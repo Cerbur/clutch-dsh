@@ -35,12 +35,28 @@ async function createFixture() {
   return root;
 }
 
-async function createPackage(root, folderName, bundle) {
+async function createPackage(
+  root,
+  folderName,
+  {
+    packageName = folderName,
+    plugin = 'clutch-dsh-worktree',
+    role = 'provider',
+    serviceDefinition = 'clutch-dsh-worktree-manager',
+    bundle,
+    metadata = true,
+  } = {},
+) {
   const packageDirectory = path.join(root, 'packages', folderName);
   await mkdir(packageDirectory);
   await writeFile(
     path.join(packageDirectory, 'package.json'),
-    JSON.stringify({ name: `dsh-${folderName}` }),
+    JSON.stringify({
+      name: packageName,
+      ...(metadata
+        ? { clutchDsh: { plugin, role, serviceDefinition } }
+        : {}),
+    }),
   );
   await writeFile(path.join(packageDirectory, 'cordis.patch.yml'), `dsh:\n  bundle: ${bundle}\n`);
 }
@@ -56,25 +72,43 @@ test('allows planning-only directories without package metadata', async (t) => {
   assert.match(result.stdout, /cordis patches ok/);
 });
 
-test('rejects a package whose bundle does not match its capability', async (t) => {
+test('rejects a package whose bundle does not match its service definition', async (t) => {
   const root = await createFixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  await createPackage(root, 'file-cap', 'dsh-other-cap');
+  await createPackage(root, 'clutch-dsh-worktree-git', {
+    bundle: 'clutch-dsh-other-manager',
+  });
 
   const result = await runCheck(root);
 
   assert.equal(result.code, 1);
   assert.match(result.stdout, /cordis\.patch\.yml/);
-  assert.match(result.stdout, /dsh-file-cap/);
+  assert.match(result.stdout, /clutch-dsh-worktree-manager/);
 });
 
-test('accepts a package whose bundle matches its capability', async (t) => {
+test('accepts a package whose bundle matches its declared service definition', async (t) => {
   const root = await createFixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  await createPackage(root, 'file-cap', 'dsh-file-cap');
+  await createPackage(root, 'clutch-dsh-worktree-git', {
+    bundle: 'clutch-dsh-worktree-manager',
+  });
 
   const result = await runCheck(root);
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /cordis patches ok/);
+});
+
+test('rejects a package without a declared service definition', async (t) => {
+  const root = await createFixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await createPackage(root, 'clutch-dsh-worktree-git', {
+    bundle: 'clutch-dsh-worktree-manager',
+    metadata: false,
+  });
+
+  const result = await runCheck(root);
+
+  assert.equal(result.code, 1);
+  assert.match(result.stdout, /clutchDsh\.serviceDefinition is missing/);
 });

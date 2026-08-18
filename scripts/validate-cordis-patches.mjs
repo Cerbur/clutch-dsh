@@ -13,10 +13,8 @@ async function exists(filePath) {
   }
 }
 
-export function expectedBundle(folderName) {
-  if (folderName.startsWith('tool-')) return `dsh-${folderName.slice(5)}`;
-  if (folderName.endsWith('-local')) return `dsh-${folderName.slice(0, -6)}`;
-  return `dsh-${folderName}`;
+export function expectedBundle(packageJson) {
+  return packageJson?.clutchDsh?.serviceDefinition;
 }
 
 export async function validatePatch(packageDirectory) {
@@ -30,8 +28,10 @@ export async function validatePatch(packageDirectory) {
     throw new Error('dsh.bundle is missing');
   }
 
-  const folderName = path.basename(packageDirectory);
-  const expected = expectedBundle(folderName);
+  const expected = expectedBundle(packageJson);
+  if (typeof expected !== 'string' || expected.length === 0) {
+    throw new Error('clutchDsh.serviceDefinition is missing');
+  }
   if (bundleReference !== expected) {
     throw new Error(`dsh.bundle must be ${expected}, got ${bundleReference}`);
   }
