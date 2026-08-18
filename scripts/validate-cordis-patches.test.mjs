@@ -53,9 +53,7 @@ async function createPackage(
     path.join(packageDirectory, 'package.json'),
     JSON.stringify({
       name: packageName,
-      ...(metadata
-        ? { clutchDsh: { plugin, role, serviceDefinition } }
-        : {}),
+      ...(metadata ? { clutchDsh: { plugin, role, serviceDefinition } } : {}),
     }),
   );
   await writeFile(path.join(packageDirectory, 'cordis.patch.yml'), `dsh:\n  bundle: ${bundle}\n`);

@@ -187,5 +187,5 @@ test('requires providers and consumers to use an exact workspace dependency', as
   const result = await runCheck(root);
 
   assert.equal(result.code, 1);
-  assert.match(result.stdout, /dependency clutch-dsh-worktree-manager must be workspace:\*/,);
+  assert.match(result.stdout, /dependency clutch-dsh-worktree-manager must be workspace:\*/);
 });
