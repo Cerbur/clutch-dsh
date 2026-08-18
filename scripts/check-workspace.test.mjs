@@ -85,7 +85,7 @@ test('reports the path and missing files for an invalid package', async (t) => {
   await mkdir(packageDirectory);
   await writeFile(
     path.join(packageDirectory, 'package.json'),
-    JSON.stringify({ name: 'dsh-file-cap', scripts: {} }),
+    JSON.stringify({ name: 'file-cap', scripts: {} }),
   );
 
   const result = await runCheck(root);
