@@ -1,0 +1,23 @@
+{
+  "name": "clutch-dsh",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "check": "pnpm run check:workspace && pnpm run check:patches && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "node --test scripts/*.test.mjs && pnpm -r --if-present run test",
+    "check:workspace": "node scripts/check-workspace.mjs",
+    "check:patches": "node scripts/validate-cordis-patches.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "yaml": "^2.9.0"
+  }
+}

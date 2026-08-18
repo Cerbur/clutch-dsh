@@ -23,13 +23,13 @@
 
 ## Components and Boundaries
 
-| Component | Responsibility | Boundary |
-| --- | --- | --- |
-| Workspace root | workspace discovery, shared tooling, validation commands | 不包含具体 capability 实现 |
-| Service Definition | capability name and public TypeScript contract | 不依赖 Provider 或 Consumer |
-| Provider | local implementation of the contract | 不重新定义公共 contract |
-| Consumer | user-facing/tool entry targeting the contract | 不直接依赖 Provider |
-| Workspace validators | deterministic package and patch checks | 只读取 package metadata、目录结构和 YAML |
+| Component            | Responsibility                                           | Boundary                                 |
+| -------------------- | -------------------------------------------------------- | ---------------------------------------- |
+| Workspace root       | workspace discovery, shared tooling, validation commands | 不包含具体 capability 实现               |
+| Service Definition   | capability name and public TypeScript contract           | 不依赖 Provider 或 Consumer              |
+| Provider             | local implementation of the contract                     | 不重新定义公共 contract                  |
+| Consumer             | user-facing/tool entry targeting the contract            | 不直接依赖 Provider                      |
+| Workspace validators | deterministic package and patch checks                   | 只读取 package metadata、目录结构和 YAML |
 
 ## Validation and Failure Behavior
 
