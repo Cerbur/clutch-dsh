@@ -12,6 +12,8 @@
 
 没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace guard 当作可运行 package。当前 `packages/clutch-dsh-worktree/` 仍是规划入口，真实 runtime package 按独立计划推进。
 
+可运行 package 使用 `packages/<plugin>-<module>/` 形式，目录名必须与 `package.json.name` 完全一致，并以所属 plugin 名称加 `-` 为前缀。`<module>` 由 plugin 功能决定，不使用 workspace 强制的固定后缀；package 的 `clutchDsh` metadata 声明 plugin、架构角色和对应 Service Definition。
+
 ## Commands
 
 ```bash

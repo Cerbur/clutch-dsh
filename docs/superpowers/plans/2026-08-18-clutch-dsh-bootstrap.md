@@ -4,7 +4,7 @@
 
 **Goal:** 建立一个可持续扩展的 pnpm workspace，用统一的根目录工具、package 形状校验和 DSH patch 校验管理后续 plugin。
 
-**Architecture:** 根目录只负责 workspace、共享 TypeScript/lint/format 配置、校验脚本和统一命令，不发布为 plugin。`packages/*` 下只有包含 `package.json` 的目录才被视为可运行 package；README/计划形式的规划目录可以保留而不会被 guard 误判。真实 Service Definition、Provider、Consumer 按命名和依赖规则在后续 capability 中创建。
+**Architecture:** 根目录只负责 workspace、共享 TypeScript/lint/format 配置、校验脚本和统一命令，不发布为 plugin。`packages/*` 下只有包含 `package.json` 的目录才被视为可运行 package；README/计划形式的规划目录可以保留而不会被 guard 误判。真实 Service Definition、Provider、Consumer 按 package metadata、前缀和依赖规则在后续 capability 中创建。
 
 **Tech Stack:** pnpm workspace、TypeScript、ESLint、Prettier、Node.js 检查脚本、Cordis patch YAML。
 
@@ -13,10 +13,11 @@
 - 根 `package.json` 必须设置 `private: true`，根 package 不发布。
 - 根 `package.json` 的项目名必须是 `clutch-dsh`。
 - `pnpm-workspace.yaml` 只纳入 `packages/*`。
-- Service Definition 的命名格式为 `dsh-<capability>`，目录为 `<capability>`。
-- Provider 的目录格式为 `<capability>-local`，package 名称为 `dsh-<capability>-local`。
-- Consumer 的目录格式为 `tool-<capability>`，package 名称为 `dsh-tool-<capability>`。
-- Provider 和 Consumer 对 Service Definition 使用精确的 `workspace:*` 依赖；Service Definition 不依赖具体 Provider 或 Consumer。
+- 每个可运行 package 的目录格式为 `packages/<plugin>-<module>/`，且目录名与 `package.json.name` 完全一致。
+- package name 必须以所属 plugin 名称加 `-` 为前缀；`<module>` 由 plugin 功能决定，不使用固定后缀推导角色。
+- 每个可运行 package 必须在 `clutchDsh` metadata 中声明 `plugin`、`role` 和 `serviceDefinition`。
+- Service Definition 的 `serviceDefinition` 等于自身 package name；Provider 和 Consumer 对该名称使用精确的 `workspace:*` 依赖。
+- Service Definition 不依赖具体 Provider 或 Consumer。
 - 每个可运行 plugin package 都必须包含 `package.json`、`cordis.patch.yml`、`tsconfig.json` 和 `src/index.ts`，并提供 `build`、`lint`、`typecheck`、`test` scripts。
 - 每个可运行 plugin 的 patch 必须让 DSH loader 解析出对应 Service Definition 的 `dsh.bundle`。
 - 没有 `package.json` 的规划目录不属于可运行 package，workspace 和 patch guard 必须跳过它。
@@ -60,12 +61,12 @@ clutch-dsh/
 
 ## Package Boundaries
 
-| Package role                          | Owns                                                                  | May depend on                                | Must not own                                  |
-| ------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------- |
-| Service Definition `dsh-<capability>` | capability name、公共类型、Service 接口和 loader 可识别的 bundle 身份 | DSH/Cordis 的公共类型或 runtime contract     | 本地实现、具体外部服务、Consumer 行为         |
-| Provider `dsh-<capability>-local`     | 一个可运行的本地实现，以及把实现绑定到 Service Definition 的 patch    | 对应 Service Definition 和 Provider 实现依赖 | 重新定义公共 Service 类型                     |
-| Consumer `dsh-tool-<capability>`      | 面向用户或上层流程的工具入口，以及对 Service 的调用                   | 对应 Service Definition 和 Consumer 实现依赖 | 直接复制 Provider 实现或绕过 Service contract |
-| Root                                  | workspace、共享配置、检查脚本和统一命令                               | tooling dependencies                         | 任何具体 capability 的运行时实现              |
+| Package role                           | Owns                                                                  | May depend on                                | Must not own                                  |
+| -------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------- |
+| Service Definition `<plugin>-<module>` | capability name、公共类型、Service 接口和 loader 可识别的 bundle 身份 | DSH/Cordis 的公共类型或 runtime contract     | 本地实现、具体外部服务、Consumer 行为         |
+| Provider `<plugin>-<module>`           | 一个可运行的实现，以及把实现绑定到 Service Definition 的 patch        | 对应 Service Definition 和 Provider 实现依赖 | 重新定义公共 Service 类型                     |
+| Consumer `<plugin>-<module>`           | 面向用户或上层流程的入口，以及对 Service 的调用                       | 对应 Service Definition 和 Consumer 实现依赖 | 直接复制 Provider 实现或绕过 Service contract |
+| Root                                   | workspace、共享配置、检查脚本和统一命令                               | tooling dependencies                         | 任何具体 capability 的运行时实现              |
 
 ## Implementation Tasks
 
@@ -222,8 +223,8 @@ export default {
 1. 读取 `packages/` 的直接子目录；目录不存在时成功退出。
 2. 对没有 `package.json` 的目录直接跳过，使规划入口不会被当作 plugin package。
 3. 对存在 `package.json` 的目录解析 metadata，并要求 `build`、`lint`、`typecheck`、`test` scripts，以及 `cordis.patch.yml`、`tsconfig.json`、`src/index.ts`。
-4. 按目录角色校验 package 名：`tool-<capability>` -> `dsh-tool-<capability>`；`<capability>-local` -> `dsh-<capability>-local`；其他 package 目录 -> `dsh-<directory>`。
-5. 对 Provider 和 Consumer 要求对应 Service Definition 依赖值精确为 `workspace:*`。
+4. 校验 `package.json.name` 与目录名一致，并要求 package name 以 `clutchDsh.plugin + "-"` 开头；不从模块后缀推导角色或 package name。
+5. 校验 `clutchDsh.role` 和 `clutchDsh.serviceDefinition`；Service Definition 指向自身，Provider 和 Consumer 对声明的 Service Definition 依赖值精确为 `workspace:*`。
 6. 每个失败都输出 package 路径和原因，并以状态码 1 退出；无失败时输出 `workspace shape ok` 并以状态码 0 退出。
 
 - [x] **Step 7: 运行根级工具链检查**
@@ -259,17 +260,15 @@ Expected: 规划目录被跳过，输出 `workspace shape ok`。
 
 - [x] **Step 2: 实现 bundle 推导和错误报告**
 
-使用以下确定性规则：
+使用 package metadata 中声明的 Service Definition 作为确定性 bundle：
 
 ```js
-function expectedBundle(folderName) {
-  if (folderName.startsWith('tool-')) return 'dsh-' + folderName.slice(5);
-  if (folderName.endsWith('-local')) return 'dsh-' + folderName.slice(0, -6);
-  return 'dsh-' + folderName;
+function expectedBundle(packageJson) {
+  return packageJson?.clutchDsh?.serviceDefinition;
 }
 ```
 
-YAML 无法解析、缺少 `dsh.bundle` 或其值不等于 `expectedBundle(folderName)` 时，报告 patch 文件路径和原因并以状态码 1 退出；无实际 package 时输出 `cordis patches ok`。
+YAML 无法解析、缺少 `dsh.bundle`、缺少 `clutchDsh.serviceDefinition` 或其值不等于 `expectedBundle(packageJson)` 时，报告 patch 文件路径和原因并以状态码 1 退出；无实际 package 时输出 `cordis patches ok`。
 
 - [x] **Step 3: 运行当前仓库 patch 检查**
 
@@ -304,10 +303,10 @@ pnpm run test
 
 文档必须覆盖：
 
-1. Service Definition：`packages/<capability>/` -> `dsh-<capability>`，只导出公共 contract。
-2. Provider：`packages/<capability>-local/` -> `dsh-<capability>-local`，依赖 `dsh-<capability>: workspace:*`。
-3. Consumer：`packages/tool-<capability>/` -> `dsh-tool-<capability>`，只依赖 Service Definition。
-4. Patch：每个实际 package 都要有 `cordis.patch.yml`，其 `dsh.bundle` 指向 Service Definition。
+1. 命名：`packages/<plugin>-<module>/` -> package name `<plugin>-<module>`，目录名与 package name 相同，模块名由 plugin 功能决定。
+2. Metadata：每个 package 声明 `clutchDsh.plugin`、`clutchDsh.role` 和 `clutchDsh.serviceDefinition`。
+3. Provider/Consumer：只依赖对应 Service Definition，并使用精确的 `<serviceDefinition>: workspace:*`。
+4. Patch：每个实际 package 都要有 `cordis.patch.yml`，其 `dsh.bundle` 等于 metadata 声明的 Service Definition。
 5. Validation：新增 package 后运行 `pnpm install`、`pnpm run check:workspace`、`pnpm run check:patches`、`pnpm run check`。
 6. Boundary rule：Service Definition 不引用 Provider/Consumer；Consumer 不直接引用 Provider。
 7. 明确说明 `my-cap`、`file-cap` 仅用于解释命名，不是当前仓库要创建的 package。
@@ -317,10 +316,10 @@ pnpm run test
 只在临时目录中将 `<capability>` 替换为 `file-cap`，确认文档推导出：
 
 ```text
-packages/file-cap       -> dsh-file-cap
-packages/file-cap-local -> dsh-file-cap-local
-packages/tool-file-cap  -> dsh-tool-file-cap
-dsh.bundle              -> dsh-file-cap
+packages/file-cap-manager -> file-cap-manager
+packages/file-cap-local   -> file-cap-manager
+packages/file-cap-ui      -> file-cap-manager
+dsh.bundle                -> file-cap-manager
 ```
 
 不得把临时目录或 demo package 加入仓库。
