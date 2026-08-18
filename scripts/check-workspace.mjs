@@ -4,6 +4,7 @@ import process from 'node:process';
 
 const requiredFiles = ['cordis.patch.yml', 'tsconfig.json', path.join('src', 'index.ts')];
 const requiredScripts = ['build', 'lint', 'typecheck', 'test'];
+const validRoles = new Set(['service-definition', 'provider', 'consumer']);
 
 async function exists(filePath) {
   try {
@@ -13,23 +14,6 @@ async function exists(filePath) {
     if (error?.code === 'ENOENT') return false;
     throw error;
   }
-}
-
-function packageRole(folderName) {
-  if (folderName.startsWith('tool-')) {
-    return { capability: folderName.slice('tool-'.length), role: 'consumer' };
-  }
-  if (folderName.endsWith('-local')) {
-    return { capability: folderName.slice(0, -'-local'.length), role: 'provider' };
-  }
-  return { capability: folderName, role: 'service-definition' };
-}
-
-function expectedPackageName(folderName) {
-  const { capability, role } = packageRole(folderName);
-  if (role === 'consumer') return `dsh-tool-${capability}`;
-  if (role === 'provider') return `dsh-${capability}-local`;
-  return `dsh-${capability}`;
 }
 
 function report(errors, packageDirectory, message) {
@@ -46,12 +30,11 @@ async function validatePackage(packageDirectory, folderName, errors) {
     return;
   }
 
-  const expectedName = expectedPackageName(folderName);
-  if (packageJson.name !== expectedName) {
+  if (packageJson.name !== folderName) {
     report(
       errors,
       packageDirectory,
-      `package name must be ${expectedName}, got ${packageJson.name ?? '<missing>'}`,
+      `package name must match directory name ${folderName}, got ${packageJson.name ?? '<missing>'}`,
     );
   }
 
@@ -67,15 +50,51 @@ async function validatePackage(packageDirectory, folderName, errors) {
     }
   }
 
-  const { capability, role } = packageRole(folderName);
+  const metadata = packageJson.clutchDsh;
+  if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    report(errors, packageDirectory, 'clutchDsh metadata must be an object');
+    return;
+  }
+
+  const { plugin, role, serviceDefinition } = metadata;
+  if (typeof plugin !== 'string' || plugin.length === 0) {
+    report(errors, packageDirectory, 'clutchDsh.plugin must be a non-empty string');
+  } else if (typeof packageJson.name === 'string' && !packageJson.name.startsWith(`${plugin}-`)) {
+    report(
+      errors,
+      packageDirectory,
+      `package name must start with plugin prefix ${plugin}-, got ${packageJson.name}`,
+    );
+  }
+
+  if (!validRoles.has(role)) {
+    report(
+      errors,
+      packageDirectory,
+      `clutchDsh.role must be service-definition, provider, or consumer, got ${role ?? '<missing>'}`,
+    );
+  }
+
+  if (typeof serviceDefinition !== 'string' || serviceDefinition.length === 0) {
+    report(errors, packageDirectory, 'clutchDsh.serviceDefinition must be a non-empty string');
+    return;
+  }
+
+  if (role === 'service-definition' && serviceDefinition !== packageJson.name) {
+    report(
+      errors,
+      packageDirectory,
+      `service-definition serviceDefinition must be ${packageJson.name ?? '<missing>'}, got ${serviceDefinition}`,
+    );
+  }
+
   if (role === 'provider' || role === 'consumer') {
-    const serviceDefinitionName = `dsh-${capability}`;
-    const dependencyValue = packageJson.dependencies?.[serviceDefinitionName];
+    const dependencyValue = packageJson.dependencies?.[serviceDefinition];
     if (dependencyValue !== 'workspace:*') {
       report(
         errors,
         packageDirectory,
-        `dependency ${serviceDefinitionName} must be workspace:*, got ${dependencyValue ?? '<missing>'}`,
+        `dependency ${serviceDefinition} must be workspace:*, got ${dependencyValue ?? '<missing>'}`,
       );
     }
   }
