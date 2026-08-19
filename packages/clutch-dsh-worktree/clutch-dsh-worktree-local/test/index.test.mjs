@@ -1,0 +1,623 @@
+import assert from 'node:assert/strict';
+import { execFile as execFileCallback } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
+
+import {
+  LocalGitAdapter,
+  SIDECAR_SCHEMA_VERSION,
+  WorktreeProviderError,
+  WorkspaceShardedSidecarRepository,
+  createLocalWorktreeProvider,
+} from '../dist/index.js';
+
+const execFile = promisify(execFileCallback);
+
+async function runGit(cwd, args) {
+  return execFile('git', args, { cwd, encoding: 'utf8' });
+}
+
+async function exists(filePath) {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function createGitWorkspace({ initialCommit = true } = {}) {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-worktree-local-'));
+  const dshHome = path.join(tempRoot, 'dsh-home');
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  await mkdir(dshHome, { recursive: true });
+  await mkdir(workspaceRoot, { recursive: true });
+
+  await runGit(workspaceRoot, ['init']);
+  await runGit(workspaceRoot, ['config', 'user.email', 'test@example.invalid']);
+  await runGit(workspaceRoot, ['config', 'user.name', 'Test User']);
+  await runGit(workspaceRoot, ['branch', '-M', 'main']);
+  if (initialCommit) {
+    await writeFile(path.join(workspaceRoot, 'README.md'), '# fixture\n');
+    await runGit(workspaceRoot, ['add', 'README.md']);
+    await runGit(workspaceRoot, ['commit', '-m', 'initial']);
+  }
+
+  return { tempRoot, dshHome, workspaceRoot };
+}
+
+function createDshReader({ workspaceId = 'ws_one', projectId = 'project_one', rootPath, sessions = [] }) {
+  const sessionMap = new Map(sessions.map((session) => [session.sessionId, { ...session }]));
+  const workspace = { workspaceId, projectId, rootPath };
+
+  return {
+    async getWorkspace(requestedWorkspaceId) {
+      return requestedWorkspaceId === workspaceId ? { ...workspace } : undefined;
+    },
+    async getSession(sessionId) {
+      const session = sessionMap.get(sessionId);
+      return session ? { ...session } : undefined;
+    },
+    async listSessions() {
+      return [...sessionMap.values()].map((session) => ({ ...session }));
+    },
+    addSession(session) {
+      sessionMap.set(session.sessionId, { ...session });
+    },
+  };
+}
+
+async function withGitFixture(callback, options = {}) {
+  const fixture = await createGitWorkspace(options);
+  try {
+    const dsh = createDshReader({ rootPath: fixture.workspaceRoot });
+    const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: fixture.dshHome });
+    const provider = createLocalWorktreeProvider({
+      dsh,
+      dshHome: fixture.dshHome,
+      sidecar,
+      idFactory: options.idFactory,
+    });
+    await callback({ ...fixture, dsh, sidecar, provider });
+  } finally {
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+}
+
+function expectCode(promise, code) {
+  return assert.rejects(promise, (error) => error?.code === code);
+}
+
+function makeRecord({ workspaceId = 'ws_one', worktreeId = 'wt_seed', absolutePath, branch = 'feature/seed' } = {}) {
+  return {
+    worktreeId,
+    workspaceId,
+    absolutePath,
+    branch,
+    status: 'active',
+  };
+}
+
+function makeBinding({ workspaceId = 'ws_one', worktreeId = 'wt_seed', sessionId = 'session_seed' } = {}) {
+  return { workspaceId, worktreeId, sessionId, status: 'active' };
+}
+
+test('initializes an empty Workspace-sharded sidecar without a global index', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const snapshot = await sidecar.read('ws_one');
+
+    assert.deepEqual(snapshot, {
+      schemaVersion: SIDECAR_SCHEMA_VERSION,
+      workspaceId: 'ws_one',
+      worktrees: [],
+      bindings: [],
+    });
+    assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'index.json')), false);
+    assert.equal(
+      await exists(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json')),
+      false,
+    );
+  });
+});
+
+test('serializes concurrent sidecar mutations and leaves an atomically replaced shard', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const worktreeRoot = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
+    const records = [
+      makeRecord({ worktreeId: 'wt_one', absolutePath: path.join(worktreeRoot, 'wt_one') }),
+      makeRecord({ worktreeId: 'wt_two', absolutePath: path.join(worktreeRoot, 'wt_two') }),
+    ];
+
+    await Promise.all(
+      records.map((record) =>
+        sidecar.mutate('ws_one', async (snapshot) => {
+          await delay(5);
+          return {
+            result: record,
+            snapshot: {
+              ...snapshot,
+              worktrees: [...snapshot.worktrees, record],
+            },
+          };
+        }),
+      ),
+    );
+
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    const snapshot = JSON.parse(await readFile(shardPath, 'utf8'));
+    const workspaceFiles = await readdir(path.dirname(shardPath));
+
+    assert.deepEqual(
+      snapshot.worktrees.map((record) => record.worktreeId).sort(),
+      ['wt_one', 'wt_two'],
+    );
+    assert.deepEqual(workspaceFiles, ['ws_one.json']);
+  });
+});
+
+test('rejects a shard whose filename and stored Workspace identity disagree', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    await mkdir(path.dirname(shardPath), { recursive: true });
+    await writeFile(
+      shardPath,
+      `${JSON.stringify({
+        schemaVersion: SIDECAR_SCHEMA_VERSION,
+        workspaceId: 'ws_other',
+        worktrees: [],
+        bindings: [],
+      })}\n`,
+    );
+
+    await expectCode(sidecar.read('ws_one'), 'SIDECAR_CORRUPT');
+  });
+});
+
+test('rejects a sidecar Worktree path outside the generated DSH Home root', async () => {
+  await withGitFixture(async ({ dshHome, provider }) => {
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    await mkdir(path.dirname(shardPath), { recursive: true });
+    await writeFile(
+      shardPath,
+      `${JSON.stringify({
+        schemaVersion: SIDECAR_SCHEMA_VERSION,
+        workspaceId: 'ws_one',
+        worktrees: [makeRecord({ absolutePath: path.join(dshHome, '..', 'outside', 'wt_path') })],
+        bindings: [],
+      })}\n`,
+    );
+
+    await expectCode(provider.listWorktrees({ workspaceId: 'ws_one' }), 'SIDECAR_CORRUPT');
+  });
+});
+
+test('repeated identical Worktree upsert is idempotent', async () => {
+  await withGitFixture(async ({ sidecar, dshHome }) => {
+    const record = makeRecord({
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_seed'),
+    });
+
+    assert.deepEqual(await sidecar.upsertWorktree(record), record);
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    const firstWrite = await readFile(shardPath, 'utf8');
+    assert.deepEqual(await sidecar.upsertWorktree(record), record);
+    assert.equal(await readFile(shardPath, 'utf8'), firstWrite);
+    assert.deepEqual((await sidecar.read('ws_one')).worktrees, [record]);
+  });
+});
+
+test('rejects relative workspace roots before invoking Git', async () => {
+  await withGitFixture(async ({ dshHome }) => {
+    const dsh = createDshReader({ rootPath: 'relative/workspace' });
+    const provider = createLocalWorktreeProvider({ dsh, dshHome, idFactory: () => 'wt_relative' });
+
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKSPACE_NOT_FOUND');
+  });
+});
+
+test('rejects a non-Git Workspace', async () => {
+  const fixture = await createGitWorkspace();
+  const nonGitRoot = path.join(fixture.tempRoot, 'not-a-repository');
+  await mkdir(nonGitRoot);
+  try {
+    const dsh = createDshReader({ rootPath: nonGitRoot });
+    const provider = createLocalWorktreeProvider({ dsh, dshHome: fixture.dshHome });
+
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKSPACE_NOT_GIT_REPOSITORY');
+  } finally {
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects a Git repository without an initial commit', async () => {
+  await withGitFixture(async ({ provider }) => {
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKTREE_REQUIRES_INITIAL_COMMIT');
+  }, { initialCommit: false });
+});
+
+test('rejects invalid and already checked-out branches without using force', async () => {
+  await withGitFixture(async ({ provider }) => {
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKTREE_BRANCH_CONFLICT');
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature name' }), 'GIT_OPERATION_FAILED');
+  });
+});
+
+test('rejects a generated Worktree path that already exists or is inside the Workspace', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, dsh }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/existing']);
+    await runGit(workspaceRoot, ['branch', 'feature/inside']);
+    const existingId = 'wt_existing';
+    const existingPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', existingId);
+    await mkdir(existingPath, { recursive: true });
+    const existingProvider = createLocalWorktreeProvider({
+      dsh,
+      dshHome,
+      idFactory: () => existingId,
+    });
+    await expectCode(
+      existingProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/existing' }),
+      'GIT_OPERATION_FAILED',
+    );
+
+    const insideProvider = createLocalWorktreeProvider({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome: workspaceRoot,
+      idFactory: () => 'wt_inside',
+    });
+    await expectCode(
+      insideProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/inside' }),
+      'GIT_OPERATION_FAILED',
+    );
+  });
+});
+
+test('rejects a symlinked DSH Home before creating a Worktree', async () => {
+  await withGitFixture(async ({ dshHome, tempRoot, workspaceRoot }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/symlink']);
+    const linkedHome = path.join(tempRoot, 'dsh-home-link');
+    await symlink(dshHome, linkedHome, 'dir');
+    const provider = createLocalWorktreeProvider({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome: linkedHome,
+      idFactory: () => 'wt_symlink',
+    });
+
+    await expectCode(
+      provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/symlink' }),
+      'GIT_OPERATION_FAILED',
+    );
+  });
+});
+
+test('rejects a reused Worktree ID even when the old record is removed', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, provider, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/reused-id']);
+    const worktreeId = 'wt_reused';
+    await sidecar.upsertWorktree({
+      ...makeRecord({
+        worktreeId,
+        absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId),
+        branch: 'feature/old',
+      }),
+      status: 'removed',
+    });
+    const reusedProvider = createLocalWorktreeProvider({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome,
+      sidecar,
+      idFactory: () => worktreeId,
+    });
+
+    await expectCode(
+      reusedProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/reused-id' }),
+      'SIDECAR_CORRUPT',
+    );
+    assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId)), false);
+    assert.deepEqual((await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId), [worktreeId]);
+    void provider;
+  });
+});
+
+test('creates a generated Worktree and persists only approved relation metadata', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, provider, sidecar, dsh }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/example']);
+    const dshFixturePath = path.join(dshHome, 'dsh-project-session-fixture.json');
+    await writeFile(dshFixturePath, '{"title":"DSH-owned","messages":["history"],"cwd":"original"}\n');
+    const dshFixtureBefore = await readFile(dshFixturePath);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/example' });
+    const expectedPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId);
+
+    assert.equal(record.absolutePath, expectedPath);
+    assert.equal(path.isAbsolute(record.absolutePath), true);
+    assert.equal(await exists(record.absolutePath), true);
+    assert.deepEqual(await sidecar.read('ws_one'), {
+      schemaVersion: SIDECAR_SCHEMA_VERSION,
+      workspaceId: 'ws_one',
+      worktrees: [record],
+      bindings: [],
+    });
+    assert.equal((await provider.listBranches({ workspaceId: 'ws_one' })).find((branch) => branch.name === 'main').checkedOut, true);
+    assert.equal((await provider.listBranches({ workspaceId: 'ws_one' })).find((branch) => branch.name === 'feature/example').checkedOut, true);
+    assert.deepEqual(await readFile(dshFixturePath), dshFixtureBefore);
+
+    dsh.addSession({
+      sessionId: 'session_content',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: record.absolutePath,
+      title: 'must stay in DSH',
+      messages: ['not sidecar data'],
+    });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'session_content' });
+    assert.deepEqual(await readFile(dshFixturePath), dshFixtureBefore);
+    const sidecarText = await readFile(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json'), 'utf8');
+    assert.equal(sidecarText.includes('must stay in DSH'), false);
+    assert.equal(sidecarText.includes('messages'), false);
+    assert.equal(sidecarText.includes(workspaceRoot), false);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
+    assert.deepEqual(await readFile(dshFixturePath), dshFixtureBefore);
+  });
+});
+
+test('cleans up a newly created Worktree when sidecar persistence fails', async () => {
+  await withGitFixture(async ({ dshHome, dsh, workspaceRoot }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/sidecar-failure']);
+    const sidecar = {
+      async read() {
+        return { schemaVersion: SIDECAR_SCHEMA_VERSION, workspaceId: 'ws_one', worktrees: [], bindings: [] };
+      },
+      async mutate() {
+        throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar write failed', { reason: 'test' });
+      },
+    };
+    const provider = createLocalWorktreeProvider({
+      dsh,
+      dshHome,
+      sidecar,
+      idFactory: () => 'wt_sidecar_failure',
+    });
+
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/sidecar-failure' }), 'SIDECAR_UNAVAILABLE');
+    assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_sidecar_failure')), false);
+  });
+});
+
+test('returns sync-required when cleanup after sidecar failure also fails', async () => {
+  await withGitFixture(async ({ dshHome, dsh, workspaceRoot }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/cleanup-failure']);
+    const baseGit = new LocalGitAdapter();
+    const git = {
+      listBranches: (...args) => baseGit.listBranches(...args),
+      listWorktrees: (...args) => baseGit.listWorktrees(...args),
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      createWorktree: (...args) => baseGit.createWorktree(...args),
+      async removeWorktree() {
+        throw new Error('cleanup blocked');
+      },
+    };
+    const sidecar = {
+      async read() {
+        return { schemaVersion: SIDECAR_SCHEMA_VERSION, workspaceId: 'ws_one', worktrees: [], bindings: [] };
+      },
+      async mutate() {
+        throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar write failed', { reason: 'test' });
+      },
+    };
+    const provider = createLocalWorktreeProvider({
+      dsh,
+      dshHome,
+      git,
+      sidecar,
+      idFactory: () => 'wt_cleanup_failure',
+    });
+
+    await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/cleanup-failure' }), 'SIDECAR_SYNC_REQUIRED');
+    assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_cleanup_failure')), true);
+  });
+});
+
+test('binds a Session idempotently and rejects a second active Worktree', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, dsh }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/one']);
+    await runGit(workspaceRoot, ['branch', 'feature/two']);
+    const first = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/one' });
+    const second = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/two' });
+    dsh.addSession({ sessionId: 'session_bound', workspaceId: 'ws_one', projectId: 'project_one', cwd: first.absolutePath });
+
+    const binding = await provider.bindSession({ workspaceId: 'ws_one', worktreeId: first.worktreeId, sessionId: 'session_bound' });
+    assert.deepEqual(
+      await provider.bindSession({ workspaceId: 'ws_one', worktreeId: first.worktreeId, sessionId: 'session_bound' }),
+      binding,
+    );
+    await expectCode(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: second.worktreeId, sessionId: 'session_bound' }),
+      'SESSION_ALREADY_BOUND',
+    );
+  });
+});
+
+test('sidecar upsert rejects a Session binding conflict with a stable error', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/binding-one']);
+    await runGit(workspaceRoot, ['branch', 'feature/binding-two']);
+    const first = await createLocalWorktreeProvider({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome,
+      sidecar,
+      idFactory: () => 'wt_binding_one',
+    }).createWorktree({ workspaceId: 'ws_one', branch: 'feature/binding-one' });
+    const second = await createLocalWorktreeProvider({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome,
+      sidecar,
+      idFactory: () => 'wt_binding_two',
+    }).createWorktree({ workspaceId: 'ws_one', branch: 'feature/binding-two' });
+
+    await sidecar.upsertBinding(makeBinding({ worktreeId: first.worktreeId, sessionId: 'session_conflict' }));
+    await expectCode(
+      sidecar.upsertBinding(makeBinding({ worktreeId: second.worktreeId, sessionId: 'session_conflict' })),
+      'SESSION_ALREADY_BOUND',
+    );
+  });
+});
+
+test('rejects missing, mismatched, and relative Session bindings', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, dsh }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/bind']);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/bind' });
+
+    await expectCode(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'missing' }),
+      'SESSION_NOT_FOUND',
+    );
+    dsh.addSession({ sessionId: 'wrong_workspace', workspaceId: 'ws_other', cwd: record.absolutePath });
+    await expectCode(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'wrong_workspace' }),
+      'SESSION_CWD_MISMATCH',
+    );
+    dsh.addSession({ sessionId: 'relative_cwd', workspaceId: 'ws_one', cwd: 'relative/path' });
+    await expectCode(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'relative_cwd' }),
+      'SESSION_CWD_MISMATCH',
+    );
+    dsh.addSession({ sessionId: 'wrong_cwd', workspaceId: 'ws_one', cwd: workspaceRoot });
+    await expectCode(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'wrong_cwd' }),
+      'SESSION_CWD_MISMATCH',
+    );
+  });
+});
+
+test('keeps sidecar unchanged when Git Worktree removal fails', async () => {
+  await withGitFixture(async ({ dshHome, dsh, workspaceRoot, provider, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/remove-failure']);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/remove-failure' });
+    const before = await sidecar.read('ws_one');
+    const baseGit = new LocalGitAdapter();
+    const failingGit = {
+      listBranches: (...args) => baseGit.listBranches(...args),
+      listWorktrees: (...args) => baseGit.listWorktrees(...args),
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      createWorktree: (...args) => baseGit.createWorktree(...args),
+      async removeWorktree() {
+        throw new Error('remove blocked');
+      },
+    };
+    const failingProvider = createLocalWorktreeProvider({ dsh, dshHome, git: failingGit, sidecar });
+
+    await expectCode(
+      failingProvider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId }),
+      'GIT_OPERATION_FAILED',
+    );
+    assert.deepEqual(await sidecar.read('ws_one'), before);
+    assert.equal(await exists(record.absolutePath), true);
+  });
+});
+
+test('reconciles a sidecar after Git removal succeeded but sidecar sync failed', async () => {
+  await withGitFixture(async ({ dshHome, dsh, workspaceRoot, provider, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/remove-sync']);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/remove-sync' });
+    let failWrite = true;
+    const flakySidecar = {
+      read: (...args) => sidecar.read(...args),
+      async mutate(workspaceId, mutation) {
+        const current = await sidecar.read(workspaceId);
+        const result = await mutation(current);
+        if (failWrite) {
+          failWrite = false;
+          throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar sync failed', { reason: 'test' });
+        }
+        return sidecar.mutate(workspaceId, () => result);
+      },
+    };
+    const firstAttempt = createLocalWorktreeProvider({ dsh, dshHome, sidecar: flakySidecar });
+
+    await expectCode(
+      firstAttempt.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId }),
+      'SIDECAR_SYNC_REQUIRED',
+    );
+    assert.equal(await exists(record.absolutePath), false);
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
+
+    const retry = createLocalWorktreeProvider({ dsh, dshHome, sidecar });
+    await retry.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'removed');
+  });
+});
+
+test('marks a removed Worktree and its bindings detached only after Git succeeds', async () => {
+  await withGitFixture(async ({ dsh, workspaceRoot, provider, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/remove']);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/remove' });
+    dsh.addSession({ sessionId: 'session_remove', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'session_remove' });
+
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(await exists(record.absolutePath), false);
+    assert.equal(snapshot.worktrees[0].status, 'removed');
+    assert.deepEqual(snapshot.bindings[0], {
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 'session_remove',
+      status: 'detached',
+    });
+  });
+});
+
+test('derives main, active, and detached runtime cwd without writing to DSH', async () => {
+  await withGitFixture(async ({ dsh, workspaceRoot, provider }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/cwd']);
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/cwd' });
+    dsh.addSession({ sessionId: 'session_cwd', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_cwd' }), workspaceRoot);
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'session_cwd' });
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_cwd' }), record.absolutePath);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_cwd' }), workspaceRoot);
+    assert.deepEqual(await provider.listBindings({ workspaceId: 'ws_one' }), [{
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 'session_cwd',
+      status: 'detached',
+    }]);
+    assert.equal((await dsh.listSessions())[0].cwd, record.absolutePath);
+  });
+});
+
+test('reports an explicit error for an active binding whose Worktree path disappeared', async () => {
+  await withGitFixture(async ({ dshHome, dsh, provider, sidecar, workspaceRoot }) => {
+    const missingPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_missing');
+    await sidecar.upsertWorktree(makeRecord({ worktreeId: 'wt_missing', absolutePath: missingPath }));
+    await sidecar.upsertBinding(makeBinding({ worktreeId: 'wt_missing', sessionId: 'session_missing_path' }));
+    dsh.addSession({ sessionId: 'session_missing_path', workspaceId: 'ws_one', cwd: workspaceRoot });
+
+    await expectCode(
+      provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_missing_path' }),
+      'WORKTREE_NOT_FOUND',
+    );
+  });
+});
+
+test('keeps the raw DSH Session read path available when sidecar data is corrupt', async () => {
+  await withGitFixture(async ({ dshHome, dsh, provider }) => {
+    const fixturePath = path.join(dshHome, 'dsh-sessions.json');
+    const fixtureBytes = '{"title":"DSH-owned","messages":["history"],"transcript":"raw"}\n';
+    await writeFile(fixturePath, fixtureBytes);
+    dsh.addSession({ sessionId: 'session_raw', workspaceId: 'ws_one', cwd: '/tmp/raw' });
+    const before = await readFile(fixturePath);
+    await mkdir(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces'), { recursive: true });
+    await writeFile(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json'), '{not-json}\n');
+
+    await expectCode(provider.listWorktrees({ workspaceId: 'ws_one' }), 'SIDECAR_CORRUPT');
+    assert.deepEqual(await dsh.listSessions(), [{ sessionId: 'session_raw', workspaceId: 'ws_one', cwd: '/tmp/raw' }]);
+    assert.deepEqual(await readFile(fixturePath), before);
+  });
+});
