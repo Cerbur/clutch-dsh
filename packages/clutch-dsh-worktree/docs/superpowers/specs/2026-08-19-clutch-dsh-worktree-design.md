@@ -2,9 +2,9 @@
 
 > Status: design snapshot for review. Implementation has not started.
 >
-> This document records the decisions made in the design discussion. Open
-> questions are collected at the end under **待确认** and must not be treated
-> as implementation requirements until resolved.
+> This document records the current V1 design baseline. The previously
+> discussed decisions are integrated into the relevant deployment, Git, UI,
+> lifecycle, and acceptance sections below.
 
 ## 1. Goal and scope
 
@@ -51,6 +51,22 @@ design document.
 
 The plugin targets existing DSH releases and does not modify DSH source code.
 It uses public DSH APIs and supported plugin extension points.
+
+For the current target release `dsh-v0.1.0-rc.7`, Host Manager methods are
+exposed to the browser through a generated `./remote` contribution:
+
+- the Provider publishes the generated Remote runtime artifact and Client-safe
+  declarations;
+- a matching DSH release/profile composition explicitly mounts that contribution
+  into `@deepseek-ai/dsh-api-remotes/client`;
+- the Worktree UI consumes `ctx.remote` and does not create a second Remote
+  assembly;
+- `dsh.client` continues to describe browser Client bundle loading only; it
+  does not select or register Remote contributions.
+
+This is a profile/package composition requirement, not a DSH source change. If
+the matching composition is absent, the UI bundle may load but Worktree Remote
+calls are unavailable.
 
 The selected model is the persisted-`cwd` model:
 
@@ -128,7 +144,8 @@ It does not execute Git, read sidecar files, or write DSH data directly.
 
 The browser cannot call the Host Manager object directly. The UI uses a
 browser-safe Remote/client projection whose methods mirror the Manager
-contract. This transport projection is not a second business API.
+contract. The projection is mounted by the external `api-remotes` composition;
+the UI does not mount a second Remote assembly or define a second business API.
 
 ## 5. Worktree storage and sidecar layout
 
@@ -234,9 +251,15 @@ The Provider manages only local Git Worktrees. It does not modify business
 files, create an automatic commit, create an orphan branch, or use `--force`
 to attach a branch already checked out elsewhere.
 
-The exact meaning of the selected branch in the create flow is listed under
-**待确认** because the latest UI decision changes the earlier free-text/new
-branch assumption.
+V1 selects an existing local branch as the Worktree branch:
+
+- the branch combobox lists local branches from the selected Workspace and
+  filters them by keyword;
+- a branch already checked out by the Workspace or another active Worktree is
+  unavailable and disabled;
+- creation uses `git worktree add <generated-path> <selected-branch>`;
+- V1 does not create a new branch. Base-branch plus new-branch creation is a
+  future one-step optimization.
 
 ## 7. Service contract
 
@@ -289,7 +312,9 @@ interface BranchRecord {
 }
 ```
 
-The exact branch target/base semantics remain pending.
+`isCurrent` identifies the Workspace's current branch. `checkedOut` identifies a
+branch that cannot be selected as a new Worktree target because it is already
+checked out by the Workspace or another active Worktree.
 
 ## 8. Worktree and Session lifecycle
 
@@ -387,8 +412,18 @@ Current DSH extension points imply this embedding strategy:
 
 The overlay is an implementation seam, not a modal interaction. Visually, the
 Worktree surface is the same navigation level as the original Workspace/Session
-surface. Its exact frame geometry is one of the items still requiring final
-confirmation.
+surface. Its confirmed frame geometry is:
+
+- the surface covers the left Sidebar column without replacing the `sidebar`
+  slot or obscuring the Conversation column;
+- in the expanded state it follows the resolved Sidebar width, including user
+  resizing, with a default of approximately 280px;
+- in the collapsed state it follows the existing 56px compact rail and keeps
+  only the Worktree rail affordance visible;
+- it reuses the Sidebar width, track transition, and easing semantics instead
+  of introducing a fixed Drawer width or an independent animation;
+- the Conversation remains visible and the current Session is unchanged when
+  Worktree mode is entered, switched, or collapsed.
 
 ### 9.1 Entering Worktree mode
 
@@ -417,6 +452,12 @@ Workspace list.
 
 The mode remains active when the current Session changes. The user explicitly
 switches back to Workspace/Session mode.
+
+The UI persists only `viewMode` in browser-local UI preference. On refresh, it
+restores Worktree mode without writing to DSH or the plugin sidecar. The initial
+Workspace target still comes from the current Session's Workspace, or the most
+recent DSH Workspace when no Session is current. If the plugin or Worktree view
+is unavailable, the UI falls back to the original Workspace/Session mode.
 
 ### 9.3 Worktree mode contents
 
@@ -454,9 +495,6 @@ searchable combobox:
 - unavailable branches are disabled rather than silently forced;
 - the generated Worktree path is not editable;
 - no-HEAD errors are shown as the explicit Git requirement described above.
-
-The meaning of a selected branch is pending and must be settled before the
-implementation plan is written.
 
 ### 9.5 Create and open Session interaction
 
@@ -531,6 +569,9 @@ sidecar is missing, corrupt, or unavailable.
 ### Data and Host
 
 - No DSH source changes are required.
+- The target DSH release/profile composition explicitly mounts the Worktree
+  Remote contribution through `api-remotes`; the plugin does not modify DSH
+  source code.
 - DSH Workspace and Session data are never copied into the sidecar.
 - Sidecar files are stored below the resolved DSH Home, not in a Workspace
   root, Worktree, `.git`, or DSH raw Session storage.
@@ -549,10 +590,13 @@ sidecar is missing, corrupt, or unavailable.
 - Switching to Worktree mode does not change the current Session.
 - Opening a Session in Worktree mode keeps Worktree mode active.
 - Switching back restores the original Workspace/Session navigation.
-- Worktree creation uses a searchable branch combobox, not a raw path field or
-  free-form branch-only input.
+- Worktree creation uses a searchable combobox of existing local branches;
+  branches already checked out elsewhere are disabled, and V1 does not create
+  a new branch.
 - The Worktree view shows main, active Worktree, detached, repair-needed, and
   degraded states where applicable.
+- Refreshing the browser restores the last Worktree view mode from browser-local
+  UI preference without writing that preference into DSH or the plugin sidecar.
 - Worktree Session creation uses DSH `session.create({ cwd })`, then external
   binding, then the existing Conversation navigation.
 - Sidecar failure does not make the original DSH Session view unusable.
@@ -567,67 +611,3 @@ sidecar is missing, corrupt, or unavailable.
 - background Git file watching;
 - a generic execution API for external plugins;
 - replacing DSH's Workspace browser or Conversation component.
-
-## 13. 待确认
-
-以下内容已集中保留，避免在未决状态下污染已确定设计。
-
-### 13.1 Branch combobox 的语义
-
-最新需求确定了“获取 branch 列表 + 关键词过滤”，但还没有确定所选
-branch 的 Git 语义：
-
-**方案 A：选择已有 branch 作为 Worktree branch**
-
-```text
-git worktree add <path> <selected-branch>
-```
-
-这会使已经被 Workspace 或其他 Worktree checkout 的 branch 不可选；V1
-不支持自动新建 branch。
-
-**方案 B：选择 base branch，再创建新的 Worktree branch**
-
-```text
-base branch: <combobox>
-new branch:  <new branch name>
-git worktree add -b <new branch> <path> <base branch>
-```
-
-这保留了此前“创建新本地 branch”的语义，但需要两个字段。
-
-当前推荐先确认方案 A 或方案 B，再固定 `createWorktree` 的输入类型、Git
-命令、branch conflict 行为和验收测试。
-
-### 13.2 Remote/client contribution 的装配方式
-
-Host Manager 必须通过浏览器可调用的 Remote projection 暴露给 UI。需要
-确认在目标 DSH release 下，是：
-
-- 由本插件的 Client half 自己挂载 `clutch-dsh-worktree-manager` 的 Remote
-  contribution；还是
-- 由一个外部 composition 显式把该 `/remote` contribution 加入现有
-  `api-remotes` assembly。
-
-设计目标仍然是不修改 DSH core；这里只待确认插件 Remote 的装配路径和
-发布约束。
-
-### 13.3 Worktree mode 的 frame geometry
-
-模式语义已经确定为与 Workspace/Session 同级，但需要在实现前确认
-`shell.overlay` 的具体布局：
-
-- 是否只覆盖原 sidebar navigation 区域并保留 Conversation 可见；
-- 收起 sidebar 时 Worktree surface 的展开行为；
-- 是否需要复用 DSH sidebar 的宽度/动画变量。
-
-这属于嵌入几何，不改变模式、数据流或职责边界。
-
-### 13.4 View mode 的刷新持久性
-
-需要决定 Worktree 模式是否：
-
-- 仅在当前浏览器 Tab 内存活，刷新后回到 Workspace/Session；或
-- 写入浏览器本地 UI 偏好，刷新后恢复上次模式。
-
-这不进入 DSH Session、Workspace 或 plugin sidecar。
