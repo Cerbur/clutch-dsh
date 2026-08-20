@@ -2,6 +2,43 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { computeOverlayBounds } from '../lib/client/overlay-bounds.js';
+import {
+  findNewSessionAnchor,
+  resolveNativeSidebarRoot,
+} from '../lib/client/sidebar-overlay-geometry.js';
+
+test('unwraps the display-contents sidebar slot before measuring the native root', () => {
+  const nativeRoot = {
+    firstElementChild: null,
+    getBoundingClientRect: () => ({ width: 280, height: 813 }),
+  };
+  const slotWrapper = {
+    firstElementChild: nativeRoot,
+    getBoundingClientRect: () => ({ width: 0, height: 0 }),
+  };
+  const sidebar = {
+    firstElementChild: slotWrapper,
+    getBoundingClientRect: () => ({ width: 280, height: 813 }),
+  };
+
+  assert.equal(resolveNativeSidebarRoot(sidebar), nativeRoot);
+});
+
+test('prefers the visible New Session button when the logo shortcut shares its label', () => {
+  const logoShortcut = {
+    textContent: 'DSH Local Build',
+    getAttribute: () => '新建会话',
+  };
+  const newSession = {
+    textContent: '新会话',
+    getAttribute: () => '新建会话',
+  };
+  const root = {
+    querySelectorAll: () => [logoShortcut, newSession],
+  };
+
+  assert.equal(findNewSessionAnchor(root), newSession);
+});
 
 test('computes coverage from New Session top to footer top', () => {
   assert.deepEqual(

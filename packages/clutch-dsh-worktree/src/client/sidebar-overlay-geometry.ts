@@ -10,16 +10,28 @@ function asRect(element: Element): RectLike {
   return { top: rect.top, bottom: rect.bottom };
 }
 
-function findNewSessionAnchor(root: Element): HTMLElement | undefined {
+export function resolveNativeSidebarRoot(sidebar: Element): Element | undefined {
+  const directChild = sidebar.firstElementChild;
+  if (directChild === null) return undefined;
+
+  const directRect = directChild.getBoundingClientRect();
+  if (directRect.width > 0 || directRect.height > 0) return directChild;
+  return directChild.firstElementChild ?? directChild;
+}
+
+export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   const labels = ['新建会话', 'New session', '新会话', 'New Session'];
-  for (const label of labels) {
-    const button = root.querySelector<HTMLElement>(`button[aria-label="${label}"]`);
-    if (button !== null) return button;
-  }
-  return [...root.querySelectorAll<HTMLElement>('button')].find((button) => {
+  const buttons = [...root.querySelectorAll<HTMLElement>('button')];
+  const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
     return text === '新会话' || text === 'New Session';
   });
+  if (visibleLabel !== undefined) return visibleLabel;
+  for (const label of labels) {
+    const button = buttons.find((candidate) => candidate.getAttribute('aria-label') === label);
+    if (button !== undefined) return button;
+  }
+  return undefined;
 }
 
 export function useSidebarOverlayGeometry(active: boolean): {
@@ -41,7 +53,8 @@ export function useSidebarOverlayGeometry(active: boolean): {
     const overlay = surface?.closest('[data-shell-overlay]');
     const frame = overlay?.parentElement;
     const sidebar = frame?.firstElementChild;
-    const nativeRoot = sidebar?.firstElementChild;
+    const nativeRoot =
+      sidebar === null || sidebar === undefined ? undefined : resolveNativeSidebarRoot(sidebar);
     if (
       !(overlay instanceof HTMLElement) ||
       !(sidebar instanceof HTMLElement) ||
