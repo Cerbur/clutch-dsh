@@ -235,11 +235,13 @@ existing `/api` Connection/Gateway wire to `WorktreeManager`; it owns neither
 the Host descriptor nor a transport. The UI imports only browser-safe contract
 and Client modules, never Host, Manage, or Provider runtime internals.
 
-Main rows use the global DSH Session list and subtract selected Workspace
-sidecar bindings instead of depending on native `Workspace.sessionIds`. When a
-Connection endpoint is missing or a call fails, the original Workspace/Session
-browser remains available and the Worktree surface shows an explicit retryable
-error rather than an empty successful projection.
+Main rows use the selected native `Workspace.sessionIds` and subtract that
+Workspace's sidecar bindings. Worktree-created Sessions are shown under their
+bound Worktree even when rc.8 does not add cwd-created Sessions to native
+Workspace membership. When a Connection endpoint is missing or a call fails,
+the original Workspace/Session browser remains available and the Worktree
+surface shows an explicit retryable error rather than an empty successful
+projection.
 
 ## 5. Worktree storage and sidecar layout
 
@@ -345,15 +347,16 @@ The Provider manages only local Git Worktrees. It does not modify business
 files, create an automatic commit, create an orphan branch, or use `--force`
 to attach a branch already checked out elsewhere.
 
-V1 selects an existing local branch as the Worktree branch:
+V1 selects an existing local branch as the Worktree base branch:
 
 - the branch combobox lists local branches from the selected Workspace and
   filters them by keyword;
-- a branch already checked out by the Workspace or another active Worktree is
-  unavailable and disabled;
-- creation uses `git worktree add <generated-path> <selected-branch>`;
-- V1 does not create a new branch. Base-branch plus new-branch creation is a
-  future one-step optimization.
+- a branch already checked out by the Workspace or another active Worktree
+  requires a distinct new local branch name;
+- an unchecked-out branch uses `git worktree add <generated-path> <branch>`;
+- a checked-out base uses `git worktree add -b <new-branch> <generated-path>
+  <base-branch>`;
+- the Provider never uses `--force` or remote Git operations.
 
 ## 7. Service contract
 
@@ -365,7 +368,11 @@ interface WorktreeManager {
 
   listBranches(input: { workspaceId: string }): Promise<readonly BranchRecord[]>;
 
-  createWorktree(input: { workspaceId: string; branch: string }): Promise<WorktreeRecord>;
+  createWorktree(input: {
+    workspaceId: string;
+    branch: string;
+    newBranch?: string;
+  }): Promise<WorktreeRecord>;
 
   removeWorktree(input: { workspaceId: string; worktreeId: string }): Promise<void>;
 
@@ -583,7 +590,8 @@ searchable combobox:
 - branches are fetched from the selected Workspace through `listBranches`;
 - filtering is performed by keyword in the browser;
 - the list shows the current branch and branch checkout availability;
-- unavailable branches are disabled rather than silently forced;
+- checked-out branches remain selectable as bases, but require a distinct new
+  local branch name;
 - the generated Worktree path is not editable;
 - no-HEAD errors are shown as the explicit Git requirement described above.
 
@@ -594,7 +602,8 @@ creation uses DSH `session.create({ cwd })`, then the external binding flow.
 
 After a successful binding, the UI opens the Session in the existing DSH
 Conversation while retaining Worktree mode. A binding failure leaves the row in
-`repair-needed` and never silently falls back to main.
+`repair-needed` and never silently falls back to main; the created Session ID
+remains available for binding retry or direct navigation.
 
 ### 9.6 Delete interaction
 
@@ -687,9 +696,9 @@ sidecar is missing, corrupt, or unavailable.
 - Switching to Worktree mode does not change the current Session.
 - Opening a Session in Worktree mode keeps Worktree mode active.
 - Switching back restores the original Workspace/Session navigation.
-- Worktree creation uses a searchable combobox of existing local branches;
-  branches already checked out elsewhere are disabled, and V1 does not create
-  a new branch.
+- Worktree creation uses a searchable local-branch picker; checked-out bases
+  require a distinct new local branch name and are created with `git worktree
+  add -b`, while unoccupied branches use the selected branch directly.
 - The Worktree view shows main, active Worktree, detached, repair-needed, and
   degraded states where applicable.
 - Refreshing the browser restores the last Worktree view mode from browser-local

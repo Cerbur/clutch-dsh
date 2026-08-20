@@ -121,10 +121,17 @@ export interface WorktreeManager {
   listBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
 
   /**
-   * 从已有本地分支创建路径受管的 Worktree；Git 成功而 sidecar 失败时实现必须执行补偿清理。
-   * Creates a path-managed Worktree from an existing local branch; implementations must compensate if Git succeeds but sidecar persistence fails.
+   * 从已有本地分支创建路径受管的 Worktree；当 base branch 已 checkout 时，`newBranch`
+   * 允许从它创建一个新的本地 branch。Git 成功而 sidecar 失败时实现必须执行补偿清理。
+   * Creates a path-managed Worktree from an existing local branch. When the base
+   * branch is already checked out, `newBranch` creates a new local branch from it.
+   * Implementations must compensate if Git succeeds but sidecar persistence fails.
    */
-  createWorktree(input: { workspaceId: WorkspaceId; branch: string }): Promise<WorktreeRecord>;
+  createWorktree(input: {
+    workspaceId: WorkspaceId;
+    branch: string;
+    newBranch?: string;
+  }): Promise<WorktreeRecord>;
 
   /**
    * 删除 Git Worktree 后保留 record，并将其 active bindings 转为 detached；不会删除任何 DSH Session。
@@ -188,6 +195,7 @@ export interface WorktreeRemoteManager {
   createWorktree(input: {
     workspaceId: WorkspaceId;
     branch: string;
+    newBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
 
   removeWorktree(input: {

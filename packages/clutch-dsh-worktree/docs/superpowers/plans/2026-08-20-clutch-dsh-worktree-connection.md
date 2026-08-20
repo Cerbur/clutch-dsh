@@ -219,20 +219,21 @@ not.
   carries a user-facing message, stable code and `retryable` flag.
 - Read failures keep a visible Worktree error panel with a Retry action and do
   not turn the Worktree list into an empty successful state.
-- The surface uses the injected `WorktreeManager` for `listWorktrees`,
-  `listBranches`, `createWorktree`, `removeWorktree`, `listBindings`, and
-  `bindSession`; it does not access Connection or Remote directly.
-- Create uses a selected branch from `listBranches`; remove targets the selected
-  Worktree; bind targets the current DSH Session and selected Worktree. These
-  actions only mutate the plugin's Worktree relation/Git domain through Host and
-  never write DSH Session metadata. Each successful mutation refreshes the
-  Worktree/binding projection.
+- The surface uses the injected `WorktreeManager` for Worktree reads,
+  `createWorktree`, `removeWorktree`, and the automatic Session binding path; it
+  does not access Connection or Remote directly.
+- Create uses a selected branch from `listBranches`; checked-out bases supply a
+  distinct new local branch; remove targets the selected Worktree; new Session
+  creates through DSH `session.create({ cwd })` before calling `bindSession`.
+  These actions never write DSH Session metadata from the plugin. Each
+  successful mutation refreshes the Worktree/binding projection.
 
 - [x] **Step 1: Write error-state and action tests.**
 
 Use a real fake `WorktreeManager` with counters and rejected reads. Assert a
 rejected list produces a visible retryable error state, retry calls the manager
-again, and create/remove/bind invoke the correct existing manager methods.
+again, and create/remove invoke the correct existing manager methods; cover
+Session creation separately as DSH create followed by external bind.
 
 - [x] **Step 2: Run the surface test and observe RED.**
 

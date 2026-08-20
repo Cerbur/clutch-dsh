@@ -247,6 +247,29 @@ test('rejects invalid and already checked-out branches without using force', asy
   });
 });
 
+test('creates a new Worktree branch from an already checked-out base branch', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'worktree/main',
+    });
+
+    assert.equal(record.branch, 'worktree/main');
+    assert.equal(await exists(record.absolutePath), true);
+    assert.equal((await runGit(workspaceRoot, ['branch', '--show-current'])).stdout.trim(), 'main');
+
+    const branches = await provider.listBranches({ workspaceId: 'ws_one' });
+    assert.deepEqual(
+      branches.map((branch) => ({ name: branch.name, checkedOut: branch.checkedOut })),
+      [
+        { name: 'main', checkedOut: true },
+        { name: 'worktree/main', checkedOut: true },
+      ],
+    );
+  });
+});
+
 test('rejects a generated Worktree path that already exists or is inside the Workspace', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, dsh }) => {
     await runGit(workspaceRoot, ['branch', 'feature/existing']);

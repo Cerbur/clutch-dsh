@@ -50,12 +50,13 @@ pnpm dsh web
 ```
 
 `--dump-config` 输出中应能看到 `@cerbur/clutch-dsh-worktree` 的 Host layer。启动后，
-在 DSH Web UI 的 Sidebar footer 进入 Worktree mode，选择 Workspace，然后可以：
+在 DSH Web UI 的 Sidebar footer 进入 Worktree mode，然后可以：
 
-1. 查看 Worktrees、local branches 和 bindings；
-2. 从可用 branch 创建 Worktree；
-3. 将当前 Session 绑定到 Worktree；
-4. 删除 Worktree，并查看保留的 detached binding。
+1. 搜索并平铺查看 Workspace；
+2. 点击 Workspace 的 `+`，在弹窗中从 local branch 创建 Worktree；
+3. 如果基准 branch 正被 checkout，填写新的 local branch 名称后创建；
+4. 点击 Worktree 的 `+` 创建一个 cwd 指向该 Worktree 的新 Session，并自动完成 binding；
+5. 删除 Worktree，并查看保留的 detached binding。
 
 ### 更新本地 plugin 后重新测试
 
@@ -165,9 +166,9 @@ ctx.connection.rpc.call(
 六个 endpoint、payload、Connection 外层失败、Worktree 内层领域失败和
 dispose abort 都在 adapter 内归一化；UI 只接收现有 `WorktreeManager` interface。
 因此 `ctx.remote.worktreeManager` 可以始终为 `undefined`，不影响 Worktree 查询
-和操作。请求失败显示明确的 retryable error，不伪装成空列表。Main bucket 读取
-全局 DSH Session list，再加入 sidecar binding 投影；不依赖 native
-`Workspace.sessionIds` membership。
+和操作。请求失败显示明确的 retryable error，不伪装成空列表。Main bucket 先按当前
+Workspace 的 native `sessionIds` 过滤，再排除该 Workspace 的 sidecar binding；
+Worktree 下的 Session 则来自对应的 binding 投影。
 package 现在声明官方 `dsh.client` metadata，并由 `src/client/entry.ts` 产出
 `lib/client.js` 的 `window.__ModuleLoader__.load(...)` handoff；Client 不自行
 调用 `$mount()`，也不创建第二套 RPC/transport。
@@ -193,14 +194,21 @@ Git adapter 和 sidecar repository 都通过注入边界组合；Host read adapt
 ## 已确认的 V1 约束
 
 - Worktree 使用 Provider 生成的路径。
-- branch combobox 只选择已有 local branch。
-- 已被 Workspace 或其他 active Worktree checkout 的 branch 禁用。
-- 创建使用 `git worktree add <generated-path> <selected-branch>`。
-- V1 不创建新 branch，不使用 `--force`，不执行 remote Git 操作。
+- branch combobox 选择已有 local branch 作为基准。
+- 已 checkout 的基准 branch 需要填写新的 local branch 名称，创建使用
+  `git worktree add -b <new-branch> <generated-path> <base-branch>`；未 checkout
+  的 branch 直接使用 `git worktree add <generated-path> <branch>`。
+- 不使用 `--force`，不执行 remote Git 操作，也不修改工作树业务文件。
 - Worktree Session 先通过 DSH `session.create({ cwd })` 创建，再通过外部
   Manager contract 绑定。
+- 如果 binding 失败，已创建的 DSH Session 不会被删除；UI 保留其 Session ID，
+  提供重试 binding 或直接打开该 Session 的恢复入口。
+- Worktree UI 不提供 `Bind current Session` 入口；Session binding 只在 Worktree
+  的新增 Session 流程中自动完成。
 - UI 使用 `sidebar.footer.action` 和 `shell.overlay`，不替换 DSH 原生
   Workspace/Session browser。
+- Worktree surface 提供搜索、Workspace 新增、Workspace 新增 Worktree 和
+  Worktree 新增 Session 的入口，层级展示为 Workspace → Worktree → Session。
 - `viewMode` 只保存在浏览器本地，刷新后可恢复，不写入 DSH 或 sidecar。
 - overlay 通过 `data-shell-overlay` 的左侧 Sidebar 列和 `ResizeObserver`
   派生实际宽度，跟随 280px 默认宽度、用户 resize、300ms transition 及 56px

@@ -161,11 +161,11 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
 
 /**
  * 本地 Git worktree adapter：所有命令都以 DSH Workspace 根目录为 cwd，并仅使用固定的
- * 本地子命令；V1 不创建分支、不使用 `--force`，也不访问 remote。
+ * 本地子命令；不使用 `--force`，也不访问 remote。
  *
  * Local Git worktree adapter: every command runs with the DSH Workspace root as
- * cwd and uses a fixed local-only subcommand; V1 neither creates branches, uses
- * `--force`, nor accesses remotes.
+ * cwd and uses a fixed local-only subcommand; it never uses `--force` or accesses
+ * remotes.
  */
 export class LocalGitAdapter implements GitWorktreeAdapter {
   /**
@@ -241,15 +241,23 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   }
 
   /**
-   * 仅执行 `git worktree add <targetPath> <branch>`；不会隐式创建分支或强制覆盖冲突。
-   * Executes only `git worktree add <targetPath> <branch>`; it never implicitly
-   * creates a branch or force-overrides a conflict.
+   * 执行 `git worktree add`；传入 newBranch 时使用 `-b` 从 base branch 创建本地分支。
+   * Executes `git worktree add`; when newBranch is supplied, `-b` creates a local
+   * branch from the selected base branch.
    */
-  async createWorktree(workspaceRoot: string, targetPath: string, branch: string): Promise<void> {
+  async createWorktree(
+    workspaceRoot: string,
+    targetPath: string,
+    branch: string,
+    newBranch?: string,
+  ): Promise<void> {
     try {
-      await runGit(['worktree', 'add', targetPath, branch], workspaceRoot);
+      const args = newBranch
+        ? ['worktree', 'add', '-b', newBranch, targetPath, branch]
+        : ['worktree', 'add', targetPath, branch];
+      await runGit(args, workspaceRoot);
     } catch (error) {
-      throw operationError('create worktree', workspaceRoot, targetPath, branch, error);
+      throw operationError('create worktree', workspaceRoot, targetPath, newBranch ?? branch, error);
     }
   }
 

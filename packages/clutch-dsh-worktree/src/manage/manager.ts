@@ -179,10 +179,17 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
   }
 
   /**
-   * 创建受 DSH Home 边界管理的 Git Worktree，并仅在 sidecar 提交成功后返回；持久化失败会补偿删除 Git Worktree。
-   * Creates a Git Worktree inside the managed DSH Home boundary and returns only after sidecar commit; persistence failure compensates by removing the Git Worktree.
+   * 创建受 DSH Home 边界管理的 Git Worktree，并仅在 sidecar 提交成功后返回；已 checkout 的
+   * base branch 可以通过 newBranch 创建新的本地 branch。持久化失败会补偿删除 Git Worktree。
+   * Creates a Git Worktree inside the managed DSH Home boundary and returns only after sidecar
+   * commit. An already checked-out base branch can create a new local branch through newBranch.
+   * Persistence failure compensates by removing the Git Worktree.
    */
-  async createWorktree(input: { workspaceId: WorkspaceId; branch: string }): Promise<WorktreeRecord> {
+  async createWorktree(input: {
+    workspaceId: WorkspaceId;
+    branch: string;
+    newBranch?: string;
+  }): Promise<WorktreeRecord> {
     const workspace = await this.requireWorkspace(input.workspaceId);
     await this.git.validateRepository(workspace.rootPath);
 
@@ -192,19 +199,50 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       });
     }
 
-    const branches = await this.git.listBranches(workspace.rootPath);
-    if (!branches.includes(input.branch)) {
-      throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${input.branch}`, {
+    const baseBranch = input.branch.trim();
+    if (input.newBranch !== undefined && typeof input.newBranch !== 'string') {
+      throw providerError('GIT_OPERATION_FAILED', 'A new branch name must be a string', {
         workspaceRoot: workspace.rootPath,
-        branch: input.branch,
+        baseBranch,
+      });
+    }
+    const newBranch = input.newBranch?.trim();
+    if (baseBranch.length === 0) {
+      throw providerError('GIT_OPERATION_FAILED', 'A local base branch is required', {
+        workspaceRoot: workspace.rootPath,
+      });
+    }
+    if (input.newBranch !== undefined && (!newBranch || newBranch === baseBranch)) {
+      throw providerError('GIT_OPERATION_FAILED', 'A distinct new branch name is required', {
+        workspaceRoot: workspace.rootPath,
+        baseBranch,
+        newBranch: input.newBranch,
+      });
+    }
+
+    const branches = await this.git.listBranches(workspace.rootPath);
+    if (!branches.includes(baseBranch)) {
+      throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
+        workspaceRoot: workspace.rootPath,
+        branch: baseBranch,
+      });
+    }
+
+    const targetBranch = newBranch ?? baseBranch;
+    if (newBranch !== undefined && branches.includes(newBranch)) {
+      throw providerError('WORKTREE_BRANCH_CONFLICT', `New branch already exists: ${newBranch}`, {
+        workspaceRoot: workspace.rootPath,
+        branch: newBranch,
+        baseBranch,
       });
     }
 
     const existingGitWorktrees = await this.git.listWorktrees(workspace.rootPath);
-    if (existingGitWorktrees.some((worktree) => worktree.branch === input.branch)) {
-      throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already checked out: ${input.branch}`, {
+    if (existingGitWorktrees.some((worktree) => worktree.branch === targetBranch)) {
+      throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already checked out: ${targetBranch}`, {
         workspaceRoot: workspace.rootPath,
-        branch: input.branch,
+        branch: targetBranch,
+        baseBranch,
       });
     }
 
@@ -226,7 +264,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     // Git 是第一个外部副作用；下方 sidecar mutation 是关系提交点，失败时必须反向清理这一步。
     // Git is the first external side effect; the sidecar mutation below is the relation commit point and must compensate this step on failure.
     try {
-      await this.git.createWorktree(workspace.rootPath, targetPath, input.branch);
+      await this.git.createWorktree(workspace.rootPath, targetPath, baseBranch, newBranch);
     } catch (error) {
       throw asGitError('create worktree', workspace.rootPath, targetPath, error);
     }
@@ -235,7 +273,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       worktreeId,
       workspaceId: input.workspaceId,
       absolutePath: targetPath,
-      branch: input.branch,
+      branch: targetBranch,
       status: 'active',
     };
 
@@ -251,11 +289,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
           });
         }
         const branchConflict = snapshot.worktrees.find(
-          (worktree) => worktree.status === 'active' && worktree.branch === input.branch,
+          (worktree) => worktree.status === 'active' && worktree.branch === targetBranch,
         );
         if (branchConflict) {
-          throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${input.branch}`, {
-            branch: input.branch,
+          throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
+            branch: targetBranch,
             worktreeId: branchConflict.worktreeId,
           });
         }

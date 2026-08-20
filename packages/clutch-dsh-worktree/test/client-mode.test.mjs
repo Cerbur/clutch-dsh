@@ -3,8 +3,13 @@ import test from 'node:test';
 import { loadClientEntry } from './client-fixture.mjs';
 import { openWorktreeSession } from '../lib/client/navigation.js';
 
-const { WORKTREE_VIEW_MODE_STORAGE_KEY, effectiveViewMode, initialWorkspaceId, unboundSessionIds } =
-  await import('../lib/client/view-mode.js');
+const {
+  WORKTREE_VIEW_MODE_STORAGE_KEY,
+  effectiveViewMode,
+  initialWorkspaceId,
+  unboundSessionIds,
+  workspaceSessionIds,
+} = await import('../lib/client/view-mode.js');
 
 class MemoryStorage {
   #values = new Map();
@@ -101,10 +106,19 @@ test('unavailable or degraded Worktree service falls back to the original view',
   assert.equal(effectiveViewMode('worktree', true), 'worktree');
 });
 
-test('Main uses the global DSH Session list rather than native Workspace grouping', () => {
-  assert.deepEqual(unboundSessionIds(['workspace-session', 'cwd-session'], ['workspace-session']), [
-    'cwd-session',
-  ]);
+test('Main follows the selected Workspace membership before removing Worktree-bound sessions', () => {
+  const workspaces = {
+    items: [workspace('ws-one', ['one', 'two']), workspace('ws-two', ['three', 'four'])],
+  };
+
+  const selectedSessionIds = workspaceSessionIds(
+    workspaces,
+    'ws-two',
+    ['one', 'two', 'three', 'four', 'orphan'],
+  );
+
+  assert.deepEqual(selectedSessionIds, ['three', 'four']);
+  assert.deepEqual(unboundSessionIds(selectedSessionIds, ['four']), ['three']);
 });
 
 test('initial Workspace follows the current Session, then the recent DSH Workspace', () => {

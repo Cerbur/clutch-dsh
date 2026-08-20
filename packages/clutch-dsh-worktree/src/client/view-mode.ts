@@ -30,7 +30,19 @@ export function effectiveViewMode(
   return preferred;
 }
 
-/** Keep the Main bucket sourced from DSH's global Session list, not Workspace grouping. */
+/** Keep the Main bucket scoped to the selected DSH Workspace before filtering bindings. */
+export function workspaceSessionIds(
+  workspaces: WorkspaceListLike,
+  workspaceId: string | undefined,
+  sessionIds: readonly string[],
+): readonly string[] {
+  if (workspaceId === undefined) return [];
+  const workspace = workspaces.items.find((candidate) => candidate.workspaceId === workspaceId);
+  if (workspace === undefined) return [];
+  const listed = new Set(sessionIds);
+  return workspace.sessionIds.filter((sessionId) => listed.has(sessionId));
+}
+
 export function unboundSessionIds(
   sessionIds: readonly string[],
   boundSessionIds: readonly string[],

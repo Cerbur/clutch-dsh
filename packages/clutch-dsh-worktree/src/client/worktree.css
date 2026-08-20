@@ -192,6 +192,12 @@
   padding: 6px 8px;
 }
 
+.recoveryActions {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .retryButton:disabled,
 .actionButton:disabled,
 .inlineButton:disabled {
@@ -302,4 +308,288 @@
   flex: none;
   margin-left: 6px;
   padding: 3px 6px;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 6px;
+}
+
+.searchIcon {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.searchInput,
+.textInput {
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  outline: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.searchInput:focus,
+.textInput:focus,
+.actionSelect:focus {
+  border-color: #3b82f6;
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.iconButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.workspaceList {
+  display: grid;
+  gap: 4px;
+}
+
+.workspaceGroup {
+  min-width: 0;
+}
+
+.workspaceRow,
+.worktreeRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 36px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 3px 4px;
+}
+
+.workspaceRow:hover,
+.worktreeRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.disclosureButton {
+  flex: none;
+  width: 24px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.disclosureButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.workspaceIcon,
+.worktreeIcon {
+  flex: none;
+  width: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
+}
+
+.workspaceIcon {
+  color: #3b82f6;
+}
+
+.workspaceTitle,
+.worktreeLabel {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.treeChildren {
+  margin-left: 24px;
+  padding: 2px 0 5px 12px;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+
+.groupLabel {
+  padding: 6px 8px 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.worktreeGroup {
+  margin-top: 2px;
+}
+
+.worktreeRow {
+  min-height: 34px;
+}
+
+.worktreeRow .disclosureButton {
+  width: 22px;
+}
+
+.worktreeRow .status {
+  margin-left: 4px;
+}
+
+.treeSession {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 7px;
+  padding: 4px 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.treeSession:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeGuide {
+  flex: none;
+  width: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.emptyNested {
+  margin: 0;
+  padding: 4px 8px 5px 28px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, #000 35%, transparent);
+}
+
+.modal {
+  display: grid;
+  gap: 12px;
+  width: min(360px, 100%);
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--dsw-specific-sidebar-fill);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 28%);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modalTitle {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+
+.modalDescription {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.modalField {
+  display: grid;
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.textInput {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.modalPrimaryButton,
+.modalSecondaryButton {
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 11px;
+}
+
+.modalPrimaryButton {
+  background: #2563eb;
+  color: white;
+}
+
+.modalSecondaryButton {
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+}
+
+.modalPrimaryButton:disabled,
+.modalSecondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }

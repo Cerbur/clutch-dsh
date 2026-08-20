@@ -5,10 +5,36 @@ import type {
   WorktreeRecord,
 } from '../contract/index.js';
 
+/** A DSH Session exists even when the external Worktree binding needs repair. */
+export class WorktreeSessionBindingError extends Error {
+  readonly code = 'SESSION_BINDING_FAILED';
+  readonly retryable = true;
+  readonly sessionId: string;
+  readonly cause: unknown;
+
+  constructor(sessionId: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    super(`Session ${sessionId} was created, but Worktree binding failed: ${reason}`);
+    this.name = 'WorktreeSessionBindingError';
+    this.sessionId = sessionId;
+    this.cause = cause;
+  }
+}
+
 export interface WorktreeViewData {
   readonly worktrees: readonly WorktreeRecord[];
   readonly branches: readonly BranchRecord[];
   readonly bindings: readonly SessionBinding[];
+}
+
+export interface WorktreeWorkspaceView extends WorktreeViewData {
+  readonly workspaceId: string;
+}
+
+export interface CreateSessionForWorktreeInput {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly cwd: string;
 }
 
 export interface WorktreeViewError {
@@ -25,10 +51,6 @@ export type WorktreeViewAction =
   | {
       readonly type: 'removeWorktree';
       readonly input: Parameters<WorktreeManager['removeWorktree']>[0];
-    }
-  | {
-      readonly type: 'bindSession';
-      readonly input: Parameters<WorktreeManager['bindSession']>[0];
     };
 
 /** Read all three Worktree projections needed by the surface in one refresh. */
@@ -44,6 +66,19 @@ export async function loadWorktreeView(
   return { worktrees, branches, bindings };
 }
 
+/** Load one independent projection per DSH Workspace for the flat sidebar hierarchy. */
+export async function loadWorktreeViews(
+  manager: WorktreeManager,
+  workspaceIds: readonly string[],
+): Promise<readonly WorktreeWorkspaceView[]> {
+  return Promise.all(
+    workspaceIds.map(async (workspaceId) => ({
+      workspaceId,
+      ...(await loadWorktreeView(manager, workspaceId)),
+    })),
+  );
+}
+
 /** Keep mutation routing in the browser Consumer while leaving wire details to the adapter. */
 export async function executeWorktreeAction(
   manager: WorktreeManager,
@@ -57,7 +92,29 @@ export async function executeWorktreeAction(
     await manager.removeWorktree(action.input);
     return;
   }
-  await manager.bindSession(action.input);
+}
+
+/**
+ * Create a normal DSH Session at a Worktree cwd, then add the external binding.
+ * A binding failure deliberately leaves the DSH-created Session intact.
+ */
+export async function createSessionForWorktree(input: CreateSessionForWorktreeInput & {
+  readonly createSession: (input: { cwd: string }) => Promise<string>;
+  readonly manager: Pick<WorktreeManager, 'bindSession'>;
+  readonly openSession: (sessionId: string) => void;
+}): Promise<string> {
+  const sessionId = await input.createSession({ cwd: input.cwd });
+  try {
+    await input.manager.bindSession({
+      workspaceId: input.workspaceId,
+      worktreeId: input.worktreeId,
+      sessionId,
+    });
+  } catch (error) {
+    throw new WorktreeSessionBindingError(sessionId, error);
+  }
+  input.openSession(sessionId);
+  return sessionId;
 }
 
 /** Convert any adapter/Gateway failure into renderable, retry-aware UI data. */

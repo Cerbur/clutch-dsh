@@ -171,11 +171,14 @@ pretend to have a real DSH Host composition until Phase 3.
       enter/exit, refresh rehydration, and unavailable/degraded fallback to
       `workspace-session`.
 - [x] Render a Worktree surface that derives its initial Workspace
-      from current Session membership or DSH recency, allows local Workspace
-      selection, reads Main rows from the global DSH Session list rather than
-      native `Workspace.sessionIds`, opens existing Sessions through
-      `ctx.sessions.open` without changing mode, and executes Worktree
-      create/remove/bind through the Manager contract.
+      from current Session membership or DSH recency, renders the selected
+      Workspace hierarchy as Workspace → Worktree → Session, scopes Main rows
+      to the selected native `Workspace.sessionIds`, opens existing Sessions
+      through `ctx.sessions.open` without changing mode, and exposes search,
+      Workspace creation, Worktree creation and Worktree Session creation.
+- [x] Keep Worktree Session creation on the no-DSH-change path: call DSH
+      `session.create({ cwd })`, then bind the returned Session through the
+      external Manager contract; remove the manual “Bind current Session” UI.
 - [x] Keep Connection/Gateway/endpoint failures visible as explicit retryable
       UI errors; never turn a failed read into an empty Worktree list.
 - [x] Measure the existing Sidebar column through the supported overlay DOM
@@ -193,11 +196,11 @@ The detailed rc.8 assembly conclusion is recorded in
 
 ### Phase 5 — Worktree lifecycle UI
 
-- List local branches and mark branches checked out by the Workspace or an
-  active Worktree as unavailable.
+- List local branches and show which branch is currently checked out.
 - Create Worktrees only through Provider-generated paths and existing local
-  branches; reject no-initial-commit, invalid branch, path conflict and
-  already-checked-out cases with stable errors.
+  branches. A checked-out branch is accepted as a base only when the UI
+  supplies a distinct new local branch; reject no-initial-commit, invalid
+  branch, path conflict and duplicate new-branch cases with stable errors.
 - Delete Worktrees only after explicit confirmation; show detached bindings and
   preserve Session history when synchronization needs repair.
 

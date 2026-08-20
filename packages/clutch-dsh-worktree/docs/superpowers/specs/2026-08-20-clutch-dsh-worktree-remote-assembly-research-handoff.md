@@ -81,8 +81,10 @@ UI 只消费现有 `WorktreeManager` interface，不接触 endpoint 或 transpor
   thrown call、malformed result、内层领域失败和 dispose abort。
 - `test/client-composition.test.mjs`：真实 Client fiber dispose 会 abort 在途
   Connection call；`ctx.remote.worktreeManager` 缺失不影响 manager 注入。
-- `test/client-surface.test.mjs`：Worktree/branch/binding 读取、create/remove/bind
-  action、显式 retryable error presentation。
+- `test/client-surface.test.mjs`：Workspace-scoped Main projection、Worktree/branch/
+  binding 读取、Workspace → Worktree → Session hierarchy affordances、create/remove
+  action 和显式 retryable error presentation；`client-session.test.mjs` 覆盖 DSH
+  `session.create({ cwd })` 后自动 binding。
 - `test/client-boundary.test.mjs`：Client bundle/source 不导入 Host/Manage/Provider
   runtime；raw `rpc.call`、`/api`、endpoint 字符串只在 adapter 内；没有
   `$mount()` 或 custom route。

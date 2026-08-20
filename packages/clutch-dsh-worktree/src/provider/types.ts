@@ -66,7 +66,12 @@ export interface GitWorktreeAdapter {
   validateRepository(workspaceRoot: string): Promise<void>;
   listBranches(workspaceRoot: string): Promise<readonly string[]>;
   listWorktrees(workspaceRoot: string): Promise<readonly GitWorktreeInfo[]>;
-  createWorktree(workspaceRoot: string, targetPath: string, branch: string): Promise<void>;
+  createWorktree(
+    workspaceRoot: string,
+    targetPath: string,
+    branch: string,
+    newBranch?: string,
+  ): Promise<void>;
   removeWorktree(workspaceRoot: string, targetPath: string): Promise<void>;
 }
 

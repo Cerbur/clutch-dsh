@@ -11,9 +11,14 @@ This directory contains the browser Consumer and one deep Connection seam:
   disposes it with the fiber. It supplies the same manager to the additive
   `sidebar.footer.action` and `shell.overlay` slots.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own only browser view state and
-  action orchestration. Reads include Worktrees, branches and bindings; create,
-  remove and bind go through the injected manager. Connection/Gateway failures
-  remain visible as retryable errors rather than becoming an empty list.
+  action orchestration. The surface renders Workspace → Worktree → Session,
+  scopes Main sessions to the selected DSH Workspace, and provides search plus
+  Workspace/Worktree creation affordances. Worktree creation and removal go
+  through the injected manager; a new Worktree Session is created through DSH
+  `session.create({ cwd })` and then bound through that manager. Connection/
+  Gateway failures remain visible as retryable errors rather than becoming an
+  empty list; a binding failure keeps the created Session ID available for
+  retry or direct navigation.
 
 The Client never reads `ctx.remote.worktreeManager`, imports or traverses the
 generated `./remote` artifact, calls `ctx.remote.$mount()`, executes Git, reads

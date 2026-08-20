@@ -6,6 +6,7 @@ import { createWorktreeConnectionAdapter } from './worktree-connection.js';
 import { WorktreeModeAction } from './WorktreeModeAction.js';
 import { WorktreeSurface } from './WorktreeSurface.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
+import { createSessionForWorktree } from './worktree-view.js';
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -26,6 +27,11 @@ export type {
 } from './worktree-connection.js';
 export type { WorktreeViewActions, WorktreeViewMode, WorktreeViewState } from './view-mode.js';
 
+/** rc.8 runtime exposes create(), while the published Client type omits it. */
+interface WorktreeSessionCreator {
+  create(input: { cwd: string }): Promise<SessionId>;
+}
+
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
 export const inject = ['connection', 'slots', 'sessions', 'workspaces'];
 
@@ -35,6 +41,7 @@ export const inject = ['connection', 'slots', 'sessions', 'workspaces'];
  */
 export function apply(ctx: ClientContext): void {
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
+  const sessions = ctx.sessions as typeof ctx.sessions & WorktreeSessionCreator;
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   const viewStore = createWorktreeViewStore();
 
@@ -59,6 +66,19 @@ export function apply(ctx: ClientContext): void {
         inject: () => ({
           available: true,
           manager,
+          createWorkspace: async () => {
+            const workspacePath = await ctx.workspaces.pickDirectory();
+            if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
+          },
+          createSessionForWorktree: (input) =>
+            createSessionForWorktree({
+              ...input,
+              createSession: (sessionInput) => sessions.create(sessionInput),
+              manager,
+              openSession: (sessionId) => {
+                ctx.sessions.open(sessionId as SessionId);
+              },
+            }),
           openSession: (sessionId: string) => {
             ctx.sessions.open(sessionId as SessionId);
           },
