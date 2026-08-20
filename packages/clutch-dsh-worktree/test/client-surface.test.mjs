@@ -343,6 +343,26 @@ test('matches native Workspace row actions and drag behavior', async () => {
   assert.match(source, /data-workspace-drag/);
 });
 
+test('matches native Session grouping, drag, and expand-more behavior', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /insertSessionBefore/);
+  assert.match(source, /draggable/);
+  assert.match(source, /onDragOver/);
+  assert.match(source, /onDrop/);
+  assert.match(source, /Expand|Show.*more/);
+  assert.match(source, /Collapse/);
+  assert.match(source, /expandedSessionGroups/);
+  assert.match(source, /slice\(0, 5\)/);
+  assert.doesNotMatch(
+    source,
+    /status=\{record\.status === 'active' \? 'bound' : 'detached'\}/,
+  );
+});
+
 test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

@@ -109,12 +109,21 @@ interface SessionRenameTarget {
 interface WorktreeSessionRowProps {
   readonly sessionId: string;
   readonly label: string;
-  readonly status?: string;
+  readonly drag: SessionDragProps;
   readonly actionPending: boolean;
   readonly onOpen: () => void;
   readonly onRename?: (sessionId: string, currentTitle: string) => void;
   readonly onFork?: (sessionId: string) => void;
   readonly onArchive?: (sessionId: string) => void;
+}
+
+interface SessionDragProps {
+  readonly active: boolean;
+  readonly marker: 'before' | 'after' | null;
+  readonly start: () => void;
+  readonly hover: (half: 'before' | 'after') => void;
+  readonly drop: (half: 'before' | 'after') => void;
+  readonly end: () => void;
 }
 
 interface WorkspaceDragProps {
@@ -155,6 +164,15 @@ interface WorkspaceRenameTarget {
 interface WorkspaceDeleteTarget {
   readonly workspaceId: string;
   readonly title: string;
+}
+
+interface SessionDragState {
+  readonly groupKey: string;
+  readonly sessionId: string;
+  readonly over: {
+    readonly sessionId: string;
+    readonly half: 'before' | 'after';
+  } | null;
 }
 
 const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
@@ -342,7 +360,7 @@ function WorktreeWorkspaceRow({
 function WorktreeSessionRow({
   sessionId,
   label,
-  status,
+  drag,
   actionPending,
   onOpen,
   onRename,
@@ -350,6 +368,11 @@ function WorktreeSessionRow({
   onArchive,
 }: WorktreeSessionRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const markerClass = drag.marker === 'before'
+    ? styles.dropBefore
+    : drag.marker === 'after'
+      ? styles.dropAfter
+      : '';
   const sessionMenuItems = [
     {
       id: 'rename',
@@ -373,17 +396,35 @@ function WorktreeSessionRow({
 
   return (
     <div
-      className={styles.treeSessionRow}
+      className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
+      data-session-drag={drag.active ? 'active' : undefined}
       data-menu-open={menuOpen || undefined}
       role="treeitem"
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', sessionId);
+        drag.start();
+      }}
+      onDragEnd={drag.end}
+      onDragOver={(event) => {
+        if (!drag.active) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        drag.hover(rowHalf(event));
+      }}
+      onDrop={(event) => {
+        if (!drag.active) return;
+        event.preventDefault();
+        drag.drop(rowHalf(event));
+      }}
     >
       <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
         <span className={styles.treeGuide} aria-hidden="true">
           └
         </span>
         <span className={styles.sessionLabel}>{label}</span>
-        {status !== undefined && <span className={styles.status}>{status}</span>}
       </button>
       <span className={styles.rowActions}>
         <Menu
@@ -417,6 +458,113 @@ function WorktreeSessionRow({
         />
       </span>
     </div>
+  );
+}
+
+interface WorktreeSessionGroupProps {
+  readonly groupKey: string;
+  readonly sessionIds: readonly string[];
+  readonly workspaceId: string;
+  readonly expanded: boolean;
+  readonly actionPending: boolean;
+  readonly sessions: SessionListLike;
+  readonly dragState: SessionDragState | undefined;
+  readonly onToggleExpanded: () => void;
+  readonly onStartDrag: (groupKey: string, sessionId: string) => void;
+  readonly onHoverDrag: (sessionId: string, half: 'before' | 'after') => void;
+  readonly onClearDrag: () => void;
+  readonly onFinishDrag: () => void;
+  readonly onCommitDrag: (
+    activeDrag: SessionDragState,
+    over: NonNullable<SessionDragState['over']>,
+    sessionIds: readonly string[],
+    workspaceId: string,
+  ) => void;
+  readonly onOpen: (sessionId: string) => void;
+  readonly onRename?: (sessionId: string, currentTitle: string) => void;
+  readonly onFork?: (sessionId: string) => void;
+  readonly onArchive?: (sessionId: string) => void;
+}
+
+function WorktreeSessionGroup({
+  groupKey,
+  sessionIds,
+  workspaceId,
+  expanded,
+  actionPending,
+  sessions,
+  dragState,
+  onToggleExpanded,
+  onStartDrag,
+  onHoverDrag,
+  onClearDrag,
+  onFinishDrag,
+  onCommitDrag,
+  onOpen,
+  onRename,
+  onFork,
+  onArchive,
+}: WorktreeSessionGroupProps) {
+  const visibleSessionIds = expanded ? sessionIds : sessionIds.slice(0, 5);
+  const sameGroupDrag = dragState?.groupKey === groupKey;
+
+  return (
+    <>
+      {visibleSessionIds.map((sessionId) => (
+        <WorktreeSessionRow
+          key={`${groupKey}:${sessionId}`}
+          sessionId={sessionId}
+          label={sessionLabel(sessionId, sessions)}
+          drag={{
+            active: sameGroupDrag,
+            marker:
+              sameGroupDrag && dragState.over?.sessionId === sessionId
+                ? dragState.over.half
+                : null,
+            start: () => {
+              onStartDrag(groupKey, sessionId);
+            },
+            hover: (half) => {
+              onHoverDrag(sessionId, half);
+            },
+            drop: (half) => {
+              if (dragState === undefined) return;
+              onCommitDrag(
+                dragState,
+                { sessionId, half },
+                sessionIds,
+                workspaceId,
+              );
+            },
+            end: () => {
+              if (dragState?.over !== null && dragState?.over !== undefined) {
+                onCommitDrag(dragState, dragState.over, sessionIds, workspaceId);
+              } else {
+                onClearDrag();
+              }
+              onFinishDrag();
+            },
+          }}
+          actionPending={actionPending}
+          onOpen={() => {
+            onOpen(sessionId);
+          }}
+          onRename={onRename}
+          onFork={onFork}
+          onArchive={onArchive}
+        />
+      ))}
+      {sessionIds.length > 5 && (
+        <button
+          type="button"
+          className={styles.sessionOverflowButton}
+          aria-expanded={expanded}
+          onClick={onToggleExpanded}
+        >
+          {expanded ? 'Collapse' : `Expand ${sessionIds.length - 5} more`}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -476,6 +624,9 @@ export function WorktreeSurface({
   const [workspaceDeletePending, setWorkspaceDeletePending] = useState(false);
   const [workspaceDeleteError, setWorkspaceDeleteError] = useState<string>();
   const workspaceDropCommitted = useRef(false);
+  const [sessionDrag, setSessionDrag] = useState<SessionDragState>();
+  const [expandedSessionGroups, setExpandedSessionGroups] = useState<Record<string, boolean>>({});
+  const sessionDropCommitted = useRef(false);
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
@@ -661,6 +812,45 @@ export function WorktreeSurface({
     }
     setActionError(undefined);
     void insertWorkspaceBefore(activeDrag.workspaceId, beforeWorkspaceId).catch((error) => {
+      setActionError(toWorktreeViewError(error));
+    });
+  };
+
+  const commitSessionDrag = (
+    activeDrag: SessionDragState,
+    over: NonNullable<SessionDragState['over']>,
+    sessionIds: readonly string[],
+    workspaceId: string,
+  ): void => {
+    if (sessionDropCommitted.current) return;
+    sessionDropCommitted.current = true;
+    setSessionDrag(undefined);
+    const targetIndex = sessionIds.indexOf(over.sessionId);
+    const sourceIndex = sessionIds.indexOf(activeDrag.sessionId);
+    if (targetIndex === -1 || sourceIndex === -1) return;
+    const beforeSessionId = over.half === 'before'
+      ? over.sessionId
+      : sessionIds[targetIndex + 1];
+    const anchorIndex = beforeSessionId === undefined
+      ? sessionIds.length
+      : sessionIds.indexOf(beforeSessionId);
+    if (
+      beforeSessionId === activeDrag.sessionId ||
+      anchorIndex === sourceIndex ||
+      anchorIndex === sourceIndex + 1
+    ) {
+      return;
+    }
+    if (insertSessionBefore === undefined) {
+      setActionError({
+        code: 'SESSION_ORDER_UNAVAILABLE',
+        message: 'Session ordering is unavailable; retry after reconnecting.',
+        retryable: true,
+      });
+      return;
+    }
+    setActionError(undefined);
+    void insertSessionBefore(workspaceId, activeDrag.sessionId, beforeSessionId).catch((error) => {
       setActionError(toWorktreeViewError(error));
     });
   };
@@ -1010,6 +1200,12 @@ export function WorktreeSurface({
                   const mainSessionIds = unboundSessionIds(allWorkspaceSessionIds, [
                     ...boundSessionIds,
                   ]);
+                  const visibleMainSessionIds = mainSessionIds.filter(
+                    (sessionId) =>
+                      workspaceMatchesQuery ||
+                      includesText(sessionLabel(sessionId, sessions), query),
+                  );
+                  const mainGroupKey = `main:${workspace.workspaceId}`;
                   const worktrees = view?.worktrees ?? [];
 
                   return (
@@ -1094,28 +1290,47 @@ export function WorktreeSurface({
                               </button>
                             )}
                           </div>
-                          {mainSessionIds
-                            .filter(
-                              (sessionId) =>
-                                workspaceMatchesQuery ||
-                                includesText(sessionLabel(sessionId, sessions), query),
-                            )
-                            .map((sessionId) => (
-                              <WorktreeSessionRow
-                                key={sessionId}
-                                sessionId={sessionId}
-                                label={sessionLabel(sessionId, sessions)}
-                                actionPending={actionPending}
-                                onOpen={() => {
-                                  openWorktreeSession({ open: openSession }, sessionId);
-                                }}
-                                onRename={renameSession === undefined ? undefined : openSessionRename}
-                                onFork={forkSession}
-                                onArchive={
-                                  archiveSession === undefined ? undefined : archiveWorktreeSession
-                                }
-                              />
-                            ))}
+                          <WorktreeSessionGroup
+                            groupKey={mainGroupKey}
+                            sessionIds={visibleMainSessionIds}
+                            workspaceId={workspace.workspaceId}
+                            expanded={expandedSessionGroups[mainGroupKey] === true}
+                            actionPending={actionPending}
+                            sessions={sessions}
+                            dragState={sessionDrag}
+                            onToggleExpanded={() => {
+                              setExpandedSessionGroups((current) => ({
+                                ...current,
+                                [mainGroupKey]: current[mainGroupKey] !== true,
+                              }));
+                            }}
+                            onStartDrag={(groupKey, sessionId) => {
+                              sessionDropCommitted.current = false;
+                              setSessionDrag({ groupKey, sessionId, over: null });
+                            }}
+                            onHoverDrag={(sessionId, half) => {
+                              setSessionDrag((current) =>
+                                current === undefined
+                                  ? current
+                                  : { ...current, over: { sessionId, half } },
+                              );
+                            }}
+                            onClearDrag={() => {
+                              setSessionDrag(undefined);
+                            }}
+                            onFinishDrag={() => {
+                              sessionDropCommitted.current = false;
+                            }}
+                            onCommitDrag={commitSessionDrag}
+                            onOpen={(sessionId) => {
+                              openWorktreeSession({ open: openSession }, sessionId);
+                            }}
+                            onRename={renameSession === undefined ? undefined : openSessionRename}
+                            onFork={forkSession}
+                            onArchive={
+                              archiveSession === undefined ? undefined : archiveWorktreeSession
+                            }
+                          />
 
                           {worktrees.length === 0 && (
                             <p className={styles.emptyNested}>No Worktrees</p>
@@ -1140,6 +1355,12 @@ export function WorktreeSurface({
                             ) {
                               return null;
                             }
+                            const visibleWorktreeSessionIds = worktreeSessionIds.filter(
+                              (sessionId) =>
+                                worktreeMatchesQuery ||
+                                includesText(sessionLabel(sessionId, sessions), query),
+                            );
+                            const worktreeGroupKey = `worktree:${record.worktreeId}`;
                             const worktreeExpanded =
                               expandedWorktrees[record.worktreeId] !== false;
                             return (
@@ -1237,34 +1458,53 @@ export function WorktreeSurface({
                                     </span>
                                   )}
                                 </div>
-                                {worktreeExpanded &&
-                                  worktreeSessionIds
-                                    .filter(
-                                      (sessionId) =>
-                                        worktreeMatchesQuery ||
-                                        includesText(sessionLabel(sessionId, sessions), query),
-                                    )
-                                    .map((sessionId) => (
-                                      <WorktreeSessionRow
-                                        key={`${record.worktreeId}:${sessionId}`}
-                                        sessionId={sessionId}
-                                        label={sessionLabel(sessionId, sessions)}
-                                        status={record.status === 'active' ? 'bound' : 'detached'}
-                                        actionPending={actionPending}
-                                        onOpen={() => {
-                                          openWorkspaceSession(workspace.workspaceId, sessionId);
-                                        }}
-                                        onRename={
-                                          renameSession === undefined ? undefined : openSessionRename
-                                        }
-                                        onFork={forkSession}
-                                        onArchive={
-                                          archiveSession === undefined
-                                            ? undefined
-                                            : archiveWorktreeSession
-                                        }
-                                      />
-                                    ))}
+                                {worktreeExpanded && (
+                                  <WorktreeSessionGroup
+                                    groupKey={worktreeGroupKey}
+                                    sessionIds={visibleWorktreeSessionIds}
+                                    workspaceId={workspace.workspaceId}
+                                    expanded={expandedSessionGroups[worktreeGroupKey] === true}
+                                    actionPending={actionPending}
+                                    sessions={sessions}
+                                    dragState={sessionDrag}
+                                    onToggleExpanded={() => {
+                                      setExpandedSessionGroups((current) => ({
+                                        ...current,
+                                        [worktreeGroupKey]: current[worktreeGroupKey] !== true,
+                                      }));
+                                    }}
+                                    onStartDrag={(groupKey, sessionId) => {
+                                      sessionDropCommitted.current = false;
+                                      setSessionDrag({ groupKey, sessionId, over: null });
+                                    }}
+                                    onHoverDrag={(sessionId, half) => {
+                                      setSessionDrag((current) =>
+                                        current === undefined
+                                          ? current
+                                          : { ...current, over: { sessionId, half } },
+                                      );
+                                    }}
+                                    onClearDrag={() => {
+                                      setSessionDrag(undefined);
+                                    }}
+                                    onFinishDrag={() => {
+                                      sessionDropCommitted.current = false;
+                                    }}
+                                    onCommitDrag={commitSessionDrag}
+                                    onOpen={(sessionId) => {
+                                      openWorkspaceSession(workspace.workspaceId, sessionId);
+                                    }}
+                                    onRename={
+                                      renameSession === undefined ? undefined : openSessionRename
+                                    }
+                                    onFork={forkSession}
+                                    onArchive={
+                                      archiveSession === undefined
+                                        ? undefined
+                                        : archiveWorktreeSession
+                                    }
+                                  />
+                                )}
                               </div>
                             );
                           })}

@@ -523,6 +523,7 @@
 }
 
 .treeSessionRow {
+  position: relative;
   display: flex;
   align-items: center;
   width: 100%;
@@ -535,6 +536,25 @@
 .treeSessionRow:hover,
 .treeSessionRow[data-menu-open='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeSessionRow.dropBefore::before,
+.treeSessionRow.dropAfter::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-brand-primary);
+  content: '';
+}
+
+.treeSessionRow.dropBefore::before {
+  top: -1px;
+}
+
+.treeSessionRow.dropAfter::after {
+  bottom: -1px;
 }
 
 .treeSessionContent {
@@ -566,6 +586,26 @@
   flex: none;
   align-items: center;
   gap: 4px;
+}
+
+.sessionOverflowButton {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 2px 0 4px 24px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.sessionOverflowButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .treeSessionRow:hover .rowActions,
