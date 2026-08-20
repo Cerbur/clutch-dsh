@@ -1,3 +1,11 @@
+/**
+ * Provider 层公共入口：仅暴露底层 Git、sidecar、DSH 只读端口及统一错误词汇；
+ * Worktree/Session 生命周期编排和业务冲突判断仍属于 Manage 层。
+ *
+ * Provider public surface: only low-level Git, sidecar, read-only DSH ports, and
+ * the shared error vocabulary are exported here; Worktree/Session lifecycle
+ * orchestration and policy conflicts remain the responsibility of Manage.
+ */
 export { LocalGitAdapter } from './git.js';
 export {
   WorkspaceShardedSidecarRepository,
