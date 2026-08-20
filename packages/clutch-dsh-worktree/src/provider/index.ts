@@ -1,5 +1,4 @@
 export { LocalGitAdapter } from './git.js';
-export { LocalWorktreeProviderImpl, createLocalWorktreeProvider } from './provider.js';
 export {
   WorkspaceShardedSidecarRepository,
   validateSidecarSnapshot,
@@ -7,6 +6,7 @@ export {
 export {
   SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,
+  isWorktreeProviderError,
   providerError,
 } from './types.js';
 export type {
@@ -15,9 +15,6 @@ export type {
   DshWorkspaceSummary,
   GitWorktreeAdapter,
   GitWorktreeInfo,
-  LocalWorktreeProvider,
-  LocalWorktreeProviderOptions,
-  RuntimeCwdInput,
   SidecarMutation,
   SidecarSnapshot,
   SidecarStore,

@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
+> **Package amendment (2026-08-20):** `clutch-dsh-worktree` is one runnable
+> package. Use the package-consolidation plan for the migration and treat the
+> role sections below as internal modules, not nested package creation tasks.
+
 **Goal:** 为 DSH Web UI 增加 project-worktree-session 视角，在不改写 DSH 原始 Project、Session 和会话内容的前提下，通过插件自有的外部关系索引维护 Worktree 与 Session 的绑定。
 
 **Architecture:** DSH 继续作为 Project、Session、消息和 transcript 的唯一数据源；clutch-dsh-worktree 只保存 Project/Worktree/Session 的关系、worktree 生命周期元数据和路径解析所需的信息。Web UI 读取 DSH 原始 session 列表，再与外部关系索引做投影，从而提供 worktree 视角；回到 project-session 视角时，原始 session 仍由 DSH 按 Project 展示，不依赖插件写回任何 session 字段。
@@ -21,7 +25,8 @@
 - 删除 Worktree 不删除 Session；关系索引保留 detached 状态，只有显式解绑才回到 main 视角。
 - Git 操作只允许创建、查询和删除 worktree 及其 Git metadata；插件不负责修改工作树中的业务文件。
 - 所有关系写入必须幂等；重复绑定同一关系不会创建重复记录，冲突绑定必须返回可解释错误。
-- Service Definition、Provider、Consumer 按仓库 bootstrap plan 的三类 package 约定拆分。
+- Service Definition、Provider、Consumer 在同一 package 内保持单向内部 seam；
+  只有需要独立替换或发布时才拆成 package。
 
 ---
 
@@ -56,7 +61,7 @@ Project
 | Project identity | DSH Project API | 否 |
 | Project 原始工作目录 | DSH Project API | 否 |
 | Session identity 和内容 | DSH Session API | 否 |
-| Worktree 的 Git path、branch、状态 | clutch-dsh-worktree provider | 是，写入插件自有索引 |
+| Worktree 的 Git path、branch、状态 | clutch-dsh-worktree internal Provider | 是，写入插件自有索引 |
 | Session 与 Worktree 的关系 | clutch-dsh-worktree sidecar index | 是，写入插件自有索引 |
 | 运行时 cwd | 每次根据 DSH Project + sidecar relation 派生 | 不持久化 |
 
@@ -146,9 +151,9 @@ export interface IndexSnapshot {
 
 ## Component Boundaries
 
-### Service Definition
+### Internal Service Definition: `src/contract/`
 
-Planned package: dsh-clutch-dsh-worktree
+Internal module: `src/contract/index.ts`
 
 Owns:
 
@@ -163,17 +168,18 @@ Does not own：
 - UI 状态。
 - sidecar 存储实现。
 
-### Provider
+### Internal Provider: `src/provider/`
 
-Planned package: dsh-clutch-dsh-worktree-local
+Internal modules: `src/provider/index.ts`, `src/provider/git.ts`,
+`src/provider/sidecar.ts`, `src/provider/types.ts`
 
 Owns:
 
-- Git worktree 生命周期。
-- 插件自有索引的读写。
-- DSH Project/Session read API adapter。
-- Session context resolution。
-- 关系写入的幂等、冲突和修复。
+- Git worktree adapter 和底层 Git 操作。
+- 插件自有 sidecar 索引的底层读写。
+- DSH Project/Session read API adapter port。
+- Provider-owned errors and persistence validation。
+- Sidecar mutation primitives and atomic persistence。
 
 Does not own：
 
@@ -181,9 +187,26 @@ Does not own：
 - Project/Session 内容写入。
 - Web UI 页面和路由。
 
-### Consumer
+### Internal Manage: `src/manage/`
 
-Planned package: dsh-tool-clutch-dsh-worktree
+Internal modules: `src/manage/index.ts`, `src/manage/manager.ts`,
+`src/manage/types.ts`
+
+Owns:
+
+- Worktree/Session use-case orchestration.
+- Worktree creation/removal, binding conflicts and idempotency.
+- Main, active Worktree and detached runtime cwd resolution.
+- Git/sidecar recovery sequencing and degraded-state decisions.
+
+Does not own：
+
+- Git commands or sidecar file-format implementation details.
+- DSH original Workspace/Session data or Web UI routes.
+
+### Internal Consumer: `src/client/`
+
+Internal browser entrypoint: `src/client/`
 
 Owns:
 
@@ -191,7 +214,7 @@ Owns:
 - Worktree 列表、创建和状态展示。
 - Worktree 下的 Session 列表和创建入口。
 - main、active worktree、detached 三种关系状态展示。
-- 调用 DSH 原始 session API 和 plugin relation API 的编排。
+- 调用 DSH 原始 session API 和 plugin Remote facade 的编排。
 
 Does not own：
 
@@ -215,11 +238,11 @@ Does not own：
 **Interfaces:**
 
 - Consumes: 仓库 bootstrap plan 中的 Service Definition package 约定。
-- Produces: dsh-clutch-dsh-worktree 的稳定类型和 resolveSessionCwd contract，Provider 与 Consumer 不依赖具体存储实现。
+- Produces: clutch-dsh-worktree 的稳定类型和 resolveSessionCwd contract，Provider 与 Consumer 不依赖具体存储实现。
 
 - [ ] **Step 1: 创建 Service Definition package metadata**
 
-定义 package 名称 dsh-clutch-dsh-worktree、ESM 输出、build/lint/typecheck/test scripts，以及 dist/index.js 和 dist/index.d.ts exports。
+定义 package 名称 clutch-dsh-worktree、ESM 输出、build/lint/typecheck/test scripts，以及 dist/index.js 和 dist/index.d.ts exports。
 
 - [ ] **Step 2: 定义关系和上下文类型**
 
@@ -266,7 +289,7 @@ export function resolveSessionCwd(input: {
 
 - [ ] **Step 5: 验证 Service Definition 独立构建**
 
-Run: pnpm --filter dsh-clutch-dsh-worktree typecheck && pnpm --filter dsh-clutch-dsh-worktree build && pnpm --filter dsh-clutch-dsh-worktree test
+Run: pnpm --filter clutch-dsh-worktree typecheck && pnpm --filter clutch-dsh-worktree build && pnpm --filter clutch-dsh-worktree test
 
 Expected: 全部成功；Service Definition 没有 Provider、Consumer 或 Git 实现依赖。
 
@@ -274,12 +297,12 @@ Expected: 全部成功；Service Definition 没有 Provider、Consumer 或 Git �
 
 **Files:**
 
-- Create: packages/clutch-dsh-worktree-local/package.json
-- Create: packages/clutch-dsh-worktree-local/cordis.patch.yml
-- Create: packages/clutch-dsh-worktree-local/tsconfig.json
-- Create: packages/clutch-dsh-worktree-local/src/index.ts
-- Create: packages/clutch-dsh-worktree-local/src/index-store.ts
-- Create: packages/clutch-dsh-worktree-local/test/index-store.test.mjs
+- Create: packages/clutch-dsh-worktree/package.json
+- Create: packages/clutch-dsh-worktree/cordis.patch.yml
+- Create: packages/clutch-dsh-worktree/tsconfig.json
+- Create: packages/clutch-dsh-worktree/src/index.ts
+- Create: packages/clutch-dsh-worktree/src/index-store.ts
+- Create: packages/clutch-dsh-worktree/test/index-store.test.mjs
 
 **Interfaces:**
 
@@ -355,14 +378,14 @@ detach worktree -> bindings become detached and remain queryable
 
 **Files:**
 
-- Modify: packages/clutch-dsh-worktree-local/src/index.ts
-- Create: packages/clutch-dsh-worktree-local/src/git-worktree.ts
-- Create: packages/clutch-dsh-worktree-local/src/dsh-read-adapter.ts
-- Create: packages/clutch-dsh-worktree-local/src/session-context.ts
-- Create: packages/clutch-dsh-worktree-local/src/session-execution-context.ts
-- Create: packages/clutch-dsh-worktree-local/test/git-worktree.test.mjs
-- Create: packages/clutch-dsh-worktree-local/test/session-context.test.mjs
-- Create: packages/clutch-dsh-worktree-local/test/session-execution-context.test.mjs
+- Modify: packages/clutch-dsh-worktree/src/index.ts
+- Create: packages/clutch-dsh-worktree/src/git-worktree.ts
+- Create: packages/clutch-dsh-worktree/src/dsh-read-adapter.ts
+- Create: packages/clutch-dsh-worktree/src/session-context.ts
+- Create: packages/clutch-dsh-worktree/src/session-execution-context.ts
+- Create: packages/clutch-dsh-worktree/test/git-worktree.test.mjs
+- Create: packages/clutch-dsh-worktree/test/session-context.test.mjs
+- Create: packages/clutch-dsh-worktree/test/session-execution-context.test.mjs
 
 **Interfaces:**
 
@@ -469,9 +492,9 @@ export async function executeWithResolvedContext(
 
 **Files:**
 
-- Modify: packages/clutch-dsh-worktree-local/src/index.ts
-- Create: packages/clutch-dsh-worktree-local/src/session-binding.ts
-- Create: packages/clutch-dsh-worktree-local/test/session-binding.test.mjs
+- Modify: packages/clutch-dsh-worktree/src/index.ts
+- Create: packages/clutch-dsh-worktree/src/session-binding.ts
+- Create: packages/clutch-dsh-worktree/test/session-binding.test.mjs
 
 **Interfaces:**
 
@@ -527,12 +550,11 @@ invalid worktree ID -> DSH create is not called
 
 **Files:**
 
-- Create: packages/tool-clutch-dsh-worktree/package.json
-- Create: packages/tool-clutch-dsh-worktree/cordis.patch.yml
-- Create: packages/tool-clutch-dsh-worktree/tsconfig.json
-- Create: packages/tool-clutch-dsh-worktree/src/index.ts
-- Create: packages/tool-clutch-dsh-worktree/src/project-worktree-session-view.ts
-- Create: packages/tool-clutch-dsh-worktree/test/view-model.test.mjs
+- Modify: packages/clutch-dsh-worktree/package.json
+- Modify: packages/clutch-dsh-worktree/cordis.patch.yml
+- Create: packages/clutch-dsh-worktree/src/client/index.ts
+- Create: packages/clutch-dsh-worktree/src/client/project-worktree-session-view.ts
+- Create: packages/clutch-dsh-worktree/test/view-model.test.mjs
 
 **Interfaces:**
 
@@ -623,7 +645,10 @@ Consumer 提供 Worktree sidebar entry、当前 Project 选择、main 分组、a
 
 ## Bootstrap Plan Integration
 
-插件规划入口位于 packages/clutch-dsh-worktree/README.md；仓库总初始化计划会链接本文件，并明确采用 external relationship index，而不是修改原始 DSH 数据。实现时先完成 Service Definition 和外部索引 contract，再推进 Provider 与 Consumer。
+插件 package 位于 packages/clutch-dsh-worktree/；仓库 bootstrap 计划和
+2026-08-20 package-consolidation plan 共同记录 package identity。实现时先
+完成内部 Service Definition 和外部索引 contract，再推进同一 package 的
+Provider、Remote 和 Browser Consumer。
 
 ## Self-Review
 

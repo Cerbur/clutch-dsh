@@ -7,13 +7,11 @@ import type {
   SessionBinding,
   WorktreeRecord,
   WorkspaceId,
-} from 'clutch-dsh-worktree-manager';
+} from '../contract/index.js';
 
-import { LocalGitAdapter } from './git.js';
-import { WorkspaceShardedSidecarRepository } from './sidecar.js';
+import { LocalGitAdapter } from '../provider/git.js';
+import { WorkspaceShardedSidecarRepository } from '../provider/sidecar.js';
 import {
-  type LocalWorktreeProvider,
-  type LocalWorktreeProviderOptions,
   type DshSessionSummary,
   type DshWorkspaceSummary,
   type GitWorktreeAdapter,
@@ -22,7 +20,8 @@ import {
   WorktreeProviderError,
   isWorktreeProviderError,
   providerError,
-} from './types.js';
+} from '../provider/types.js';
+import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
 
 function isSameOrInside(parent: string, candidate: string): boolean {
   const relative = path.relative(parent, candidate);
@@ -107,14 +106,14 @@ function generatedId(idFactory: () => string): string {
   return worktreeId;
 }
 
-export class LocalWorktreeProviderImpl implements LocalWorktreeProvider {
-  private readonly dsh: LocalWorktreeProviderOptions['dsh'];
+export class WorktreeManagerImpl implements WorktreeManagerService {
+  private readonly dsh: WorktreeManagerOptions['dsh'];
   private readonly dshHome: string;
   private readonly git: GitWorktreeAdapter;
   private readonly sidecar: SidecarStore;
   private readonly idFactory: () => string;
 
-  constructor(options: LocalWorktreeProviderOptions) {
+  constructor(options: WorktreeManagerOptions) {
     if (!path.isAbsolute(options.dshHome)) {
       throw providerError('SIDECAR_UNAVAILABLE', 'DSH Home must be an absolute path', {
         dshHome: options.dshHome,
@@ -503,6 +502,6 @@ export class LocalWorktreeProviderImpl implements LocalWorktreeProvider {
   }
 }
 
-export function createLocalWorktreeProvider(options: LocalWorktreeProviderOptions): LocalWorktreeProvider {
-  return new LocalWorktreeProviderImpl(options);
+export function createWorktreeManager(options: WorktreeManagerOptions): WorktreeManagerService {
+  return new WorktreeManagerImpl(options);
 }

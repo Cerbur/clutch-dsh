@@ -13,30 +13,76 @@ async function exists(filePath) {
   }
 }
 
-export function expectedBundle(packageJson) {
-  return packageJson?.clutchDsh?.serviceDefinition;
+function isInsidePackage(packageDirectory, targetPath) {
+  const relativePath = path.relative(packageDirectory, targetPath);
+  return (
+    relativePath !== '' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    relativePath !== '..' &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
+export function bundlePatchReference(packageJson) {
+  return packageJson?.dsh?.bundle?.patch;
 }
 
 export async function validatePatch(packageDirectory) {
   const packageJsonPath = path.join(packageDirectory, 'package.json');
-  const patchPath = path.join(packageDirectory, 'cordis.patch.yml');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const patch = parseYaml(await readFile(patchPath, 'utf8'));
-  const bundleReference = patch?.dsh?.bundle;
+  const patchReference = bundlePatchReference(packageJson);
 
-  if (typeof bundleReference !== 'string' || bundleReference.length === 0) {
-    throw new Error('dsh.bundle is missing');
+  if (typeof patchReference !== 'string' || patchReference.length === 0) {
+    throw new Error('dsh.bundle.patch is missing');
+  }
+  if (path.isAbsolute(patchReference)) {
+    throw new Error('dsh.bundle.patch must be a relative package path');
   }
 
-  const expected = expectedBundle(packageJson);
-  if (typeof expected !== 'string' || expected.length === 0) {
-    throw new Error('clutchDsh.serviceDefinition is missing');
-  }
-  if (bundleReference !== expected) {
-    throw new Error(`dsh.bundle must be ${expected}, got ${bundleReference}`);
+  const patchPath = path.resolve(packageDirectory, patchReference);
+  if (!isInsidePackage(packageDirectory, patchPath)) {
+    throw new Error('dsh.bundle.patch must point inside the package');
   }
 
-  return { packageName: packageJson.name, bundleReference };
+  let patch;
+  try {
+    patch = parseYaml(await readFile(patchPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`unable to read or parse ${path.basename(patchPath)}: ${error.message}`, {
+      cause: error,
+    });
+  }
+  if (!Array.isArray(patch)) {
+    throw new Error('cordis.patch.yml must contain a YAML array');
+  }
+
+  return { packageName: packageJson.name, patchPath: patchReference };
+}
+
+async function findPackageDirectories(packagesDirectory) {
+  const packageDirectories = [];
+  const pluginEntries = await readdir(packagesDirectory, { withFileTypes: true });
+
+  for (const pluginEntry of pluginEntries) {
+    if (!pluginEntry.isDirectory()) continue;
+
+    const pluginDirectory = path.join(packagesDirectory, pluginEntry.name);
+    if (await exists(path.join(pluginDirectory, 'package.json'))) {
+      packageDirectories.push(pluginDirectory);
+    }
+
+    const moduleEntries = await readdir(pluginDirectory, { withFileTypes: true });
+    for (const moduleEntry of moduleEntries) {
+      if (!moduleEntry.isDirectory()) continue;
+
+      const packageDirectory = path.join(pluginDirectory, moduleEntry.name);
+      if (await exists(path.join(packageDirectory, 'package.json'))) {
+        packageDirectories.push(packageDirectory);
+      }
+    }
+  }
+
+  return packageDirectories;
 }
 
 async function main() {
@@ -46,12 +92,8 @@ async function main() {
     return;
   }
 
-  const entries = await readdir(packagesDirectory, { withFileTypes: true });
   const errors = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const packageDirectory = path.join(packagesDirectory, entry.name);
-    if (!(await exists(path.join(packageDirectory, 'package.json')))) continue;
+  for (const packageDirectory of await findPackageDirectories(packagesDirectory)) {
     try {
       await validatePatch(packageDirectory);
     } catch (error) {

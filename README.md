@@ -4,15 +4,25 @@
 
 ## Workspace layout
 
-可运行 plugin 位于 `packages/*`，按三类 package 拆分：
+每个直接位于 `packages/*` 下的目录可以是一个完整 plugin package，也可以
+是包含若干独立 module package 的 plugin 根目录。Service Definition、Provider
+和 Consumer 是能力角色，不是必须拆开的 package；只有角色需要独立替换、
+独立发布或独立安装时才拆分。
 
-- Service Definition：导出 capability 的公共 contract。
-- Provider：实现 Service Definition，并通过 `workspace:*` 依赖它。
-- Consumer：提供面向用户或上层流程的入口，只依赖 Service Definition。
+没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace guard
+当作可运行 package。当前 `packages/clutch-dsh-worktree/` 直接就是完整的
+`clutch-dsh-worktree` package，其内部通过 `src/contract/`、`src/provider/`、
+`src/manage/` 和未来的 `src/client/` 保留角色 seam。
 
-没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace guard 当作可运行 package。当前 `packages/clutch-dsh-worktree/` 仍是规划入口，真实 runtime package 按独立计划推进。
+若确实需要独立 module package，仍可使用
+`packages/<plugin>/<package-name>/`；目录名必须与 `package.json.name` 完全
+一致，并以所属 plugin 名称加 `-` 为前缀。模块数量、模块名和角色组合由
+plugin 功能决定，workspace 不强制固定后缀。workspace 同时兼容直接位于
+`packages/*` 下的 package 和一层 nested package。
 
-可运行 package 使用 `packages/<plugin>-<module>/` 形式，目录名必须与 `package.json.name` 完全一致，并以所属 plugin 名称加 `-` 为前缀。`<module>` 由 plugin 功能决定，不使用 workspace 强制的固定后缀；package 的 `clutchDsh` metadata 声明 plugin、架构角色和对应 Service Definition。
+可安装 DSH bundle 使用真实 DSH manifest：`package.json` 的
+`dsh.bundle.patch` 指向同 package 内的 `cordis.patch.yml`。clutch-dsh
+额外的 `clutchDsh` metadata 只用于 workspace 结构校验和记录角色。
 
 ## Commands
 

@@ -4,7 +4,7 @@ import process from 'node:process';
 
 const requiredFiles = ['cordis.patch.yml', 'tsconfig.json', path.join('src', 'index.ts')];
 const requiredScripts = ['build', 'lint', 'typecheck', 'test'];
-const validRoles = new Set(['service-definition', 'provider', 'consumer']);
+const validRoles = new Set(['plugin', 'service-definition', 'provider', 'consumer']);
 
 async function exists(filePath) {
   try {
@@ -18,6 +18,37 @@ async function exists(filePath) {
 
 function report(errors, packageDirectory, message) {
   errors.push(`${packageDirectory}: ${message}`);
+}
+
+async function findPackageDirectories(packagesDirectory) {
+  const packageDirectories = [];
+  const pluginEntries = await readdir(packagesDirectory, { withFileTypes: true });
+
+  for (const pluginEntry of pluginEntries) {
+    if (!pluginEntry.isDirectory()) continue;
+
+    const pluginDirectory = path.join(packagesDirectory, pluginEntry.name);
+    if (await exists(path.join(pluginDirectory, 'package.json'))) {
+      packageDirectories.push({
+        packageDirectory: pluginDirectory,
+        folderName: pluginEntry.name,
+      });
+    }
+
+    const moduleEntries = await readdir(pluginDirectory, { withFileTypes: true });
+    for (const moduleEntry of moduleEntries) {
+      if (!moduleEntry.isDirectory()) continue;
+
+      const packageDirectory = path.join(pluginDirectory, moduleEntry.name);
+      if (!(await exists(path.join(packageDirectory, 'package.json')))) continue;
+      packageDirectories.push({
+        packageDirectory,
+        folderName: moduleEntry.name,
+      });
+    }
+  }
+
+  return packageDirectories;
 }
 
 async function validatePackage(packageDirectory, folderName, errors) {
@@ -59,11 +90,15 @@ async function validatePackage(packageDirectory, folderName, errors) {
   const { plugin, role, serviceDefinition } = metadata;
   if (typeof plugin !== 'string' || plugin.length === 0) {
     report(errors, packageDirectory, 'clutchDsh.plugin must be a non-empty string');
-  } else if (typeof packageJson.name === 'string' && !packageJson.name.startsWith(`${plugin}-`)) {
+  } else if (
+    typeof packageJson.name === 'string' &&
+    packageJson.name !== plugin &&
+    !packageJson.name.startsWith(`${plugin}-`)
+  ) {
     report(
       errors,
       packageDirectory,
-      `package name must start with plugin prefix ${plugin}-, got ${packageJson.name}`,
+      `package name must start with plugin prefix ${plugin}- or equal plugin ${plugin}, got ${packageJson.name}`,
     );
   }
 
@@ -71,7 +106,7 @@ async function validatePackage(packageDirectory, folderName, errors) {
     report(
       errors,
       packageDirectory,
-      `clutchDsh.role must be service-definition, provider, or consumer, got ${role ?? '<missing>'}`,
+      `clutchDsh.role must be plugin, service-definition, provider, or consumer, got ${role ?? '<missing>'}`,
     );
   }
 
@@ -80,11 +115,14 @@ async function validatePackage(packageDirectory, folderName, errors) {
     return;
   }
 
-  if (role === 'service-definition' && serviceDefinition !== packageJson.name) {
+  if (
+    (role === 'plugin' || role === 'service-definition') &&
+    serviceDefinition !== packageJson.name
+  ) {
     report(
       errors,
       packageDirectory,
-      `service-definition serviceDefinition must be ${packageJson.name ?? '<missing>'}, got ${serviceDefinition}`,
+      `${role} serviceDefinition must be ${packageJson.name ?? '<missing>'}, got ${serviceDefinition}`,
     );
   }
 
@@ -107,13 +145,9 @@ async function main() {
     return;
   }
 
-  const entries = await readdir(packagesDirectory, { withFileTypes: true });
   const errors = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const packageDirectory = path.join(packagesDirectory, entry.name);
-    if (!(await exists(path.join(packageDirectory, 'package.json')))) continue;
-    await validatePackage(packageDirectory, entry.name, errors);
+  for (const { packageDirectory, folderName } of await findPackageDirectories(packagesDirectory)) {
+    await validatePackage(packageDirectory, folderName, errors);
   }
 
   if (errors.length > 0) {

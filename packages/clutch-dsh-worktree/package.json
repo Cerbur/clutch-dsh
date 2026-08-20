@@ -1,0 +1,38 @@
+{
+  "name": "clutch-dsh-worktree",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/contract/index.d.ts",
+      "import": "./dist/contract/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "clutchDsh": {
+    "plugin": "clutch-dsh-worktree",
+    "role": "plugin",
+    "serviceDefinition": "clutch-dsh-worktree"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3"
+  }
+}

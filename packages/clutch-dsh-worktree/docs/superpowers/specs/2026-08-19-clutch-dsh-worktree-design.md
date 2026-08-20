@@ -1,6 +1,7 @@
 # clutch-dsh-worktree V1 Design
 
-> Status: design snapshot for review. Implementation has not started.
+> Status: approved design baseline; package consolidation was confirmed after
+> inspecting DSH's real bundle and Client loading conventions on 2026-08-20.
 >
 > This document records the current V1 design baseline. The previously
 > discussed decisions are integrated into the relevant deployment, Git, UI,
@@ -35,14 +36,26 @@ V1 does not include remote Git operations, merge/rebase, branch switching,
 automatic discovery or migration, detached-HEAD Worktrees, or a generic
 execution/cwd API for other plugins.
 
-The package family is:
+The plugin is one installable DSH bundle package. Its capability roles remain
+internal modules rather than independent workspace packages:
 
 ```text
 packages/
-├── clutch-dsh-worktree-manager/  # Service Definition
-├── clutch-dsh-worktree-local/    # local Git + sidecar Provider
-└── clutch-dsh-worktree-ui/       # Web UI Consumer
+└── clutch-dsh-worktree/
+    ├── package.json
+    ├── cordis.patch.yml
+    ├── src/
+    │   ├── contract/       # stable types and interfaces
+    │   ├── provider/       # Git, sidecar, DSH read adapters
+    │   ├── manage/         # Worktree/Session use-case orchestration
+    │   └── client/         # Web UI Consumer entrypoint
+    └── test/
 ```
+
+The package name and DSH bundle identity are both `clutch-dsh-worktree`.
+`manager`, `local`, and `ui` describe internal roles or implementation areas;
+they are not package names. DSH does not require these roles to be installed
+or composed as separate packages.
 
 Root workspace naming rules and root-level documentation are outside this
 design document.
@@ -50,7 +63,24 @@ design document.
 ## 2. Deployment boundary
 
 The plugin targets existing DSH releases and does not modify DSH source code.
-It uses public DSH APIs and supported plugin extension points.
+It uses public DSH APIs and supported plugin extension points. The package is
+activated as one DSH bundle through this manifest:
+
+```json
+{
+  "name": "clutch-dsh-worktree",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
+```
+
+The Node/Host entry and the browser entry may produce separate artifacts from
+the same package. This is a build-plane distinction, not a package split. The
+bundle patch remains empty until the real Host Remote and Web UI composition
+is implemented in the later phases.
 
 For the current target release `dsh-v0.1.0-rc.7`, Host Manager methods are
 exposed to the browser through a generated `./remote` contribution:
@@ -104,9 +134,11 @@ relations. It never copies Session content into the sidecar.
 
 ## 4. Component boundaries
 
-### 4.1 `clutch-dsh-worktree-manager`
+### 4.1 Internal Service Definition: `src/contract/`
 
-The Service Definition owns the stable domain vocabulary and manager contract:
+The internal Service Definition owns the stable domain vocabulary and manager
+contract. It has no dependency on Provider, Manage, DSH mutation, Git, sidecar,
+or React code:
 
 - `WorktreeRecord`;
 - `SessionBinding`;
@@ -114,25 +146,37 @@ The Service Definition owns the stable domain vocabulary and manager contract:
 - lifecycle and error codes;
 - list/create/remove/bind service methods.
 
-It does not own Git commands, JSON storage, React components, or DSH Session
-mutation methods.
+It is an internal seam, not a published package.
 
-### 4.2 `clutch-dsh-worktree-local`
+### 4.2 Internal Provider: `src/provider/`
 
-The local Provider owns:
+The Provider module owns the low-level adapters and persistence mechanisms:
 
 - DSH read adapters for Workspace and Session summaries;
 - local Git Worktree operations;
 - DSH Home path resolution;
 - Workspace-sharded sidecar persistence;
-- relationship validation, idempotency, conflict detection, and recovery;
-- the Host-side transport projection consumed by the Web UI.
+- provider-owned data/error types and adapter interfaces.
 
-It does not modify DSH Workspace or Session data.
+It does not own Worktree/Session use-case sequencing, UI state, or DSH
+Workspace/Session mutation. It imports only the internal Service Definition.
 
-### 4.3 `clutch-dsh-worktree-ui`
+### 4.3 Internal Manage: `src/manage/`
 
-The Web UI Consumer owns:
+The Manage module is the Host-facing application layer. It owns:
+
+- Worktree create/list/remove orchestration;
+- Session binding and active-binding conflict rules;
+- main, active Worktree and detached runtime cwd resolution;
+- sidecar/Git recovery behavior and stable operation errors;
+- the high-level `WorktreeManager` implementation consumed by Remote and UI.
+
+It depends on the Service Definition and Provider adapters. It does not expose
+Git commands or sidecar records as a UI concern.
+
+### 4.4 Internal Consumer: `src/client/`
+
+The Web UI Consumer module owns:
 
 - the peer `workspace-session` / `worktree` view mode;
 - Worktree and Session navigation surfaces;
@@ -140,7 +184,9 @@ The Web UI Consumer owns:
 - orchestration between DSH Session APIs and the Worktree Manager;
 - opening an existing DSH Conversation through `ctx.sessions.open`.
 
-It does not execute Git, read sidecar files, or write DSH data directly.
+It does not execute Git, read sidecar files, or write DSH data directly. It
+imports the browser-safe contract and Manage/Remote client facade from the same
+package, never Provider internals.
 
 The browser cannot call the Host Manager object directly. The UI uses a
 browser-safe Remote/client projection whose methods mirror the Manager

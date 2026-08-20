@@ -27,17 +27,11 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
 
-  packages/clutch-dsh-worktree/clutch-dsh-worktree-local:
-    dependencies:
-      clutch-dsh-worktree-manager:
-        specifier: workspace:*
-        version: link:../clutch-dsh-worktree-manager
+  packages/clutch-dsh-worktree:
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
         version: 22.20.1
-
-  packages/clutch-dsh-worktree/clutch-dsh-worktree-manager: {}
 
 packages:
 

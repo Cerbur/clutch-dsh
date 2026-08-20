@@ -2,7 +2,7 @@ import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promi
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import type { SessionBinding, WorktreeRecord } from 'clutch-dsh-worktree-manager';
+import type { SessionBinding, WorktreeRecord } from '../contract/index.js';
 
 import {
   SIDECAR_SCHEMA_VERSION,

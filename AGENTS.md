@@ -15,9 +15,13 @@ clutch-dsh 是一个 pnpm workspace，用于开发一系列 DSH（DeepSeek Harne
 ## 工作区结构
 
 - 根 package 必须保持 private，不发布根 package。
-- plugin 位于 packages/* 下。
-- Service Definition、Provider、Consumer 按仓库计划中的三类 package 约定拆分。
-- Provider 和 Consumer 使用 workspace:* 依赖 Service Definition。
+- `packages/*` 下的目录可以是完整 plugin package，也可以是包含 nested
+  module packages 的 plugin 根目录。workspace 同时发现 `packages/*` 和
+  `packages/*/*`。
+- Service Definition、Provider、Consumer 是能力角色；只有需要独立替换、
+  发布或安装时才拆成 package，一个 plugin package 可以拥有多个角色。
+- 只有独立 Provider/Consumer package 才使用 `workspace:*` 依赖独立的
+  Service Definition package。
 - 每个可运行 plugin package 应包含 package.json、cordis.patch.yml、tsconfig.json 和 src/index.ts。
 - plugin 专属文档和计划放在对应 plugin 目录下，优先使用最近的 AGENTS.md。
 

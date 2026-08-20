@@ -1,13 +1,10 @@
 import type {
-  BranchRecord,
-  JsonValue,
   SessionBinding,
   WorktreeErrorCode,
   WorktreeErrorDetails,
-  WorktreeManager,
   WorktreeRecord,
   WorkspaceId,
-} from 'clutch-dsh-worktree-manager';
+} from '../contract/index.js';
 
 export const SIDECAR_SCHEMA_VERSION = 1 as const;
 
@@ -65,25 +62,6 @@ export interface SidecarStore {
   ): Promise<T>;
 }
 
-export interface LocalWorktreeProviderOptions {
-  readonly dsh: DshReadAdapter;
-  readonly dshHome: string;
-  readonly git?: GitWorktreeAdapter;
-  readonly sidecar?: SidecarStore;
-  readonly idFactory?: () => string;
-}
-
-export interface RuntimeCwdInput {
-  readonly workspaceId: WorkspaceId;
-  readonly sessionId: string;
-}
-
-export interface LocalWorktreeProvider extends WorktreeManager {
-  resolveRuntimeCwd(input: RuntimeCwdInput): Promise<string>;
-}
-
-export type ProviderJsonValue = JsonValue;
-
 export class WorktreeProviderError extends Error {
   readonly code: WorktreeErrorCode;
   readonly details: WorktreeErrorDetails;
@@ -111,5 +89,3 @@ export function providerError(
 export function isWorktreeProviderError(error: unknown): error is WorktreeProviderError {
   return error instanceof WorktreeProviderError;
 }
-
-export type { BranchRecord, SessionBinding, WorktreeManager, WorktreeRecord };

@@ -35,8 +35,9 @@ async function createFixture() {
   return root;
 }
 
-async function createRunnablePackage(
+async function writeRunnablePackage(
   root,
+  packageParts,
   folderName,
   {
     name = folderName,
@@ -48,7 +49,7 @@ async function createRunnablePackage(
     dependencies = {},
   } = {},
 ) {
-  const packageDirectory = path.join(root, 'packages', folderName);
+  const packageDirectory = path.join(root, 'packages', ...packageParts);
   await mkdir(path.join(packageDirectory, 'src'), { recursive: true });
   const packageJson = {
     name,
@@ -65,6 +66,14 @@ async function createRunnablePackage(
   await writeFile(path.join(packageDirectory, 'cordis.patch.yml'), 'dsh:\n  bundle: example\n');
   await writeFile(path.join(packageDirectory, 'tsconfig.json'), '{}');
   await writeFile(path.join(packageDirectory, 'src', 'index.ts'), 'export {};\n');
+}
+
+async function createRunnablePackage(root, folderName, options = {}) {
+  return writeRunnablePackage(root, [folderName], folderName, options);
+}
+
+async function createNestedRunnablePackage(root, pluginName, folderName, options = {}) {
+  return writeRunnablePackage(root, [pluginName, folderName], folderName, options);
 }
 
 test('allows planning-only directories without package metadata', async (t) => {
@@ -123,6 +132,43 @@ test('accepts plugin-prefixed packages with arbitrary module names and exact ser
   assert.match(result.stdout, /workspace shape ok/);
 });
 
+test('accepts runnable module packages nested under a plugin root', async (t) => {
+  const root = await createFixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const serviceDefinition = 'clutch-dsh-worktree-manager';
+  await createNestedRunnablePackage(root, 'clutch-dsh-worktree', serviceDefinition);
+  await createNestedRunnablePackage(root, 'clutch-dsh-worktree', 'clutch-dsh-worktree-local', {
+    metadata: {
+      plugin: 'clutch-dsh-worktree',
+      role: 'provider',
+      serviceDefinition,
+    },
+    dependencies: { [serviceDefinition]: 'workspace:*' },
+  });
+
+  const result = await runCheck(root);
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /workspace shape ok/);
+});
+
+test('accepts one plugin package that owns all capability roles internally', async (t) => {
+  const root = await createFixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await createRunnablePackage(root, 'clutch-dsh-worktree', {
+    metadata: {
+      plugin: 'clutch-dsh-worktree',
+      role: 'plugin',
+      serviceDefinition: 'clutch-dsh-worktree',
+    },
+  });
+
+  const result = await runCheck(root);
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /workspace shape ok/);
+});
+
 test('requires the package name to match its directory name', async (t) => {
   const root = await createFixture();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -169,7 +215,10 @@ test('requires valid clutchDsh metadata and role', async (t) => {
 
   assert.equal(result.code, 1);
   assert.match(result.stdout, /clutchDsh metadata must be an object/);
-  assert.match(result.stdout, /clutchDsh.role must be service-definition, provider, or consumer/);
+  assert.match(
+    result.stdout,
+    /clutchDsh.role must be plugin, service-definition, provider, or consumer/,
+  );
 });
 
 test('requires providers and consumers to use an exact workspace dependency', async (t) => {

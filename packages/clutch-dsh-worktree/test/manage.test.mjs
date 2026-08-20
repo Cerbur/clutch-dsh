@@ -12,7 +12,7 @@ import {
   SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,
   WorkspaceShardedSidecarRepository,
-  createLocalWorktreeProvider,
+  createWorktreeManager,
 } from '../dist/index.js';
 
 const execFile = promisify(execFileCallback);
@@ -32,7 +32,7 @@ async function exists(filePath) {
 }
 
 async function createGitWorkspace({ initialCommit = true } = {}) {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-worktree-local-'));
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-worktree-manage-'));
   const dshHome = path.join(tempRoot, 'dsh-home');
   const workspaceRoot = path.join(tempRoot, 'workspace');
   await mkdir(dshHome, { recursive: true });
@@ -77,7 +77,7 @@ async function withGitFixture(callback, options = {}) {
   try {
     const dsh = createDshReader({ rootPath: fixture.workspaceRoot });
     const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: fixture.dshHome });
-    const provider = createLocalWorktreeProvider({
+    const provider = createWorktreeManager({
       dsh,
       dshHome: fixture.dshHome,
       sidecar,
@@ -214,7 +214,7 @@ test('repeated identical Worktree upsert is idempotent', async () => {
 test('rejects relative workspace roots before invoking Git', async () => {
   await withGitFixture(async ({ dshHome }) => {
     const dsh = createDshReader({ rootPath: 'relative/workspace' });
-    const provider = createLocalWorktreeProvider({ dsh, dshHome, idFactory: () => 'wt_relative' });
+    const provider = createWorktreeManager({ dsh, dshHome, idFactory: () => 'wt_relative' });
 
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKSPACE_NOT_FOUND');
   });
@@ -226,7 +226,7 @@ test('rejects a non-Git Workspace', async () => {
   await mkdir(nonGitRoot);
   try {
     const dsh = createDshReader({ rootPath: nonGitRoot });
-    const provider = createLocalWorktreeProvider({ dsh, dshHome: fixture.dshHome });
+    const provider = createWorktreeManager({ dsh, dshHome: fixture.dshHome });
 
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKSPACE_NOT_GIT_REPOSITORY');
   } finally {
@@ -254,7 +254,7 @@ test('rejects a generated Worktree path that already exists or is inside the Wor
     const existingId = 'wt_existing';
     const existingPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', existingId);
     await mkdir(existingPath, { recursive: true });
-    const existingProvider = createLocalWorktreeProvider({
+    const existingProvider = createWorktreeManager({
       dsh,
       dshHome,
       idFactory: () => existingId,
@@ -264,7 +264,7 @@ test('rejects a generated Worktree path that already exists or is inside the Wor
       'GIT_OPERATION_FAILED',
     );
 
-    const insideProvider = createLocalWorktreeProvider({
+    const insideProvider = createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
       dshHome: workspaceRoot,
       idFactory: () => 'wt_inside',
@@ -281,7 +281,7 @@ test('rejects a symlinked DSH Home before creating a Worktree', async () => {
     await runGit(workspaceRoot, ['branch', 'feature/symlink']);
     const linkedHome = path.join(tempRoot, 'dsh-home-link');
     await symlink(dshHome, linkedHome, 'dir');
-    const provider = createLocalWorktreeProvider({
+    const provider = createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
       dshHome: linkedHome,
       idFactory: () => 'wt_symlink',
@@ -306,7 +306,7 @@ test('rejects a reused Worktree ID even when the old record is removed', async (
       }),
       status: 'removed',
     });
-    const reusedProvider = createLocalWorktreeProvider({
+    const reusedProvider = createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
       dshHome,
       sidecar,
@@ -375,7 +375,7 @@ test('cleans up a newly created Worktree when sidecar persistence fails', async 
         throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar write failed', { reason: 'test' });
       },
     };
-    const provider = createLocalWorktreeProvider({
+    const provider = createWorktreeManager({
       dsh,
       dshHome,
       sidecar,
@@ -408,7 +408,7 @@ test('returns sync-required when cleanup after sidecar failure also fails', asyn
         throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar write failed', { reason: 'test' });
       },
     };
-    const provider = createLocalWorktreeProvider({
+    const provider = createWorktreeManager({
       dsh,
       dshHome,
       git,
@@ -445,13 +445,13 @@ test('sidecar upsert rejects a Session binding conflict with a stable error', as
   await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
     await runGit(workspaceRoot, ['branch', 'feature/binding-one']);
     await runGit(workspaceRoot, ['branch', 'feature/binding-two']);
-    const first = await createLocalWorktreeProvider({
+    const first = await createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
       dshHome,
       sidecar,
       idFactory: () => 'wt_binding_one',
     }).createWorktree({ workspaceId: 'ws_one', branch: 'feature/binding-one' });
-    const second = await createLocalWorktreeProvider({
+    const second = await createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
       dshHome,
       sidecar,
@@ -508,7 +508,7 @@ test('keeps sidecar unchanged when Git Worktree removal fails', async () => {
         throw new Error('remove blocked');
       },
     };
-    const failingProvider = createLocalWorktreeProvider({ dsh, dshHome, git: failingGit, sidecar });
+    const failingProvider = createWorktreeManager({ dsh, dshHome, git: failingGit, sidecar });
 
     await expectCode(
       failingProvider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId }),
@@ -536,7 +536,7 @@ test('reconciles a sidecar after Git removal succeeded but sidecar sync failed',
         return sidecar.mutate(workspaceId, () => result);
       },
     };
-    const firstAttempt = createLocalWorktreeProvider({ dsh, dshHome, sidecar: flakySidecar });
+    const firstAttempt = createWorktreeManager({ dsh, dshHome, sidecar: flakySidecar });
 
     await expectCode(
       firstAttempt.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId }),
@@ -545,7 +545,7 @@ test('reconciles a sidecar after Git removal succeeded but sidecar sync failed',
     assert.equal(await exists(record.absolutePath), false);
     assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
 
-    const retry = createLocalWorktreeProvider({ dsh, dshHome, sidecar });
+    const retry = createWorktreeManager({ dsh, dshHome, sidecar });
     await retry.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
     assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'removed');
   });

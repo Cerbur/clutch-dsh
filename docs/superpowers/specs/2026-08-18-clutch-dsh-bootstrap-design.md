@@ -2,69 +2,112 @@
 
 ## Goal
 
-将 clutch-dsh 初始化为一个可持续扩展的 pnpm workspace，用统一的根目录工具管理 DSH plugin，并用校验脚本与 authoring 文档明确 Service Definition、Provider、Consumer 的边界。
+将 `clutch-dsh` 初始化为一个可持续扩展的 pnpm workspace，用统一的根目录
+工具管理 DSH plugin，并用 workspace guard 与 authoring 文档明确 package
+身份、能力角色和真实 DSH bundle manifest 的边界。
 
 ## Scope
 
-本次初始化包含：
+本次 bootstrap 包含：
 
-- private 的 pnpm workspace root，仅发现 `packages/*`；
+- private pnpm workspace root，发现 `packages/*` 和 `packages/*/*`；
 - 根级 TypeScript、ESLint、Prettier 配置与统一检查命令；
-- package 形状、plugin 前缀、metadata、workspace 依赖和 Cordis patch 校验脚本；
-- 根 README 和 plugin authoring 文档。
+- package 形状、plugin identity、role metadata、workspace 依赖和 DSH bundle
+  manifest 校验脚本；
+- 根 README 与 plugin authoring 文档。
 
-本次不创建 demo capability package，不实现真实 DSH runtime API、外部服务凭据、发布流程，或 `clutch-dsh-worktree` 的 Provider/Consumer。`my-cap` 等名称只在 authoring 文档中作为示例。`packages/clutch-dsh-worktree/` 保持现有 README、AGENTS.md 和独立计划作为后续实现入口。
+本次 bootstrap 不创建 demo capability package，不实现真实 DSH Host Remote、
+外部服务凭据、发布流程或完整 Worktree UI。`my-cap` 等名称只在 authoring
+文档中作为示例。
 
 ## Architecture
 
-根 package 只承载 workspace 和开发工具，不发布运行时能力。每个 plugin package 都包含 `package.json`、`cordis.patch.yml`、`tsconfig.json` 和 `src/index.ts`，并可独立运行 build、lint、typecheck、test scripts。
+根 package 只承载 workspace 和开发工具，不发布运行时能力。默认一个 plugin
+就是一个可安装 package：
 
-可运行 package 位于 `packages/<plugin>-<module>/`，目录名必须与 `package.json.name` 完全一致，package name 必须以所属 plugin 名称加 `-` 为前缀。模块名由 plugin 功能决定，不由 workspace 规定固定后缀。每个 package 的 `clutchDsh` metadata 声明 `plugin`、`role` 和 `serviceDefinition`；Provider 与 Consumer 用精确的 `workspace:*` 依赖 Service Definition，所有 package 的 `dsh.bundle` 都指向该 Service Definition。
+```text
+packages/<plugin>/
+├── package.json
+├── cordis.patch.yml
+├── tsconfig.json
+└── src/index.ts
+```
 
-## Components and Boundaries
+一个 package 可以同时拥有 Service Definition、Provider 和 Consumer。只有
+角色需要独立安装、独立版本或可替换实现时，才在
+`packages/<plugin>/<package-name>/` 下创建 nested package。nested package
+目录名必须等于 `package.json.name`，且使用 plugin 前缀。
 
-| Component            | Responsibility                                           | Boundary                                 |
-| -------------------- | -------------------------------------------------------- | ---------------------------------------- |
-| Workspace root       | workspace discovery, shared tooling, validation commands | 不包含具体 capability 实现               |
-| Service Definition   | capability name and public TypeScript contract           | 不依赖 Provider 或 Consumer              |
-| Provider             | implementation of the contract                           | 不重新定义公共 contract                  |
-| Consumer             | user-facing entry targeting the contract                 | 不直接依赖 Provider                      |
-| Workspace validators | deterministic package and patch checks                   | 只读取 package metadata、目录结构和 YAML |
+`clutch-dsh-worktree` 采用默认的一包形态：
+
+```text
+packages/clutch-dsh-worktree/
+├── package.json
+├── cordis.patch.yml
+├── src/contract/                 # stable types and interfaces
+├── src/provider/                 # Git, sidecar and DSH read adapters
+├── src/manage/                   # Worktree/Session orchestration
+└── src/client/                   # future browser Consumer
+```
 
 ## Metadata Contract
 
+workspace metadata 与 DSH bundle metadata 分开：
+
 ```json
 {
-  "name": "clutch-dsh-worktree-local",
+  "name": "clutch-dsh-worktree",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "clutchDsh": {
     "plugin": "clutch-dsh-worktree",
-    "role": "provider",
-    "serviceDefinition": "clutch-dsh-worktree-manager"
-  },
-  "dependencies": {
-    "clutch-dsh-worktree-manager": "workspace:*"
+    "role": "plugin",
+    "serviceDefinition": "clutch-dsh-worktree"
   }
 }
 ```
 
-`role` 只能是 `service-definition`、`provider` 或 `consumer`。Service Definition 的 `serviceDefinition` 必须等于自身 package name；Provider 和 Consumer 对声明的 Service Definition 使用精确的 `workspace:*`。
+`clutchDsh.role` 可以是 `plugin`、`service-definition`、`provider` 或
+`consumer`。`plugin` 表示一个 package 内含多个角色；独立 Provider 和
+Consumer 才需要对独立 Service Definition 使用精确的 `workspace:*`。
+
+`cordis.patch.yml` 是 DSH patch layer 的 YAML 数组，不包含 `dsh.bundle`
+字段。`package.json.dsh.bundle.patch` 必须是 package 内的相对文件路径。
+
+## Components and Boundaries
+
+| Module           | Responsibility                              | Boundary                           |
+| ---------------- | ------------------------------------------- | ---------------------------------- |
+| Workspace root   | workspace discovery、shared tooling、guards | 不包含 capability runtime          |
+| `src/contract/`  | 稳定类型、Service interface、错误码         | 不依赖 Provider 或 Consumer        |
+| `src/provider/`  | Git、sidecar、DSH read adapter              | 不写 DSH 原始数据                  |
+| `src/manage/`    | Worktree/Session 用例编排                   | 不暴露底层实现细节                 |
+| `src/client/`    | Web UI Consumer                             | 不执行 Git、不读 sidecar           |
+| Workspace guards | deterministic package/manifest checks       | 只读 package metadata、目录和 YAML |
 
 ## Validation and Failure Behavior
 
-- 缺少必需文件、scripts、目录/name 一致性、plugin 前缀、metadata 或精确 `workspace:*` 依赖时，workspace validator 输出 package 路径和原因并以状态码 1 退出。
-- YAML 解析失败、缺少 `dsh.bundle`、缺少 metadata 中的 Service Definition 或 bundle 不等于该 Service Definition 时，patch validator 输出文件路径和原因并以状态码 1 退出。
-- `packages/` 下没有 `package.json` 的规划目录不视为可运行 package；根工具链必须允许这类目录存在。
-- 一旦新增 package，所有含 `package.json` 的 package 必须通过相同的 shape、metadata、依赖和 patch guard。
+- 缺少必需文件、scripts、目录/name 不一致、plugin identity、role metadata
+  或独立 package 的精确 `workspace:*` 依赖时，workspace validator 输出
+  package 路径和原因并以状态码 1 退出。
+- 缺少、越界或不可解析的 `dsh.bundle.patch`，以及非数组 patch YAML，patch
+  validator 输出 package patch 路径和原因并以状态码 1 退出。
+- `packages/` 下没有 `package.json` 的规划目录不视为可运行 package。
+- 任何真实 package 都必须通过相同的 shape、metadata 和 bundle guard。
 
 ## Testing Strategy
 
-- 根配置通过 format、lint 和 typecheck 检查。
-- 根级检查脚本在当前只有规划目录时成功运行，并能在临时 fixture 中识别 package 结构、plugin 前缀、metadata、依赖和 patch 错误。
-- 根级 `check` 串联 workspace、patch、format、lint、typecheck 和 test，作为最终验收入口；没有实际 package 时，递归 package 命令安全地无操作成功。
+- 根配置通过 format、lint、typecheck 和 test 检查。
+- guard tests 覆盖 atomic plugin package、独立三角色 package、名称/目录、
+  plugin prefix、role、service identity、workspace dependency、bundle
+  manifest、patch path、YAML root 和规划目录跳过。
+- `clutch-dsh-worktree` package tests 覆盖 contract、Git、sidecar、binding、
+  cwd、恢复和 DSH fixture 不变式。
 
 ## Acceptance Criteria
-
-完成后，以下命令全部成功：
 
 ```text
 pnpm install --frozen-lockfile
@@ -78,8 +121,12 @@ pnpm run test
 pnpm run check
 ```
 
-没有 demo package 或 demo 构建产物被加入仓库；`dist/`、coverage、临时文件和本地凭据不进入 Git。新增真实 package 后，workspace、`workspace:*` 依赖和 `dsh.bundle` 规则由根级 guard 统一验证。
+不加入 demo package、dist、coverage、sidecar、临时文件或凭据。完整
+Worktree Remote/UI composition 由 plugin 自己的后续实现计划负责。
 
 ## Implementation Reference
 
-具体文件清单、代码接口、命令和任务顺序以 [`2026-08-18-clutch-dsh-bootstrap.md`](../plans/2026-08-18-clutch-dsh-bootstrap.md) 为准。
+workspace guard 的已实施约定见
+[`2026-08-19-clutch-dsh-package-naming.md`](../plans/2026-08-19-clutch-dsh-package-naming.md)；
+Worktree package 合并见
+[`2026-08-20-clutch-dsh-worktree-package-consolidation.md`](../../../packages/clutch-dsh-worktree/docs/superpowers/plans/2026-08-20-clutch-dsh-worktree-package-consolidation.md)。

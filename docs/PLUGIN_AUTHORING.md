@@ -1,86 +1,70 @@
 # Plugin Authoring Guide
 
-本仓库的根项目名是 `clutch-dsh`。根 package 只提供 workspace 工具，不发布为 plugin；实际 plugin package 放在 `packages/*` 下。
+本仓库的根项目名是 `clutch-dsh`。根 package 只提供 workspace 工具，不发布为
+plugin。一个 plugin 可以由一个完整 package 组成，也可以在确有独立发布或
+替换需求时拆成多个 module package。
 
-## 1. Naming and package metadata
+## 1. Package 与 plugin identity
 
-每个可运行 package 使用以下形式：
-
-```text
-packages/<plugin>-<module>/
-package name: <plugin>-<module>
-```
-
-目录名必须与 `package.json.name` 完全一致，且 package name 必须以所属 plugin 名称加 `-` 为前缀。`<module>` 由 plugin 的实际功能决定，workspace 不规定 `manager`、`local`、`ui`、`tool` 或其他固定后缀。
-
-每个可运行 package 还要声明 `clutchDsh` metadata：
-
-```json
-{
-  "name": "clutch-dsh-worktree-manager",
-  "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
-    "role": "service-definition",
-    "serviceDefinition": "clutch-dsh-worktree-manager"
-  }
-}
-```
-
-`role` 是架构角色，只能是 `service-definition`、`provider` 或 `consumer`；它不限制 module 名称。
-
-## 2. Service Definition
-
-Service Definition 只导出公共类型、Service 接口和 capability identity，不引用 Provider 或 Consumer。Service Definition 的 `clutchDsh.serviceDefinition` 必须等于自身 package name。
-
-例如 `clutch-dsh-worktree-manager` 可以作为 Service Definition：
+默认形式是一个 package：
 
 ```text
-packages/clutch-dsh-worktree-manager/
-package name: clutch-dsh-worktree-manager
-serviceDefinition: clutch-dsh-worktree-manager
+packages/<plugin>/
+package name: <plugin>
 ```
 
-`manager` 只是这个 plugin 的一个模块选择，不是通用命名要求。
+如果角色需要独立演进，才使用 nested package：
 
-## 3. Provider
+```text
+packages/<plugin>/<package-name>/
+package name: <package-name>
+```
 
-Provider 实现 Service Definition 的 contract，不重新定义公共类型，也不把 Consumer 行为放进实现中。Provider 的 package name 可以按功能选择，例如 `clutch-dsh-worktree-local`，并在 `dependencies` 中使用精确的 workspace 依赖：
+目录名必须与 `package.json.name` 完全一致，package name 必须以所属 plugin
+名称加 `-` 为前缀。`manager`、`local`、`ui` 不是通用后缀。
+
+DSH 真正识别的是 package manifest 中的 `dsh.bundle`，而不是 Service
+Definition、Provider、Consumer 的数量：
 
 ```json
 {
-  "name": "clutch-dsh-worktree-local",
+  "name": "clutch-dsh-worktree",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "clutchDsh": {
     "plugin": "clutch-dsh-worktree",
-    "role": "provider",
-    "serviceDefinition": "clutch-dsh-worktree-manager"
-  },
-  "dependencies": {
-    "clutch-dsh-worktree-manager": "workspace:*"
+    "role": "plugin",
+    "serviceDefinition": "clutch-dsh-worktree"
   }
 }
 ```
 
-## 4. Consumer
+`clutchDsh` 是本 workspace 的校验 metadata；`role: plugin` 表示一个 package
+内部可以同时拥有多个能力角色。`service-definition`、`provider` 和
+`consumer` 仍可用于真正独立的 module package。
 
-Consumer 提供面向用户或上层流程的入口，只依赖 Service Definition。例如 UI 模块可以命名为 `clutch-dsh-worktree-ui`：
+## 2. Internal capability roles
 
-```json
-{
-  "name": "clutch-dsh-worktree-ui",
-  "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
-    "role": "consumer",
-    "serviceDefinition": "clutch-dsh-worktree-manager"
-  },
-  "dependencies": {
-    "clutch-dsh-worktree-manager": "workspace:*"
-  }
-}
+一个 atomic plugin package 内部仍然保持单向依赖：
+
+```text
+src/contract/  ←  src/provider/
+      ↑              ↑
+      └──────────── src/manage/  ←  src/client/ (future browser Consumer)
 ```
 
-Consumer 不直接依赖 Provider，也不复制 Provider 的实现。Provider 和 Consumer 的 `serviceDefinition` 必须指向对应 Service Definition，并在 `dependencies` 中使用精确的 `workspace:*`。
+Service Definition 只拥有公共类型、服务 interface 和稳定错误码。Provider
+实现它并拥有 Git、sidecar 和 Host adapter。Consumer 只通过 Service
+Definition 与 Host/Client facade 交互，不导入 Provider internals。
 
-## 5. Package files and patch
+只有当这些角色需要独立安装、独立版本、可替换 Provider 或外部 Consumer
+时，才把它们提升成不同 package；此时 Provider/Consumer 才需要使用精确的
+`workspace:*` 依赖 Service Definition。
+
+## 3. Package files and DSH bundle
 
 每个可运行 package 都必须包含：
 
@@ -91,29 +75,28 @@ tsconfig.json
 src/index.ts
 ```
 
-并提供 `build`、`lint`、`typecheck` 和 `test` scripts。
+并提供 `build`、`lint`、`typecheck` 和 `test` scripts。真实 DSH bundle 的
+manifest 位于 `package.json`：
 
-每个 package 的 `cordis.patch.yml` 都指向其 `clutchDsh.serviceDefinition`。上面示例的 canonical YAML 形式是：
+```json
+"dsh": {
+  "bundle": {
+    "patch": "./cordis.patch.yml"
+  }
+}
+```
+
+`cordis.patch.yml` 本身是 DSH patch layer 的 YAML 数组；它不是 bundle
+metadata。当前 `clutch-dsh-worktree` 在 Host Remote 和 Web UI composition
+接入前使用空数组：
 
 ```yaml
-dsh:
-  bundle: clutch-dsh-worktree-manager
+[]
 ```
 
-对应关系为：
+## 4. Validation
 
-```text
-packages/clutch-dsh-worktree-manager -> clutch-dsh-worktree-manager
-packages/clutch-dsh-worktree-local   -> clutch-dsh-worktree-manager
-packages/clutch-dsh-worktree-ui      -> clutch-dsh-worktree-manager
-dsh.bundle                           -> clutch-dsh-worktree-manager
-```
-
-这些 module 名称只用于说明一种 plugin 结构；实际 plugin 可以根据功能选择不同模块名。
-
-## 6. Validation
-
-新增实际 package 后，在根目录执行：
+新增或修改 package 后，在根目录执行：
 
 ```bash
 pnpm install
@@ -122,13 +105,17 @@ pnpm run check:patches
 pnpm run check
 ```
 
-`check:workspace` 会校验 package 形状、目录/name 一致性、plugin 前缀、metadata、必需 scripts 和 Provider/Consumer 的 `workspace:*` 依赖。`check:patches` 会校验 `dsh.bundle` 是否等于 metadata 声明的 Service Definition。没有 `package.json` 的规划目录会被两个 guard 跳过。
+`check:workspace` 校验 package 形状、目录/name 一致性、plugin 前缀、metadata
+和独立 Provider/Consumer 的依赖。`check:patches` 校验
+`package.json.dsh.bundle.patch` 存在、指向 package 内文件，并且该文件是
+可解析的 YAML 数组。两个 guard 会扫描 `packages/*` 和 `packages/*/*`，没有
+`package.json` 的规划目录会被跳过。
 
-## 7. Boundary rules
+## 5. Boundary rules
 
-- Service Definition 不依赖 Provider 或 Consumer。
-- Provider 只实现 Service Definition，不改写公共 contract。
-- Consumer 不直接依赖 Provider。
+- 内部 Service Definition 不依赖 Provider 或 Consumer。
+- Provider 不把 Git、sidecar 和 DSH mutation 暴露给 Consumer。
+- Consumer 不直接依赖 Provider internals。
 - 根项目不承载具体 capability 的 runtime 实现。
-- 不把 demo package、构建产物、coverage、临时 sidecar 数据或凭据提交到仓库。
+- 不把 demo package、构建产物、coverage、临时 sidecar 数据或凭据提交到 Git。
 - `my-cap`、`file-cap` 等名称只用于 authoring 文档说明，不是当前仓库要创建的 package。

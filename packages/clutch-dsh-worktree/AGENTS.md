@@ -61,15 +61,34 @@ plugin 自己的 sidecar index 只保存：
 
 Git worktree 操作只允许管理 worktree 和 Git metadata；不要修改工作树中的业务文件。
 
-## Package 拆分
+## Package 与内部模块
 
-计划中的 package family：
+`clutch-dsh-worktree` 是一个同时包含 Service Definition、Provider 和
+Consumer 的可运行 plugin package。DSH 按 package 的 bundle manifest 激活
+plugin，不要求这三个角色拆成独立 package；只有未来出现可独立替换的
+Provider、外部 Consumer 或独立发布需求时，才重新提升为 package seam。
 
-- Service Definition：dsh-clutch-dsh-worktree
-- Provider：dsh-clutch-dsh-worktree-local
-- Consumer：dsh-tool-clutch-dsh-worktree
+当前 package 根目录就是本目录：
 
-当前目录是 Service Definition 的规划入口，现阶段可能只有 README、AGENTS.md 和 docs。Provider、Consumer 目录和实际源码按独立实现计划推进。
+```text
+packages/clutch-dsh-worktree/
+├── package.json
+├── cordis.patch.yml
+├── src/
+│   ├── contract/         # stable Service Definition vocabulary
+│   ├── provider/         # Git, sidecar and DSH read adapters
+│   ├── manage/           # Worktree/Session use-case orchestration
+│   └── client/           # future Web UI Consumer entrypoint
+└── test/
+```
+
+`src/contract/` 是内部稳定 seam。`src/provider/` 只负责底层 adapter 和
+sidecar 持久化；`src/manage/` 负责上层 Worktree/Session 用例编排；
+未来的 `src/client/` 通过 browser-safe facade 使用 contract 和 Manage
+能力。依赖方向是 `contract ← provider`、`contract ← manage ← client`，
+且 `manage → provider`；Provider 不得反向导入 Manage。
+`manager`、`local`、`ui` 只描述角色或实现位置，不再对应 workspace package
+名称。
 
 ## 开始工作前
 
@@ -79,13 +98,15 @@ Git worktree 操作只允许管理 worktree 和 Git metadata；不要修改工�
 2. 本文件
 3. README.md
 4. docs/superpowers/plans/2026-08-18-clutch-dsh-worktree.md
-5. 需要改动的 DSH/Cordis adapter 或 host API 文档
+5. docs/superpowers/plans/2026-08-20-clutch-dsh-worktree-package-consolidation.md
+6. 需要改动的 DSH/Cordis adapter 或 host API 文档
 
 先确认当前 git status，并保留用户已有改动。
 
 ## 实现要求
 
-- 先定义 Service Definition contract，再实现 sidecar Provider，最后接入 Web UI Consumer。
+- 先定义内部 Service Definition contract，再实现 sidecar Provider，最后
+  接入同一 package 的 Web UI Consumer。
 - DSH read adapter 可以读取 Project/Session，但不得暴露 Project/Session mutation 方法。
 - Session 创建流程是：创建正常 DSH Session，再写入外部 binding；binding 写入失败时不得删除或修改 DSH Session。
 - Worktree 创建流程是：创建 Git worktree，再写入 sidecar；sidecar 写入失败时清理刚创建的 worktree。
@@ -114,4 +135,5 @@ Git worktree 操作只允许管理 worktree 和 Git metadata；不要修改工�
 
 packages/clutch-dsh-worktree/docs/superpowers/plans/2026-08-18-clutch-dsh-worktree.md
 
-当实现改变关系模型、数据边界、存储位置或 DSH adapter contract 时，必须同步更新独立计划和 README。
+当实现改变关系模型、数据边界、存储位置、DSH adapter contract 或 package
+entrypoint 时，必须同步更新独立计划和 README。
