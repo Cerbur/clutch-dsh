@@ -64,6 +64,17 @@ export interface WorktreeSurfaceInjected {
     input: CreateSessionForWorktreeInput,
   ) => Promise<string>;
   readonly createMainSession?: (workspaceId: string) => void;
+  readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
+  readonly deleteWorkspace?: (workspaceId: string) => Promise<void>;
+  readonly insertWorkspaceBefore?: (
+    workspaceId: string,
+    beforeWorkspaceId?: string,
+  ) => Promise<void>;
+  readonly insertSessionBefore?: (
+    workspaceId: string,
+    sessionId: string,
+    beforeSessionId?: string,
+  ) => Promise<void>;
   readonly renameSession?: (sessionId: string, title: string) => Promise<void>;
   readonly forkSession?: (sessionId: string) => void;
   readonly archiveSession?: (sessionId: string) => Promise<void>;

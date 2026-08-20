@@ -113,6 +113,37 @@ export function apply(ctx: ClientContext): void {
               workspaceId as Parameters<typeof ctx.workspaces.startSession>[0],
             );
           },
+          renameWorkspace: async (workspaceId: string, title: string) => {
+            await ctx.workspaces.rename(
+              workspaceId as Parameters<typeof ctx.workspaces.rename>[0],
+              title,
+            );
+          },
+          deleteWorkspace: async (workspaceId: string) => {
+            await ctx.workspaces.delete(
+              workspaceId as Parameters<typeof ctx.workspaces.delete>[0],
+            );
+          },
+          insertWorkspaceBefore: async (
+            workspaceId: string,
+            beforeWorkspaceId?: string,
+          ) => {
+            await ctx.workspaces.insertBefore(
+              workspaceId as Parameters<typeof ctx.workspaces.insertBefore>[0],
+              beforeWorkspaceId as Parameters<typeof ctx.workspaces.insertBefore>[1],
+            );
+          },
+          insertSessionBefore: async (
+            workspaceId: string,
+            sessionId: string,
+            beforeSessionId?: string,
+          ) => {
+            await ctx.workspaces.insertSessionBefore(
+              workspaceId as Parameters<typeof ctx.workspaces.insertSessionBefore>[0],
+              sessionId as Parameters<typeof ctx.workspaces.insertSessionBefore>[1],
+              beforeSessionId as Parameters<typeof ctx.workspaces.insertSessionBefore>[2],
+            );
+          },
           renameSession: async (sessionId: string, title: string) => {
             const session = ctx.sessions.binding(sessionId as SessionId)?.session;
             if (session === undefined) throw new Error(`unknown session "${sessionId}"`);

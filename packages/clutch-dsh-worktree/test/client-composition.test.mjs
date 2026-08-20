@@ -56,6 +56,14 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /ctx\.sessions\.binding/);
   assert.match(source, /ctx\.sessions\.fork/);
   assert.match(source, /ctx\.workspaces\.archiveSession/);
+  assert.match(source, /renameWorkspace/);
+  assert.match(source, /deleteWorkspace/);
+  assert.match(source, /insertWorkspaceBefore/);
+  assert.match(source, /insertSessionBefore/);
+  assert.match(source, /ctx\.workspaces\.rename/);
+  assert.match(source, /ctx\.workspaces\.delete/);
+  assert.match(source, /ctx\.workspaces\.insertBefore/);
+  assert.match(source, /ctx\.workspaces\.insertSessionBefore/);
 });
 
 test('loads and disposes the Client entry through the DSH module handoff', async () => {
