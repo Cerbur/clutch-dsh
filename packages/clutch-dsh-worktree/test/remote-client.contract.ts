@@ -1,7 +1,7 @@
 import type { RemoteResult, TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol';
-import type { WorktreeConnectionAdapter } from 'clutch-dsh-worktree/client';
-import type { WorktreeManager, WorktreeRemoteManager } from 'clutch-dsh-worktree';
-import type {} from 'clutch-dsh-worktree/remote';
+import type { WorktreeConnectionAdapter } from '@cerbur/clutch-dsh-worktree/client';
+import type { WorktreeManager, WorktreeRemoteManager } from '@cerbur/clutch-dsh-worktree';
+import type {} from '@cerbur/clutch-dsh-worktree/remote';
 
 type Extends<Left, Right> = Left extends Right ? true : false;
 type Expect<Value extends true> = Value;

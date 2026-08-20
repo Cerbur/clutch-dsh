@@ -1,6 +1,6 @@
 # Plugin Authoring Guide
 
-本仓库的根项目名是 `clutch-dsh`。根 package 只提供 workspace 工具，不发布为
+本仓库的根 package 名是 `@cerbur/clutch-dsh`。根 package 只提供 workspace 工具，不发布为
 plugin。一个 plugin 可以由一个完整 package 组成，也可以在确有独立发布或
 替换需求时拆成多个 module package。
 
@@ -20,24 +20,25 @@ packages/<plugin>/<package-name>/
 package name: <package-name>
 ```
 
-目录名必须与 `package.json.name` 完全一致，package name 必须以所属 plugin
-名称加 `-` 为前缀。`manager`、`local`、`ui` 不是通用后缀。
+目录名必须与 `package.json.name` 的 unscoped 部分一致；scoped package 使用
+`@scope/<directory>` 形式。package name 必须使用所属 plugin 的 scope 和名称，
+并以 `-` 加模块名为前缀。`manager`、`local`、`ui` 不是通用后缀。
 
 DSH 真正识别的是 package manifest 中的 `dsh.bundle`，而不是 Service
 Definition、Provider、Consumer 的数量：
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
   "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
+    "plugin": "@cerbur/clutch-dsh-worktree",
     "role": "plugin",
-    "serviceDefinition": "clutch-dsh-worktree"
+    "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   }
 }
 ```
@@ -90,13 +91,13 @@ manifest 位于 `package.json`：
 ```
 
 `cordis.patch.yml` 本身是 DSH patch layer 的 YAML 数组；它不是 bundle
-metadata。`clutch-dsh-worktree` 的 Phase 3 patch 已装载 Host entry，并由 DSH
+metadata。`@cerbur/clutch-dsh-worktree` 的 patch 已装载 Host entry，并由 DSH
 注入解析后的 Home：
 
 ```yaml
 - insert:
     - id: clutch-dsh-worktree-host
-      name: clutch-dsh-worktree
+      name: '@cerbur/clutch-dsh-worktree'
       config:
         dshHome: !!js dshHomePath()
 ```

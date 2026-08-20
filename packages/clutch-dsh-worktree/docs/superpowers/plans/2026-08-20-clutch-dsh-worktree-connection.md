@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkboxes for tracking.
 
 **Goal:** 在 `dsh-v0.1.0-rc.8` 的既有 `/api` Connection transport 上，让
-`clutch-dsh-worktree` 的 browser Consumer 通过一个集中 adapter 调用 Host 的
+`@cerbur/clutch-dsh-worktree` 的 browser Consumer 通过一个集中 adapter 调用 Host 的
 六个 Worktree 方法，不再依赖或加载本 package 的 `./remote` namespace。
 
 **Architecture:** Host 保留现有 `WorktreeRemoteService`、六个 `@Remote` 方法、
@@ -21,7 +21,7 @@ Gateway/Loader、Node test runner、React slot Consumer。
 
 - 目标 DSH 基线为 `dsh-v0.1.0-rc.8`；peer/dev DSH package 版本统一为 rc.8，`@deepseek-ai/cordis` 保持 `4.0.1`。
 - 只修改 `/Users/yuancheng/Documents/Code/clutch-dsh`；`/Users/yuancheng/Documents/Code/deepseek-harness` 只读参考。
-- 不要求 `clutch-dsh-worktree/remote` 加入 `@deepseek-ai/dsh-api-remotes/client`；生产 Client 不导入、遍历或挂载 `./remote` metadata。
+- 不要求 `@cerbur/clutch-dsh-worktree/remote` 加入 `@deepseek-ai/dsh-api-remotes/client`；生产 Client 不导入、遍历或挂载 `./remote` metadata。
 - 不创建第二套 RPC、logical channel、transport、HTTP/WebServer route，也不直接 `fetch`。
 - Client 不调用 `ctx.remote.$mount()`；DSH canonical `ctx.remote` 不删除，只不作为本 plugin 的依赖。
 - 原始 DSH Workspace/Session 仍是唯一数据源；sidecar、commands、settings、session metadata 和文本 JSON 旁路均不参与 Client 调用。
@@ -339,9 +339,9 @@ production Client and current acceptance text must describe the Connection path.
 - [x] **Step 1: Run package verification.**
 
 ```bash
-pnpm --filter clutch-dsh-worktree typecheck
-pnpm --filter clutch-dsh-worktree build
-pnpm --filter clutch-dsh-worktree test
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree build
+pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
 
 - [x] **Step 2: Run workspace verification.**

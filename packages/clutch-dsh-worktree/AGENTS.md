@@ -63,7 +63,7 @@ Git worktree 操作只允许管理 worktree 和 Git metadata；不要修改工�
 
 ## Package 与内部模块
 
-`clutch-dsh-worktree` 是一个同时包含 Service Definition、Provider 和
+`@cerbur/clutch-dsh-worktree` 是一个同时包含 Service Definition、Provider 和
 Consumer 的可运行 plugin package。DSH 按 package 的 bundle manifest 激活
 plugin，不要求这三个角色拆成独立 package；只有未来出现可独立替换的
 Provider、外部 Consumer 或独立发布需求时，才重新提升为 package seam。

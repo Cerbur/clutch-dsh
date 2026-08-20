@@ -14,7 +14,7 @@
 
 ```text
 packages/clutch-dsh-worktree/
-package name: clutch-dsh-worktree
+package name: @cerbur/clutch-dsh-worktree
 ```
 
 一个 package 可以在内部拥有 Service Definition、Provider 和 Consumer。
@@ -22,16 +22,16 @@ package name: clutch-dsh-worktree
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
   "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
+    "plugin": "@cerbur/clutch-dsh-worktree",
     "role": "plugin",
-    "serviceDefinition": "clutch-dsh-worktree"
+    "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   }
 }
 ```
@@ -49,8 +49,9 @@ packages/<plugin>/<package-name>/
 package name: <package-name>
 ```
 
-目录名必须与 `package.json.name` 完全一致，package name 必须等于 plugin
-名称或以 `${plugin}-` 开头。独立 Provider/Consumer 对 Service Definition
+目录名必须与 `package.json.name` 的 unscoped 部分一致；scoped package 使用
+`@scope/<directory>` 形式。package name 必须等于 plugin 名称或以 `${plugin}-`
+开头。独立 Provider/Consumer 对 Service Definition
 使用精确的 `workspace:*` 依赖；角色名称不从 `manager`、`local`、`ui`
 等后缀推导。
 
@@ -90,7 +91,7 @@ workspace 的结构校验 metadata，不替代 DSH manifest。
 
 ## Worktree application
 
-`clutch-dsh-worktree` 采用 atomic package：
+`@cerbur/clutch-dsh-worktree` 采用 atomic package：
 
 ```text
 packages/clutch-dsh-worktree/

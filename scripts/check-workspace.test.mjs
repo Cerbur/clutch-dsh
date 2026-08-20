@@ -169,6 +169,24 @@ test('accepts one plugin package that owns all capability roles internally', asy
   assert.match(result.stdout, /workspace shape ok/);
 });
 
+test('accepts scoped atomic plugin package names', async (t) => {
+  const root = await createFixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await createRunnablePackage(root, 'clutch-dsh-worktree', {
+    name: '@cerbur/clutch-dsh-worktree',
+    metadata: {
+      plugin: '@cerbur/clutch-dsh-worktree',
+      role: 'plugin',
+      serviceDefinition: '@cerbur/clutch-dsh-worktree',
+    },
+  });
+
+  const result = await runCheck(root);
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /workspace shape ok/);
+});
+
 test('requires the package name to match its directory name', async (t) => {
   const root = await createFixture();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -196,7 +214,7 @@ test('requires the package name to use the declared plugin prefix', async (t) =>
   const result = await runCheck(root);
 
   assert.equal(result.code, 1);
-  assert.match(result.stdout, /must start with plugin prefix/);
+  assert.match(result.stdout, /must use plugin scope\/prefix/);
 });
 
 test('requires valid clutchDsh metadata and role', async (t) => {

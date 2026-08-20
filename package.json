@@ -1,5 +1,5 @@
 {
-  "name": "clutch-dsh",
+  "name": "@cerbur/clutch-dsh",
   "private": true,
   "scripts": {
     "build": "pnpm -r --if-present run build",

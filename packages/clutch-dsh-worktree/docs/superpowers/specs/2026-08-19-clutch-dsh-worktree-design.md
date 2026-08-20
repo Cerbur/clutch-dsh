@@ -9,7 +9,7 @@
 
 ## 1. Goal and scope
 
-`clutch-dsh-worktree` adds a Worktree/Session view to the existing DSH Web UI:
+`@cerbur/clutch-dsh-worktree` adds a Worktree/Session view to the existing DSH Web UI:
 
 ```text
 Workspace
@@ -53,7 +53,7 @@ packages/
     └── test/
 ```
 
-The package name and DSH bundle identity are both `clutch-dsh-worktree`.
+The package name and DSH bundle identity are both `@cerbur/clutch-dsh-worktree`.
 `manager`, `local`, and `ui` describe internal roles or implementation areas;
 they are not package names. DSH does not require these roles to be installed
 or composed as separate packages.
@@ -69,7 +69,7 @@ activated as one DSH bundle through this manifest:
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

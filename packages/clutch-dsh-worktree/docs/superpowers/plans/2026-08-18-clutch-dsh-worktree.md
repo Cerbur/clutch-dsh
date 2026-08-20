@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
-> **Package amendment (2026-08-20):** `clutch-dsh-worktree` is one runnable
+> **Package amendment (2026-08-20):** `@cerbur/clutch-dsh-worktree` is one runnable
 > package. Use the package-consolidation plan for the migration and treat the
 > role sections below as internal modules, not nested package creation tasks.
 
@@ -289,7 +289,7 @@ export function resolveSessionCwd(input: {
 
 - [ ] **Step 5: 验证 Service Definition 独立构建**
 
-Run: pnpm --filter clutch-dsh-worktree typecheck && pnpm --filter clutch-dsh-worktree build && pnpm --filter clutch-dsh-worktree test
+Run: pnpm --filter @cerbur/clutch-dsh-worktree typecheck && pnpm --filter @cerbur/clutch-dsh-worktree build && pnpm --filter @cerbur/clutch-dsh-worktree test
 
 Expected: 全部成功；Service Definition 没有 Provider、Consumer 或 Git 实现依赖。
 

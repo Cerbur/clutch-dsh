@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { loadClientEntry } from './client-fixture.mjs';
 
 const packageDirectory = path.resolve('.');
+const packageManifest = JSON.parse(
+  await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
+);
 
 async function loadRuntimeClientExports() {
   const runtimePath = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-client-runtime/client'));
@@ -33,7 +36,7 @@ async function loadRuntimeClientExports() {
 test('publishes an official DSH client-module handoff with a browser-safe apply entry', async () => {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   assert.match(clientBundle, /window\.__ModuleLoader__\.load/);
-  assert.match(clientBundle, /clutch-dsh-worktree/);
+  assert.match(clientBundle, /@cerbur\/clutch-dsh-worktree/);
   assert.match(clientBundle, /sidebar\.footer\.action/);
   assert.match(clientBundle, /shell\.overlay/);
   assert.doesNotMatch(clientBundle, /@deepseek-ai\/dsh-api-remotes|\.\/remote/);
@@ -56,7 +59,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   evaluate(windowObject);
 
   assert.equal(registrations.length, 1);
-  assert.equal(registrations[0].id, 'clutch-dsh-worktree');
+  assert.equal(registrations[0].id, packageManifest.name);
 
   const fixture = await loadClientEntry();
   assert.equal(typeof fixture.exports.apply, 'function');

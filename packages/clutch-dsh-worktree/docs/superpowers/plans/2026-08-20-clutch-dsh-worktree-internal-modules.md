@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在单一 `clutch-dsh-worktree` package 内建立清晰的 `contract`、
+**Goal:** 在单一 `@cerbur/clutch-dsh-worktree` package 内建立清晰的 `contract`、
 `provider`、`manage` 和 `client` 内部模块，避免 Provider 同时承担上层
 Worktree/Session 用例编排。
 
@@ -17,7 +17,7 @@ worktree、Workspace-sharded JSON sidecar。
 
 ## Global Constraints
 
-- 外部发布单元仍然只有 `clutch-dsh-worktree`，不新增 workspace package。
+- 外部发布单元仍然只有 `@cerbur/clutch-dsh-worktree`，不新增 workspace package。
 - `src/contract/` 不依赖 `provider`、`manage`、`client`、Git、sidecar 或 React。
 - `src/provider/` 不依赖 `manage` 或 `client`；它只实现底层 adapter 和持久化机制。
 - `src/manage/` 可以依赖 `contract` 和 `provider`，但不向上暴露 Git/sidecar implementation details。
@@ -115,7 +115,7 @@ the post-migration run is GREEN.
 - [x] **Step 1: Move the two contract files.**
 - [x] **Step 2: Update the assertion import to `./index.js`.**
 - [x] **Step 3: Export contract values/types from the root barrel.**
-- [x] **Step 4: Run `pnpm --filter clutch-dsh-worktree typecheck`.**
+- [x] **Step 4: Run `pnpm --filter @cerbur/clutch-dsh-worktree typecheck`.**
 
 Expected: the contract compiles without importing Provider or Manage.
 
@@ -143,7 +143,7 @@ Expected: the contract compiles without importing Provider or Manage.
 - [x] **Step 1: Move the adapter files and add the Provider barrel.**
 - [x] **Step 2: Update relative imports to `../contract/index.js` where needed.**
 - [x] **Step 3: Remove Manage-only option/service types from Provider types.**
-- [x] **Step 4: Run `pnpm --filter clutch-dsh-worktree typecheck`.**
+- [x] **Step 4: Run `pnpm --filter @cerbur/clutch-dsh-worktree typecheck`.**
 
 Expected: Git and sidecar compile as low-level Provider modules with no Manage
 dependency.
@@ -190,7 +190,7 @@ inject fake adapters.
 - [x] **Step 3: Move and rename the current orchestration implementation.**
 - [x] **Step 4: Add `WorktreeManagerOptions` and `WorktreeManagerService`.**
 - [x] **Step 5: Export Manage from `src/manage/index.ts` and the root barrel.**
-- [x] **Step 6: Run `pnpm --filter clutch-dsh-worktree test`.**
+- [x] **Step 6: Run `pnpm --filter @cerbur/clutch-dsh-worktree test`.**
 
 Expected: all existing 27 behavior tests pass, plus the module-boundary test, with the implementation now owned
 by Manage rather than Provider (28 tests pass in total).
@@ -217,9 +217,9 @@ by Manage rather than Provider (28 tests pass in total).
 
 ```bash
 node --test test/module-boundaries.test.mjs
-pnpm --filter clutch-dsh-worktree typecheck
-pnpm --filter clutch-dsh-worktree lint
-pnpm --filter clutch-dsh-worktree test
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
 
 - [x] **Step 2: Run repository checks.**

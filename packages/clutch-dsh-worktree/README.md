@@ -1,12 +1,115 @@
-# clutch-dsh-worktree
+# @cerbur/clutch-dsh-worktree
 
-`clutch-dsh-worktree` 是一个整体 plugin，为 DSH Web UI 增加
-Project → Worktree → Session 的外部关系视角。本目录是 plugin 根目录；
-其功能模块按自身边界放在本目录下。
+`@cerbur/clutch-dsh-worktree` 是一个整体 DSH plugin，为 DSH Web UI 增加
+Project → Worktree → Session 的外部关系视角。本仓库中的源码目录是
+`packages/clutch-dsh-worktree/`；对外安装时使用上面的 scoped package name。
+
+## 安装与启动
+
+### 前置条件
+
+- DSH CLI 和目标 Web profile 使用 `dsh-v0.1.0-rc.8`；不要与 rc.7 混用。
+- 已有可启动的 profile，例如 `web` 或 `demo`。
+- 该 plugin 必须安装到实际启动 Web UI 的同一个 profile 中。
+
+### 在本地 deepseek-harness 中安装（推荐）
+
+本地 DSH 源码模式下，所有 CLI 命令都从 `deepseek-harness` 根目录通过
+`pnpm dsh` 转发。先构建 plugin 和 DSH 自身的本地 artifacts：
+
+```bash
+# Terminal 1: 构建本地 plugin
+cd /path/to/clutch-dsh
+pnpm install
+pnpm --filter @cerbur/clutch-dsh-worktree build
+
+# Terminal 2: 在本地 DSH 源码仓库中安装到 web profile
+cd /path/to/deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+`dsh plugin` 会把本地 checkout 链接到 profile，并将 package 声明的
+`dsh.bundle` layer 加入 profile；不需要手动编辑 profile 的 `package.json` 或
+`cordis.patch.yml`。路径建议使用绝对路径，避免 profile 的工作目录影响解析。
+
+如果该 profile 之前安装过旧的 unscoped package，先执行一次：
+
+```bash
+pnpm dsh plugin --profile web remove clutch-dsh-worktree
+```
+
+然后重新执行上面的 scoped package 安装命令。
+
+安装后仍然在 `deepseek-harness` 根目录中检查 bundle layer，再启动 Web：
+
+```bash
+pnpm dsh web --dump-config
+pnpm dsh web
+```
+
+`--dump-config` 输出中应能看到 `@cerbur/clutch-dsh-worktree` 的 Host layer。启动后，
+在 DSH Web UI 的 Sidebar footer 进入 Worktree mode，选择 Workspace，然后可以：
+
+1. 查看 Worktrees、local branches 和 bindings；
+2. 从可用 branch 创建 Worktree；
+3. 将当前 Session 绑定到 Worktree；
+4. 删除 Worktree，并查看保留的 detached binding。
+
+### 更新本地 plugin 后重新测试
+
+profile 已经链接本地 checkout 后，每次修改 plugin 只需要重新构建 plugin，重启
+本地 DSH；不需要重复添加：
+
+```bash
+cd /path/to/clutch-dsh
+pnpm --filter @cerbur/clutch-dsh-worktree build
+cd /path/to/deepseek-harness
+pnpm dsh web
+```
+
+本地 checkout 必须先生成 `lib/`；直接从 Git 源码安装而不构建时，DSH 无法加载
+TypeScript package 的发布入口。修改 `cordis.patch.yml`、package manifest 或
+profile bundle 成员后，需要重新执行 `pnpm dsh plugin --profile web add ...`，并重启
+profile。
+
+### 从 package registry 安装
+
+如果使用已发布的 package，而不是本地 DSH 源码模式，则在 `deepseek-harness` 根目录
+执行：
+
+```bash
+pnpm dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+pnpm dsh web
+```
+
+### 卸载
+
+从 profile 移除 package 和对应 bundle layer：
+
+```bash
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
+```
+
+### 运行时检查
+
+- Client 通过 DSH 已有的 `ctx.connection.rpc` 和 `/api` channel 调用 Host；不需要
+  额外安装 `@deepseek-ai/dsh-api-remotes`，也不需要手动挂载 `ctx.remote`。
+- `ctx.remote.worktreeManager` 为 `undefined` 是预期行为，不影响 Worktree UI。
+- 如果调用失败，UI 会显示明确的 retryable error，而不是显示为空列表；优先检查
+  `--dump-config` 中是否包含 package layer，以及 Host/Gateway 日志。
+
+### 已知限制
+
+rc.8 的原生 `session.create` 不能同时传 `workspaceId` 和 `cwd`。本 plugin 当前
+解决的是 Worktree Host 核心逻辑和 Web UI 调用路径，不宣称解决原生 Workspace
+membership 与 Worktree runtime cwd 的独立限制。
 
 ## 当前实现进度
 
-`clutch-dsh-worktree` 是一个整体 plugin 和一个 workspace package。当前
+`@cerbur/clutch-dsh-worktree` 是一个整体 plugin 和一个 workspace package。当前
 package 内部已经包含：
 
 - `src/contract/`：稳定的公共类型与 interface，不依赖运行时实现；

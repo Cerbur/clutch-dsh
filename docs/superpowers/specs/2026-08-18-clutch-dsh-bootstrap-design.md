@@ -38,7 +38,7 @@ packages/<plugin>/
 `packages/<plugin>/<package-name>/` 下创建 nested package。nested package
 目录名必须等于 `package.json.name`，且使用 plugin 前缀。
 
-`clutch-dsh-worktree` 采用默认的一包形态：
+`@cerbur/clutch-dsh-worktree` 采用默认的一包形态：
 
 ```text
 packages/clutch-dsh-worktree/
@@ -56,16 +56,16 @@ workspace metadata 与 DSH bundle metadata 分开：
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
   "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
+    "plugin": "@cerbur/clutch-dsh-worktree",
     "role": "plugin",
-    "serviceDefinition": "clutch-dsh-worktree"
+    "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   }
 }
 ```
@@ -104,7 +104,7 @@ Consumer 才需要对独立 Service Definition 使用精确的 `workspace:*`。
 - guard tests 覆盖 atomic plugin package、独立三角色 package、名称/目录、
   plugin prefix、role、service identity、workspace dependency、bundle
   manifest、patch path、YAML root 和规划目录跳过。
-- `clutch-dsh-worktree` package tests 覆盖 contract、Git、sidecar、binding、
+- `@cerbur/clutch-dsh-worktree` package tests 覆盖 contract、Git、sidecar、binding、
   cwd、恢复和 DSH fixture 不变式。
 
 ## Acceptance Criteria

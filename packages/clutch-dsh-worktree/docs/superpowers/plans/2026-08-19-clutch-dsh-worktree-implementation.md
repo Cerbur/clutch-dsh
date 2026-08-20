@@ -8,7 +8,7 @@
 
 **Goal:** 为 DSH Web UI 增加 Project → Worktree → Session 视角，在不改写 DSH
 原始 Workspace、Session 或会话内容的前提下，通过同一个
-`clutch-dsh-worktree` plugin package 的 Host Provider、Remote facade 和
+`@cerbur/clutch-dsh-worktree` plugin package 的 Host Provider、Remote facade 和
 Browser Consumer 维护 Worktree/Session 关系。
 
 **Architecture:** DSH 继续作为 Workspace、Session、消息和 transcript 的唯一
@@ -73,12 +73,12 @@ packages/clutch-dsh-worktree/
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
+    "plugin": "@cerbur/clutch-dsh-worktree",
     "role": "plugin",
-    "serviceDefinition": "clutch-dsh-worktree"
+    "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   }
 }
 ```

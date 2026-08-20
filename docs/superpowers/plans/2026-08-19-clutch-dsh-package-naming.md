@@ -14,7 +14,8 @@ Definition 名称推导。
 
 ## Implemented rules
 
-- package directory name equals `package.json.name`;
+- package directory name equals the unscoped part of `package.json.name`;
+- scoped package names use the `@scope/<directory>` form;
 - an atomic package name may equal `clutchDsh.plugin`;
 - a nested module package name must use the plugin prefix;
 - `clutchDsh.role` is `plugin`, `service-definition`, `provider`, or `consumer`;
@@ -28,7 +29,7 @@ Definition 名称推导。
 **Files:** `scripts/check-workspace.mjs`,
 `scripts/check-workspace.test.mjs`
 
-- [x] Accept `clutch-dsh-worktree` as an atomic plugin package.
+- [x] Accept `@cerbur/clutch-dsh-worktree` as an atomic plugin package.
 - [x] Accept the existing independent package fixture shape.
 - [x] Reject invalid directory/name, plugin prefix, role, identity and
       Provider/Consumer dependency values.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 `clutch-dsh-worktree` 合并为一个真实 DSH bundle package，同时在
+**Goal:** 将 `@cerbur/clutch-dsh-worktree` 合并为一个真实 DSH bundle package，同时在
 `src/` 内以 `contract`、`provider`、`manage`、`client` 保留清晰的单向
 内部 seam。
 
@@ -19,7 +19,7 @@ manifest、YAML patch layer、Git worktree、JSON sidecar。
 ## Global Constraints
 
 - 只修改 `/Users/yuancheng/Documents/Code/clutch-dsh`，不修改 DSH 源码仓库。
-- `clutch-dsh-worktree` 是唯一 workspace package；不保留 manager/local/ui 的 nested `package.json`、patch 或独立测试入口。
+- `@cerbur/clutch-dsh-worktree` 是唯一 workspace package；不保留 manager/local/ui 的 nested `package.json`、patch 或独立测试入口。
 - DSH bundle metadata 位于 package.json：`dsh.bundle.patch: "./cordis.patch.yml"`；patch 文件本身是 YAML 数组。
 - `clutchDsh.role: "plugin"` 表示一个 package 可以同时拥有多个能力角色；独立 Provider/Consumer package 才使用 `workspace:*` 依赖规则。
 - `src/contract/` 不依赖 Git、sidecar、Node-only API、React 或 DSH mutation API。
@@ -60,13 +60,13 @@ DSH 的能力 seam 文档也允许一个 package 拥有多个角色，只有独�
 - [x] **Step 1: Add the failing atomic-package fixture.**
 
 Extend `check-workspace.test.mjs` with a direct package fixture named
-`clutch-dsh-worktree` whose metadata is:
+`@cerbur/clutch-dsh-worktree` whose metadata is:
 
 ```json
 {
-  "plugin": "clutch-dsh-worktree",
+  "plugin": "@cerbur/clutch-dsh-worktree",
   "role": "plugin",
-  "serviceDefinition": "clutch-dsh-worktree"
+  "serviceDefinition": "@cerbur/clutch-dsh-worktree"
 }
 ```
 
@@ -150,7 +150,7 @@ Run the same Node test command. Expected: all validator tests pass.
 **Interfaces:**
 
 - Root package name, plugin id, service identity and DSH bundle identity are
-  `clutch-dsh-worktree`.
+  `@cerbur/clutch-dsh-worktree`.
 - `src/index.ts` re-exports `src/contract/`, `src/provider/` and `src/manage/`.
 - Provider files import `../contract/index.js` rather than a workspace package.
 - The package remains independently testable through injected DSH, Git and
@@ -162,12 +162,12 @@ Create the root package manifest with these relevant fields:
 
 ```json
 {
-  "name": "clutch-dsh-worktree",
+  "name": "@cerbur/clutch-dsh-worktree",
   "type": "module",
   "clutchDsh": {
-    "plugin": "clutch-dsh-worktree",
+    "plugin": "@cerbur/clutch-dsh-worktree",
     "role": "plugin",
-    "serviceDefinition": "clutch-dsh-worktree"
+    "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   },
   "dsh": {
     "bundle": {
@@ -212,9 +212,9 @@ the unfinished Remote or UI composition is already mounted.
 Run:
 
 ```bash
-pnpm --filter clutch-dsh-worktree typecheck
-pnpm --filter clutch-dsh-worktree build
-pnpm --filter clutch-dsh-worktree test
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree build
+pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
 
 Expected: the root package builds and both migrated test files pass.
@@ -286,9 +286,9 @@ installation as a substitute for a failed validator.
 ```bash
 pnpm run check:workspace
 pnpm run check:patches
-pnpm --filter clutch-dsh-worktree typecheck
-pnpm --filter clutch-dsh-worktree build
-pnpm --filter clutch-dsh-worktree test
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree build
+pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
 
 - [x] **Step 3: Run repository checks appropriate to the changed surfaces.**

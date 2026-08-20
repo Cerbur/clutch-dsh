@@ -20,6 +20,27 @@ function report(errors, packageDirectory, message) {
   errors.push(`${packageDirectory}: ${message}`);
 }
 
+function packageParts(name) {
+  const separator = name.startsWith('@') ? name.indexOf('/') : -1;
+  return separator > 0
+    ? { scope: name.slice(0, separator), name: name.slice(separator + 1) }
+    : { scope: '', name };
+}
+
+function packageMatchesDirectory(packageName, folderName) {
+  return packageParts(packageName).name === folderName;
+}
+
+function packageBelongsToPlugin(packageName, pluginName) {
+  const packageIdentity = packageParts(packageName);
+  const pluginIdentity = packageParts(pluginName);
+  return (
+    packageIdentity.scope === pluginIdentity.scope &&
+    (packageIdentity.name === pluginIdentity.name ||
+      packageIdentity.name.startsWith(`${pluginIdentity.name}-`))
+  );
+}
+
 async function findPackageDirectories(packagesDirectory) {
   const packageDirectories = [];
   const pluginEntries = await readdir(packagesDirectory, { withFileTypes: true });
@@ -61,11 +82,16 @@ async function validatePackage(packageDirectory, folderName, errors) {
     return;
   }
 
-  if (packageJson.name !== folderName) {
+  if (
+    typeof packageJson.name !== 'string' ||
+    !packageMatchesDirectory(packageJson.name, folderName)
+  ) {
     report(
       errors,
       packageDirectory,
-      `package name must match directory name ${folderName}, got ${packageJson.name ?? '<missing>'}`,
+      `package name must match directory name ${folderName} (a scope is allowed), got ${
+        packageJson.name ?? '<missing>'
+      }`,
     );
   }
 
@@ -92,13 +118,12 @@ async function validatePackage(packageDirectory, folderName, errors) {
     report(errors, packageDirectory, 'clutchDsh.plugin must be a non-empty string');
   } else if (
     typeof packageJson.name === 'string' &&
-    packageJson.name !== plugin &&
-    !packageJson.name.startsWith(`${plugin}-`)
+    !packageBelongsToPlugin(packageJson.name, plugin)
   ) {
     report(
       errors,
       packageDirectory,
-      `package name must start with plugin prefix ${plugin}- or equal plugin ${plugin}, got ${packageJson.name}`,
+      `package name must use plugin scope/prefix ${plugin} or equal plugin ${plugin}, got ${packageJson.name}`,
     );
   }
 

@@ -6,7 +6,10 @@ import { fileURLToPath, URL } from 'node:url';
 import { build } from 'tsdown';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
-const clientId = 'clutch-dsh-worktree';
+const packageManifest = JSON.parse(
+  await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
+);
+const clientId = packageManifest.name;
 const CSS_PREFIX = '\0clutch-dsh-worktree-css:';
 const CSS_SUFFIX = '.mjs';
 const clientExternals = [

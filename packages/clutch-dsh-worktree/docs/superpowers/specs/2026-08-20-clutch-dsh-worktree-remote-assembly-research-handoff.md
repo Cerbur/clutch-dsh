@@ -29,7 +29,7 @@ Host:
 Client:
   dsh.client module graph
     -> dsh-client-connection provides ctx.connection
-    -> clutch-dsh-worktree/client entry
+    -> @cerbur/clutch-dsh-worktree/client entry
     -> Worktree Connection adapter
     -> WorktreeManager interface
     -> footer action / shell overlay UI

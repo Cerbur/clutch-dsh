@@ -7,13 +7,13 @@ import {
   WorkspaceAnalyzer,
 } from '@deepseek-ai/dsh-typert-generator';
 
-const packageName = 'clutch-dsh-worktree';
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const outputDirectory = path.join(packageDirectory, 'lib');
 const manifest = JSON.parse(
   await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
 );
+const packageName = manifest.name;
 
 assertExport('./typert', {
   types: './lib/typert.host.d.ts',

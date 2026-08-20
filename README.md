@@ -1,6 +1,6 @@
-# clutch-dsh
+# @cerbur/clutch-dsh
 
-`clutch-dsh` 是一个用于开发 DSH（DeepSeek Harness）plugin 的 pnpm workspace。根项目只负责 workspace 发现、共享工具链、package 规则和 Cordis patch 校验；根 package 保持 private，不作为可发布 plugin。
+`@cerbur/clutch-dsh` 是一个用于开发 DSH（DeepSeek Harness）plugin 的 pnpm workspace。根项目只负责 workspace 发现、共享工具链、package 规则和 Cordis patch 校验；根 package 保持 private，不作为可发布 plugin。
 
 ## Workspace layout
 
@@ -11,7 +11,7 @@
 
 没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace guard
 当作可运行 package。当前 `packages/clutch-dsh-worktree/` 直接就是完整的
-`clutch-dsh-worktree` package，其内部通过 `src/contract/`、`src/provider/`、
+`@cerbur/clutch-dsh-worktree` package，其内部通过 `src/contract/`、`src/provider/`、
 `src/manage/`、`src/host/` 和 `src/client/` 保留角色 seam；Client 当前只含
 browser-safe facade，完整 UI 仍属于后续阶段。
 

@@ -12,6 +12,7 @@ const packageManifestPath = path.join(packageDirectory, 'package.json');
 const packageManifest = JSON.parse(await readFile(packageManifestPath, 'utf8'));
 
 test('publishes the generated Host and Client Remote contribution entries', () => {
+  assert.equal(packageManifest.name, '@cerbur/clutch-dsh-worktree');
   assert.equal(packageManifest.exports['.'].default, './lib/index.js');
   assert.deepEqual(packageManifest.exports['./typert'], {
     types: './lib/typert.host.d.ts',
@@ -60,7 +61,7 @@ test('mounts the Host service through the package bundle patch', async () => {
   const patch = await readFile(path.join(packageDirectory, 'cordis.patch.yml'), 'utf8');
   assert.match(patch, /- insert:/);
   assert.match(patch, /id: clutch-dsh-worktree-host/);
-  assert.match(patch, /name: clutch-dsh-worktree/);
+  assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree['"]/);
   assert.match(patch, /dshHome: !!js dshHomePath\(\)/);
 });
 
@@ -68,7 +69,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
   const remoteModule = await import(
     pathToFileURL(path.join(packageDirectory, 'lib', 'typert.remote-client.js')).href
   );
-  assert.equal(remoteModule.TYPERT_REMOTE.package, 'clutch-dsh-worktree');
+  assert.equal(remoteModule.TYPERT_REMOTE.package, packageManifest.name);
   assert.deepEqual(
     remoteModule.TYPERT_REMOTE.descriptors.map(
       (descriptor) => `${descriptor.namespace}/${descriptor.method}`,
@@ -143,7 +144,7 @@ test('loads the package and calls its Host Remote through the real DSH compositi
     await host.plugin(TypertGatewayService);
     await host.loader.create({
       id: 'clutch-dsh-worktree-host',
-      name: 'clutch-dsh-worktree',
+      name: packageManifest.name,
       config: { dshHome },
     });
     await host.loader.await();
