@@ -129,23 +129,23 @@ pretend to have a real DSH Host composition until Phase 3.
 
 - [x] Add `WorktreeRemoteService` from the same package's Host entry.
 - [x] Generate and publish strict `./typert` and `./remote` artifacts with the
-  official `dsh-typert-generator@0.1.0-rc.7` API.
+      official `dsh-typert-generator@0.1.0-rc.7` API.
 - [x] Expose `listWorktrees`, `listBranches`, `createWorktree`,
-  `removeWorktree`, `listBindings`, and `bindSession` as plain browser-safe
-  projections.
+      `removeWorktree`, `listBindings`, and `bindSession` as plain browser-safe
+      projections.
 - [x] Keep `resolveRuntimeCwd` Host-only because the persisted-cwd model has no
-  browser execution boundary requiring it.
+      browser execution boundary requiring it.
 - [x] Insert the Host service through `cordis.patch.yml` and pass
-  `dshHomePath()` from DSH composition.
+      `dshHomePath()` from DSH composition.
 - [x] Add a minimal real composition fixture using Cordis Loader, DSH
-  `TypertLoader`, `TypertRegistry`, and `ApiGateway`; load the package row and
-  call `worktreeManager/listWorktrees` through the generated strict Host
-  descriptor.
+      `TypertLoader`, `TypertRegistry`, and `ApiGateway`; load the package row and
+      call `worktreeManager/listWorktrees` through the generated strict Host
+      descriptor.
 - [x] Add runtime contract, generated descriptor, compile-time namespace, DSH
-  read-only adapter, dependency-boundary, and fixed-roster evidence tests.
+      read-only adapter, dependency-boundary, and fixed-roster evidence tests.
 - [x] Verify rc.7 profile/browser mounting instead of inventing it.
 - [ ] Mount `clutch-dsh-worktree/remote` inside
-  `@deepseek-ai/dsh-api-remotes/client` for the target application.
+      `@deepseek-ai/dsh-api-remotes/client` for the target application.
 
 The last item is blocked in `dsh-v0.1.0-rc.7`: the Client source imports a
 fixed five-contribution roster, its README requires another explicit runtime
@@ -160,12 +160,47 @@ imports this package's `./remote`.
 
 ### Phase 4 — Browser Consumer and peer Worktree mode
 
-- Reuse the Phase 3 `src/client/index.ts` browser-safe facade after the target
-  application resolves the canonical assembly gate.
-- Register a peer Worktree/Session navigation surface using DSH's supported
-  sidebar/footer and shell overlay slots.
-- Keep the native Workspace/Session browser intact.
-- Store `viewMode` in browser-local state only; never write it to DSH or sidecar.
+- **Status: shell complete; canonical Remote assembly remains blocked on rc.7.**
+- [x] Add package `dsh.client` metadata and an official `./client` browser
+      handoff from `src/client/entry.ts` to `lib/client.js`, loadable through
+      `window.__ModuleLoader__.load(...)` and disposable through the slot entry
+      lifetimes.
+- [x] Reuse the Phase 3 `src/client/index.ts` browser-safe facade only when the
+      target application's canonical assembly already exposes the complete
+      `worktreeManager` namespace; do not call the Remote contribution mount API.
+- [x] Wait for the DSH Remote carrier service while keeping the Worktree
+      namespace optional; resolve the namespace at slot injection time so a
+      canonical mount is not lost to an early `undefined` snapshot.
+- [x] Register only the additive `sidebar.footer.action` and `shell.overlay`
+      slots. Do not register `sidebar.workspaces`; the native browser remains
+      mounted underneath the overlay.
+- [x] Add a root-scoped browser-local `viewMode` preference with default,
+      enter/exit, refresh rehydration, and unavailable/degraded fallback to
+      `workspace-session`.
+- [x] Render a read-only Worktree surface that derives its initial Workspace
+      from current Session membership or DSH recency, allows local Workspace
+      selection, reads Main rows from the global DSH Session list rather than
+      native `Workspace.sessionIds`, and opens existing Sessions through
+      `ctx.sessions.open` without changing mode.
+- [x] Measure the existing Sidebar column through the supported overlay DOM
+      anchor and `ResizeObserver`, following resize/collapse behavior without
+      covering Conversation.
+- [x] Add Client loading/disposal, slot registration, mode persistence,
+      navigation, geometry, browser-boundary, late-namespace, and real Cordis
+      Context/SlotRegistry disposal fixtures.
+- [ ] Mount `clutch-dsh-worktree/remote` inside the one canonical
+      `@deepseek-ai/dsh-api-remotes/client` assembly for a future DSH release or
+      target application build.
+
+The last item is blocked in `dsh-v0.1.0-rc.7`: the Client source imports a
+fixed five-contribution roster, its README requires another explicit runtime
+import for any additional capability, and profile patches only compose Loader
+rows. The completed Phase 4 shell therefore distinguishes two states: Client
+loading/disposal is real and tested; Worktree Remote calls are unavailable on
+rc.7 until an official contribution-selection seat or a target application
+build explicitly includes `clutch-dsh-worktree/remote` in the existing
+assembly. The detailed research handoff and model prompt are recorded in
+`docs/superpowers/specs/2026-08-20-clutch-dsh-worktree-remote-assembly-research-handoff.md`.
 
 ### Phase 5 — Worktree lifecycle UI
 
@@ -201,8 +236,8 @@ Cover the following through package tests and a real DSH composition fixture:
 
 ## Handoff gate
 
-Phase 3 Host implementation may be handed off after the repository checks pass.
-Do not begin a UI that assumes Worktree Remote calls are available on rc.7;
-first resolve the canonical `api-remotes/client` assembly gate. After each
-later phase, report changed files, commands, results and unresolved DSH
-composition issues, then stop for approval.
+Phase 4 may be handed off after the repository checks pass. The UI must not
+assume Worktree Remote calls are available on rc.7; report the canonical
+assembly evidence and the unresolved upstream capability separately from the
+tested Client shell. After each later phase, report changed files, commands,
+results and unresolved DSH composition issues, then stop for approval.

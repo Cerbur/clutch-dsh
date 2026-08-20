@@ -21,12 +21,19 @@ test('publishes the generated Host and Client Remote contribution entries', () =
     default: './lib/typert.remote-client.js',
   });
   assert.deepEqual(packageManifest.exports['./client'], {
-    types: './lib/client/index.d.ts',
-    import: './lib/client/index.js',
-    default: './lib/client/index.js',
+    types: './lib/client/entry.d.ts',
+    default: './lib/client.js',
   });
   assert.equal(packageManifest.exports['./package.json'], './package.json');
-  assert.equal(packageManifest.dsh.client, undefined);
+  assert.deepEqual(packageManifest.dsh.client, {
+    inject: [
+      '@deepseek-ai/dsh-api-remotes',
+      '@deepseek-ai/dsh-client-runtime',
+      '@deepseek-ai/dsh-client-ui-layout',
+      '@deepseek-ai/dsh-client-ui-sidebar',
+    ],
+    platform: 'web',
+  });
 });
 
 test('mounts the Host service through the package bundle patch', async () => {
@@ -132,7 +139,10 @@ test('records that dsh-v0.1.0-rc.7 api-remotes has a fixed build-time roster', a
   const manifestUrl = import.meta.resolve('@deepseek-ai/dsh-api-remotes/package.json');
   const manifestPath = fileURLToPath(manifestUrl);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  const clientBundle = await readFile(path.join(path.dirname(manifestPath), 'lib', 'client.js'), 'utf8');
+  const clientBundle = await readFile(
+    path.join(path.dirname(manifestPath), 'lib', 'client.js'),
+    'utf8',
+  );
 
   assert.equal(manifest.version, '0.1.0-rc.7');
   assert.match(clientBundle, /@deepseek-ai\/dsh-goal/);

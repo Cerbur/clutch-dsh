@@ -15,7 +15,8 @@ package 内部已经包含：
   cwd 派生；
 - `src/host/`：真实 DSH Host read adapter、`WorktreeRemoteService` 和
   browser-safe Remote projection；
-- `src/client/`：已提供后续 Phase 4 使用的安全 facade；尚未实现 Web UI。
+- `src/client/`：Phase 4 的 browser-safe Remote facade、官方 Client entry、
+  browser-local viewMode store、footer action 和 shell overlay Consumer。
 
 `manager`、`local`、`ui` 是内部角色/实现名称，不是独立 package；其中
 `manage` 和 `provider` 是源码模块边界。只有当
@@ -43,13 +44,28 @@ Host 半侧已经可组合且有最小真实 fixture 覆盖：
 - `resolveRuntimeCwd` 不进入 browser Remote。当前 V1 使用 DSH Session
   header 中持久化的 `cwd`，不存在需要它的浏览器调用边界。
 
-目标 `dsh-v0.1.0-rc.7` 的 browser composition 仍有明确上游阻塞：
+目标 `dsh-v0.1.0-rc.7` 的 canonical Remote assembly 仍有明确上游阻塞：
 `@deepseek-ai/dsh-api-remotes/client` 在构建时写死五个 contribution import，
 profile/bundle patch 只能装载 Cordis row，不能给该 Client bundle 增加新的
-runtime import。因此当前 package 只发布 `./client` facade，不声明
-`dsh.client`，也不自行调用 `$mount()`。Phase 4 在目标 DSH 提供可扩展的
-Remote assembly seat，或目标应用显式构建包含本 contribution 的唯一
-`api-remotes` assembly 之前，不能声称浏览器 Worktree RPC 已挂载。
+runtime import。Phase 4 已实现可加载、可 dispose 的 Client shell，但只在
+`ctx.remote.worktreeManager` 已由 canonical assembly 挂载时创建 facade；rc.7
+下 namespace 不存在时 footer/overlay 自动回退到原始 Workspace/Session view。
+Client entry waits for the DSH Remote carrier service, while resolving the
+Worktree namespace at slot injection time so a late canonical mount is not
+cached as a permanent unavailable state. The Main bucket reads the global DSH
+Session list and only joins sidecar bindings for Worktree grouping; it does not
+depend on native `Workspace.sessionIds` membership.
+package 现在声明官方 `dsh.client` metadata，并由 `src/client/entry.ts` 产出
+`lib/client.js` 的 `window.__ModuleLoader__.load(...)` handoff；Client 不自行
+调用 `$mount()`，也不创建第二套 RPC/transport。
+
+要让 Worktree Remote 真正可调用，最小上游能力二选一：
+
+- 在 `@deepseek-ai/dsh-api-remotes/client` 的唯一 assembly 中显式 import 和
+  mount `clutch-dsh-worktree/remote`，并让目标 profile 将本 package 作为
+  client loader row 纳入同一 roster；或
+- 为 `api-remotes` 提供官方 contribution-selection seat，使 profile 能向这套
+  canonical assembly 声明该 contribution。
 
 ## 数据边界
 
@@ -76,10 +92,19 @@ Git adapter 和 sidecar repository 都通过注入边界组合；Host read adapt
 - UI 使用 `sidebar.footer.action` 和 `shell.overlay`，不替换 DSH 原生
   Workspace/Session browser。
 - `viewMode` 只保存在浏览器本地，刷新后可恢复，不写入 DSH 或 sidecar。
+- overlay 通过 `data-shell-overlay` 的左侧 Sidebar 列和 `ResizeObserver`
+  派生实际宽度，跟随 280px 默认宽度、用户 resize、300ms transition 及 56px
+  collapsed rail；Conversation 列不被覆盖。
+- rc.7 Remote gate 未解决时，Client shell fixture 只验证加载/dispose 和
+  degraded fallback，不声称 Worktree RPC 可调用。
+- Client loading/disposal 使用真实 Cordis `Context`、`SlotRegistry` 和
+  Client fiber fixture；Remote namespace late-probe 仍只消费 canonical
+  assembly 已挂载的对象。
 
 ## 相关文档
 
 - [approved design spec](docs/superpowers/specs/2026-08-19-clutch-dsh-worktree-design.md)
 - [implementation plan](docs/superpowers/plans/2026-08-19-clutch-dsh-worktree-implementation.md)
+- [Remote assembly research handoff](docs/superpowers/specs/2026-08-20-clutch-dsh-worktree-remote-assembly-research-handoff.md)
 - [package consolidation plan](docs/superpowers/plans/2026-08-20-clutch-dsh-worktree-package-consolidation.md)
 - [original planning document](docs/superpowers/plans/2026-08-18-clutch-dsh-worktree.md)

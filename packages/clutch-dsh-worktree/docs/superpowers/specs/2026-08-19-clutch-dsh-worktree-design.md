@@ -115,11 +115,20 @@ the application assembly build. Official evidence is explicit:
 - `dsh.client` describes browser Client bundle loading and injection, not
   Remote contribution selection.
 
-Therefore the package does not create a second Remote assembly, does not call
-`$mount()` from its Client facade, and does not claim browser RPC availability
-on rc.7. Phase 4 is gated on a DSH release with an explicit contribution seat,
-or on the target application building its one canonical `api-remotes` assembly
-with `clutch-dsh-worktree/remote` included. No DSH source was modified.
+Therefore the package does not create a second Remote assembly and does not
+call `$mount()` from its Client code. Phase 4 now ships the browser Consumer
+shell independently: `src/client/entry.ts` is enrolled through package
+`dsh.client` metadata and emits the official
+`window.__ModuleLoader__.load(...)` handoff. The entry only adapts
+`ctx.remote.worktreeManager` when that namespace is already present; on rc.7
+the missing namespace makes the footer and overlay fall back to the original
+Workspace/Session view. The entry waits for the DSH Remote carrier service,
+but the Worktree namespace remains optional; the slot inject face resolves it
+at registration/render time instead of caching an early `undefined` probe.
+The Worktree RPC remains gated on a DSH release with
+an explicit contribution seat, or on the target application building its one
+canonical `api-remotes` assembly with `clutch-dsh-worktree/remote` included.
+No DSH source was modified.
 
 The rc.7 generator also recognizes protocol meta symbols only when the protocol
 is a registered workspace project or an ambient build declaration. The package
@@ -146,16 +155,16 @@ deployment model.
 
 ## 3. Source-of-truth boundary
 
-| Data | Owner | Plugin writes it? |
-| --- | --- | --- |
-| Workspace identity | DSH | No |
-| Workspace root path | DSH Workspace API | No |
-| Session identity and header, including cwd | DSH Session API | No |
-| Messages, prompt, transcript, history | DSH Session persistence | No |
-| Git Worktree path, branch, lifecycle | local Provider + plugin sidecar | Yes |
-| Workspace → Worktree relation | plugin sidecar | Yes |
-| Worktree → Session binding | plugin sidecar | Yes |
-| Worktree UI mode and selection | browser-local UI state | Yes, locally only |
+| Data                                       | Owner                           | Plugin writes it? |
+| ------------------------------------------ | ------------------------------- | ----------------- |
+| Workspace identity                         | DSH                             | No                |
+| Workspace root path                        | DSH Workspace API               | No                |
+| Session identity and header, including cwd | DSH Session API                 | No                |
+| Messages, prompt, transcript, history      | DSH Session persistence         | No                |
+| Git Worktree path, branch, lifecycle       | local Provider + plugin sidecar | Yes               |
+| Workspace → Worktree relation              | plugin sidecar                  | Yes               |
+| Worktree → Session binding                 | plugin sidecar                  | Yes               |
+| Worktree UI mode and selection             | browser-local UI state          | Yes, locally only |
 
 The plugin's view model is a projection over DSH Session summaries and sidecar
 relations. It never copies Session content into the sidecar.
@@ -235,9 +244,13 @@ Provider runtime internals.
 
 The browser cannot call the Host Manager object directly. The UI uses a
 browser-safe Remote/client projection whose methods mirror the Manager
-contract. The target application's canonical `api-remotes` assembly must mount
-the generated contribution before the facade can be used; the UI does not
-mount a second Remote assembly or define a second business API.
+contract. `entry.ts` probes the already-mounted namespace and passes the
+facade into the read-only Worktree surface only when all six generated methods
+exist; the UI does not mount a second Remote assembly or define a second
+business API. Main rows use the global DSH Session list and subtract selected
+Workspace sidecar bindings instead of depending on native `Workspace.sessionIds`.
+The original Workspace/Session browser remains available when
+the namespace is absent or the read surface reports a degraded error.
 
 ## 5. Worktree storage and sidecar layout
 
@@ -359,33 +372,21 @@ The V1 Manager surface is deliberately limited to the current Web UI needs:
 
 ```ts
 interface WorktreeManager {
-  listWorktrees(input: {
-    workspaceId: string
-  }): Promise<readonly WorktreeRecord[]>
+  listWorktrees(input: { workspaceId: string }): Promise<readonly WorktreeRecord[]>;
 
-  listBranches(input: {
-    workspaceId: string
-  }): Promise<readonly BranchRecord[]>
+  listBranches(input: { workspaceId: string }): Promise<readonly BranchRecord[]>;
 
-  createWorktree(input: {
-    workspaceId: string
-    branch: string
-  }): Promise<WorktreeRecord>
+  createWorktree(input: { workspaceId: string; branch: string }): Promise<WorktreeRecord>;
 
-  removeWorktree(input: {
-    workspaceId: string
-    worktreeId: string
-  }): Promise<void>
+  removeWorktree(input: { workspaceId: string; worktreeId: string }): Promise<void>;
 
-  listBindings(input: {
-    workspaceId: string
-  }): Promise<readonly SessionBinding[]>
+  listBindings(input: { workspaceId: string }): Promise<readonly SessionBinding[]>;
 
   bindSession(input: {
-    workspaceId: string
-    worktreeId: string
-    sessionId: string
-  }): Promise<SessionBinding>
+    workspaceId: string;
+    worktreeId: string;
+    sessionId: string;
+  }): Promise<SessionBinding>;
 }
 ```
 
@@ -398,9 +399,9 @@ metadata is:
 
 ```ts
 interface BranchRecord {
-  readonly name: string
-  readonly isCurrent: boolean
-  readonly checkedOut: boolean
+  readonly name: string;
+  readonly isCurrent: boolean;
+  readonly checkedOut: boolean;
 }
 ```
 
@@ -517,6 +518,13 @@ surface. Its confirmed frame geometry is:
 - the Conversation remains visible and the current Session is unchanged when
   Worktree mode is entered, switched, or collapsed.
 
+The rc.7 `shell.overlay` owner share contains no Sidebar geometry. The Client
+surface therefore observes the existing frame's first column through the
+overlay's `data-shell-overlay` parent and a `ResizeObserver`, then applies that
+measured width to its own absolute child. This follows the live grid resize and
+collapse transition without changing the DSH `shell.overlay` contract or
+replacing `sidebar.workspaces`.
+
 ### 9.1 Entering Worktree mode
 
 The footer action is visible in the normal Workspace/Session mode. It uses the
@@ -554,7 +562,9 @@ is unavailable, the UI falls back to the original Workspace/Session mode.
 ### 9.3 Worktree mode contents
 
 The Worktree view groups DSH Session summaries obtained through the public DSH
-Session read API plus the sidecar binding projection. It must not depend on
+Session read API plus the sidecar binding projection. Phase 4 implements the
+read-only shell and list projection when the Remote is available; it does not
+yet expose create/remove or create/bind controls. It must not depend on
 the native Workspace-specific `sessionIds` grouping, because Sessions created
 with `cwd` may not be included there:
 
@@ -628,14 +638,14 @@ GIT_OPERATION_FAILED
 
 UI states:
 
-| State | Meaning | Allowed interaction |
-| --- | --- | --- |
-| active | Worktree and binding are usable | create/open Session, delete Worktree |
-| detached | Worktree removed, Session retained | open history only |
-| repair-needed | DSH Session exists but binding is absent | retry binding or open Session |
-| degraded/read-only | sidecar unavailable or corrupt | inspect warning; no Worktree mutation |
-| sync-required | Git and sidecar need explicit reconciliation | retry synchronization |
-| no-head | Git repository has no first commit | complete first commit, then retry |
+| State              | Meaning                                      | Allowed interaction                   |
+| ------------------ | -------------------------------------------- | ------------------------------------- |
+| active             | Worktree and binding are usable              | create/open Session, delete Worktree  |
+| detached           | Worktree removed, Session retained           | open history only                     |
+| repair-needed      | DSH Session exists but binding is absent     | retry binding or open Session         |
+| degraded/read-only | sidecar unavailable or corrupt               | inspect warning; no Worktree mutation |
+| sync-required      | Git and sidecar need explicit reconciliation | retry synchronization                 |
+| no-head            | Git repository has no first commit           | complete first commit, then retry     |
 
 The original DSH Workspace/Session view must remain usable when the plugin
 sidecar is missing, corrupt, or unavailable.
@@ -680,8 +690,9 @@ sidecar is missing, corrupt, or unavailable.
 
 ### Web UI
 
-- The plugin loads as a browser Client package through the supported DSH
-  client-module mechanism.
+- The plugin loads and disposes as a browser Client package through the
+  supported DSH client-module mechanism; the package exports `dsh.client`
+  metadata and an official `./client` handoff.
 - The original Workspace/Session view remains available.
 - Worktree mode is a peer navigation mode, not a transient popup.
 - Switching to Worktree mode does not change the current Session.
@@ -697,6 +708,9 @@ sidecar is missing, corrupt, or unavailable.
 - Worktree Session creation uses DSH `session.create({ cwd })`, then external
   binding, then the existing Conversation navigation.
 - Sidecar failure does not make the original DSH Session view unusable.
+- On rc.7, the missing canonical Remote contribution makes the Client shell
+  fall back to Workspace/Session mode; this is not counted as a mounted
+  Worktree RPC composition.
 
 ### Explicit V1 exclusions
 
