@@ -19,6 +19,7 @@ import {
   Input,
   Menu,
   Modal,
+  StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SessionBinding, WorktreeManager, WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
@@ -198,10 +199,6 @@ function bindingIdsFor(bindings: readonly SessionBinding[], worktreeId: string):
   return bindings
     .filter((binding) => binding.worktreeId === worktreeId)
     .map((binding) => binding.sessionId);
-}
-
-function worktreeStatus(record: WorktreeRecord): string {
-  return record.status === 'active' ? 'active' : 'detached';
 }
 
 function includesText(value: string, query: string): boolean {
@@ -1361,6 +1358,16 @@ export function WorktreeSurface({
                                 includesText(sessionLabel(sessionId, sessions), query),
                             );
                             const worktreeGroupKey = `worktree:${record.worktreeId}`;
+                            const state = record.status === 'removed'
+                              ? 'warning'
+                              : record.health === 'repair'
+                                ? 'error'
+                                : 'done';
+                            const stateLabel = record.status === 'removed'
+                              ? 'Detached Worktree'
+                              : record.health === 'repair'
+                                ? 'Worktree needs repair'
+                                : 'Active Worktree ready';
                             const worktreeExpanded =
                               expandedWorktrees[record.worktreeId] !== false;
                             return (
@@ -1395,8 +1402,15 @@ export function WorktreeSurface({
                                   <span className={styles.worktreeIcon} aria-hidden="true">
                                     <IconBranchOutline16 />
                                   </span>
+                                  <span
+                                    className={styles.worktreeState}
+                                    role="img"
+                                    aria-label={stateLabel}
+                                    title={stateLabel}
+                                  >
+                                    <StateDot state={state} />
+                                  </span>
                                   <span className={styles.worktreeLabel}>{record.branch}</span>
-                                  <span className={styles.status}>{worktreeStatus(record)}</span>
                                   {record.status === 'active' && (
                                     <span className={styles.worktreeActions}>
                                       <Menu

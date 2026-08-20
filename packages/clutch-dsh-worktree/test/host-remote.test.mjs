@@ -120,3 +120,26 @@ test('leaves unexpected Host failures for the DSH Gateway to classify', async ()
 
   await assert.rejects(remote.listWorktrees({ workspaceId: 'ws_example' }), failure);
 });
+
+test('projects transient Worktree health as plain JSON', async () => {
+  const remote = createWorktreeRemoteProjection(
+    createManager({
+      async listWorktrees() {
+        return [{
+          worktreeId: 'wt_health',
+          workspaceId: 'ws_example',
+          absolutePath: '/tmp/dsh/worktree/wt_health',
+          branch: 'feature/health',
+          status: 'active',
+          health: 'repair',
+        }];
+      },
+    }),
+  );
+
+  const result = await remote.listWorktrees({ workspaceId: 'ws_example' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
+  assert.equal(Object.getPrototypeOf(result), Object.prototype);
+  assert.equal(Object.getPrototypeOf(result.value[0]), Object.prototype);
+});

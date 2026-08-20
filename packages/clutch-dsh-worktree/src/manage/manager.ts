@@ -145,8 +145,41 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
    * Returns the sidecar Worktree projection, including active/removed state.
    */
   async listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
-    await this.requireWorkspace(input.workspaceId);
-    return (await this.sidecar.read(input.workspaceId)).worktrees;
+    const workspace = await this.requireWorkspace(input.workspaceId);
+    const records = (await this.sidecar.read(input.workspaceId)).worktrees;
+    let gitWorktrees: readonly { readonly absolutePath: string }[];
+    try {
+      gitWorktrees = await this.git.listWorktrees(workspace.rootPath);
+    } catch {
+      return records.map((record) => {
+        const { health: _health, ...durableRecord } = record;
+        void _health;
+        return record.status === 'active'
+          ? { ...durableRecord, health: 'repair' as const }
+          : durableRecord;
+      });
+    }
+    const nextRecords: WorktreeRecord[] = [];
+    for (const record of records) {
+      const { health: _health, ...durableRecord } = record;
+      void _health;
+      if (record.status !== 'active') {
+        nextRecords.push(durableRecord);
+        continue;
+      }
+      let ready = false;
+      for (const gitWorktree of gitWorktrees) {
+        if (
+          path.resolve(gitWorktree.absolutePath) === path.resolve(record.absolutePath) ||
+          (await samePhysicalPath(gitWorktree.absolutePath, record.absolutePath))
+        ) {
+          ready = true;
+          break;
+        }
+      }
+      nextRecords.push({ ...durableRecord, health: ready ? 'ready' : 'repair' });
+    }
+    return nextRecords;
   }
 
   /**

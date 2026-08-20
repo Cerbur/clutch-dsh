@@ -426,6 +426,15 @@
   text-align: center;
 }
 
+.worktreeState {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  margin-right: 2px;
+}
+
 .workspaceIcon {
   color: var(--dsw-alias-brand-primary);
 }

@@ -644,3 +644,90 @@ test('keeps the raw DSH Session read path available when sidecar data is corrupt
     assert.deepEqual(await readFile(fixturePath), before);
   });
 });
+
+test('projects repair health when an active Worktree path is missing from Git', async () => {
+  await withGitFixture(async ({ dsh, dshHome, workspaceRoot, sidecar }) => {
+    const record = makeRecord({
+      worktreeId: 'wt_missing_health',
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_missing_health'),
+    });
+    await sidecar.upsertWorktree(record);
+    const baseGit = new LocalGitAdapter();
+    const git = {
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      listBranches: (...args) => baseGit.listBranches(...args),
+      listWorktrees: async () => [{ absolutePath: workspaceRoot }],
+      createWorktree: (...args) => baseGit.createWorktree(...args),
+      removeWorktree: (...args) => baseGit.removeWorktree(...args),
+    };
+    const manager = createWorktreeManager({ dsh, dshHome, sidecar, git });
+
+    const result = await manager.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(result[0].health, 'repair');
+  });
+});
+
+test('projects ready health when an active Worktree path is present in Git', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/health']);
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/health',
+    });
+
+    const result = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(
+      result.find((candidate) => candidate.worktreeId === record.worktreeId).health,
+      'ready',
+    );
+  });
+});
+
+test('projects repair on Git health failure and keeps removed records uncolored', async () => {
+  await withGitFixture(async ({ dsh, dshHome, workspaceRoot, sidecar }) => {
+    await sidecar.upsertWorktree({
+      ...makeRecord({
+        worktreeId: 'wt_failed_health',
+        absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_failed_health'),
+      }),
+      status: 'active',
+    });
+    await sidecar.upsertWorktree({
+      ...makeRecord({
+        worktreeId: 'wt_removed_health',
+        absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_removed_health'),
+      }),
+      status: 'removed',
+    });
+    const baseGit = new LocalGitAdapter();
+    const git = {
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      listBranches: (...args) => baseGit.listBranches(...args),
+      async listWorktrees() {
+        throw new Error('git health unavailable');
+      },
+      createWorktree: (...args) => baseGit.createWorktree(...args),
+      removeWorktree: (...args) => baseGit.removeWorktree(...args),
+    };
+    const manager = createWorktreeManager({ dsh, dshHome, sidecar, git });
+
+    const result = await manager.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(result.find((record) => record.worktreeId === 'wt_failed_health').health, 'repair');
+    assert.equal('health' in result.find((record) => record.worktreeId === 'wt_removed_health'), false);
+    void workspaceRoot;
+  });
+});
+
+test('does not persist transient Worktree health', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const record = makeRecord({
+      worktreeId: 'wt_health',
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_health'),
+    });
+
+    await sidecar.upsertWorktree({ ...record, health: 'repair' });
+    const raw = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
+    const snapshot = JSON.parse(raw);
+    assert.equal('health' in snapshot.worktrees[0], false);
+  });
+});

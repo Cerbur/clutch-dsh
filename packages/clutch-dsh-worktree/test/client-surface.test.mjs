@@ -363,6 +363,19 @@ test('matches native Session grouping, drag, and expand-more behavior', async ()
   );
 });
 
+test('renders transient Worktree health with the public StateDot primitive', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /StateDot/);
+  assert.match(source, /health/);
+  assert.match(source, /['"]warning['"]/);
+  assert.match(source, /['"]error['"]/);
+  assert.doesNotMatch(source, /worktreeStatus\(record\)/);
+});
+
 test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

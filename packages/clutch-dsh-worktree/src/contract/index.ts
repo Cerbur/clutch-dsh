@@ -37,6 +37,9 @@ export type SessionId = string;
  */
 export type WorktreeStatus = 'active' | 'removed';
 
+/** Runtime-only Git health projection; this value is never persisted in the sidecar. */
+export type WorktreeHealth = 'ready' | 'repair';
+
 /**
  * Session 与 Worktree 的关系状态；删除 Worktree 只会将关系转为 `detached`，不会删除 Session。
  * Session-to-Worktree relation state; removing a Worktree only detaches the relation and never deletes the Session.
@@ -53,6 +56,8 @@ export interface WorktreeRecord {
   readonly absolutePath: string;
   readonly branch: string;
   readonly status: WorktreeStatus;
+  /** Runtime-only; never written to the sidecar. */
+  readonly health?: WorktreeHealth;
 }
 
 /**

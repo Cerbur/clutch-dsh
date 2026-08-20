@@ -302,19 +302,23 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
    * different metadata under the same ID is treated as corruption.
    */
   async upsertWorktree(record: WorktreeRecord): Promise<WorktreeRecord> {
+    const { health: _health, ...persistedRecord } = record;
+    void _health;
     return this.mutate(record.workspaceId, (snapshot) => {
-      const existing = snapshot.worktrees.find((candidate) => candidate.worktreeId === record.worktreeId);
+      const existing = snapshot.worktrees.find(
+        (candidate) => candidate.worktreeId === persistedRecord.worktreeId,
+      );
       if (existing) {
-        if (!sameWorktree(existing, record)) {
+        if (!sameWorktree(existing, persistedRecord)) {
           throw providerError('SIDECAR_CORRUPT', 'Worktree ID already contains different metadata', {
-            worktreeId: record.worktreeId,
+            worktreeId: persistedRecord.worktreeId,
           });
         }
         return { result: existing, snapshot, changed: false };
       }
       return {
-        result: record,
-        snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, record] },
+        result: persistedRecord,
+        snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, persistedRecord] },
       };
     });
   }
