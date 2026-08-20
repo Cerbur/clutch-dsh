@@ -52,11 +52,10 @@
 
 ## Package 规划入口
 
-按仓库的 Service Definition、Provider、Consumer 三类 package 约定，先创建不含 `package.json` 的规划目录，避免在能力边界和交互协议尚未确定前把它们实现为 runtime package：
-
-- `packages/clutch-dsh-discuss/`：Service Definition 规划入口，未来计划包名为 `dsh-clutch-dsh-discuss`。
-- `packages/clutch-dsh-discuss-local/`：Provider 规划入口，未来计划包名为 `dsh-clutch-dsh-discuss-local`。
-- `packages/tool-clutch-dsh-discuss/`：Consumer 规划入口，未来计划包名为 `dsh-tool-clutch-dsh-discuss`。
+当前只保留 `packages/clutch-dsh-discuss/` 作为这个独立 plugin 的规划
+入口。Service Definition、Provider、Consumer 的边界仍在讨论中，未来是否
+拆成多个模块、如何命名和如何组织目录，都由这个 plugin 的功能决定，不套用
+其他 plugin 的结构。
 
 职责的初步分工：
 

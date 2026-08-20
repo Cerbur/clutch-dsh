@@ -80,3 +80,29 @@
 ## 当前状态
 
 Idea only。下一步应先确认 DSH/Cordis 能提供的 UI 和结构化交互能力，再为最小可行的 discussion session 设计 Service Definition、Provider 和 Consumer 的边界。
+
+## 模块职责草案
+
+以下内容合并自早期的 Provider/Consumer 规划记录。它们描述的是
+`clutch-dsh-discuss` 当前按功能划分的职责，不代表仓库要求所有 plugin
+采用相同的模块名称或目录结构。
+
+### Provider 职责
+
+- 推进 discussion session 的状态变化。
+- 保存和恢复讨论上下文及用户选择。
+- 校验用户输入与交互式卡片回答。
+- 根据讨论结果组装 design doc。
+- 与 DSH/Cordis 的 session、tool 或其他交互承载机制对接。
+
+交互逻辑究竟由新增 tool 承载，还是由 host/plugin UI、事件或结构化
+response 承载，仍需结合 DSH/Cordis 能力确定；Provider 不在当前阶段提前
+锁定具体实现。
+
+### Consumer 职责
+
+- 提供“讨论一个需求”的入口。
+- 拉起需求输入框并展示当前 discussion session 阶段。
+- 渲染交互式卡片，支持选择、补充和确认。
+- 让用户返回、修改或跳过前一步讨论。
+- 展示、编辑和确认最终 design doc。
