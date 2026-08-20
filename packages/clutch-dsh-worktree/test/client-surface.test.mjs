@@ -254,6 +254,29 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /detached bindings/);
 });
 
+test('bounds the surface to live native sidebar anchors', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const geometrySource = await readFile(
+    new URL('../src/client/sidebar-overlay-geometry.ts', import.meta.url),
+    'utf8',
+  );
+  const styleSource = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /useSidebarOverlayGeometry/);
+  assert.match(geometrySource, /ResizeObserver/);
+  assert.match(geometrySource, /MutationObserver/);
+  assert.match(geometrySource, /requestAnimationFrame/);
+  assert.match(geometrySource, /cancelAnimationFrame/);
+  assert.doesNotMatch(styleSource, /\.surface \{[\s\S]*inset: 0 auto 0 0;/);
+  assert.match(styleSource, /\.surface \{[\s\S]*top: 0;/);
+});
+
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

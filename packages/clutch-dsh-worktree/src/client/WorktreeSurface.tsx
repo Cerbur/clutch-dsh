@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import {
@@ -22,6 +21,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SessionBinding, WorktreeManager, WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
+import { useSidebarOverlayGeometry } from './sidebar-overlay-geometry.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
 import {
@@ -113,36 +113,6 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   const stable = stableWorkspaceIds(previousRef.current, next);
   if (stable !== previousRef.current) previousRef.current = stable;
   return previousRef.current;
-}
-
-function useSidebarWidth(active: boolean): {
-  ref: RefObject<HTMLDivElement>;
-  width: number;
-} {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(280);
-
-  useLayoutEffect(() => {
-    if (!active) return;
-    const surface = ref.current;
-    const overlay = surface?.closest('[data-shell-overlay]');
-    const frame = overlay?.parentElement;
-    const sidebar = frame?.firstElementChild;
-    if (!(sidebar instanceof HTMLElement)) return;
-    const update = (): void => {
-      const next = sidebar.getBoundingClientRect().width;
-      if (next > 0) setWidth(next);
-    };
-    update();
-    if (typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver(update);
-    observer.observe(sidebar);
-    return () => {
-      observer.disconnect();
-    };
-  }, [active]);
-
-  return { ref, width };
 }
 
 function sessionLabel(sessionId: string, sessions: SessionListLike): string {
@@ -316,7 +286,7 @@ export function WorktreeSurface({
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   const [sessionRenamePending, setSessionRenamePending] = useState(false);
   const [sessionRenameError, setSessionRenameError] = useState<string>();
-  const { ref, width } = useSidebarWidth(mode === 'worktree');
+  const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
@@ -577,7 +547,12 @@ export function WorktreeSurface({
       data-worktree-surface
       data-collapsed={collapsed || undefined}
       aria-label="Worktree navigation"
-      style={{ width: `${width}px` }}
+      style={{
+        width: `${width}px`,
+        ...(bounds.ready
+          ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
+          : { height: '0px', visibility: 'hidden' }),
+      }}
     >
       <div className={styles.wideContent}>
         <header className={styles.header}>

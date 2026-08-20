@@ -42,7 +42,8 @@
 
 .surface {
   position: absolute;
-  inset: 0 auto 0 0;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
