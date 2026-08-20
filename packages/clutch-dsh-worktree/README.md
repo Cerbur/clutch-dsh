@@ -15,8 +15,9 @@ package 内部已经包含：
   cwd 派生；
 - `src/host/`：真实 DSH Host read adapter、`WorktreeRemoteService` 和
   browser-safe Remote projection；
-- `src/client/`：Phase 4 的 browser-safe Remote facade、官方 Client entry、
-  browser-local viewMode store、footer action 和 shell overlay Consumer。
+- `src/client/`：browser-safe Worktree Connection adapter、官方 Client entry、
+  browser-local viewMode store、Worktree action/error surface 和 shell overlay
+  Consumer。
 
 `manager`、`local`、`ui` 是内部角色/实现名称，不是独立 package；其中
 `manage` 和 `provider` 是源码模块边界。只有当
@@ -27,15 +28,17 @@ DSH 的实际 bundle 身份由根 `package.json` 的
 `dsh.bundle.patch: "./cordis.patch.yml"` 声明。当前 patch 会以
 `clutch-dsh-worktree-host` 行装载 package Host entry，并从 DSH 的
 `dshHomePath()` 注入绝对 DSH Home。package 通过官方 Typert generator 发布
-`./typert` 和 `./remote`；DSH `typert-loader` 注册 Host descriptor，现有
-`api-gateway` 执行调用。本 package 没有第二套 RPC 或 transport。
+`./typert` 和 `./remote`；DSH `typert-loader` 注册 Host descriptor，rc.8
+`TypertGateway` 在现有 `/api` Connection channel 接管
+`worktreeManager/<method>`。本 package 没有第二套 RPC 或 transport。
 
 ### Phase 3 composition 状态
 
 Host 半侧已经可组合且有最小真实 fixture 覆盖：
 
 - Cordis Loader 从 package root 装载 Host row，官方 `dsh-typert-loader` 通过
-  `./package.json` 与 `./typert` 自动注册 descriptor，再由 `api-gateway` 调用；
+  `./package.json` 与 `./typert` 自动注册 descriptor，再由 rc.8
+  `TypertGateway` 接入共享 `/api`；
 - `WorktreeRemoteService` 暴露六个安全方法；
 - Remote 只返回 contract 中的 plain JSON projection，不暴露 Git、sidecar、
   Provider class 或 Node API；
@@ -44,28 +47,32 @@ Host 半侧已经可组合且有最小真实 fixture 覆盖：
 - `resolveRuntimeCwd` 不进入 browser Remote。当前 V1 使用 DSH Session
   header 中持久化的 `cwd`，不存在需要它的浏览器调用边界。
 
-目标 `dsh-v0.1.0-rc.7` 的 canonical Remote assembly 仍有明确上游阻塞：
-`@deepseek-ai/dsh-api-remotes/client` 在构建时写死五个 contribution import，
-profile/bundle patch 只能装载 Cordis row，不能给该 Client bundle 增加新的
-runtime import。Phase 4 已实现可加载、可 dispose 的 Client shell，但只在
-`ctx.remote.worktreeManager` 已由 canonical assembly 挂载时创建 facade；rc.7
-下 namespace 不存在时 footer/overlay 自动回退到原始 Workspace/Session view。
-Client entry waits for the DSH Remote carrier service, while resolving the
-Worktree namespace at slot injection time so a late canonical mount is not
-cached as a permanent unavailable state. The Main bucket reads the global DSH
-Session list and only joins sidecar bindings for Worktree grouping; it does not
-depend on native `Workspace.sessionIds` membership.
+目标 `dsh-v0.1.0-rc.8` 的 Client 不依赖本 package 的 Remote namespace。`entry.ts`
+注入 `ctx.connection`，由唯一的 `worktree-connection.ts` 集中调用：
+
+```ts
+ctx.connection.rpc.call(
+  '/api',
+  'worktreeManager/listWorktrees',
+  { args: { input: { workspaceId } } },
+  signal,
+);
+```
+
+六个 endpoint、payload、Connection 外层失败、Worktree 内层领域失败和
+dispose abort 都在 adapter 内归一化；UI 只接收现有 `WorktreeManager` interface。
+因此 `ctx.remote.worktreeManager` 可以始终为 `undefined`，不影响 Worktree 查询
+和操作。请求失败显示明确的 retryable error，不伪装成空列表。Main bucket 读取
+全局 DSH Session list，再加入 sidecar binding 投影；不依赖 native
+`Workspace.sessionIds` membership。
 package 现在声明官方 `dsh.client` metadata，并由 `src/client/entry.ts` 产出
 `lib/client.js` 的 `window.__ModuleLoader__.load(...)` handoff；Client 不自行
 调用 `$mount()`，也不创建第二套 RPC/transport。
 
-要让 Worktree Remote 真正可调用，最小上游能力二选一：
-
-- 在 `@deepseek-ai/dsh-api-remotes/client` 的唯一 assembly 中显式 import 和
-  mount `clutch-dsh-worktree/remote`，并让目标 profile 将本 package 作为
-  client loader row 纳入同一 roster；或
-- 为 `api-remotes` 提供官方 contribution-selection seat，使 profile 能向这套
-  canonical assembly 声明该 contribution。
+`./remote` 仍然作为 Host/Typert 生成 artifact 发布，供 descriptor、类型和
+Host assembly 测试使用；生产 Client 不加载或遍历它，也不调用 `ctx.remote.$mount()`。
+canonical Remote assembly 不再是本 Worktree 功能的 blocker，因为 rc.8
+Typert Gateway 已在已有 `/api` channel 接管 Host descriptor。
 
 ## 数据边界
 
@@ -95,11 +102,11 @@ Git adapter 和 sidecar repository 都通过注入边界组合；Host read adapt
 - overlay 通过 `data-shell-overlay` 的左侧 Sidebar 列和 `ResizeObserver`
   派生实际宽度，跟随 280px 默认宽度、用户 resize、300ms transition 及 56px
   collapsed rail；Conversation 列不被覆盖。
-- rc.7 Remote gate 未解决时，Client shell fixture 只验证加载/dispose 和
-  degraded fallback，不声称 Worktree RPC 可调用。
+- rc.8 Client fixture 验证 Connection `/api` 调用、双层错误、dispose abort、
+  `ctx.remote.worktreeManager` 缺失时的 manager 注入，以及失败可重试 UI。
 - Client loading/disposal 使用真实 Cordis `Context`、`SlotRegistry` 和
-  Client fiber fixture；Remote namespace late-probe 仍只消费 canonical
-  assembly 已挂载的对象。
+  Client fiber fixture；Client module graph 显式包含
+  `@deepseek-ai/dsh-client-connection`。
 
 ## 相关文档
 

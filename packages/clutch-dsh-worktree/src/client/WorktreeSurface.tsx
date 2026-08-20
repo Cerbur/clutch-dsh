@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
@@ -6,6 +6,13 @@ import type { SessionBinding, WorktreeManager, WorktreeRecord } from '../contrac
 import { openWorktreeSession } from './navigation.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, initialWorkspaceId, unboundSessionIds } from './view-mode.js';
+import {
+  executeWorktreeAction,
+  loadWorktreeView,
+  toWorktreeViewError,
+  type WorktreeViewData,
+  type WorktreeViewError,
+} from './worktree-view.js';
 import styles from './worktree.css';
 
 /** Apply-time facts and DSH navigation callback used by the surface. */
@@ -20,13 +27,12 @@ export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
   PropsStore<ReturnType<typeof createWorktreeViewStore>> &
   WorktreeSurfaceInjected;
 
-interface ReadState {
-  readonly status: 'idle' | 'loading' | 'ready';
-  readonly worktrees: readonly WorktreeRecord[];
-  readonly bindings: readonly SessionBinding[];
+interface ReadState extends WorktreeViewData {
+  readonly status: 'idle' | 'loading' | 'ready' | 'error';
+  readonly error?: WorktreeViewError;
 }
 
-const EMPTY_READ_STATE: ReadState = { status: 'idle', worktrees: [], bindings: [] };
+const EMPTY_READ_STATE: ReadState = { status: 'idle', worktrees: [], branches: [], bindings: [] };
 
 function useSidebarWidth(active: boolean): {
   ref: RefObject<HTMLDivElement>;
@@ -76,9 +82,8 @@ function bindingIdsFor(bindings: readonly SessionBinding[], worktreeId: string):
 }
 
 /**
- * Peer Worktree navigation surface. It owns no Session content and no Git
- * mutation controls in Phase 4; it only reads the mounted Manager facade and
- * opens existing DSH Sessions through the normal Session service.
+ * Peer Worktree navigation surface. It owns no Session content or wire details;
+ * all Worktree reads and mutations cross the injected Manager contract.
  */
 export function WorktreeSurface({
   useStore,
@@ -103,9 +108,31 @@ export function WorktreeSurface({
   const workspaceId =
     selectedWorkspace === undefined ? fallbackWorkspaceId : selectedWorkspace.workspaceId;
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState('');
+  const [actionError, setActionError] = useState<WorktreeViewError>();
+  const [actionPending, setActionPending] = useState(false);
   const wasWorktree = useRef(false);
   const { ref, width } = useSidebarWidth(mode === 'worktree');
   const collapsed = width <= 64;
+
+  const refresh = useCallback(async (): Promise<void> => {
+    if (manager === undefined || workspaceId === undefined) {
+      setReadState(EMPTY_READ_STATE);
+      return;
+    }
+    setReadState({ ...EMPTY_READ_STATE, status: 'loading' });
+    try {
+      const data = await loadWorktreeView(manager, workspaceId);
+      setReadState({ status: 'ready', ...data });
+    } catch (error) {
+      setReadState({
+        ...EMPTY_READ_STATE,
+        status: 'error',
+        error: toWorktreeViewError(error),
+      });
+    }
+  }, [manager, workspaceId]);
 
   useEffect(() => {
     if (mode === 'worktree' && !wasWorktree.current) {
@@ -121,35 +148,48 @@ export function WorktreeSurface({
   }, [fallbackWorkspaceId, selectedWorkspace, selectedWorkspaceId]);
 
   useEffect(() => {
-    let disposed = false;
     if (mode !== 'worktree' || manager === undefined || workspaceId === undefined) {
       setReadState(EMPTY_READ_STATE);
       return () => {
-        disposed = true;
+        // Keep the effect shape stable while leaving the original DSH view untouched.
       };
     }
-    setReadState({ ...EMPTY_READ_STATE, status: 'loading' });
-    void Promise.all([
-      manager.listWorktrees({ workspaceId }),
-      manager.listBindings({ workspaceId }),
-    ]).then(
-      ([worktrees, bindings]) => {
-        if (disposed) return;
-        setReadState({ status: 'ready', worktrees, bindings });
-      },
-      () => {
-        if (disposed) return;
-        // A sidecar/Remote read failure is a degraded plugin state: restore
-        // the original DSH navigator instead of trapping the user in a dead
-        // Worktree surface. The persisted preference follows the safe view.
-        actions.setViewMode('workspace-session');
-        setReadState(EMPTY_READ_STATE);
-      },
+    void refresh();
+    return undefined;
+  }, [manager, mode, refresh, workspaceId]);
+
+  useEffect(() => {
+    const availableBranch = readState.branches.find((branch) => !branch.checkedOut);
+    if (readState.branches.some((branch) => branch.name === selectedBranch)) return;
+    setSelectedBranch(availableBranch?.name ?? '');
+  }, [readState.branches, selectedBranch]);
+
+  useEffect(() => {
+    if (
+      readState.worktrees.some(
+        (record) => record.worktreeId === selectedWorktreeId && record.status === 'active',
+      )
+    ) {
+      return;
+    }
+    setSelectedWorktreeId(
+      readState.worktrees.find((record) => record.status === 'active')?.worktreeId ?? '',
     );
-    return () => {
-      disposed = true;
-    };
-  }, [manager, mode, workspaceId]);
+  }, [readState.worktrees, selectedWorktreeId]);
+
+  const runAction = async (action: Parameters<typeof executeWorktreeAction>[1]): Promise<void> => {
+    if (manager === undefined) return;
+    setActionPending(true);
+    setActionError(undefined);
+    try {
+      await executeWorktreeAction(manager, action);
+      await refresh();
+    } catch (error) {
+      setActionError(toWorktreeViewError(error));
+    } finally {
+      setActionPending(false);
+    }
+  };
 
   if (mode !== 'worktree') return null;
 
@@ -222,9 +262,120 @@ export function WorktreeSurface({
           </select>
         </label>
         <div className={styles.content}>
+          {actionError !== undefined && (
+            <div className={styles.error} role="alert" data-worktree-error>
+              <p className={styles.message} data-error="true">
+                {actionError.message}
+              </p>
+              {actionError.retryable && (
+                <button
+                  type="button"
+                  className={styles.retryButton}
+                  onClick={() => {
+                    setActionError(undefined);
+                    void refresh();
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
           {readState.status === 'loading' && <p className={styles.message}>Loading Worktrees…</p>}
-          <>
-            <section className={styles.section} aria-labelledby="worktree-main-heading">
+          {readState.status === 'error' && readState.error !== undefined ? (
+            <div className={styles.error} role="alert" data-worktree-error>
+              <p className={styles.message} data-error="true">
+                {readState.error.message}
+              </p>
+              <button
+                type="button"
+                className={styles.retryButton}
+                onClick={() => {
+                  void refresh();
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : readState.status === 'ready' ? (
+            <>
+              <section className={styles.actions} aria-label="Worktree actions">
+                <label className={styles.actionLabel}>
+                  Branch
+                  <select
+                    className={styles.actionSelect}
+                    aria-label="Worktree branch"
+                    value={selectedBranch}
+                    disabled={actionPending}
+                    onChange={(event) => {
+                      setSelectedBranch(event.currentTarget.value);
+                    }}
+                  >
+                    <option value="">No available branch</option>
+                    {readState.branches.map((branch) => (
+                      <option key={branch.name} value={branch.name} disabled={branch.checkedOut}>
+                        {branch.name}
+                        {branch.checkedOut ? ' (checked out)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={styles.actionButton}
+                  disabled={actionPending || selectedBranch === ''}
+                  onClick={() => {
+                    void runAction({
+                      type: 'createWorktree',
+                      input: { workspaceId: workspaceId ?? '', branch: selectedBranch },
+                    });
+                  }}
+                >
+                  Create Worktree
+                </button>
+                <label className={styles.actionLabel}>
+                  Bind current Session
+                  <select
+                    className={styles.actionSelect}
+                    aria-label="Worktree to bind"
+                    value={selectedWorktreeId}
+                    disabled={actionPending}
+                    onChange={(event) => {
+                      setSelectedWorktreeId(event.currentTarget.value);
+                    }}
+                  >
+                    <option value="">Select Worktree</option>
+                    {readState.worktrees
+                      .filter((record) => record.status === 'active')
+                      .map((record) => (
+                        <option key={record.worktreeId} value={record.worktreeId}>
+                          {record.branch}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={styles.actionButton}
+                  disabled={
+                    actionPending || selectedWorktreeId === '' || sessions.current === undefined
+                  }
+                  onClick={() => {
+                    if (sessions.current === undefined || workspaceId === undefined) return;
+                    void runAction({
+                      type: 'bindSession',
+                      input: {
+                        workspaceId,
+                        worktreeId: selectedWorktreeId,
+                        sessionId: sessions.current,
+                      },
+                    });
+                  }}
+                >
+                  Bind current Session
+                </button>
+              </section>
+              <section className={styles.section} aria-labelledby="worktree-main-heading">
                 <h2 id="worktree-main-heading" className={styles.sectionTitle}>
                   Main
                 </h2>
@@ -247,8 +398,8 @@ export function WorktreeSurface({
                     </button>
                   ))
                 )}
-            </section>
-            <section className={styles.section} aria-labelledby="worktree-active-heading">
+              </section>
+              <section className={styles.section} aria-labelledby="worktree-active-heading">
                 <h2 id="worktree-active-heading" className={styles.sectionTitle}>
                   Worktrees
                 </h2>
@@ -263,6 +414,24 @@ export function WorktreeSurface({
                     >
                       <span className={styles.worktreeLabel}>{record.branch}</span>
                       <span className={styles.status}>{worktreeStatus(record)}</span>
+                      {record.status === 'active' && (
+                        <button
+                          type="button"
+                          className={styles.inlineButton}
+                          disabled={actionPending}
+                          onClick={() => {
+                            void runAction({
+                              type: 'removeWorktree',
+                              input: {
+                                workspaceId: record.workspaceId,
+                                worktreeId: record.worktreeId,
+                              },
+                            });
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
@@ -286,8 +455,9 @@ export function WorktreeSurface({
                     </button>
                   )),
                 )}
-            </section>
-          </>
+              </section>
+            </>
+          ) : null}
         </div>
       </div>
       <div className={styles.railContent}>

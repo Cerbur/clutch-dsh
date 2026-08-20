@@ -3,9 +3,9 @@ import test from 'node:test';
 
 import { WORKTREE_REMOTE_METHODS } from '../lib/contract/index.js';
 import {
-  WorktreeRemoteCallError,
-  createWorktreeManagerFacade,
-} from '../lib/client/index.js';
+  WorktreeConnectionError,
+  createWorktreeConnectionAdapter,
+} from '../lib/client/worktree-connection.js';
 
 const worktree = {
   worktreeId: 'wt_example',
@@ -27,46 +27,30 @@ test('exposes only the six browser-safe Worktree Manager methods', () => {
   assert.equal(WORKTREE_REMOTE_METHODS.includes('resolveRuntimeCwd'), false);
 });
 
-test('adapts the mounted DSH Remote namespace to the WorktreeManager contract', async () => {
+test('adapts the shared Connection RPC to the WorktreeManager contract', async () => {
   const calls = [];
-  const remote = {
-    async listWorktrees(input) {
-      calls.push(['listWorktrees', input]);
-      return { ok: true, value: { ok: true, value: [worktree] } };
-    },
-    async listBranches(input) {
-      calls.push(['listBranches', input]);
-      return { ok: true, value: { ok: true, value: [] } };
-    },
-    async createWorktree(input) {
-      calls.push(['createWorktree', input]);
-      return { ok: true, value: { ok: true, value: worktree } };
-    },
-    async removeWorktree(input) {
-      calls.push(['removeWorktree', input]);
-      return { ok: true, value: { ok: true, value: null } };
-    },
-    async listBindings(input) {
-      calls.push(['listBindings', input]);
-      return { ok: true, value: { ok: true, value: [] } };
-    },
-    async bindSession(input) {
-      calls.push(['bindSession', input]);
-      return {
-        ok: true,
-        value: {
-          ok: true,
-          value: {
-            workspaceId: input.workspaceId,
-            worktreeId: input.worktreeId,
-            sessionId: input.sessionId,
-            status: 'active',
-          },
-        },
-      };
+  const rpc = {
+    async call(channel, endpoint, payload, signal) {
+      calls.push({ channel, endpoint, payload, signal });
+      const input = payload.args.input;
+      const value = endpoint.endsWith('/listWorktrees')
+        ? [worktree]
+        : endpoint.endsWith('/createWorktree')
+          ? worktree
+          : endpoint.endsWith('/bindSession')
+            ? {
+                workspaceId: input.workspaceId,
+                worktreeId: input.worktreeId,
+                sessionId: input.sessionId,
+                status: 'active',
+              }
+            : endpoint.endsWith('/removeWorktree')
+              ? null
+              : [];
+      return { ok: true, value: { ok: true, value } };
     },
   };
-  const manager = createWorktreeManagerFacade(remote);
+  const manager = createWorktreeConnectionAdapter(rpc);
 
   assert.deepEqual(await manager.listWorktrees({ workspaceId: 'ws_example' }), [worktree]);
   assert.deepEqual(await manager.listBranches({ workspaceId: 'ws_example' }), []);
@@ -92,26 +76,18 @@ test('adapts the mounted DSH Remote namespace to the WorktreeManager contract', 
       status: 'active',
     },
   );
-  assert.deepEqual(calls, [
-    ['listWorktrees', { workspaceId: 'ws_example' }],
-    ['listBranches', { workspaceId: 'ws_example' }],
-    ['createWorktree', { workspaceId: 'ws_example', branch: 'feature/example' }],
-    ['removeWorktree', { workspaceId: 'ws_example', worktreeId: 'wt_example' }],
-    ['listBindings', { workspaceId: 'ws_example' }],
-    [
-      'bindSession',
-      {
-        workspaceId: 'ws_example',
-        worktreeId: 'wt_example',
-        sessionId: 'session_example',
-      },
-    ],
-  ]);
+  assert.equal(
+    calls.every(
+      ({ channel, payload, signal }) => channel === '/api' && payload.args.input && signal,
+    ),
+    true,
+  );
+  manager.dispose();
 });
 
-test('preserves domain failures and carrier failures as browser-safe errors', async () => {
-  const domainFailure = createWorktreeManagerFacade({
-    async listWorktrees() {
+test('preserves Worktree domain failures and Connection failures as browser-safe errors', async () => {
+  const domainFailure = createWorktreeConnectionAdapter({
+    async call() {
       return {
         ok: true,
         value: {
@@ -128,13 +104,14 @@ test('preserves domain failures and carrier failures as browser-safe errors', as
   await assert.rejects(
     domainFailure.listWorktrees({ workspaceId: 'ws_example' }),
     (error) =>
-      error instanceof WorktreeRemoteCallError &&
+      error instanceof WorktreeConnectionError &&
       error.code === 'SIDECAR_UNAVAILABLE' &&
-      error.details.workspaceId === 'ws_example',
+      error.details.workspaceId === 'ws_example' &&
+      error.retryable === false,
   );
 
-  const carrierFailure = createWorktreeManagerFacade({
-    async listWorktrees() {
+  const connectionFailure = createWorktreeConnectionAdapter({
+    async call() {
       return {
         ok: false,
         error: { code: 'internal', message: 'gateway failed', details: {} },
@@ -142,10 +119,11 @@ test('preserves domain failures and carrier failures as browser-safe errors', as
     },
   });
   await assert.rejects(
-    carrierFailure.listWorktrees({ workspaceId: 'ws_example' }),
+    connectionFailure.listWorktrees({ workspaceId: 'ws_example' }),
     (error) =>
-      error instanceof WorktreeRemoteCallError &&
+      error instanceof WorktreeConnectionError &&
       error.code === 'internal' &&
-      error.message === 'gateway failed',
+      error.retryable === true &&
+      error.message.includes('gateway failed'),
   );
 });

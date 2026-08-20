@@ -83,13 +83,13 @@ the same package. This is a build-plane distinction, not a package split. The
 Phase 3 patch inserts `clutch-dsh-worktree-host`, passes the resolved
 `dshHomePath()`, and loads `WorktreeRemoteService` from the package root.
 
-For target release `dsh-v0.1.0-rc.7`, the implemented Host path is:
+For target release `dsh-v0.1.0-rc.8`, the implemented Host path is:
 
 ```text
 bundle patch
   -> Cordis Loader loads WorktreeRemoteService (TypertRemoteService + @Remote)
   -> generated ./typert registered by dsh-typert-loader
-  -> existing dsh-api-gateway Host dispatcher
+  -> dsh-api-gateway TypertGateway interceptor on the existing /api Connection channel
 ```
 
 The Phase 3 composition fixture executes this path with the published package
@@ -100,40 +100,33 @@ Client-safe declaration merge. The Remote projection contains only the six
 Manager operations and plain contract values. Stable Worktree failures use an
 inner domain result so their code/details survive the carrier boundary;
 unexpected Host failures remain Gateway failures. `resolveRuntimeCwd` is not a
-Remote method because rc.7's persisted-`cwd` execution model has no browser
-call boundary that needs it.
+Remote method because the persisted-`cwd` execution model has no browser call
+boundary that needs it.
 
-The rc.7 browser assembly cannot yet select this contribution without changing
-the application assembly build. Official evidence is explicit:
+The browser Consumer does not select that generated contribution. Instead,
+`src/client/worktree-connection.ts` accepts a narrowed
+`Pick<ClientConnectionRpc, 'call'>` and invokes the existing shared transport:
 
-- `packages/api/remotes/src/client/index.ts` imports and mounts a fixed list of
-  five generated contributions as runtime values;
-- its README states that additional capabilities require an explicit
-  `/remote` value import and mount in that assembly;
-- profile/bundle patches compose Loader rows only; they cannot add a runtime
-  import to the already-built `@deepseek-ai/dsh-api-remotes/client` bundle;
-- `dsh.client` describes browser Client bundle loading and injection, not
-  Remote contribution selection.
+```ts
+ctx.connection.rpc.call(
+  '/api',
+  'worktreeManager/listWorktrees',
+  { args: { input: { workspaceId } } },
+  signal,
+);
+```
 
-Therefore the package does not create a second Remote assembly and does not
-call `$mount()` from its Client code. Phase 4 now ships the browser Consumer
-shell independently: `src/client/entry.ts` is enrolled through package
-`dsh.client` metadata and emits the official
-`window.__ModuleLoader__.load(...)` handoff. The entry only adapts
-`ctx.remote.worktreeManager` when that namespace is already present; on rc.7
-the missing namespace makes the footer and overlay fall back to the original
-Workspace/Session view. The entry waits for the DSH Remote carrier service,
-but the Worktree namespace remains optional; the slot inject face resolves it
-at registration/render time instead of caching an early `undefined` probe.
-The Worktree RPC remains gated on a DSH release with
-an explicit contribution seat, or on the target application building its one
-canonical `api-remotes` assembly with `clutch-dsh-worktree/remote` included.
-No DSH source was modified.
+The six endpoint strings, payload shape, outer Connection/Gateway failure, inner
+Worktree domain failure, and request abort lifecycle live in this one adapter.
+`src/client/entry.ts` creates one adapter per Client fiber and disposes it with
+the fiber. The UI receives the existing `WorktreeManager` interface and never
+reads `ctx.remote.worktreeManager`, imports `./remote` metadata, calls
+`ctx.remote.$mount()`, or creates another transport. `ctx.remote` remains an
+official DSH service, but this plugin does not depend on its namespace.
 
-The rc.7 generator also recognizes protocol meta symbols only when the protocol
-is a registered workspace project or an ambient build declaration. The package
-uses a build-only ambient metadata bridge matching the official generator
-fixture; emitted/runtime code still imports the published rc.7 protocol.
+The rc.8 generator recognizes the protocol metadata through the package's
+build-only ambient bridge; emitted Host and generated artifacts use the rc.8
+Typert protocol. No DSH source was modified.
 
 The selected model is the persisted-`cwd` model:
 
@@ -236,21 +229,17 @@ The Web UI Consumer module owns:
 - orchestration between DSH Session APIs and the Worktree Manager;
 - opening an existing DSH Conversation through `ctx.sessions.open`.
 
-It does not execute Git, read sidecar files, or write DSH data directly. Phase
-3 supplies only `createWorktreeManagerFacade()`, which adapts an already-mounted
-DSH Remote namespace and owns neither contribution mounting nor transport. The
-future UI imports the browser-safe contract/facade, never Host, Manage, or
-Provider runtime internals.
+It does not execute Git, read sidecar files, or write DSH data directly. The
+browser Consumer uses the deep `Worktree Connection` adapter, which adapts the
+existing `/api` Connection/Gateway wire to `WorktreeManager`; it owns neither
+the Host descriptor nor a transport. The UI imports only browser-safe contract
+and Client modules, never Host, Manage, or Provider runtime internals.
 
-The browser cannot call the Host Manager object directly. The UI uses a
-browser-safe Remote/client projection whose methods mirror the Manager
-contract. `entry.ts` probes the already-mounted namespace and passes the
-facade into the read-only Worktree surface only when all six generated methods
-exist; the UI does not mount a second Remote assembly or define a second
-business API. Main rows use the global DSH Session list and subtract selected
-Workspace sidecar bindings instead of depending on native `Workspace.sessionIds`.
-The original Workspace/Session browser remains available when
-the namespace is absent or the read surface reports a degraded error.
+Main rows use the global DSH Session list and subtract selected Workspace
+sidecar bindings instead of depending on native `Workspace.sessionIds`. When a
+Connection endpoint is missing or a call fails, the original Workspace/Session
+browser remains available and the Worktree surface shows an explicit retryable
+error rather than an empty successful projection.
 
 ## 5. Worktree storage and sidecar layout
 
@@ -518,7 +507,7 @@ surface. Its confirmed frame geometry is:
 - the Conversation remains visible and the current Session is unchanged when
   Worktree mode is entered, switched, or collapsed.
 
-The rc.7 `shell.overlay` owner share contains no Sidebar geometry. The Client
+The rc.8 `shell.overlay` owner share contains no Sidebar geometry. The Client
 surface therefore observes the existing frame's first column through the
 overlay's `data-shell-overlay` parent and a `ResizeObserver`, then applies that
 measured width to its own absolute child. This follows the live grid resize and
@@ -562,9 +551,9 @@ is unavailable, the UI falls back to the original Workspace/Session mode.
 ### 9.3 Worktree mode contents
 
 The Worktree view groups DSH Session summaries obtained through the public DSH
-Session read API plus the sidecar binding projection. Phase 4 implements the
-read-only shell and list projection when the Remote is available; it does not
-yet expose create/remove or create/bind controls. It must not depend on
+Session read API plus the sidecar binding projection. The Client reads
+Worktrees, local branches and bindings through Connection and exposes create,
+remove and bind actions through the same Manager contract. It must not depend on
 the native Workspace-specific `sessionIds` grouping, because Sessions created
 with `cwd` may not be included there:
 
@@ -675,9 +664,9 @@ sidecar is missing, corrupt, or unavailable.
   its generated `./typert`, and the existing Host Gateway can invoke it.
 - The package publishes a strict generated `./remote` contribution containing
   exactly the six browser-safe Manager methods.
-- For rc.7, the profile cannot add that contribution to the build-time-fixed
-  `api-remotes/client` roster. This is an explicit Phase 4 gate, not a simulated
-  successful composition.
+- For rc.8, the Host Typert Gateway claims the six Worktree endpoints on the
+  existing `/api` Connection channel; canonical Remote assembly is not a
+  functional blocker for Worktree calls.
 - No second RPC, custom transport, or Client-side `$mount()` path is introduced.
 - DSH Workspace and Session data are never copied into the sidecar.
 - Sidecar files are stored below the resolved DSH Home, not in a Workspace
@@ -708,9 +697,9 @@ sidecar is missing, corrupt, or unavailable.
 - Worktree Session creation uses DSH `session.create({ cwd })`, then external
   binding, then the existing Conversation navigation.
 - Sidecar failure does not make the original DSH Session view unusable.
-- On rc.7, the missing canonical Remote contribution makes the Client shell
-  fall back to Workspace/Session mode; this is not counted as a mounted
-  Worktree RPC composition.
+- On rc.8, `ctx.remote.worktreeManager` may be undefined and the Client still
+  queries and mutates Worktrees through `ctx.connection.rpc`; endpoint or
+  transport failures remain visible and retryable in the Worktree surface.
 
 ### Explicit V1 exclusions
 

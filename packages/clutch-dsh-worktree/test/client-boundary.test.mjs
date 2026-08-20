@@ -38,3 +38,24 @@ test('Client registers the two additive extension points without replacing sideb
   assert.match(source, /data-shell-overlay/);
   assert.doesNotMatch(source, /name:\s*['"]sidebar\.workspaces['"]/);
 });
+
+test('keeps Connection RPC wire details inside the browser adapter', async () => {
+  const files = await sourceFiles(clientRoot);
+  const sources = await Promise.all(
+    files.map(async (file) => [file, await readFile(file, 'utf8')]),
+  );
+  const adapter = sources.find(([file]) => file.endsWith('worktree-connection.ts'));
+  assert.ok(adapter);
+  assert.match(adapter[1], /rpc\.call\(/);
+  assert.match(adapter[1], /['"]\/api['"]/);
+  assert.match(adapter[1], /worktreeManager\/listWorktrees/);
+  assert.match(adapter[1], /WORKTREE_CONNECTION_CHANNEL/);
+
+  for (const [file, source] of sources) {
+    if (file.endsWith('worktree-connection.ts')) continue;
+    assert.doesNotMatch(source, /rpc\.call\(/, file);
+    assert.doesNotMatch(source, /['"]\/api['"]/, file);
+    assert.doesNotMatch(source, /worktreeManager\//, file);
+    assert.doesNotMatch(source, /remote\.worktreeManager/, file);
+  }
+});

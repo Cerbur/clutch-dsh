@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
+import { WORKTREE_CONNECTION_ENDPOINTS } from '../lib/client/worktree-connection.js';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const packageManifestPath = path.join(packageDirectory, 'package.json');
@@ -27,13 +28,32 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   assert.equal(packageManifest.exports['./package.json'], './package.json');
   assert.deepEqual(packageManifest.dsh.client, {
     inject: [
-      '@deepseek-ai/dsh-api-remotes',
+      '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-ui-layout',
       '@deepseek-ai/dsh-client-ui-sidebar',
     ],
     platform: 'web',
   });
+});
+
+test('targets the rc.8 DSH graph without depending on the canonical Remote client assembly', () => {
+  const dshDependencyVersions = [
+    ...Object.entries(packageManifest.peerDependencies ?? {}),
+    ...Object.entries(packageManifest.devDependencies ?? {}),
+  ].filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
+
+  assert.ok(dshDependencyVersions.length > 0);
+  for (const [name, version] of dshDependencyVersions) {
+    assert.equal(version, '0.1.0-rc.8', `${name} must target dsh-v0.1.0-rc.8`);
+  }
+  assert.equal(
+    packageManifest.peerDependencies['@deepseek-ai/dsh-client-connection'],
+    '0.1.0-rc.8',
+  );
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-connection'], '0.1.0-rc.8');
+  assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
 });
 
 test('mounts the Host service through the package bundle patch', async () => {
@@ -62,6 +82,12 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/removeWorktree',
     ],
   );
+  assert.deepEqual(
+    Object.values(WORKTREE_CONNECTION_ENDPOINTS).sort(),
+    remoteModule.TYPERT_REMOTE.descriptors
+      .map((descriptor) => `${descriptor.namespace}/${descriptor.method}`)
+      .sort(),
+  );
   assert.equal(
     remoteModule.TYPERT_REMOTE.descriptors.some(
       (descriptor) => descriptor.method === 'resolveRuntimeCwd',
@@ -81,6 +107,7 @@ test('loads the package and calls its Host Remote through the real DSH compositi
   const { default: Loader } = await import('@deepseek-ai/cordis-plugin-loader');
   const { default: TypertRegistry } = await import('@deepseek-ai/dsh-typert-registry');
   const { default: TypertGatewayService } = await import('@deepseek-ai/dsh-api-gateway');
+  const { HostConnectionService } = await import('@deepseek-ai/dsh-client-connection');
   const typertLoader = await import('@deepseek-ai/dsh-typert-loader');
   const workspace = {
     id: 'ws_example',
@@ -105,6 +132,7 @@ test('loads the package and calls its Host Remote through the real DSH compositi
   try {
     await host.plugin(TypertRegistry);
     await host.plugin(Loader);
+    await host.plugin(HostConnectionService, []);
     const packageRequire = createRequire(host.baseUrl);
     host.loader.internal = {
       version: 'v2',
@@ -121,32 +149,40 @@ test('loads the package and calls its Host Remote through the real DSH compositi
     await host.loader.await();
     await host.plugin(typertLoader);
 
-    assert.deepEqual(
-      await host.typertGateway.invoke({
-        namespace: 'worktreeManager',
-        method: 'listWorktrees',
-        args: { input: { workspaceId: 'ws_example' } },
+    const fetchHandler = host.connection.createSharedFetchHandler('/api', {
+      fetch: async () => new globalThis.Response('fallback', { status: 404 }),
+    });
+    const response = await fetchHandler.fetch(
+      new globalThis.Request('http://localhost/api/worktreeManager/listWorktrees', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request',
+          rpcId: 'rpc-worktree-list',
+          method: 'worktreeManager/listWorktrees',
+          payload: { args: { input: { workspaceId: 'ws_example' } } },
+        }),
       }),
-      { ok: true, value: [] },
     );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      type: 'server-response',
+      rpcId: 'rpc-worktree-list',
+      result: { ok: true, value: { ok: true, value: [] } },
+    });
   } finally {
     await host.fiber.dispose();
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('records that dsh-v0.1.0-rc.7 api-remotes has a fixed build-time roster', async () => {
-  const manifestUrl = import.meta.resolve('@deepseek-ai/dsh-api-remotes/package.json');
-  const manifestPath = fileURLToPath(manifestUrl);
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  const clientBundle = await readFile(
-    path.join(path.dirname(manifestPath), 'lib', 'client.js'),
-    'utf8',
-  );
-
-  assert.equal(manifest.version, '0.1.0-rc.7');
-  assert.match(clientBundle, /@deepseek-ai\/dsh-goal/);
-  assert.match(clientBundle, /@deepseek-ai\/dsh-host-plugin-inventory/);
-  assert.doesNotMatch(clientBundle, /clutch-dsh-worktree/);
-  assert.doesNotMatch(clientBundle, /config\.(?:contributions|remotes)|profile.*remote/i);
+test('canonical rc.8 Host Gateway claims Worktree endpoints on the shared /api channel', () => {
+  assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/listWorktrees',
+    'worktreeManager/listBranches',
+    'worktreeManager/createWorktree',
+    'worktreeManager/removeWorktree',
+    'worktreeManager/listBindings',
+    'worktreeManager/bindSession',
+  ]);
 });

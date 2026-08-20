@@ -8,13 +8,35 @@ const packageDirectory = path.resolve('.');
  * table and a small slot/context fixture. The real Client loader owns the
  * same registration call; this fixture only supplies its platform modules.
  */
-export async function loadClientEntry({ remote = {} } = {}) {
+export async function loadClientEntry({ remote = {}, rpc } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
   const disposers = [];
   const openedSessions = [];
+  const rpcCalls = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
+
+  const connectionRpc = rpc ?? {
+    call(channel, endpoint, payload, signal) {
+      rpcCalls.push({ channel, endpoint, payload, signal });
+      const input = payload.args.input;
+      const value =
+        endpoint === 'worktreeManager/createWorktree'
+          ? {
+              worktreeId: 'wt-created',
+              ...input,
+              absolutePath: '/tmp/wt-created',
+              status: 'active',
+            }
+          : endpoint === 'worktreeManager/bindSession'
+            ? { ...input, status: 'active' }
+            : endpoint === 'worktreeManager/removeWorktree'
+              ? null
+              : [];
+      return Promise.resolve({ ok: true, value: { ok: true, value } });
+    },
+  };
 
   const defineStore = (spec) => ({
     spec,
@@ -49,6 +71,7 @@ export async function loadClientEntry({ remote = {} } = {}) {
   });
 
   const fakeContext = {
+    connection: { rpc: connectionRpc },
     remote,
     sessions: {
       list: { getSnapshot: () => ({ current: 'session-current' }) },
@@ -83,6 +106,11 @@ export async function loadClientEntry({ remote = {} } = {}) {
         };
       },
     },
+    effect(callback) {
+      const dispose = callback();
+      if (typeof dispose === 'function') disposers.push(dispose);
+      return dispose;
+    },
   };
 
   const windowObject = {
@@ -104,5 +132,5 @@ export async function loadClientEntry({ remote = {} } = {}) {
   });
 
   exports.apply(fakeContext);
-  return { exports, fakeContext, registrationsBySlot, disposers, openedSessions };
+  return { exports, fakeContext, registrationsBySlot, disposers, openedSessions, rpcCalls };
 }

@@ -1,4 +1,4 @@
-# Phase 4 Remote assembly research handoff
+# Worktree Host/Client assembly research handoff
 
 ## 状态
 
@@ -6,165 +6,117 @@
 
 - 业务仓库：`/Users/yuancheng/Documents/Code/clutch-dsh`
 - 目标 package：`packages/clutch-dsh-worktree`
-- 参考 DSH：`/Users/yuancheng/Documents/Code/deepseek-harness`
-- 验证基线：`dsh-v0.1.0-rc.7`
+- 参考 DSH：`/Users/yuancheng/Documents/Code/deepseek-harness`（只读）
+- 验证基线：`dsh-v0.1.0-rc.8`
 - 参考 DSH 仓库在本阶段没有修改。
 
-结论：Phase 4 的 Client shell 已完成，但真实 Worktree Remote navigation 被
-rc.7 的 canonical Remote assembly gate 阻塞。这个阻塞不是 Host Manager、sidecar
-或 Client slot 的实现错误。
+结论：canonical Remote assembly 不再是 Worktree 功能 blocker。Host 继续保留
+`WorktreeRemoteService`、六个 `@Remote` 方法、`./typert` 和 `./remote` artifact；
+生产 Client 不加载或挂载 `./remote`，而是使用 rc.8 的唯一 `ctx.connection`，
+通过既有 `/api` channel 调用 Typert Gateway。`ctx.remote.worktreeManager` 可以
+始终为 `undefined`。
 
-## 已完成内容
-
-- Host Worktree Manager、Remote descriptor 和六个 browser-safe 方法已经存在；
-- Client 通过官方 `window.__ModuleLoader__.load(...)` 机制加载和 dispose；
-- package 声明 `dsh.client` metadata，入口为 `src/client/entry.ts`；
-- 只使用 `sidebar.footer.action` 和 `shell.overlay`，不注册
-  `sidebar.workspaces`；
-- `viewMode` 为 `workspace-session | worktree`，只写 browser-local preference；
-- 切换 mode 和打开已有 Session 不关闭或替换当前 Conversation；
-- Main Session projection 使用全局 DSH Session list，不依赖原生
-  `Workspace.sessionIds`；
-- Remote carrier 是 Client lifecycle dependency，但 `worktreeManager` namespace
-  仍然是 optional；slot injection 时才探测完整六方法；
-- namespace 不存在或 read 失败时，回退到原始 Workspace/Session view；
-- Phase 4 没有实现 Worktree create/remove 或 Session create/bind；
-- browser boundary、local mode、module loading、真实 Cordis SlotRegistry
-  disposal fixture 均已覆盖。
-
-## 具体阻塞
-
-用户期望的真实场景：
+## 已确认的架构
 
 ```text
-Workspace ws1
-└── Worktree wt1 / feature/login
-    └── Session s42
+Host:
+  cordis.patch.yml
+    -> WorktreeRemoteService
+    -> ./typert + dsh-typert-loader
+    -> dsh-api-gateway TypertGateway
+    -> HostConnectionService shared /api interceptor
+
+Client:
+  dsh.client module graph
+    -> dsh-client-connection provides ctx.connection
+    -> clutch-dsh-worktree/client entry
+    -> Worktree Connection adapter
+    -> WorktreeManager interface
+    -> footer action / shell overlay UI
 ```
 
-进入 Worktree mode 后，Client 需要通过同一个 DSH Remote transport 调用：
+`src/client/worktree-connection.ts` 是唯一的 browser wire seam。它接受
+`Pick<ClientConnectionRpc, 'call'>`，集中拥有：
 
 ```ts
-ctx.remote.worktreeManager.listWorktrees({ workspaceId: 'ws1' })
-ctx.remote.worktreeManager.listBindings({ workspaceId: 'ws1' })
+ctx.connection.rpc.call(
+  '/api',
+  'worktreeManager/listWorktrees',
+  { args: { input: { workspaceId } } },
+  signal,
+);
 ```
 
-但 rc.7 的 `@deepseek-ai/dsh-api-remotes/client` 在构建时只 import/mount
-固定五个 contribution：
+六个 endpoint 表、payload 形状、AbortController、Connection 外层
+`RpcResult`、Typert/Gateway failure、Worktree 内层 domain result 都在此处处理。
+UI 只消费现有 `WorktreeManager` interface，不接触 endpoint 或 transport。
 
-- `dsh-commands/remote`
-- `dsh-goal/remote`
-- `dsh-cordis-host-runner/remote`
-- `dsh-host-plugin-inventory/remote`
-- `dsh-message-feedback/remote`
+## rc.8 证据和 activation order
 
-它没有 `clutch-dsh-worktree/remote`，所以运行时：
+1. `package.json` 的 `dsh.bundle.patch` 仍指向 `./cordis.patch.yml`；patch
+   装载 `clutch-dsh-worktree-host`。
+2. `src/host/service.ts` 的 `WorktreeRemoteService` 仍继承
+   `TypertRemoteService`，namespace 是 `worktreeManager`，六个方法仍标记
+   `@Remote`。
+3. `scripts/generate-typert.mjs` 通过 rc.8 Typert generator 生成
+   `lib/typert.host.*` 和 `lib/typert.remote-client.*`。生成 descriptor 与
+   `WORKTREE_CONNECTION_ENDPOINTS` 在
+   `test/dsh-composition.test.mjs` 中逐项比对。
+4. rc.8 `dsh-typert-loader` 从 Loader package row 注册 `./typert`；
+   `@deepseek-ai/dsh-api-gateway` 的 `TypertGatewayService` 对
+   `ctx.connection.rpc.intercept('/api', ...)` 注册共享 channel interceptor。
+5. rc.8 `HostConnectionService.createSharedFetchHandler('/api', fallback)`
+   先按 endpoint 选择 Typert interceptor，再把 JSON RPC envelope 交给
+   Gateway；未声明的 endpoint 才落到现有 API Proxy fallback。
+6. package `dsh.client.inject` 显式包含
+   `@deepseek-ai/dsh-client-connection`；`@deepseek-ai/dsh-api-remotes` 不再是
+   本 package 的 peer/dev 或 Client graph 依赖。
+7. `src/client/entry.ts` 注入 `connection`，创建一个 adapter，并通过
+   `ctx.effect()` 在 Client fiber dispose 时 abort 所有在途请求。entry 不读取
+   `ctx.remote`，不调用 `$mount()`，不加载生成 Remote metadata。
 
-```ts
-ctx.remote.worktreeManager === undefined
-```
+## 已完成验证
 
-结果是 Worktree action/surface 安全隐藏或回退，无法读取 `wt1`、branch、binding
-或 `s42`。强行调用会得到 `TypeError`，因为浏览器 Remote registry 没有对应
-namespace、descriptor 和 method。
+- `test/client-connection.test.mjs`：六个 channel/endpoint/payload、外层失败、
+  thrown call、malformed result、内层领域失败和 dispose abort。
+- `test/client-composition.test.mjs`：真实 Client fiber dispose 会 abort 在途
+  Connection call；`ctx.remote.worktreeManager` 缺失不影响 manager 注入。
+- `test/client-surface.test.mjs`：Worktree/branch/binding 读取、create/remove/bind
+  action、显式 retryable error presentation。
+- `test/client-boundary.test.mjs`：Client bundle/source 不导入 Host/Manage/Provider
+  runtime；raw `rpc.call`、`/api`、endpoint 字符串只在 adapter 内；没有
+  `$mount()` 或 custom route。
+- `test/dsh-composition.test.mjs`：真实 Cordis Loader、Typert Loader/Registry、
+  rc.8 Host Connection 和 Typert Gateway 通过共享 `/api` Fetch handler 调达
+  `WorktreeRemoteService`，wire result 为 outer RPC + inner Worktree result。
+- `test/remote-client.contract.ts`：生成 `./remote` 类型仍与 Host contract
+  一致；Connection adapter 仍实现 `WorktreeManager`。
 
-## 已确认的官方证据
-
-- `deepseek-harness/packages/api/remotes/src/client/index.ts`：固定五项 value
-  import，并在 `apply()` 中逐项调用 `ctx.remote.$mount()`；
-- `deepseek-harness/packages/api/remotes/README.md`：新增 Remote capability 需要
-  在 assembly 中显式 import/mount `./remote`；
-- `deepseek-harness/packages/client/modules/src/index.ts`：`dsh.client` 只发现和
-  加载 Client bundle；
-- `deepseek-harness/packages/client/runtime/src/client/slots.ts`：slot injection
-  只管理 slot declaration 和 disposal，不选择 Remote contribution；
-- `deepseek-harness/packages/bundle/web-app/cordis.patch.yml`：profile patch
-  只能增加 Loader row，不能给已构建的 `api-remotes/client` 增加 runtime import；
-- rc.7 的 `dsh.client.inject` 是 metadata/dependency edge，不是 Remote
-  contribution selection seat，也不能创建第二个 assembly。
-
-## 允许与禁止的边界
+## 边界和非目标
 
 允许：
 
-- 研究 DSH 官方源码、文档和目标 profile composition；
-- 提出未来 DSH release、target application build 或官方扩展点的方案；
-- 继续保持本 package 的单一 canonical transport、Host/Client contract 和
-  degraded fallback。
+- 保留和生成 `./remote`，供 Host descriptor、类型合约和 Typert artifact 使用；
+- 通过 DSH 官方 Client module graph 注入 `dsh-client-connection`；
+- 通过同一个 `/api` transport 调用 Host Typert Gateway。
 
 禁止：
 
 - 修改 `/Users/yuancheng/Documents/Code/deepseek-harness`；
-- 在 Client 中调用 `ctx.remote.$mount()`；
-- 创建第二套 Remote assembly、RPC 或 custom transport；
-- 仅通过 metadata、Loader row 或伪造 namespace 声称 capability 已启用。
+- 在 Client 中调用 `ctx.remote.$mount()` 或遍历 `./remote` metadata；
+- 创建第二套 RPC、logical channel、custom transport 或 HTTP/WebServer route；
+- 直接 `fetch`；
+- 用 commands、settings、session metadata 或文本 JSON 旁路保存关系；
+- 将失败请求伪装成空列表，或把 DSH Workspace/Session 内容复制到 plugin state。
 
-## 给高阶模型的研究 Prompt
+`dsh-v0.1.0-rc.8` 的 `session.create` 仍禁止同时传 `workspaceId` 与 `cwd`；
+本 handoff 不把该独立问题宣称为已解决。本文只覆盖 Worktree Host 核心逻辑
+和 Web UI 的 Connection 调用路径。
 
-```text
-你是 DSH/Cordis 架构和源码研究专家。请研究如何在不创建第二套 RPC/transport、
-不在 Client 中调用 ctx.remote.$mount()、并且不修改
-/Users/yuancheng/Documents/Code/deepseek-harness 当前工作树的前提下，让
-clutch-dsh-worktree 的 `clutch-dsh-worktree/remote` 被目标 DSH Web profile 的
-唯一 canonical @deepseek-ai/dsh-api-remotes/client assembly 选择并挂载。
+## 历史说明
 
-上下文：
-- 业务仓库：/Users/yuancheng/Documents/Code/clutch-dsh
-- 目标 package：packages/clutch-dsh-worktree
-- 参考 DSH：/Users/yuancheng/Documents/Code/deepseek-harness
-- DSH 基线：dsh-v0.1.0-rc.7
-- Host WorktreeManager、./remote descriptor、sidecar 和 browser-safe facade 已完成。
-- Client entry 已通过 window.__ModuleLoader__.load 加载，使用
-  sidebar.footer.action 和 shell.overlay，并在 namespace 不可用时回退原生 view。
-
-具体失败 case：
-Workspace ws1 有 Worktree wt1（branch feature/login），Session s42 绑定到 wt1。
-真实 Worktree mode 需要调用：
-  ctx.remote.worktreeManager.listWorktrees({ workspaceId: 'ws1' })
-  ctx.remote.worktreeManager.listBindings({ workspaceId: 'ws1' })
-但 rc.7 的 api-remotes/client 只固定挂载五个 contribution，没有
-clutch-dsh-worktree/remote，因此 ctx.remote.worktreeManager 为 undefined。
-
-请直接检查以下官方源码/文档，而不是根据抽象经验猜测：
-1. packages/api/remotes/src/client/index.ts
-2. packages/api/remotes/README.md
-3. packages/client/modules/src/index.ts 及其 Client module loader 文档
-4. packages/client/runtime/src/client/slots.ts
-5. packages/client/ui-layout/src/client/index.ts
-6. packages/client/ui-sidebar/src/client/index.ts
-7. packages/bundle/web-app/cordis.patch.yml
-8. clutch-dsh-worktree 当前 package.json、cordis.patch.yml、src/client/entry.ts
-
-请回答：
-1. rc.7 是否存在未被当前实现发现的官方 contribution-selection、profile
-   overlay、dynamic assembly 或 build hook，可以在不修改 DSH source 的情况下
-   让目标 profile 选择外部 ./remote？给出精确源码证据和调用顺序。
-2. 如果不存在，是否可以只修改目标 application 的 composition/build 输入而不修改
-   deepseek-harness source？这是否仍然属于唯一 canonical assembly，而不是第二套
-   assembly？请列出需要修改的最小文件和风险。
-3. 如果必须升级 DSH，最小 upstream API/manifest 设计是什么？请说明它如何保持
-   descriptor registry、transport、disposal、type generation 和 profile selection
-   的一致性。
-4. 对候选方案按“官方支持程度、是否违反约束、改动量、可测试性、升级兼容性”排序。
-5. 给出一个可执行的分阶段方案：先证明 gate，再接通真实
-   listWorktrees/listBindings，再验证 Session open、dispose 和 degraded fallback。
-6. 如果在所有约束下确实不可能，请明确写出“不可能的最小边界”和阻塞它的具体
-   service/assembly 生命周期，而不是只说“需要修改 DSH”。
-
-要求：
-- 不修改任何仓库文件；
-- 不建议第二套 RPC、custom transport、Client-side $mount 或 metadata hack；
-- 每个结论都附源码文件、行号/符号名和实际 activation order；
-- 最终输出包含：结论、证据、候选方案表、推荐方案、最小 patch 清单、测试计划。
-```
-
-## 当前验证记录
-
-- `pnpm run check`：通过；root 16 tests、package 51 tests 全部通过；
-- `pnpm run build`：通过；
-- `pnpm exec prettier --check .`：通过；
-- `git diff --check`：通过；
-- 参考 DSH 仓库 `git status --short`：无改动。
-
-这个 handoff 不宣称 rc.7 已经具备真实 Worktree Remote；它只记录已完成的
-package 工作、可复现的 gate、约束和下一轮研究输入。
+此前 rc.7 研究记录了 `@deepseek-ai/dsh-api-remotes/client` 固定 contribution
+roster 导致 `ctx.remote.worktreeManager` 无法出现的 gate。该结论仍可解释旧
+profile 的行为，但不再是当前 rc.8 实现的功能前提：Worktree 请求已经改走
+Connection/Gateway seam，canonical Remote assembly 只保留为 DSH 官方能力的
+独立 artifact，不参与本 plugin 的生产 Client runtime。

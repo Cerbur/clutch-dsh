@@ -8,9 +8,7 @@ import { loadClientEntry } from './client-fixture.mjs';
 const packageDirectory = path.resolve('.');
 
 async function loadRuntimeClientExports() {
-  const runtimePath = fileURLToPath(
-    import.meta.resolve('@deepseek-ai/dsh-client-runtime/client'),
-  );
+  const runtimePath = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-client-runtime/client'));
   const runtimeBundle = await readFile(runtimePath, 'utf8');
   const handoffs = [];
   new Function('window', runtimeBundle)({
@@ -38,6 +36,8 @@ test('publishes an official DSH client-module handoff with a browser-safe apply 
   assert.match(clientBundle, /clutch-dsh-worktree/);
   assert.match(clientBundle, /sidebar\.footer\.action/);
   assert.match(clientBundle, /shell\.overlay/);
+  assert.doesNotMatch(clientBundle, /@deepseek-ai\/dsh-api-remotes|\.\/remote/);
+  assert.doesNotMatch(clientBundle, /(?:Host|Manage|Provider) runtime/i);
   assert.doesNotMatch(clientBundle, /ctx\.remote\.\$mount|remote\.\$mount/);
 });
 
@@ -98,7 +98,11 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   });
 
   const ctx = new Context();
-  ctx.provide('remote', {});
+  ctx.provide('connection', {
+    rpc: {
+      call: async () => ({ ok: true, value: { ok: true, value: [] } }),
+    },
+  });
   ctx.provide('sessions', { open() {} });
   ctx.provide('workspaces', {});
   const slotsFiber = ctx.plugin(SlotRegistry);
@@ -127,4 +131,27 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     rootDisposer();
     await ctx.fiber.dispose();
   }
+});
+
+test('Client fiber disposal aborts an in-flight Worktree Connection call', async () => {
+  let signal;
+  const fixture = await loadClientEntry({
+    rpc: {
+      call: (_channel, _endpoint, _payload, requestSignal) => {
+        signal = requestSignal;
+        return new Promise((_resolve, reject) => {
+          requestSignal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        });
+      },
+    },
+  });
+  const manager = fixture.registrationsBySlot.get('shell.overlay').options.inject().manager;
+  const pending = manager.listWorktrees({ workspaceId: 'ws1' });
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+
+  assert.equal(signal.aborted, true);
+  await assert.rejects(pending);
 });
