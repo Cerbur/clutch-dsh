@@ -383,6 +383,7 @@
 
 .workspaceRow,
 .worktreeRow {
+  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -438,6 +439,46 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+
+.workspaceActions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  width: 64px;
+  gap: 4px;
+}
+
+.menuAction {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  visibility: hidden;
+}
+
+.workspaceRow:hover .menuAction,
+.workspaceRow[data-menu-open='true'] .menuAction {
+  visibility: visible;
+}
+
+.workspaceRow.dropBefore::before,
+.workspaceRow.dropAfter::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-brand-primary);
+  content: '';
+}
+
+.workspaceRow.dropBefore::before {
+  top: -1px;
+}
+
+.workspaceRow.dropAfter::after {
+  bottom: -1px;
 }
 
 .treeChildren {

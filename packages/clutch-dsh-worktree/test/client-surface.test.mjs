@@ -326,6 +326,23 @@ test('uses native DSH menus for Session and Worktree row actions', async () => {
   );
 });
 
+test('matches native Workspace row actions and drag behavior', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /renameWorkspace/);
+  assert.match(source, /deleteWorkspace/);
+  assert.match(source, /insertWorkspaceBefore/);
+  assert.match(source, /draggable/);
+  assert.match(source, /onDragOver/);
+  assert.match(source, /onDrop/);
+  assert.match(source, /Rename/);
+  assert.match(source, /Delete/);
+  assert.match(source, /data-workspace-drag/);
+});
+
 test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

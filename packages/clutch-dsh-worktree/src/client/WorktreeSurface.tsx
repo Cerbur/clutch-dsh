@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent as ReactDragEvent } from 'react';
 import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import {
@@ -116,6 +117,46 @@ interface WorktreeSessionRowProps {
   readonly onArchive?: (sessionId: string) => void;
 }
 
+interface WorkspaceDragProps {
+  readonly active: boolean;
+  readonly marker: 'before' | 'after' | null;
+  readonly start: () => void;
+  readonly hover: (half: 'before' | 'after') => void;
+  readonly drop: (half: 'before' | 'after') => void;
+  readonly end: () => void;
+}
+
+interface WorktreeWorkspaceRowProps {
+  readonly workspace: WorkspaceLike;
+  readonly expanded: boolean;
+  readonly actionPending: boolean;
+  readonly menuOpen: boolean;
+  readonly drag: WorkspaceDragProps;
+  readonly onToggle: () => void;
+  readonly onCreateWorktree: () => void;
+  readonly onRename: () => void;
+  readonly onDelete: () => void;
+  readonly onMenuOpenChange: (open: boolean) => void;
+}
+
+interface WorkspaceDragState {
+  readonly workspaceId: string;
+  readonly over: {
+    readonly workspaceId: string;
+    readonly half: 'before' | 'after';
+  } | null;
+}
+
+interface WorkspaceRenameTarget {
+  readonly workspaceId: string;
+  readonly currentTitle: string;
+}
+
+interface WorkspaceDeleteTarget {
+  readonly workspaceId: string;
+  readonly title: string;
+}
+
 const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
 
 function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
@@ -128,6 +169,11 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
 
 function sessionLabel(sessionId: string, sessions: SessionListLike): string {
   return sessions.byId[sessionId]?.displayTitle ?? sessionId;
+}
+
+function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
 }
 
 function bindingIdsFor(bindings: readonly SessionBinding[], worktreeId: string): readonly string[] {
@@ -170,6 +216,125 @@ function workspaceMatches(
   }
   return view.bindings.some((binding) =>
     includesText(sessionLabel(binding.sessionId, sessions), query),
+  );
+}
+
+/** Workspace row using the native DSH menu, fixed action column, and drag contract. */
+function WorktreeWorkspaceRow({
+  workspace,
+  expanded,
+  actionPending,
+  menuOpen,
+  drag,
+  onToggle,
+  onCreateWorktree,
+  onRename,
+  onDelete,
+  onMenuOpenChange,
+}: WorktreeWorkspaceRowProps) {
+  const workspaceMenuItems = [
+    {
+      id: 'rename',
+      label: 'Rename',
+      icon: <IconEditOutline16 />,
+      disabled: actionPending,
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: <IconTrashOutline16 />,
+      danger: true,
+      disabled: actionPending,
+    },
+  ];
+  const markerClass = drag.marker === 'before'
+    ? styles.dropBefore
+    : drag.marker === 'after'
+      ? styles.dropAfter
+      : '';
+
+  return (
+    <div
+      className={`${styles.workspaceRow} ${markerClass}`}
+      data-workspace-drag={drag.active ? 'active' : undefined}
+      data-menu-open={menuOpen || undefined}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', workspace.workspaceId);
+        drag.start();
+      }}
+      onDragEnd={drag.end}
+      onDragOver={(event) => {
+        if (!drag.active) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        drag.hover(rowHalf(event));
+      }}
+      onDrop={(event) => {
+        if (!drag.active) return;
+        event.preventDefault();
+        drag.drop(rowHalf(event));
+      }}
+    >
+      <button
+        type="button"
+        className={styles.disclosureButton}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${workspace.title}`}
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        {expanded ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+      </button>
+      <span className={styles.workspaceIcon} aria-hidden="true">
+        {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
+      </span>
+      <span className={styles.workspaceTitle}>{workspace.title}</span>
+      <span className={styles.workspaceActions}>
+        <span className={styles.menuAction}>
+          <Menu
+            open={menuOpen}
+            onClose={() => {
+              onMenuOpenChange(false);
+            }}
+            items={workspaceMenuItems}
+            onSelect={(id) => {
+              onMenuOpenChange(false);
+              if (id === 'rename') onRename();
+              if (id === 'delete') onDelete();
+            }}
+            portal
+            closeOnPointerLeave
+            anchor={(
+              <button
+                type="button"
+                className={styles.iconButton}
+                data-workspace-menu
+                aria-label={`Workspace options for ${workspace.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMenuOpenChange(!menuOpen);
+                }}
+              >
+                <IconEllipsisOutline16 />
+              </button>
+            )}
+          />
+        </span>
+        <button
+          type="button"
+          className={styles.iconButton}
+          data-add-worktree
+          aria-label={`Add Worktree to ${workspace.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onCreateWorktree();
+          }}
+        >
+          <IconPlusOutline16 />
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -269,6 +434,10 @@ export function WorktreeSurface({
   createWorkspace,
   createSessionForWorktree: createSessionCallback,
   createMainSession,
+  renameWorkspace,
+  deleteWorkspace,
+  insertWorkspaceBefore,
+  insertSessionBefore,
   renameSession,
   forkSession,
   archiveSession,
@@ -287,6 +456,7 @@ export function WorktreeSurface({
   const [expandedWorktrees, setExpandedWorktrees] = useState<Record<string, boolean>>({});
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
+  const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
   const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranch, setNewBranch] = useState('');
@@ -297,6 +467,15 @@ export function WorktreeSurface({
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   const [sessionRenamePending, setSessionRenamePending] = useState(false);
   const [sessionRenameError, setSessionRenameError] = useState<string>();
+  const [workspaceDrag, setWorkspaceDrag] = useState<WorkspaceDragState>();
+  const [workspaceRenameTarget, setWorkspaceRenameTarget] = useState<WorkspaceRenameTarget>();
+  const [workspaceRenameDraft, setWorkspaceRenameDraft] = useState('');
+  const [workspaceRenamePending, setWorkspaceRenamePending] = useState(false);
+  const [workspaceRenameError, setWorkspaceRenameError] = useState<string>();
+  const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<WorkspaceDeleteTarget>();
+  const [workspaceDeletePending, setWorkspaceDeletePending] = useState(false);
+  const [workspaceDeleteError, setWorkspaceDeleteError] = useState<string>();
+  const workspaceDropCommitted = useRef(false);
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
@@ -363,6 +542,127 @@ export function WorktreeSurface({
     } finally {
       setActionPending(false);
     }
+  };
+
+  const workspaceRenameTrimmed = workspaceRenameDraft.trim();
+  const workspaceRenameDuplicate = workspaceRenameTarget !== undefined &&
+    workspaceRenameTrimmed.length > 0 &&
+    workspaces.items.some(
+      (workspace) =>
+        workspace.workspaceId !== workspaceRenameTarget.workspaceId &&
+        workspace.title === workspaceRenameTrimmed,
+    );
+  const workspaceRenameBlocked =
+    workspaceRenamePending ||
+    workspaceRenameTarget === undefined ||
+    workspaceRenameTrimmed.length === 0 ||
+    workspaceRenameTrimmed === workspaceRenameTarget?.currentTitle ||
+    workspaceRenameDuplicate;
+
+  const openWorkspaceRename = (workspace: WorkspaceLike): void => {
+    setWorkspaceRenameTarget({
+      workspaceId: workspace.workspaceId,
+      currentTitle: workspace.title,
+    });
+    setWorkspaceRenameDraft(workspace.title);
+    setWorkspaceRenameError(undefined);
+  };
+
+  const closeWorkspaceRename = (): void => {
+    if (workspaceRenamePending) return;
+    setWorkspaceRenameTarget(undefined);
+    setWorkspaceRenameError(undefined);
+  };
+
+  const confirmWorkspaceRename = async (): Promise<void> => {
+    const target = workspaceRenameTarget;
+    if (workspaceRenameBlocked || target === undefined) return;
+    if (renameWorkspace === undefined) {
+      setWorkspaceRenameError('Workspace rename is unavailable; retry after reconnecting.');
+      return;
+    }
+    setWorkspaceRenamePending(true);
+    setWorkspaceRenameError(undefined);
+    try {
+      await renameWorkspace(target.workspaceId, workspaceRenameTrimmed);
+      setWorkspaceRenameTarget(undefined);
+    } catch (error) {
+      setWorkspaceRenameError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setWorkspaceRenamePending(false);
+    }
+  };
+
+  const openWorkspaceDelete = (workspace: WorkspaceLike): void => {
+    setWorkspaceDeleteTarget({ workspaceId: workspace.workspaceId, title: workspace.title });
+    setWorkspaceDeleteError(undefined);
+  };
+
+  const closeWorkspaceDelete = (): void => {
+    if (workspaceDeletePending) return;
+    setWorkspaceDeleteTarget(undefined);
+    setWorkspaceDeleteError(undefined);
+  };
+
+  const confirmWorkspaceDelete = async (): Promise<void> => {
+    const target = workspaceDeleteTarget;
+    if (target === undefined || workspaceDeletePending) return;
+    if (deleteWorkspace === undefined) {
+      setWorkspaceDeleteError('Workspace delete is unavailable; retry after reconnecting.');
+      return;
+    }
+    setWorkspaceDeletePending(true);
+    setWorkspaceDeleteError(undefined);
+    try {
+      await deleteWorkspace(target.workspaceId);
+      setWorkspaceDeleteTarget(undefined);
+    } catch (error) {
+      setWorkspaceDeleteError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setWorkspaceDeletePending(false);
+    }
+  };
+
+  const commitWorkspaceDrag = (
+    activeDrag: WorkspaceDragState,
+    over: NonNullable<WorkspaceDragState['over']>,
+  ): void => {
+    if (workspaceDropCommitted.current) return;
+    workspaceDropCommitted.current = true;
+    setWorkspaceDrag(undefined);
+    const rows = workspaces.items;
+    const targetIndex = rows.findIndex(
+      (workspace) => workspace.workspaceId === over.workspaceId,
+    );
+    const sourceIndex = rows.findIndex(
+      (workspace) => workspace.workspaceId === activeDrag.workspaceId,
+    );
+    if (targetIndex === -1 || sourceIndex === -1) return;
+    const beforeWorkspaceId = over.half === 'before'
+      ? over.workspaceId
+      : rows[targetIndex + 1]?.workspaceId;
+    const anchorIndex = beforeWorkspaceId === undefined
+      ? rows.length
+      : rows.findIndex((workspace) => workspace.workspaceId === beforeWorkspaceId);
+    if (
+      beforeWorkspaceId === activeDrag.workspaceId ||
+      anchorIndex === sourceIndex ||
+      anchorIndex === sourceIndex + 1
+    ) {
+      return;
+    }
+    if (insertWorkspaceBefore === undefined) {
+      setActionError({
+        code: 'WORKSPACE_ORDER_UNAVAILABLE',
+        message: 'Workspace ordering is unavailable; retry after reconnecting.',
+        retryable: true,
+      });
+      return;
+    }
+    setActionError(undefined);
+    void insertWorkspaceBefore(activeDrag.workspaceId, beforeWorkspaceId).catch((error) => {
+      setActionError(toWorktreeViewError(error));
+    });
   };
 
   const openSessionRename = (sessionId: string, currentTitle: string): void => {
@@ -718,34 +1018,63 @@ export function WorktreeSurface({
                       className={styles.workspaceGroup}
                       data-workspace-id={workspace.workspaceId}
                     >
-                      <div className={styles.workspaceRow}>
-                        <button
-                          type="button"
-                          className={styles.disclosureButton}
-                          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${workspace.title}`}
-                          aria-expanded={expanded}
-                          onClick={() => {
-                            toggleWorkspace(workspace.workspaceId);
-                          }}
-                        >
-                          {expanded ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
-                        </button>
-                        <span className={styles.workspaceIcon} aria-hidden="true">
-                          {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
-                        </span>
-                        <span className={styles.workspaceTitle}>{workspace.title}</span>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          data-add-worktree
-                          aria-label={`Add Worktree to ${workspace.title}`}
-                          onClick={() => {
-                            openWorktreeCreator(workspace);
-                          }}
-                        >
-                          <IconPlusOutline16 />
-                        </button>
-                      </div>
+                      <WorktreeWorkspaceRow
+                        workspace={workspace}
+                        expanded={expanded}
+                        actionPending={actionPending}
+                        menuOpen={openWorkspaceMenuId === workspace.workspaceId}
+                        drag={{
+                          active: workspaceDrag !== undefined,
+                          marker:
+                            workspaceDrag?.over?.workspaceId === workspace.workspaceId
+                              ? workspaceDrag.over.half
+                              : null,
+                          start: () => {
+                            workspaceDropCommitted.current = false;
+                            setWorkspaceDrag({ workspaceId: workspace.workspaceId, over: null });
+                          },
+                          hover: (half) => {
+                            setWorkspaceDrag((current) =>
+                              current === undefined
+                                ? current
+                                : {
+                                    ...current,
+                                    over: { workspaceId: workspace.workspaceId, half },
+                                  },
+                            );
+                          },
+                          drop: (half) => {
+                            if (workspaceDrag === undefined) return;
+                            commitWorkspaceDrag(workspaceDrag, {
+                              workspaceId: workspace.workspaceId,
+                              half,
+                            });
+                          },
+                          end: () => {
+                            if (workspaceDrag?.over !== null && workspaceDrag?.over !== undefined) {
+                              commitWorkspaceDrag(workspaceDrag, workspaceDrag.over);
+                            } else {
+                              setWorkspaceDrag(undefined);
+                            }
+                            workspaceDropCommitted.current = false;
+                          },
+                        }}
+                        onToggle={() => {
+                          toggleWorkspace(workspace.workspaceId);
+                        }}
+                        onCreateWorktree={() => {
+                          openWorktreeCreator(workspace);
+                        }}
+                        onRename={() => {
+                          openWorkspaceRename(workspace);
+                        }}
+                        onDelete={() => {
+                          openWorkspaceDelete(workspace);
+                        }}
+                        onMenuOpenChange={(open) => {
+                          setOpenWorkspaceMenuId(open ? workspace.workspaceId : undefined);
+                        }}
+                      />
 
                       {expanded && (
                         <div className={styles.treeChildren}>
@@ -1011,6 +1340,94 @@ export function WorktreeSurface({
           </p>
         )}
       </Modal>
+
+      {workspaceRenameTarget !== undefined && (
+        <Modal
+          open={workspaceRenameTarget !== undefined}
+          onClose={closeWorkspaceRename}
+          closeLabel="Close Rename Workspace dialog"
+          title="Rename Workspace"
+          footer={(
+            <>
+              <Button variant="outline" disabled={workspaceRenamePending} onClick={closeWorkspaceRename}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={workspaceRenameBlocked}
+                onClick={() => {
+                  void confirmWorkspaceRename();
+                }}
+              >
+                Rename
+              </Button>
+            </>
+          )}
+        >
+          <Input
+            className={styles.renameInput}
+            value={workspaceRenameDraft}
+            aria-label="Workspace name"
+            autoFocus
+            disabled={workspaceRenamePending}
+            onFocus={(event) => {
+              event.currentTarget.select();
+            }}
+            onChange={(event) => {
+              setWorkspaceRenameDraft(event.currentTarget.value);
+              setWorkspaceRenameError(undefined);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void confirmWorkspaceRename();
+              }
+            }}
+          />
+          {workspaceRenameDuplicate && (
+            <p className={styles.renameError} role="alert">
+              A Workspace with this name already exists.
+            </p>
+          )}
+          {workspaceRenameError !== undefined && (
+            <p className={styles.renameError} role="alert">
+              {workspaceRenameError}
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {workspaceDeleteTarget !== undefined && (
+        <Modal
+          open={workspaceDeleteTarget !== undefined}
+          onClose={closeWorkspaceDelete}
+          closeLabel="Close Delete Workspace dialog"
+          title="Delete Workspace"
+          description={`Delete ${workspaceDeleteTarget.title}? This removes only the DSH Workspace registration. The directory, Sessions, and Git Worktrees will be retained.`}
+          footer={(
+            <>
+              <Button variant="outline" disabled={workspaceDeletePending} onClick={closeWorkspaceDelete}>
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                disabled={workspaceDeletePending}
+                onClick={() => {
+                  void confirmWorkspaceDelete();
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          )}
+        >
+          {workspaceDeleteError !== undefined && (
+            <p className={styles.renameError} role="alert">
+              {workspaceDeleteError}
+            </p>
+          )}
+        </Modal>
+      )}
 
       {worktreeModalWorkspaceId !== undefined && modalWorkspace !== undefined && (
         <Modal
