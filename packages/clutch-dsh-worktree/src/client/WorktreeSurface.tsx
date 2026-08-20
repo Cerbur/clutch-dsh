@@ -305,7 +305,7 @@ function WorktreeWorkspaceRow({
         {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
       </span>
       <span className={styles.workspaceTitle}>{workspace.title}</span>
-      <span className={styles.workspaceActions}>
+      <span className={`${styles.treeActionSlot} ${styles.workspaceActions}`}>
         <span className={styles.menuAction}>
           <Menu
             open={menuOpen}
@@ -1067,29 +1067,6 @@ export function WorktreeSurface({
           </button>
         </header>
 
-        <div className={styles.modeSwitch} role="tablist" aria-label="Navigation mode">
-          <button
-            type="button"
-            className={styles.modeButton}
-            role="tab"
-            aria-selected={false}
-            onClick={() => {
-              actions.setViewMode('workspace-session');
-            }}
-          >
-            Workspace
-          </button>
-          <button
-            type="button"
-            className={styles.modeButton}
-            data-active="true"
-            role="tab"
-            aria-selected
-          >
-            Worktree
-          </button>
-        </div>
-
         <div className={styles.searchRow}>
           <span className={styles.searchIcon} aria-hidden="true">
             <IconSearchOutline16 />
@@ -1115,7 +1092,7 @@ export function WorktreeSurface({
           </button>
         </div>
 
-        <div className={styles.content}>
+        <div className={styles.content} tabIndex={0}>
           {actionError !== undefined && (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
@@ -1273,19 +1250,21 @@ export function WorktreeSurface({
                         <div className={styles.treeChildren}>
                           <div className={styles.groupHeader}>
                             <div className={styles.groupLabel}>Main</div>
-                            {createMainSession !== undefined && (
-                              <button
-                                type="button"
-                                className={styles.iconButton}
-                                data-add-main-session
-                                aria-label={`Add Session to ${workspace.title}`}
-                                onClick={() => {
-                                  createMainSession(workspace.workspaceId);
-                                }}
-                              >
-                                <IconPlusOutline16 />
-                              </button>
-                            )}
+                            <span className={styles.treeActionSlot}>
+                              {createMainSession !== undefined && (
+                                <button
+                                  type="button"
+                                  className={styles.iconButton}
+                                  data-add-main-session
+                                  aria-label={`Add Session to ${workspace.title}`}
+                                  onClick={() => {
+                                    createMainSession(workspace.workspaceId);
+                                  }}
+                                >
+                                  <IconPlusOutline16 />
+                                </button>
+                              )}
+                            </span>
                           </div>
                           <WorktreeSessionGroup
                             groupKey={mainGroupKey}
@@ -1411,8 +1390,9 @@ export function WorktreeSurface({
                                     <StateDot state={state} />
                                   </span>
                                   <span className={styles.worktreeLabel}>{record.branch}</span>
-                                  {record.status === 'active' && (
-                                    <span className={styles.worktreeActions}>
+                                  <span className={`${styles.treeActionSlot} ${styles.worktreeActions}`}>
+                                    {record.status === 'active' && (
+                                      <span className={styles.menuAction}>
                                       <Menu
                                         open={openWorktreeMenuId === record.worktreeId}
                                         onClose={() => {
@@ -1454,6 +1434,9 @@ export function WorktreeSurface({
                                           </button>
                                         )}
                                       />
+                                      </span>
+                                    )}
+                                    {record.status === 'active' && (
                                       <button
                                         type="button"
                                         className={styles.iconButton}
@@ -1469,8 +1452,8 @@ export function WorktreeSurface({
                                       >
                                         <IconPlusOutline16 />
                                       </button>
-                                    </span>
-                                  )}
+                                    )}
+                                  </span>
                                 </div>
                                 {worktreeExpanded && (
                                   <WorktreeSessionGroup

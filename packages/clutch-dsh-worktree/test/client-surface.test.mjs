@@ -376,6 +376,27 @@ test('renders transient Worktree health with the public StateDot primitive', asy
   assert.doesNotMatch(source, /worktreeStatus\(record\)/);
 });
 
+test('keeps the final surface bounded, scrollable, and action-aligned', async () => {
+  const surfaceSource = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styleSource = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.doesNotMatch(surfaceSource, /role="tablist"|role='tablist'/);
+  assert.doesNotMatch(surfaceSource, /Workspace<\/button>[\s\S]*Worktree<\/button>/);
+  assert.match(surfaceSource, /data-worktree-surface/);
+  assert.match(styleSource, /overflow: auto/);
+  assert.match(styleSource, /min-height: 0/);
+  assert.match(styleSource, /treeActionSlot|workspaceActions|worktreeActions/);
+  assert.match(surfaceSource, /StateDot/);
+  assert.doesNotMatch(surfaceSource, /\bactive\b.*\bstatus\b/);
+  assert.doesNotMatch(surfaceSource, /\bbound\b/);
+});
+
 test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

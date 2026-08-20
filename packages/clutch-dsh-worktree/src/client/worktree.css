@@ -59,6 +59,7 @@
 .wideContent {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
 }
@@ -80,8 +81,7 @@
 }
 
 .railButton,
-.closeButton,
-.modeButton {
+.closeButton {
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -99,9 +99,7 @@
 }
 
 .railButton:hover,
-.closeButton:hover,
-.modeButton:hover,
-.modeButton[data-active='true'] {
+.closeButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -134,20 +132,6 @@
   line-height: 1;
 }
 
-.modeSwitch {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px 4px;
-}
-
-.modeButton {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-}
-
 .modeButton[data-active='true'] {
   color: var(--dsw-alias-label-primary);
 }
@@ -176,6 +160,11 @@
   flex: 1;
   overflow: auto;
   padding: 0 10px 12px;
+}
+
+.content:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-l3);
+  outline-offset: -2px;
 }
 
 .error {
@@ -373,8 +362,11 @@
 }
 
 .workspaceList {
+  min-width: 0;
+  min-height: 0;
   display: grid;
   gap: 4px;
+  overflow-x: hidden;
 }
 
 .workspaceGroup {
@@ -450,6 +442,7 @@
   font-size: 13px;
 }
 
+.treeActionSlot,
 .workspaceActions {
   display: inline-flex;
   flex: none;
@@ -467,7 +460,9 @@
 }
 
 .workspaceRow:hover .menuAction,
-.workspaceRow[data-menu-open='true'] .menuAction {
+.workspaceRow[data-menu-open='true'] .menuAction,
+.worktreeRow:hover .menuAction,
+.worktreeRow[data-menu-open='true'] .menuAction {
   visibility: visible;
 }
 
@@ -525,10 +520,6 @@
 
 .worktreeRow .disclosureButton {
   width: 22px;
-}
-
-.worktreeRow .status {
-  margin-left: 4px;
 }
 
 .treeSessionRow {
@@ -589,12 +580,15 @@
   background: transparent;
 }
 
-.rowActions,
-.worktreeActions {
+.rowActions {
   display: none;
   flex: none;
   align-items: center;
   gap: 4px;
+}
+
+.worktreeActions {
+  display: inline-flex;
 }
 
 .sessionOverflowButton {
