@@ -59,6 +59,16 @@ pnpm dsh web
 5. 点击 Worktree 旁边的 `+`，UI 会创建 cwd 指向该 Worktree 的新 Session、完成 binding 并打开该 Session；
 6. 删除 Worktree，并查看保留的 detached binding。
 
+Worktree mode is opened only from the Sidebar footer action. The surface is a
+dynamic, scrollable overlay bounded by the native New Session control and the
+native footer, so the native header and footer remain interactive. It does not
+add a separate Workspace/Worktree mode Tab. Workspace rename/delete/reorder
+and Session reorder use the native DSH Client APIs; Session reorder stays
+within the current Main or Worktree group, and groups over five rows expose an
+Expand more/Collapse control. Workspace deletion removes only the DSH
+registration: its directory, Sessions, Git Worktrees, and plugin sidecar are
+retained.
+
 ### 更新本地 plugin 后重新测试
 
 profile 已经链接本地 checkout 后，每次修改 plugin 只需要重新构建 plugin，重启
@@ -224,8 +234,12 @@ Git adapter 和 sidecar repository 都通过注入边界组合；Host read adapt
   Worktree 新增 Session 的入口，层级展示为 Workspace → Worktree → Session。
 - `viewMode` 只保存在浏览器本地，刷新后可恢复，不写入 DSH 或 sidecar。
 - overlay 通过 `data-shell-overlay` 的左侧 Sidebar 列和 `ResizeObserver`
-  派生实际宽度，跟随 280px 默认宽度、用户 resize、300ms transition 及 56px
-  collapsed rail；Conversation 列不被覆盖。
+  派生实际宽度，并从 native New Session 顶部动态计算到 Sidebar footer
+  顶部的实际覆盖区间；缺少任一 anchor 时保持零覆盖，跟随 280px 默认宽度、
+  用户 resize、300ms transition 及 56px collapsed rail；Conversation 列不被覆盖。
+- Worktree health 只是在运行时从 Git 投影出的 `ready`/`repair` 状态；active
+  路径存在时显示 ready，路径缺失或 Git 检查失败时显示 repair，removed 历史显示
+  warning。该字段不会写入 sidecar。
 - rc.8 Client fixture 验证 Connection `/api` 调用、双层错误、dispose abort、
   `ctx.remote.worktreeManager` 缺失时的 manager 注入，以及失败可重试 UI。
 - Client loading/disposal 使用真实 Cordis `Context`、`SlotRegistry` 和

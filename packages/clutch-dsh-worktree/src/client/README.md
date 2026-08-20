@@ -35,3 +35,29 @@ depend on its namespace.
 The package metadata includes `@deepseek-ai/dsh-client-connection` in the rc.8
 Client module graph. All Worktree calls reuse the existing `/api` transport and
 the Host-side `WorktreeRemoteService`/Typert Gateway composition.
+
+## Worktree Surface interaction contract
+
+The Worktree surface is an additive overlay. Its vertical coverage is derived
+at runtime from the native New Session button's top edge to the native Sidebar
+footer's top edge. Until both anchors exist, the surface has zero coverage and
+is hidden; `ResizeObserver` and `MutationObserver` recalculate the bounds when
+the native sidebar changes, including resize and collapse transitions. The
+computed interval is independently scrollable and does not cover the native
+header or footer.
+
+The footer action is the only Worktree entry point. The surface does not add a
+Workspace/Worktree mode Tab and does not replace the native Workspace browser.
+Workspace rows use the native Client Workspace APIs for rename, delete, and
+drag ordering. Session menus retain Rename/Fork/Archive actions, and Session
+drag ordering is restricted to the current visual Main or Worktree group. Each
+group shows five rows initially and provides Expand more/Collapse when needed.
+The trailing action column is reserved across Workspace, Main, and active
+Worktree rows so `+` controls remain aligned when menus appear.
+
+Workspace deletion calls only the native DSH Workspace registration delete.
+The confirmation explicitly states that the directory, Sessions, Git
+Worktrees, and plugin sidecar are retained. Worktree health is a runtime
+projection: active paths present in Git show a ready state, removed history is
+shown as warning, and a missing active path or failed Git health check shows a
+repair state. `health` is never written to the sidecar.
