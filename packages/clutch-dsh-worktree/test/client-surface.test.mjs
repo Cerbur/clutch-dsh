@@ -313,3 +313,30 @@ test('uses the DSH Modal primitive for Worktree create and remove dialogs', asyn
   assert.match(source, /open=\{worktreeRemoval !== undefined/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });
+
+test('renders the Worktree footer action like the native Settings row', async () => {
+  const actionSource = await readFile(
+    new URL('../src/client/WorktreeModeAction.tsx', import.meta.url),
+    'utf8',
+  );
+  const styleSource = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(actionSource, /IconBranchOutline16/);
+  assert.match(actionSource, /<IconBranchOutline16 size=\{wide \? 16 : 18\} \/>/);
+  assert.match(
+    actionSource,
+    /wide && <span className=\{styles\.actionLabel\}>Worktree<\/span>/,
+  );
+  assert.doesNotMatch(actionSource, /wide \? 'Worktree' : 'WT'/);
+  assert.match(
+    styleSource,
+    /\.action \{[\s\S]*justify-content: flex-start;[\s\S]*height: 42px;/,
+  );
+  assert.match(
+    styleSource,
+    /\.action\[data-collapsed='true'\] \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*border-radius: 50%;/,
+  );
+});

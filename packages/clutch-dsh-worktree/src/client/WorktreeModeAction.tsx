@@ -1,5 +1,6 @@
 import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import styles from './worktree.css';
 
@@ -37,7 +38,8 @@ export function WorktreeModeAction({
         actions.setViewMode(active ? 'workspace-session' : 'worktree');
       }}
     >
-      <span aria-hidden="true">{wide ? 'Worktree' : 'WT'}</span>
+      <IconBranchOutline16 size={wide ? 16 : 18} />
+      {wide && <span className={styles.actionLabel}>Worktree</span>}
     </button>
   );
 }
