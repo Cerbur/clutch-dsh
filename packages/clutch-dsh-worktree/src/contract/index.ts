@@ -80,3 +80,49 @@ export interface WorktreeManager {
     sessionId: SessionId;
   }): Promise<SessionBinding>;
 }
+
+export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'listWorktrees',
+  'listBranches',
+  'createWorktree',
+  'removeWorktree',
+  'listBindings',
+  'bindSession',
+] as const);
+
+export type WorktreeRemoteMethod = (typeof WORKTREE_REMOTE_METHODS)[number];
+
+export type WorktreeRemoteResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | { readonly ok: false; readonly error: WorktreeError };
+
+/** Browser-safe Host projection. It contains domain values only, never Provider objects. */
+export interface WorktreeRemoteManager {
+  listWorktrees(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+
+  listBranches(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
+
+  createWorktree(input: {
+    workspaceId: WorkspaceId;
+    branch: string;
+  }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
+
+  removeWorktree(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+  }): Promise<WorktreeRemoteResult<null>>;
+
+  listBindings(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly SessionBinding[]>>;
+
+  bindSession(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    sessionId: SessionId;
+  }): Promise<WorktreeRemoteResult<SessionBinding>>;
+}

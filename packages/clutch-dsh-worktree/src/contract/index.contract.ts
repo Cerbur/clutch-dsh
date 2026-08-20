@@ -1,6 +1,20 @@
-import type { BranchRecord, SessionBinding, WorktreeManager, WorktreeRecord } from './index.js';
+import type {
+  BranchRecord,
+  SessionBinding,
+  WorktreeManager,
+  WorktreeRecord,
+  WorktreeRemoteManager,
+} from './index.js';
 
 const expectedManagerKeys = [
+  'listWorktrees',
+  'listBranches',
+  'createWorktree',
+  'removeWorktree',
+  'listBindings',
+  'bindSession',
+] as const;
+const expectedRemoteKeys = [
   'listWorktrees',
   'listBranches',
   'createWorktree',
@@ -17,8 +31,12 @@ type Expect<Value extends true> = Value;
 type ManagerKeysMatchSpec = Expect<
   Equal<keyof WorktreeManager, (typeof expectedManagerKeys)[number]>
 >;
+type RemoteKeysMatchSpec = Expect<
+  Equal<keyof WorktreeRemoteManager, (typeof expectedRemoteKeys)[number]>
+>;
 
 const managerKeysMatchSpec: ManagerKeysMatchSpec = true;
+const remoteKeysMatchSpec: RemoteKeysMatchSpec = true;
 
 const worktree: WorktreeRecord = {
   worktreeId: 'wt_example',
@@ -40,7 +58,9 @@ const binding: SessionBinding = {
 };
 
 void managerKeysMatchSpec;
+void remoteKeysMatchSpec;
 void expectedManagerKeys;
+void expectedRemoteKeys;
 void worktree;
 void branch;
 void binding;

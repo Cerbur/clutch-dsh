@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@deepseek-ai/dsh-typert-protocol": [
+        "packages/clutch-dsh-worktree/scripts/typert-protocol-meta.d.ts"
+      ]
+    }
+  },
+  "files": [],
+  "references": [{ "path": "./tsconfig.json" }]
+}

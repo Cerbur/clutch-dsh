@@ -1,1 +1,5 @@
-[]
+- insert:
+    - id: clutch-dsh-worktree-host
+      name: clutch-dsh-worktree
+      config:
+        dshHome: !!js dshHomePath()

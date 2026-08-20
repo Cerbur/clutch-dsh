@@ -1,4 +1,8 @@
-export { WORKTREE_ERROR_CODES, createWorktreeError } from './contract/index.js';
+export {
+  WORKTREE_ERROR_CODES,
+  WORKTREE_REMOTE_METHODS,
+  createWorktreeError,
+} from './contract/index.js';
 export type {
   BranchRecord,
   BindingStatus,
@@ -9,6 +13,9 @@ export type {
   WorktreeErrorCode,
   WorktreeErrorDetails,
   WorktreeManager,
+  WorktreeRemoteManager,
+  WorktreeRemoteMethod,
+  WorktreeRemoteResult,
   WorktreeRecord,
   WorktreeStatus,
   WorktreeId,
@@ -42,3 +49,10 @@ export type {
   WorktreeManagerOptions,
   WorktreeManagerService,
 } from './manage/index.js';
+export {
+  DshHostReadAdapter,
+  WorktreeRemoteService,
+  createWorktreeRemoteProjection,
+} from './host/index.js';
+export type { DshHostReadContext, WorktreeHostConfig } from './host/index.js';
+export { WorktreeRemoteService as default } from './host/index.js';

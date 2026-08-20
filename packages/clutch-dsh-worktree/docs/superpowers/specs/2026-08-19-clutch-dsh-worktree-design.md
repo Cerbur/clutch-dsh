@@ -48,7 +48,8 @@ packages/
     │   ├── contract/       # stable types and interfaces
     │   ├── provider/       # Git, sidecar, DSH read adapters
     │   ├── manage/         # Worktree/Session use-case orchestration
-    │   └── client/         # Web UI Consumer entrypoint
+    │   ├── host/           # DSH Host composition and Remote projection
+    │   └── client/         # browser-safe facade and Web UI entrypoint
     └── test/
 ```
 
@@ -79,24 +80,51 @@ activated as one DSH bundle through this manifest:
 
 The Node/Host entry and the browser entry may produce separate artifacts from
 the same package. This is a build-plane distinction, not a package split. The
-bundle patch remains empty until the real Host Remote and Web UI composition
-is implemented in the later phases.
+Phase 3 patch inserts `clutch-dsh-worktree-host`, passes the resolved
+`dshHomePath()`, and loads `WorktreeRemoteService` from the package root.
 
-For the current target release `dsh-v0.1.0-rc.7`, Host Manager methods are
-exposed to the browser through a generated `./remote` contribution:
+For target release `dsh-v0.1.0-rc.7`, the implemented Host path is:
 
-- the Provider publishes the generated Remote runtime artifact and Client-safe
-  declarations;
-- a matching DSH release/profile composition explicitly mounts that contribution
-  into `@deepseek-ai/dsh-api-remotes/client`;
-- the Worktree UI consumes `ctx.remote` and does not create a second Remote
-  assembly;
-- `dsh.client` continues to describe browser Client bundle loading only; it
-  does not select or register Remote contributions.
+```text
+bundle patch
+  -> Cordis Loader loads WorktreeRemoteService (TypertRemoteService + @Remote)
+  -> generated ./typert registered by dsh-typert-loader
+  -> existing dsh-api-gateway Host dispatcher
+```
 
-This is a profile/package composition requirement, not a DSH source change. If
-the matching composition is absent, the UI bundle may load but Worktree Remote
-calls are unavailable.
+The Phase 3 composition fixture executes this path with the published package
+exports rather than manually importing or registering the service descriptor.
+
+The same build publishes the generated `./remote` runtime descriptor and
+Client-safe declaration merge. The Remote projection contains only the six
+Manager operations and plain contract values. Stable Worktree failures use an
+inner domain result so their code/details survive the carrier boundary;
+unexpected Host failures remain Gateway failures. `resolveRuntimeCwd` is not a
+Remote method because rc.7's persisted-`cwd` execution model has no browser
+call boundary that needs it.
+
+The rc.7 browser assembly cannot yet select this contribution without changing
+the application assembly build. Official evidence is explicit:
+
+- `packages/api/remotes/src/client/index.ts` imports and mounts a fixed list of
+  five generated contributions as runtime values;
+- its README states that additional capabilities require an explicit
+  `/remote` value import and mount in that assembly;
+- profile/bundle patches compose Loader rows only; they cannot add a runtime
+  import to the already-built `@deepseek-ai/dsh-api-remotes/client` bundle;
+- `dsh.client` describes browser Client bundle loading and injection, not
+  Remote contribution selection.
+
+Therefore the package does not create a second Remote assembly, does not call
+`$mount()` from its Client facade, and does not claim browser RPC availability
+on rc.7. Phase 4 is gated on a DSH release with an explicit contribution seat,
+or on the target application building its one canonical `api-remotes` assembly
+with `clutch-dsh-worktree/remote` included. No DSH source was modified.
+
+The rc.7 generator also recognizes protocol meta symbols only when the protocol
+is a registered workspace project or an ambient build declaration. The package
+uses a build-only ambient metadata bridge matching the official generator
+fixture; emitted/runtime code still imports the published rc.7 protocol.
 
 The selected model is the persisted-`cwd` model:
 
@@ -174,7 +202,22 @@ The Manage module is the Host-facing application layer. It owns:
 It depends on the Service Definition and Provider adapters. It does not expose
 Git commands or sidecar records as a UI concern.
 
-### 4.4 Internal Consumer: `src/client/`
+### 4.4 Host composition: `src/host/`
+
+The Host module is the package composition root. It owns:
+
+- the read-only adapter over `ctx.workspaceRegistry`, `ctx.sessions`, and
+  `ctx.sessionPersistence.list()`;
+- creation of the Manage implementation with the host-resolved DSH Home;
+- `WorktreeRemoteService`, its generated Typert descriptors, and domain-error
+  projection.
+
+The DSH adapter reads Workspace records and Session headers only. It never
+calls Session persistence `inspect`, `load`, or mutation methods, so transcript
+and event content do not cross into the plugin. The Remote module imports
+Manage and contract seams but not Provider internals.
+
+### 4.5 Internal Consumer: `src/client/`
 
 The Web UI Consumer module owns:
 
@@ -184,14 +227,17 @@ The Web UI Consumer module owns:
 - orchestration between DSH Session APIs and the Worktree Manager;
 - opening an existing DSH Conversation through `ctx.sessions.open`.
 
-It does not execute Git, read sidecar files, or write DSH data directly. It
-imports the browser-safe contract and Manage/Remote client facade from the same
-package, never Provider internals.
+It does not execute Git, read sidecar files, or write DSH data directly. Phase
+3 supplies only `createWorktreeManagerFacade()`, which adapts an already-mounted
+DSH Remote namespace and owns neither contribution mounting nor transport. The
+future UI imports the browser-safe contract/facade, never Host, Manage, or
+Provider runtime internals.
 
 The browser cannot call the Host Manager object directly. The UI uses a
 browser-safe Remote/client projection whose methods mirror the Manager
-contract. The projection is mounted by the external `api-remotes` composition;
-the UI does not mount a second Remote assembly or define a second business API.
+contract. The target application's canonical `api-remotes` assembly must mount
+the generated contribution before the facade can be used; the UI does not
+mount a second Remote assembly or define a second business API.
 
 ## 5. Worktree storage and sidecar layout
 
@@ -615,9 +661,14 @@ sidecar is missing, corrupt, or unavailable.
 ### Data and Host
 
 - No DSH source changes are required.
-- The target DSH release/profile composition explicitly mounts the Worktree
-  Remote contribution through `api-remotes`; the plugin does not modify DSH
-  source code.
+- The package bundle mounts `WorktreeRemoteService`; `dsh-typert-loader` loads
+  its generated `./typert`, and the existing Host Gateway can invoke it.
+- The package publishes a strict generated `./remote` contribution containing
+  exactly the six browser-safe Manager methods.
+- For rc.7, the profile cannot add that contribution to the build-time-fixed
+  `api-remotes/client` roster. This is an explicit Phase 4 gate, not a simulated
+  successful composition.
+- No second RPC, custom transport, or Client-side `$mount()` path is introduced.
 - DSH Workspace and Session data are never copied into the sidecar.
 - Sidecar files are stored below the resolved DSH Home, not in a Workspace
   root, Worktree, `.git`, or DSH raw Session storage.

@@ -78,15 +78,19 @@ packages/clutch-dsh-worktree/
 │   ├── contract/         # stable Service Definition vocabulary
 │   ├── provider/         # Git, sidecar and DSH read adapters
 │   ├── manage/           # Worktree/Session use-case orchestration
-│   └── client/           # future Web UI Consumer entrypoint
+│   ├── host/             # DSH Host composition and Remote projection
+│   └── client/           # browser-safe facade; future Web UI entrypoint
 └── test/
 ```
 
 `src/contract/` 是内部稳定 seam。`src/provider/` 只负责底层 adapter 和
 sidecar 持久化；`src/manage/` 负责上层 Worktree/Session 用例编排；
-未来的 `src/client/` 通过 browser-safe facade 使用 contract 和 Manage
-能力。依赖方向是 `contract ← provider`、`contract ← manage ← client`，
-且 `manage → provider`；Provider 不得反向导入 Manage。
+`src/host/` 是 composition root，通过 Manage 组合真实 DSH read adapter，并
+以 contract-only projection 暴露 Remote；Remote 文件不得导入 Provider
+internals。`src/client/` 只使用 browser-safe contract/facade。依赖方向是
+`contract ← provider`、`contract ← manage ← host`、`contract ← client`，
+且 `manage → provider`；Provider 不得反向导入 Manage，Client 不得导入
+Host、Manage 或 Provider runtime。
 `manager`、`local`、`ui` 只描述角色或实现位置，不再对应 workspace package
 名称。
 

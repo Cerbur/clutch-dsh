@@ -53,12 +53,15 @@ Definition、Provider、Consumer 的数量：
 ```text
 src/contract/  ←  src/provider/
       ↑              ↑
-      └──────────── src/manage/  ←  src/client/ (future browser Consumer)
+      └──────────── src/manage/  ←  src/host/
+      ↑
+      └──────────── src/client/  (browser-safe facade / Consumer)
 ```
 
 Service Definition 只拥有公共类型、服务 interface 和稳定错误码。Provider
-实现它并拥有 Git、sidecar 和 Host adapter。Consumer 只通过 Service
-Definition 与 Host/Client facade 交互，不导入 Provider internals。
+实现它并拥有 Git、sidecar 和底层 adapter；Host 是 composition root。
+Consumer 只通过 Service Definition 与 browser-safe facade 交互，不导入
+Provider 或 Host internals。
 
 只有当这些角色需要独立安装、独立版本、可替换 Provider 或外部 Consumer
 时，才把它们提升成不同 package；此时 Provider/Consumer 才需要使用精确的
@@ -87,12 +90,22 @@ manifest 位于 `package.json`：
 ```
 
 `cordis.patch.yml` 本身是 DSH patch layer 的 YAML 数组；它不是 bundle
-metadata。当前 `clutch-dsh-worktree` 在 Host Remote 和 Web UI composition
-接入前使用空数组：
+metadata。`clutch-dsh-worktree` 的 Phase 3 patch 已装载 Host entry，并由 DSH
+注入解析后的 Home：
 
 ```yaml
-[]
+- insert:
+    - id: clutch-dsh-worktree-host
+      name: clutch-dsh-worktree
+      config:
+        dshHome: !!js dshHomePath()
 ```
+
+Host package 发布的 `./typert` 由 DSH `typert-loader` 注册。`./remote` 是供
+Client Remote assembly 显式选择的生成 contribution；`dsh.bundle` 或
+`dsh.client` metadata 本身都不会动态改写已构建的 Remote assembly roster。
+发布 `./typert` 的 package 也必须导出 `./package.json`，因为 loader 先从
+composition anchor 解析 manifest，再读取其中的 `./typert` target。
 
 ## 4. Validation
 

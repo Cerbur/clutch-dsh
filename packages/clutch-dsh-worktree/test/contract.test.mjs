@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { WORKTREE_ERROR_CODES, createWorktreeError } from '../dist/index.js';
+import { WORKTREE_ERROR_CODES, createWorktreeError } from '../lib/index.js';
 
 test('exports the approved stable error codes', () => {
   assert.deepEqual(WORKTREE_ERROR_CODES, [

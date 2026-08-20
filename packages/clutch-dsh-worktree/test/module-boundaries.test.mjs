@@ -5,12 +5,13 @@ import test from 'node:test';
 
 const sourceRoot = path.resolve('src');
 
-test('keeps contract, provider, manage, and client as separate internal modules', async () => {
-  const [contract, provider, manage, client] = await Promise.all([
+test('keeps contract, provider, manage, host, and client as separate internal modules', async () => {
+  const [contract, provider, manage, hostRemote, client] = await Promise.all([
     readFile(path.join(sourceRoot, 'contract', 'index.ts'), 'utf8'),
     readFile(path.join(sourceRoot, 'provider', 'index.ts'), 'utf8'),
-      readFile(path.join(sourceRoot, 'manage', 'manager.ts'), 'utf8'),
-    readFile(path.join(sourceRoot, 'client', 'README.md'), 'utf8'),
+    readFile(path.join(sourceRoot, 'manage', 'manager.ts'), 'utf8'),
+    readFile(path.join(sourceRoot, 'host', 'remote.ts'), 'utf8'),
+    readFile(path.join(sourceRoot, 'client', 'index.ts'), 'utf8'),
   ]);
 
   assert.match(contract, /interface WorktreeManager/);
@@ -18,5 +19,7 @@ test('keeps contract, provider, manage, and client as separate internal modules'
   assert.match(manage, /WorktreeManagerImpl/);
   assert.match(manage, /\.\.\/provider/);
   assert.doesNotMatch(provider, /\.\.\/manage/);
-  assert.match(client, /browser Consumer/);
+  assert.doesNotMatch(hostRemote, /\.\.\/provider/);
+  assert.doesNotMatch(client, /\.\.\/provider|node:/);
+  assert.doesNotMatch(client, /\$mount/);
 });

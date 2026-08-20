@@ -1,0 +1,122 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { createWorktreeRemoteProjection } from '../lib/host/remote.js';
+
+function createManager(overrides = {}) {
+  return {
+    async listWorktrees() {
+      return [];
+    },
+    async listBranches() {
+      return [];
+    },
+    async createWorktree(input) {
+      return {
+        worktreeId: 'wt_example',
+        workspaceId: input.workspaceId,
+        absolutePath: '/tmp/dsh/worktree/wt_example',
+        branch: input.branch,
+        status: 'active',
+      };
+    },
+    async removeWorktree() {},
+    async listBindings() {
+      return [];
+    },
+    async bindSession(input) {
+      return { ...input, status: 'active' };
+    },
+    async resolveRuntimeCwd() {
+      return '/tmp/dsh/worktree/wt_example';
+    },
+    ...overrides,
+  };
+}
+
+test('projects every approved Manager operation as a serializable result', async () => {
+  const remote = createWorktreeRemoteProjection(createManager());
+
+  assert.deepEqual(await remote.listWorktrees({ workspaceId: 'ws_example' }), {
+    ok: true,
+    value: [],
+  });
+  assert.deepEqual(await remote.listBranches({ workspaceId: 'ws_example' }), {
+    ok: true,
+    value: [],
+  });
+  assert.deepEqual(
+    await remote.createWorktree({ workspaceId: 'ws_example', branch: 'feature/example' }),
+    {
+      ok: true,
+      value: {
+        worktreeId: 'wt_example',
+        workspaceId: 'ws_example',
+        absolutePath: '/tmp/dsh/worktree/wt_example',
+        branch: 'feature/example',
+        status: 'active',
+      },
+    },
+  );
+  assert.deepEqual(
+    await remote.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),
+    { ok: true, value: null },
+  );
+  assert.deepEqual(await remote.listBindings({ workspaceId: 'ws_example' }), {
+    ok: true,
+    value: [],
+  });
+  assert.deepEqual(
+    await remote.bindSession({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+      sessionId: 'session_example',
+    }),
+    {
+      ok: true,
+      value: {
+        workspaceId: 'ws_example',
+        worktreeId: 'wt_example',
+        sessionId: 'session_example',
+        status: 'active',
+      },
+    },
+  );
+  assert.equal('resolveRuntimeCwd' in remote, false);
+});
+
+test('serializes stable Worktree failures without importing Provider internals', async () => {
+  const remote = createWorktreeRemoteProjection(
+    createManager({
+      async listWorktrees() {
+        throw {
+          code: 'SIDECAR_UNAVAILABLE',
+          message: 'sidecar unavailable',
+          details: { workspaceId: 'ws_example' },
+        };
+      },
+    }),
+  );
+
+  assert.deepEqual(await remote.listWorktrees({ workspaceId: 'ws_example' }), {
+    ok: false,
+    error: {
+      code: 'SIDECAR_UNAVAILABLE',
+      message: 'sidecar unavailable',
+      details: { workspaceId: 'ws_example' },
+    },
+  });
+});
+
+test('leaves unexpected Host failures for the DSH Gateway to classify', async () => {
+  const failure = new Error('unexpected failure');
+  const remote = createWorktreeRemoteProjection(
+    createManager({
+      async listWorktrees() {
+        throw failure;
+      },
+    }),
+  );
+
+  await assert.rejects(remote.listWorktrees({ workspaceId: 'ws_example' }), failure);
+});

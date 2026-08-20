@@ -13,7 +13,7 @@ import {
   WorktreeProviderError,
   WorkspaceShardedSidecarRepository,
   createWorktreeManager,
-} from '../dist/index.js';
+} from '../lib/index.js';
 
 const execFile = promisify(execFileCallback);
 
