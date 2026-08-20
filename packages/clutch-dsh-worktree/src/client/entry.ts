@@ -113,6 +113,28 @@ export function apply(ctx: ClientContext): void {
               workspaceId as Parameters<typeof ctx.workspaces.startSession>[0],
             );
           },
+          renameSession: async (sessionId: string, title: string) => {
+            const session = ctx.sessions.binding(sessionId as SessionId)?.session;
+            if (session === undefined) throw new Error(`unknown session "${sessionId}"`);
+            const result = await session.rename(title);
+            if (!result.ok) throw new Error(result.error.message);
+          },
+          forkSession: (sessionId: string) => {
+            void ctx.sessions.fork({
+              sessionId: sessionId as SessionId,
+              increaseTitle: true,
+            })
+              .then((childId) => {
+                ctx.sessions.open(childId);
+              })
+              .catch(() => {
+                // Fork failure leaves the current Session and Worktree projection unchanged.
+              });
+          },
+          archiveSession: (sessionId: string) =>
+            ctx.workspaces.archiveSession(
+              sessionId as Parameters<typeof ctx.workspaces.archiveSession>[0],
+            ),
           ensureSessionWorkspace,
           syncSessionWorkspaces,
           openSession: (sessionId: string) => {

@@ -11,6 +11,7 @@ import {
   selectDefaultBaseBranch,
   toWorktreeViewError,
 } from '../lib/client/worktree-view.js';
+import * as worktreeView from '../lib/client/worktree-view.js';
 
 function manager(overrides = {}) {
   return {
@@ -48,6 +49,14 @@ function manager(overrides = {}) {
   };
 }
 
+test('reuses the previous Workspace id array when a snapshot republishes the same ids', () => {
+  const previous = ['ws1', 'ws2'];
+  const next = ['ws1', 'ws2'];
+
+  assert.equal(worktreeView.stableWorkspaceIds(previous, next), previous);
+  assert.notEqual(worktreeView.stableWorkspaceIds(previous, ['ws2', 'ws1']), previous);
+});
+
 test('loads Worktree, branch, and binding projection through the Manager contract', async () => {
   const calls = [];
   const data = await loadWorktreeView(
@@ -74,6 +83,18 @@ test('loads Worktree, branch, and binding projection through the Manager contrac
     ['listBranches', { workspaceId: 'ws1' }],
     ['listBindings', { workspaceId: 'ws1' }],
   ]);
+});
+
+test('filters archived Session ids without changing order or inputs', () => {
+  assert.equal(typeof worktreeView.filterArchivedSessionIds, 'function');
+  const sessionIds = ['main', 'archived', 'bound'];
+  const archivedSessionIds = ['archived', 'unknown'];
+  assert.deepEqual(
+    worktreeView.filterArchivedSessionIds(sessionIds, archivedSessionIds),
+    ['main', 'bound'],
+  );
+  assert.deepEqual(sessionIds, ['main', 'archived', 'bound']);
+  assert.deepEqual(archivedSessionIds, ['archived', 'unknown']);
 });
 
 test('selects the current local branch as the default Worktree base branch', () => {
@@ -255,4 +276,40 @@ test('renders a Main Session action alongside the Main group label', async () =>
 
   assert.match(source, /createMainSession/);
   assert.match(source, /data-add-main-session/);
+});
+
+test('uses native DSH menus for Session and Worktree row actions', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /from ['"]@deepseek-ai\/dsh-client-ui-primitives['"]/);
+  assert.match(source, /\bMenu\b/);
+  assert.match(source, /\bModal\b/);
+  assert.match(source, /\bButton\b/);
+  assert.match(source, /\bInput\b/);
+  for (const label of ['Rename', 'Fork session', 'Archive session']) {
+    assert.match(source, new RegExp(label));
+  }
+  assert.match(source, /Remove Worktree/);
+  assert.match(source, /portal/);
+  assert.match(source, /closeOnPointerLeave/);
+  assert.match(source, /data-session-menu/);
+  assert.match(source, /data-worktree-menu/);
+  assert.doesNotMatch(
+    source,
+    /className=\{styles\.inlineButton\}[\s\S]*?>\s*Remove\s*</,
+  );
+});
+
+test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /open=\{worktreeModalWorkspaceId !== undefined/);
+  assert.match(source, /open=\{worktreeRemoval !== undefined/);
+  assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });

@@ -175,8 +175,7 @@
 }
 
 .retryButton,
-.actionButton,
-.inlineButton {
+.actionButton {
   border: 0;
   border-radius: 6px;
   background: var(--dsw-alias-button-elevated-fill);
@@ -199,8 +198,7 @@
 }
 
 .retryButton:disabled,
-.actionButton:disabled,
-.inlineButton:disabled {
+.actionButton:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -304,12 +302,6 @@
   font-size: 11px;
 }
 
-.inlineButton {
-  flex: none;
-  margin-left: 6px;
-  padding: 3px 6px;
-}
-
 .searchRow {
   display: flex;
   align-items: center;
@@ -318,14 +310,14 @@
 }
 
 .searchIcon {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
   color: var(--dsw-alias-label-secondary);
-  font-size: 18px;
-  line-height: 1;
 }
 
-.searchInput,
-.textInput {
+.searchInput {
   min-width: 0;
   box-sizing: border-box;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -343,7 +335,6 @@
 }
 
 .searchInput:focus,
-.textInput:focus,
 .actionSelect:focus {
   border-color: #3b82f6;
 }
@@ -424,7 +415,7 @@
 }
 
 .workspaceIcon {
-  color: #3b82f6;
+  color: var(--dsw-alias-brand-primary);
 }
 
 .workspaceTitle,
@@ -479,10 +470,26 @@
   margin-left: 4px;
 }
 
-.treeSession {
+.treeSessionRow {
   display: flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  box-sizing: border-box;
+  border-radius: 7px;
+}
+
+.treeSessionRow:hover,
+.treeSessionRow[data-menu-open='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeSessionContent {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  width: 0;
   min-width: 0;
   min-height: 31px;
   box-sizing: border-box;
@@ -497,8 +504,34 @@
   text-align: left;
 }
 
-.treeSession:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.treeSessionContent:hover {
+  background: transparent;
+}
+
+.rowActions,
+.worktreeActions {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.treeSessionRow:hover .rowActions,
+.treeSessionRow[data-menu-open='true'] .rowActions,
+.worktreeRow:hover .worktreeActions,
+.worktreeRow[data-menu-open='true'] .worktreeActions {
+  display: inline-flex;
+}
+
+.renameInput {
+  width: 100%;
+}
+
+.renameError {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .treeGuide {
@@ -515,91 +548,9 @@
   font-size: 11px;
 }
 
-.modalBackdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: color-mix(in srgb, #000 35%, transparent);
-}
-
-.modal {
-  display: grid;
-  gap: 12px;
-  width: min(360px, 100%);
-  box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  padding: 16px;
-  background: var(--dsw-specific-sidebar-fill);
-  box-shadow: 0 18px 50px rgb(0 0 0 / 28%);
-}
-
-.modalHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.modalTitle {
-  min-width: 0;
-  flex: 1;
-  margin: 0;
-  font-size: 16px;
-}
-
-.modalDescription {
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
 .modalField {
   display: grid;
   gap: 5px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
-}
-
-.textInput {
-  width: 100%;
-  padding: 8px;
-  font-size: 13px;
-}
-
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.modalPrimaryButton,
-.modalSecondaryButton {
-  border: 0;
-  border-radius: 7px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  padding: 7px 11px;
-}
-
-.modalPrimaryButton {
-  background: #2563eb;
-  color: white;
-}
-
-.modalSecondaryButton {
-  background: var(--dsw-alias-button-elevated-fill);
-  color: var(--dsw-alias-label-primary);
-}
-
-.modalPrimaryButton:disabled,
-.modalSecondaryButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }

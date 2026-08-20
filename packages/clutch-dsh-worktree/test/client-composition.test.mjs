@@ -28,6 +28,7 @@ async function loadRuntimeClientExports() {
   ]);
   return handoffs[0].factory((specifier) => {
     if (specifier === '@deepseek-ai/cordis') return cordis;
+    if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
     throw new Error(`unexpected DSH runtime module request: ${specifier}`);
   });
@@ -42,6 +43,19 @@ test('publishes an official DSH client-module handoff with a browser-safe apply 
   assert.doesNotMatch(clientBundle, /@deepseek-ai\/dsh-api-remotes|\.\/remote/);
   assert.doesNotMatch(clientBundle, /(?:Host|Manage|Provider) runtime/i);
   assert.doesNotMatch(clientBundle, /ctx\.remote\.\$mount|remote\.\$mount/);
+});
+
+test('injects native Session actions into the Worktree surface', async () => {
+  const source = await readFile(
+    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
+    'utf8',
+  );
+  assert.match(source, /renameSession/);
+  assert.match(source, /forkSession/);
+  assert.match(source, /archiveSession/);
+  assert.match(source, /ctx\.sessions\.binding/);
+  assert.match(source, /ctx\.sessions\.fork/);
+  assert.match(source, /ctx\.workspaces\.archiveSession/);
 });
 
 test('loads and disposes the Client entry through the DSH module handoff', async () => {
@@ -96,6 +110,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     if (specifier === '@deepseek-ai/dsh-client-runtime/client') return runtime;
     if (specifier === 'react') return react;
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
+    if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
     throw new Error(`unexpected browser module request: ${specifier}`);
   });

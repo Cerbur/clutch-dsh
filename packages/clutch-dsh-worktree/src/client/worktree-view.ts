@@ -31,6 +31,18 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+/** Reuse the previous ID snapshot when DSH republishes equivalent Workspace items. */
+export function stableWorkspaceIds(
+  previous: readonly string[],
+  next: readonly string[],
+): readonly string[] {
+  if (previous.length !== next.length) return next;
+  for (let index = 0; index < previous.length; index += 1) {
+    if (previous[index] !== next[index]) return next;
+  }
+  return previous;
+}
+
 /** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
 export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
   return branches.find((branch) => branch.isCurrent)?.name ?? branches[0]?.name ?? '';
@@ -67,6 +79,14 @@ export interface WorktreeViewError {
   readonly code: string;
   readonly message: string;
   readonly retryable: boolean;
+}
+
+/** Hide DSH-archived Sessions from the browser-local Worktree projection. */
+export function filterArchivedSessionIds(
+  sessionIds: readonly string[],
+  archivedSessionIds: readonly string[],
+): readonly string[] {
+  return sessionIds.filter((sessionId) => !archivedSessionIds.includes(sessionId));
 }
 
 export type WorktreeViewAction =
