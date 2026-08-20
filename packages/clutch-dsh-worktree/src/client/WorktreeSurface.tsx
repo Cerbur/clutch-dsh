@@ -8,7 +8,9 @@ import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
 import {
   executeWorktreeAction,
+  createDefaultWorktreeName,
   loadWorktreeViews,
+  selectDefaultBaseBranch,
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
@@ -36,6 +38,11 @@ export interface WorktreeSurfaceInjected {
   readonly createSessionForWorktree?: (
     input: CreateSessionForWorktreeInput,
   ) => Promise<string>;
+  readonly createMainSession?: (workspaceId: string) => void;
+  readonly ensureSessionWorkspace?: (workspaceId: string, sessionId: string) => void;
+  readonly syncSessionWorkspaces?: (
+    bindings: readonly { workspaceId: string; sessionId: string }[],
+  ) => void;
   readonly openSession: (sessionId: string) => void;
 }
 
@@ -100,15 +107,6 @@ function worktreeStatus(record: WorktreeRecord): string {
   return record.status === 'active' ? 'active' : 'detached';
 }
 
-function slug(value: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return normalized || 'workspace';
-}
-
 function includesText(value: string, query: string): boolean {
   return value.toLocaleLowerCase().includes(query);
 }
@@ -155,6 +153,9 @@ export function WorktreeSurface({
   manager,
   createWorkspace,
   createSessionForWorktree: createSessionCallback,
+  createMainSession,
+  ensureSessionWorkspace,
+  syncSessionWorkspaces,
   openSession,
 }: WorktreeSurfaceProps) {
   const preferredMode = useStore((state) => state.viewMode);
@@ -206,6 +207,18 @@ export function WorktreeSurface({
     }
   }, [mode, refresh]);
 
+  useEffect(() => {
+    if (readState.status !== 'ready' || syncSessionWorkspaces === undefined) return;
+    syncSessionWorkspaces(
+      readState.views.flatMap((view) =>
+        view.bindings.map((binding) => ({
+          workspaceId: binding.workspaceId,
+          sessionId: binding.sessionId,
+        })),
+      ),
+    );
+  }, [readState.status, readState.views, syncSessionWorkspaces]);
+
   const viewByWorkspace = useMemo(
     () => new Map(readState.views.map((view) => [view.workspaceId, view])),
     [readState.views],
@@ -218,8 +231,6 @@ export function WorktreeSurface({
     worktreeModalWorkspaceId === undefined
       ? undefined
       : viewByWorkspace.get(worktreeModalWorkspaceId);
-  const selectedBranchRecord = modalView?.branches.find((branch) => branch.name === selectedBranch);
-
   const runMutation = async (operation: () => Promise<void>): Promise<void> => {
     setActionPending(true);
     setActionError(undefined);
@@ -249,26 +260,75 @@ export function WorktreeSurface({
 
   const openWorktreeCreator = (workspace: WorkspaceLike): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
-    const baseBranch =
-      view?.branches.find((branch) => branch.isCurrent)?.name ?? view?.branches[0]?.name ?? '';
+    const baseBranch = selectDefaultBaseBranch(view?.branches ?? []);
+    const existingNames = [
+      ...(view?.branches ?? []).map((branch) => branch.name),
+      ...(view?.worktrees ?? []).map((worktree) => worktree.branch),
+    ];
     setWorktreeModalWorkspaceId(workspace.workspaceId);
     setSelectedBranch(baseBranch);
-    setNewBranch(`worktree/${slug(workspace.title)}`);
+    setNewBranch(createDefaultWorktreeName(existingNames));
     setActionError(undefined);
   };
 
   const submitWorktree = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    if (manager === undefined || modalWorkspace === undefined || selectedBranch.length === 0) return;
+    const worktreeName = newBranch.trim();
+    if (
+      manager === undefined ||
+      modalWorkspace === undefined ||
+      selectedBranch.length === 0 ||
+      worktreeName.length === 0
+    ) {
+      return;
+    }
     const input = {
       workspaceId: modalWorkspace.workspaceId,
       branch: selectedBranch,
-      ...(selectedBranchRecord?.checkedOut ? { newBranch: newBranch.trim() } : {}),
+      newBranch: worktreeName,
     };
-    await runMutation(async () => {
-      await executeWorktreeAction(manager, { type: 'createWorktree', input });
+    setActionPending(true);
+    setActionError(undefined);
+    setPendingSessionBinding(undefined);
+    try {
+      const createdWorktree = await executeWorktreeAction(manager, {
+        type: 'createWorktree',
+        input,
+      });
+      if (createdWorktree === undefined) {
+        throw new Error('Worktree creation returned no Worktree record; retry the request.');
+      }
       setWorktreeModalWorkspaceId(undefined);
-    });
+
+      if (createSessionCallback === undefined) {
+        await refresh();
+        setActionError({
+          code: 'SESSION_CREATE_UNAVAILABLE',
+          message: 'Worktree created, but Session creation is unavailable; retry after reconnecting.',
+          retryable: true,
+        });
+        return;
+      }
+
+      const sessionInput: CreateSessionForWorktreeInput = {
+        workspaceId: createdWorktree.workspaceId,
+        worktreeId: createdWorktree.worktreeId,
+        cwd: createdWorktree.absolutePath,
+      };
+      try {
+        await createSessionCallback(sessionInput);
+      } catch (error) {
+        if (error instanceof WorktreeSessionBindingError) {
+          setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
+        }
+        throw error;
+      }
+      await refresh();
+    } catch (error) {
+      setActionError(toWorktreeViewError(error));
+    } finally {
+      setActionPending(false);
+    }
   };
 
   const createSession = async (input: CreateSessionForWorktreeInput): Promise<void> => {
@@ -308,6 +368,7 @@ export function WorktreeSurface({
       });
       const sessionId = pendingSessionBinding.sessionId;
       setPendingSessionBinding(undefined);
+      ensureSessionWorkspace?.(pendingSessionBinding.workspaceId, sessionId);
       await refresh();
       openSession(sessionId);
     } catch (error) {
@@ -315,6 +376,11 @@ export function WorktreeSurface({
     } finally {
       setActionPending(false);
     }
+  };
+
+  const openWorkspaceSession = (workspaceId: string, sessionId: string): void => {
+    ensureSessionWorkspace?.(workspaceId, sessionId);
+    openWorktreeSession({ open: openSession }, sessionId);
   };
 
   if (mode !== 'worktree') return null;
@@ -522,7 +588,22 @@ export function WorktreeSurface({
 
                       {expanded && (
                         <div className={styles.treeChildren}>
-                          <div className={styles.groupLabel}>Main</div>
+                          <div className={styles.groupHeader}>
+                            <div className={styles.groupLabel}>Main</div>
+                            {createMainSession !== undefined && (
+                              <button
+                                type="button"
+                                className={styles.iconButton}
+                                data-add-main-session
+                                aria-label={`Add Session to ${workspace.title}`}
+                                onClick={() => {
+                                  createMainSession(workspace.workspaceId);
+                                }}
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
                           {mainSessionIds
                             .filter(
                               (sessionId) =>
@@ -641,7 +722,7 @@ export function WorktreeSurface({
                                         className={styles.treeSession}
                                         data-session-id={sessionId}
                                         onClick={() => {
-                                          openWorktreeSession({ open: openSession }, sessionId);
+                                          openWorkspaceSession(workspace.workspaceId, sessionId);
                                         }}
                                       >
                                         <span className={styles.treeGuide} aria-hidden="true">
@@ -726,26 +807,25 @@ export function WorktreeSurface({
                 {(modalView?.branches ?? []).map((branch) => (
                   <option key={branch.name} value={branch.name}>
                     {branch.name}
-                    {branch.checkedOut ? ' (checked out · new branch required)' : ''}
+                    {branch.isCurrent ? ' (current)' : ''}
+                    {branch.checkedOut ? ' (checked out)' : ''}
                   </option>
                 ))}
               </select>
             </label>
-            {selectedBranchRecord?.checkedOut && (
-              <label className={styles.modalField}>
-                New branch
-                <input
-                  className={styles.textInput}
-                  aria-label="New Worktree branch"
-                  value={newBranch}
-                  placeholder="worktree/feature-name"
-                  disabled={actionPending}
-                  onChange={(event) => {
-                    setNewBranch(event.currentTarget.value);
-                  }}
-                />
-              </label>
-            )}
+            <label className={styles.modalField}>
+              Worktree name
+              <input
+                className={styles.textInput}
+                aria-label="Worktree name"
+                value={newBranch}
+                placeholder="dsh/12345678"
+                disabled={actionPending}
+                onChange={(event) => {
+                  setNewBranch(event.currentTarget.value);
+                }}
+              />
+            </label>
             {modalView?.branches.length === 0 && (
               <p className={styles.empty}>No local branches found in this Workspace.</p>
             )}
@@ -765,7 +845,7 @@ export function WorktreeSurface({
                 disabled={
                   actionPending ||
                   selectedBranch.length === 0 ||
-                  (selectedBranchRecord?.checkedOut === true && newBranch.trim().length === 0)
+                  newBranch.trim().length === 0
                 }
               >
                 Create Worktree

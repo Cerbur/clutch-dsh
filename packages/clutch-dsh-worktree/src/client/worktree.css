@@ -453,6 +453,16 @@
   text-transform: uppercase;
 }
 
+.groupHeader {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+.groupHeader .groupLabel {
+  flex: 1;
+}
+
 .worktreeGroup {
   margin-top: 2px;
 }

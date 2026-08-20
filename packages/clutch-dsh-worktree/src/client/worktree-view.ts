@@ -31,6 +31,32 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+/** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
+export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
+  return branches.find((branch) => branch.isCurrent)?.name ?? branches[0]?.name ?? '';
+}
+
+function browserRandomUuid(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID === 'function') return randomUUID.call(globalThis.crypto);
+  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+}
+
+/** Generate a short, editable default branch name without colliding with known local names. */
+export function createDefaultWorktreeName(
+  existingNames: Iterable<string>,
+  randomUuid: () => string = browserRandomUuid,
+): string {
+  const usedNames = new Set([...existingNames].map((name) => name.trim()));
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const suffix = randomUuid().replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
+    if (suffix.length < 8) continue;
+    const candidate = `dsh/${suffix}`;
+    if (!usedNames.has(candidate)) return candidate;
+  }
+  throw new Error('Unable to generate an available default Worktree name.');
+}
+
 export interface CreateSessionForWorktreeInput {
   readonly workspaceId: string;
   readonly worktreeId: string;
@@ -83,10 +109,9 @@ export async function loadWorktreeViews(
 export async function executeWorktreeAction(
   manager: WorktreeManager,
   action: WorktreeViewAction,
-): Promise<void> {
+): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
-    await manager.createWorktree(action.input);
-    return;
+    return manager.createWorktree(action.input);
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
@@ -101,6 +126,7 @@ export async function executeWorktreeAction(
 export async function createSessionForWorktree(input: CreateSessionForWorktreeInput & {
   readonly createSession: (input: { cwd: string }) => Promise<string>;
   readonly manager: Pick<WorktreeManager, 'bindSession'>;
+  readonly beforeOpen?: (sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
 }): Promise<string> {
   const sessionId = await input.createSession({ cwd: input.cwd });
@@ -113,6 +139,7 @@ export async function createSessionForWorktree(input: CreateSessionForWorktreeIn
   } catch (error) {
     throw new WorktreeSessionBindingError(sessionId, error);
   }
+  input.beforeOpen?.(sessionId);
   input.openSession(sessionId);
   return sessionId;
 }

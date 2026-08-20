@@ -11,6 +11,12 @@ export interface WorktreeViewState {
   viewMode: WorktreeViewMode;
 }
 
+/** A browser-local Worktree → DSH Workspace membership projection. */
+export interface VirtualWorkspaceBinding {
+  readonly workspaceId: string;
+  readonly sessionId: string;
+}
+
 /** The complete mutation face for the view-mode store. */
 export type WorktreeViewActions = ActionsDecl<WorktreeViewState> & {
   setViewMode: (draft: WorktreeViewState, mode: WorktreeViewMode) => void;
@@ -49,6 +55,48 @@ export function unboundSessionIds(
 ): readonly string[] {
   const bound = new Set(boundSessionIds);
   return sessionIds.filter((sessionId) => !bound.has(sessionId));
+}
+
+/**
+ * Apply a browser-only membership delta to a DSH Workspace list snapshot.
+ * `previousBindings` are removed first so the same function can also undo a
+ * projection after a binding is deleted or the plugin is disposed.
+ */
+export function projectVirtualWorkspaceMembership<
+  T extends { readonly items: readonly WorkspaceLike[] },
+>(
+  snapshot: T,
+  previousBindings: readonly VirtualWorkspaceBinding[],
+  nextBindings: readonly VirtualWorkspaceBinding[],
+): T {
+  const previousSessionIds = new Set(previousBindings.map((binding) => binding.sessionId));
+  const nextByWorkspace = new Map<string, string[]>();
+  for (const binding of nextBindings) {
+    const sessionIds = nextByWorkspace.get(binding.workspaceId) ?? [];
+    if (!sessionIds.includes(binding.sessionId)) sessionIds.push(binding.sessionId);
+    nextByWorkspace.set(binding.workspaceId, sessionIds);
+  }
+
+  const items = snapshot.items.map((workspace) => {
+    const nativeSessionIds = workspace.sessionIds.filter(
+      (sessionId) => !previousSessionIds.has(sessionId),
+    );
+    const virtualSessionIds = nextByWorkspace.get(workspace.workspaceId) ?? [];
+    const sessionIds = [
+      ...nativeSessionIds,
+      ...virtualSessionIds.filter((sessionId) => !nativeSessionIds.includes(sessionId)),
+    ];
+    if (
+      sessionIds.length === workspace.sessionIds.length &&
+      sessionIds.every((sessionId, index) => sessionId === workspace.sessionIds[index])
+    ) {
+      return workspace;
+    }
+    return { ...workspace, sessionIds };
+  });
+
+  if (items.every((workspace, index) => workspace === snapshot.items[index])) return snapshot;
+  return { ...snapshot, items } as T;
 }
 
 interface WorkspaceLike {

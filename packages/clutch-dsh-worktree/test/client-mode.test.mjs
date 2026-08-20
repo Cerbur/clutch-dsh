@@ -7,6 +7,7 @@ const {
   WORKTREE_VIEW_MODE_STORAGE_KEY,
   effectiveViewMode,
   initialWorkspaceId,
+  projectVirtualWorkspaceMembership,
   unboundSessionIds,
   workspaceSessionIds,
 } = await import('../lib/client/view-mode.js');
@@ -100,6 +101,64 @@ test('connection-backed Worktree Manager remains available when canonical Remote
   assert.equal(fixture.rpcCalls[0].endpoint, 'worktreeManager/listWorktrees');
 });
 
+test('Worktree Session membership is projected into the current Workspace before opening', async () => {
+  storage.clear();
+  const fixture = await loadClientEntry();
+  const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+
+  await injected.createSessionForWorktree({
+    workspaceId: 'workspace-current',
+    worktreeId: 'wt-one',
+    cwd: '/tmp/wt-one',
+  });
+
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current', 'session-created'],
+  );
+  assert.deepEqual(fixture.openedSessions, ['session-created']);
+});
+
+test('virtual Worktree membership replays after native refresh and is removed on dispose', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  let snapshot = {
+    items: [workspace('ws-one', ['native-one'])],
+  };
+  const subscribers = new Set();
+  const list = {
+    getSnapshot: () => snapshot,
+    set(next) {
+      snapshot = next;
+      for (const subscriber of subscribers) subscriber();
+    },
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  assert.deepEqual(snapshot.items[0].sessionIds, ['native-one', 'worktree-session']);
+
+  list.set({ items: [workspace('ws-one', ['native-after-refresh'])] });
+  assert.deepEqual(snapshot.items[0].sessionIds, ['native-after-refresh', 'worktree-session']);
+
+  membership.dispose();
+  assert.deepEqual(snapshot.items[0].sessionIds, ['native-after-refresh']);
+});
+
+test('Main Session creation delegates to the native Workspace service', async () => {
+  const fixture = await loadClientEntry();
+  const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+
+  injected.createMainSession('workspace-current');
+
+  assert.deepEqual(fixture.startedSessions, ['workspace-current']);
+});
+
 test('unavailable or degraded Worktree service falls back to the original view', () => {
   assert.equal(effectiveViewMode('worktree', false), 'workspace-session');
   assert.equal(effectiveViewMode('workspace-session', false), 'workspace-session');
@@ -119,6 +178,22 @@ test('Main follows the selected Workspace membership before removing Worktree-bo
 
   assert.deepEqual(selectedSessionIds, ['three', 'four']);
   assert.deepEqual(unboundSessionIds(selectedSessionIds, ['four']), ['three']);
+});
+
+test('virtual Workspace membership preserves native entries and can be removed', () => {
+  const snapshot = {
+    items: [workspace('ws-one', ['native-one']), workspace('ws-two', ['native-two'])],
+    recentWorkspaceId: 'ws-one',
+  };
+
+  const bindings = [{ workspaceId: 'ws-one', sessionId: 'worktree-session' }];
+  const projected = projectVirtualWorkspaceMembership(snapshot, [], bindings);
+  assert.deepEqual(projected.items[0].sessionIds, ['native-one', 'worktree-session']);
+  assert.equal(projected.recentWorkspaceId, 'ws-one');
+
+  const restored = projectVirtualWorkspaceMembership(projected, bindings, []);
+  assert.deepEqual(restored.items[0].sessionIds, ['native-one']);
+  assert.deepEqual(restored.items[1].sessionIds, ['native-two']);
 });
 
 test('initial Workspace follows the current Session, then the recent DSH Workspace', () => {

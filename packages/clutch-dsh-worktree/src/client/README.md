@@ -14,15 +14,21 @@ This directory contains the browser Consumer and one deep Connection seam:
   action orchestration. The surface renders Workspace → Worktree → Session,
   scopes Main sessions to the selected DSH Workspace, and provides search plus
   Workspace/Worktree creation affordances. Worktree creation and removal go
-  through the injected manager; a new Worktree Session is created through DSH
-  `session.create({ cwd })` and then bound through that manager. Connection/
-  Gateway failures remain visible as retryable errors rather than becoming an
-  empty list; a binding failure keeps the created Session ID available for
-  retry or direct navigation.
+  through the injected manager; the creation dialog chooses a base branch
+  (defaulting to the current branch), generates an available editable
+  `dsh/<8-char>` branch name, then creates the Worktree and immediately creates
+  a new DSH Session through `session.create({ cwd })`, binds it through that
+  manager, projects its `{ workspaceId, sessionId }` membership in the browser,
+  and opens it. The Main `+` delegates to native `workspaces.startSession` and
+  never creates a sidecar binding. Connection/Gateway failures remain visible
+  as retryable errors rather than becoming an empty list; a binding failure
+  keeps the created Session ID available for retry or direct navigation.
 
 The Client never reads `ctx.remote.worktreeManager`, imports or traverses the
 generated `./remote` artifact, calls `ctx.remote.$mount()`, executes Git, reads
-sidecar files, or writes DSH Workspace/Session data. `ctx.remote` remains an
+sidecar files, or writes DSH Workspace/Session data. The browser-only membership
+overlay is replayed across native Workspace list refreshes and removed when its
+binding disappears or the Client fiber is disposed. `ctx.remote` remains an
 official DSH service owned by the host application, but this plugin does not
 depend on its namespace.
 

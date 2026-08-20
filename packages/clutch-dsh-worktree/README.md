@@ -53,10 +53,11 @@ pnpm dsh web
 在 DSH Web UI 的 Sidebar footer 进入 Worktree mode，然后可以：
 
 1. 搜索并平铺查看 Workspace；
-2. 点击 Workspace 的 `+`，在弹窗中从 local branch 创建 Worktree；
-3. 如果基准 branch 正被 checkout，填写新的 local branch 名称后创建；
-4. 点击 Worktree 的 `+` 创建一个 cwd 指向该 Worktree 的新 Session，并自动完成 binding；
-5. 删除 Worktree，并查看保留的 detached binding。
+2. 点击 Workspace 的 `+`，在弹窗中选择基线 branch（默认当前 branch）；
+3. 填写 Worktree name（默认 `dsh/<8位随机串>`，已存在时自动重滚），创建时从基线 branch 派生新的 local branch；
+4. 点击 Main 旁边的 `+`，通过 DSH 原生 `startSession(workspaceId)` 创建 Main Session；
+5. 点击 Worktree 旁边的 `+`，UI 会创建 cwd 指向该 Worktree 的新 Session、完成 binding 并打开该 Session；
+6. 删除 Worktree，并查看保留的 detached binding。
 
 ### 更新本地 plugin 后重新测试
 
@@ -102,11 +103,18 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 如果调用失败，UI 会显示明确的 retryable error，而不是显示为空列表；优先检查
   `--dump-config` 中是否包含 package layer，以及 Host/Gateway 日志。
 
-### 已知限制
+### 已知限制与 rc.8 workaround
 
-rc.8 的原生 `session.create` 不能同时传 `workspaceId` 和 `cwd`。本 plugin 当前
-解决的是 Worktree Host 核心逻辑和 Web UI 调用路径，不宣称解决原生 Workspace
-membership 与 Worktree runtime cwd 的独立限制。
+rc.8 的原生 `session.create` 不能同时传 `workspaceId` 和 `cwd`。因此 Worktree
+Session 使用 `session.create({ cwd })` 保留正确的 Session runtime cwd，再由 sidecar
+保存当前 Workspace/Worktree/Session 关系。为了让 DSH composer 在当前 Client 中把它
+识别为当前 Workspace 的 Session，plugin 对 `ctx.workspaces.list` 增加浏览器内存中的
+`sessionIds` projection；native Workspace/Session 数据、Host API 和 DSH 源码都不改。
+
+该 projection 会在 native Workspace list 刷新后重放，binding 删除或 plugin dispose
+时撤销。它是 Client 侧 workaround，不等同于把 Worktree Session 持久 attach 到 DSH
+Workspace；要获得 DSH 原生持久 membership，需要 DSH 提供同时接受 `workspaceId` 与
+独立 cwd 的 API。
 
 ## 当前实现进度
 
@@ -195,12 +203,17 @@ Git adapter 和 sidecar repository 都通过注入边界组合；Host read adapt
 
 - Worktree 使用 Provider 生成的路径。
 - branch combobox 选择已有 local branch 作为基准。
-- 已 checkout 的基准 branch 需要填写新的 local branch 名称，创建使用
-  `git worktree add -b <new-branch> <generated-path> <base-branch>`；未 checkout
-  的 branch 直接使用 `git worktree add <generated-path> <branch>`。
+- 创建弹窗始终要求一个新的 local branch name，默认使用 `dsh/<8位随机串>`；
+  创建统一使用 `git worktree add -b <new-branch> <generated-path> <base-branch>`，
+  不再根据基线 branch 是否 checkout 切换两套用户流程。
 - 不使用 `--force`，不执行 remote Git 操作，也不修改工作树业务文件。
 - Worktree Session 先通过 DSH `session.create({ cwd })` 创建，再通过外部
-  Manager contract 绑定。
+  Manager contract 绑定；Worktree 创建成功后立即进入这条链路并打开新 Session。
+- Worktree 新增 Session 成功绑定后，会把 `{ workspaceId, sessionId }` 投影到当前
+  Client 的 Workspace list，保证 DSH composer 使用正确 Workspace；该 projection
+  不写入 DSH，也不改变 DSH source。
+- Main 分组的 `+` 只调用 DSH 原生 `ctx.workspaces.startSession(workspaceId)`，不创建
+  sidecar binding。
 - 如果 binding 失败，已创建的 DSH Session 不会被删除；UI 保留其 Session ID，
   提供重试 binding 或直接打开该 Session 的恢复入口。
 - Worktree UI 不提供 `Bind current Session` 入口；Session binding 只在 Worktree

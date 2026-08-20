@@ -107,7 +107,14 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     },
   });
   ctx.provide('sessions', { open() {} });
-  ctx.provide('workspaces', {});
+  ctx.provide('workspaces', {
+    list: {
+      getSnapshot: () => ({ items: [] }),
+      set() {},
+      subscribe: () => () => {},
+    },
+    startSession() {},
+  });
   const slotsFiber = ctx.plugin(SlotRegistry);
   await slotsFiber.await();
   const rootDisposer = ctx.slots.register(

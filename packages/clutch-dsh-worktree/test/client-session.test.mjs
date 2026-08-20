@@ -5,6 +5,7 @@ test('creates a DSH Session at the Worktree cwd and binds it automatically', asy
   const { createSessionForWorktree } = await import('../lib/client/worktree-view.js');
   const calls = [];
   const opened = [];
+  const prepared = [];
 
   const sessionId = await createSessionForWorktree({
     workspaceId: 'ws-one',
@@ -20,6 +21,9 @@ test('creates a DSH Session at the Worktree cwd and binds it automatically', asy
         return { ...input, status: 'active' };
       },
     },
+    beforeOpen(session) {
+      prepared.push(session);
+    },
     openSession(session) {
       opened.push(session);
     },
@@ -33,6 +37,7 @@ test('creates a DSH Session at the Worktree cwd and binds it automatically', asy
       { workspaceId: 'ws-one', worktreeId: 'wt-one', sessionId: 'session-new' },
     ],
   ]);
+  assert.deepEqual(prepared, ['session-new']);
   assert.deepEqual(opened, ['session-new']);
 });
 

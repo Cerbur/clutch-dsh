@@ -4,9 +4,11 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 import {
+  createDefaultWorktreeName,
   executeWorktreeAction,
   loadWorktreeView,
   loadWorktreeViews,
+  selectDefaultBaseBranch,
   toWorktreeViewError,
 } from '../lib/client/worktree-view.js';
 
@@ -32,8 +34,8 @@ function manager(overrides = {}) {
     async createWorktree(input) {
       return {
         worktreeId: 'created',
-        ...input,
         workspaceId: 'ws1',
+        branch: input.newBranch ?? input.branch,
         absolutePath: '/tmp/created',
         status: 'active',
       };
@@ -72,6 +74,41 @@ test('loads Worktree, branch, and binding projection through the Manager contrac
     ['listBranches', { workspaceId: 'ws1' }],
     ['listBindings', { workspaceId: 'ws1' }],
   ]);
+});
+
+test('selects the current local branch as the default Worktree base branch', () => {
+  assert.equal(
+    selectDefaultBaseBranch([
+      { name: 'feature/other', isCurrent: false, checkedOut: false },
+      { name: 'main', isCurrent: true, checkedOut: true },
+    ]),
+    'main',
+  );
+  assert.equal(
+    selectDefaultBaseBranch([
+      { name: 'feature/other', isCurrent: false, checkedOut: false },
+    ]),
+    'feature/other',
+  );
+  assert.equal(selectDefaultBaseBranch([]), '');
+});
+
+test('generates an available dsh Worktree name and rolls after a collision', () => {
+  const generated = [];
+  const candidates = [
+    '12345678-aaaa-bbbb-cccc-000000000000',
+    '87654321-aaaa-bbbb-cccc-000000000000',
+  ];
+  const name = createDefaultWorktreeName(
+    ['dsh/12345678', 'main'],
+    () => {
+      generated.push(candidates.shift());
+      return generated.at(-1);
+    },
+  );
+
+  assert.equal(name, 'dsh/87654321');
+  assert.equal(generated.length, 2);
 });
 
 test('loads independent Worktree projections for every Workspace', async () => {
@@ -145,18 +182,25 @@ test('executes create and remove actions through the Manager contract', async ()
     },
   });
 
-  await executeWorktreeAction(worktreeManager, {
+  const created = await executeWorktreeAction(worktreeManager, {
     type: 'createWorktree',
-    input: { workspaceId: 'ws1', branch: 'feature/login' },
+    input: { workspaceId: 'ws1', branch: 'main', newBranch: 'dsh/12345678' },
   });
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
     input: { workspaceId: 'ws1', worktreeId: 'wt1' },
   });
   assert.deepEqual(calls, [
-    ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }],
+    ['createWorktree', { workspaceId: 'ws1', branch: 'main', newBranch: 'dsh/12345678' }],
     ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
   ]);
+  assert.deepEqual(created, {
+    worktreeId: 'created',
+    workspaceId: 'ws1',
+    branch: 'dsh/12345678',
+    absolutePath: '/tmp/created',
+    status: 'active',
+  });
 });
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
@@ -187,4 +231,28 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /Open Created Session/);
   assert.match(source, /Remove Worktree/);
   assert.match(source, /detached bindings/);
+});
+
+test('creates a Worktree Session immediately after creating the Worktree', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /const createdWorktree = await executeWorktreeAction/);
+  assert.match(source, /await createSessionCallback\(sessionInput\)/);
+  assert.match(source, /worktreeId: createdWorktree\.worktreeId/);
+  assert.match(source, /cwd: createdWorktree\.absolutePath/);
+  assert.match(source, /Worktree name/);
+  assert.match(source, /dsh\//);
+});
+
+test('renders a Main Session action alongside the Main group label', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /createMainSession/);
+  assert.match(source, /data-add-main-session/);
 });

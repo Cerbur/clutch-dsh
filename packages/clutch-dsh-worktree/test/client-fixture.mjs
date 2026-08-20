@@ -14,8 +14,29 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
   const registrationsBySlot = new Map();
   const disposers = [];
   const openedSessions = [];
+  const startedSessions = [];
+  const createdSessions = [];
   const rpcCalls = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
+
+  let workspaceSnapshot = {
+    items: [
+      { workspaceId: 'workspace-current', title: 'Current', sessionIds: ['session-current'] },
+    ],
+    recentWorkspaceId: 'workspace-current',
+  };
+  const workspaceSubscribers = new Set();
+  const workspaceList = {
+    getSnapshot: () => workspaceSnapshot,
+    set(next) {
+      workspaceSnapshot = next;
+      for (const subscriber of workspaceSubscribers) subscriber();
+    },
+    subscribe(subscriber) {
+      workspaceSubscribers.add(subscriber);
+      return () => workspaceSubscribers.delete(subscriber);
+    },
+  };
 
   const connectionRpc = rpc ?? {
     call(channel, endpoint, payload, signal) {
@@ -75,18 +96,18 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
     remote,
     sessions: {
       list: { getSnapshot: () => ({ current: 'session-current' }) },
+      async create(input) {
+        createdSessions.push(input);
+        return 'session-created';
+      },
       open(sessionId) {
         openedSessions.push(sessionId);
       },
     },
     workspaces: {
-      list: {
-        getSnapshot: () => ({
-          items: [
-            { workspaceId: 'workspace-current', title: 'Current', sessionIds: ['session-current'] },
-          ],
-          recentWorkspaceId: 'workspace-current',
-        }),
+      list: workspaceList,
+      startSession(workspaceId) {
+        startedSessions.push(workspaceId);
       },
     },
     slots: {
@@ -132,5 +153,14 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
   });
 
   exports.apply(fakeContext);
-  return { exports, fakeContext, registrationsBySlot, disposers, openedSessions, rpcCalls };
+  return {
+    exports,
+    fakeContext,
+    registrationsBySlot,
+    disposers,
+    openedSessions,
+    startedSessions,
+    createdSessions,
+    rpcCalls,
+  };
 }
