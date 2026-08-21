@@ -77,7 +77,7 @@ function isWorktreeRemoteResult(value: unknown): value is WorktreeRemoteResult<u
 function disposedError(): WorktreeConnectionError {
   return new WorktreeConnectionError({
     code: 'CLIENT_DISPOSED',
-    message: 'Worktree connection is disposed; reload the plugin and retry.',
+    message: '',
     details: {},
     retryable: false,
   });
@@ -91,7 +91,7 @@ function connectionFailure(
   const message = error instanceof Error ? error.message : String(error);
   return new WorktreeConnectionError({
     code,
-    message: `Worktree endpoint ${endpoint} failed; retryable connection error: ${message}`,
+    message,
     details: { endpoint },
     retryable: true,
     cause: error,
@@ -99,10 +99,11 @@ function connectionFailure(
 }
 
 function gatewayFailure(endpoint: string, result: Extract<ConnectionResult, { ok: false }>): never {
+  const rawDetails = isRecord(result.error.details) ? result.error.details : {};
   throw new WorktreeConnectionError({
     code: result.error.code,
-    message: `Worktree endpoint ${endpoint} failed: ${result.error.message}`,
-    details: isRecord(result.error.details) ? result.error.details : {},
+    message: result.error.message,
+    details: { endpoint, ...rawDetails },
     retryable: true,
   });
 }
@@ -110,7 +111,7 @@ function gatewayFailure(endpoint: string, result: Extract<ConnectionResult, { ok
 function invalidResult(endpoint: string): WorktreeConnectionError {
   return new WorktreeConnectionError({
     code: 'WORKTREE_RPC_INVALID_RESULT',
-    message: `Worktree endpoint ${endpoint} returned an invalid result; retry the request.`,
+    message: '',
     details: { endpoint },
     retryable: true,
   });

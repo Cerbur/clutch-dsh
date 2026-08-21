@@ -33,6 +33,7 @@ import { openWorktreeSession } from './navigation.js';
 import { useSidebarOverlayGeometry } from './sidebar-overlay-geometry.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
+import { formatWorktreeViewError } from './worktree-error-copy.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
@@ -921,7 +922,7 @@ export function WorktreeSurface({
     if (insertWorkspaceBefore === undefined) {
       setActionError({
         code: 'WORKSPACE_ORDER_UNAVAILABLE',
-        message: t('error.workspaceOrderingUnavailable'),
+        message: '',
         retryable: true,
       });
       return;
@@ -960,7 +961,7 @@ export function WorktreeSurface({
     if (insertSessionBefore === undefined) {
       setActionError({
         code: 'SESSION_ORDER_UNAVAILABLE',
-        message: t('error.sessionOrderingUnavailable'),
+        message: '',
         retryable: true,
       });
       return;
@@ -1066,15 +1067,19 @@ export function WorktreeSurface({
         input,
       });
       if (createdWorktree === undefined) {
-        throw new Error(t('error.worktreeRecordMissing'));
+        throw {
+          code: 'WORKTREE_RECORD_MISSING',
+          message: '',
+          retryable: true,
+        };
       }
       setWorktreeModalWorkspaceId(undefined);
 
       if (createSessionCallback === undefined) {
         await refresh();
         setActionError({
-          code: 'SESSION_CREATE_UNAVAILABLE',
-          message: t('error.worktreeCreatedSessionUnavailable'),
+          code: 'WORKTREE_CREATED_SESSION_UNAVAILABLE',
+          message: '',
           retryable: true,
         });
         return;
@@ -1105,7 +1110,7 @@ export function WorktreeSurface({
     if (createSessionCallback === undefined) {
       setActionError({
         code: 'SESSION_CREATE_UNAVAILABLE',
-        message: t('error.sessionCreationUnavailable'),
+        message: '',
         retryable: true,
       });
       return;
@@ -1222,7 +1227,7 @@ export function WorktreeSurface({
           {actionError !== undefined && (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
-                {actionError.message}
+                {formatWorktreeViewError(actionError, t)}
               </p>
               {pendingSessionBinding !== undefined && (
                 <div className={styles.recoveryActions}>
@@ -1272,7 +1277,7 @@ export function WorktreeSurface({
           {readState.status === 'error' && readState.error !== undefined ? (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
-                {readState.error.message}
+                {formatWorktreeViewError(readState.error, t)}
               </p>
               <button
                 type="button"

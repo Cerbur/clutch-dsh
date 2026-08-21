@@ -14,7 +14,7 @@ export class WorktreeSessionBindingError extends Error {
 
   constructor(sessionId: string, cause: unknown) {
     const reason = cause instanceof Error ? cause.message : String(cause);
-    super(`Session ${sessionId} was created, but Worktree binding failed: ${reason}`);
+    super(reason);
     this.name = 'WorktreeSessionBindingError';
     this.sessionId = sessionId;
     this.cause = cause;
@@ -79,6 +79,7 @@ export interface WorktreeViewError {
   readonly code: string;
   readonly message: string;
   readonly retryable: boolean;
+  readonly details?: Readonly<Record<string, unknown>>;
 }
 
 /** Hide DSH-archived Sessions from the browser-local Worktree projection. */
@@ -164,6 +165,13 @@ export async function createSessionForWorktree(input: CreateSessionForWorktreeIn
   return sessionId;
 }
 
+function recordDetails(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const details = (value as { readonly details?: unknown }).details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return undefined;
+  return details as Readonly<Record<string, unknown>>;
+}
+
 /** Convert any adapter/Gateway failure into renderable, retry-aware UI data. */
 export function toWorktreeViewError(error: unknown): WorktreeViewError {
   if (typeof error === 'object' && error !== null) {
@@ -172,18 +180,19 @@ export function toWorktreeViewError(error: unknown): WorktreeViewError {
       readonly message?: unknown;
       readonly retryable?: unknown;
     };
+    const details = error instanceof WorktreeSessionBindingError
+      ? { ...(recordDetails(error) ?? {}), sessionId: error.sessionId }
+      : recordDetails(error);
     return {
       code: typeof candidate.code === 'string' ? candidate.code : 'WORKTREE_VIEW_FAILED',
-      message:
-        typeof candidate.message === 'string'
-          ? candidate.message
-          : 'Worktree data is unavailable. Retry the request.',
+      message: typeof candidate.message === 'string' ? candidate.message : '',
       retryable: candidate.retryable !== false,
+      ...(details === undefined ? {} : { details }),
     };
   }
   return {
     code: 'WORKTREE_VIEW_FAILED',
-    message: 'Worktree data is unavailable. Retry the request.',
+    message: '',
     retryable: true,
   };
 }

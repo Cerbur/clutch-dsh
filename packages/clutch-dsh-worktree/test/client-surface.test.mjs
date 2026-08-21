@@ -187,6 +187,7 @@ test('preserves an endpoint failure as an explicit retryable view error', async 
   assert.deepEqual(toWorktreeViewError(failure), {
     code: failure.code,
     message: failure.message,
+    details: failure.details,
     retryable: true,
   });
 });
@@ -248,6 +249,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
   assert.match(actionSource, /PropsLocale/);
   assert.match(surfaceSource, /PropsLocale/);
   assert.match(surfaceSource, /WORKTREE_NS/);
+  assert.match(surfaceSource, /formatWorktreeViewError/);
   assert.match(surfaceSource, /t\('workspace\.search'\)/);
   assert.match(surfaceSource, /t\('session\.expandMore'/);
   assert.match(surfaceSource, /t\('dialog\.closeWorkspaceDelete'\)/);
@@ -255,6 +257,24 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
   assert.doesNotMatch(surfaceSource, /Retry Binding/);
   assert.doesNotMatch(surfaceSource, /No matching Workspaces/);
   assert.match(surfaceSource, /sidebar-overlay-geometry/);
+});
+
+test('formats Worktree view errors at render time and leaves plugin literals out of state', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /import \{ formatWorktreeViewError \}/);
+  assert.match(source, /\{formatWorktreeViewError\(actionError, t\)\}/);
+  assert.match(source, /\{formatWorktreeViewError\(readState\.error, t\)\}/);
+  assert.match(source, /code: 'WORKTREE_CREATED_SESSION_UNAVAILABLE'/);
+  assert.match(source, /code: 'WORKTREE_RECORD_MISSING'/);
+  assert.doesNotMatch(source, /message: t\('error\.workspaceOrderingUnavailable'\)/);
+  assert.doesNotMatch(source, /message: t\('error\.sessionOrderingUnavailable'\)/);
+  assert.doesNotMatch(source, /message: t\('error\.worktreeCreatedSessionUnavailable'\)/);
+  assert.doesNotMatch(source, /message: t\('error\.sessionCreationUnavailable'\)/);
+  assert.doesNotMatch(source, /throw new Error\(t\('error\.worktreeRecordMissing'\)\)/);
 });
 
 test('renders the Worktree hierarchy with search and nested creation affordances', async () => {

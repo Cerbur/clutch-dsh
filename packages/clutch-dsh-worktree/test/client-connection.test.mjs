@@ -92,30 +92,30 @@ test('turns Gateway failures, thrown calls, and malformed endpoint results into 
         }),
       },
       expectedCode: 'method-unavailable',
+      expectedMessage: 'endpoint missing',
     },
     {
       name: 'thrown call',
       rpc: { call: async () => Promise.reject(new Error('connection lost')) },
       expectedCode: 'CONNECTION_CALL_FAILED',
+      expectedMessage: 'connection lost',
     },
     {
       name: 'malformed value',
       rpc: { call: async () => ({ ok: true, value: { unexpected: true } }) },
       expectedCode: 'WORKTREE_RPC_INVALID_RESULT',
+      expectedMessage: '',
     },
   ];
 
-  for (const { name, rpc, expectedCode } of cases) {
+  for (const { name, rpc, expectedCode, expectedMessage } of cases) {
     const adapter = createWorktreeConnectionAdapter(rpc);
     await assert.rejects(adapter.listWorktrees({ workspaceId: 'ws1' }), (error) => {
       assert.ok(error instanceof WorktreeConnectionError, name);
       assert.equal(error.code, expectedCode, name);
+      assert.equal(error.message, expectedMessage, name);
+      assert.equal(error.details.endpoint, 'worktreeManager/listWorktrees', name);
       assert.equal(error.retryable, true, name);
-      assert.match(
-        error.message,
-        /worktreeManager\/listWorktrees|endpoint|connection|result/i,
-        name,
-      );
       return true;
     });
     adapter.dispose();
