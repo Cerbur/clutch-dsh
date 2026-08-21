@@ -17,6 +17,7 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
   const startedSessions = [];
   const createdSessions = [];
   const rpcCalls = [];
+  const localeRegistrations = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
 
   let workspaceSnapshot = {
@@ -91,8 +92,21 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
     },
   });
 
+  const locale = {
+    register(namespace, dictionaries) {
+      const entry = { namespace, dictionaries };
+      localeRegistrations.push(entry);
+      return () => {
+        const index = localeRegistrations.indexOf(entry);
+        if (index !== -1) localeRegistrations.splice(index, 1);
+      };
+    },
+  };
+
   const fakeContext = {
     connection: { rpc: connectionRpc },
+    locale,
+    localeRegistrations,
     remote,
     sessions: {
       list: { getSnapshot: () => ({ current: 'session-current' }) },

@@ -45,6 +45,9 @@ importers:
       '@deepseek-ai/dsh-client-connection':
         specifier: 0.1.0-rc.8
         version: 0.1.0-rc.8(fe206655156830a934a8c1ad4c553629)
+      '@deepseek-ai/dsh-client-locale':
+        specifier: 0.1.0-rc.8
+        version: 0.1.0-rc.8(1a3d8a91c4f4fa0e0397786bec3eddce)
       '@deepseek-ai/dsh-client-runtime':
         specifier: 0.1.0-rc.8
         version: 0.1.0-rc.8(c30c11caf28a5634279e6e808a6e5391)

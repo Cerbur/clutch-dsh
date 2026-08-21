@@ -94,6 +94,35 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   assert.equal(fixture.registrationsBySlot.size, 0);
 });
 
+test('declares the DSH locale service and namespace on both Client Slots', async () => {
+  const source = await readFile(
+    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
+    'utf8',
+  );
+  assert.match(source, /@deepseek-ai\/dsh-client-locale\/client/);
+  assert.match(source, /locale:\s*WORKTREE_NS/);
+  assert.equal(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'), true);
+
+  const fixture = await loadClientEntry();
+  assert.equal(fixture.fakeContext.localeRegistrations.length, 1);
+  assert.equal(fixture.fakeContext.localeRegistrations[0].namespace, 'worktree');
+  assert.deepEqual(Object.keys(fixture.fakeContext.localeRegistrations[0].dictionaries).sort(), [
+    'en',
+    'zh',
+  ]);
+  assert.equal(
+    fixture.registrationsBySlot.get('sidebar.footer.action').options.locale,
+    'worktree',
+  );
+  assert.equal(
+    fixture.registrationsBySlot.get('shell.overlay').options.locale,
+    'worktree',
+  );
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+  assert.equal(fixture.fakeContext.localeRegistrations.length, 0);
+});
+
 test('disposes Client slot contributions through a real Cordis Client context', async () => {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const handoffs = [];
@@ -127,6 +156,11 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   ctx.provide('connection', {
     rpc: {
       call: async () => ({ ok: true, value: { ok: true, value: [] } }),
+    },
+  });
+  ctx.provide('locale', {
+    register() {
+      return () => {};
     },
   });
   ctx.provide('sessions', { open() {} });

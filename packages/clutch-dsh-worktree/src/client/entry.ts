@@ -1,7 +1,10 @@
 import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client';
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
+import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type { WorktreeLocaleKey } from './locales.js';
+import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
 import { WorktreeModeAction } from './WorktreeModeAction.js';
 import { WorktreeSurface } from './WorktreeSurface.js';
@@ -16,6 +19,12 @@ import type { VirtualWorkspaceBinding } from './view-mode.js';
 declare module '@deepseek-ai/cordis' {
   interface Context {
     connection: ConnectionHandle;
+  }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    worktree: WorktreeLocaleKey;
   }
 }
 
@@ -45,13 +54,17 @@ interface WorkspaceListSnapshot {
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'slots', 'sessions', 'workspaces'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
 export function apply(ctx: ClientContext): void {
+  ctx.effect(
+    () => ctx.locale.register(WORKTREE_NS, { zh, en }),
+    'clutch-dsh-worktree: locale dictionaries',
+  );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
   const sessions = ctx.sessions as typeof ctx.sessions & WorktreeSessionCreator;
   const virtualWorkspaceMembership = createVirtualWorkspaceMembership(
@@ -77,6 +90,7 @@ export function apply(ctx: ClientContext): void {
         name: 'sidebar.footer.action',
         id: 'clutch-dsh-worktree-mode-action',
         store: viewStore,
+        locale: WORKTREE_NS,
         inject: () => ({ available: true }),
       },
       WorktreeModeAction,
@@ -89,6 +103,7 @@ export function apply(ctx: ClientContext): void {
         name: 'shell.overlay',
         id: 'clutch-dsh-worktree-navigation',
         store: viewStore,
+        locale: WORKTREE_NS,
         inject: () => ({
           available: true,
           manager,

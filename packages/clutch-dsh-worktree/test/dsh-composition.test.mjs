@@ -31,6 +31,7 @@ test('publishes the generated Host and Client Remote contribution entries', () =
     inject: [
       '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-runtime',
+      '@deepseek-ai/dsh-client-locale',
       '@deepseek-ai/dsh-client-ui-layout',
       '@deepseek-ai/dsh-client-ui-sidebar',
     ],
@@ -55,6 +56,18 @@ test('targets the rc.8 DSH graph without depending on the canonical Remote clien
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-connection'], '0.1.0-rc.8');
   assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
+});
+
+test('depends on and injects the DSH locale service', () => {
+  assert.equal(
+    packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
+    '0.1.0-rc.8',
+  );
+  assert.equal(
+    packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
+    '0.1.0-rc.8',
+  );
+  assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
 });
 
 test('mounts the Host service through the package bundle patch', async () => {
