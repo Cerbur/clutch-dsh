@@ -363,6 +363,67 @@ function WorktreeWorkspaceRow({
   );
 }
 
+interface MainSessionGroupRowProps {
+  readonly workspaceTitle: string;
+  readonly mainExpanded: boolean;
+  readonly onToggle: () => void;
+  readonly onCreateSession?: () => void;
+}
+
+/** Main Session group row with Worktree-style disclosure and no removal action. */
+function MainSessionGroupRow({
+  workspaceTitle,
+  mainExpanded,
+  onToggle,
+  onCreateSession,
+}: MainSessionGroupRowProps) {
+  return (
+    <div
+      className={`${styles.worktreeRow} ${styles.mainRow}`}
+      data-main-group
+      data-main-expanded={mainExpanded}
+      onClick={() => {
+        onToggle();
+      }}
+    >
+      <button
+        type="button"
+        className={`${styles.disclosureButton} ${styles.mainDisclosure}`}
+        data-main-disclosure
+        aria-label={`${mainExpanded ? 'Collapse' : 'Expand'} Main`}
+        aria-expanded={mainExpanded}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        {mainExpanded ? (
+          <IconChevronDownOutline14 size={18} />
+        ) : (
+          <IconChevronRightOutline14 size={18} />
+        )}
+      </button>
+      <span className={styles.mainLabel}>Main</span>
+      <span className={styles.treeActionSlot}>
+        {onCreateSession !== undefined && (
+          <button
+            type="button"
+            className={styles.iconButton}
+            data-add-main-session
+            aria-label={`Add Session to ${workspaceTitle}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onCreateSession();
+            }}
+          >
+            <IconPlusOutline16 />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /** Worktree-mode Session row with the same trailing options menu as native DSH rows. */
 function WorktreeSessionRow({
   sessionId,
@@ -608,6 +669,7 @@ export function WorktreeSurface({
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
+  const [expandedMains, setExpandedMains] = useState<Record<string, boolean>>({});
   const [expandedWorktrees, setExpandedWorktrees] = useState<Record<string, boolean>>({});
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
@@ -906,6 +968,13 @@ export function WorktreeSurface({
     }));
   };
 
+  const toggleMain = (workspaceId: string): void => {
+    setExpandedMains((current) => ({
+      ...current,
+      [workspaceId]: current[workspaceId] === false,
+    }));
+  };
+
   const toggleWorktree = (worktreeId: string): void => {
     setExpandedWorktrees((current) => ({
       ...current,
@@ -1189,6 +1258,7 @@ export function WorktreeSurface({
                       workspaceMatchesQuery ||
                       includesText(sessionLabel(sessionId, sessions), query),
                   );
+                  const mainExpanded = expandedMains[workspace.workspaceId] !== false;
                   const mainGroupKey = `main:${workspace.workspaceId}`;
                   const worktrees = view?.worktrees ?? [];
 
@@ -1258,65 +1328,63 @@ export function WorktreeSurface({
 
                       {expanded && (
                         <div className={styles.treeChildren}>
-                          <div className={styles.groupHeader}>
-                            <div className={styles.groupLabel}>Main</div>
-                            <span className={styles.treeActionSlot}>
-                              {createMainSession !== undefined && (
-                                <button
-                                  type="button"
-                                  className={styles.iconButton}
-                                  data-add-main-session
-                                  aria-label={`Add Session to ${workspace.title}`}
-                                  onClick={() => {
+                          <MainSessionGroupRow
+                            workspaceTitle={workspace.title}
+                            mainExpanded={mainExpanded}
+                            onToggle={() => {
+                              toggleMain(workspace.workspaceId);
+                            }}
+                            onCreateSession={
+                              createMainSession === undefined
+                                ? undefined
+                                : () => {
                                     createMainSession(workspace.workspaceId);
-                                  }}
-                                >
-                                  <IconPlusOutline16 />
-                                </button>
-                              )}
-                            </span>
-                          </div>
-                          <WorktreeSessionGroup
-                            groupKey={mainGroupKey}
-                            sessionIds={visibleMainSessionIds}
-                            workspaceId={workspace.workspaceId}
-                            expanded={expandedSessionGroups[mainGroupKey] === true}
-                            actionPending={actionPending}
-                            sessions={sessions}
-                            dragState={sessionDrag}
-                            onToggleExpanded={() => {
-                              setExpandedSessionGroups((current) => ({
-                                ...current,
-                                [mainGroupKey]: current[mainGroupKey] !== true,
-                              }));
-                            }}
-                            onStartDrag={(groupKey, sessionId) => {
-                              sessionDropCommitted.current = false;
-                              setSessionDrag({ groupKey, sessionId, over: null });
-                            }}
-                            onHoverDrag={(sessionId, half) => {
-                              setSessionDrag((current) =>
-                                current === undefined
-                                  ? current
-                                  : { ...current, over: { sessionId, half } },
-                              );
-                            }}
-                            onClearDrag={() => {
-                              setSessionDrag(undefined);
-                            }}
-                            onFinishDrag={() => {
-                              sessionDropCommitted.current = false;
-                            }}
-                            onCommitDrag={commitSessionDrag}
-                            onOpen={(sessionId) => {
-                              openWorktreeSession({ open: openSession }, sessionId);
-                            }}
-                            onRename={renameSession === undefined ? undefined : openSessionRename}
-                            onFork={forkSession}
-                            onArchive={
-                              archiveSession === undefined ? undefined : archiveWorktreeSession
+                                  }
                             }
                           />
+                          {mainExpanded && (
+                            <WorktreeSessionGroup
+                              groupKey={mainGroupKey}
+                              sessionIds={visibleMainSessionIds}
+                              workspaceId={workspace.workspaceId}
+                              expanded={expandedSessionGroups[mainGroupKey] === true}
+                              actionPending={actionPending}
+                              sessions={sessions}
+                              dragState={sessionDrag}
+                              onToggleExpanded={() => {
+                                setExpandedSessionGroups((current) => ({
+                                  ...current,
+                                  [mainGroupKey]: current[mainGroupKey] !== true,
+                                }));
+                              }}
+                              onStartDrag={(groupKey, sessionId) => {
+                                sessionDropCommitted.current = false;
+                                setSessionDrag({ groupKey, sessionId, over: null });
+                              }}
+                              onHoverDrag={(sessionId, half) => {
+                                setSessionDrag((current) =>
+                                  current === undefined
+                                    ? current
+                                    : { ...current, over: { sessionId, half } },
+                                );
+                              }}
+                              onClearDrag={() => {
+                                setSessionDrag(undefined);
+                              }}
+                              onFinishDrag={() => {
+                                sessionDropCommitted.current = false;
+                              }}
+                              onCommitDrag={commitSessionDrag}
+                              onOpen={(sessionId) => {
+                                openWorktreeSession({ open: openSession }, sessionId);
+                              }}
+                              onRename={renameSession === undefined ? undefined : openSessionRename}
+                              onFork={forkSession}
+                              onArchive={
+                                archiveSession === undefined ? undefined : archiveWorktreeSession
+                              }
+                            />
+                          )}
 
                           {worktrees.length === 0 && (
                             <p className={styles.emptyNested}>No Worktrees</p>

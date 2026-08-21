@@ -26,6 +26,10 @@ their actions do not also toggle the row. The existing disclosure control
 continues to expose `aria-expanded` and an accessible label; it delegates to
 the same toggle path without causing a double toggle.
 
+The Main group uses the same split-row disclosure treatment as Worktree. Its
+expanded state is browser-local and independent from the Workspace and session
+overflow states; the Main row keeps its `+` action and has no removal menu.
+
 The leading Workspace affordance follows native DSH CSS: the folder is shown
 at rest, and the chevron becomes visible on row hover while the folder is
 hidden. The row remains keyboard reachable through its existing interactive
@@ -48,7 +52,7 @@ new UI primitive is introduced.
 
 ## Trailing action alignment
 
-Workspace rows, the Main header, and active Worktree rows use one explicit
+Workspace rows, the Main split row, and active Worktree rows use one explicit
 fixed-width trailing action rail. The rail has a stable `64px` width and the
 visible `+` anchor is positioned against the same right edge in every row.
 The menu slot remains reserved when its menu is hidden, so showing or hiding

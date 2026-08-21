@@ -77,6 +77,10 @@ Workspace, Main, and Worktree `+` controls share a fixed right-aligned action
 rail. These are Client presentation details only; they do not change DSH-owned
 data, Session membership, or the plugin sidecar.
 
+The Main group uses the same split-row presentation as a Worktree: its row can
+be collapsed and expanded independently from the Workspace, keeps the native
+Main `+` Session action, and intentionally has no Worktree removal action.
+
 ### 更新本地 plugin 后重新测试
 
 profile 已经链接本地 checkout 后，每次修改 plugin 只需要重新构建 plugin，重启

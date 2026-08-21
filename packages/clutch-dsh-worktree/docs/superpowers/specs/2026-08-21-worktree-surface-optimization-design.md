@@ -101,7 +101,7 @@ surface.
 
 ### Action alignment
 
-Workspace rows, the Main header, and active Worktree rows share one fixed
+Workspace rows, the Main split row, and active Worktree rows share one fixed
 trailing action slot. The slot reserves the same width whether its menu is
 visible or hidden, so every `+` lands on one vertical alignment line. Search
 controls remain outside this tree action grid.

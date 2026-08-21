@@ -538,3 +538,45 @@ test('matches native Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*display: none;/);
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
+
+test('renders Main as a collapsible Worktree-style split row without removal', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const mainStart = source.lastIndexOf('<div', source.indexOf('data-main-group'));
+  const mainEnd = source.indexOf('</div>\n', mainStart);
+  assert.notEqual(mainStart, -1);
+  assert.notEqual(mainEnd, -1);
+  const mainSource = source.slice(mainStart, mainEnd);
+
+  assert.match(mainSource, /styles\.mainRow/);
+  assert.match(mainSource, /data-main-disclosure/);
+  assert.match(mainSource, /mainExpanded/);
+  assert.match(mainSource, /aria-expanded=\{mainExpanded\}/);
+  assert.match(mainSource, /data-add-main-session/);
+  assert.match(mainSource, /styles\.treeActionSlot/);
+  assert.match(mainSource, /onClick=\{\(\) => \{\s*onToggle\(\);/);
+  assert.match(
+    mainSource,
+    /data-main-disclosure[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onToggle\(\);/,
+  );
+  assert.match(
+    mainSource,
+    /data-add-main-session[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onCreateSession\(\);/,
+  );
+  assert.doesNotMatch(mainSource, /Remove|remove|Menu|menu/);
+  assert.match(
+    styles,
+    /\.mainRow \.mainDisclosure\s*\{[\s\S]*display: inline-flex;[\s\S]*visibility: hidden;/,
+  );
+  assert.match(
+    styles,
+    /\.mainRow:hover \.mainDisclosure\s*\{[\s\S]*visibility: visible;/,
+  );
+  assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
+});

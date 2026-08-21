@@ -1,5 +1,10 @@
 # Worktree Tree Native Parity Implementation Plan
 
+> **Follow-up (2026-08-21):** Main now uses the same split-row/disclosure
+> presentation as Worktree. Its browser-local expansion state is independent
+> from the Workspace and session overflow state; the Main `+` remains available,
+> while Main intentionally has no removal menu.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Worktree Workspace tree behave and look like the native DSH Workspace browser, including whole-row disclosure, native text metrics, and one aligned trailing `+` rail.
