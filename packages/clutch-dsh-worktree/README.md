@@ -57,7 +57,7 @@ pnpm dsh web
 3. 填写 Worktree name（默认 `dsh/<8位随机串>`，已存在时自动重滚），创建时从基线 branch 派生新的 local branch；
 4. 点击 Main 旁边的 `+`，通过 DSH 原生 `startSession(workspaceId)` 创建 Main Session；
 5. 点击 Worktree 旁边的 `+`，UI 会创建 cwd 指向该 Worktree 的新 Session、完成 binding 并打开该 Session；
-6. 删除 Worktree，并查看保留的 detached binding。
+6. 查看 Worktree 的 ready、repair 和 detached 状态；当前 Worktree surface 不提供 Remove Worktree 入口。
 
 Worktree mode is opened only from the Sidebar footer action. The surface is a
 dynamic, scrollable overlay bounded by the native New Session control and the
@@ -77,9 +77,10 @@ Workspace, Main, and Worktree `+` controls share a fixed right-aligned action
 rail. These are Client presentation details only; they do not change DSH-owned
 data, Session membership, or the plugin sidecar.
 
-The Main group uses the same split-row presentation as a Worktree: its row can
-be collapsed and expanded independently from the Workspace, keeps the native
-Main `+` Session action, and intentionally has no Worktree removal action.
+Main and Worktree groups share one parameterized split-row presentation. Main
+uses the same branch/tree icon and aligned action rail as Worktree. The Client
+surface intentionally does not expose Worktree removal; detached bindings
+remain visible and the underlying Manager contract is unchanged.
 
 ### 更新本地 plugin 后重新测试
 

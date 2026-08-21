@@ -13,8 +13,9 @@ This directory contains the browser Consumer and one deep Connection seam:
 - `worktree-view.ts` and `WorktreeSurface.tsx` own only browser view state and
   action orchestration. The surface renders Workspace → Worktree → Session,
   scopes Main sessions to the selected DSH Workspace, and provides search plus
-  Workspace/Worktree creation affordances. Worktree creation and removal go
-  through the injected manager; the creation dialog chooses a base branch
+  Workspace/Worktree creation affordances. Worktree creation goes through the
+  injected manager, while the Client surface does not expose Worktree removal;
+  the creation dialog chooses a base branch
   (defaulting to the current branch), generates an available editable
   `dsh/<8-char>` branch name, then creates the Worktree and immediately creates
   a new DSH Session through `session.create({ cwd })`, binds it through that
@@ -54,6 +55,13 @@ drag ordering is restricted to the current visual Main or Worktree group. Each
 group shows five rows initially and provides Expand more/Collapse when needed.
 The trailing action column is reserved across Workspace, Main, and active
 Worktree rows so `+` controls remain aligned when menus appear.
+
+The Main and Worktree group rows use one parameterized row component. Main uses
+the branch/tree icon, keeps its native DSH `+` Session action, and has no
+health-dot or removal menu. Active Worktree rows add the health dot and Worktree
+Session `+`; detached rows remain read-only. The Client surface does not expose
+Worktree removal, while the Manager/API contract remains available to other
+controlled consumers.
 
 Workspace deletion calls only the native DSH Workspace registration delete.
 The confirmation explicitly states that the directory, Sessions, Git
