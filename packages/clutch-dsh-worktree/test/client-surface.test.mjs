@@ -250,7 +250,7 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /createSessionForWorktree/);
   assert.match(source, /Retry Binding/);
   assert.match(source, /Open Created Session/);
-  assert.match(source, /Remove Worktree/);
+  assert.doesNotMatch(source, /Remove Worktree/);
   assert.match(source, /detached bindings/);
 });
 
@@ -301,7 +301,7 @@ test('renders a Main Session action alongside the Main group label', async () =>
   assert.match(source, /data-add-main-session/);
 });
 
-test('uses native DSH menus for Session and Worktree row actions', async () => {
+test('uses native DSH menus for Session and Workspace row actions', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -315,11 +315,11 @@ test('uses native DSH menus for Session and Worktree row actions', async () => {
   for (const label of ['Rename', 'Fork session', 'Archive session']) {
     assert.match(source, new RegExp(label));
   }
-  assert.match(source, /Remove Worktree/);
+  assert.doesNotMatch(source, /Remove Worktree/);
   assert.match(source, /portal/);
   assert.match(source, /closeOnPointerLeave/);
   assert.match(source, /data-session-menu/);
-  assert.match(source, /data-worktree-menu/);
+  assert.doesNotMatch(source, /data-worktree-menu/);
   assert.doesNotMatch(
     source,
     /className=\{styles\.inlineButton\}[\s\S]*?>\s*Remove\s*</,
@@ -391,20 +391,20 @@ test('keeps the final surface bounded, scrollable, and action-aligned', async ()
   assert.match(surfaceSource, /data-worktree-surface/);
   assert.match(styleSource, /overflow: auto/);
   assert.match(styleSource, /min-height: 0/);
-  assert.match(styleSource, /treeActionSlot|workspaceActions|worktreeActions/);
+  assert.match(styleSource, /treeActionSlot|workspaceActions/);
   assert.match(surfaceSource, /StateDot/);
   assert.doesNotMatch(surfaceSource, /\bactive\b.*\bstatus\b/);
   assert.doesNotMatch(surfaceSource, /\bbound\b/);
 });
 
-test('uses the DSH Modal primitive for Worktree create and remove dialogs', async () => {
+test('uses the DSH Modal primitive for the Worktree create dialog', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /open=\{worktreeModalWorkspaceId !== undefined/);
-  assert.match(source, /open=\{worktreeRemoval !== undefined/);
+  assert.doesNotMatch(source, /worktreeRemoval|Remove Worktree/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });
 
@@ -495,7 +495,7 @@ test('matches native Workspace interaction, typography, and action rail', async 
   assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
 });
 
-test('matches native Worktree row disclosure and aligned action geometry', async () => {
+test('matches shared Worktree row disclosure and aligned action geometry', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -504,13 +504,13 @@ test('matches native Worktree row disclosure and aligned action geometry', async
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
   );
-  const rowStart = source.indexOf('<div\n                                  className={styles.worktreeRow}');
-  const rowEnd = source.indexOf('{worktreeExpanded && (', rowStart);
+  const rowStart = source.indexOf('function WorktreeGroupRow');
+  const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
   assert.notEqual(rowStart, -1);
   assert.notEqual(rowEnd, -1);
   const rowSource = source.slice(rowStart, rowEnd);
 
-  assert.match(rowSource, /onClick=\{\(\) => \{\s*toggleWorktree\(record\.worktreeId\);/);
+  assert.match(rowSource, /className=\{styles\.worktreeRow\}/);
   assert.match(
     rowSource,
     /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}/,
@@ -519,7 +519,7 @@ test('matches native Worktree row disclosure and aligned action geometry', async
   assert.match(rowSource, /IconChevronRightOutline14 size=\{18\}/);
   assert.match(
     rowSource,
-    /data-add-session[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/,
+    /data-add-session=\{main \? undefined : 'true'\}[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/,
   );
 
   assert.match(
@@ -539,7 +539,7 @@ test('matches native Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
-test('renders Main as a collapsible Worktree-style split row without removal', async () => {
+test('shares one parameterized group row between Main and Worktree without removal UI', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -548,35 +548,19 @@ test('renders Main as a collapsible Worktree-style split row without removal', a
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
   );
-  const mainStart = source.lastIndexOf('<div', source.indexOf('data-main-group'));
-  const mainEnd = source.indexOf('</div>\n', mainStart);
-  assert.notEqual(mainStart, -1);
-  assert.notEqual(mainEnd, -1);
-  const mainSource = source.slice(mainStart, mainEnd);
-
-  assert.match(mainSource, /styles\.mainRow/);
-  assert.match(mainSource, /data-main-disclosure/);
-  assert.match(mainSource, /mainExpanded/);
-  assert.match(mainSource, /aria-expanded=\{mainExpanded\}/);
-  assert.match(mainSource, /data-add-main-session/);
-  assert.match(mainSource, /styles\.treeActionSlot/);
-  assert.match(mainSource, /onClick=\{\(\) => \{\s*onToggle\(\);/);
-  assert.match(
-    mainSource,
-    /data-main-disclosure[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onToggle\(\);/,
-  );
-  assert.match(
-    mainSource,
-    /data-add-main-session[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onCreateSession\(\);/,
-  );
-  assert.doesNotMatch(mainSource, /Remove|remove|Menu|menu/);
-  assert.match(
-    styles,
-    /\.mainRow \.mainDisclosure\s*\{[\s\S]*display: inline-flex;[\s\S]*visibility: hidden;/,
-  );
-  assert.match(
-    styles,
-    /\.mainRow:hover \.mainDisclosure\s*\{[\s\S]*visibility: visible;/,
-  );
+  assert.equal((source.match(/function WorktreeGroupRow/g) ?? []).length, 1);
+  assert.match(source, /function WorktreeGroupRow/);
+  assert.doesNotMatch(source, /MainSessionGroupRow/);
+  assert.match(source, /kind="main"/);
+  assert.match(source, /kind="worktree"/);
+  assert.match(source, /kind="main"[\s\S]*icon=\{<IconBranchOutline16 \/>\}/);
+  assert.match(source, /kind="worktree"[\s\S]*icon=\{<IconBranchOutline16 \/>\}/);
+  assert.match(source, /data-add-main-session/);
+  assert.match(source, /data-add-session/);
+  assert.match(source, /expandedMains/);
+  assert.match(source, /expandedWorktrees/);
+  assert.doesNotMatch(source, /worktreeRemoval|openWorktreeMenuId|data-worktree-menu/);
+  assert.doesNotMatch(source, /Remove Worktree/);
+  assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
   assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
 });
