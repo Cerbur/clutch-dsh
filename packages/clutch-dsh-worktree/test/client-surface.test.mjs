@@ -492,6 +492,7 @@ test('matches native Workspace interaction, typography, and action rail', async 
   );
   assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
   assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
+  assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
 });
 
 test('matches native Worktree row disclosure and aligned action geometry', async () => {

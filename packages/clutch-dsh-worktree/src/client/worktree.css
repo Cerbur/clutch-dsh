@@ -557,6 +557,7 @@
   display: flex;
   align-items: center;
   min-height: 34px;
+  padding-right: 4px;
 }
 
 .groupHeader .groupLabel {
