@@ -34,7 +34,7 @@
 - Consumes: the current source text from `src/client/WorktreeSurface.tsx` and CSS text from `src/client/worktree.css`.
 - Produces: focused source/CSS assertions that fail before the implementation and protect the approved native-parity behavior.
 
-- [ ] **Step 1: Add the failing Workspace interaction assertions.**
+- [x] **Step 1: Add the failing Workspace interaction assertions.**
 
 Add a test that reads both files and asserts the Workspace row has row-level
 `onClick` wiring, while the menu and Workspace `+` handlers call
@@ -69,7 +69,7 @@ test('uses native whole-row Workspace disclosure and hover affordances', async (
 });
 ```
 
-- [ ] **Step 2: Add the failing native text metric assertions.**
+- [x] **Step 2: Add the failing native text metric assertions.**
 
 In the same test file, add a CSS declaration helper or direct source
 assertions that require these exact declarations:
@@ -83,7 +83,7 @@ assert.match(styles, /\.sessionOverflowButton\s*\{[\s\S]*font-size: 12px;/);
 assert.match(styles, /\.searchInput\s*\{[\s\S]*font-size: 13px;/);
 ```
 
-- [ ] **Step 3: Add the failing fixed-rail assertions.**
+- [x] **Step 3: Add the failing fixed-rail assertions.**
 
 Require the CSS to define a single fixed-width rail and a right-edge anchor
 for its final `+` button:
@@ -95,7 +95,7 @@ assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*righ
 assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
 ```
 
-- [ ] **Step 4: Run the focused tests and verify RED.**
+- [x] **Step 4: Run the focused tests and verify RED.**
 
 Run:
 
@@ -108,7 +108,7 @@ the new row interaction, typography, and rail assertions fail because the
 current row has no row-level click handler, current tree text is 12–13px, and
 the rail is flex-positioned rather than right-anchored.
 
-- [ ] **Step 5: Commit the red regression tests.**
+- [x] **Step 5: Commit the red regression tests.**
 
 ```bash
 git add test/client-surface.test.mjs
@@ -127,7 +127,7 @@ git commit -m "test(worktree): pin native tree parity requirements"
 - Consumes: the existing `WorktreeWorkspaceRow` props, `toggleWorkspace`, and current tree action markup.
 - Produces: a Workspace row that toggles from its body or disclosure affordance, native hover presentation, native text metrics, and a stable trailing rail consumed by Workspace/Main/Worktree rows.
 
-- [ ] **Step 1: Add row-level Workspace disclosure without double toggles.**
+- [x] **Step 1: Add row-level Workspace disclosure without double toggles.**
 
 Update the root Workspace row element in `WorktreeWorkspaceRow` so it calls
 `onToggle` from the row body:
@@ -180,7 +180,7 @@ before calling the same toggle callback:
 Keep the existing `stopPropagation()` calls on the ellipsis and Workspace
 `+` buttons. Do not add a second expansion state or change Worktree expansion.
 
-- [ ] **Step 2: Implement native folder/chevron hover swapping.**
+- [x] **Step 2: Implement native folder/chevron hover swapping.**
 
 Add these CSS rules next to the Workspace row rules. The folder is visible at
 rest; the dedicated disclosure control replaces it only while the Workspace
@@ -203,7 +203,7 @@ toggle semantics:
 }
 ```
 
-- [ ] **Step 3: Apply the native tree text metrics.**
+- [x] **Step 3: Apply the native tree text metrics.**
 
 Update the existing selectors without changing semantic colors:
 
@@ -236,7 +236,7 @@ Update the existing selectors without changing semantic colors:
 Retain the existing `MAIN` rule at `10px`/`600` and its native letter
 spacing. Do not increase modal/error copy as part of this tree-only fix.
 
-- [ ] **Step 4: Make the trailing action rail deterministic.**
+- [x] **Step 4: Make the trailing action rail deterministic.**
 
 Replace the current flex-only action-slot sizing with an explicit positioned
 rail. Keep the 28px hit target, reserve the hidden menu slot, and anchor the
@@ -274,7 +274,7 @@ inline-flex; }` override because the shared rail declaration now controls its
 display; keep the existing hover/menu-open visibility behavior for the menu
 and Worktree actions.
 
-- [ ] **Step 5: Run the focused tests and verify GREEN.**
+- [x] **Step 5: Run the focused tests and verify GREEN.**
 
 Run:
 
@@ -285,7 +285,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test -- --test-name-pattern='Workspace
 Expected: the new regression assertions and all existing matching Client
 surface tests pass.
 
-- [ ] **Step 6: Commit the implementation slice.**
+- [x] **Step 6: Commit the implementation slice.**
 
 ```bash
 git add src/client/WorktreeSurface.tsx src/client/worktree.css
@@ -307,7 +307,7 @@ git commit -m "fix(worktree): match native workspace tree parity"
 - Consumes: the completed Consumer implementation and the existing Arc tab titled `查看当前工作目录 — DSH Local Build`.
 - Produces: documented native-parity behavior, passing package checks, and a visual confirmation from the real DSH page.
 
-- [ ] **Step 1: Record the behavior change in package documentation.**
+- [x] **Step 1: Record the behavior change in package documentation.**
 
 Add a short native-parity note to `README.md` and the current surface
 optimization plan: Workspace rows toggle from the row body, the chevron is a
@@ -315,7 +315,7 @@ hover affordance, tree copy follows native DSH metrics, and the Workspace/Main/
 Worktree `+` controls share a fixed right-aligned rail. State that this remains
 browser-local presentation and does not alter DSH data or source.
 
-- [ ] **Step 2: Build the package and run the complete package checks.**
+- [x] **Step 2: Build the package and run the complete package checks.**
 
 Run from the package directory:
 
@@ -329,7 +329,7 @@ git diff --check
 Expected: typecheck, build, and the full Node test suite exit with code 0; the
 diff check reports no whitespace errors. Do not add generated `lib/` output.
 
-- [ ] **Step 3: Reload and inspect the real DSH page with Computer Use.**
+- [x] **Step 3: Reload and inspect the real DSH page with Computer Use.**
 
 Use the persistent Computer Use `node_repl` session and the `@oai/sky` API;
 do not substitute a terminal-only or code-only check:
@@ -352,7 +352,7 @@ If the DSH page still shows the old bundle, reload Arc with
 `sky.get_app_state({ app: 'Arc' })` again before acting on the page. The page
 must remain the existing local DSH page; do not navigate to a new site.
 
-- [ ] **Step 4: Verify row interaction and hover presentation in Arc.**
+- [x] **Step 4: Verify row interaction and hover presentation in Arc.**
 
 Use the latest screenshot and fresh coordinates/AX indices after every action:
 
@@ -376,7 +376,7 @@ external data during this QA pass. If the page cannot be reloaded or the
 visual result differs, record the exact Arc state and stop before claiming the
 fix is complete.
 
-- [ ] **Step 5: Review the final diff and status.**
+- [x] **Step 5: Review the final diff and status.**
 
 Run:
 

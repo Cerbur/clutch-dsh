@@ -69,6 +69,13 @@ Expand more/Collapse control. Workspace deletion removes only the DSH
 registration: its directory, Sessions, Git Worktrees, and plugin sidecar are
 retained.
 
+The tree keeps native DSH Workspace presentation: clicking the Workspace row
+body toggles its browser-local expansion state, while the folder changes to a
+chevron only on hover. Workspace, Worktree, and Session copy follows the native
+tree text metrics, and the Workspace, Main, and Worktree `+` controls share a
+fixed right-aligned action rail. These are Client presentation details only;
+they do not change DSH-owned data, Session membership, or the plugin sidecar.
+
 ### 更新本地 plugin 后重新测试
 
 profile 已经链接本地 checkout 后，每次修改 plugin 只需要重新构建 plugin，重启

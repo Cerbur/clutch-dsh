@@ -767,14 +767,14 @@ git commit -m "docs(worktree): record native-style surface behavior"
 - `pnpm --filter @cerbur/clutch-dsh-worktree typecheck` — passed.
 - `pnpm --filter @cerbur/clutch-dsh-worktree build` — passed; generated `lib/`
   remains ignored.
-- `pnpm --filter @cerbur/clutch-dsh-worktree test` — passed, 97/97 tests.
+- `pnpm --filter @cerbur/clutch-dsh-worktree test` — passed, 98/98 tests.
 - `pnpm run check:workspace` — passed (`workspace shape ok`).
 - `pnpm run check:patches` — passed (`cordis patches ok`; the existing YAML
   unresolved-tag warning is emitted by the validator).
 - `pnpm run format:check` — passed.
 - `pnpm run lint` — passed.
 - `pnpm run typecheck` — passed.
-- `pnpm run test` — passed, including the package's 97/97 tests.
+- `pnpm run test` — passed, including the package's 98/98 tests.
 - `pnpm run check` — passed, including all workspace, formatting, lint,
   typecheck, and test stages.
 - `git diff --check` — passed with no output.
@@ -788,3 +788,18 @@ git commit -m "docs(worktree): record native-style surface behavior"
   /Users/yuancheng/Documents/Code/deepseek-harness diff --name-only`; both were
   empty. The repository-relative pathspec form cannot target that separate
   repository and was therefore not used as the scope check.
+- Worktree tree parity follow-up — focused RED/GREEN coverage added for whole-row
+  Workspace disclosure, hover-only folder/chevron presentation, native text
+  metrics, and the fixed action rail; Arc Computer Use confirmed row collapse,
+  row expansion, single-toggle disclosure-button behavior, and aligned
+  Workspace/Main/Worktree `+` controls after rebuilding the local bundle.
+
+## Follow-up: Worktree tree native parity
+
+The later Client parity correction keeps the approved surface architecture and
+does not change DSH data boundaries. Workspace rows now toggle from their body,
+with the folder/chevron affordance swapping on hover; tree text uses the native
+14px regular-weight metrics; and Workspace, Main, and Worktree `+` controls use
+one fixed right-aligned action rail. The regression coverage lives in
+`test/client-surface.test.mjs`, and the implementation was also checked in the
+already-open Arc DSH page with Computer Use after rebuilding the package.
