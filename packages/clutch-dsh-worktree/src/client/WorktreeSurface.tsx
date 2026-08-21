@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
-import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
+import type {
+  PropsLocale,
+  PropsRuntime,
+  PropsStore,
+  TranslateNS,
+} from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import {
   Button,
@@ -23,6 +28,7 @@ import {
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SessionBinding, WorktreeManager } from '../contract/index.js';
+import { WORKTREE_NS } from './locales.js';
 import { openWorktreeSession } from './navigation.js';
 import { useSidebarOverlayGeometry } from './sidebar-overlay-geometry.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
@@ -91,7 +97,10 @@ export interface WorktreeSurfaceInjected {
 /** Props derived from the frame overlay slot, shared state, and injected face. */
 export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
   PropsStore<ReturnType<typeof createWorktreeViewStore>> &
+  PropsLocale<typeof WORKTREE_NS> &
   WorktreeSurfaceInjected;
+
+type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
 
 interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
@@ -109,6 +118,7 @@ interface SessionRenameTarget {
 }
 
 interface WorktreeSessionRowProps {
+  readonly t: WorktreeTranslate;
   readonly sessionId: string;
   readonly label: string;
   readonly drag: SessionDragProps;
@@ -138,6 +148,7 @@ interface WorkspaceDragProps {
 }
 
 interface WorktreeWorkspaceRowProps {
+  readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
   readonly actionPending: boolean;
@@ -237,6 +248,7 @@ function workspaceMatches(
 
 /** Workspace row using the native DSH menu, fixed action column, and drag contract. */
 function WorktreeWorkspaceRow({
+  t,
   workspace,
   expanded,
   actionPending,
@@ -251,13 +263,13 @@ function WorktreeWorkspaceRow({
   const workspaceMenuItems = [
     {
       id: 'rename',
-      label: 'Rename',
+      label: t('workspace.rename'),
       icon: <IconEditOutline16 />,
       disabled: actionPending,
     },
     {
       id: 'delete',
-      label: 'Delete',
+      label: t('workspace.delete'),
       icon: <IconTrashOutline16 />,
       danger: true,
       disabled: actionPending,
@@ -299,7 +311,9 @@ function WorktreeWorkspaceRow({
       <button
         type="button"
         className={`${styles.disclosureButton} ${styles.workspaceDisclosure}`}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${workspace.title}`}
+        aria-label={t(expanded ? 'workspace.collapse' : 'workspace.expand', {
+          name: workspace.title,
+        })}
         aria-expanded={expanded}
         onClick={(event) => {
           event.stopPropagation();
@@ -336,7 +350,7 @@ function WorktreeWorkspaceRow({
                 type="button"
                 className={styles.iconButton}
                 data-workspace-menu
-                aria-label={`Workspace options for ${workspace.title}`}
+                aria-label={t('workspace.options', { name: workspace.title })}
                 onClick={(event) => {
                   event.stopPropagation();
                   onMenuOpenChange(!menuOpen);
@@ -351,7 +365,7 @@ function WorktreeWorkspaceRow({
           type="button"
           className={styles.iconButton}
           data-add-worktree
-          aria-label={`Add Worktree to ${workspace.title}`}
+          aria-label={t('workspace.addWorktree', { name: workspace.title })}
           onClick={(event) => {
             event.stopPropagation();
             onCreateWorktree();
@@ -367,6 +381,7 @@ function WorktreeWorkspaceRow({
 type WorktreeGroupKind = 'main' | 'worktree';
 
 interface WorktreeGroupRowProps {
+  readonly t: WorktreeTranslate;
   readonly kind: WorktreeGroupKind;
   readonly label: string;
   readonly expanded: boolean;
@@ -380,6 +395,7 @@ interface WorktreeGroupRowProps {
 
 /** Shared Main/Worktree group row with parameterized icon, state, and actions. */
 function WorktreeGroupRow({
+  t,
   kind,
   label,
   expanded,
@@ -402,7 +418,7 @@ function WorktreeGroupRow({
       <button
         type="button"
         className={`${styles.disclosureButton} ${styles.worktreeDisclosure}`}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
+        aria-label={t(expanded ? 'worktree.collapse' : 'worktree.expand', { name: label })}
         aria-expanded={expanded}
         onClick={(event) => {
           event.stopPropagation();
@@ -436,7 +452,7 @@ function WorktreeGroupRow({
             className={styles.iconButton}
             data-add-main-session={main ? 'true' : undefined}
             data-add-session={main ? undefined : 'true'}
-            aria-label={`Add Session to ${workspaceTitle}`}
+            aria-label={t('worktree.addSession', { name: workspaceTitle })}
             onClick={(event) => {
               event.stopPropagation();
               onCreateSession();
@@ -452,6 +468,7 @@ function WorktreeGroupRow({
 
 /** Worktree-mode Session row with the same trailing options menu as native DSH rows. */
 function WorktreeSessionRow({
+  t,
   sessionId,
   label,
   drag,
@@ -470,19 +487,19 @@ function WorktreeSessionRow({
   const sessionMenuItems = [
     {
       id: 'rename',
-      label: 'Rename',
+      label: t('session.rename'),
       icon: <IconEditOutline16 />,
       disabled: onRename === undefined || actionPending,
     },
     {
       id: 'fork',
-      label: 'Fork session',
+      label: t('session.fork'),
       icon: <IconBranchOutline16 />,
       disabled: onFork === undefined || actionPending,
     },
     {
       id: 'archive',
-      label: 'Archive session',
+      label: t('session.archive'),
       icon: <IconArchiveOutline20 size={16} />,
       disabled: onArchive === undefined || actionPending,
     },
@@ -540,7 +557,7 @@ function WorktreeSessionRow({
               type="button"
               className={styles.iconButton}
               data-session-menu
-              aria-label={`Session options for ${label}`}
+              aria-label={t('session.options', { name: label })}
               onClick={(event) => {
                 event.stopPropagation();
                 setMenuOpen((current) => !current);
@@ -556,6 +573,7 @@ function WorktreeSessionRow({
 }
 
 interface WorktreeSessionGroupProps {
+  readonly t: WorktreeTranslate;
   readonly groupKey: string;
   readonly sessionIds: readonly string[];
   readonly workspaceId: string;
@@ -581,6 +599,7 @@ interface WorktreeSessionGroupProps {
 }
 
 function WorktreeSessionGroup({
+  t,
   groupKey,
   sessionIds,
   workspaceId,
@@ -606,6 +625,7 @@ function WorktreeSessionGroup({
     <>
       {visibleSessionIds.map((sessionId) => (
         <WorktreeSessionRow
+          t={t}
           key={`${groupKey}:${sessionId}`}
           sessionId={sessionId}
           label={sessionLabel(sessionId, sessions)}
@@ -655,7 +675,9 @@ function WorktreeSessionGroup({
           aria-expanded={expanded}
           onClick={onToggleExpanded}
         >
-          {expanded ? 'Collapse' : `Expand ${sessionIds.length - 5} more`}
+          {expanded
+            ? t('session.collapse')
+            : t('session.expandMore', { count: sessionIds.length - 5 })}
         </button>
       )}
     </>
@@ -671,6 +693,7 @@ export function WorktreeSurface({
   actions,
   useSessions,
   useWorkspaces,
+  t,
   available,
   manager,
   createWorkspace,
@@ -822,7 +845,7 @@ export function WorktreeSurface({
     const target = workspaceRenameTarget;
     if (workspaceRenameBlocked || target === undefined) return;
     if (renameWorkspace === undefined) {
-      setWorkspaceRenameError('Workspace rename is unavailable; retry after reconnecting.');
+      setWorkspaceRenameError(t('error.workspaceRenameUnavailable'));
       return;
     }
     setWorkspaceRenamePending(true);
@@ -852,7 +875,7 @@ export function WorktreeSurface({
     const target = workspaceDeleteTarget;
     if (target === undefined || workspaceDeletePending) return;
     if (deleteWorkspace === undefined) {
-      setWorkspaceDeleteError('Workspace delete is unavailable; retry after reconnecting.');
+      setWorkspaceDeleteError(t('error.workspaceDeleteUnavailable'));
       return;
     }
     setWorkspaceDeletePending(true);
@@ -898,7 +921,7 @@ export function WorktreeSurface({
     if (insertWorkspaceBefore === undefined) {
       setActionError({
         code: 'WORKSPACE_ORDER_UNAVAILABLE',
-        message: 'Workspace ordering is unavailable; retry after reconnecting.',
+        message: t('error.workspaceOrderingUnavailable'),
         retryable: true,
       });
       return;
@@ -937,7 +960,7 @@ export function WorktreeSurface({
     if (insertSessionBefore === undefined) {
       setActionError({
         code: 'SESSION_ORDER_UNAVAILABLE',
-        message: 'Session ordering is unavailable; retry after reconnecting.',
+        message: t('error.sessionOrderingUnavailable'),
         retryable: true,
       });
       return;
@@ -965,7 +988,7 @@ export function WorktreeSurface({
     const title = sessionRenameDraft.trim();
     if (target === undefined || title.length === 0 || sessionRenamePending) return;
     if (renameSession === undefined) {
-      setSessionRenameError('Session rename is unavailable; retry after reconnecting.');
+      setSessionRenameError(t('error.sessionRenameUnavailable'));
       return;
     }
     setSessionRenamePending(true);
@@ -1043,7 +1066,7 @@ export function WorktreeSurface({
         input,
       });
       if (createdWorktree === undefined) {
-        throw new Error('Worktree creation returned no Worktree record; retry the request.');
+        throw new Error(t('error.worktreeRecordMissing'));
       }
       setWorktreeModalWorkspaceId(undefined);
 
@@ -1051,7 +1074,7 @@ export function WorktreeSurface({
         await refresh();
         setActionError({
           code: 'SESSION_CREATE_UNAVAILABLE',
-          message: 'Worktree created, but Session creation is unavailable; retry after reconnecting.',
+          message: t('error.worktreeCreatedSessionUnavailable'),
           retryable: true,
         });
         return;
@@ -1082,7 +1105,7 @@ export function WorktreeSurface({
     if (createSessionCallback === undefined) {
       setActionError({
         code: 'SESSION_CREATE_UNAVAILABLE',
-        message: 'Session creation is unavailable; retry after reconnecting.',
+        message: t('error.sessionCreationUnavailable'),
         retryable: true,
       });
       return;
@@ -1147,7 +1170,7 @@ export function WorktreeSurface({
       className={styles.surface}
       data-worktree-surface
       data-collapsed={collapsed || undefined}
-      aria-label="Worktree navigation"
+      aria-label={t('mode.navigation')}
       style={{
         width: `${width}px`,
         ...(bounds.ready
@@ -1157,11 +1180,11 @@ export function WorktreeSurface({
     >
       <div className={styles.wideContent}>
         <header className={styles.header}>
-          <span className={styles.title}>Worktrees</span>
+          <span className={styles.title}>{t('worktree.title')}</span>
           <button
             type="button"
             className={styles.closeButton}
-            aria-label="Exit Worktree mode"
+            aria-label={t('mode.exit')}
             onClick={() => {
               actions.setViewMode('workspace-session');
             }}
@@ -1176,8 +1199,8 @@ export function WorktreeSurface({
           </span>
           <input
             className={styles.searchInput}
-            aria-label="Search Workspaces and Sessions"
-            placeholder="Search Workspaces and Sessions"
+            aria-label={t('workspace.search')}
+            placeholder={t('workspace.search')}
             value={searchQuery}
             onChange={(event) => {
               setSearchQuery(event.currentTarget.value);
@@ -1186,7 +1209,7 @@ export function WorktreeSurface({
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="Add Workspace"
+            aria-label={t('workspace.add')}
             onClick={() => {
               if (createWorkspace !== undefined) void runMutation(createWorkspace);
             }}
@@ -1211,7 +1234,7 @@ export function WorktreeSurface({
                       void retrySessionBinding();
                     }}
                   >
-                    Retry Binding
+                    {t('action.retryBinding')}
                   </button>
                   <button
                     type="button"
@@ -1224,7 +1247,7 @@ export function WorktreeSurface({
                       openSession(sessionId);
                     }}
                   >
-                    Open Created Session
+                    {t('action.openCreatedSession')}
                   </button>
                 </div>
               )}
@@ -1237,13 +1260,15 @@ export function WorktreeSurface({
                     void refresh();
                   }}
                 >
-                  Retry
+                  {t('action.retry')}
                 </button>
               )}
             </div>
           )}
 
-          {readState.status === 'loading' && <p className={styles.message}>Loading Workspaces…</p>}
+          {readState.status === 'loading' && (
+            <p className={styles.message}>{t('status.loading')}</p>
+          )}
           {readState.status === 'error' && readState.error !== undefined ? (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
@@ -1256,13 +1281,13 @@ export function WorktreeSurface({
                   void refresh();
                 }}
               >
-                Retry
+                {t('action.retry')}
               </button>
             </div>
           ) : readState.status === 'ready' ? (
             <div className={styles.workspaceList}>
               {visibleWorkspaces.length === 0 ? (
-                <p className={styles.empty}>No matching Workspaces</p>
+                <p className={styles.empty}>{t('workspace.noMatches')}</p>
               ) : (
                 visibleWorkspaces.map((workspace) => {
                   const view = viewByWorkspace.get(workspace.workspaceId);
@@ -1293,6 +1318,7 @@ export function WorktreeSurface({
                       data-workspace-id={workspace.workspaceId}
                     >
                       <WorktreeWorkspaceRow
+                        t={t}
                         workspace={workspace}
                         expanded={expanded}
                         actionPending={actionPending}
@@ -1353,8 +1379,9 @@ export function WorktreeSurface({
                       {expanded && (
                         <div className={styles.treeChildren}>
                           <WorktreeGroupRow
+                            t={t}
                             kind="main"
-                            label="Main"
+                            label={t('worktree.main')}
                             expanded={mainExpanded}
                             icon={<IconBranchOutline16 />}
                             workspaceTitle={workspace.title}
@@ -1371,6 +1398,7 @@ export function WorktreeSurface({
                           />
                           {mainExpanded && (
                             <WorktreeSessionGroup
+                              t={t}
                               groupKey={mainGroupKey}
                               sessionIds={visibleMainSessionIds}
                               workspaceId={workspace.workspaceId}
@@ -1414,7 +1442,7 @@ export function WorktreeSurface({
                           )}
 
                           {worktrees.length === 0 && (
-                            <p className={styles.emptyNested}>No Worktrees</p>
+                            <p className={styles.emptyNested}>{t('worktree.noWorktrees')}</p>
                           )}
                           {worktrees.map((record) => {
                             const worktreeSessionIds = filterArchivedSessionIds(
@@ -1448,10 +1476,10 @@ export function WorktreeSurface({
                                 ? 'error'
                                 : 'done';
                             const stateLabel = record.status === 'removed'
-                              ? 'Detached Worktree'
+                              ? t('worktree.detached')
                               : record.health === 'repair'
-                                ? 'Worktree needs repair'
-                                : 'Active Worktree ready';
+                                ? t('worktree.repair')
+                                : t('worktree.ready');
                             const worktreeExpanded =
                               expandedWorktrees[record.worktreeId] !== false;
                             return (
@@ -1461,6 +1489,7 @@ export function WorktreeSurface({
                                 data-worktree-id={record.worktreeId}
                               >
                                 <WorktreeGroupRow
+                                  t={t}
                                   kind="worktree"
                                   label={record.branch}
                                   expanded={worktreeExpanded}
@@ -1485,6 +1514,7 @@ export function WorktreeSurface({
                                 />
                                 {worktreeExpanded && (
                                   <WorktreeSessionGroup
+                                    t={t}
                                     groupKey={worktreeGroupKey}
                                     sessionIds={visibleWorktreeSessionIds}
                                     workspaceId={workspace.workspaceId}
@@ -1548,7 +1578,7 @@ export function WorktreeSurface({
         <button
           type="button"
           className={styles.railButton}
-          aria-label="Exit Worktree mode"
+          aria-label={t('mode.exit')}
           onClick={() => {
             actions.setViewMode('workspace-session');
           }}
@@ -1560,12 +1590,12 @@ export function WorktreeSurface({
       <Modal
         open={sessionRenameTarget !== undefined}
         onClose={closeSessionRename}
-        closeLabel="Close"
-        title="Rename session"
+        closeLabel={t('dialog.close')}
+        title={t('session.rename')}
         footer={(
           <>
             <Button variant="outline" disabled={sessionRenamePending} onClick={closeSessionRename}>
-              Cancel
+              {t('dialog.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -1574,7 +1604,7 @@ export function WorktreeSurface({
                 void confirmSessionRename();
               }}
             >
-              Rename
+              {t('dialog.rename')}
             </Button>
           </>
         )}
@@ -1582,7 +1612,7 @@ export function WorktreeSurface({
         <Input
           className={styles.renameInput}
           value={sessionRenameDraft}
-          aria-label="Session name"
+          aria-label={t('session.name')}
           autoFocus
           disabled={sessionRenamePending}
           onFocus={(event) => {
@@ -1610,12 +1640,12 @@ export function WorktreeSurface({
         <Modal
           open={workspaceRenameTarget !== undefined}
           onClose={closeWorkspaceRename}
-          closeLabel="Close Rename Workspace dialog"
-          title="Rename Workspace"
+          closeLabel={t('dialog.closeWorkspaceRename')}
+          title={t('workspace.renameTitle')}
           footer={(
             <>
               <Button variant="outline" disabled={workspaceRenamePending} onClick={closeWorkspaceRename}>
-                Cancel
+                {t('dialog.cancel')}
               </Button>
               <Button
                 variant="primary"
@@ -1624,7 +1654,7 @@ export function WorktreeSurface({
                   void confirmWorkspaceRename();
                 }}
               >
-                Rename
+                {t('dialog.rename')}
               </Button>
             </>
           )}
@@ -1632,7 +1662,7 @@ export function WorktreeSurface({
           <Input
             className={styles.renameInput}
             value={workspaceRenameDraft}
-            aria-label="Workspace name"
+            aria-label={t('workspace.name')}
             autoFocus
             disabled={workspaceRenamePending}
             onFocus={(event) => {
@@ -1651,7 +1681,7 @@ export function WorktreeSurface({
           />
           {workspaceRenameDuplicate && (
             <p className={styles.renameError} role="alert">
-              A Workspace with this name already exists.
+              {t('workspace.duplicate')}
             </p>
           )}
           {workspaceRenameError !== undefined && (
@@ -1666,13 +1696,13 @@ export function WorktreeSurface({
         <Modal
           open={workspaceDeleteTarget !== undefined}
           onClose={closeWorkspaceDelete}
-          closeLabel="Close Delete Workspace dialog"
-          title="Delete Workspace"
-          description={`Delete ${workspaceDeleteTarget.title}? This removes only the DSH Workspace registration. The directory, Sessions, and Git Worktrees will be retained.`}
+          closeLabel={t('dialog.closeWorkspaceDelete')}
+          title={t('workspace.deleteTitle')}
+          description={t('workspace.deleteDescription', { name: workspaceDeleteTarget.title })}
           footer={(
             <>
               <Button variant="outline" disabled={workspaceDeletePending} onClick={closeWorkspaceDelete}>
-                Cancel
+                {t('dialog.cancel')}
               </Button>
               <Button
                 variant="outline"
@@ -1681,7 +1711,7 @@ export function WorktreeSurface({
                   void confirmWorkspaceDelete();
                 }}
               >
-                Delete
+                {t('dialog.delete')}
               </Button>
             </>
           )}
@@ -1701,9 +1731,9 @@ export function WorktreeSurface({
             if (actionPending) return;
             setWorktreeModalWorkspaceId(undefined);
           }}
-          closeLabel="Close Create Worktree dialog"
-          title="New Worktree"
-          description={`${modalWorkspace.title} · the Worktree path is managed by DSH.`}
+          closeLabel={t('dialog.closeWorktreeCreate')}
+          title={t('worktree.createTitle')}
+          description={t('worktree.createDescription', { name: modalWorkspace.title })}
           footer={(
             <>
               <Button
@@ -1713,7 +1743,7 @@ export function WorktreeSurface({
                   setWorktreeModalWorkspaceId(undefined);
                 }}
               >
-                Cancel
+                {t('dialog.cancel')}
               </Button>
               <Button
                 variant="primary"
@@ -1726,37 +1756,37 @@ export function WorktreeSurface({
                   void submitWorktree();
                 }}
               >
-                Create Worktree
+                {t('worktree.create')}
               </Button>
             </>
           )}
         >
           <label className={styles.modalField}>
-            Base branch
+            {t('worktree.baseBranch')}
             <select
               className={styles.actionSelect}
-              aria-label="Worktree base branch"
+              aria-label={t('worktree.baseBranch')}
               value={selectedBranch}
               disabled={actionPending}
               onChange={(event) => {
                 setSelectedBranch(event.currentTarget.value);
               }}
             >
-              <option value="">No local branch</option>
+              <option value="">{t('worktree.noLocalBranch')}</option>
               {(modalView?.branches ?? []).map((branch) => (
                 <option key={branch.name} value={branch.name}>
                   {branch.name}
-                  {branch.isCurrent ? ' (current)' : ''}
-                  {branch.checkedOut ? ' (checked out)' : ''}
+                  {branch.isCurrent ? t('branch.current') : ''}
+                  {branch.checkedOut ? t('branch.checkedOut') : ''}
                 </option>
               ))}
             </select>
           </label>
           <label className={styles.modalField}>
-            Worktree name
+            {t('worktree.name')}
             <Input
               className={styles.renameInput}
-              aria-label="Worktree name"
+              aria-label={t('worktree.name')}
               value={newBranch}
               placeholder="dsh/12345678"
               disabled={actionPending}
@@ -1766,7 +1796,7 @@ export function WorktreeSurface({
             />
           </label>
           {modalView?.branches.length === 0 && (
-            <p className={styles.empty}>No local branches found in this Workspace.</p>
+            <p className={styles.empty}>{t('worktree.noBranches')}</p>
           )}
         </Modal>
       )}

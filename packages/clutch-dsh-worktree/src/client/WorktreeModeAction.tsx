@@ -1,6 +1,7 @@
-import type { PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { WORKTREE_NS } from './locales.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import styles from './worktree.css';
 
@@ -12,6 +13,7 @@ export interface WorktreeModeActionInjected {
 /** Props derived from the footer slot, shared store, and injected availability face. */
 export type WorktreeModeActionProps = PropsRuntime<'sidebar.footer.action'> &
   PropsStore<ReturnType<typeof createWorktreeViewStore>> &
+  PropsLocale<typeof WORKTREE_NS> &
   WorktreeModeActionInjected;
 
 /** Footer action that enters/exits the peer Worktree navigation mode. */
@@ -19,6 +21,7 @@ export function WorktreeModeAction({
   wide,
   useStore,
   actions,
+  t,
   available,
 }: WorktreeModeActionProps) {
   if (!available) return null;
@@ -31,15 +34,15 @@ export function WorktreeModeAction({
       data-worktree-mode-action
       data-active={active || undefined}
       data-collapsed={!wide || undefined}
-      aria-label={active ? 'Exit Worktree mode' : 'Open Worktree mode'}
+      aria-label={active ? t('mode.exit') : t('mode.open')}
       aria-pressed={active}
-      title={active ? 'Exit Worktree mode' : 'Worktree mode'}
+      title={active ? t('mode.exit') : t('mode.label')}
       onClick={() => {
         actions.setViewMode(active ? 'workspace-session' : 'worktree');
       }}
     >
       <IconBranchOutline16 size={wide ? 16 : 18} />
-      {wide && <span className={styles.actionLabel}>Worktree</span>}
+      {wide && <span className={styles.actionLabel}>{t('mode.label')}</span>}
     </button>
   );
 }

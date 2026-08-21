@@ -230,9 +230,31 @@ test('renders a retry surface instead of treating Worktree failures as an empty 
     'utf8',
   );
   assert.match(source, /data-worktree-error/);
-  assert.match(source, />\s*Retry\s*<\/button>/);
+  assert.match(source, /t\('action\.retry'\)/);
   assert.match(source, /status === 'error'/);
   assert.match(source, /executeWorktreeAction/);
+});
+
+test('declares the Worktree locale seat and routes visible copy through t', async () => {
+  const actionSource = await readFile(
+    new URL('../src/client/WorktreeModeAction.tsx', import.meta.url),
+    'utf8',
+  );
+  const surfaceSource = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(actionSource, /PropsLocale/);
+  assert.match(surfaceSource, /PropsLocale/);
+  assert.match(surfaceSource, /WORKTREE_NS/);
+  assert.match(surfaceSource, /t\('workspace\.search'\)/);
+  assert.match(surfaceSource, /t\('session\.expandMore'/);
+  assert.match(surfaceSource, /t\('dialog\.closeWorkspaceDelete'\)/);
+  assert.doesNotMatch(surfaceSource, /Search Workspaces and Sessions/);
+  assert.doesNotMatch(surfaceSource, /Retry Binding/);
+  assert.doesNotMatch(surfaceSource, /No matching Workspaces/);
+  assert.match(surfaceSource, /sidebar-overlay-geometry/);
 });
 
 test('renders the Worktree hierarchy with search and nested creation affordances', async () => {
@@ -242,16 +264,16 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   );
 
   assert.doesNotMatch(source, /Bind current Session/);
-  assert.match(source, /Search Workspaces and Sessions/);
+  assert.match(source, /t\('workspace\.search'\)/);
   assert.match(source, /data-workspace-id/);
   assert.match(source, /data-add-worktree/);
   assert.match(source, /data-add-session/);
   assert.match(source, /createWorkspace/);
   assert.match(source, /createSessionForWorktree/);
-  assert.match(source, /Retry Binding/);
-  assert.match(source, /Open Created Session/);
+  assert.match(source, /t\('action\.retryBinding'\)/);
+  assert.match(source, /t\('action\.openCreatedSession'\)/);
   assert.doesNotMatch(source, /Remove Worktree/);
-  assert.match(source, /Detached Worktree|detached/i);
+  assert.match(source, /t\('worktree\.detached'\)/);
 });
 
 test('bounds the surface to live native sidebar anchors', async () => {
@@ -287,7 +309,7 @@ test('creates a Worktree Session immediately after creating the Worktree', async
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
   assert.match(source, /worktreeId: createdWorktree\.worktreeId/);
   assert.match(source, /cwd: createdWorktree\.absolutePath/);
-  assert.match(source, /Worktree name/);
+  assert.match(source, /t\('worktree\.name'\)/);
   assert.match(source, /dsh\//);
 });
 
@@ -312,9 +334,9 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
   assert.match(source, /\bModal\b/);
   assert.match(source, /\bButton\b/);
   assert.match(source, /\bInput\b/);
-  for (const label of ['Rename', 'Fork session', 'Archive session']) {
-    assert.match(source, new RegExp(label));
-  }
+  assert.match(source, /t\('session\.rename'\)/);
+  assert.match(source, /t\('session\.fork'\)/);
+  assert.match(source, /t\('session\.archive'\)/);
   assert.doesNotMatch(source, /Remove Worktree/);
   assert.match(source, /portal/);
   assert.match(source, /closeOnPointerLeave/);
@@ -338,8 +360,8 @@ test('matches native Workspace row actions and drag behavior', async () => {
   assert.match(source, /draggable/);
   assert.match(source, /onDragOver/);
   assert.match(source, /onDrop/);
-  assert.match(source, /Rename/);
-  assert.match(source, /Delete/);
+  assert.match(source, /t\('workspace\.rename'\)/);
+  assert.match(source, /t\('workspace\.delete'\)/);
   assert.match(source, /data-workspace-drag/);
 });
 
@@ -353,8 +375,8 @@ test('matches native Session grouping, drag, and expand-more behavior', async ()
   assert.match(source, /draggable/);
   assert.match(source, /onDragOver/);
   assert.match(source, /onDrop/);
-  assert.match(source, /Expand|Show.*more/);
-  assert.match(source, /Collapse/);
+  assert.match(source, /t\('session\.expandMore'/);
+  assert.match(source, /t\('session\.collapse'\)/);
   assert.match(source, /expandedSessionGroups/);
   assert.match(source, /slice\(0, 5\)/);
   assert.doesNotMatch(
@@ -422,7 +444,7 @@ test('renders the Worktree footer action like the native Settings row', async ()
   assert.match(actionSource, /<IconBranchOutline16 size=\{wide \? 16 : 18\} \/>/);
   assert.match(
     actionSource,
-    /wide && <span className=\{styles\.actionLabel\}>Worktree<\/span>/,
+    /wide && <span className=\{styles\.actionLabel\}>\{t\('mode\.label'\)\}<\/span>/,
   );
   assert.doesNotMatch(actionSource, /wide \? 'Worktree' : 'WT'/);
   assert.match(
