@@ -109,6 +109,15 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 Workspace 删除只删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
 
+## 界面语言
+
+Worktree mode 跟随 DSH 当前界面语言。语言选择和偏好持久化由 DSH 提供；插件不增加
+独立的语言设置。当前插件随 DSH 提供中文和 English 文案，切换 DSH 语言后，Worktree
+入口、Workspace/Worktree/Session 树、菜单、弹窗、状态和重试提示会同步切换。
+
+Workspace、Session、branch、path 以及 DSH/Host 返回的原始错误信息保持原值，便于
+诊断和继续使用 DSH 原生数据。
+
 ## 当前限制
 
 DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
