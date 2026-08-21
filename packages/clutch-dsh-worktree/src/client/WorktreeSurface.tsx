@@ -274,6 +274,9 @@ function WorktreeWorkspaceRow({
       data-workspace-drag={drag.active ? 'active' : undefined}
       data-menu-open={menuOpen || undefined}
       draggable
+      onClick={() => {
+        onToggle();
+      }}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', workspace.workspaceId);
@@ -294,10 +297,13 @@ function WorktreeWorkspaceRow({
     >
       <button
         type="button"
-        className={styles.disclosureButton}
+        className={`${styles.disclosureButton} ${styles.workspaceDisclosure}`}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${workspace.title}`}
         aria-expanded={expanded}
-        onClick={onToggle}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
       >
         {expanded ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
       </button>

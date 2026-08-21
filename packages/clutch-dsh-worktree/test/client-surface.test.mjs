@@ -434,3 +434,60 @@ test('renders the Worktree footer action like the native Settings row', async ()
     /\.action\[data-collapsed='true'\] \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*border-radius: 50%;/,
   );
 });
+
+test('matches native Workspace interaction, typography, and action rail', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const rowStart = source.indexOf('className={`${styles.workspaceRow} ${markerClass}`}');
+  const rowEnd = source.indexOf('</div>\n  );\n}', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(rowSource, /onClick=\{\(\) => \{\s*onToggle\(\);/);
+  assert.match(
+    rowSource,
+    /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.workspaceDisclosure\}`\}/,
+  );
+  assert.match(
+    rowSource,
+    /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onCreateWorktree\(\);/,
+  );
+  assert.match(
+    rowSource,
+    /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onMenuOpenChange/,
+  );
+  assert.match(styles, /\.workspaceRow \.workspaceDisclosure\s*\{[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /\.workspaceRow:hover \.workspaceDisclosure\s*,[\s\S]*display: inline-flex;/,
+  );
+  assert.match(styles, /\.workspaceRow:hover \.workspaceIcon\s*,[\s\S]*display: none;/);
+
+  assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-size: 14px;/);
+  assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-weight: 400;/);
+  assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*line-height: 20px;/);
+  assert.match(
+    styles,
+    /\.treeSessionContent\s*\{[\s\S]*font-size: 14px;[\s\S]*line-height: 20px;/,
+  );
+  assert.match(styles, /\.sessionOverflowButton\s*\{[\s\S]*font-size: 12px;/);
+  assert.match(styles, /\.searchInput\s*\{[\s\S]*font-size: 13px;/);
+
+  assert.match(
+    styles,
+    /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*flex: 0 0 64px;/,
+  );
+  assert.match(
+    styles,
+    /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*width: 64px;/,
+  );
+  assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
+  assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
+});
