@@ -251,7 +251,7 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /Retry Binding/);
   assert.match(source, /Open Created Session/);
   assert.doesNotMatch(source, /Remove Worktree/);
-  assert.match(source, /detached bindings/);
+  assert.match(source, /Detached Worktree|detached/i);
 });
 
 test('bounds the surface to live native sidebar anchors', async () => {
@@ -533,9 +533,9 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeDisclosure\s*,[\s\S]*display: inline-flex;/,
+    /\.worktreeRow:hover \.worktreeDisclosure\s*\{[\s\S]*display: inline-flex;/,
   );
-  assert.match(styles, /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*display: none;/);
+  assert.match(styles, /\.worktreeRow:hover \.worktreeIcon\s*\{[\s\S]*display: none;/);
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 

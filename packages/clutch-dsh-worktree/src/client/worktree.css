@@ -409,13 +409,11 @@
   display: none;
 }
 
-.worktreeRow:hover .worktreeDisclosure,
-.worktreeRow[data-menu-open='true'] .worktreeDisclosure {
+.worktreeRow:hover .worktreeDisclosure {
   display: inline-flex;
 }
 
-.worktreeRow:hover .worktreeIcon,
-.worktreeRow[data-menu-open='true'] .worktreeIcon {
+.worktreeRow:hover .worktreeIcon {
   display: none;
 }
 
@@ -513,9 +511,7 @@
 }
 
 .workspaceRow:hover .menuAction,
-.workspaceRow[data-menu-open='true'] .menuAction,
-.worktreeRow:hover .menuAction,
-.worktreeRow[data-menu-open='true'] .menuAction {
+.workspaceRow[data-menu-open='true'] .menuAction {
   visibility: visible;
 }
 
@@ -574,30 +570,6 @@
 
 .worktreeRow .disclosureButton {
   width: 22px;
-}
-
-.mainRow .mainDisclosure {
-  display: inline-flex;
-  visibility: hidden;
-}
-
-.mainRow:hover .mainDisclosure {
-  visibility: visible;
-}
-
-.mainLabel {
-  min-width: 0;
-  overflow: hidden;
-  flex: 1;
-  padding: 0 6px;
-  color: var(--dsw-alias-label-tertiary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  line-height: 20px;
-  text-transform: uppercase;
 }
 
 .treeSessionRow {
@@ -690,9 +662,7 @@
 }
 
 .treeSessionRow:hover .rowActions,
-.treeSessionRow[data-menu-open='true'] .rowActions,
-.worktreeRow:hover .worktreeActions,
-.worktreeRow[data-menu-open='true'] .worktreeActions {
+.treeSessionRow[data-menu-open='true'] .rowActions {
   display: inline-flex;
 }
 
