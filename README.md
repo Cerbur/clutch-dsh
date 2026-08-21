@@ -12,8 +12,9 @@
 没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace guard
 当作可运行 package。当前 `packages/clutch-dsh-worktree/` 直接就是完整的
 `@cerbur/clutch-dsh-worktree` package，其内部通过 `src/contract/`、`src/provider/`、
-`src/manage/`、`src/host/` 和 `src/client/` 保留角色 seam；Client 当前只含
-browser-safe facade，完整 UI 仍属于后续阶段。
+`src/manage/`、`src/host/` 和 `src/client/` 保留角色 seam，并包含已接入 DSH Web UI
+的 Host 与 Client entry。该 package 的具体架构和权责见
+`packages/clutch-dsh-worktree/AGENTS.md`。
 
 若确实需要独立 module package，仍可使用
 `packages/<plugin>/<package-name>/`；目录名必须与 `package.json.name` 完全
