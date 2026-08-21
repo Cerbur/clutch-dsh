@@ -18,7 +18,7 @@ Service Definition、Provider、Manage、Host 和 browser Consumer。它们是�
 DSH 通过 `package.json.dsh.bundle.patch` 激活 package；`cordis.patch.yml` 是同目录的
 YAML patch layer。当前 package 还声明 `dsh.client` browser metadata，并发布
 `./typert`、`./remote` 等 Host/Typert 相关入口。修改 package manifest、patch 或
-entrypoint 时，必须同步检查 README、计划和测试。
+entrypoint 时，必须同步检查 README、发布文档、计划和测试。
 
 当前源码边界：
 
@@ -37,6 +37,17 @@ packages/clutch-dsh-worktree/
 
 `manager`、`local`、`ui` 只描述历史角色或实现位置，不是当前 workspace package 名称。
 只有未来出现独立替换、独立发布或外部 Consumer 需求时，才重新提升为 package seam。
+
+## 版本、发布与安装来源
+
+- `package.json.version` 是本地 checkout、GitHub `main` 和 npm release 的唯一版本源；README 和市场 YAML 不复制当前版本号。
+- npm 已发布的 `name + version` 不能覆盖；新发布必须先使用 `npm version patch|minor|major --no-git-tag-version` 递增版本。
+- `publishConfig.access` 必须保持 `public`，`publishConfig.registry` 指向官方 npm registry，`prepack` 必须从当前源码生成 `lib/`。
+- 发布顺序固定为：递增 package version → `pnpm run check` → `npm pack --dry-run` → 提交并推送 `main` → `npm publish --access public --registry=https://registry.npmjs.org/` → 用 `npm view` 比较本地和 npm version。
+- 本地 checkout 安装使用绝对路径；已发布版本使用 `dsh plugin --profile web add @cerbur/clutch-dsh-worktree`。DSH 源码 checkout 使用等价的 `pnpm dsh` 转发命令。
+- npm 官方 registry 与本机镜像的同步可能存在延迟；发布和版本验证必须显式指定 `https://registry.npmjs.org/`，遇到短暂 404 时等待重试，不重复发布同一版本。
+
+完整命令、版本不一致处理和安装验证见 [`docs/RELEASING.md`](docs/RELEASING.md)。
 
 ## DSH 数据边界
 
@@ -190,6 +201,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 - `README.md`：面向安装者、使用者和插件市场维护者的公开事实、安装、能力和限制；
 - `AGENTS.md`：本 package 的架构、数据边界、模块权责、生命周期和维护约束；
 - `src/client/README.md`：浏览器 Consumer 的实现边界和交互细节；
+- `docs/RELEASING.md`：版本同步、npm 发布和本地/registry 安装流程；
 - `docs/superpowers/specs/`：已确认的设计与决策；
 - `docs/superpowers/plans/`：实现步骤、验证命令和交接记录。
 

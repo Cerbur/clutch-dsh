@@ -108,7 +108,43 @@ Client Remote assembly 显式选择的生成 contribution；`dsh.bundle` 或
 发布 `./typert` 的 package 也必须导出 `./package.json`，因为 loader 先从
 composition anchor 解析 manifest，再读取其中的 `./typert` target。
 
-## 4. Validation
+## 4. Publishing and version synchronization
+
+For a package that should be installable by name, `package.json.version` is the
+single source of truth for the local checkout, GitHub release commit and npm
+publication. Do not copy a current version into README or an awesome-list entry.
+
+Publishable public scoped packages should include:
+
+```json
+{
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/owner/repo.git",
+    "directory": "packages/plugin"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "prepack": "pnpm run build"
+  }
+}
+```
+
+Release order is: increment the package version, run workspace checks, preview
+the tarball, commit and push the matching `main`, then run
+`npm publish --access public --registry=https://registry.npmjs.org/`. Verify
+with `npm view <package-name> version` before documenting the published install
+command. A package-specific release document may add the exact commands and
+registry recovery steps.
+
+The awesome-dsh-plugin entry is a discovery record, not an npm publication. Its
+`repository` mapping is inferred from the published package metadata; do not
+add a handwritten `npm:` field to the entry.
+
+## 5. Validation
 
 新增或修改 package 后，在根目录执行：
 
@@ -125,7 +161,7 @@ pnpm run check
 可解析的 YAML 数组。两个 guard 会扫描 `packages/*` 和 `packages/*/*`，没有
 `package.json` 的规划目录会被跳过。
 
-## 5. Boundary rules
+## 6. Boundary rules
 
 - 内部 Service Definition 不依赖 Provider 或 Consumer。
 - Provider 不把 Git、sidecar 和 DSH mutation 暴露给 Consumer。

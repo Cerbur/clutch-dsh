@@ -58,16 +58,30 @@ pnpm dsh web
 pnpm dsh plugin --profile web remove clutch-dsh-worktree
 ```
 
-### 从 package registry 安装
+### 从 npm registry 安装
 
-package 发布到 registry 后，可以在 `deepseek-harness` 根目录执行：
+已发布的 package 可以直接通过 DSH CLI 安装：
 
 ```bash
+dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+dsh web
+```
+
+如果使用的是 `deepseek-harness` 源码 checkout、系统没有独立的 `dsh` 命令，使用等价的转发形式：
+
+```bash
+cd /path/to/deepseek-harness
 pnpm dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 pnpm dsh web
 ```
 
-从已链接的本地 checkout 更新时，只需重新构建 package 并重启 DSH：
+安装前可以查看官方 npm registry 的当前发布版本：
+
+```bash
+npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+从本地 checkout 更新时，只需重新构建 package 并重启 DSH：
 
 ```bash
 cd /path/to/clutch-dsh
@@ -101,6 +115,10 @@ DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `
 
 如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。
 
+## 版本与发布
+
+本地路径安装读取当前 checkout，npm 安装读取 registry；两者不是同一个安装来源。`packages/clutch-dsh-worktree/package.json` 的 `version` 是本地和 npm 的唯一版本源。不要在 README 或市场条目中复制当前版本号；发布修复或新功能时，先递增 package version，再通过 `prepack` 构建并发布新的 npm version。完整的版本同步、发布、registry 验证和本地/registry 安装流程见 [`docs/RELEASING.md`](docs/RELEASING.md)。
+
 ## 开发与验证
 
 在 workspace 根目录执行：
@@ -120,7 +138,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 pnpm run check
 ```
 
-维护者请先阅读 [AGENTS.md](AGENTS.md) 了解数据边界、模块权责、生命周期和验证约束；浏览器 Consumer 的实现说明位于 [`src/client/README.md`](src/client/README.md)。
+维护者请先阅读 [AGENTS.md](AGENTS.md) 了解数据边界、模块权责、生命周期和验证约束；发布流程见 [`docs/RELEASING.md`](docs/RELEASING.md)；浏览器 Consumer 的实现说明位于 [`src/client/README.md`](src/client/README.md)。
 
 ## 插件市场条目建议
 

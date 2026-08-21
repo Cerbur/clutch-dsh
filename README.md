@@ -46,3 +46,17 @@ pnpm run typecheck
 ```
 
 具体命名、依赖和 patch 规则见 [plugin authoring guide](docs/PLUGIN_AUTHORING.md)。
+
+## 已发布 plugin
+
+当前可安装的 plugin package 是 `@cerbur/clutch-dsh-worktree`。在已安装 DSH CLI
+的环境中使用：
+
+```bash
+dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+dsh web
+```
+
+本地 checkout 安装、版本同步和发布流程分别见
+[`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md)
+和 [`packages/clutch-dsh-worktree/docs/RELEASING.md`](packages/clutch-dsh-worktree/docs/RELEASING.md)。

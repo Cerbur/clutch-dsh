@@ -1,0 +1,137 @@
+# @cerbur/clutch-dsh-worktree 发布与版本同步
+
+## 版本规则
+
+`packages/clutch-dsh-worktree/package.json` 的 `version` 是唯一版本源：
+
+- 本地 checkout、GitHub `main` 和 npm 发布都必须来自同一个 package version；
+- README、市场 YAML 和安装命令不重复写当前版本号；
+- npm 已发布的 `name + version` 不能原地覆盖，发布修复必须先递增版本；
+- `latest` dist-tag 是用户不指定版本时的安装版本。
+
+检查本地版本和 npm 版本：
+
+```bash
+cd /path/to/clutch-dsh
+node -p "require('./packages/clutch-dsh-worktree/package.json').version"
+npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+两条命令输出相同，才表示当前 checkout 与 npm release 对齐。
+
+## 安装来源
+
+### 本地 checkout
+
+适合开发和验证未发布的源码。先构建 package，然后在 DSH 源码仓库根目录执行：
+
+```bash
+cd /path/to/clutch-dsh
+pnpm --filter @cerbur/clutch-dsh-worktree build
+
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
+pnpm dsh web
+```
+
+### npm registry
+
+适合用户安装已发布版本：
+
+```bash
+dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+dsh web
+```
+
+如果使用的是 DSH 源码 checkout、系统没有独立的 `dsh` 命令，将 `dsh` 替换为 `pnpm dsh`。两种命令使用相同的 DSH plugin loader。
+
+如果需要重新验证已发布版本，先移除 profile 中的旧 package，再重新添加：
+
+```bash
+dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
+dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+```
+
+## 发布前提
+
+发布前必须满足：
+
+- 当前分支是待发布的 `main`，工作区没有未提交的业务改动；
+- `package.json` 保留 `dsh.bundle.patch`、`publishConfig.access: "public"` 和 `prepack`；
+- `npm whoami --registry=https://registry.npmjs.org/` 返回拥有 `@cerbur` scope 的账号；
+- npm 账号已完成邮箱验证和发布所需的 2FA；
+- 官方 DSH package 继续放在 `peerDependencies`，不要复制成 runtime `dependencies`；
+- `lib/` 不提交到 Git，由 `prepack` 在打包时生成。
+
+## 发布流程
+
+### 1. 递增版本
+
+从 package 目录执行，按变更类型选择 `patch`、`minor` 或 `major`：
+
+```bash
+cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
+npm version patch --no-git-tag-version
+```
+
+发布新功能通常使用 `minor`，兼容性破坏使用 `major`，缺陷修复使用 `patch`。不要手工把版本改回已经存在于 npm 的版本。
+
+### 2. 检查并预览 tarball
+
+```bash
+cd /path/to/clutch-dsh
+pnpm run check
+
+cd packages/clutch-dsh-worktree
+npm pack --dry-run
+```
+
+预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`npm pack` 与 `npm publish` 都会触发 `prepack`，因此会从当前源码重新构建。
+
+### 3. 先推送对应源码
+
+```bash
+cd /path/to/clutch-dsh
+git status --short
+git add -- packages/clutch-dsh-worktree/package.json
+git commit -m "chore(worktree): release package"
+git push origin main
+```
+
+GitHub `main` 上的 package version、README 和代码必须与即将发布的 tarball 一致。
+
+### 4. 发布到官方 npm registry
+
+即使本机默认 registry 是镜像，也要显式指定 npmjs：
+
+```bash
+cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
+npm publish --access public --registry=https://registry.npmjs.org/
+```
+
+### 5. 验证发布结果
+
+```bash
+npm view @cerbur/clutch-dsh-worktree name version dist-tags.latest dist.tarball repository \
+  --json --registry=https://registry.npmjs.org/
+
+LOCAL_VERSION=$(node -p "require('./package.json').version")
+PUBLISHED_VERSION=$(npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/)
+test "$LOCAL_VERSION" = "$PUBLISHED_VERSION"
+```
+
+新包在 registry 的 packument 可能比 `npm publish` 的成功响应晚几秒出现；遇到短暂 404 时等待后重试，不要再次发布同一个版本。
+
+## 版本不一致时的处理
+
+| 状态 | 处理 |
+| --- | --- |
+| 本地版本 = npm 版本 | 不能再次发布；先 `npm version patch`/`minor`/`major`。 |
+| 本地版本 > npm 版本 | 运行完整校验，推送包含该版本的 `main`，再发布。 |
+| 本地版本 < npm 版本 | 不要降级 `package.json`；从 `main` 同步后递增到下一个未使用版本。 |
+| npm `view` 成功但 DSH 仍装旧版本 | 检查 DSH 使用的 registry 和 profile；必要时移除后重新添加。 |
+| npm 官方 registry 成功、镜像 404 | 镜像尚未同步；发布和验证使用 `https://registry.npmjs.org/`，等待镜像刷新。 |
+
+## awesome-dsh-plugin 收录
+
+npm 发布负责分发，awesome-dsh-plugin 负责收录和 dsh-market 发现。市场 YAML 不写版本号，也不添加 `npm:` 字段；package 的 `repository` 映射由市场自动读取。市场条目格式与提交流程见 [package README](../README.md) 和 [awesome-dsh-plugin contributing guide](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md)。
