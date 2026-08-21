@@ -405,18 +405,40 @@
   display: none;
 }
 
+.worktreeRow .worktreeDisclosure {
+  display: none;
+}
+
+.worktreeRow:hover .worktreeDisclosure,
+.worktreeRow[data-menu-open='true'] .worktreeDisclosure {
+  display: inline-flex;
+}
+
+.worktreeRow:hover .worktreeIcon,
+.worktreeRow[data-menu-open='true'] .worktreeIcon {
+  display: none;
+}
+
 .disclosureButton {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 28px;
   border: 0;
   border-radius: 6px;
+  padding: 0;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 17px;
   line-height: 1;
+}
+
+.disclosureButton > svg {
+  display: block;
 }
 
 .disclosureButton:hover {

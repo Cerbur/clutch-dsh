@@ -640,6 +640,19 @@ Worktree Consumer 的创建弹窗采用单一路径：
 
 这次 UI 调整不改变 DSH Session/Workspace 的数据边界，也不把 Worktree metadata 写进 DSH 原始数据。实际验证覆盖 CTool：生成 `dsh/17d78b46`，创建并打开 `session-c5e035af-1e3e-4d16-8bf2-119f376a7dfe`，sidecar active binding 与 Session `cwd` 均指向同一 Worktree。
 
+## 2026-08-21 UI tree parity follow-up
+
+为对齐 DSH 原生 Workspace tree，Workspace 和 Worktree 的 row body 都是浏览器内存
+展开状态的 toggle target；菜单、`+` 和 disclosure button 会阻止事件冒泡。默认显示
+folder/branch glyph，悬浮时替换为垂直居中的 18px outline chevron；标题沿用
+14px/400/20px 的 native text metrics。Workspace、Main 和嵌套 Worktree 的 `+`
+按钮共用固定右对齐 action rail，嵌套 `treeChildren` 不再添加额外右侧 padding，避免
+Worktree 的 `+` 向左漂移。
+
+本轮 package surface test 为 22/22，且在 Arc 的真实 DSH Local Build 页面通过
+Computer Use 检查了 Workspace/Worktree hover disclosure、Worktree row body 收起与
+展开，以及 Workspace/Main/Worktree action rail 的截图位置。
+
 ## Failure and Repair Rules
 
 - Sidecar 写失败：保留 DSH Session，不进行回滚式删除；返回 sessionId 和 retryable relation error。

@@ -305,7 +305,11 @@ function WorktreeWorkspaceRow({
           onToggle();
         }}
       >
-        {expanded ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+        {expanded ? (
+          <IconChevronDownOutline14 size={18} />
+        ) : (
+          <IconChevronRightOutline14 size={18} />
+        )}
       </button>
       <span className={styles.workspaceIcon} aria-hidden="true">
         {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
@@ -1366,22 +1370,26 @@ export function WorktreeSurface({
                                   data-menu-open={
                                     openWorktreeMenuId === record.worktreeId || undefined
                                   }
+                                  onClick={() => {
+                                    toggleWorktree(record.worktreeId);
+                                  }}
                                 >
                                   <button
                                     type="button"
-                                    className={styles.disclosureButton}
+                                    className={`${styles.disclosureButton} ${styles.worktreeDisclosure}`}
                                     aria-label={`${
                                       worktreeExpanded ? 'Collapse' : 'Expand'
                                     } ${record.branch}`}
                                     aria-expanded={worktreeExpanded}
-                                    onClick={() => {
+                                    onClick={(event) => {
+                                      event.stopPropagation();
                                       toggleWorktree(record.worktreeId);
                                     }}
                                   >
                                     {worktreeExpanded ? (
-                                      <IconChevronDownOutline14 />
+                                      <IconChevronDownOutline14 size={18} />
                                     ) : (
-                                      <IconChevronRightOutline14 />
+                                      <IconChevronRightOutline14 size={18} />
                                     )}
                                   </button>
                                   <span className={styles.worktreeIcon} aria-hidden="true">
@@ -1448,7 +1456,8 @@ export function WorktreeSurface({
                                         className={styles.iconButton}
                                         data-add-session
                                         aria-label={`Add Session to ${record.branch}`}
-                                        onClick={() => {
+                                        onClick={(event) => {
+                                          event.stopPropagation();
                                           void createSession({
                                             workspaceId: record.workspaceId,
                                             worktreeId: record.worktreeId,

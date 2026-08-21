@@ -455,6 +455,8 @@ test('matches native Workspace interaction, typography, and action rail', async 
     rowSource,
     /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.workspaceDisclosure\}`\}/,
   );
+  assert.match(rowSource, /IconChevronDownOutline14 size=\{18\}/);
+  assert.match(rowSource, /IconChevronRightOutline14 size=\{18\}/);
   assert.match(
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onCreateWorktree\(\);/,
@@ -490,4 +492,48 @@ test('matches native Workspace interaction, typography, and action rail', async 
   );
   assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
   assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
+});
+
+test('matches native Worktree row disclosure and aligned action geometry', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const rowStart = source.indexOf('<div\n                                  className={styles.worktreeRow}');
+  const rowEnd = source.indexOf('{worktreeExpanded && (', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(rowSource, /onClick=\{\(\) => \{\s*toggleWorktree\(record\.worktreeId\);/);
+  assert.match(
+    rowSource,
+    /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}/,
+  );
+  assert.match(rowSource, /IconChevronDownOutline14 size=\{18\}/);
+  assert.match(rowSource, /IconChevronRightOutline14 size=\{18\}/);
+  assert.match(
+    rowSource,
+    /data-add-session[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/,
+  );
+
+  assert.match(
+    styles,
+    /\.disclosureButton\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;/,
+  );
+  assert.match(styles, /\.disclosureButton > svg\s*\{[\s\S]*display: block;/);
+  assert.match(
+    styles,
+    /\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*display: none;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeDisclosure\s*,[\s\S]*display: inline-flex;/,
+  );
+  assert.match(styles, /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*display: none;/);
+  assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
