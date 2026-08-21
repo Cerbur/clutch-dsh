@@ -21,7 +21,7 @@ export function resolveNativeSidebarRoot(sidebar: Element): Element | undefined 
 
 export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   const labels = ['新建会话', 'New session', '新会话', 'New Session'];
-  const buttons = [...root.querySelectorAll<HTMLElement>('button')];
+  const buttons = Array.from(root.querySelectorAll<HTMLElement>('button'));
   const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
     return text === '新会话' || text === 'New Session';
