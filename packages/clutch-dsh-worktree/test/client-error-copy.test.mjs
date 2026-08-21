@@ -40,6 +40,33 @@ test('formats adapter-owned retryable errors with endpoint and raw reason', () =
   );
 });
 
+test('uses translated fallback copy when a known wrapper has no raw reason', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'CONNECTION_CALL_FAILED',
+        message: '',
+        retryable: true,
+        details: { endpoint: 'worktreeManager/listWorktrees' },
+      },
+      t,
+    ),
+    'error.connectionFailed:endpoint=worktreeManager/listWorktrees,reason=error.worktreeDataUnavailable',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'SESSION_BINDING_FAILED',
+        message: '',
+        retryable: true,
+        details: { sessionId: 'session-1' },
+      },
+      t,
+    ),
+    'error.sessionBindingFailed:sessionId=session-1,reason=error.worktreeDataUnavailable',
+  );
+});
+
 test('keeps an unknown DSH or Host message unchanged', () => {
   assert.equal(
     formatWorktreeViewError(

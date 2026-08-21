@@ -9,6 +9,10 @@ function detail(error: WorktreeViewError, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
+  return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
+}
+
 export function formatWorktreeViewError(
   error: WorktreeViewError,
   t: WorktreeTranslate,
@@ -19,7 +23,7 @@ export function formatWorktreeViewError(
     case 'CONNECTION_CALL_FAILED':
       return t('error.connectionFailed', {
         endpoint: detail(error, 'endpoint'),
-        reason: error.message,
+        reason: reason(error, t),
       });
     case 'WORKTREE_RPC_INVALID_RESULT':
       return t('error.invalidResult', { endpoint: detail(error, 'endpoint') });
@@ -42,7 +46,7 @@ export function formatWorktreeViewError(
     case 'SESSION_BINDING_FAILED':
       return t('error.sessionBindingFailed', {
         sessionId: detail(error, 'sessionId'),
-        reason: error.message,
+        reason: reason(error, t),
       });
     default:
       return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');

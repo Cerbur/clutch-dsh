@@ -189,6 +189,12 @@ interface SessionDragState {
   } | null;
 }
 
+function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
+  const viewError = toWorktreeViewError(error);
+  if (typeof error === 'object' && error !== null) return viewError;
+  return { ...viewError, message: String(error) };
+}
+
 const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
 
 function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
@@ -731,15 +737,15 @@ export function WorktreeSurface({
   const [sessionRenameTarget, setSessionRenameTarget] = useState<SessionRenameTarget>();
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   const [sessionRenamePending, setSessionRenamePending] = useState(false);
-  const [sessionRenameError, setSessionRenameError] = useState<string>();
+  const [sessionRenameError, setSessionRenameError] = useState<WorktreeViewError>();
   const [workspaceDrag, setWorkspaceDrag] = useState<WorkspaceDragState>();
   const [workspaceRenameTarget, setWorkspaceRenameTarget] = useState<WorkspaceRenameTarget>();
   const [workspaceRenameDraft, setWorkspaceRenameDraft] = useState('');
   const [workspaceRenamePending, setWorkspaceRenamePending] = useState(false);
-  const [workspaceRenameError, setWorkspaceRenameError] = useState<string>();
+  const [workspaceRenameError, setWorkspaceRenameError] = useState<WorktreeViewError>();
   const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<WorkspaceDeleteTarget>();
   const [workspaceDeletePending, setWorkspaceDeletePending] = useState(false);
-  const [workspaceDeleteError, setWorkspaceDeleteError] = useState<string>();
+  const [workspaceDeleteError, setWorkspaceDeleteError] = useState<WorktreeViewError>();
   const workspaceDropCommitted = useRef(false);
   const [sessionDrag, setSessionDrag] = useState<SessionDragState>();
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<Record<string, boolean>>({});
@@ -846,7 +852,11 @@ export function WorktreeSurface({
     const target = workspaceRenameTarget;
     if (workspaceRenameBlocked || target === undefined) return;
     if (renameWorkspace === undefined) {
-      setWorkspaceRenameError(t('error.workspaceRenameUnavailable'));
+      setWorkspaceRenameError({
+        code: 'WORKSPACE_RENAME_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      });
       return;
     }
     setWorkspaceRenamePending(true);
@@ -855,7 +865,7 @@ export function WorktreeSurface({
       await renameWorkspace(target.workspaceId, workspaceRenameTrimmed);
       setWorkspaceRenameTarget(undefined);
     } catch (error) {
-      setWorkspaceRenameError(error instanceof Error ? error.message : String(error));
+      setWorkspaceRenameError(toNativeWorktreeViewError(error));
     } finally {
       setWorkspaceRenamePending(false);
     }
@@ -876,7 +886,11 @@ export function WorktreeSurface({
     const target = workspaceDeleteTarget;
     if (target === undefined || workspaceDeletePending) return;
     if (deleteWorkspace === undefined) {
-      setWorkspaceDeleteError(t('error.workspaceDeleteUnavailable'));
+      setWorkspaceDeleteError({
+        code: 'WORKSPACE_DELETE_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      });
       return;
     }
     setWorkspaceDeletePending(true);
@@ -885,7 +899,7 @@ export function WorktreeSurface({
       await deleteWorkspace(target.workspaceId);
       setWorkspaceDeleteTarget(undefined);
     } catch (error) {
-      setWorkspaceDeleteError(error instanceof Error ? error.message : String(error));
+      setWorkspaceDeleteError(toNativeWorktreeViewError(error));
     } finally {
       setWorkspaceDeletePending(false);
     }
@@ -989,7 +1003,11 @@ export function WorktreeSurface({
     const title = sessionRenameDraft.trim();
     if (target === undefined || title.length === 0 || sessionRenamePending) return;
     if (renameSession === undefined) {
-      setSessionRenameError(t('error.sessionRenameUnavailable'));
+      setSessionRenameError({
+        code: 'SESSION_RENAME_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      });
       return;
     }
     setSessionRenamePending(true);
@@ -998,7 +1016,7 @@ export function WorktreeSurface({
       await renameSession(target.sessionId, title);
       setSessionRenameTarget(undefined);
     } catch (error) {
-      setSessionRenameError(error instanceof Error ? error.message : String(error));
+      setSessionRenameError(toNativeWorktreeViewError(error));
     } finally {
       setSessionRenamePending(false);
     }
@@ -1636,7 +1654,7 @@ export function WorktreeSurface({
         />
         {sessionRenameError !== undefined && (
           <p className={styles.renameError} role="alert">
-            {sessionRenameError}
+            {formatWorktreeViewError(sessionRenameError, t)}
           </p>
         )}
       </Modal>
@@ -1691,7 +1709,7 @@ export function WorktreeSurface({
           )}
           {workspaceRenameError !== undefined && (
             <p className={styles.renameError} role="alert">
-              {workspaceRenameError}
+              {formatWorktreeViewError(workspaceRenameError, t)}
             </p>
           )}
         </Modal>
@@ -1723,7 +1741,7 @@ export function WorktreeSurface({
         >
           {workspaceDeleteError !== undefined && (
             <p className={styles.renameError} role="alert">
-              {workspaceDeleteError}
+              {formatWorktreeViewError(workspaceDeleteError, t)}
             </p>
           )}
         </Modal>

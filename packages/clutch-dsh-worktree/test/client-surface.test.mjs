@@ -275,6 +275,12 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.doesNotMatch(source, /message: t\('error\.worktreeCreatedSessionUnavailable'\)/);
   assert.doesNotMatch(source, /message: t\('error\.sessionCreationUnavailable'\)/);
   assert.doesNotMatch(source, /throw new Error\(t\('error\.worktreeRecordMissing'\)\)/);
+  assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
+  assert.match(source, /code: 'WORKSPACE_DELETE_UNAVAILABLE'/);
+  assert.match(source, /code: 'SESSION_RENAME_UNAVAILABLE'/);
+  assert.match(source, /formatWorktreeViewError\(workspaceRenameError, t\)/);
+  assert.match(source, /formatWorktreeViewError\(workspaceDeleteError, t\)/);
+  assert.match(source, /formatWorktreeViewError\(sessionRenameError, t\)/);
 });
 
 test('renders the Worktree hierarchy with search and nested creation affordances', async () => {
