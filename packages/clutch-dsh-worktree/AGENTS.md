@@ -168,7 +168,7 @@ Client surface 的当前约束：
 - Workspace rename/delete/reorder 和 Session 菜单、排序继续使用 DSH 原生 Client API；
 - Main 与 Worktree 共用 parameterized split-row，Session reorder 限定在当前视觉分组内；
 - 每组默认显示五行，更多内容使用 Expand more/Collapse；
-- 当前 Client surface 不提供 Worktree removal，detached binding 仍可展示；
+- Main 与 Worktree 共用 parameterized split-row；active Worktree 通过可选参数暴露 remove menu、确认弹窗和状态，Main 与 detached binding 不传入 menu，因此不显示 Worktree remove 选项；
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar；
 - Connection/Gateway/domain 失败必须显示 retryable error，不能伪装成空列表。
 

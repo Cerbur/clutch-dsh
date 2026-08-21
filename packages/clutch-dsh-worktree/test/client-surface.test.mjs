@@ -298,7 +298,7 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /createSessionForWorktree/);
   assert.match(source, /t\('action\.retryBinding'\)/);
   assert.match(source, /t\('action\.openCreatedSession'\)/);
-  assert.doesNotMatch(source, /Remove Worktree/);
+  assert.match(source, /t\('worktree\.remove'\)/);
   assert.match(source, /t\('worktree\.detached'\)/);
 });
 
@@ -363,11 +363,11 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
   assert.match(source, /t\('session\.rename'\)/);
   assert.match(source, /t\('session\.fork'\)/);
   assert.match(source, /t\('session\.archive'\)/);
-  assert.doesNotMatch(source, /Remove Worktree/);
+  assert.match(source, /t\('worktree\.remove'\)/);
   assert.match(source, /portal/);
   assert.match(source, /closeOnPointerLeave/);
   assert.match(source, /data-session-menu/);
-  assert.doesNotMatch(source, /data-worktree-menu/);
+  assert.match(source, /data-worktree-menu/);
   assert.doesNotMatch(
     source,
     /className=\{styles\.inlineButton\}[\s\S]*?>\s*Remove\s*</,
@@ -445,14 +445,16 @@ test('keeps the final surface bounded, scrollable, and action-aligned', async ()
   assert.doesNotMatch(surfaceSource, /\bbound\b/);
 });
 
-test('uses the DSH Modal primitive for the Worktree create dialog', async () => {
+test('uses the DSH Modal primitives for Worktree create and removal dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /open=\{worktreeModalWorkspaceId !== undefined/);
-  assert.doesNotMatch(source, /worktreeRemoval|Remove Worktree/);
+  assert.match(source, /open=\{worktreeRemoval !== undefined/);
+  assert.match(source, /t\('dialog\.closeWorktreeRemove'\)/);
+  assert.match(source, /t\('worktree\.removeDescription'/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });
 
@@ -569,6 +571,9 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     rowSource,
     /data-add-session=\{main \? undefined : 'true'\}[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/,
   );
+  assert.match(source, /interface WorktreeGroupMenuProps[\s\S]*menu\?: WorktreeGroupMenuProps/);
+  assert.match(rowSource, /menu,/);
+  assert.match(rowSource, /data-worktree-menu/);
 
   assert.match(
     styles,
@@ -581,13 +586,16 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeDisclosure\s*\{[\s\S]*display: inline-flex;/,
+    /\.worktreeRow:hover \.worktreeDisclosure\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeDisclosure[\s\S]*display: inline-flex;/,
   );
-  assert.match(styles, /\.worktreeRow:hover \.worktreeIcon\s*\{[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeIcon[\s\S]*display: none;/,
+  );
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
-test('shares one parameterized group row between Main and Worktree without removal UI', async () => {
+test('shares one parameterized group row while gating removal UI by row configuration', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -607,8 +615,20 @@ test('shares one parameterized group row between Main and Worktree without remov
   assert.match(source, /data-add-session/);
   assert.match(source, /expandedMains/);
   assert.match(source, /expandedWorktrees/);
-  assert.doesNotMatch(source, /worktreeRemoval|openWorktreeMenuId|data-worktree-menu/);
-  assert.doesNotMatch(source, /Remove Worktree/);
+  assert.match(source, /interface WorktreeGroupMenuProps/);
+  assert.match(source, /menu\?: WorktreeGroupMenuProps/);
+  assert.match(source, /worktreeRemoval/);
+  assert.match(source, /openWorktreeMenuId/);
+  assert.match(source, /data-worktree-menu/);
+  assert.match(source, /t\('worktree\.remove'\)/);
+  const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
+  const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = source.slice(mainCallStart, mainCallEnd);
+  assert.doesNotMatch(mainCallSource, /\bmenu=/);
+  const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
+  const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /\bmenu=\{\s*record\.status === 'active'/);
   assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
   assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
 });

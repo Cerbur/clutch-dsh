@@ -409,11 +409,13 @@
   display: none;
 }
 
-.worktreeRow:hover .worktreeDisclosure {
+.worktreeRow:hover .worktreeDisclosure,
+.worktreeRow[data-menu-open='true'] .worktreeDisclosure {
   display: inline-flex;
 }
 
-.worktreeRow:hover .worktreeIcon {
+.worktreeRow:hover .worktreeIcon,
+.worktreeRow[data-menu-open='true'] .worktreeIcon {
   display: none;
 }
 
@@ -511,7 +513,9 @@
 }
 
 .workspaceRow:hover .menuAction,
-.workspaceRow[data-menu-open='true'] .menuAction {
+.workspaceRow[data-menu-open='true'] .menuAction,
+.worktreeRow:hover .menuAction,
+.worktreeRow[data-menu-open='true'] .menuAction {
   visibility: visible;
 }
 

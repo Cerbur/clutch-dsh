@@ -27,7 +27,7 @@ import {
   Modal,
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives';
-import type { SessionBinding, WorktreeManager } from '../contract/index.js';
+import type { SessionBinding, WorktreeManager, WorktreeRecord } from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
 import { openWorktreeSession } from './navigation.js';
 import { useSidebarOverlayGeometry } from './sidebar-overlay-geometry.js';
@@ -387,6 +387,14 @@ function WorktreeWorkspaceRow({
 
 type WorktreeGroupKind = 'main' | 'worktree';
 
+interface WorktreeGroupMenuProps {
+  readonly open: boolean;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onRemove: () => void;
+}
+
 interface WorktreeGroupRowProps {
   readonly t: WorktreeTranslate;
   readonly kind: WorktreeGroupKind;
@@ -398,6 +406,7 @@ interface WorktreeGroupRowProps {
   readonly stateLabel?: string;
   readonly onToggle: () => void;
   readonly onCreateSession?: () => void;
+  readonly menu?: WorktreeGroupMenuProps;
 }
 
 /** Shared Main/Worktree group row with parameterized icon, state, and actions. */
@@ -412,6 +421,7 @@ function WorktreeGroupRow({
   stateLabel,
   onToggle,
   onCreateSession,
+  menu,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
 
@@ -420,6 +430,7 @@ function WorktreeGroupRow({
       className={styles.worktreeRow}
       data-main-group={main ? 'true' : undefined}
       data-main-expanded={main ? String(expanded) : undefined}
+      data-menu-open={menu?.open ? 'true' : undefined}
       onClick={onToggle}
     >
       <button
@@ -453,6 +464,45 @@ function WorktreeGroupRow({
       )}
       <span className={styles.worktreeLabel}>{label}</span>
       <span className={styles.treeActionSlot}>
+        {menu !== undefined && (
+          <span className={styles.menuAction}>
+            <Menu
+              open={menu.open}
+              onClose={() => {
+                menu.onOpenChange(false);
+              }}
+              items={[
+                {
+                  id: 'remove',
+                  label: t('worktree.remove'),
+                  icon: <IconTrashOutline16 />,
+                  danger: true,
+                  disabled: menu.disabled,
+                },
+              ]}
+              onSelect={(id) => {
+                menu.onOpenChange(false);
+                if (id === 'remove') menu.onRemove();
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  data-worktree-menu
+                  aria-label={t('worktree.options', { name: menu.label })}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    menu.onOpenChange(!menu.open);
+                  }}
+                >
+                  <IconEllipsisOutline16 />
+                </button>
+              }
+            />
+          </span>
+        )}
         {onCreateSession !== undefined && (
           <button
             type="button"
@@ -729,6 +779,8 @@ export function WorktreeSurface({
   const [expandedWorktrees, setExpandedWorktrees] = useState<Record<string, boolean>>({});
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
+  const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
+  const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranch, setNewBranch] = useState('');
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
@@ -1534,6 +1586,24 @@ export function WorktreeSurface({
                                         }
                                       : undefined
                                   }
+                                  menu={
+                                    record.status === 'active'
+                                      ? {
+                                          open: openWorktreeMenuId === record.worktreeId,
+                                          label: record.branch,
+                                          disabled: actionPending,
+                                          onOpenChange: (open) => {
+                                            setOpenWorktreeMenuId(
+                                              open ? record.worktreeId : undefined,
+                                            );
+                                          },
+                                          onRemove: () => {
+                                            setWorktreeRemoval(record);
+                                            setActionError(undefined);
+                                          },
+                                        }
+                                      : undefined
+                                  }
                                 />
                                 {worktreeExpanded && (
                                   <WorktreeSessionGroup
@@ -1822,6 +1892,52 @@ export function WorktreeSurface({
             <p className={styles.empty}>{t('worktree.noBranches')}</p>
           )}
         </Modal>
+      )}
+
+      {worktreeRemoval !== undefined && (
+        <Modal
+          open={worktreeRemoval !== undefined}
+          onClose={() => {
+            if (actionPending) return;
+            setWorktreeRemoval(undefined);
+          }}
+          closeLabel={t('dialog.closeWorktreeRemove')}
+          title={t('worktree.remove')}
+          description={t('worktree.removeDescription', { name: worktreeRemoval.branch })}
+          footer={(
+            <>
+              <Button
+                variant="outline"
+                disabled={actionPending}
+                onClick={() => {
+                  setWorktreeRemoval(undefined);
+                }}
+              >
+                {t('dialog.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                disabled={actionPending}
+                onClick={() => {
+                  if (manager === undefined) return;
+                  const target = worktreeRemoval;
+                  void runMutation(async () => {
+                    await executeWorktreeAction(manager, {
+                      type: 'removeWorktree',
+                      input: {
+                        workspaceId: target.workspaceId,
+                        worktreeId: target.worktreeId,
+                      },
+                    });
+                    setWorktreeRemoval(undefined);
+                  });
+                }}
+              >
+                {t('worktree.remove')}
+              </Button>
+            </>
+          )}
+        />
       )}
 
     </aside>

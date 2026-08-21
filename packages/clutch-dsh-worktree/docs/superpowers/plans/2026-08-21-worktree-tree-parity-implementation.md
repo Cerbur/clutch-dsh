@@ -1,11 +1,12 @@
 # Worktree Tree Native Parity Implementation Plan
 
-> **Follow-up (2026-08-21):** Main and Worktree group rows now share one
+> **Follow-up (2026-08-22):** Main and Worktree group rows now share one
 > parameterized `WorktreeGroupRow`. Main uses the branch/tree icon and the same
 > action rail; its browser-local expansion state remains independent from the
-> Workspace and session overflow state, and its `+` remains available. The
-> Client surface intentionally does not expose Worktree removal; the
-> Manager/API removal contract remains unchanged.
+> Workspace and session overflow state, and its `+` remains available. Active
+> Worktree rows pass an optional remove menu and confirmation flow; Main and
+> detached rows omit that parameter. The Manager/API removal contract remains
+> unchanged.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -2,9 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Refactor the Client tree so Main and Worktree groups use one parameterized row component, Main shows the branch/tree icon, and the Worktree surface no longer exposes removal.
+> **Correction (2026-08-22):** The original plan incorrectly removed the
+> Worktree removal UI from the whole Client surface. The shared row now accepts
+> an optional menu configuration: active Worktrees pass the remove menu and
+> confirmation flow, while Main and detached Worktrees omit it. The underlying
+> Manager/API contract remains unchanged.
 
-**Architecture:** `WorktreeGroupRow` will own the shared row shell, disclosure button, leading icon, optional health dot, label, and fixed action rail. `WorktreeSurface` will keep Main and Worktree expansion/session state and pass row-specific callbacks and data. The UI removal path is deleted from the Client only; `WorktreeManager.removeWorktree` and its Remote/API contract remain unchanged.
+**Goal:** Refactor the Client tree so Main and Worktree groups use one parameterized row component, Main shows the branch/tree icon, and removal UI is exposed only for active Worktrees.
+
+**Architecture:** `WorktreeGroupRow` will own the shared row shell, disclosure button, leading icon, optional health dot, label, fixed action rail, and optional Worktree menu. `WorktreeSurface` will keep Main and Worktree expansion/session state and pass row-specific callbacks and data. Active Worktrees pass the removal menu/modal state; Main and detached rows omit it. `WorktreeManager.removeWorktree` and its Remote/API contract remain unchanged.
 
 **Tech Stack:** React 18, TypeScript, CSS Modules, DSH client UI primitives, Node test runner, pnpm workspace.
 
@@ -15,7 +21,7 @@
 - Keep Main and Worktree expansion state independent: `expandedMains` and `expandedWorktrees` remain separate browser-local state.
 - Main and Worktree group rows must use the shared `worktreeRow`, `worktreeIcon`, `worktreeLabel`, `worktreeDisclosure`, and `treeActionSlot` styles.
 - Main must render `IconBranchOutline16` in the same leading icon slot as Worktree.
-- The Client surface must not render a Worktree remove menu, remove confirmation dialog, remove UI label, or remove-specific React state.
+- The Client surface must render the Worktree remove menu, confirmation dialog, UI label, and remove-specific React state only for active Worktree rows; Main and detached rows must not receive the menu parameter.
 - Keep `WorktreeManager.removeWorktree`, the Remote method, Provider implementation, detached binding lifecycle, and all non-Client removal tests unchanged.
 - Use `apply_patch` for local source, test, documentation, and plan edits.
 - Run each focused test after its RED/GREEN change; do not write production code before observing the new test fail.
@@ -23,10 +29,10 @@
 
 ## File Map
 
-- `src/client/WorktreeSurface.tsx` — replace `MainSessionGroupRow` and the inline Worktree row with the shared `WorktreeGroupRow`; remove Client-only Worktree removal state, menu, and modal.
-- `src/client/worktree.css` — make Main use the existing Worktree row styles and remove Main-only and Worktree-menu-only rules that become dead after the refactor.
-- `test/client-surface.test.mjs` — add RED assertions for one shared row, Main's tree icon, independent expansion/add-session behavior, and the absence of Worktree removal UI; update stale removal expectations.
-- `README.md` — document that the Worktree surface no longer exposes removal while retaining detached-state behavior.
+- `src/client/WorktreeSurface.tsx` — replace `MainSessionGroupRow` and the inline Worktree row with the shared `WorktreeGroupRow`; retain removal UI behind the optional active-Worktree menu parameter.
+- `src/client/worktree.css` — make Main use the existing Worktree row styles and keep menu-open visibility rules for active Worktree rows.
+- `test/client-surface.test.mjs` — add RED assertions for one shared row, Main's tree icon, independent expansion/add-session behavior, and conditional Worktree removal UI.
+- `README.md` — document active Worktree removal while retaining detached-state behavior and Main's hidden menu.
 - `src/client/README.md` — document the Client action boundary and shared row presentation.
 - `docs/superpowers/plans/2026-08-21-worktree-tree-parity-implementation.md` — record the follow-up consolidation and removal-UI decision.
 
@@ -41,38 +47,37 @@
 **Interfaces:**
 
 - Consumes: the current `WorktreeSurface.tsx` and `worktree.css` source text.
-- Produces: source/CSS assertions that define the approved shared-row and disabled-removal contract before production code changes.
+- Produces: source/CSS assertions that define the approved shared-row and conditional-removal contract before production code changes.
 
 - [ ] **Step 1: Replace stale removal expectations with the new failing contract.**
 
-In the existing hierarchy test, replace the assertion that requires
-`Remove Worktree` with an assertion that rejects the same label. In the native
-menu test, replace the `Remove Worktree` and `data-worktree-menu` requirements
-with negative assertions. In the Modal test, rename it to cover the Worktree
-creation dialog only and remove the assertion for `worktreeRemoval`:
+In the existing hierarchy and native menu tests, assert the localized Worktree
+remove label and `data-worktree-menu`. In the Modal test, cover both the
+creation and removal dialogs:
 
 ```js
-test('uses the DSH Modal primitive for the Worktree create dialog', async () => {
+test('uses the DSH Modal primitives for Worktree create and removal dialogs', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /open=\{worktreeModalWorkspaceId !== undefined/);
-  assert.doesNotMatch(source, /worktreeRemoval|Remove Worktree/);
+  assert.match(source, /open=\{worktreeRemoval !== undefined/);
+  assert.match(source, /t\('dialog\.closeWorktreeRemove'\)/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });
 ```
 
-Keep the existing Session/Workspace `Menu` and `Modal` assertions; only remove
-the expectations for the Worktree removal path.
+Keep the existing Session/Workspace `Menu` and `Modal` assertions; additionally
+verify that Main does not pass `menu`, while active Worktree rows do.
 
 - [ ] **Step 2: Add the shared-row and Main icon regression test.**
 
 Append this focused test to `test/client-surface.test.mjs`:
 
 ```js
-test('shares one parameterized group row between Main and Worktree without removal UI', async () => {
+test('shares one parameterized group row while gating removal UI by row configuration', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -93,15 +98,15 @@ test('shares one parameterized group row between Main and Worktree without remov
   assert.match(source, /data-add-session/);
   assert.match(source, /expandedMains/);
   assert.match(source, /expandedWorktrees/);
-  assert.doesNotMatch(source, /worktreeRemoval|openWorktreeMenuId|data-worktree-menu/);
-  assert.doesNotMatch(source, /Remove Worktree/);
+  assert.match(source, /worktreeRemoval|openWorktreeMenuId|data-worktree-menu/);
+  assert.match(source, /t\('worktree\.remove'\)/);
   assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
 });
 ```
 
-The current source must fail this test because it still defines
-`MainSessionGroupRow`, does not pass a Main icon, and contains the Worktree
-remove menu/modal and Main-only CSS selectors.
+The old source must fail this test because it did not expose the conditional
+remove menu/modal or the menu-open CSS branches. The test also protects against
+passing that menu parameter to Main.
 
 - [ ] **Step 3: Run the focused tests and verify RED.**
 
@@ -122,7 +127,7 @@ git add test/client-surface.test.mjs
 git commit -m "test(worktree): define shared group row contract"
 ```
 
-### Task 2: Implement the shared row and remove the Client removal path
+### Task 2: Implement the shared row and preserve conditional removal UI
 
 **Files:**
 
@@ -132,7 +137,7 @@ git commit -m "test(worktree): define shared group row contract"
 **Interfaces:**
 
 - Consumes: `expandedMains`, `expandedWorktrees`, existing Session creation callbacks, existing Worktree health projection, and existing `treeActionSlot` CSS.
-- Produces: one `WorktreeGroupRow` component used by Main and Worktree rows, with no Client-visible Worktree removal action.
+- Produces: one `WorktreeGroupRow` component used by Main and Worktree rows, with an optional Client-visible Worktree removal action.
 
 - [ ] **Step 1: Define the shared row props and implement its minimal row shell.**
 
@@ -221,24 +226,23 @@ function WorktreeGroupRow({
 }
 ```
 
-This component must not contain a remove menu, removal callback, Main-only
-class, or separate Main label style.
+This component must keep the remove menu behind an optional menu prop; it must
+not introduce a Main-only class or separate Main label style.
 
-- [ ] **Step 2: Remove the obsolete Main component and Client removal state.**
+- [ ] **Step 2: Remove the obsolete Main component and restore conditional Client removal state.**
 
-Delete `MainSessionGroupRow` and remove these state variables from
-`WorktreeSurface`:
+Delete `MainSessionGroupRow` and retain these state variables in
+`WorktreeSurface` for active Worktree removal:
 
 ```tsx
 const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
 const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
 ```
 
-Remove the inline Worktree menu, `data-worktree-menu`, all calls to
-`setOpenWorktreeMenuId`, and the final `worktreeRemoval` `<Modal>`. Do not remove
-`WorktreeRecord` from imports if it remains needed by `ReadState` or another
-existing type; do remove it only if the compiler proves there are no remaining
-uses.
+Keep the inline behavior in the shared `WorktreeGroupRow` menu prop,
+`data-worktree-menu`, the `setOpenWorktreeMenuId` calls, and the final
+`worktreeRemoval` `<Modal>`. Pass the menu only when `record.status ===
+'active'`; Main and detached rows omit it.
 
 - [ ] **Step 3: Render Main through the shared component.**
 
@@ -295,38 +299,55 @@ the health calculation, then replace the inline row with:
         }
       : undefined
   }
+  menu={
+    record.status === 'active'
+      ? {
+          open: openWorktreeMenuId === record.worktreeId,
+          label: record.branch,
+          disabled: actionPending,
+          onOpenChange: (open) => {
+            setOpenWorktreeMenuId(open ? record.worktreeId : undefined);
+          },
+          onRemove: () => {
+            setWorktreeRemoval(record);
+            setActionError(undefined);
+          },
+        }
+      : undefined
+  }
 />
 ```
 
 Keep the existing `worktreeExpanded && <WorktreeSessionGroup ... />` block and
 its Session ordering/navigation callbacks unchanged. Detached rows therefore
-retain their health display but do not receive a `+` button.
+retain their health display but do not receive a `+` button or remove menu.
 
-- [ ] **Step 5: Remove Main-only and dead Worktree-menu CSS.**
+- [ ] **Step 5: Remove Main-only CSS and retain menu-open Worktree CSS.**
 
-Keep the shared Worktree row rules and change the Worktree hover rules to use
-hover only:
+Keep the shared Worktree row rules and keep the disclosure/icon hidden at rest,
+while also pinning the menu-open row state:
 
 ```css
 .worktreeRow .worktreeDisclosure {
   display: none;
 }
 
-.worktreeRow:hover .worktreeDisclosure {
+.worktreeRow:hover .worktreeDisclosure,
+.worktreeRow[data-menu-open='true'] .worktreeDisclosure {
   display: inline-flex;
 }
 
-.worktreeRow:hover .worktreeIcon {
+.worktreeRow:hover .worktreeIcon,
+.worktreeRow[data-menu-open='true'] .worktreeIcon {
   display: none;
 }
 ```
 
 Delete the `.mainRow`, `.mainLabel`, and `.mainDisclosure` blocks. Remove the
-`.worktreeRow[data-menu-open='true']` and `.worktreeRow:hover .menuAction`
-branches that only supported the deleted Worktree menu. Keep the equivalent
-Workspace menu visibility and Session row menu behavior. Remove
-`.worktreeActions` from the action-visibility selector; `treeActionSlot` now
-owns the shared rail.
+only-dead branches, but keep `.worktreeRow[data-menu-open='true']` and
+`.worktreeRow:hover .menuAction` so active Worktree menus remain visible. Keep
+the equivalent Workspace menu visibility and Session row menu behavior.
+`treeActionSlot` owns the shared rail.
 
 - [ ] **Step 6: Run the focused tests and verify GREEN.**
 
@@ -365,35 +386,35 @@ git commit -m "refactor(worktree): share main and worktree group rows"
 
 - [ ] **Step 1: Update the package README action list and native-parity note.**
 
-In `README.md`, replace the installation walkthrough's Worktree deletion step
-with a read-only status step:
+In `README.md`, document that active Worktree rows expose the removal menu while
+Main and detached rows do not:
 
 ```md
-6. 查看 Worktree 的 ready、repair 和 detached 状态；当前 Worktree surface 不提供 Remove Worktree 入口。
+5. 观察 Worktree 的 ready、repair 或 detached 状态；active Worktree 的选项菜单提供 Remove Worktree 入口，Main 和 detached Worktree 不显示该选项。
 ```
 
 Replace the existing Main-only removal sentence with a shared-row note:
 
 ```md
 Main and Worktree groups share one parameterized split-row presentation. Main
-uses the same branch/tree icon and aligned action rail as Worktree. The Client
-surface intentionally does not expose Worktree removal; detached bindings
-remain visible and the underlying Manager contract is unchanged.
+uses the same branch/tree icon and aligned action rail as Worktree, but does not
+receive the optional Worktree menu. Active Worktree rows retain the remove menu
+and confirmation dialog; detached bindings remain visible and the underlying
+Manager contract is unchanged.
 ```
 
 - [ ] **Step 2: Update the browser Client README.**
 
-Change the Client description so it says Worktree creation goes through the
-injected Manager but the surface does not expose removal. Add the shared-row
-behavior next to the existing trailing-action-rail note:
+Change the Client description so it says Worktree creation and active Worktree
+removal go through the injected Manager. Add the shared-row behavior next to the
+existing trailing-action-rail note:
 
 ```md
 The Main and Worktree group rows use one parameterized row component. Main uses
 the branch/tree icon, keeps its native DSH `+` Session action, and has no
-health-dot or removal menu. Active Worktree rows add the health dot and Worktree
-Session `+`; detached rows remain read-only. The Client surface does not expose
-Worktree removal, while the Manager/API contract remains available to other
-controlled consumers.
+removal menu. Active Worktree rows add the health dot, Worktree Session `+`, and
+the remove menu/confirmation flow; detached rows remain read-only. The
+Manager/API contract remains unchanged.
 ```
 
 - [ ] **Step 3: Record the follow-up in the tree-parity plan.**
@@ -402,10 +423,10 @@ Add a dated follow-up near the top of
 `docs/superpowers/plans/2026-08-21-worktree-tree-parity-implementation.md`:
 
 ```md
-> **Follow-up (2026-08-21):** Main and Worktree group rows now share one
+> **Follow-up (2026-08-22):** Main and Worktree group rows now share one
 > parameterized `WorktreeGroupRow`. Main uses the branch/tree icon and the same
-> action rail; Worktree removal is intentionally not exposed by the Client
-> surface. The Manager/API removal contract remains unchanged.
+> action rail; active Worktree rows pass the optional remove menu and Main and
+> detached rows omit it. The Manager/API removal contract remains unchanged.
 ```
 
 - [ ] **Step 4: Run the complete package verification.**
@@ -428,5 +449,5 @@ artifacts.
 
 ```bash
 git add README.md src/client/README.md docs/superpowers/plans/2026-08-21-worktree-tree-parity-implementation.md
-git commit -m "docs(worktree): record shared row and disabled removal UI"
+git commit -m "docs(worktree): record shared row and conditional removal UI"
 ```
