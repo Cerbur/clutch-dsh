@@ -2,7 +2,7 @@ import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promi
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import type { SessionBinding, WorktreeRecord } from '../contract/index.js';
+import type { SessionBinding, WorktreeId, WorktreeRecord } from '../contract/index.js';
 
 import {
   SIDECAR_SCHEMA_VERSION,
@@ -179,6 +179,10 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
   );
 }
 
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
 function sameBinding(left: SessionBinding, right: SessionBinding): boolean {
   return (
     left.workspaceId === right.workspaceId &&
@@ -319,6 +323,57 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
       return {
         result: persistedRecord,
         snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, persistedRecord] },
+      };
+    });
+  }
+
+  async insertWorktreeBefore(
+    workspaceId: string,
+    worktreeId: WorktreeId,
+    beforeWorktreeId?: WorktreeId,
+  ): Promise<readonly WorktreeId[]> {
+    return this.mutate(workspaceId, (snapshot) => {
+      const currentIds = snapshot.worktrees.map((record) => record.worktreeId);
+      const sourceIndex = currentIds.indexOf(worktreeId);
+      if (sourceIndex === -1) {
+        throw providerError(
+          'WORKTREE_ORDER_INVALID',
+          `Cannot reorder unknown Worktree: ${worktreeId}`,
+          { workspaceId, worktreeId, role: 'source' },
+        );
+      }
+      if (beforeWorktreeId !== undefined && !currentIds.includes(beforeWorktreeId)) {
+        throw providerError(
+          'WORKTREE_ORDER_INVALID',
+          `Cannot reorder before unknown Worktree: ${beforeWorktreeId}`,
+          {
+            workspaceId,
+            worktreeId,
+            beforeWorktreeId,
+            role: 'anchor',
+          },
+        );
+      }
+      if (beforeWorktreeId === worktreeId) {
+        return { result: currentIds, snapshot, changed: false };
+      }
+
+      const without = snapshot.worktrees.filter((record) => record.worktreeId !== worktreeId);
+      const at = beforeWorktreeId === undefined
+        ? without.length
+        : without.findIndex((record) => record.worktreeId === beforeWorktreeId);
+      const worktrees = [
+        ...without.slice(0, at),
+        snapshot.worktrees[sourceIndex],
+        ...without.slice(at),
+      ];
+      const nextIds = worktrees.map((record) => record.worktreeId);
+      if (sameIds(nextIds, currentIds)) {
+        return { result: currentIds, snapshot, changed: false };
+      }
+      return {
+        result: nextIds,
+        snapshot: { ...snapshot, worktrees },
       };
     });
   }

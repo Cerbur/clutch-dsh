@@ -211,6 +211,60 @@ test('repeated identical Worktree upsert is idempotent', async () => {
   });
 });
 
+test('reorders Worktrees with native insertBefore semantics and survives reload', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
+    const records = ['wt_one', 'wt_two', 'wt_three'].map((worktreeId) =>
+      makeRecord({
+        worktreeId,
+        absolutePath: path.join(root, worktreeId),
+      }),
+    );
+    for (const record of records) await sidecar.upsertWorktree(record);
+
+    assert.deepEqual(
+      await sidecar.insertWorktreeBefore('ws_one', 'wt_one', 'wt_three'),
+      ['wt_two', 'wt_one', 'wt_three'],
+    );
+    assert.deepEqual(
+      await sidecar.insertWorktreeBefore('ws_one', 'wt_one'),
+      ['wt_two', 'wt_three', 'wt_one'],
+    );
+
+    const reloaded = new WorkspaceShardedSidecarRepository({ dshHome });
+    assert.deepEqual(
+      (await reloaded.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      ['wt_two', 'wt_three', 'wt_one'],
+    );
+  });
+});
+
+test('does not rewrite the sidecar for no-op or invalid Worktree moves', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
+    for (const worktreeId of ['wt_one', 'wt_two']) {
+      await sidecar.upsertWorktree(makeRecord({
+        worktreeId,
+        absolutePath: path.join(root, worktreeId),
+      }));
+    }
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    const before = await readFile(shardPath, 'utf8');
+
+    await sidecar.insertWorktreeBefore('ws_one', 'wt_one', 'wt_two');
+    assert.equal(await readFile(shardPath, 'utf8'), before);
+    await assert.rejects(
+      sidecar.insertWorktreeBefore('ws_one', 'wt_missing', 'wt_one'),
+      (error) => error?.code === 'WORKTREE_ORDER_INVALID',
+    );
+    await assert.rejects(
+      sidecar.insertWorktreeBefore('ws_one', 'wt_one', 'wt_missing'),
+      (error) => error?.code === 'WORKTREE_ORDER_INVALID',
+    );
+    assert.equal(await readFile(shardPath, 'utf8'), before);
+  });
+});
+
 test('rejects relative workspace roots before invoking Git', async () => {
   await withGitFixture(async ({ dshHome }) => {
     const dsh = createDshReader({ rootPath: 'relative/workspace' });

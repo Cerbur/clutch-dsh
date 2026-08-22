@@ -2,6 +2,7 @@ import type {
   SessionBinding,
   WorktreeErrorCode,
   WorktreeErrorDetails,
+  WorktreeId,
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
@@ -113,6 +114,11 @@ export interface SidecarStore {
     workspaceId: WorkspaceId,
     mutation: (snapshot: SidecarSnapshot) => SidecarMutation<T> | Promise<SidecarMutation<T>>,
   ): Promise<T>;
+  insertWorktreeBefore(
+    workspaceId: WorkspaceId,
+    worktreeId: WorktreeId,
+    beforeWorktreeId?: WorktreeId,
+  ): Promise<readonly WorktreeId[]>;
 }
 
 /**
