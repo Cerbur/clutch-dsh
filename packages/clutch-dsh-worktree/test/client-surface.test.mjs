@@ -521,6 +521,40 @@ test('matches native Session grouping, drag, and expand-more behavior', async ()
   );
 });
 
+test('matches native Worktree drag ordering while keeping Main fixed', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /insertWorktreeBefore/);
+  assert.match(source, /resolveWorktreeMove/);
+  assert.match(source, /interface WorktreeDragState/);
+  assert.match(source, /data-worktree-drag/);
+  assert.match(source, /onDragStart/);
+  assert.match(source, /onDragOver/);
+  assert.match(source, /onDrop/);
+  assert.match(source, /onDragEnd/);
+  assert.match(source, /worktreeDropCommitted/);
+  assert.match(source, /worktreeDrag/);
+
+  const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
+  const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = source.slice(mainCallStart, mainCallEnd);
+  assert.doesNotMatch(mainCallSource, /\bdrag=/);
+
+  const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
+  const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /\bdrag=/);
+  assert.match(styles, /\.worktreeRow\.dropBefore::before/);
+  assert.match(styles, /\.worktreeRow\.dropAfter::after/);
+});
+
 test('renders transient Worktree health with the public StateDot primitive', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
@@ -670,7 +704,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.notEqual(rowEnd, -1);
   const rowSource = source.slice(rowStart, rowEnd);
 
-  assert.match(rowSource, /className=\{styles\.worktreeRow\}/);
+  assert.match(rowSource, /className=\{`\$\{styles\.worktreeRow\} \$\{markerClass\}`\}/);
   assert.match(
     rowSource,
     /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}/,

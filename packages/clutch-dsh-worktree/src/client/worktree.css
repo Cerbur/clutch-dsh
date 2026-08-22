@@ -565,6 +565,25 @@
   bottom: -1px;
 }
 
+.worktreeRow.dropBefore::before,
+.worktreeRow.dropAfter::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-brand-primary);
+  content: '';
+}
+
+.worktreeRow.dropBefore::before {
+  top: -1px;
+}
+
+.worktreeRow.dropAfter::after {
+  bottom: -1px;
+}
+
 .treeChildren {
   margin-left: 24px;
   padding: 2px 0 5px 12px;

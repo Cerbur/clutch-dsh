@@ -41,6 +41,7 @@ import {
   filterArchivedSessionIds,
   loadWorktreeViews,
   reconcileBaseBranchSelection,
+  resolveWorktreeMove,
   selectDefaultBaseBranch,
   stableWorkspaceIds,
   toWorktreeViewError,
@@ -173,6 +174,15 @@ interface WorkspaceDragProps {
   readonly end: () => void;
 }
 
+interface WorktreeDragProps {
+  readonly active: boolean;
+  readonly marker: 'before' | 'after' | null;
+  readonly start: () => void;
+  readonly hover: (half: 'before' | 'after') => void;
+  readonly drop: (half: 'before' | 'after') => void;
+  readonly end: () => void;
+}
+
 interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
@@ -210,6 +220,15 @@ interface SessionDragState {
   readonly sessionId: string;
   readonly over: {
     readonly sessionId: string;
+    readonly half: 'before' | 'after';
+  } | null;
+}
+
+interface WorktreeDragState {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly over: {
+    readonly worktreeId: string;
     readonly half: 'before' | 'after';
   } | null;
 }
@@ -424,6 +443,7 @@ interface WorktreeGroupRowProps {
   readonly t: WorktreeTranslate;
   readonly kind: WorktreeGroupKind;
   readonly label: string;
+  readonly worktreeId?: string;
   readonly expanded: boolean;
   readonly icon: ReactNode;
   readonly workspaceTitle: string;
@@ -432,6 +452,7 @@ interface WorktreeGroupRowProps {
   readonly onToggle: () => void;
   readonly onCreateSession?: () => void;
   readonly menu?: WorktreeGroupMenuProps;
+  readonly drag?: WorktreeDragProps;
 }
 
 /** Shared Main/Worktree group row with parameterized icon, state, and actions. */
@@ -439,6 +460,7 @@ function WorktreeGroupRow({
   t,
   kind,
   label,
+  worktreeId,
   expanded,
   icon,
   workspaceTitle,
@@ -447,15 +469,45 @@ function WorktreeGroupRow({
   onToggle,
   onCreateSession,
   menu,
+  drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
+  const markerClass = drag?.marker === 'before'
+    ? styles.dropBefore
+    : drag?.marker === 'after'
+      ? styles.dropAfter
+      : '';
+  const dragProps = drag === undefined
+    ? {}
+    : {
+        draggable: true,
+        onDragStart: (event: ReactDragEvent<HTMLElement>) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', worktreeId ?? label);
+          drag.start();
+        },
+        onDragEnd: drag.end,
+        onDragOver: (event: ReactDragEvent<HTMLElement>) => {
+          if (!drag.active) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          drag.hover(rowHalf(event));
+        },
+        onDrop: (event: ReactDragEvent<HTMLElement>) => {
+          if (!drag.active) return;
+          event.preventDefault();
+          drag.drop(rowHalf(event));
+        },
+      };
 
   const row = (
     <div
-      className={styles.worktreeRow}
+      className={`${styles.worktreeRow} ${markerClass}`}
       data-main-group={main ? 'true' : undefined}
       data-main-expanded={main ? String(expanded) : undefined}
       data-menu-open={menu?.open ? 'true' : undefined}
+      data-worktree-drag={drag?.active ? 'active' : undefined}
+      {...dragProps}
       onClick={onToggle}
     >
       <button
@@ -795,6 +847,7 @@ export function WorktreeSurface({
   deleteWorkspace,
   insertWorkspaceBefore,
   insertSessionBefore,
+  insertWorktreeBefore,
   renameSession,
   forkSession,
   archiveSession,
@@ -837,6 +890,8 @@ export function WorktreeSurface({
   const [sessionDrag, setSessionDrag] = useState<SessionDragState>();
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<Record<string, boolean>>({});
   const sessionDropCommitted = useRef(false);
+  const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
+  const worktreeDropCommitted = useRef(false);
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
@@ -1090,6 +1145,43 @@ export function WorktreeSurface({
     void insertSessionBefore(workspaceId, activeDrag.sessionId, beforeSessionId).catch((error) => {
       setActionError(toWorktreeViewError(error));
     });
+  };
+
+  const commitWorktreeDrag = (
+    activeDrag: WorktreeDragState,
+    over: NonNullable<WorktreeDragState['over']>,
+    worktreeIds: readonly string[],
+    workspaceId: string,
+  ): void => {
+    if (worktreeDropCommitted.current) return;
+    worktreeDropCommitted.current = true;
+    setWorktreeDrag(undefined);
+    if (activeDrag.workspaceId !== workspaceId) return;
+    const move = resolveWorktreeMove(
+      worktreeIds,
+      activeDrag.worktreeId,
+      over.worktreeId,
+      over.half,
+    );
+    if (move === undefined) return;
+    if (insertWorktreeBefore === undefined) {
+      setActionError({
+        code: 'WORKTREE_ORDER_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      });
+      return;
+    }
+    setActionError(undefined);
+    void insertWorktreeBefore(
+      workspaceId,
+      activeDrag.worktreeId,
+      move.beforeWorktreeId,
+    )
+      .then(() => refresh())
+      .catch((error) => {
+        setActionError(toWorktreeViewError(error));
+      });
   };
 
   const openSessionRename = (sessionId: string, currentTitle: string): void => {
@@ -1446,6 +1538,8 @@ export function WorktreeSurface({
                   const mainExpanded = expandedMains[workspace.workspaceId] !== false;
                   const mainGroupKey = `main:${workspace.workspaceId}`;
                   const worktrees = view?.worktrees ?? [];
+                  const sameWorkspaceWorktreeDrag =
+                    worktreeDrag?.workspaceId === workspace.workspaceId;
 
                   return (
                     <section
@@ -1628,6 +1722,7 @@ export function WorktreeSurface({
                                   t={t}
                                   kind="worktree"
                                   label={record.branch}
+                                  worktreeId={record.worktreeId}
                                   expanded={worktreeExpanded}
                                   icon={<IconBranchOutline16 />}
                                   workspaceTitle={workspace.title}
@@ -1665,6 +1760,57 @@ export function WorktreeSurface({
                                         }
                                       : undefined
                                   }
+                                  drag={{
+                                    active: sameWorkspaceWorktreeDrag,
+                                    marker:
+                                      worktreeDrag?.over?.worktreeId === record.worktreeId
+                                        ? worktreeDrag.over.half
+                                        : null,
+                                    start: () => {
+                                      worktreeDropCommitted.current = false;
+                                      setWorktreeDrag({
+                                        workspaceId: workspace.workspaceId,
+                                        worktreeId: record.worktreeId,
+                                        over: null,
+                                      });
+                                    },
+                                    hover: (half) => {
+                                      setWorktreeDrag((current) =>
+                                        current === undefined ||
+                                        current.workspaceId !== workspace.workspaceId
+                                          ? current
+                                          : {
+                                              ...current,
+                                              over: { worktreeId: record.worktreeId, half },
+                                            },
+                                      );
+                                    },
+                                    drop: (half) => {
+                                      if (worktreeDrag === undefined) return;
+                                      commitWorktreeDrag(
+                                        worktreeDrag,
+                                        { worktreeId: record.worktreeId, half },
+                                        worktrees.map((candidate) => candidate.worktreeId),
+                                        workspace.workspaceId,
+                                      );
+                                    },
+                                    end: () => {
+                                      if (
+                                        worktreeDrag?.over !== null &&
+                                        worktreeDrag?.over !== undefined
+                                      ) {
+                                        commitWorktreeDrag(
+                                          worktreeDrag,
+                                          worktreeDrag.over,
+                                          worktrees.map((candidate) => candidate.worktreeId),
+                                          workspace.workspaceId,
+                                        );
+                                      } else {
+                                        setWorktreeDrag(undefined);
+                                      }
+                                      worktreeDropCommitted.current = false;
+                                    },
+                                  }}
                                 />
                                 {worktreeExpanded && (
                                   <WorktreeSessionGroup
