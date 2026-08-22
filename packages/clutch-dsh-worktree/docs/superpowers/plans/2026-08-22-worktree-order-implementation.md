@@ -284,7 +284,6 @@ git commit -m "feat(worktree): persist native-style Worktree order"
 - Modify: `src/manage/manager.ts` after `removeWorktree`
 - Modify: `src/host/remote.ts`
 - Modify: `src/host/service.ts`
-- Modify: `test/contract.test.mjs`
 - Modify: `test/manage.test.mjs`
 - Modify: `test/host-remote.test.mjs`
 
@@ -429,7 +428,7 @@ Run the same command from Step 2. Expected: the Manage order assertion and Host 
 - [ ] **Step 6: Commit the Manage/Host change.**
 
 ```bash
-git add src/contract/index.ts src/manage/manager.ts src/host/remote.ts src/host/service.ts test/contract.test.mjs test/manage.test.mjs test/host-remote.test.mjs
+git add src/contract/index.ts src/manage/manager.ts src/host/remote.ts src/host/service.ts test/manage.test.mjs test/host-remote.test.mjs
 git commit -m "feat(worktree): expose Worktree ordering from Host"
 ```
 
