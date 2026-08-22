@@ -632,3 +632,39 @@ test('shares one parameterized group row while gating removal UI by row configur
   assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
   assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
 });
+
+test('polishes Main and Worktree row hover presentation', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /\bHoverCard\b/);
+  assert.match(source, /<HoverCard[\s\S]*openDelayMs=\{500\}/);
+  assert.match(
+    source,
+    /content=\{<div className=\{styles\.worktreeHoverTitle\}>\{label\}<\/div>\}/,
+  );
+  assert.match(source, /disabled=\{menu\?\.open === true\}/);
+
+  assert.match(
+    styles,
+    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 22px;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;[\s\S]*font-weight: 600;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeState\s*\{[\s\S]*width: 12px;[\s\S]*margin-right: 0;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeHoverTitle\s*\{[\s\S]*color: var\(--dsw-static-neutral-bluish-00\);/,
+  );
+});

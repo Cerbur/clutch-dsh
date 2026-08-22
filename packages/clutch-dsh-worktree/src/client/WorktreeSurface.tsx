@@ -10,6 +10,7 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import {
   Button,
+  HoverCard,
   IconArchiveOutline20,
   IconBranchOutline16,
   IconChevronDownOutline14,
@@ -425,7 +426,7 @@ function WorktreeGroupRow({
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
 
-  return (
+  const row = (
     <div
       className={styles.worktreeRow}
       data-main-group={main ? 'true' : undefined}
@@ -520,6 +521,16 @@ function WorktreeGroupRow({
         )}
       </span>
     </div>
+  );
+
+  if (main) return row;
+  return (
+    <HoverCard
+      anchor={row}
+      content={<div className={styles.worktreeHoverTitle}>{label}</div>}
+      openDelayMs={500}
+      disabled={menu?.open === true}
+    />
   );
 }
 

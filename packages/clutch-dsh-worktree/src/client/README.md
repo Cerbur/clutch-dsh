@@ -42,6 +42,7 @@ The Worktree surface is additive:
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and has no Worktree menu; active Worktree rows expose the Worktree options menu and removal confirmation, while detached rows remain visible and read-only;
+- Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open.
 - Worktree health is a runtime Git projection and is never written to the sidecar.
 
 Connection, Gateway and Worktree domain failures remain visible as retryable errors rather
