@@ -72,11 +72,11 @@ test('renders a localized Main label with the current branch and a fallback', as
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*font-weight: 600;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
   );
   assert.doesNotMatch(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*text-transform: uppercase;/,
   );
 });
 ```
@@ -111,11 +111,11 @@ with these assertions:
 ```js
 assert.match(
   styles,
-  /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*font-weight: 600;/,
+  /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
 );
 assert.doesNotMatch(
   styles,
-  /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;/,
+  /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*text-transform: uppercase;/,
 );
 ```
 
