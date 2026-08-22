@@ -21,7 +21,8 @@ export const zh = {
   'workspace.deleteDescription':
     '删除“{name}”？这只会移除 DSH 工作区注册。目录、会话和 Git Worktree 会保留。',
   'worktree.title': 'Worktree',
-  'worktree.main': 'Main',
+  'worktree.main': '本地',
+  'worktree.mainWithBranch': '本地（{branch}）',
   'worktree.detached': '已分离 Worktree',
   'worktree.repair': 'Worktree 需要修复',
   'worktree.ready': '活动 Worktree 已就绪',
@@ -98,7 +99,8 @@ export const en = {
   'workspace.deleteDescription':
     'Delete {name}? This removes only the DSH Workspace registration. The directory, Sessions, and Git Worktrees will be retained.',
   'worktree.title': 'Worktrees',
-  'worktree.main': 'Main',
+  'worktree.main': 'Local',
+  'worktree.mainWithBranch': 'Local ({branch})',
   'worktree.detached': 'Detached Worktree',
   'worktree.repair': 'Worktree needs repair',
   'worktree.ready': 'Active Worktree ready',

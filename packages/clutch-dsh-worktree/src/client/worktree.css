@@ -483,7 +483,6 @@
 
 .worktreeRow[data-main-group='true'] .worktreeLabel {
   font-weight: 600;
-  text-transform: uppercase;
 }
 
 .worktreeHoverTitle {

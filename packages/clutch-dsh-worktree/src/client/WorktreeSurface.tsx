@@ -1377,6 +1377,12 @@ export function WorktreeSurface({
               ) : (
                 visibleWorkspaces.map((workspace) => {
                   const view = viewByWorkspace.get(workspace.workspaceId);
+                  const currentBranch = view?.branches.find(
+                    (branch) => branch.isCurrent,
+                  )?.name;
+                  const mainLabel = currentBranch === undefined
+                    ? t('worktree.main')
+                    : t('worktree.mainWithBranch', { branch: currentBranch });
                   const expanded = expandedWorkspaces[workspace.workspaceId] !== false;
                   const workspaceMatchesQuery = includesText(workspace.title, query);
                   const allWorkspaceSessionIds = filterArchivedSessionIds(
@@ -1467,7 +1473,7 @@ export function WorktreeSurface({
                           <WorktreeGroupRow
                             t={t}
                             kind="main"
-                            label={t('worktree.main')}
+                            label={mainLabel}
                             expanded={mainExpanded}
                             icon={<IconBranchOutline16 />}
                             workspaceTitle={workspace.title}
