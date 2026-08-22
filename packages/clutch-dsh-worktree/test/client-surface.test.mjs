@@ -8,8 +8,10 @@ import {
   executeWorktreeAction,
   loadWorktreeView,
   loadWorktreeViews,
+  reconcileBaseBranchSelection,
   selectDefaultBaseBranch,
   toWorktreeViewError,
+  worktreeSetupCommands,
 } from '../lib/client/worktree-view.js';
 import * as worktreeView from '../lib/client/worktree-view.js';
 
@@ -77,7 +79,12 @@ test('loads Worktree, branch, and binding projection through the Manager contrac
     'ws1',
   );
 
-  assert.deepEqual(data, { worktrees: [], branches: [], bindings: [] });
+  assert.deepEqual(data, {
+    worktrees: [],
+    branches: [],
+    bindings: [],
+    readiness: { status: 'noLocalBranch' },
+  });
   assert.deepEqual(calls, [
     ['listWorktrees', { workspaceId: 'ws1' }],
     ['listBranches', { workspaceId: 'ws1' }],
@@ -112,6 +119,97 @@ test('selects the current local branch as the default Worktree base branch', () 
     'feature/other',
   );
   assert.equal(selectDefaultBaseBranch([]), '');
+});
+
+test('maps a non-Git branch-list failure to Workspace-local readiness', async () => {
+  const data = await loadWorktreeView(
+    manager({
+      async listWorktrees() {
+        return [{
+          worktreeId: 'wt1',
+          workspaceId: 'ws1',
+          absolutePath: '/tmp/wt1',
+          branch: 'main',
+          status: 'active',
+        }];
+      },
+      async listBranches() {
+        throw {
+          code: 'WORKSPACE_NOT_GIT_REPOSITORY',
+          message: 'Workspace is not a Git repository.',
+          details: {},
+        };
+      },
+      async listBindings() {
+        return [{ workspaceId: 'ws1', worktreeId: 'wt1', sessionId: 's1', status: 'active' }];
+      },
+    }),
+    'ws1',
+  );
+
+  assert.equal(data.readiness.status, 'noRepository');
+  assert.equal(data.worktrees.length, 1);
+  assert.equal(data.bindings.length, 1);
+});
+
+test('maps a no-initial-commit branch-list failure to setup readiness', async () => {
+  const data = await loadWorktreeView(
+    manager({
+      async listBranches() {
+        throw {
+          code: 'WORKTREE_REQUIRES_INITIAL_COMMIT',
+          message: 'Workspace has no initial commit.',
+          details: {},
+        };
+      },
+    }),
+    'ws1',
+  );
+
+  assert.equal(data.readiness.status, 'noInitialCommit');
+  assert.deepEqual(data.branches, []);
+});
+
+test('does not hide unknown branch-list failures as an empty branch state', async () => {
+  await assert.rejects(
+    loadWorktreeView(
+      manager({
+        async listBranches() {
+          throw { code: 'CONNECTION_CALL_FAILED', message: 'connection lost', details: {} };
+        },
+      }),
+      'ws1',
+    ),
+    (error) => error?.message === 'connection lost',
+  );
+});
+
+test('selects the current branch and preserves a valid user selection', () => {
+  const branches = [
+    { name: 'feature/other', isCurrent: false, checkedOut: false },
+    { name: 'main', isCurrent: true, checkedOut: true },
+  ];
+
+  assert.equal(reconcileBaseBranchSelection('', branches), 'main');
+  assert.equal(reconcileBaseBranchSelection('feature/other', branches), 'feature/other');
+  assert.equal(reconcileBaseBranchSelection('removed', branches), 'main');
+  assert.equal(reconcileBaseBranchSelection('', []), '');
+});
+
+test('returns setup commands for each Git readiness state', () => {
+  assert.deepEqual(worktreeSetupCommands('noRepository'), [
+    'git init',
+    'printf "# README\\n" > README.md',
+    'git add README.md',
+    'git commit -m "Initial commit"',
+  ]);
+  assert.deepEqual(worktreeSetupCommands('noInitialCommit'), [
+    'printf "# README\\n" > README.md',
+    'git add README.md',
+    'git commit -m "Initial commit"',
+  ]);
+  assert.deepEqual(worktreeSetupCommands('noLocalBranch'), ['git switch -c main']);
+  assert.deepEqual(worktreeSetupCommands('ready'), []);
 });
 
 test('generates an available dsh Worktree name and rolls after a collision', () => {
@@ -153,8 +251,20 @@ test('loads independent Worktree projections for every Workspace', async () => {
   );
 
   assert.deepEqual(data, [
-    { workspaceId: 'ws1', worktrees: [], branches: [], bindings: [] },
-    { workspaceId: 'ws2', worktrees: [], branches: [], bindings: [] },
+    {
+      workspaceId: 'ws1',
+      worktrees: [],
+      branches: [],
+      bindings: [],
+      readiness: { status: 'noLocalBranch' },
+    },
+    {
+      workspaceId: 'ws2',
+      worktrees: [],
+      branches: [],
+      bindings: [],
+      readiness: { status: 'noLocalBranch' },
+    },
   ]);
   assert.deepEqual(calls, [
     ['listWorktrees', { workspaceId: 'ws1' }],
