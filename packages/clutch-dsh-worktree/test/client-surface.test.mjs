@@ -657,7 +657,11 @@ test('polishes Main and Worktree row hover presentation', async () => {
   );
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;[\s\S]*font-weight: 600;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*font-weight: 600;/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;/,
   );
   assert.match(
     styles,
@@ -666,5 +670,35 @@ test('polishes Main and Worktree row hover presentation', async () => {
   assert.match(
     styles,
     /\.worktreeHoverTitle\s*\{[\s\S]*color: var\(--dsw-static-neutral-bluish-00\);/,
+  );
+});
+
+test('renders a localized Main label with the current branch and a fallback', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /const currentBranch = view\?\.branches\.find\(\s*\(branch\) => branch\.isCurrent,?\s*\)\?\.name;/,
+  );
+  assert.match(
+    source,
+    /const mainLabel = currentBranch === undefined\s+\? t\('worktree\.main'\)\s+: t\('worktree\.mainWithBranch', \{ branch: currentBranch \}\);/,
+  );
+  assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
+  assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
+  assert.match(
+    styles,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*font-weight: 600;/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[\s\S]*text-transform: uppercase;/,
   );
 });

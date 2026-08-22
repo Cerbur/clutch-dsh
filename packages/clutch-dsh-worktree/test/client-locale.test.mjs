@@ -29,3 +29,10 @@ test('keeps parameter placeholders in the translated templates', () => {
   assert.match(en['error.sessionBindingFailed'], /\{sessionId\}/);
   assert.match(en['error.sessionBindingFailed'], /\{reason\}/);
 });
+
+test('uses localized Local copy with the current branch', () => {
+  assert.equal(zh['worktree.main'], '本地');
+  assert.equal(en['worktree.main'], 'Local');
+  assert.equal(zh['worktree.mainWithBranch'], '本地（{branch}）');
+  assert.equal(en['worktree.mainWithBranch'], 'Local ({branch})');
+});
