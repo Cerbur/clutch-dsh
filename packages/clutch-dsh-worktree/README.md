@@ -119,6 +119,10 @@ Worktree mode 跟随 DSH 当前界面语言。语言选择和偏好持久化由 
 Workspace、Session、branch、path 以及 DSH/Host 返回的原始错误信息保持原值，便于
 诊断和继续使用 DSH 原生数据。
 
+Worktree mode 的 Main 分组会显示当前 local branch：English 为 `Local (branch)`，中文为
+`本地（branch）`；如果 DSH 没有返回当前分支，则显示 `Local` 或 `本地`。branch 名称保持
+DSH/Git 原值。
+
 ## 当前限制
 
 DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
