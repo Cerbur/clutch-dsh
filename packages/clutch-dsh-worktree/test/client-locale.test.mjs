@@ -36,3 +36,14 @@ test('uses localized Local copy with the current branch', () => {
   assert.equal(zh['worktree.mainWithBranch'], '本地（{branch}）');
   assert.equal(en['worktree.mainWithBranch'], 'Local ({branch})');
 });
+
+test('localizes the unavailable Worktree ordering error', () => {
+  assert.equal(
+    zh['error.worktreeOrderingUnavailable'],
+    'Worktree 排序不可用，请重新连接后重试。',
+  );
+  assert.equal(
+    en['error.worktreeOrderingUnavailable'],
+    'Worktree ordering is unavailable; retry after reconnecting.',
+  );
+});

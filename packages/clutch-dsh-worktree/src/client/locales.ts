@@ -69,6 +69,7 @@ export const zh = {
   'error.invalidResult': 'Worktree endpoint {endpoint} 返回了无效结果，请重试请求。',
   'error.workspaceOrderingUnavailable': '工作区排序不可用，请重新连接后重试。',
   'error.sessionOrderingUnavailable': '会话排序不可用，请重新连接后重试。',
+  'error.worktreeOrderingUnavailable': 'Worktree 排序不可用，请重新连接后重试。',
   'error.worktreeCreatedSessionUnavailable': 'Worktree 已创建，但 Session 创建不可用，请重新连接后重试。',
   'error.sessionCreationUnavailable': 'Session 创建不可用，请重新连接后重试。',
   'error.worktreeRecordMissing': 'Worktree 创建未返回 Worktree 记录，请重试请求。',
@@ -152,6 +153,7 @@ export const en = {
   'error.invalidResult': 'Worktree endpoint {endpoint} returned an invalid result; retry the request.',
   'error.workspaceOrderingUnavailable': 'Workspace ordering is unavailable; retry after reconnecting.',
   'error.sessionOrderingUnavailable': 'Session ordering is unavailable; retry after reconnecting.',
+  'error.worktreeOrderingUnavailable': 'Worktree ordering is unavailable; retry after reconnecting.',
   'error.worktreeCreatedSessionUnavailable':
     'Worktree created, but Session creation is unavailable; retry after reconnecting.',
   'error.sessionCreationUnavailable': 'Session creation is unavailable; retry after reconnecting.',

@@ -67,6 +67,20 @@ test('uses translated fallback copy when a known wrapper has no raw reason', () 
   );
 });
 
+test('formats unavailable Worktree ordering with localized copy', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'WORKTREE_ORDER_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      },
+      t,
+    ),
+    'error.worktreeOrderingUnavailable',
+  );
+});
+
 test('keeps an unknown DSH or Host message unchanged', () => {
   assert.equal(
     formatWorktreeViewError(

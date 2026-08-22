@@ -31,6 +31,8 @@ export function formatWorktreeViewError(
       return t('error.workspaceOrderingUnavailable');
     case 'SESSION_ORDER_UNAVAILABLE':
       return t('error.sessionOrderingUnavailable');
+    case 'WORKTREE_ORDER_UNAVAILABLE':
+      return t('error.worktreeOrderingUnavailable');
     case 'SESSION_CREATE_UNAVAILABLE':
       return t('error.sessionCreationUnavailable');
     case 'WORKTREE_CREATED_SESSION_UNAVAILABLE':

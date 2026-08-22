@@ -44,6 +44,7 @@ import {
   resolveWorktreeMove,
   selectDefaultBaseBranch,
   stableWorkspaceIds,
+  toRetryableWorktreeOrderError,
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
@@ -1180,7 +1181,7 @@ export function WorktreeSurface({
     )
       .then(() => refresh())
       .catch((error) => {
-        setActionError(toWorktreeViewError(error));
+        setActionError(toRetryableWorktreeOrderError(error));
       });
   };
 

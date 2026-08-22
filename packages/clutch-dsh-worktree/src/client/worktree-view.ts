@@ -294,3 +294,11 @@ export function toWorktreeViewError(error: unknown): WorktreeViewError {
     retryable: true,
   };
 }
+
+/** Keep ordering mutation/refresh failures reachable from the surface Retry control. */
+export function toRetryableWorktreeOrderError(error: unknown): WorktreeViewError {
+  return {
+    ...toWorktreeViewError(error),
+    retryable: true,
+  };
+}

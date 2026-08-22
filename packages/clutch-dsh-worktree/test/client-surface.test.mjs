@@ -591,6 +591,19 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
     worktreeCallSource,
     /end: \(\) => \{\s*setWorktreeDrag\(undefined\);\s*worktreeDropCommitted\.current = false;\s*\}/,
   );
+
+  const commitStart = source.indexOf('const commitWorktreeDrag =');
+  const commitEnd = source.indexOf('const openSessionRename =', commitStart);
+  const commitSource = source.slice(commitStart, commitEnd);
+  assert.match(
+    commitSource,
+    /if \(activeDrag\.workspaceId !== workspaceId\) return;[\s\S]*?insertWorktreeBefore\(/,
+  );
+  assert.match(
+    commitSource,
+    /\.then\(\(\) => refresh\(\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
+  );
+  assert.match(source, /\{actionError\.retryable && \(/);
 });
 
 test('renders transient Worktree health with the public StateDot primitive', async () => {
