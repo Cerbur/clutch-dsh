@@ -1795,19 +1795,7 @@ export function WorktreeSurface({
                                       );
                                     },
                                     end: () => {
-                                      if (
-                                        worktreeDrag?.over !== null &&
-                                        worktreeDrag?.over !== undefined
-                                      ) {
-                                        commitWorktreeDrag(
-                                          worktreeDrag,
-                                          worktreeDrag.over,
-                                          worktrees.map((candidate) => candidate.worktreeId),
-                                          workspace.workspaceId,
-                                        );
-                                      } else {
-                                        setWorktreeDrag(undefined);
-                                      }
+                                      setWorktreeDrag(undefined);
                                       worktreeDropCommitted.current = false;
                                     },
                                   }}

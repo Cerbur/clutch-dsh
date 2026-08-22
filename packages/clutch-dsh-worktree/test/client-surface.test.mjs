@@ -555,6 +555,31 @@ test('matches native Worktree drag ordering while keeping Main fixed', async () 
   assert.match(styles, /\.worktreeRow\.dropAfter::after/);
 });
 
+test('commits Worktree ordering only from valid same-Workspace drop targets', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const groupRowStart = source.indexOf('function WorktreeGroupRow');
+  const groupRowEnd = source.indexOf('/** Worktree-mode Session row', groupRowStart);
+  const groupRowSource = source.slice(groupRowStart, groupRowEnd);
+  assert.match(
+    groupRowSource,
+    /onDrop: \(event: ReactDragEvent<HTMLElement>\) => \{\s*if \(!drag\.active\) return;\s*event\.preventDefault\(\);\s*drag\.drop\(rowHalf\(event\)\);/,
+  );
+
+  const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
+  const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /active: sameWorkspaceWorktreeDrag/);
+  assert.match(worktreeCallSource, /drop: \(half\) => \{[\s\S]*?commitWorktreeDrag\(/);
+  assert.equal((worktreeCallSource.match(/commitWorktreeDrag\(/g) ?? []).length, 1);
+  assert.match(
+    worktreeCallSource,
+    /end: \(\) => \{\s*setWorktreeDrag\(undefined\);\s*worktreeDropCommitted\.current = false;\s*\}/,
+  );
+});
+
 test('renders transient Worktree health with the public StateDot primitive', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
