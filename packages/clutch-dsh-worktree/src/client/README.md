@@ -38,6 +38,8 @@ The Worktree surface is additive:
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - Workspace rename, delete and drag ordering use native DSH Workspace APIs;
 - Session menus retain Rename/Fork/Archive, and Session drag ordering is restricted to the current visual Main or Worktree group;
+- Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
+- Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;

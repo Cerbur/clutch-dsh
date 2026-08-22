@@ -991,7 +991,7 @@ git commit -m "feat(worktree): add persistent Worktree drag ordering"
 - Consumes: the completed contract, sidecar, Host, Connection, and Client behavior from Tasks 1–6.
 - Produces: public documentation that states Worktree ordering is persistent per Workspace, Main is fixed, and ordering does not modify DSH-owned data.
 
-- [ ] **Step 1: Write the failing documentation assertions.**
+- [x] **Step 1: Write the failing documentation assertions.**
 
 Add these source assertions to `test/client-surface.test.mjs`:
 
@@ -1010,7 +1010,7 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
 });
 ```
 
-- [ ] **Step 2: Run the documentation assertion and verify RED.**
+- [x] **Step 2: Run the documentation assertion and verify RED.**
 
 Run:
 
@@ -1020,7 +1020,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test -- --test-name-pattern='documents
 
 Expected: the test fails because the current README files do not state the new ordering behavior.
 
-- [ ] **Step 3: Update the public README.**
+- [x] **Step 3: Update the public README.**
 
 In the Chinese feature list, replace the existing native-ordering bullet with:
 
@@ -1034,7 +1034,7 @@ In the current limitations section, add:
 Worktree 顺序按每个 Workspace 独立持久化在 plugin sidecar 的 `worktrees` 数组中，使用与 DSH 原生 `insertBefore` 相同的 source/anchor 语义。Main 是固定的本地视角，不参与 Worktree 拖动；排序不会修改 DSH Workspace、Session 或 Git Worktree 数据。
 ```
 
-- [ ] **Step 4: Update the browser Consumer README.**
+- [x] **Step 4: Update the browser Consumer README.**
 
 In the Worktree surface contract, add these bullets:
 
@@ -1043,11 +1043,11 @@ In the Worktree surface contract, add these bullets:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 ```
 
-- [ ] **Step 5: Run the documentation assertion and verify GREEN.**
+- [x] **Step 5: Run the documentation assertion and verify GREEN.**
 
 Run the same command from Step 2. Expected: the README assertions pass.
 
-- [ ] **Step 6: Run focused contract, provider, Host, Connection, and Client checks.**
+- [x] **Step 6: Run focused contract, provider, Host, Connection, and Client checks.**
 
 Run:
 
@@ -1057,7 +1057,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test -- --test-name-pattern='Worktree|
 
 Expected: the package build succeeds and all matching tests pass, including the sidecar reload/no-op checks and the existing Workspace/Session drag checks.
 
-- [ ] **Step 7: Run the required package checks.**
+- [x] **Step 7: Run the required package checks.**
 
 Run each command separately from the workspace root:
 
@@ -1071,7 +1071,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 
 Expected: every command exits with status 0. The test command must report zero failures and must not leave generated `lib/` changes staged.
 
-- [ ] **Step 8: Inspect the final diff and status.**
+- [x] **Step 8: Inspect the final diff and status.**
 
 Run:
 
@@ -1083,7 +1083,15 @@ git diff --stat HEAD~6..HEAD
 
 Confirm that only the contract/provider/Manage/Host/Client source, tests, README files, and this plan/spec changed; no generated artifacts, coverage, credentials, or sidecar fixtures are present.
 
-- [ ] **Step 9: Commit the documentation and verification record.**
+### Task 7 verification record (2026-08-23)
+
+- RED: `pnpm --filter @cerbur/clutch-dsh-worktree test -- --test-name-pattern='documents persistent Worktree ordering'` exited 1 as expected: 130 passed and the new documentation assertion failed because `README.md` lacked a Worktree ordering statement.
+- GREEN: the same command exited 0 after the README updates: 131 passed, 0 failed.
+- Focused matrix: `pnpm --filter @cerbur/clutch-dsh-worktree test -- --test-name-pattern='Worktree|Workspace row actions|Session grouping|approved stable error codes|browser-safe Worktree Manager methods|projects every approved Manager operation|canonical endpoint and payload|generated Worktree Remote descriptors|documents persistent Worktree ordering'` exited 0: 131 passed, 0 failed.
+- Required package checks all exited 0: `pnpm run check:workspace` (`workspace shape ok`), `pnpm run check:patches` (`cordis patches ok`; existing unresolved `!!js` YAML warning at `cordis.patch.yml:5`), `pnpm --filter @cerbur/clutch-dsh-worktree typecheck`, `pnpm --filter @cerbur/clutch-dsh-worktree build`, and `pnpm --filter @cerbur/clutch-dsh-worktree test` (131 passed, 0 failed).
+- Final diff inspection: `git diff --check` exited 0; the working tree contains only Task 7 README, Client README, plan, and source-assertion test changes, with no generated artifacts, coverage, credentials, or sidecar fixtures.
+
+- [x] **Step 9: Commit the documentation and verification record.**
 
 ```bash
 git add README.md src/client/README.md docs/superpowers/plans/2026-08-22-worktree-order-implementation.md test/client-surface.test.mjs

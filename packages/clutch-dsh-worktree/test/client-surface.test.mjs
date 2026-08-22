@@ -15,6 +15,19 @@ import {
 } from '../lib/client/worktree-view.js';
 import * as worktreeView from '../lib/client/worktree-view.js';
 
+test('documents persistent Worktree ordering and fixed Main behavior', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const clientReadme = await readFile(
+    new URL('../src/client/README.md', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(readme, /Worktree.*排序|Worktree.*order/i);
+  assert.match(readme, /Main.*固定|Main.*fixed/i);
+  assert.match(clientReadme, /persistent Worktree order|持久.*Worktree.*顺序/i);
+  assert.match(clientReadme, /Main.*fixed|Main.*固定/i);
+});
+
 function manager(overrides = {}) {
   return {
     async listWorktrees() {

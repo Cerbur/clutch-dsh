@@ -15,7 +15,7 @@ English marketplace description:
 - 在 Main 或指定 Worktree 下创建 Session，并直接打开新 Session；
 - 查看 active、detached 和 repair 状态；
 - 通过 active Worktree 的选项菜单移除 Worktree，并在确认弹窗中完成操作；
-- 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单、排序能力。
+- 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单、排序能力；Worktree 可在所属 Workspace 内拖动排序，顺序持久化在 plugin sidecar，Main 固定在第一位。
 
 Worktree Session 仍属于原始 DSH Project/Workspace，因此切回原生 Project/Session 视角时仍可由 DSH 展示。插件不复制 Session 内容，也不修改消息、prompt、transcript 或历史记录。
 
@@ -126,6 +126,8 @@ DSH/Git 原值。
 ## 当前限制
 
 DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
+
+Worktree 顺序按每个 Workspace 独立持久化在 plugin sidecar 的 `worktrees` 数组中，使用与 DSH 原生 `insertBefore` 相同的 source/anchor 语义。Main 是固定的本地视角，不参与 Worktree 拖动；排序不会修改 DSH Workspace、Session 或 Git Worktree 数据。
 
 如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。Git 前置条件失败会按 Workspace 独立显示 setup 提示和可复制命令；插件不会自动执行这些命令，也不会写入 README 或 commit。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。
 
