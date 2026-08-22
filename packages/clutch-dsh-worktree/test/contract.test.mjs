@@ -9,6 +9,7 @@ test('exports the approved stable error codes', () => {
     'WORKTREE_REQUIRES_INITIAL_COMMIT',
     'WORKTREE_BRANCH_CONFLICT',
     'WORKTREE_NOT_FOUND',
+    'WORKTREE_ORDER_INVALID',
     'WORKTREE_REMOVED',
     'SESSION_NOT_FOUND',
     'SESSION_CWD_MISMATCH',
