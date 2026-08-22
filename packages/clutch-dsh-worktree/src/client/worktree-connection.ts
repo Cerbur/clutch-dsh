@@ -19,6 +19,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   listBranches: 'worktreeManager/listBranches',
   createWorktree: 'worktreeManager/createWorktree',
   removeWorktree: 'worktreeManager/removeWorktree',
+  insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
 }) satisfies Readonly<Record<WorktreeRemoteMethod, string>>;
@@ -171,6 +172,9 @@ export function createWorktreeConnectionAdapter(
     createWorktree: (input) => invoke('createWorktree', input),
     async removeWorktree(input): Promise<void> {
       await invoke<null>('removeWorktree', input);
+    },
+    async insertWorktreeBefore(input): Promise<readonly string[]> {
+      return invoke<readonly string[]>('insertWorktreeBefore', input);
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),

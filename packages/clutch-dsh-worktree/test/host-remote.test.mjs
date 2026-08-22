@@ -21,6 +21,9 @@ function createManager(overrides = {}) {
       };
     },
     async removeWorktree() {},
+    async insertWorktreeBefore() {
+      return ['wt_example'];
+    },
     async listBindings() {
       return [];
     },
@@ -61,6 +64,13 @@ test('projects every approved Manager operation as a serializable result', async
   assert.deepEqual(
     await remote.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),
     { ok: true, value: null },
+  );
+  assert.deepEqual(
+    await remote.insertWorktreeBefore({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+    }),
+    { ok: true, value: ['wt_example'] },
   );
   assert.deepEqual(await remote.listBindings({ workspaceId: 'ws_example' }), {
     ok: true,

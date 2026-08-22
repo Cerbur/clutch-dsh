@@ -6,6 +6,7 @@ import type {
   BranchRecord,
   SessionBinding,
   WorktreeRecord,
+  WorktreeId,
   WorkspaceId,
 } from '../contract/index.js';
 
@@ -441,6 +442,23 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
         );
       }
       throw error;
+    }
+  }
+
+  async insertWorktreeBefore(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    beforeWorktreeId?: WorktreeId;
+  }): Promise<readonly WorktreeId[]> {
+    await this.requireWorkspace(input.workspaceId);
+    try {
+      return await this.sidecar.insertWorktreeBefore(
+        input.workspaceId,
+        input.worktreeId,
+        input.beforeWorktreeId,
+      );
+    } catch (error) {
+      throw asSidecarError(error, input.workspaceId);
     }
   }
 

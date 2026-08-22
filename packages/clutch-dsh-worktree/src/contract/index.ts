@@ -146,6 +146,17 @@ export interface WorktreeManager {
   removeWorktree(input: { workspaceId: WorkspaceId; worktreeId: WorktreeId }): Promise<void>;
 
   /**
+   * Move one Worktree within the Workspace's durable order. With an anchor it
+   * lands before that Worktree; without one it appends. Invalid and unchanged
+   * moves resolve without changing the sidecar.
+   */
+  insertWorktreeBefore(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    beforeWorktreeId?: WorktreeId;
+  }): Promise<readonly WorktreeId[]>;
+
+  /**
    * 返回 active 与 detached 关系，使调用方能够区分当前归属和待修复历史。
    * Returns active and detached relations so callers can distinguish current ownership from repairable history.
    */
@@ -171,6 +182,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'listBranches',
   'createWorktree',
   'removeWorktree',
+  'insertWorktreeBefore',
   'listBindings',
   'bindSession',
 ] as const);
@@ -208,6 +220,12 @@ export interface WorktreeRemoteManager {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
   }): Promise<WorktreeRemoteResult<null>>;
+
+  insertWorktreeBefore(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    beforeWorktreeId?: WorktreeId;
+  }): Promise<WorktreeRemoteResult<readonly WorktreeId[]>>;
 
   listBindings(input: {
     workspaceId: WorkspaceId;

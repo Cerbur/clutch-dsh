@@ -90,6 +90,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
     [
       'worktreeManager/bindSession',
       'worktreeManager/createWorktree',
+      'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
       'worktreeManager/listBranches',
       'worktreeManager/listWorktrees',
@@ -196,6 +197,7 @@ test('canonical rc.8 Host Gateway claims Worktree endpoints on the shared /api c
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
   ]);

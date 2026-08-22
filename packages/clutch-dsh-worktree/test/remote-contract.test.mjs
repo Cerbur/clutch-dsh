@@ -15,12 +15,13 @@ const worktree = {
   status: 'active',
 };
 
-test('exposes only the six browser-safe Worktree Manager methods', () => {
+test('exposes only the seven browser-safe Worktree Manager methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'listWorktrees',
     'listBranches',
     'createWorktree',
     'removeWorktree',
+    'insertWorktreeBefore',
     'listBindings',
     'bindSession',
   ]);
@@ -44,9 +45,11 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
                 sessionId: input.sessionId,
                 status: 'active',
               }
-            : endpoint.endsWith('/removeWorktree')
-              ? null
-              : [];
+            : endpoint.endsWith('/insertWorktreeBefore')
+              ? ['wt_example']
+              : endpoint.endsWith('/removeWorktree')
+                ? null
+                : [];
       return { ok: true, value: { ok: true, value } };
     },
   };
@@ -61,6 +64,13 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
   assert.equal(
     await manager.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),
     undefined,
+  );
+  assert.deepEqual(
+    await manager.insertWorktreeBefore({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+    }),
+    ['wt_example'],
   );
   assert.deepEqual(await manager.listBindings({ workspaceId: 'ws_example' }), []);
   assert.deepEqual(

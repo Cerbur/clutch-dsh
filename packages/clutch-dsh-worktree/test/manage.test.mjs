@@ -648,6 +648,28 @@ test('marks a removed Worktree and its bindings detached only after Git succeeds
   });
 });
 
+test('moves Worktrees through Manage while preserving the sidecar order', async () => {
+  await withGitFixture(async ({ dshHome, provider, sidecar }) => {
+    await sidecar.upsertWorktree(makeRecord({
+      worktreeId: 'wt_one',
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_one'),
+    }));
+    await sidecar.upsertWorktree(makeRecord({
+      worktreeId: 'wt_two',
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_two'),
+    }));
+
+    assert.deepEqual(
+      await provider.insertWorktreeBefore({
+        workspaceId: 'ws_one',
+        worktreeId: 'wt_two',
+        beforeWorktreeId: 'wt_one',
+      }),
+      ['wt_two', 'wt_one'],
+    );
+  });
+});
+
 test('derives main, active, and detached runtime cwd without writing to DSH', async () => {
   await withGitFixture(async ({ dsh, workspaceRoot, provider }) => {
     await runGit(workspaceRoot, ['branch', 'feature/cwd']);

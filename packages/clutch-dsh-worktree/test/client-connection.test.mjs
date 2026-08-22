@@ -12,6 +12,11 @@ const METHODS = [
   ['listBranches', { workspaceId: 'ws1' }, []],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
   ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }, null],
+  ['insertWorktreeBefore', {
+    workspaceId: 'ws1',
+    worktreeId: 'wt1',
+    beforeWorktreeId: 'wt2',
+  }, ['wt1', 'wt2']],
   ['listBindings', { workspaceId: 'ws1' }, []],
   ['bindSession', { workspaceId: 'ws1', worktreeId: 'wt1', sessionId: 's1' }, { sessionId: 's1' }],
 ];
@@ -55,6 +60,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
   ]);

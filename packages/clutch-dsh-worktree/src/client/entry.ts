@@ -159,6 +159,15 @@ export function apply(ctx: ClientContext): void {
               beforeSessionId as Parameters<typeof ctx.workspaces.insertSessionBefore>[2],
             );
           },
+          insertWorktreeBefore: (
+            workspaceId: string,
+            worktreeId: string,
+            beforeWorktreeId?: string,
+          ) => manager.insertWorktreeBefore({
+            workspaceId,
+            worktreeId,
+            beforeWorktreeId,
+          }),
           renameSession: async (sessionId: string, title: string) => {
             const session = ctx.sessions.binding(sessionId as SessionId)?.session;
             if (session === undefined) throw new Error(`unknown session "${sessionId}"`);

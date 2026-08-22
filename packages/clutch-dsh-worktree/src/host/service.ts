@@ -4,6 +4,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type {
   BranchRecord,
   SessionBinding,
+  WorktreeId,
   WorktreeRecord,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
@@ -93,6 +94,15 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly worktreeId: string;
   }): Promise<WorktreeRemoteResult<null>> {
     return this.remote.removeWorktree(input);
+  }
+
+  @Remote
+  insertWorktreeBefore(input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly beforeWorktreeId?: string;
+  }): Promise<WorktreeRemoteResult<readonly WorktreeId[]>> {
+    return this.remote.insertWorktreeBefore(input);
   }
 
   @Remote

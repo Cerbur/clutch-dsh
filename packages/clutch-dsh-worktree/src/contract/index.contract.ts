@@ -13,6 +13,7 @@ const expectedManagerKeys = [
   'listBranches',
   'createWorktree',
   'removeWorktree',
+  'insertWorktreeBefore',
   'listBindings',
   'bindSession',
 ] as const;
@@ -21,6 +22,7 @@ const expectedRemoteKeys = [
   'listBranches',
   'createWorktree',
   'removeWorktree',
+  'insertWorktreeBefore',
   'listBindings',
   'bindSession',
 ] as const;
