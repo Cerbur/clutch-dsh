@@ -640,6 +640,19 @@ Worktree Consumer 的创建弹窗采用单一路径：
 
 这次 UI 调整不改变 DSH Session/Workspace 的数据边界，也不把 Worktree metadata 写进 DSH 原始数据。实际验证覆盖 CTool：生成 `dsh/17d78b46`，创建并打开 `session-c5e035af-1e3e-4d16-8bf2-119f376a7dfe`，sidecar active binding 与 Session `cwd` 均指向同一 Worktree。
 
+## 2026-08-22 Git readiness follow-up
+
+Worktree 创建弹窗按 Workspace 独立区分 Git 前置条件：非 Git Workspace 显示
+`git init`、创建 README、首次 commit 的可复制命令；已有 Git 但没有初始 commit
+时显示创建 README 和首次 commit 的命令；已有 commit 但没有本地 `heads` 分支时
+显示 `git switch -c main`。这些命令只展示，不由插件执行，也不由插件写入 Workspace
+业务文件。
+
+分支列表成功返回时，弹窗默认选择 Workspace 当前 branch，并只渲染真实 local
+branch；`No local branch` 不再作为可选项。分支列表的已知 Git 前置条件错误转成
+Workspace-local readiness，Worktree/binding 事实仍保留；未知 Connection、Gateway、
+sidecar 或 Worktree 错误继续走原有 retryable error surface。
+
 ## 2026-08-21 UI tree parity follow-up
 
 为对齐 DSH 原生 Workspace tree，Workspace 和 Worktree 的 row body 都是浏览器内存

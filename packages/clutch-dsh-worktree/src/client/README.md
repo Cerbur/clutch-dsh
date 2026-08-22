@@ -43,9 +43,11 @@ The Worktree surface is additive:
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and has no Worktree menu; active Worktree rows expose the Worktree options menu and removal confirmation, while detached rows remain visible and read-only;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, and falls back to `Local` / `本地` when it does not;
+- Worktree creation requires a Git repository with an initial commit and at least one local branch. The create dialog selects the current branch by default and lists real local branches only; missing Git prerequisites render copyable setup commands without running them or modifying Workspace files;
 - Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open.
 - Worktree health is a runtime Git projection and is never written to the sidecar.
 
-Connection, Gateway and Worktree domain failures remain visible as retryable errors rather
-than being converted to an empty list. Client disposal must abort pending Connection calls
-and release browser-local membership projections.
+Connection, Gateway and unexpected Worktree domain failures remain visible as retryable
+errors rather than being converted to an empty list. Recognized Git readiness failures are
+Workspace-local setup states, not transport failures. Client disposal must abort pending
+Connection calls and release browser-local membership projections.

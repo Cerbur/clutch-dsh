@@ -24,7 +24,7 @@ Worktree Session 仍属于原始 DSH Project/Workspace，因此切回原生 Proj
 - DSH CLI 和目标 Web profile 使用 `dsh-v0.1.0-rc.8`；
 - 已有可启动的 DSH profile，例如 `web` 或 `demo`；
 - plugin 安装在实际启动 Web UI 的同一个 profile；
-- 要使用 Worktree 功能，目标 Workspace 必须位于 Git repository 中。
+- 要使用 Worktree 功能，目标 Workspace 必须位于 Git repository 中，且至少有一个初始 commit 和本地 branch；如果前置条件不满足，创建弹窗会显示可复制的 Git 命令，但插件不会自动修改 Workspace。
 
 package manifest 已声明可安装的 `dsh.bundle`，并随 package 提供 `cordis.patch.yml`；Web UI 使用另行声明的 `dsh.client` browser entry。
 
@@ -103,7 +103,7 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ## 使用说明
 
 1. 启动 DSH Web UI，在 Sidebar footer 打开 Worktree mode。
-2. 使用 Workspace 的 `+` 选择基线 local branch，填写新的 Worktree name；默认 branch 名为 `dsh/<8位随机串>`。
+2. 使用 Workspace 的 `+` 选择基线 local branch，填写新的 Worktree name；默认 branch 名为 `dsh/<8位随机串>`。如果 Workspace 没有 Git、没有首次 commit 或没有本地 branch，弹窗会先显示对应的可复制修复命令。
 3. 使用 Main 旁边的 `+` 创建普通 DSH Session。
 4. 使用 Worktree 旁边的 `+` 创建 cwd 指向该 Worktree 的 Session；插件完成关系绑定后打开它。
 5. 观察 Worktree 的 ready、repair 或 detached 状态；active Worktree 的选项菜单提供 Remove Worktree 入口，Main 和 detached Worktree 不显示该选项。
@@ -127,7 +127,7 @@ DSH/Git 原值。
 
 DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
 
-如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。
+如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。Git 前置条件失败会按 Workspace 独立显示 setup 提示和可复制命令；插件不会自动执行这些命令，也不会写入 README 或 commit。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。
 
 ## 版本与发布
 
