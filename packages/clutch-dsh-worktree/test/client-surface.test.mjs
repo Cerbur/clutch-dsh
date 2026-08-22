@@ -812,3 +812,39 @@ test('renders a localized Main label with the current branch and a fallback', as
     /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*text-transform: uppercase;/,
   );
 });
+
+test('reconciles the selected branch after the modal view becomes ready', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /reconcileBaseBranchSelection/);
+  assert.match(source, /modalView\?\.readiness/);
+  assert.match(source, /setSelectedBranch\(\(current\) =>/);
+});
+
+test('renders setup instructions instead of a fake base-branch option', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const localeSource = await readFile(
+    new URL('../src/client/locales.ts', import.meta.url),
+    'utf8',
+  );
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /data-worktree-readiness/);
+  assert.match(source, /worktreeSetupCommands/);
+  assert.match(source, /<pre[\s\S]*className=\{styles\.commandBlock\}[\s\S]*>/);
+  assert.match(source, /modalView\?\.branches\.map/);
+  assert.doesNotMatch(source, /<option value="">\{t\('worktree\.noLocalBranch'\)\}<\/option>/);
+  assert.match(localeSource, /worktree\.setup\.noRepository/);
+  assert.match(localeSource, /worktree\.setup\.noInitialCommit/);
+  assert.match(localeSource, /worktree\.setup\.noLocalBranch/);
+  assert.match(styles, /\.commandBlock\s*\{/);
+});

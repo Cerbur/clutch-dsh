@@ -40,13 +40,16 @@ import {
   createDefaultWorktreeName,
   filterArchivedSessionIds,
   loadWorktreeViews,
+  reconcileBaseBranchSelection,
   selectDefaultBaseBranch,
   stableWorkspaceIds,
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
+  type WorktreeGitReadiness,
   type WorktreeViewError,
   type WorktreeWorkspaceView,
+  worktreeSetupCommands,
 } from './worktree-view.js';
 import styles from './worktree.css';
 
@@ -103,6 +106,22 @@ export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
   WorktreeSurfaceInjected;
 
 type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
+
+type WorktreeSetupStatus = Exclude<WorktreeGitReadiness['status'], 'ready'>;
+
+function worktreeSetupMessage(
+  status: WorktreeSetupStatus,
+  t: WorktreeTranslate,
+): string {
+  switch (status) {
+    case 'noRepository':
+      return t('worktree.setup.noRepository');
+    case 'noInitialCommit':
+      return t('worktree.setup.noInitialCommit');
+    case 'noLocalBranch':
+      return t('worktree.setup.noLocalBranch');
+  }
+}
 
 interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
@@ -868,6 +887,25 @@ export function WorktreeSurface({
     worktreeModalWorkspaceId === undefined
       ? undefined
       : viewByWorkspace.get(worktreeModalWorkspaceId);
+  const modalReadiness = modalView?.readiness;
+  const modalSetupStatus: WorktreeSetupStatus | undefined = modalView === undefined
+    ? undefined
+    : modalReadiness?.status === 'ready'
+      ? modalView.branches.length === 0 ? 'noLocalBranch' : undefined
+      : modalReadiness?.status;
+  const modalCanCreate = modalSetupStatus === undefined && modalReadiness?.status === 'ready';
+
+  useEffect(() => {
+    if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
+    if (modalView.readiness.status !== 'ready') {
+      setSelectedBranch('');
+      return;
+    }
+    setSelectedBranch((current) =>
+      reconcileBaseBranchSelection(current, modalView.branches),
+    );
+  }, [modalView, worktreeModalWorkspaceId]);
+
   const runMutation = async (operation: () => Promise<void>): Promise<void> => {
     setActionPending(true);
     setActionError(undefined);
@@ -1129,6 +1167,7 @@ export function WorktreeSurface({
     if (
       manager === undefined ||
       modalWorkspace === undefined ||
+      !modalCanCreate ||
       selectedBranch.length === 0 ||
       worktreeName.length === 0
     ) {
@@ -1871,42 +1910,62 @@ export function WorktreeSurface({
             </>
           )}
         >
-          <label className={styles.modalField}>
-            {t('worktree.baseBranch')}
-            <select
-              className={styles.actionSelect}
-              aria-label={t('worktree.baseBranch')}
-              value={selectedBranch}
-              disabled={actionPending}
-              onChange={(event) => {
-                setSelectedBranch(event.currentTarget.value);
-              }}
+          {modalCanCreate ? (
+            <>
+              <label className={styles.modalField}>
+                {t('worktree.baseBranch')}
+                <select
+                  className={styles.actionSelect}
+                  aria-label={t('worktree.baseBranch')}
+                  value={selectedBranch}
+                  disabled={actionPending}
+                  onChange={(event) => {
+                    setSelectedBranch(event.currentTarget.value);
+                  }}
+                >
+                  {modalView?.branches.map((branch) => (
+                    <option key={branch.name} value={branch.name}>
+                      {branch.name}
+                      {branch.isCurrent ? t('branch.current') : ''}
+                      {branch.checkedOut ? t('branch.checkedOut') : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.modalField}>
+                {t('worktree.name')}
+                <Input
+                  className={styles.renameInput}
+                  aria-label={t('worktree.name')}
+                  value={newBranch}
+                  placeholder="dsh/12345678"
+                  disabled={actionPending}
+                  onChange={(event) => {
+                    setNewBranch(event.currentTarget.value);
+                  }}
+                />
+              </label>
+            </>
+          ) : (
+            <div
+              className={styles.gitReadiness}
+              data-worktree-readiness={modalSetupStatus ?? 'loading'}
+              role="alert"
             >
-              <option value="">{t('worktree.noLocalBranch')}</option>
-              {(modalView?.branches ?? []).map((branch) => (
-                <option key={branch.name} value={branch.name}>
-                  {branch.name}
-                  {branch.isCurrent ? t('branch.current') : ''}
-                  {branch.checkedOut ? t('branch.checkedOut') : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.modalField}>
-            {t('worktree.name')}
-            <Input
-              className={styles.renameInput}
-              aria-label={t('worktree.name')}
-              value={newBranch}
-              placeholder="dsh/12345678"
-              disabled={actionPending}
-              onChange={(event) => {
-                setNewBranch(event.currentTarget.value);
-              }}
-            />
-          </label>
-          {modalView?.branches.length === 0 && (
-            <p className={styles.empty}>{t('worktree.noBranches')}</p>
+              <p className={styles.message}>
+                {modalSetupStatus === undefined
+                  ? t('status.loading')
+                  : worktreeSetupMessage(modalSetupStatus, t)}
+              </p>
+              {modalSetupStatus !== undefined && (
+                <pre
+                  className={styles.commandBlock}
+                  aria-label={t('worktree.setup.commands')}
+                >
+                  {worktreeSetupCommands(modalSetupStatus).join('\n')}
+                </pre>
+              )}
+            </div>
           )}
         </Modal>
       )}
