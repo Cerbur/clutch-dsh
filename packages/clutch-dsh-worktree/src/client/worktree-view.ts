@@ -201,6 +201,29 @@ export async function loadWorktreeViews(
   );
 }
 
+/** Resolve a row-half drop target to native-style optional before-anchor semantics. */
+export function resolveWorktreeMove(
+  worktreeIds: readonly string[],
+  sourceWorktreeId: string,
+  targetWorktreeId: string,
+  half: 'before' | 'after',
+): { readonly beforeWorktreeId?: string } | undefined {
+  const sourceIndex = worktreeIds.indexOf(sourceWorktreeId);
+  const targetIndex = worktreeIds.indexOf(targetWorktreeId);
+  if (sourceIndex === -1 || targetIndex === -1) return undefined;
+
+  const beforeWorktreeId = half === 'before'
+    ? targetWorktreeId
+    : worktreeIds[targetIndex + 1];
+  if (beforeWorktreeId === sourceWorktreeId) return undefined;
+
+  const anchorIndex = beforeWorktreeId === undefined
+    ? worktreeIds.length
+    : worktreeIds.indexOf(beforeWorktreeId);
+  if (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1) return undefined;
+  return beforeWorktreeId === undefined ? {} : { beforeWorktreeId };
+}
+
 /** Keep mutation routing in the browser Consumer while leaving wire details to the adapter. */
 export async function executeWorktreeAction(
   manager: WorktreeManager,
