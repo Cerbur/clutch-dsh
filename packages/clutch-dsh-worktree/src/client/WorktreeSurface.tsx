@@ -136,6 +136,10 @@ interface ReadState {
   readonly error?: WorktreeViewError;
 }
 
+interface RefreshOptions {
+  readonly preserveCurrent?: boolean;
+}
+
 interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
 }
@@ -898,16 +902,20 @@ export function WorktreeSurface({
   const query = searchQuery.trim().toLocaleLowerCase();
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refresh = useCallback(async (options: RefreshOptions = {}): Promise<void> => {
     if (manager === undefined) {
       setReadState(EMPTY_READ_STATE);
       return;
     }
-    setReadState({ status: 'loading', views: [] });
+    const preserveCurrent = options.preserveCurrent === true;
+    if (!preserveCurrent) {
+      setReadState({ status: 'loading', views: [] });
+    }
     try {
       const views = await loadWorktreeViews(manager, workspaceIds);
       setReadState({ status: 'ready', views });
     } catch (error) {
+      if (preserveCurrent) throw error;
       setReadState({
         status: 'error',
         views: [],
@@ -1179,7 +1187,7 @@ export function WorktreeSurface({
       activeDrag.worktreeId,
       move.beforeWorktreeId,
     )
-      .then(() => refresh())
+      .then(() => refresh({ preserveCurrent: true }))
       .catch((error) => {
         setActionError(toRetryableWorktreeOrderError(error));
       });

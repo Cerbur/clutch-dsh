@@ -595,14 +595,24 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   const commitStart = source.indexOf('const commitWorktreeDrag =');
   const commitEnd = source.indexOf('const openSessionRename =', commitStart);
   const commitSource = source.slice(commitStart, commitEnd);
+  const refreshStart = source.indexOf('const refresh = useCallback');
+  const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
+  const refreshSource = source.slice(refreshStart, refreshEnd);
+  assert.match(refreshSource, /preserveCurrent/);
+  assert.match(
+    refreshSource,
+    /if \(!preserveCurrent\) \{[\s\S]*?setReadState\(\{ status: 'loading', views: \[\] \}\)/,
+  );
+  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
   assert.match(
     commitSource,
     /if \(activeDrag\.workspaceId !== workspaceId\) return;[\s\S]*?insertWorktreeBefore\(/,
   );
   assert.match(
     commitSource,
-    /\.then\(\(\) => refresh\(\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
+    /\.then\(\(\) => refresh\(\{ preserveCurrent: true \}\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
+  assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
   assert.match(source, /\{actionError\.retryable && \(/);
 });
 
