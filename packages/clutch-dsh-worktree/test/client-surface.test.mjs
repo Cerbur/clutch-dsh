@@ -616,6 +616,60 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   assert.match(source, /\{actionError\.retryable && \(/);
 });
 
+test('preserves the Worktree projection for action refreshes', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  const section = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    assert.notEqual(start, -1, `missing source marker: ${startMarker}`);
+    const end = source.indexOf(endMarker, start);
+    assert.notEqual(end, -1, `missing source marker: ${endMarker}`);
+    return source.slice(start, end);
+  };
+
+  const runMutationSource = section(
+    'const runMutation = async',
+    '  const workspaceRenameTrimmed',
+  );
+  assert.match(runMutationSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+
+  const submitWorktreeSource = section(
+    'const submitWorktree = async',
+    '  const createSession = async',
+  );
+  assert.equal(
+    (submitWorktreeSource.match(/await refresh\(\{ preserveCurrent: true \}\)/g) ?? []).length,
+    2,
+  );
+
+  const createSessionSource = section(
+    'const createSession = async',
+    '  const retrySessionBinding = async',
+  );
+  assert.match(createSessionSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+
+  const retryBindingSource = section(
+    'const retrySessionBinding = async',
+    '  return (',
+  );
+  assert.match(retryBindingSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+
+  const initialReadSource = section(
+    "useEffect(() => {\n    if (mode === 'worktree')",
+    '  useEffect(() => {\n    if (readState.status',
+  );
+  assert.match(initialReadSource, /void refresh\(\);/);
+
+  const actionRetryStart = source.indexOf('{actionError.retryable && (');
+  const actionRetryEnd = source.indexOf("          {readState.status === 'loading'", actionRetryStart);
+  assert.notEqual(actionRetryStart, -1);
+  assert.notEqual(actionRetryEnd, -1);
+  assert.match(source.slice(actionRetryStart, actionRetryEnd), /void refresh\(\);/);
+});
+
 test('renders transient Worktree health with the public StateDot primitive', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

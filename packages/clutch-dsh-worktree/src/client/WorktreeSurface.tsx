@@ -980,7 +980,7 @@ export function WorktreeSurface({
     setActionError(undefined);
     try {
       await operation();
-      await refresh();
+      await refresh({ preserveCurrent: true });
     } catch (error) {
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -1302,7 +1302,7 @@ export function WorktreeSurface({
       setWorktreeModalWorkspaceId(undefined);
 
       if (createSessionCallback === undefined) {
-        await refresh();
+        await refresh({ preserveCurrent: true });
         setActionError({
           code: 'WORKTREE_CREATED_SESSION_UNAVAILABLE',
           message: '',
@@ -1324,7 +1324,7 @@ export function WorktreeSurface({
         }
         throw error;
       }
-      await refresh();
+      await refresh({ preserveCurrent: true });
     } catch (error) {
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -1346,7 +1346,7 @@ export function WorktreeSurface({
     setPendingSessionBinding(undefined);
     try {
       await createSessionCallback(input);
-      await refresh();
+      await refresh({ preserveCurrent: true });
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId });
@@ -1370,7 +1370,7 @@ export function WorktreeSurface({
       const sessionId = pendingSessionBinding.sessionId;
       setPendingSessionBinding(undefined);
       ensureSessionWorkspace?.(pendingSessionBinding.workspaceId, sessionId);
-      await refresh();
+      await refresh({ preserveCurrent: true });
       openSession(sessionId);
     } catch (error) {
       setActionError(toWorktreeViewError(error));
