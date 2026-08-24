@@ -870,6 +870,8 @@ export function WorktreeSurface({
   const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
   const workspaceIds = useStableWorkspaceIds(workspaces.items);
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
+  const readStateRef = useRef(readState);
+  readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
   const [expandedMains, setExpandedMains] = useState<Record<string, boolean>>({});
@@ -938,7 +940,7 @@ export function WorktreeSurface({
 
   useEffect(() => {
     if (mode === 'worktree') {
-      void refresh();
+      void refresh({ preserveCurrent: readStateRef.current.status === 'ready' });
     } else {
       refreshGuard.current.invalidate();
       setReadState(EMPTY_READ_STATE);

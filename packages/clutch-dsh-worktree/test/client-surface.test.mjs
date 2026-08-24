@@ -167,6 +167,24 @@ test('drops stale asynchronous Worktree refresh rejection', async () => {
   assert.deepEqual(errors, []);
 });
 
+test('preserves a ready Worktree projection during automatic refreshes', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /const readStateRef = useRef\(readState\)/);
+
+  const effectStart = source.indexOf('useEffect(() => {\n    if (mode === \'worktree\')');
+  const effectEnd = source.indexOf('  useEffect(() => {', effectStart + 1);
+  assert.notEqual(effectStart, -1);
+  assert.notEqual(effectEnd, -1);
+  const effectSource = source.slice(effectStart, effectEnd);
+  assert.match(
+    effectSource,
+    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === \'ready\' \}\);/,
+  );
+});
+
 test('loads Worktree, branch, and binding projection through the Manager contract', async () => {
   const calls = [];
   const data = await loadWorktreeView(
@@ -756,7 +774,10 @@ test('preserves the Worktree projection for action refreshes', async () => {
     "useEffect(() => {\n    if (mode === 'worktree')",
     '  useEffect(() => {\n    if (readState.status',
   );
-  assert.match(initialReadSource, /void refresh\(\);/);
+  assert.match(
+    initialReadSource,
+    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
+  );
 
   const actionRetryStart = source.indexOf('{actionError.retryable && (');
   const actionRetryEnd = source.indexOf("          {readState.status === 'loading'", actionRetryStart);

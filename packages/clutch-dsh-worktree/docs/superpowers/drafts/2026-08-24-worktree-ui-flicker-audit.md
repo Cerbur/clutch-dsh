@@ -1,6 +1,6 @@
 # Draft TODO 3：全面排查 Worktree 相关 UI 闪动
 
-**状态：** Draft，调查项；action refresh 与过期结果回写已处理，membership、blank parity 和 geometry 仍待调查
+**状态：** Draft，调查项；refresh 保持与过期结果回写已处理，membership、blank parity 和 geometry 仍待调查
 
 **来源：** 用户提出的第 3 项。
 
@@ -16,11 +16,11 @@ TODO 2 已通过 `refresh({ preserveCurrent: true })` 修复：已有树的 Work
 
 TODO3 本身又补上了 `WorktreeSurface` 的 latest-wins guard：新 refresh 开始后，旧请求即使晚返回，也不能再提交 `ready/error` 状态。它只防止过期结果污染画面，不取消已经发出的 Connection 请求，也不替代后续的请求去重。
 
-### P1：外部拓扑刷新仍可能触发空 loading
+### 已处理：外部拓扑刷新保持 ready projection
 
-当 Workspace ID 或顺序变化时，`refresh` callback 会变化并触发默认 refresh；这类非 action refresh 仍可能暂时清空旧树。需要单独决定它应该继续视为初始读取，还是也采用保留旧 projection 的 `refreshing` 语义。
+当 Workspace ID 或顺序变化使 `refresh` callback 变化时，mode effect 会根据当前 `readState` 选择 refresh 语义：已有 `ready` projection 使用 `preserveCurrent`，首次进入或没有可保留 projection 时仍使用默认 loading。
 
-另外，旧请求仍会消耗传输并可能完成 context invalidation；latest-wins 目前只保护 `readState` 的可见提交。
+旧请求仍会消耗传输并可能完成 context invalidation；latest-wins 目前只保护 `readState` 的可见提交。
 
 ### P1：native membership projection 的多次 snapshot
 
