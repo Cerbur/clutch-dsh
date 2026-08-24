@@ -101,7 +101,7 @@ test('connection-backed Worktree Manager remains available when canonical Remote
   assert.equal(fixture.rpcCalls[0].endpoint, 'worktreeManager/listWorktrees');
 });
 
-test('Worktree Session membership is projected into the current Workspace before opening', async () => {
+test('Worktree Session membership waits for the binding refresh before projection', async () => {
   storage.clear();
   const fixture = await loadClientEntry();
   const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
@@ -112,6 +112,14 @@ test('Worktree Session membership is projected into the current Workspace before
     cwd: '/tmp/wt-one',
   });
 
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current'],
+  );
+
+  injected.syncSessionWorkspaces([
+    { workspaceId: 'workspace-current', sessionId: 'session-created' },
+  ]);
   assert.deepEqual(
     fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
     ['session-current', 'session-created'],

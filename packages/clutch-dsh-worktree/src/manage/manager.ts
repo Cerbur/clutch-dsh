@@ -530,7 +530,9 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       };
       return {
         result: binding,
-        snapshot: { ...snapshot, bindings: [...snapshot.bindings, binding] },
+        // Worktree Session groups render bindings in sidecar order; prepend so
+        // the Session just created is immediately visible at the group head.
+        snapshot: { ...snapshot, bindings: [binding, ...snapshot.bindings] },
       };
     });
   }

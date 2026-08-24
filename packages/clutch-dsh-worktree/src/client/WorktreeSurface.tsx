@@ -1369,7 +1369,6 @@ export function WorktreeSurface({
       });
       const sessionId = pendingSessionBinding.sessionId;
       setPendingSessionBinding(undefined);
-      ensureSessionWorkspace?.(pendingSessionBinding.workspaceId, sessionId);
       await refresh({ preserveCurrent: true });
       openSession(sessionId);
     } catch (error) {

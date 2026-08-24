@@ -116,9 +116,6 @@ export function apply(ctx: ClientContext): void {
               ...input,
               createSession: (sessionInput) => sessions.create(sessionInput),
               manager,
-              beforeOpen: (sessionId) => {
-                ensureSessionWorkspace(input.workspaceId, sessionId);
-              },
               openSession: (sessionId) => {
                 ctx.sessions.open(sessionId as SessionId);
               },

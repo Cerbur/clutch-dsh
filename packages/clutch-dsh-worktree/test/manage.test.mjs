@@ -518,6 +518,54 @@ test('binds a Session idempotently and rejects a second active Worktree', async 
   });
 });
 
+test('puts the newest Session binding at the head of its Worktree group', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, dsh }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/session-order']);
+    const worktree = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/session-order',
+    });
+    dsh.addSession({
+      sessionId: 'session-old',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: worktree.absolutePath,
+    });
+    dsh.addSession({
+      sessionId: 'session-new',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: worktree.absolutePath,
+    });
+
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: worktree.worktreeId,
+      sessionId: 'session-old',
+    });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: worktree.worktreeId,
+      sessionId: 'session-new',
+    });
+
+    assert.deepEqual(await provider.listBindings({ workspaceId: 'ws_one' }), [
+      {
+        workspaceId: 'ws_one',
+        worktreeId: worktree.worktreeId,
+        sessionId: 'session-new',
+        status: 'active',
+      },
+      {
+        workspaceId: 'ws_one',
+        worktreeId: worktree.worktreeId,
+        sessionId: 'session-old',
+        status: 'active',
+      },
+    ]);
+  });
+});
+
 test('sidecar upsert rejects a Session binding conflict with a stable error', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
     await runGit(workspaceRoot, ['branch', 'feature/binding-one']);
