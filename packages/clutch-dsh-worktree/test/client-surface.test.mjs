@@ -72,6 +72,40 @@ test('reuses the previous Workspace id array when a snapshot republishes the sam
   assert.notEqual(worktreeView.stableWorkspaceIds(previous, ['ws2', 'ws1']), previous);
 });
 
+test('invalidates superseded Worktree refresh results', async () => {
+  assert.equal(typeof worktreeView.createWorktreeRefreshGuard, 'function');
+  const guard = worktreeView.createWorktreeRefreshGuard();
+  const first = guard.begin();
+  const second = guard.begin();
+
+  assert.equal(guard.isCurrent(first), false);
+  assert.equal(guard.isCurrent(second), true);
+
+  guard.invalidate();
+  assert.equal(guard.isCurrent(second), false);
+
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const refreshStart = source.indexOf('const refresh = useCallback');
+  const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(refreshEnd, -1);
+  const refreshSource = source.slice(refreshStart, refreshEnd);
+  assert.match(refreshSource, /const requestGeneration = refreshGuard\.current\.begin\(\)/);
+  assert.equal(
+    (refreshSource.match(/if \(!refreshGuard\.current\.isCurrent\(requestGeneration\)\) return;/g) ?? []).length,
+    2,
+  );
+
+  const modeEffectStart = source.indexOf('useEffect(() => {\n    if (mode === \'worktree\')');
+  const modeEffectEnd = source.indexOf('  useEffect(() => {', modeEffectStart + 1);
+  assert.notEqual(modeEffectStart, -1);
+  assert.notEqual(modeEffectEnd, -1);
+  assert.match(source.slice(modeEffectStart, modeEffectEnd), /refreshGuard\.current\.invalidate\(\)/);
+});
+
 test('loads Worktree, branch, and binding projection through the Manager contract', async () => {
   const calls = [];
   const data = await loadWorktreeView(

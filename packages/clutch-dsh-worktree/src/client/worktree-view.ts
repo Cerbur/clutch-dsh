@@ -55,6 +55,23 @@ export function stableWorkspaceIds(
   return previous;
 }
 
+/** Keep only the most recently started Worktree surface refresh authoritative. */
+export function createWorktreeRefreshGuard() {
+  let latestGeneration = 0;
+  return {
+    begin(): number {
+      latestGeneration += 1;
+      return latestGeneration;
+    },
+    isCurrent(generation: number): boolean {
+      return generation === latestGeneration;
+    },
+    invalidate(): void {
+      latestGeneration += 1;
+    },
+  };
+}
+
 /** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
 export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
   return branches.find((branch) => branch.isCurrent)?.name ?? branches[0]?.name ?? '';

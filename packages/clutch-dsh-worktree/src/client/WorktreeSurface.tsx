@@ -38,6 +38,7 @@ import { formatWorktreeViewError } from './worktree-error-copy.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
+  createWorktreeRefreshGuard,
   filterArchivedSessionIds,
   loadWorktreeViews,
   reconcileBaseBranchSelection,
@@ -900,12 +901,14 @@ export function WorktreeSurface({
   const sessionDropCommitted = useRef(false);
   const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
   const worktreeDropCommitted = useRef(false);
+  const refreshGuard = useRef(createWorktreeRefreshGuard());
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
 
   const refresh = useCallback(async (options: RefreshOptions = {}): Promise<void> => {
+    const requestGeneration = refreshGuard.current.begin();
     if (manager === undefined) {
       setReadState(EMPTY_READ_STATE);
       return;
@@ -919,8 +922,10 @@ export function WorktreeSurface({
         invalidateContext: options.invalidateContext !== false,
         invalidateWorktreeContext,
       });
+      if (!refreshGuard.current.isCurrent(requestGeneration)) return;
       setReadState({ status: 'ready', views });
     } catch (error) {
+      if (!refreshGuard.current.isCurrent(requestGeneration)) return;
       if (preserveCurrent) throw error;
       setReadState({
         status: 'error',
@@ -934,6 +939,7 @@ export function WorktreeSurface({
     if (mode === 'worktree') {
       void refresh();
     } else {
+      refreshGuard.current.invalidate();
       setReadState(EMPTY_READ_STATE);
     }
   }, [mode, refresh]);
