@@ -59,7 +59,9 @@ The Worktree surface is additive:
 - the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - Workspace rename, delete and drag ordering use native DSH Workspace APIs;
-- Session menus retain Rename/Fork/Archive, and Session drag ordering is restricted to the current visual Main or Worktree group;
+- Session menus retain Rename/Fork/Archive for ordinary Sessions. A provisional blank Session is visible only while it is the current DSH Session, uses the localized `New Session` label, and has no Session action menu; the binding remains browser/sidecar-owned even when the row is hidden. Session drag ordering is restricted to the current visual Main or Worktree group;
+- Worktree `+` reuses an unarchived blank Session with the exact target cwd before creating one; an existing active binding opens directly, an unbound candidate binds before browser projection and open, and a failed fresh binding keeps the created Session ID for Retry/Open recovery;
+- the browser-only Worktree Session connector coalesces concurrent creation requests per `workspaceId:worktreeId`, clears settled requests, and suppresses late projection/open callbacks after Client disposal;
 - Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - each group initially shows five rows and uses Expand more/Collapse when needed;

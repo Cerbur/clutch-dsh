@@ -20,7 +20,10 @@ import {
   createVirtualWorkspaceMembership,
   type WritableWorkspaceList,
 } from './virtual-workspace-membership.js';
-import { createSessionForWorktree } from './worktree-view.js';
+import {
+  createWorktreeSessionConnector,
+  type WorktreeSessionSnapshotReader,
+} from './worktree-session.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
 
 declare module '@deepseek-ai/cordis' {
@@ -60,6 +63,7 @@ interface WorkspaceListSnapshot {
     readonly sessionIds: readonly string[];
   }[];
   readonly recentWorkspaceId?: string;
+  readonly archivedSessionIds?: readonly string[];
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
@@ -103,6 +107,22 @@ export function apply(ctx: ClientContext): void {
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
   };
+  const worktreeSessionConnector = createWorktreeSessionConnector({
+    manager,
+    sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
+    archivedSessionIds: () =>
+      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot)
+        .archivedSessionIds ?? [],
+    createSession: async (input) => String(await sessions.create(input)),
+    ensureSessionWorkspace,
+    openSession: (sessionId) => {
+      ctx.sessions.open(sessionId as SessionId);
+    },
+  });
+  ctx.effect(
+    () => () => worktreeSessionConnector.dispose(),
+    'clutch-dsh-worktree: Worktree Session connector cleanup',
+  );
 
   ctx.slots.inject('conversation.session.header.actions', () =>
     ctx.slots.register(
@@ -145,15 +165,7 @@ export function apply(ctx: ClientContext): void {
             const workspacePath = await ctx.workspaces.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
-          createSessionForWorktree: (input) =>
-            createSessionForWorktree({
-              ...input,
-              createSession: (sessionInput) => sessions.create(sessionInput),
-              manager,
-              openSession: (sessionId) => {
-                ctx.sessions.open(sessionId as SessionId);
-              },
-            }),
+          createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
           invalidateWorktreeContext: (workspaceId?: string) =>
             contextProjection.invalidate(workspaceId),
           createMainSession: (workspaceId: string) => {

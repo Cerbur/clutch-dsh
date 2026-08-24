@@ -130,6 +130,10 @@ DSH/Git 原值。
 
 DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
 
+Worktree `+` 会优先复用当前 active Worktree、相同绝对路径下未归档的 blank Session；已绑定的直接打开，未绑定的先保存 binding 再投影和打开。没有可复用候选时才按 `create → bind → project → open` 创建；同一 Client 内对同一 Worktree 的并发点击会合并为一次流程。binding 失败会保留原 Session ID 供恢复，指向缺失 Session 或错误 cwd 的关系则显示可重试的 repair 状态。
+
+未发送第一条 prompt 的 provisional blank Session 遵循 DSH 原生显示规则：仅在当前选中的视角中显示本地化的“新会话”/“New Session”，不显示生成的 Session ID，也不显示重命名、Fork 或归档菜单。首条 prompt 被接受后，原生 Session summary 转为普通会话，Worktree 行恢复显示真实标题和菜单；隐藏 blank 行不会删除 Session 或 Worktree binding。
+
 Worktree 顺序按每个 Workspace 独立持久化在 plugin sidecar 的 `worktrees` 数组中，使用与 DSH 原生 `insertBefore` 相同的 source/anchor 语义。Main 是固定的本地视角，不参与 Worktree 拖动；排序不会修改 DSH Workspace、Session 或 Git Worktree 数据。
 
 如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。Git 前置条件失败会按 Workspace 独立显示 setup 提示和可复制命令；插件不会自动执行这些命令，也不会写入 README 或 commit。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。

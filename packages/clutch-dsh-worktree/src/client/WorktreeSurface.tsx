@@ -36,6 +36,14 @@ import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
 import { formatWorktreeViewError } from './worktree-error-copy.js';
 import {
+  filterVisibleSessionIds,
+  isBlankSession,
+  sessionDisplayLabel,
+  sessionMatchesQuery,
+  type SessionListLike,
+} from './session-view.js';
+import { retryWorktreeSessionBinding } from './worktree-session.js';
+import {
   executeWorktreeAction,
   createDefaultWorktreeName,
   createWorktreeRefreshGuard,
@@ -65,11 +73,6 @@ interface WorkspaceLike {
 interface WorkspaceListLike {
   readonly items: readonly WorkspaceLike[];
   readonly archivedSessionIds?: readonly string[];
-}
-
-interface SessionListLike {
-  readonly ids: readonly string[];
-  readonly byId: Record<string, { readonly displayTitle?: string }>;
 }
 
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
@@ -155,6 +158,7 @@ interface SessionRenameTarget {
 interface WorktreeSessionRowProps {
   readonly t: WorktreeTranslate;
   readonly sessionId: string;
+  readonly blank: boolean;
   readonly label: string;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
@@ -257,8 +261,12 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   return previousRef.current;
 }
 
-function sessionLabel(sessionId: string, sessions: SessionListLike): string {
-  return sessions.byId[sessionId]?.displayTitle ?? sessionId;
+function sessionLabel(
+  sessionId: string,
+  sessions: SessionListLike,
+  t: WorktreeTranslate,
+): string {
+  return sessionDisplayLabel(sessionId, sessions, t('session.new'));
 }
 
 function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
@@ -285,9 +293,7 @@ function workspaceMatches(
   if (query.length === 0) return true;
   if (includesText(workspace.title, query)) return true;
   if (
-    workspace.sessionIds.some((sessionId) =>
-      includesText(sessionLabel(sessionId, sessions), query),
-    )
+    workspace.sessionIds.some((sessionId) => sessionMatchesQuery(sessionId, sessions, query))
   ) {
     return true;
   }
@@ -301,7 +307,7 @@ function workspaceMatches(
     return true;
   }
   return view.bindings.some((binding) =>
-    includesText(sessionLabel(binding.sessionId, sessions), query),
+    sessionMatchesQuery(binding.sessionId, sessions, query),
   );
 }
 
@@ -622,6 +628,7 @@ function WorktreeGroupRow({
 function WorktreeSessionRow({
   t,
   sessionId,
+  blank,
   label,
   drag,
   actionPending,
@@ -661,6 +668,7 @@ function WorktreeSessionRow({
     <div
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
+      data-session-blank={blank ? 'true' : undefined}
       data-session-drag={drag.active ? 'active' : undefined}
       data-menu-open={menuOpen || undefined}
       role="treeitem"
@@ -689,7 +697,8 @@ function WorktreeSessionRow({
         </span>
         <span className={styles.sessionLabel}>{label}</span>
       </button>
-      <span className={styles.rowActions}>
+      {!blank && (
+        <span className={styles.rowActions}>
         <Menu
           open={menuOpen}
           onClose={() => {
@@ -719,7 +728,8 @@ function WorktreeSessionRow({
             </button>
           )}
         />
-      </span>
+        </span>
+      )}
     </div>
   );
 }
@@ -780,7 +790,8 @@ function WorktreeSessionGroup({
           t={t}
           key={`${groupKey}:${sessionId}`}
           sessionId={sessionId}
-          label={sessionLabel(sessionId, sessions)}
+          blank={isBlankSession(sessionId, sessions)}
+          label={sessionLabel(sessionId, sessions, t)}
           drag={{
             active: sameGroupDrag,
             marker:
@@ -908,6 +919,8 @@ export function WorktreeSurface({
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
+  const pendingSessionArchived = pendingSessionBinding !== undefined &&
+    archivedSessionIds.includes(pendingSessionBinding.sessionId);
 
   const refresh = useCallback(async (options: RefreshOptions = {}): Promise<void> => {
     if (manager === undefined) {
@@ -1335,7 +1348,7 @@ export function WorktreeSurface({
         await createSessionCallback(sessionInput);
         await invalidateWorktreeContext?.(createdWorktree.workspaceId);
       } catch (error) {
-        if (error instanceof WorktreeSessionBindingError) {
+        if (error instanceof WorktreeSessionBindingError && error.retryable) {
           setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
         }
         throw error;
@@ -1365,7 +1378,7 @@ export function WorktreeSurface({
       await invalidateWorktreeContext?.(input.workspaceId);
       await refresh({ preserveCurrent: true });
     } catch (error) {
-      if (error instanceof WorktreeSessionBindingError) {
+      if (error instanceof WorktreeSessionBindingError && error.retryable) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId });
       }
       setActionError(toWorktreeViewError(error));
@@ -1375,21 +1388,31 @@ export function WorktreeSurface({
   };
 
   const retrySessionBinding = async (): Promise<void> => {
-    if (manager === undefined || pendingSessionBinding === undefined) return;
+    if (
+      manager === undefined ||
+      pendingSessionBinding === undefined ||
+      pendingSessionArchived
+    ) return;
+    const pending = pendingSessionBinding;
     setActionPending(true);
     setActionError(undefined);
     try {
-      await manager.bindSession({
-        workspaceId: pendingSessionBinding.workspaceId,
-        worktreeId: pendingSessionBinding.worktreeId,
-        sessionId: pendingSessionBinding.sessionId,
+      await retryWorktreeSessionBinding({
+        manager,
+        pending,
+        archived: false,
+        ensureSessionWorkspace: (workspaceId, sessionId) => {
+          ensureSessionWorkspace?.(workspaceId, sessionId);
+        },
+        openSession,
       });
-      const sessionId = pendingSessionBinding.sessionId;
       setPendingSessionBinding(undefined);
       await refresh({ preserveCurrent: true });
-      openSession(sessionId);
-      await invalidateWorktreeContext?.(pendingSessionBinding.workspaceId);
+      await invalidateWorktreeContext?.(pending.workspaceId);
     } catch (error) {
+      if (error instanceof WorktreeSessionBindingError && !error.retryable) {
+        setPendingSessionBinding(undefined);
+      }
       setActionError(toWorktreeViewError(error));
     } finally {
       setActionPending(false);
@@ -1477,7 +1500,7 @@ export function WorktreeSurface({
                   <button
                     type="button"
                     className={styles.actionButton}
-                    disabled={actionPending}
+                    disabled={actionPending || pendingSessionArchived}
                     onClick={() => {
                       void retrySessionBinding();
                     }}
@@ -1553,13 +1576,13 @@ export function WorktreeSurface({
                   );
                   const bindings = view?.bindings ?? [];
                   const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
-                  const mainSessionIds = unboundSessionIds(allWorkspaceSessionIds, [
-                    ...boundSessionIds,
-                  ]);
+                  const mainSessionIds = filterVisibleSessionIds(
+                    unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
+                    sessions,
+                  );
                   const visibleMainSessionIds = mainSessionIds.filter(
                     (sessionId) =>
-                      workspaceMatchesQuery ||
-                      includesText(sessionLabel(sessionId, sessions), query),
+                      workspaceMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                   );
                   const mainExpanded = expandedMains[workspace.workspaceId] !== false;
                   const mainGroupKey = `main:${workspace.workspaceId}`;
@@ -1701,11 +1724,14 @@ export function WorktreeSurface({
                             <p className={styles.emptyNested}>{t('worktree.noWorktrees')}</p>
                           )}
                           {worktrees.map((record) => {
-                            const worktreeSessionIds = filterArchivedSessionIds(
-                              bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-                                sessions.ids.includes(sessionId),
+                            const worktreeSessionIds = filterVisibleSessionIds(
+                              filterArchivedSessionIds(
+                                bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+                                  sessions.ids.includes(sessionId),
+                                ),
+                                archivedSessionIds,
                               ),
-                              archivedSessionIds,
+                              sessions,
                             );
                             const worktreeMatchesQuery =
                               workspaceMatchesQuery ||
@@ -1715,15 +1741,14 @@ export function WorktreeSurface({
                               query.length > 0 &&
                               !worktreeMatchesQuery &&
                               !worktreeSessionIds.some((sessionId) =>
-                                includesText(sessionLabel(sessionId, sessions), query),
+                                sessionMatchesQuery(sessionId, sessions, query),
                               )
                             ) {
                               return null;
                             }
                             const visibleWorktreeSessionIds = worktreeSessionIds.filter(
                               (sessionId) =>
-                                worktreeMatchesQuery ||
-                                includesText(sessionLabel(sessionId, sessions), query),
+                                worktreeMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                             );
                             const worktreeGroupKey = `worktree:${record.worktreeId}`;
                             const state = record.status === 'removed'
@@ -1758,7 +1783,7 @@ export function WorktreeSurface({
                                     toggleWorktree(record.worktreeId);
                                   }}
                                   onCreateSession={
-                                    record.status === 'active'
+                                    record.status === 'active' && record.health !== 'repair'
                                       ? () => {
                                           void createSession({
                                             workspaceId: record.workspaceId,

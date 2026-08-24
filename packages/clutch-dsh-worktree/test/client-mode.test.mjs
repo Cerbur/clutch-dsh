@@ -101,9 +101,37 @@ test('connection-backed Worktree Manager remains available when canonical Remote
   assert.equal(fixture.rpcCalls[0].endpoint, 'worktreeManager/listWorktrees');
 });
 
-test('Worktree Session membership waits for the binding refresh before projection', async () => {
+test('Worktree Session membership is projected before opening and survives a binding refresh', async () => {
   storage.clear();
-  const fixture = await loadClientEntry();
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      ids: [],
+      byId: {},
+      current: 'session-current',
+      phase: 'ready',
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        const value =
+          endpoint === 'worktreeManager/listWorktrees'
+            ? [{
+                workspaceId: input.workspaceId,
+                worktreeId: 'wt-one',
+                branch: 'feature/one',
+                absolutePath: '/tmp/wt-one',
+                status: 'active',
+                health: 'ready',
+              }]
+            : endpoint === 'worktreeManager/listBindings'
+              ? []
+              : endpoint === 'worktreeManager/bindSession'
+                ? { ...input, status: 'active' }
+                : [];
+        return Promise.resolve({ ok: true, value: { ok: true, value } });
+      },
+    },
+  });
   const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
 
   await injected.createSessionForWorktree({
@@ -114,7 +142,7 @@ test('Worktree Session membership waits for the binding refresh before projectio
 
   assert.deepEqual(
     fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
-    ['session-current'],
+    ['session-current', 'session-created'],
   );
 
   injected.syncSessionWorkspaces([
@@ -125,6 +153,55 @@ test('Worktree Session membership waits for the binding refresh before projectio
     ['session-current', 'session-created'],
   );
   assert.deepEqual(fixture.openedSessions, ['session-created']);
+});
+
+test('Worktree plus reuses a bound blank Session through the Client entry', async () => {
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      ids: ['blank-existing'],
+      byId: {
+        'blank-existing': { blank: true, cwd: '/tmp/wt-one' },
+      },
+      current: 'blank-existing',
+      phase: 'ready',
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        const value =
+          endpoint === 'worktreeManager/listWorktrees'
+            ? [{
+                workspaceId: input.workspaceId,
+                worktreeId: 'wt-one',
+                branch: 'feature/one',
+                absolutePath: '/tmp/wt-one',
+                status: 'active',
+                health: 'ready',
+              }]
+            : endpoint === 'worktreeManager/listBindings'
+              ? [{
+                  workspaceId: input.workspaceId,
+                  worktreeId: 'wt-one',
+                  sessionId: 'blank-existing',
+                  status: 'active',
+                }]
+              : [];
+        return Promise.resolve({ ok: true, value: { ok: true, value } });
+      },
+    },
+  });
+  const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+
+  assert.equal(
+    await injected.createSessionForWorktree({
+      workspaceId: 'workspace-current',
+      worktreeId: 'wt-one',
+      cwd: '/tmp/wt-one',
+    }),
+    'blank-existing',
+  );
+  assert.deepEqual(fixture.createdSessions, []);
+  assert.deepEqual(fixture.openedSessions, ['blank-existing']);
 });
 
 test('virtual Worktree membership replays after native refresh and is removed on dispose', async () => {

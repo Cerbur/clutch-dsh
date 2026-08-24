@@ -50,6 +50,18 @@ export function formatWorktreeViewError(
         sessionId: detail(error, 'sessionId'),
         reason: reason(error, t),
       });
+    case 'SESSION_ALREADY_BOUND':
+      return t('error.sessionAlreadyBound');
+    case 'SESSION_LIST_NOT_READY':
+      return t('error.sessionListNotReady');
+    case 'SESSION_FACTS_INCOMPLETE':
+      return t('error.sessionFactsIncomplete');
+    case 'WORKTREE_SESSION_REPAIR_REQUIRED':
+      return t('error.worktreeSessionRepairRequired');
+    case 'WORKTREE_SESSION_UNAVAILABLE':
+      return t('error.worktreeSessionUnavailable');
+    case 'SESSION_ARCHIVED':
+      return t('error.sessionArchived');
     default:
       return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
   }

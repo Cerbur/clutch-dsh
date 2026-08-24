@@ -104,3 +104,27 @@ test('uses translated fallback copy when no raw message exists', () => {
     'error.worktreeDataUnavailable',
   );
 });
+
+test('formats Worktree Session action states with localized copy', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'WORKTREE_SESSION_REPAIR_REQUIRED', message: 'active-binding-cwd-mismatch', retryable: true },
+      t,
+    ),
+    'error.worktreeSessionRepairRequired',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'SESSION_ALREADY_BOUND', message: 'bound elsewhere', retryable: false },
+      t,
+    ),
+    'error.sessionAlreadyBound',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'SESSION_FACTS_INCOMPLETE', message: '', retryable: true },
+      t,
+    ),
+    'error.sessionFactsIncomplete',
+  );
+});

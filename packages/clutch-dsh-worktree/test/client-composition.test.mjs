@@ -66,6 +66,17 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /ctx\.workspaces\.insertSessionBefore/);
 });
 
+test('routes Worktree Session creation through the browser Session connector', async () => {
+  const source = await readFile(
+    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
+    'utf8',
+  );
+  assert.match(source, /createWorktreeSessionConnector/);
+  assert.match(source, /worktreeSessionConnector\.create\(input\)/);
+  assert.match(source, /worktreeSessionConnector\.dispose\(\)/);
+  assert.doesNotMatch(source, /createSessionForWorktree\(\{/);
+});
+
 test('loads and disposes the Client entry through the DSH module handoff', async () => {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];

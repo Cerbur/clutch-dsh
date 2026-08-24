@@ -8,7 +8,7 @@ const packageDirectory = path.resolve('.');
  * table and a small slot/context fixture. The real Client loader owns the
  * same registration call; this fixture only supplies its platform modules.
  */
-export async function loadClientEntry({ remote = {}, rpc } = {}) {
+export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
@@ -135,7 +135,7 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
     remote,
     sessions: {
       list: {
-        getSnapshot: () => ({ current: 'session-current' }),
+        getSnapshot: () => sessionListSnapshot ?? ({ current: 'session-current' }),
         subscribe: () => () => {},
       },
       async create(input) {

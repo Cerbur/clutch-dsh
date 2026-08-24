@@ -7,15 +7,35 @@ import type {
 
 /** A DSH Session exists even when the external Worktree binding needs repair. */
 export class WorktreeSessionBindingError extends Error {
-  readonly code = 'SESSION_BINDING_FAILED';
-  readonly retryable = true;
+  readonly code: string;
+  readonly retryable: boolean;
+  readonly details: Readonly<Record<string, unknown>>;
   readonly sessionId: string;
   readonly cause: unknown;
 
   constructor(sessionId: string, cause: unknown) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
+    const candidate = typeof cause === 'object' && cause !== null
+      ? cause as {
+          readonly code?: unknown;
+          readonly message?: unknown;
+          readonly retryable?: unknown;
+          readonly details?: unknown;
+        }
+      : undefined;
+    const reason = cause instanceof Error
+      ? cause.message
+      : typeof candidate?.message === 'string'
+        ? candidate.message
+        : String(cause);
     super(reason);
     this.name = 'WorktreeSessionBindingError';
+    const conflict = candidate?.code === 'SESSION_ALREADY_BOUND';
+    this.code = conflict ? 'SESSION_ALREADY_BOUND' : 'SESSION_BINDING_FAILED';
+    this.retryable = conflict ? false : candidate?.retryable !== false;
+    this.details = typeof candidate?.details === 'object' && candidate.details !== null
+      && !Array.isArray(candidate.details)
+      ? candidate.details as Readonly<Record<string, unknown>>
+      : {};
     this.sessionId = sessionId;
     this.cause = cause;
   }
