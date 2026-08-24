@@ -10,6 +10,18 @@ function asRect(element: Element): RectLike {
   return { top: rect.top, bottom: rect.bottom };
 }
 
+export function syncObservedElement(
+  observer: Pick<ResizeObserver, 'observe' | 'unobserve'> | undefined,
+  previous: Element | undefined,
+  next: Element | null | undefined,
+): Element | undefined {
+  const nextElement = next ?? undefined;
+  if (previous === nextElement) return previous;
+  if (previous !== undefined) observer?.unobserve(previous);
+  if (nextElement !== undefined) observer?.observe(nextElement);
+  return nextElement;
+}
+
 export function resolveNativeSidebarRoot(sidebar: Element): Element | undefined {
   const directChild = sidebar.firstElementChild;
   if (directChild === null) return undefined;
@@ -63,45 +75,49 @@ export function useSidebarOverlayGeometry(active: boolean): {
       setBounds(EMPTY_BOUNDS);
       return;
     }
+    const overlayElement = overlay;
+    const sidebarElement = sidebar;
+    const nativeRootElement = nativeRoot;
 
     let frameHandle: number | undefined;
-    const update = (): void => {
-      const newSession = findNewSessionAnchor(nativeRoot);
-      const footer = nativeRoot.lastElementChild;
-      const nextWidth = sidebar.getBoundingClientRect().width;
+    let observedNewSession: Element | undefined;
+    let observedFooter: Element | undefined;
+    function update(): void {
+      const newSession = findNewSessionAnchor(nativeRootElement);
+      const footer = nativeRootElement.lastElementChild;
+      observedNewSession = syncObservedElement(resizeObserver, observedNewSession, newSession);
+      observedFooter = syncObservedElement(resizeObserver, observedFooter, footer);
+      const nextWidth = sidebarElement.getBoundingClientRect().width;
       if (nextWidth > 0) setWidth(nextWidth);
       setBounds(
         computeOverlayBounds(
-          asRect(overlay),
+          asRect(overlayElement),
           newSession === undefined ? undefined : asRect(newSession),
           footer === null ? undefined : asRect(footer),
         ),
       );
-    };
-    const scheduleUpdate = (): void => {
+    }
+    function scheduleUpdate(): void {
       if (frameHandle !== undefined) return;
       frameHandle = requestAnimationFrame(() => {
         frameHandle = undefined;
         update();
       });
-    };
+    }
 
-    update();
-    const resizeObserver = typeof ResizeObserver === 'function'
+    const resizeObserver: ResizeObserver | undefined = typeof ResizeObserver === 'function'
       ? new ResizeObserver(scheduleUpdate)
       : undefined;
-    for (const element of [overlay, sidebar, nativeRoot]) {
+
+    for (const element of [overlayElement, sidebarElement, nativeRootElement]) {
       resizeObserver?.observe(element);
     }
-    const newSession = findNewSessionAnchor(nativeRoot);
-    const footer = nativeRoot.lastElementChild;
-    if (newSession !== undefined) resizeObserver?.observe(newSession);
-    if (footer !== null) resizeObserver?.observe(footer);
+    update();
 
     const mutationObserver = typeof MutationObserver === 'function'
       ? new MutationObserver(scheduleUpdate)
       : undefined;
-    mutationObserver?.observe(nativeRoot, { childList: true, subtree: true });
+    mutationObserver?.observe(nativeRootElement, { childList: true, subtree: true });
 
     return () => {
       resizeObserver?.disconnect();

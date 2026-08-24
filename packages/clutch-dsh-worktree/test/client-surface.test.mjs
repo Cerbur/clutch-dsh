@@ -559,6 +559,10 @@ test('bounds the surface to live native sidebar anchors', async () => {
   assert.match(geometrySource, /cancelAnimationFrame/);
   assert.doesNotMatch(styleSource, /\.surface \{[\s\S]*inset: 0 auto 0 0;/);
   assert.match(styleSource, /\.surface \{[\s\S]*top: 0;/);
+  assert.match(
+    styleSource,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.surface[\s\S]*transition: none;/,
+  );
 });
 
 test('creates a Worktree Session immediately after creating the Worktree', async () => {

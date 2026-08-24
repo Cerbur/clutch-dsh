@@ -43,7 +43,7 @@ rc.8 cannot pass `workspaceId` and Worktree `cwd` together to native
 1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
 2. binds the returned Session ID through the injected manager;
 3. projects `{ workspaceId, sessionId }` in browser memory so the current native Workspace list can resolve the Session;
-4. replays that projection after native Workspace list refreshes;
+4. applies that projection at the rc.8 Workspace-list `set()` boundary so native subscribers do not observe a raw snapshot first, and replays it after native list refreshes;
 5. removes it when the binding disappears or the Client fiber is disposed.
 
 This projection is not a persistent DSH attach and does not modify DSH source, Session

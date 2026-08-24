@@ -158,6 +158,39 @@ test('virtual Worktree membership replays after native refresh and is removed on
   assert.deepEqual(snapshot.items[0].sessionIds, ['native-after-refresh']);
 });
 
+test('native Workspace refresh publishes the projected membership atomically', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  let snapshot = {
+    items: [workspace('ws-one', ['native-one'])],
+  };
+  const subscribers = new Set();
+  const list = {
+    getSnapshot: () => snapshot,
+    set(next) {
+      snapshot = next;
+      for (const subscriber of [...subscribers]) subscriber();
+    },
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+  };
+  const seen = [];
+  list.subscribe(() => {
+    seen.push([...snapshot.items[0].sessionIds]);
+  });
+  const membership = createVirtualWorkspaceMembership(list);
+
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  seen.length = 0;
+  list.set({ items: [workspace('ws-one', ['native-after-refresh'])] });
+
+  assert.deepEqual(seen, [['native-after-refresh', 'worktree-session']]);
+  membership.dispose();
+});
+
 test('Main Session creation delegates to the native Workspace service', async () => {
   const fixture = await loadClientEntry();
   const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();

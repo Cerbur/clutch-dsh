@@ -1,6 +1,6 @@
 # Draft TODO 3：全面排查 Worktree 相关 UI 闪动
 
-**状态：** Draft，调查项；refresh 保持与过期结果回写已处理，membership、blank parity 和 geometry 仍待调查
+**状态：** Draft，调查项；refresh、过期结果回写、membership atomicity、anchor 重绑和 reduced-motion 已处理；blank parity 属于 TODO 4，真实浏览器几何/动画仍待验证
 
 **来源：** 用户提出的第 3 项。
 
@@ -22,17 +22,17 @@ TODO3 本身又补上了 `WorktreeSurface` 的 latest-wins guard：新 refresh �
 
 旧请求仍会消耗传输并可能完成 context invalidation；latest-wins 目前只保护 `readState` 的可见提交。
 
-### P1：native membership projection 的多次 snapshot
+### 已处理：native membership projection 的多次 snapshot
 
-`virtual-workspace-membership.ts` 在 `ensure`、`sync`、native list subscribe 和 `dispose` 时写入 DSH browser-local Workspace list。新 Session 的 create、bind、open、refresh 可能触发多次 Sidebar tree projection；需要确认是否出现行先插入 Main、再移动到 Worktree，或先出现 raw ID、再显示标题。Conversation context store 已经有独立的 generation 防护，但 membership overlay 仍需浏览器实测。
+`virtual-workspace-membership.ts` 现在在 rc.8 Workspace list 的 `set()` 写入边界先应用 browser-local binding projection，再通知 native subscribers。这样即使 native consumer 先于插件订阅，也不会观察到 `raw → projected` 的双快照；native list refresh 仍会通过订阅回放，dispose 会恢复原始 `set()`。回归测试覆盖 raw snapshot 不可见的顺序。
 
 ### P1：blank Session 的文本/可见性不稳定
 
 本插件 `sessionLabel()` 只有 `displayTitle ?? sessionId`，没有原生 `blank` 语义；新建 Session 可能先显示生成 ID，再变成 title，且 blank 行不会像 native 一样隐藏菜单。这既是视觉闪动来源，也是 TODO 4 的 parity 问题。
 
-### P2：overlay 几何初始化与原生 Sidebar 变化
+### 已处理一部分：overlay 几何初始化与原生 Sidebar 变化
 
-`useSidebarOverlayGeometry()` 在找不到 native New Session 或 footer anchor 时把 surface 设为 `height: 0; visibility: hidden`。它通过 `ResizeObserver`、`MutationObserver` 和 `requestAnimationFrame` 重新计算边界；原生 Sidebar 在折叠、展开、Session list 更新时重排，可能造成 Worktree surface 短暂隐藏或高度跳变。需要检查是否为真实问题，不能仅凭代码推断。
+`useSidebarOverlayGeometry()` 在找不到 native New Session 或 footer anchor 时把 surface 设为 `height: 0; visibility: hidden`。当 MutationObserver 发现原生节点被替换时，下一次计算会同步 `ResizeObserver` 的观察目标，避免继续监听已移除的旧 anchor。真实浏览器中的首屏 mount、折叠/展开和 Session list 重排仍需记录 computed style 与 bounding box，不能仅凭 Node 测试宣称无闪动。
 
 ### P2：有意动画与状态切换混在一起
 
@@ -40,6 +40,8 @@ TODO3 本身又补上了 `WorktreeSurface` 的 latest-wins guard：新 refresh �
 - Native Sidebar 自己有 collapse slide/crossfade；
 - Native ConversationRoot 有 blank/active/settling phase 保护；
 - Worktree `HoverCard`、Menu、Modal 还有 portal 生命周期。
+
+插件 surface 的 width transition 已加入 `prefers-reduced-motion: reduce` 覆盖；native Sidebar 自带的 collapse/crossfade 也有同等覆盖。剩余判断仍需浏览器录制确认 DOM 是否 remount，不能把这些有意动画全部移除。
 
 这些都可能在录屏中看起来像闪动，调查时要记录 computed style、DOM 是否 remount、元素 bounding box 是否变化，不能简单移除所有 transition。
 
@@ -64,7 +66,7 @@ TODO3 本身又补上了 `WorktreeSurface` 的 latest-wins guard：新 refresh �
 2. 在 Client 关键状态和 request 生命周期加临时 `performance.mark`；用 MutationObserver 统计 surface、row、ConversationRoot 的 mount/remove。
 3. 对关键节点采样 `getBoundingClientRect()`，区分“内容闪一下”和“几何真的跳了一下”。
 4. 在确认根因后为纯状态逻辑补 Node tests，为真实跨插件路径补 Playwright/e2e 或 snapshot；不要用 sleep 让测试“稳定”。
-5. destructive action refresh 与过期 response 已先处理；下一步优先验证外部拓扑 refresh 和 blank row 两类确定性问题，再处理 geometry 和有意动画。
+5. destructive action refresh、过期 response、membership atomicity、anchor 重绑和 reduced-motion 已有 Node 回归证据；下一步只需用浏览器验证 blank row（TODO 4）、首屏 anchor 暂缺、折叠/展开和 ConversationRoot 是否 remount。
 
 ## 统一验收标准
 

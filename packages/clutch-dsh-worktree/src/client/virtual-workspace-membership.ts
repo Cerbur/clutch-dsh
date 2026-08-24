@@ -74,17 +74,29 @@ export function createVirtualWorkspaceMembership<
   let bindings: readonly VirtualWorkspaceBinding[] = [];
   let disposed = false;
   let applying = false;
+  const nativeSet = list.set;
+
+  const write = (next: T): void => {
+    applying = true;
+    try {
+      nativeSet(next);
+    } finally {
+      applying = false;
+    }
+  };
+
+  // DSH rc.8 publishes Workspace baselines through `set()`. Decorate that
+  // browser-local write seam so native subscribers receive the projection in
+  // the same notification instead of observing a raw snapshot first.
+  list.set = (next: T): void => {
+    write(projectVirtualWorkspaceMembership(next, bindings, bindings));
+  };
 
   const apply = (nextBindings: readonly VirtualWorkspaceBinding[]): void => {
     const current = list.getSnapshot();
     const next = projectVirtualWorkspaceMembership(current, bindings, nextBindings);
     if (sameWorkspaceItems(current, next)) return;
-    applying = true;
-    try {
-      list.set(next);
-    } finally {
-      applying = false;
-    }
+    write(next);
   };
 
   const replay = (): void => {
@@ -123,6 +135,7 @@ export function createVirtualWorkspaceMembership<
       bindings = [];
       disposed = true;
       unsubscribe();
+      list.set = nativeSet;
     },
   };
 }

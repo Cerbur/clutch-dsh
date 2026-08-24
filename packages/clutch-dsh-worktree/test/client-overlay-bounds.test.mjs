@@ -5,6 +5,7 @@ import { computeOverlayBounds } from '../lib/client/overlay-bounds.js';
 import {
   findNewSessionAnchor,
   resolveNativeSidebarRoot,
+  syncObservedElement,
 } from '../lib/client/sidebar-overlay-geometry.js';
 
 test('unwraps the display-contents sidebar slot before measuring the native root', () => {
@@ -71,4 +72,27 @@ test('returns zero coverage when either anchor is unavailable', () => {
     computeOverlayBounds({ top: 100, bottom: 900 }, { top: 260, bottom: 298 }, undefined),
     { ready: false, top: 0, height: 0 },
   );
+});
+
+test('tracks replacement geometry anchors with the ResizeObserver', () => {
+  const first = {};
+  const second = {};
+  const observer = {
+    observed: [],
+    unobserved: [],
+    observe(element) {
+      this.observed.push(element);
+    },
+    unobserve(element) {
+      this.unobserved.push(element);
+    },
+  };
+
+  let current = syncObservedElement(observer, undefined, first);
+  current = syncObservedElement(observer, current, second);
+  current = syncObservedElement(observer, current, undefined);
+
+  assert.deepEqual(observer.observed, [first, second]);
+  assert.deepEqual(observer.unobserved, [first, second]);
+  assert.equal(current, undefined);
 });

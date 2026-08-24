@@ -56,6 +56,12 @@
   transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .surface {
+    transition: none;
+  }
+}
+
 .wideContent {
   display: flex;
   min-width: 0;
