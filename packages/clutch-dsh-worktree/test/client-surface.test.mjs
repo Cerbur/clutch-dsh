@@ -181,7 +181,7 @@ test('preserves a ready Worktree projection during automatic refreshes', async (
   const effectSource = source.slice(effectStart, effectEnd);
   assert.match(
     effectSource,
-    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === \'ready\' \}\);/,
+    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
   );
 });
 
