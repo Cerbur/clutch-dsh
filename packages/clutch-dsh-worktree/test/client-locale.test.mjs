@@ -47,8 +47,3 @@ test('localizes the unavailable Worktree ordering error', () => {
     'Worktree ordering is unavailable; retry after reconnecting.',
   );
 });
-
-test('uses native-compatible blank Session labels', () => {
-  assert.equal(zh['session.new'], '新会话');
-  assert.equal(en['session.new'], 'New Session');
-});

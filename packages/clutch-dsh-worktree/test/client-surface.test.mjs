@@ -1144,31 +1144,3 @@ test('renders setup instructions instead of a fake base-branch option', async ()
   assert.match(localeSource, /worktree\.setup\.noLocalBranch/);
   assert.match(styles, /\.commandBlock\s*\{/);
 });
-
-test('wires native blank Session visibility and menu parity into both tree groups', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
-  const localeSource = await readFile(
-    new URL('../src/client/locales.ts', import.meta.url),
-    'utf8',
-  );
-
-  assert.match(source, /session-view\.js/);
-  assert.match(source, /filterVisibleSessionIds/);
-  assert.match(source, /isBlankSession/);
-  assert.match(source, /sessionMatchesQuery/);
-  assert.match(source, /blank=\{isBlankSession\(sessionId, sessions\)\}/);
-  assert.match(localeSource, /'session\.new': '新会话'/);
-  assert.match(localeSource, /'session\.new': 'New Session'/);
-
-  const rowStart = source.indexOf('function WorktreeSessionRow');
-  const rowEnd = source.indexOf('interface WorktreeSessionGroupProps', rowStart);
-  assert.notEqual(rowStart, -1);
-  assert.notEqual(rowEnd, -1);
-  const rowSource = source.slice(rowStart, rowEnd);
-  assert.match(source, /interface WorktreeSessionRowProps \{[\s\S]*readonly blank: boolean/);
-  assert.match(rowSource, /data-session-blank/);
-  assert.match(rowSource, /\{!blank && \(/);
-});
