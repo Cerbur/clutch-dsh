@@ -185,6 +185,7 @@ Client surface 的当前约束：
 - plugin index 不可用时 Project/Session 视角仍可用；
 - Worktree 模式创建的 Session 能在原始 Project session 列表中出现；
 - Client `/api` 调用、双层错误、dispose abort 和 native list projection 的生命周期。
+- 任意 Client refresh、native list/membership projection 或异步错误切换不得先清空当前 ready 内容而触发白屏；已有内容刷新必须保留当前 projection，loading 空态只允许首次进入 Worktree mode 或显式 retry，新增刷新路径必须有回归测试覆盖。
 
 常用检查命令（从 workspace 根目录执行）：
 
