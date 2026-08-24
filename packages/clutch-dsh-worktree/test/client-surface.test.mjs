@@ -668,6 +668,14 @@ test('preserves the Worktree projection for action refreshes', async () => {
   assert.notEqual(actionRetryStart, -1);
   assert.notEqual(actionRetryEnd, -1);
   assert.match(source.slice(actionRetryStart, actionRetryEnd), /void refresh\(\);/);
+
+  const readErrorStart = source.indexOf(
+    "{readState.status === 'error' && readState.error !== undefined ?",
+  );
+  const readErrorEnd = source.indexOf(") : readState.status === 'ready' ?", readErrorStart);
+  assert.notEqual(readErrorStart, -1);
+  assert.notEqual(readErrorEnd, -1);
+  assert.match(source.slice(readErrorStart, readErrorEnd), /void refresh\(\);/);
 });
 
 test('renders transient Worktree health with the public StateDot primitive', async () => {
