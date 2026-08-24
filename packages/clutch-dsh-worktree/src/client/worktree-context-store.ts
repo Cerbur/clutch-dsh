@@ -222,8 +222,8 @@ export function createWorktreeContextProjection(
   const scheduleRefresh = (): void => {
     if (disposed) return;
     generation += 1;
-    setPending(identityFrom(input.sessions, input.workspaces));
     if (scheduled) return;
+    setPending(identityFrom(input.sessions, input.workspaces));
     scheduled = true;
     const ticket = ++scheduleTicket;
     const completion = scheduledRefresh();

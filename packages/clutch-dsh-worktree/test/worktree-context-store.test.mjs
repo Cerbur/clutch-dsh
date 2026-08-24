@@ -277,6 +277,33 @@ test('deduplicates same-tick Session and Workspace refresh schedules', async () 
   projection.dispose();
 });
 
+test('coalesces repeated synchronous Workspace notifications without republishing pending state', async () => {
+  const pending = deferred();
+  const sessions = snapshot({ current: 's1', byId: { s1: {} } });
+  const workspaces = snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] });
+  const projection = createProjection({
+    sessions,
+    workspaces,
+    manager: managerWithViewReads([pending]),
+  });
+  const states = [];
+  const unsubscribe = projection.store.subscribe(() => {
+    states.push(projection.store.getSnapshot());
+  });
+
+  workspaces.set({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] });
+  workspaces.set({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] });
+
+  assert.equal(states.filter((state) => state.status === 'loading').length, 1);
+
+  await new Promise(globalThis.queueMicrotask);
+  pending.resolve(dataFor('s1', 'feature/one'));
+  await new Promise(globalThis.queueMicrotask);
+  await new Promise(globalThis.queueMicrotask);
+  unsubscribe();
+  projection.dispose();
+});
+
 test('dispose aborts/ignores in-flight reads and clears visible context', async () => {
   const pending = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {} } });
