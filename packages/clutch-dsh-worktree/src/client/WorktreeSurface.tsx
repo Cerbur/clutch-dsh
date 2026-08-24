@@ -908,8 +908,8 @@ export function WorktreeSurface({
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
 
   const refresh = useCallback(async (options: RefreshOptions = {}): Promise<void> => {
-    const requestGeneration = refreshGuard.current.begin();
     if (manager === undefined) {
+      refreshGuard.current.invalidate();
       setReadState(EMPTY_READ_STATE);
       return;
     }
@@ -917,22 +917,23 @@ export function WorktreeSurface({
     if (!preserveCurrent) {
       setReadState({ status: 'loading', views: [] });
     }
-    try {
-      const views = await loadWorktreeViews(manager, workspaceIds, {
+    await refreshGuard.current.run(
+      () => loadWorktreeViews(manager, workspaceIds, {
         invalidateContext: options.invalidateContext !== false,
         invalidateWorktreeContext,
-      });
-      if (!refreshGuard.current.isCurrent(requestGeneration)) return;
-      setReadState({ status: 'ready', views });
-    } catch (error) {
-      if (!refreshGuard.current.isCurrent(requestGeneration)) return;
-      if (preserveCurrent) throw error;
-      setReadState({
-        status: 'error',
-        views: [],
-        error: toWorktreeViewError(error),
-      });
-    }
+      }),
+      (views) => {
+        setReadState({ status: 'ready', views });
+      },
+      (error) => {
+        if (preserveCurrent) throw error;
+        setReadState({
+          status: 'error',
+          views: [],
+          error: toWorktreeViewError(error),
+        });
+      },
+    );
   }, [invalidateWorktreeContext, manager, workspaceIds]);
 
   useEffect(() => {

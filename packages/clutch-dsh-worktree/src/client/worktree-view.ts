@@ -58,16 +58,35 @@ export function stableWorkspaceIds(
 /** Keep only the most recently started Worktree surface refresh authoritative. */
 export function createWorktreeRefreshGuard() {
   let latestGeneration = 0;
+  const begin = (): number => {
+    latestGeneration += 1;
+    return latestGeneration;
+  };
+  const isCurrent = (generation: number): boolean => generation === latestGeneration;
+  const invalidate = (): void => {
+    latestGeneration += 1;
+  };
+
   return {
-    begin(): number {
-      latestGeneration += 1;
-      return latestGeneration;
-    },
-    isCurrent(generation: number): boolean {
-      return generation === latestGeneration;
-    },
-    invalidate(): void {
-      latestGeneration += 1;
+    begin,
+    isCurrent,
+    invalidate,
+    async run<T>(
+      load: () => Promise<T>,
+      onSuccess: (value: T) => void,
+      onError: (error: unknown) => void,
+    ): Promise<void> {
+      const generation = begin();
+      let value: T;
+      try {
+        value = await load();
+      } catch (error) {
+        if (!isCurrent(generation)) return;
+        onError(error);
+        return;
+      }
+      if (!isCurrent(generation)) return;
+      onSuccess(value);
     },
   };
 }

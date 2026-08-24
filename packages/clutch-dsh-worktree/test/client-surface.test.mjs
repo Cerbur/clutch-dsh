@@ -64,6 +64,16 @@ function manager(overrides = {}) {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 test('reuses the previous Workspace id array when a snapshot republishes the same ids', () => {
   const previous = ['ws1', 'ws2'];
   const next = ['ws1', 'ws2'];
@@ -93,17 +103,68 @@ test('invalidates superseded Worktree refresh results', async () => {
   assert.notEqual(refreshStart, -1);
   assert.notEqual(refreshEnd, -1);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  assert.match(refreshSource, /const requestGeneration = refreshGuard\.current\.begin\(\)/);
-  assert.equal(
-    (refreshSource.match(/if \(!refreshGuard\.current\.isCurrent\(requestGeneration\)\) return;/g) ?? []).length,
-    2,
-  );
+  assert.match(refreshSource, /await refreshGuard\.current\.run\(/);
+  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
 
   const modeEffectStart = source.indexOf('useEffect(() => {\n    if (mode === \'worktree\')');
   const modeEffectEnd = source.indexOf('  useEffect(() => {', modeEffectStart + 1);
   assert.notEqual(modeEffectStart, -1);
   assert.notEqual(modeEffectEnd, -1);
   assert.match(source.slice(modeEffectStart, modeEffectEnd), /refreshGuard\.current\.invalidate\(\)/);
+});
+
+test('drops stale asynchronous Worktree refresh success', async () => {
+  const guard = worktreeView.createWorktreeRefreshGuard();
+  const first = deferred();
+  const second = deferred();
+  const committed = [];
+  const errors = [];
+
+  const firstRun = guard.run(
+    () => first.promise,
+    (value) => committed.push(value),
+    (error) => errors.push(error),
+  );
+  const secondRun = guard.run(
+    () => second.promise,
+    (value) => committed.push(value),
+    (error) => errors.push(error),
+  );
+  const runs = Promise.all([firstRun, secondRun]);
+
+  second.resolve('new');
+  first.resolve('stale');
+  await runs;
+
+  assert.deepEqual(committed, ['new']);
+  assert.deepEqual(errors, []);
+});
+
+test('drops stale asynchronous Worktree refresh rejection', async () => {
+  const guard = worktreeView.createWorktreeRefreshGuard();
+  const first = deferred();
+  const second = deferred();
+  const committed = [];
+  const errors = [];
+
+  const firstRun = guard.run(
+    () => first.promise,
+    (value) => committed.push(value),
+    (error) => errors.push(error),
+  );
+  const secondRun = guard.run(
+    () => second.promise,
+    (value) => committed.push(value),
+    (error) => errors.push(error),
+  );
+  const runs = Promise.all([firstRun, secondRun]);
+
+  second.resolve('new');
+  first.reject(new Error('stale'));
+  await runs;
+
+  assert.deepEqual(committed, ['new']);
+  assert.deepEqual(errors, []);
 });
 
 test('loads Worktree, branch, and binding projection through the Manager contract', async () => {
