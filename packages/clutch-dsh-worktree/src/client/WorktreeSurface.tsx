@@ -36,6 +36,13 @@ import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
 import { formatWorktreeViewError } from './worktree-error-copy.js';
 import {
+  filterVisibleSessionIds,
+  isBlankSession,
+  sessionDisplayLabel,
+  sessionMatchesQuery,
+  type SessionListLike,
+} from './session-view.js';
+import {
   executeWorktreeAction,
   createDefaultWorktreeName,
   createWorktreeRefreshGuard,
@@ -65,11 +72,6 @@ interface WorkspaceLike {
 interface WorkspaceListLike {
   readonly items: readonly WorkspaceLike[];
   readonly archivedSessionIds?: readonly string[];
-}
-
-interface SessionListLike {
-  readonly ids: readonly string[];
-  readonly byId: Record<string, { readonly displayTitle?: string }>;
 }
 
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
@@ -155,6 +157,7 @@ interface SessionRenameTarget {
 interface WorktreeSessionRowProps {
   readonly t: WorktreeTranslate;
   readonly sessionId: string;
+  readonly blank: boolean;
   readonly label: string;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
@@ -257,8 +260,12 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   return previousRef.current;
 }
 
-function sessionLabel(sessionId: string, sessions: SessionListLike): string {
-  return sessions.byId[sessionId]?.displayTitle ?? sessionId;
+function sessionLabel(
+  sessionId: string,
+  sessions: SessionListLike,
+  t: WorktreeTranslate,
+): string {
+  return sessionDisplayLabel(sessionId, sessions, t('session.new'));
 }
 
 function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
@@ -285,9 +292,7 @@ function workspaceMatches(
   if (query.length === 0) return true;
   if (includesText(workspace.title, query)) return true;
   if (
-    workspace.sessionIds.some((sessionId) =>
-      includesText(sessionLabel(sessionId, sessions), query),
-    )
+    workspace.sessionIds.some((sessionId) => sessionMatchesQuery(sessionId, sessions, query))
   ) {
     return true;
   }
@@ -301,7 +306,7 @@ function workspaceMatches(
     return true;
   }
   return view.bindings.some((binding) =>
-    includesText(sessionLabel(binding.sessionId, sessions), query),
+    sessionMatchesQuery(binding.sessionId, sessions, query),
   );
 }
 
@@ -622,6 +627,7 @@ function WorktreeGroupRow({
 function WorktreeSessionRow({
   t,
   sessionId,
+  blank,
   label,
   drag,
   actionPending,
@@ -661,6 +667,7 @@ function WorktreeSessionRow({
     <div
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
+      data-session-blank={blank ? 'true' : undefined}
       data-session-drag={drag.active ? 'active' : undefined}
       data-menu-open={menuOpen || undefined}
       role="treeitem"
@@ -689,37 +696,39 @@ function WorktreeSessionRow({
         </span>
         <span className={styles.sessionLabel}>{label}</span>
       </button>
-      <span className={styles.rowActions}>
-        <Menu
-          open={menuOpen}
-          onClose={() => {
-            setMenuOpen(false);
-          }}
-          items={sessionMenuItems}
-          onSelect={(id) => {
-            setMenuOpen(false);
-            if (id === 'rename') onRename?.(sessionId, label);
-            if (id === 'fork') onFork?.(sessionId);
-            if (id === 'archive') onArchive?.(sessionId);
-          }}
-          portal
-          closeOnPointerLeave
-          anchor={(
-            <button
-              type="button"
-              className={styles.iconButton}
-              data-session-menu
-              aria-label={t('session.options', { name: label })}
-              onClick={(event) => {
-                event.stopPropagation();
-                setMenuOpen((current) => !current);
-              }}
-            >
-              <IconEllipsisOutline16 />
-            </button>
-          )}
-        />
-      </span>
+      {!blank && (
+        <span className={styles.rowActions}>
+          <Menu
+            open={menuOpen}
+            onClose={() => {
+              setMenuOpen(false);
+            }}
+            items={sessionMenuItems}
+            onSelect={(id) => {
+              setMenuOpen(false);
+              if (id === 'rename') onRename?.(sessionId, label);
+              if (id === 'fork') onFork?.(sessionId);
+              if (id === 'archive') onArchive?.(sessionId);
+            }}
+            portal
+            closeOnPointerLeave
+            anchor={(
+              <button
+                type="button"
+                className={styles.iconButton}
+                data-session-menu
+                aria-label={t('session.options', { name: label })}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((current) => !current);
+                }}
+              >
+                <IconEllipsisOutline16 />
+              </button>
+            )}
+          />
+        </span>
+      )}
     </div>
   );
 }
@@ -780,7 +789,8 @@ function WorktreeSessionGroup({
           t={t}
           key={`${groupKey}:${sessionId}`}
           sessionId={sessionId}
-          label={sessionLabel(sessionId, sessions)}
+          blank={isBlankSession(sessionId, sessions)}
+          label={sessionLabel(sessionId, sessions, t)}
           drag={{
             active: sameGroupDrag,
             marker:
@@ -1553,13 +1563,13 @@ export function WorktreeSurface({
                   );
                   const bindings = view?.bindings ?? [];
                   const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
-                  const mainSessionIds = unboundSessionIds(allWorkspaceSessionIds, [
-                    ...boundSessionIds,
-                  ]);
+                  const mainSessionIds = filterVisibleSessionIds(
+                    unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
+                    sessions,
+                  );
                   const visibleMainSessionIds = mainSessionIds.filter(
                     (sessionId) =>
-                      workspaceMatchesQuery ||
-                      includesText(sessionLabel(sessionId, sessions), query),
+                      workspaceMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                   );
                   const mainExpanded = expandedMains[workspace.workspaceId] !== false;
                   const mainGroupKey = `main:${workspace.workspaceId}`;
@@ -1701,11 +1711,14 @@ export function WorktreeSurface({
                             <p className={styles.emptyNested}>{t('worktree.noWorktrees')}</p>
                           )}
                           {worktrees.map((record) => {
-                            const worktreeSessionIds = filterArchivedSessionIds(
-                              bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-                                sessions.ids.includes(sessionId),
+                            const worktreeSessionIds = filterVisibleSessionIds(
+                              filterArchivedSessionIds(
+                                bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+                                  sessions.ids.includes(sessionId),
+                                ),
+                                archivedSessionIds,
                               ),
-                              archivedSessionIds,
+                              sessions,
                             );
                             const worktreeMatchesQuery =
                               workspaceMatchesQuery ||
@@ -1715,15 +1728,14 @@ export function WorktreeSurface({
                               query.length > 0 &&
                               !worktreeMatchesQuery &&
                               !worktreeSessionIds.some((sessionId) =>
-                                includesText(sessionLabel(sessionId, sessions), query),
+                                sessionMatchesQuery(sessionId, sessions, query),
                               )
                             ) {
                               return null;
                             }
                             const visibleWorktreeSessionIds = worktreeSessionIds.filter(
                               (sessionId) =>
-                                worktreeMatchesQuery ||
-                                includesText(sessionLabel(sessionId, sessions), query),
+                                worktreeMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                             );
                             const worktreeGroupKey = `worktree:${record.worktreeId}`;
                             const state = record.status === 'removed'
