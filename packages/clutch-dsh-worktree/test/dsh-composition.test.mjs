@@ -32,6 +32,7 @@ test('publishes the generated Host and Client Remote contribution entries', () =
       '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-locale',
+      '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-layout',
       '@deepseek-ai/dsh-client-ui-sidebar',
     ],

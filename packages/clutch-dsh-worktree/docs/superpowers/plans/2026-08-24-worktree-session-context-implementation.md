@@ -2,21 +2,37 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Show one browser-local Main branch or active Worktree branch context in both native Conversation locations: `Workspace → Agent mode → branch / Worktree` for blank Hero sessions and `Session title → Agent mode → branch / Worktree` for active sessions.
+**Goal:** Show one browser-local Main branch or active Worktree branch context in the active native Conversation title row: `Session title → Agent mode → branch / Worktree`.
 
-**Architecture:** First add the missing root-scoped `conversation.hero.context` additive seat to DSH `ui-conversation` in the separate `deepseek-harness` repository. Then add a Client-fiber-scoped Worktree context projection to this plugin, with one pure resolver and one cancellable snapshot store shared by a Hero consumer and a Session-header action consumer. The plugin will reuse the existing `/api` WorktreeManager and browser-local membership projection; it will not replace native Conversation components or use DOM overlays.
+**Architecture:** Add a Client-fiber-scoped Worktree context projection to this plugin, with one pure resolver and one cancellable snapshot store consumed by the existing Session-header action list and a plugin-only Hero title overlay. The plugin reuses the existing `/api` WorktreeManager and browser-local membership projection; it does not modify native DSH data or replace native Conversation components.
+
+**Scope correction (2026-08-24):** the user approved the plugin-only `shell.overlay` approach for the blank Hero after the initial design exposed that the current DSH release has no additive Hero seat. The overlay is a visual fallback anchored to the native `[data-phase="hero"]` headline; it is not a `conversation.hero.context` slot and must be removed or replaced when DSH provides a stable Hero headline extension point.
+
+## Current execution checklist
+
+- [x] Keep the native DSH repository out of the implementation; its `master` tree contains no Hero-slot change.
+- [x] Resolve the current Session to the Main branch or active Worktree branch through one pure resolver.
+- [x] Share one cancellable browser-local projection between the plugin entry and the Session-header consumer.
+- [x] Register `conversation.session.header.actions` at order `-5` and compose the Hero suffix through the existing `shell.overlay` entry.
+- [x] Resolve `recentWorkspaceId` for a cold Hero without a current Session and update the suffix after Workspace changes.
+- [x] Document that the Hero context is a visual plugin-only overlay, not a native Hero slot.
+- [x] Verify resolver, stale-response, invalidation, disposal, composition, typecheck, build, lint, formatting, workspace, patch, and package tests.
+
+The detailed Task 1–Task 7 sections below are retained as historical design
+material from the superseded two-placement proposal. They are not execution
+instructions for the current plugin-only scope; the checklist above and the
+current source/tests are authoritative.
 
 **Tech Stack:** TypeScript, React 18, DSH SlotMap/SlotRegistry, DSH `SnapshotStore`, existing WorktreeManager `/api` adapter, CSS Modules, Vitest in DSH, Node test runner in `clutch-dsh`.
 
 ## Global Constraints
 
-- Preserve the exact display order: blank Hero `Workspace → Agent mode → branch / Worktree`; active title row `Session title → Agent mode → branch / Worktree`.
+- Preserve the active title-row order: `Session title → Agent mode → branch / Worktree`.
 - Main context is the current `BranchRecord` where `isCurrent === true`; active Worktree context is `WorktreeRecord.branch`.
 - Missing, stale, detached, repair, mismatched, or not-yet-ready context renders no label; never retain a previous Session's label or infer a Worktree from cwd alone.
 - Context labels are read-only and must not mutate DSH Workspace data, Session metadata, cwd, transcripts, Git state, or sidecar records.
-- The native Hero seat is a prerequisite in `/Users/yuancheng/Documents/Code/deepseek-harness`; do not modify native DSH source from this plugin worktree.
-- Do not hijack `conversation.hero.workspace`, replace `conversation.hero.agentPreset`, replace `conversation.session.header`, or position the label through `shell.overlay` DOM queries.
-- Both Client consumers share one projection/resolver and one request-generation/disposal policy; rendering must not issue an RPC per render, and late responses must not overwrite newer state.
+- Do not modify native DSH source, hijack `conversation.hero.workspace`, replace `conversation.hero.agentPreset`, or replace `conversation.session.header`. The approved Hero fallback may position its own read-only suffix through `shell.overlay` DOM queries; it must never mutate the native nodes or Workspace/Session data.
+- The active Session-header consumer owns the one projection/resolver and one request-generation/disposal policy; rendering must not issue an RPC per render, and late responses must not overwrite newer state.
 - Keep branch and Worktree values raw; localize only accessible prefixes and UI status copy.
 - Use `apply_patch` for local source, tests, documentation, and plan edits. Do not stage the existing untracked `docs/superpowers/drafts/` directory.
 - Each task ends with its focused tests and a small commit; generated `lib/`, coverage, sidecar data, credentials, and temporary fixtures stay untracked.
@@ -25,35 +41,33 @@
 
 ## File map and ownership
 
-The native prerequisite lives in a separate repository and must land before the
-plugin can register the Hero consumer:
-
-- `/Users/yuancheng/Documents/Code/deepseek-harness/packages/client/ui-conversation/src/client/contract/slots.ts` — native Hero slot declaration, owner type, and Conversation render share.
-- `/Users/yuancheng/Documents/Code/deepseek-harness/packages/client/ui-conversation/src/client/apply.ts` — native root children declaration.
-- `/Users/yuancheng/Documents/Code/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx` — native Hero render order.
-- `/Users/yuancheng/Documents/Code/deepseek-harness/packages/client/ui-conversation/tests/chat-apply.client.spec.tsx` — native slot ledger contract test.
-- `/Users/yuancheng/Documents/Code/deepseek-harness/packages/client/ui-conversation/tests/skeleton.client.spec.tsx` — native Hero ordering test.
-
 The plugin implementation belongs to this package:
 
 - Create `src/client/worktree-context.ts` — pure context value types and the deterministic Session → Main/Worktree resolver.
 - Create `src/client/worktree-context-store.ts` — Client-fiber-scoped async projection, cache invalidation, request generation, and disposal.
-- Create `src/client/WorktreeContext.tsx` — shared read-only label plus Hero and header slot consumers.
-- Create `src/client/worktree-context.css` — scoped Hero-chip and header-label presentation.
-- Modify `src/client/entry.ts` — create/dispose the projection and register both Client slot consumers.
+- Create `src/client/WorktreeContext.tsx` — shared read-only label plus the Session-header action consumer.
+- Create `src/client/worktree-context.css` — scoped header-label presentation.
+- Modify `src/client/entry.ts` — create/dispose the projection and register the Session-header consumer only.
 - Modify `src/client/WorktreeSurface.tsx` — invalidate the shared projection after Worktree/binding mutations and full Worktree reads.
 - Modify `src/client/worktree-view.ts` — expose the existing single-Workspace Worktree read shape to the projection without duplicating Manager read logic.
 - Modify `src/client/locales.ts` — add localized accessible context labels.
 - Modify `package.json` — inject and type against `@deepseek-ai/dsh-client-ui-conversation`; align its native compatibility version after the DSH slot lands.
-- Modify `src/client/README.md` and `README.md` — document the two native locations, read-only semantics, and native compatibility prerequisite.
+- Modify `src/client/README.md` and `README.md` — document the active Session-header location, read-only semantics, and native compatibility prerequisite.
 - Create `test/worktree-context.test.mjs` — pure resolver cases.
 - Create `test/worktree-context-store.test.mjs` — async refresh, stale response, invalidation, and disposal cases.
-- Modify `test/client-composition.test.mjs` and `test/client-surface.test.mjs` — slot registration, order, locale, and no-overlay regression assertions.
+- Modify `test/client-composition.test.mjs`, `test/client-surface.test.mjs`, and add context tests — slot registration, order, locale, resolver, projection, and no-overlay regression assertions.
 
 The plan deliberately does not modify the existing Worktree contract or Remote
 method list: branch and binding data already exist in the stable contract.
 
-## Task 1: Add the native DSH Hero context seat
+## Task 1: Native Hero context seat — superseded (historical)
+
+This task is intentionally not executed. The current plugin-only scope does not
+modify `/Users/yuancheng/Documents/Code/deepseek-harness` and does not require a
+`conversation.hero.context` slot. The native working-tree change was reverted
+locally before plugin implementation continued. The active implementation begins
+at Task 2 below; references to a Hero consumer in the historical task text are
+retained only as design history and are not acceptance criteria.
 
 **Repository:** `/Users/yuancheng/Documents/Code/deepseek-harness`
 

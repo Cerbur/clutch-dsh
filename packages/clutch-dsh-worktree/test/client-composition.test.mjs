@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { loadClientEntry } from './client-fixture.mjs';
 
 const packageDirectory = path.resolve('.');
@@ -86,12 +86,47 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   const fixture = await loadClientEntry();
   assert.equal(typeof fixture.exports.apply, 'function');
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'conversation.session.header.actions',
     'shell.overlay',
     'sidebar.footer.action',
   ]);
 
   for (const dispose of fixture.disposers.reverse()) dispose();
   assert.equal(fixture.registrationsBySlot.size, 0);
+});
+
+test('contributes context to the active Session title row and the Hero overlay', async () => {
+  const fixture = await loadClientEntry();
+  assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'conversation.session.header.actions',
+    'shell.overlay',
+    'sidebar.footer.action',
+  ]);
+  assert.equal(
+    fixture.registrationsBySlot.get('conversation.session.header.actions').options.order,
+    -5,
+  );
+  const store = fixture.registrationsBySlot
+    .get('conversation.session.header.actions').options.inject().hooks.worktreeContext;
+  assert.equal(typeof store.getSnapshot, 'function');
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  assert.equal(overlay.hooks.worktreeContext, store);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('declares the native Conversation package without depending on a Hero context seat', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/client/entry.ts', import.meta.url), 'utf8');
+
+  assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'), true);
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
+  assert.match(clientReadme, /conversation\.session\.header\.actions/);
+  assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
+  assert.match(source, /conversation\.session\.header\.actions/);
+  assert.doesNotMatch(source, /conversation\.hero\.context/);
 });
 
 test('declares the DSH locale service and namespace on both Client Slots', async () => {
@@ -163,7 +198,13 @@ test('disposes Client slot contributions through a real Cordis Client context', 
       return () => {};
     },
   });
-  ctx.provide('sessions', { open() {} });
+  ctx.provide('sessions', {
+    list: {
+      getSnapshot: () => ({ current: undefined }),
+      subscribe: () => () => {},
+    },
+    open() {},
+  });
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({ items: [] }),
@@ -178,6 +219,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     {
       name: 'root',
       children: {
+        'conversation.session.header.actions': { kind: 'list', scope: 'session' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
@@ -188,10 +230,12 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   try {
     const clientFiber = ctx.plugin({ inject, apply });
     await clientFiber.await();
+    assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 1);
 
     await clientFiber.dispose();
+    assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 0);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 0);
     assert.equal(ctx.slots.entries('shell.overlay').length, 0);
   } finally {

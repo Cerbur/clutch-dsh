@@ -92,6 +92,31 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
     },
   });
 
+  const createSnapshotStore = (initial) => {
+    let snapshot = initial;
+    const subscribers = new Set();
+    const publish = () => {
+      for (const subscriber of subscribers) subscriber();
+    };
+    return {
+      getSnapshot: () => snapshot,
+      subscribe(subscriber) {
+        subscribers.add(subscriber);
+        return () => subscribers.delete(subscriber);
+      },
+      set(next) {
+        snapshot = next;
+        publish();
+      },
+      update(mutator) {
+        const draft = globalThis.structuredClone(snapshot);
+        mutator(draft);
+        snapshot = draft;
+        publish();
+      },
+    };
+  };
+
   const locale = {
     register(namespace, dictionaries) {
       const entry = { namespace, dictionaries };
@@ -109,7 +134,10 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
     localeRegistrations,
     remote,
     sessions: {
-      list: { getSnapshot: () => ({ current: 'session-current' }) },
+      list: {
+        getSnapshot: () => ({ current: 'session-current' }),
+        subscribe: () => () => {},
+      },
       async create(input) {
         createdSessions.push(input);
         return 'session-created';
@@ -157,7 +185,9 @@ export async function loadClientEntry({ remote = {}, rpc } = {}) {
   };
   new Function('window', clientBundle)(windowObject);
   const exports = registrations[0].factory((specifier) => {
-    if (specifier === '@deepseek-ai/dsh-client-runtime/client') return { defineStore };
+    if (specifier === '@deepseek-ai/dsh-client-runtime/client') {
+      return { createSnapshotStore, defineStore };
+    }
     if (specifier === 'react/jsx-runtime') {
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }

@@ -79,6 +79,7 @@ export interface WorktreeSurfaceInjected {
   readonly createSessionForWorktree?: (
     input: CreateSessionForWorktreeInput,
   ) => Promise<string>;
+  readonly invalidateWorktreeContext?: (workspaceId?: string) => Promise<void>;
   readonly createMainSession?: (workspaceId: string) => void;
   readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
   readonly deleteWorkspace?: (workspaceId: string) => Promise<void>;
@@ -138,6 +139,7 @@ interface ReadState {
 
 interface RefreshOptions {
   readonly preserveCurrent?: boolean;
+  readonly invalidateContext?: boolean;
 }
 
 interface PendingSessionBinding extends CreateSessionForWorktreeInput {
@@ -845,6 +847,7 @@ export function WorktreeSurface({
   t,
   available,
   manager,
+  invalidateWorktreeContext,
   createWorkspace,
   createSessionForWorktree: createSessionCallback,
   createMainSession,
@@ -912,7 +915,10 @@ export function WorktreeSurface({
       setReadState({ status: 'loading', views: [] });
     }
     try {
-      const views = await loadWorktreeViews(manager, workspaceIds);
+      const views = await loadWorktreeViews(manager, workspaceIds, {
+        invalidateContext: options.invalidateContext !== false,
+        invalidateWorktreeContext,
+      });
       setReadState({ status: 'ready', views });
     } catch (error) {
       if (preserveCurrent) throw error;
@@ -922,7 +928,7 @@ export function WorktreeSurface({
         error: toWorktreeViewError(error),
       });
     }
-  }, [manager, workspaceIds]);
+  }, [invalidateWorktreeContext, manager, workspaceIds]);
 
   useEffect(() => {
     if (mode === 'worktree') {
@@ -1187,7 +1193,7 @@ export function WorktreeSurface({
       activeDrag.worktreeId,
       move.beforeWorktreeId,
     )
-      .then(() => refresh({ preserveCurrent: true }))
+      .then(() => refresh({ preserveCurrent: true, invalidateContext: false }))
       .catch((error) => {
         setActionError(toRetryableWorktreeOrderError(error));
       });
@@ -1318,6 +1324,7 @@ export function WorktreeSurface({
       };
       try {
         await createSessionCallback(sessionInput);
+        await invalidateWorktreeContext?.(createdWorktree.workspaceId);
       } catch (error) {
         if (error instanceof WorktreeSessionBindingError) {
           setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
@@ -1346,6 +1353,7 @@ export function WorktreeSurface({
     setPendingSessionBinding(undefined);
     try {
       await createSessionCallback(input);
+      await invalidateWorktreeContext?.(input.workspaceId);
       await refresh({ preserveCurrent: true });
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError) {
@@ -1371,6 +1379,7 @@ export function WorktreeSurface({
       setPendingSessionBinding(undefined);
       await refresh({ preserveCurrent: true });
       openSession(sessionId);
+      await invalidateWorktreeContext?.(pendingSessionBinding.workspaceId);
     } catch (error) {
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -2152,6 +2161,7 @@ export function WorktreeSurface({
                         worktreeId: target.worktreeId,
                       },
                     });
+                    await invalidateWorktreeContext?.(target.workspaceId);
                     setWorktreeRemoval(undefined);
                   });
                 }}

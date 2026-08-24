@@ -38,6 +38,11 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+export interface LoadWorktreeViewsOptions {
+  readonly invalidateContext?: boolean;
+  readonly invalidateWorktreeContext?: () => Promise<void>;
+}
+
 /** Reuse the previous ID snapshot when DSH republishes equivalent Workspace items. */
 export function stableWorkspaceIds(
   previous: readonly string[],
@@ -192,13 +197,18 @@ export async function loadWorktreeView(
 export async function loadWorktreeViews(
   manager: WorktreeManager,
   workspaceIds: readonly string[],
+  options: LoadWorktreeViewsOptions = {},
 ): Promise<readonly WorktreeWorkspaceView[]> {
-  return Promise.all(
+  const views = await Promise.all(
     workspaceIds.map(async (workspaceId) => ({
       workspaceId,
       ...(await loadWorktreeView(manager, workspaceId)),
     })),
   );
+  if (options.invalidateContext !== false) {
+    await options.invalidateWorktreeContext?.();
+  }
+  return views;
 }
 
 /** Resolve a row-half drop target to native-style optional before-anchor semantics. */

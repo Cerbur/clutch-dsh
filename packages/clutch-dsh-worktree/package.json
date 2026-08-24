@@ -66,6 +66,7 @@
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-sidebar"
       ],
@@ -85,6 +86,7 @@
     "@deepseek-ai/dsh-client-connection": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-locale": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.0-rc.8",
@@ -101,6 +103,7 @@
     "@deepseek-ai/dsh-client-connection": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-locale": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.0-rc.8",

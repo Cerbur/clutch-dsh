@@ -1,13 +1,20 @@
-import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client';
+import {
+  createSnapshotStore,
+  type ClientContext,
+  type SessionId,
+} from '@deepseek-ai/dsh-client-runtime/client';
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
+import { WorktreeHeaderContext } from './WorktreeContext.js';
 import { WorktreeModeAction } from './WorktreeModeAction.js';
-import { WorktreeSurface } from './WorktreeSurface.js';
+import { WorktreeOverlay } from './WorktreeOverlay.js';
+import { createWorktreeContextProjection } from './worktree-context-store.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
 import {
   createVirtualWorkspaceMembership,
@@ -49,8 +56,10 @@ interface WorktreeSessionCreator {
 interface WorkspaceListSnapshot {
   readonly items: readonly {
     readonly workspaceId: string;
+    readonly title: string;
     readonly sessionIds: readonly string[];
   }[];
+  readonly recentWorkspaceId?: string;
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
@@ -70,11 +79,22 @@ export function apply(ctx: ClientContext): void {
   const virtualWorkspaceMembership = createVirtualWorkspaceMembership(
     ctx.workspaces.list as unknown as WritableWorkspaceList<WorkspaceListSnapshot>,
   );
+  const contextProjection = createWorktreeContextProjection({
+    sessions: ctx.sessions.list,
+    workspaces: ctx.workspaces.list,
+    manager,
+    storeFactory: createSnapshotStore,
+  });
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(
     () => () => virtualWorkspaceMembership.dispose(),
     'clutch-dsh-worktree: Workspace membership cleanup',
   );
+  ctx.effect(
+    () => () => contextProjection.dispose(),
+    'clutch-dsh-worktree: Session context cleanup',
+  );
+  void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
 
   const ensureSessionWorkspace = (workspaceId: string, sessionId: string): void => {
@@ -83,6 +103,19 @@ export function apply(ctx: ClientContext): void {
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
   };
+
+  ctx.slots.inject('conversation.session.header.actions', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.session.header.actions',
+        id: 'clutch-dsh-worktree-context-header',
+        order: -5,
+        locale: WORKTREE_NS,
+        inject: () => ({ hooks: { worktreeContext: contextProjection.store } }),
+      },
+      WorktreeHeaderContext,
+    ),
+  );
 
   ctx.slots.inject('sidebar.footer.action', () =>
     ctx.slots.register(
@@ -106,6 +139,7 @@ export function apply(ctx: ClientContext): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          hooks: { worktreeContext: contextProjection.store },
           manager,
           createWorkspace: async () => {
             const workspacePath = await ctx.workspaces.pickDirectory();
@@ -120,6 +154,8 @@ export function apply(ctx: ClientContext): void {
                 ctx.sessions.open(sessionId as SessionId);
               },
             }),
+          invalidateWorktreeContext: (workspaceId?: string) =>
+            contextProjection.invalidate(workspaceId),
           createMainSession: (workspaceId: string) => {
             ctx.workspaces.startSession(
               workspaceId as Parameters<typeof ctx.workspaces.startSession>[0],
@@ -194,7 +230,7 @@ export function apply(ctx: ClientContext): void {
           },
         }),
       },
-      WorktreeSurface,
+      WorktreeOverlay,
     ),
   );
 }

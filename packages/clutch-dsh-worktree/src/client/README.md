@@ -13,6 +13,28 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
+## Conversation context
+
+The Client contributes one read-only context action to the existing
+`conversation.session.header.actions` list. It displays the current local branch
+or the active Worktree branch beside the native Session title and Agent mode.
+The Client also contributes a browser-local `shell.overlay` companion for the
+blank Hero. It positions `Workspace (branch)` after the native Hero headline
+while `[data-phase='hero']` is present. The suffix is derived from the selected
+Workspace's current local branch or active Worktree branch, so changing the
+Workspace causes the displayed suffix to refresh.
+
+The Hero companion is deliberately visual rather than a native Conversation
+slot: rc.8 has no additive Hero headline seat. It never renames the native
+Workspace, replaces the Workspace picker or Agent mode seat, and hides itself
+when the native Hero anchor is unavailable. A future DSH Hero slot would be a
+more stable placement.
+
+The context is derived from one browser-local projection shared by the header
+consumer. It does not write DSH Workspace or Session data. A compatible DSH Client
+must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
+`conversation.session.header.actions` seat.
+
 ## rc.8 Session membership projection
 
 rc.8 cannot pass `workspaceId` and Worktree `cwd` together to native

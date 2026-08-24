@@ -610,7 +610,7 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   );
   assert.match(
     commitSource,
-    /\.then\(\(\) => refresh\(\{ preserveCurrent: true \}\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
+    /\.then\(\(\) => refresh\(\{ preserveCurrent: true, invalidateContext: false \}\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
   assert.match(source, /\{actionError\.retryable && \(/);
@@ -810,6 +810,29 @@ test('matches native Workspace interaction, typography, and action rail', async 
   assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
   assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
   assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
+});
+
+test('invalidates the active Session context after Worktree reads but not pure reorder refreshes', async () => {
+  let invalidations = 0;
+  const invalidateWorktreeContext = async () => {
+    invalidations += 1;
+  };
+
+  await loadWorktreeViews(manager(), ['ws1'], { invalidateWorktreeContext });
+  assert.equal(invalidations, 1);
+
+  await loadWorktreeViews(manager(), ['ws1'], {
+    invalidateContext: false,
+    invalidateWorktreeContext,
+  });
+  assert.equal(invalidations, 1);
+
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /invalidateWorktreeContext/);
+  assert.match(source, /refresh\(\{ preserveCurrent: true, invalidateContext: false \}\)/);
 });
 
 test('matches shared Worktree row disclosure and aligned action geometry', async () => {

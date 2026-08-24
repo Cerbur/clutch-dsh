@@ -16,6 +16,8 @@ English marketplace description:
 - 查看 active、detached 和 repair 状态；
 - 通过 active Worktree 的选项菜单移除 Worktree，并在确认弹窗中完成操作；
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单、排序能力；Worktree 可在所属 Workspace 内拖动排序，顺序持久化在 plugin sidecar，Main 固定在第一位。
+- 在已有 Session 的 Conversation 标题行显示只读上下文：`Session title → Agent mode → current branch / Worktree branch`。
+- 在新建会话的 Hero 标题后以只读浮层显示 `Workspace (current branch / Worktree branch)`；重新选择 Workspace 后随当前分支上下文更新。
 
 Worktree Session 仍属于原始 DSH Project/Workspace，因此切回原生 Project/Session 视角时仍可由 DSH 展示。插件不复制 Session 内容，也不修改消息、prompt、transcript 或历史记录。
 
@@ -24,6 +26,7 @@ Worktree Session 仍属于原始 DSH Project/Workspace，因此切回原生 Proj
 - DSH CLI 和目标 Web profile 使用 `dsh-v0.1.0-rc.8`；
 - 已有可启动的 DSH profile，例如 `web` 或 `demo`；
 - plugin 安装在实际启动 Web UI 的同一个 profile；
+- DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 的 `conversation.session.header.actions` seat；
 - 要使用 Worktree 功能，目标 Workspace 必须位于 Git repository 中，且至少有一个初始 commit 和本地 branch；如果前置条件不满足，创建弹窗会显示可复制的 Git 命令，但插件不会自动修改 Workspace。
 
 package manifest 已声明可安装的 `dsh.bundle`，并随 package 提供 `cordis.patch.yml`；Web UI 使用另行声明的 `dsh.client` browser entry。
@@ -130,6 +133,8 @@ DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `
 Worktree 顺序按每个 Workspace 独立持久化在 plugin sidecar 的 `worktrees` 数组中，使用与 DSH 原生 `insertBefore` 相同的 source/anchor 语义。Main 是固定的本地视角，不参与 Worktree 拖动；排序不会修改 DSH Workspace、Session 或 Git Worktree 数据。
 
 如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。Git 前置条件失败会按 Workspace 独立显示 setup 提示和可复制命令；插件不会自动执行这些命令，也不会写入 README 或 commit。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。
+
+Conversation 上下文显示在已有 Session 的原生标题行；新建会话的空白 Hero 使用 plugin-only `shell.overlay` 在原生标题后显示 `Workspace (branch)`。浮层只在原生 `[data-phase="hero"]` 和标题锚点存在时显示，重新选择 Workspace 后会重新读取对应的 local branch 或 active Worktree branch。它仅供展示，不会写回 DSH Workspace 或 Session；binding 处于 detached、invalid、repair 或 unavailable 状态时，标签会消失。由于 rc.8 没有 Hero 标题的 additive slot，浮层位置依赖原生 Hero 的 DOM 结构，未来应优先迁移到正式 slot。
 
 ## 版本与发布
 
