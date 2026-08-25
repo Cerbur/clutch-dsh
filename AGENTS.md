@@ -23,6 +23,12 @@ clutch-dsh 是一个 pnpm workspace，用于开发一系列 DSH（DeepSeek Harne
 - 只有独立 Provider/Consumer package 才使用 `workspace:*` 依赖独立的
   Service Definition package。
 - 每个可运行 plugin package 应包含 package.json、cordis.patch.yml、tsconfig.json 和 src/index.ts。
+- `packages/` 下的每个可运行 plugin package 必须提供：
+  - `README.md`：英文公开文档；
+  - `README.zh.md`：中文公开文档；
+  - `assets/screenshots/`：当 UI 行为需要视觉说明时，存放文档引用的截图。
+- 两份 README 必须按以下顺序包含四个部分：功能介绍（含截图）、能力、安装（先 npm，再仓库/源码安装）、详细使用（含相关图片）。
+- 公开行为、能力、安装方式或限制发生变化时，必须同时更新两份 README。README 不得重复当前 package version；`package.json` 是版本唯一来源。两种语言中的命令、package 名称、错误码、路径和 source-of-truth 说明必须保持同步。
 - plugin 专属文档和计划放在对应 plugin 目录下，优先使用最近的 AGENTS.md。
 
 ## 计划与文档
@@ -47,6 +53,36 @@ clutch-dsh-worktree 的专属入口：
 4. 使用小范围、可审查的修改；本地文件编辑使用 apply_patch。
 5. 修改完成后运行与改动匹配的检查，并在交接时说明实际运行过的命令。
 6. 不在未获授权时执行发布、推送、删除数据或修改外部系统的操作。
+
+## 分支、Worktree 与 Release 聚合
+
+工作区的 release、package feature worktree 和 root/workspace change 按以下关系组织：
+
+```text
+main
+  └─ release/<release-name>-<version>
+       ├─ wt-<release-name>-<version>/<feature-name>
+       └─ wt-<release-name>-<version>/<feature-name>
+```
+
+- release branch 从 `main` 创建，是目标版本的聚合边界，命名为
+  `release/<release-name>-<version>`。`<release-name>` 使用 package short name，例如
+  `clutch-dsh-worktree` 使用 `worktree`，`clutch-dsh-discuss` 使用 `discuss`；例如
+  `release/worktree-0.1.4`。
+- package feature worktree 从对应 release branch 创建，命名为
+  `wt-<release-name>-<version>/<feature-name>`，例如
+  `wt-worktree-0.1.4/feat-readme`。
+- 不属于某个 package 的 root/workspace change 使用 `base/feat-<feature-name>`，例如
+  `base/feat-xxxx`。
+- 每个 worktree 独立运行与改动匹配的检查，并在交接前整理为一个 scoped commit；commit
+  message 必须明确说明改动范围。
+- 合并 worktree 前，必须先将其 rebase 到最新的 release branch，再把该 worktree 的单个
+  scoped commit 合并到 release branch。发生冲突时先解决并重新验证，不能跳过 rebase gate。
+- 在 `npm pack`、npm publish 或最终 release verification 之前，必须先将 release branch
+  rebase 到最新的 `main`，再运行完整检查；发布准备完成后将 release branch 合并回
+  `main`。
+- 本流程只定义分支和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
+  这些操作仍须获得明确授权。
 
 ## 校验命令
 

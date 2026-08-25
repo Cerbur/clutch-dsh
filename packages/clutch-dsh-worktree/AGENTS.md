@@ -199,14 +199,17 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 
 ## 文档边界
 
-- `README.md`：面向安装者、使用者和插件市场维护者的公开事实、安装、能力和限制；
+- `README.md`：面向安装者、使用者和插件市场维护者的英文公开事实、安装、能力和限制；
+- `README.zh.md`：与 `README.md` 同步的中文公开事实、安装、能力和限制；
 - `AGENTS.md`：本 package 的架构、数据边界、模块权责、生命周期和维护约束；
 - `src/client/README.md`：浏览器 Consumer 的实现边界和交互细节；
 - `docs/RELEASING.md`：版本同步、npm 发布和本地/registry 安装流程；
 - `docs/superpowers/specs/`：已确认的设计与决策；
 - `docs/superpowers/plans/`：实现步骤、验证命令和交接记录。
 
-新增公开行为时更新 README；改变关系模型、数据边界、存储位置、adapter contract、
+分支/发布工作流与共享的四段式 README 框架由仓库根目录的 `AGENTS.md` 统一定义。
+
+新增公开行为时同步更新 `README.md` 与 `README.zh.md`；改变关系模型、数据边界、存储位置、adapter contract、
 模块依赖或 package entrypoint 时先更新本文件，并同步相应的计划或设计记录。
 
 开始工作前按以下顺序读取：
