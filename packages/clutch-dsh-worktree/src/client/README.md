@@ -35,6 +35,18 @@ consumer. It does not write DSH Workspace or Session data. A compatible DSH Clie
 must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
 `conversation.session.header.actions` seat.
 
+The shared projection compares the current Session and Workspace identity before
+reacting to native snapshot notifications. Conversation updates for the same
+Session keep the visible context and do not start another Manager read; a Session
+switch resolves immediately from the latest completed Workspace facts while a
+replacement read runs in the background. The visible context remains available
+until replacement data is ready, while stale responses remain ignored.
+
+The Header and Hero chips keep their compact ellipsized layout and expose the
+complete branch or `Workspace (branch)` value through the native `HoverCard` after
+the standard 500 ms hover delay. The Hero chip remains pointer-hoverable while its
+placement measurement stays attached to the actual chip element.
+
 ## rc.8 Session membership projection
 
 rc.8 cannot pass `workspaceId` and Worktree `cwd` together to native
@@ -55,6 +67,9 @@ available for retry or direct navigation; it must not trigger Session deletion.
 The Worktree surface is additive:
 
 - the Sidebar footer action is the only entry point;
+- the footer action inherits the native Sidebar label line box and spacing; when the
+  Sidebar is collapsed, its icon-only footer action remains the only Worktree control
+  and the plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
 - the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
@@ -70,7 +85,7 @@ The Worktree surface is additive:
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and has no Worktree menu; active Worktree rows expose the Worktree options menu and removal confirmation, while detached rows remain visible and read-only;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, and falls back to `Local` / `本地` when it does not;
 - Worktree creation requires a Git repository with an initial commit and at least one local branch. The create dialog selects the current branch by default and lists real local branches only; missing Git prerequisites render copyable setup commands without running them or modifying Workspace files;
-- Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open.
+- Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open. The same complete-value hover behavior is available for the Conversation Header and blank Hero context chips.
 - Worktree health is a runtime Git projection and is never written to the sidecar.
 
 Connection, Gateway and unexpected Worktree domain failures remain visible as retryable

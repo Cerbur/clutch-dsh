@@ -277,6 +277,67 @@ test('deduplicates same-tick Session and Workspace refresh schedules', async () 
   projection.dispose();
 });
 
+test('keeps the current context when a same-identity Session snapshot updates', async () => {
+  const manager = managerWith({
+    worktrees: [],
+    branches: [currentBranch('main')],
+    bindings: [],
+  });
+  const sessions = snapshot({ current: 's1', byId: { s1: {} } });
+  const projection = createProjection({
+    sessions,
+    workspaces: snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] }),
+    manager,
+  });
+
+  await projection.refresh();
+  sessions.set({ current: 's1', byId: { s1: { displayTitle: 'updated' } } });
+
+  assert.equal(projection.store.getSnapshot().value.label, 'main');
+  assert.equal(projection.store.getSnapshot().status, 'ready');
+  assert.deepEqual(manager.calls, {
+    listWorktrees: 1,
+    listBranches: 1,
+    listBindings: 1,
+  });
+  projection.dispose();
+});
+
+test('resolves a changed Session immediately from cached Workspace facts', async () => {
+  const first = deferred();
+  const second = deferred();
+  const sessions = snapshot({ current: 's1', byId: { s1: {}, s2: {} } });
+  const workspaces = snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1', 's2'] }] });
+  const manager = managerWithViewReads([first, second]);
+  const projection = createProjection({ sessions, workspaces, manager });
+
+  const initial = projection.refresh();
+  first.resolve({
+    worktrees: [
+      activeWorktree('feature/one', 'ws1', 'wt1'),
+      activeWorktree('feature/two', 'ws1', 'wt2'),
+    ],
+    branches: [currentBranch('main')],
+    bindings: [activeBinding('s1', 'wt1'), activeBinding('s2', 'wt2', 'ws1')],
+  });
+  await initial;
+
+  sessions.set({ current: 's2', byId: { s1: {}, s2: {} } });
+  assert.equal(projection.store.getSnapshot().value.label, 'feature/two');
+  assert.equal(projection.store.getSnapshot().sessionId, 's2');
+
+  await new Promise(globalThis.queueMicrotask);
+  assert.equal(manager.calls.listWorktrees, 2);
+  second.resolve({
+    worktrees: [activeWorktree('feature/two', 'ws1', 'wt2')],
+    branches: [currentBranch('main')],
+    bindings: [activeBinding('s2', 'wt2', 'ws1')],
+  });
+  await new Promise(globalThis.queueMicrotask);
+  await new Promise(globalThis.queueMicrotask);
+  projection.dispose();
+});
+
 test('coalesces repeated synchronous Workspace notifications without republishing pending state', async () => {
   const pending = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {} } });
@@ -327,7 +388,13 @@ test('invalidates the matching Workspace and waits for the refreshed data', asyn
   first.resolve(dataFor('s1', 'feature/one'));
   await initial;
   const invalidated = projection.invalidate('ws1');
-  assert.deepEqual(projection.store.getSnapshot().value, { kind: 'none', reason: 'not-ready' });
+  assert.deepEqual(projection.store.getSnapshot().value, {
+    kind: 'worktree',
+    workspaceId: 'ws1',
+    worktreeId: 'wt1',
+    label: 'feature/one',
+    source: 'active-binding',
+  });
   second.resolve(dataFor('s1', 'feature/two'));
   await invalidated;
 
@@ -407,7 +474,7 @@ test('does not read the Manager when there is no current Session', async () => {
   projection.dispose();
 });
 
-test('refreshes the current branch without retaining the previous label', async () => {
+test('refreshes the current branch while retaining the previous label', async () => {
   const first = deferred();
   const second = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {} } });
@@ -417,7 +484,13 @@ test('refreshes the current branch without retaining the previous label', async 
   first.resolve({ worktrees: [], branches: [currentBranch('main')], bindings: [] });
   await initial;
   const refreshed = projection.refresh();
-  assert.deepEqual(projection.store.getSnapshot().value, { kind: 'none', reason: 'not-ready' });
+  assert.deepEqual(projection.store.getSnapshot().value, {
+    kind: 'main',
+    workspaceId: 'ws1',
+    label: 'main',
+    source: 'current-branch',
+  });
+  assert.equal(projection.store.getSnapshot().status, 'ready');
   second.resolve({ worktrees: [], branches: [currentBranch('release')], bindings: [] });
   await refreshed;
 

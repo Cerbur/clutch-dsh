@@ -39,11 +39,7 @@ function WorktreeContextLabel({
     ? t('context.main', { name: value.label })
     : t('context.worktree', { name: value.label });
   return (
-    <span
-      className={styles.headerContext}
-      title={value.label}
-      aria-label={ariaLabel}
-    >
+    <span className={styles.headerContext} title={value.label} aria-label={ariaLabel}>
       <IconBranchOutline16 size={14} className={styles.contextIcon} aria-hidden="true" />
       <span className={styles.contextLabel}>{value.label}</span>
     </span>

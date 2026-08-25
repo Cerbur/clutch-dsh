@@ -5,6 +5,7 @@ import type {
   PropsRuntime,
   TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots';
+import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type { WorktreeContextInjected } from './WorktreeContext.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
@@ -62,11 +63,16 @@ function positionedAncestor(element: HTMLElement): HTMLElement | null {
   return null;
 }
 
+function overlayFor(element: HTMLElement): HTMLElement | null {
+  const host = element.closest<HTMLElement>('[data-worktree-hero-host]');
+  return positionedAncestor(host ?? element);
+}
+
 function measurePlacement(element: HTMLElement): HeroPlacement | null {
   const hero = document.querySelector<HTMLElement>('[data-phase="hero"]');
   // The Slot renderer inserts a display: contents wrapper before the actual
   // shell overlay layer, so the direct parent is not the containing block.
-  const overlay = positionedAncestor(element);
+  const overlay = overlayFor(element);
   const headline = hero === null ? null : headlineElement(hero);
   if (hero === null || headline === null || overlay === null) return null;
 
@@ -137,7 +143,7 @@ export function WorktreeHeroContext({
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? undefined
       : new ResizeObserver(schedule);
-    resizeObserver?.observe(positionedAncestor(element) ?? element);
+    resizeObserver?.observe(overlayFor(element) ?? element);
     window.addEventListener('resize', schedule);
     schedule();
 
@@ -154,17 +160,28 @@ export function WorktreeHeroContext({
 
   return (
     <span
-      ref={measure}
-      className={styles.heroContext}
-      data-worktree-hero-context
-      aria-label={ariaLabel}
-      title={label}
+      className={styles.heroContextHost}
+      data-worktree-hero-host
       style={placement === null ? { visibility: 'hidden' } : {
         left: `${placement.left}px`,
         top: `${placement.top}px`,
       }}
     >
-      {label}
+      <HoverCard
+        anchor={(
+          <span
+            ref={measure}
+            className={styles.heroContext}
+            data-worktree-hero-context
+            aria-label={ariaLabel}
+            title={label}
+          >
+            {label}
+          </span>
+        )}
+        content={<div className={styles.contextHoverTitle}>{label}</div>}
+        openDelayMs={500}
+      />
     </span>
   );
 }

@@ -857,6 +857,26 @@ test('renders the Worktree footer action like the native Settings row', async ()
     styleSource,
     /\.action\[data-collapsed='true'\] \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*border-radius: 50%;/,
   );
+  const footerLabelStart = styleSource.indexOf('.actionLabel {');
+  const footerLabelEnd = styleSource.indexOf('\n}', footerLabelStart);
+  assert.notEqual(footerLabelStart, -1);
+  assert.notEqual(footerLabelEnd, -1);
+  assert.equal((styleSource.match(/\.actionLabel\s*\{/g) ?? []).length, 1);
+  assert.match(
+    styleSource.slice(footerLabelStart, footerLabelEnd),
+    /display: inline-flex;[\s\S]*min-width: 0;[\s\S]*align-items: center;[\s\S]*height: 22px;[\s\S]*font-weight: 400;[\s\S]*line-height: 22px;/,
+  );
+});
+
+test('does not render a plugin WT rail control when the sidebar collapses', async () => {
+  const surfaceSource = (await readSurfaceSources()).combined;
+  const styleSource = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.doesNotMatch(surfaceSource, /railContent|railButton/);
+  assert.doesNotMatch(styleSource, /railContent|railButton/);
 });
 
 test('matches native Workspace interaction, typography, and action rail', async () => {

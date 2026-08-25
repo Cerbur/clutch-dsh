@@ -27,9 +27,25 @@
   white-space: nowrap;
 }
 
-.heroContext {
+.contextHoverTitle {
+  max-width: 360px;
+  color: var(--dsw-static-neutral-bluish-00);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.heroContextHost {
   position: absolute;
   z-index: 1;
+  display: block;
+  width: max-content;
+  max-width: 260px;
+  min-height: 22px;
+}
+
+.heroContext {
   display: inline-flex;
   box-sizing: border-box;
   max-width: 260px;
@@ -43,7 +59,7 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 20px;
-  pointer-events: none;
+  pointer-events: auto;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

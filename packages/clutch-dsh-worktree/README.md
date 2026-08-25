@@ -26,6 +26,11 @@ Worktree rows, and the read-only blank-session Hero context.
   fixed first.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
+- Keep Conversation and Hero context stable across same-Session snapshot updates and Session
+  switches, while retaining the last valid context during replacement reads.
+- Truncate long branch labels to fit their chips and reveal the complete value through a native
+  hover card; the Sidebar footer action follows native typography and does not add a duplicate
+  `WT` button when the Sidebar is collapsed.
 - Keep Worktree Sessions in the original DSH Project/Workspace view; the plugin does not copy
   Session content or modify messages, prompts, transcripts, or history.
 
@@ -204,8 +209,11 @@ blank-session Hero. The displayed language follows DSH's current language settin
   DSH reports no current branch. Branch names, paths, Workspace names, Session titles, and raw
   DSH/Git errors keep their original values.
 - Existing Sessions show read-only context in the form `Session title` → `Agent mode` →
-  `current branch / Worktree branch`. The blank Hero shows `Workspace (branch)` after the native
-  title when its anchors are available.
+  `current branch / Worktree branch`. Long values remain ellipsized in the compact chip and show
+  their complete value in a hover card. The blank Hero shows `Workspace (branch)` after the native
+  title when its anchors are available and offers the same complete-value hover card.
+- When the Sidebar is collapsed, the footer keeps its icon-only native action geometry; the plugin
+  does not render a separate `WT` rail control.
 
 ### Understand status and recovery messages
 
@@ -217,7 +225,8 @@ blank-session Hero. The displayed language follows DSH's current language settin
   failures are shown per Workspace with setup instructions; Connection, Gateway, and unexpected
   Worktree-domain failures remain visible as retryable errors rather than empty lists.
 - Refreshing an already-ready view preserves its current projection until replacement data is
-  available. Initial entry and explicit Retry may show a loading state.
+  available. Same-Session snapshot updates do not blank the context or trigger redundant reads;
+  initial entry and explicit Retry may show a loading state when no cached view is available.
 
 ## Language behavior
 
