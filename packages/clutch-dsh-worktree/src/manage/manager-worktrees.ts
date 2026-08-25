@@ -64,16 +64,19 @@ export async function listBranches(
 ): Promise<readonly BranchRecord[]> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   await context.git.validateRepository(workspace.rootPath);
+  const gitRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+    : workspace.rootPath;
   const [branches, worktrees] = await Promise.all([
-    context.git.listBranches(workspace.rootPath),
-    context.git.listWorktrees(workspace.rootPath),
+    context.git.listBranches(gitRoot),
+    context.git.listWorktrees(gitRoot),
   ]);
 
-  // `checkedOut` covers the main Workspace and all linked worktree; `isCurrent` only identifies the entry at the Workspace root's physical path.
+  // `checkedOut` covers the main Workspace and all linked worktrees; `isCurrent` identifies the Git root's worktree.
   const checkedOut = new Set(worktrees.flatMap((worktree) => (worktree.branch ? [worktree.branch] : [])));
   let currentBranch: string | undefined;
   for (const worktree of worktrees) {
-    if (await samePhysicalPath(worktree.absolutePath, workspace.rootPath)) {
+    if (await samePhysicalPath(worktree.absolutePath, gitRoot)) {
       currentBranch = worktree.branch;
       break;
     }

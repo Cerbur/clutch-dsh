@@ -197,8 +197,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
   限定在当前视觉 Main 或 Worktree 分组中。
 - Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时
-  回退为 `本地`。branch 名称、路径、Workspace 名称、Session 标题以及原始 DSH/Git 错误
-  信息保持原值。
+  回退为 `本地`。如果导入的 Workspace 是 Git 仓库中的子目录，会先解析 Git 根目录，再
+  复用与 Git 根目录相同的 branch/worktree 信息。branch 名称、路径、Workspace 名称、Session
+  标题以及原始 DSH/Git 错误信息保持原值。
 - 已有 Session 会在标题行显示只读上下文，格式为 `Session title` → `Agent mode` →
   `current branch / Worktree branch`。过长值在紧凑 chip 中折叠，并通过 hover card 显示完整
   内容。原生标题存在且有锚点时，新会话空白 Hero 会在标题后显示 `Workspace (branch)`，并

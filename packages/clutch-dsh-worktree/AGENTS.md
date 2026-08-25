@@ -115,6 +115,11 @@ plain JSON projection 和 runtime cwd contract。
 拥有底层 Git adapter、sidecar repository、DSH Project/Session read adapter ports、
 输入验证、Provider-owned errors、atomic persistence 和 mutation primitives。
 
+Git adapter 的 `validateRepository` 保持向后兼容的校验契约；需要读取仓库级 branch 和
+worktree 信息时，默认 `LocalGitAdapter` 通过可选的 `resolveRepositoryRoot` 先返回当前
+Git worktree root。Manage 在该 resolver 存在时统一使用 root 读取，旧的注入 adapter 没有
+resolver 时保留原始 Workspace root 作为兼容回退。
+
 Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路由、原始 DSH 数据
 迁移或 Project/Session 内容写入。
 

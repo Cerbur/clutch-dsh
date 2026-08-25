@@ -209,8 +209,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
   ordering is limited to the current visual Main or Worktree group.
 - The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
-  DSH reports no current branch. Branch names, paths, Workspace names, Session titles, and raw
-  DSH/Git errors keep their original values.
+  DSH reports no current branch. When a Workspace is imported from a Git subdirectory, the Git
+  root is resolved first and the same branch/worktree information is used as for the root.
+  Branch names, paths, Workspace names, Session titles, and raw DSH/Git errors keep their
+  original values.
 - Existing Sessions show read-only context in the form `Session title` → `Agent mode` →
   `current branch / Worktree branch`. Long values remain ellipsized in the compact chip and show
   their complete value in a hover card. The blank Hero shows `Workspace (branch)` after the native

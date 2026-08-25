@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -346,6 +346,91 @@ test('creates a new Worktree branch from an already checked-out base branch', as
         { name: 'worktree/main', checkedOut: true },
       ],
     );
+  });
+});
+
+test('marks the containing Git Worktree branch current for an imported subdirectory Workspace', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot }) => {
+    const importedRoot = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(importedRoot, { recursive: true });
+    const gitAdapter = new LocalGitAdapter();
+    await gitAdapter.validateRepository(importedRoot);
+    assert.equal(await gitAdapter.resolveRepositoryRoot(importedRoot), await realpath(workspaceRoot));
+
+    const provider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: importedRoot }),
+      dshHome,
+    });
+
+    assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
+      { name: 'main', isCurrent: true, checkedOut: true },
+    ]);
+  });
+});
+
+test('resolves the Git root before reading branch facts for a subdirectory Workspace', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot }) => {
+    const importedRoot = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(importedRoot, { recursive: true });
+    const calls = [];
+    const git = {
+      async validateRepository(root) {
+        calls.push(['validateRepository', root]);
+      },
+      async resolveRepositoryRoot(root) {
+        calls.push(['resolveRepositoryRoot', root]);
+        return workspaceRoot;
+      },
+      async listBranches(root) {
+        calls.push(['listBranches', root]);
+        assert.equal(root, workspaceRoot);
+        return ['main'];
+      },
+      async listWorktrees(root) {
+        calls.push(['listWorktrees', root]);
+        assert.equal(root, workspaceRoot);
+        return [{ absolutePath: workspaceRoot, branch: 'main' }];
+      },
+      async createWorktree() {},
+      async removeWorktree() {},
+    };
+    const provider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: importedRoot }),
+      dshHome,
+      git,
+    });
+
+    assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
+      { name: 'main', isCurrent: true, checkedOut: true },
+    ]);
+    assert.deepEqual(calls, [
+      ['validateRepository', importedRoot],
+      ['resolveRepositoryRoot', importedRoot],
+      ['listBranches', workspaceRoot],
+      ['listWorktrees', workspaceRoot],
+    ]);
+  });
+});
+
+test('keeps injected Git adapters without a root resolver compatible', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot }) => {
+    const baseGit = new LocalGitAdapter();
+    const legacyGit = {
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      listBranches: (...args) => baseGit.listBranches(...args),
+      listWorktrees: (...args) => baseGit.listWorktrees(...args),
+      createWorktree: (...args) => baseGit.createWorktree(...args),
+      removeWorktree: (...args) => baseGit.removeWorktree(...args),
+    };
+    const provider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: workspaceRoot }),
+      dshHome,
+      git: legacyGit,
+    });
+
+    assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
+      { name: 'main', isCurrent: true, checkedOut: true },
+    ]);
   });
 });
 
