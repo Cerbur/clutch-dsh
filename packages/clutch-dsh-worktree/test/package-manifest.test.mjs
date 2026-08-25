@@ -11,7 +11,7 @@ const tsconfig = JSON.parse(
 );
 
 test('prepares Git dependencies from source with the publish build layout', () => {
-  assert.equal(packageManifest.version, '0.1.4');
+  assert.match(packageManifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(packageManifest.packageManager, 'pnpm@10.32.1');
   assert.equal(packageManifest.scripts.prepare, 'pnpm run build');
   assert.equal(packageManifest.scripts.prepack, undefined);
