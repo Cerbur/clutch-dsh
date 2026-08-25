@@ -303,6 +303,26 @@ test('maps a non-Git branch-list failure to Workspace-local readiness', async ()
   assert.equal(data.bindings.length, 1);
 });
 
+test('maps a missing Git executable to Workspace-local readiness without setup commands', async () => {
+  const data = await loadWorktreeView(
+    manager({
+      async listBranches() {
+        throw {
+          code: 'GIT_NOT_INSTALLED',
+          message: 'Git is not installed or is not available on PATH.',
+          details: { gitExitCode: 'ENOENT' },
+        };
+      },
+    }),
+    'ws1',
+  );
+
+  assert.equal(data.readiness.status, 'gitNotInstalled');
+  assert.equal(data.worktrees.length, 1);
+  assert.equal(data.bindings.length, 1);
+  assert.deepEqual(worktreeSetupCommands('gitNotInstalled'), []);
+});
+
 test('maps a no-initial-commit branch-list failure to setup readiness', async () => {
   const data = await loadWorktreeView(
     manager({
@@ -360,6 +380,7 @@ test('returns setup commands for each Git readiness state', () => {
     'git commit -m "Initial commit"',
   ]);
   assert.deepEqual(worktreeSetupCommands('noLocalBranch'), ['git switch -c main']);
+  assert.deepEqual(worktreeSetupCommands('gitNotInstalled'), []);
   assert.deepEqual(worktreeSetupCommands('ready'), []);
 });
 
@@ -1130,11 +1151,14 @@ test('renders setup instructions instead of a fake base-branch option', async ()
   assert.match(source, /data-worktree-readiness/);
   assert.match(source, /worktreeSetupCommands/);
   assert.match(source, /<pre[\s\S]*className=\{styles\.commandBlock\}[\s\S]*>/);
+  assert.match(source, /setupCommands\.length > 0/);
+  assert.match(source, /\{setupCommands\.join\('\\n'\)\}/);
   assert.match(source, /view\?\.branches\.map/);
   assert.doesNotMatch(source, /<option value="">\{t\('worktree\.noLocalBranch'\)\}<\/option>/);
   assert.match(localeSource, /worktree\.setup\.noRepository/);
   assert.match(localeSource, /worktree\.setup\.noInitialCommit/);
   assert.match(localeSource, /worktree\.setup\.noLocalBranch/);
+  assert.match(localeSource, /worktree\.setup\.gitNotInstalled/);
   assert.match(styles, /\.commandBlock\s*\{/);
 });
 

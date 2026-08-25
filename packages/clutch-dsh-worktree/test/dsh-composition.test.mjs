@@ -5,7 +5,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
-import { WORKTREE_CONNECTION_ENDPOINTS } from '../lib/client/worktree-connection.js';
+import {
+  WORKTREE_CONNECTION_ENDPOINTS,
+  createWorktreeConnectionAdapter,
+} from '../lib/client/worktree-connection.js';
+import {
+  loadWorktreeView,
+  worktreeSetupCommands,
+} from '../lib/client/worktree-view.js';
+import { createWorktreeRemoteProjection } from '../lib/host/remote.js';
+import { createWorktreeManager, LocalGitAdapter } from '../lib/index.js';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const packageManifestPath = path.join(packageDirectory, 'package.json');
@@ -188,6 +197,70 @@ test('loads the package and calls its Host Remote through the real DSH compositi
     });
   } finally {
     await host.fiber.dispose();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('carries missing Git from Provider through Host projection and /api Client readiness', async () => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'clutch-dsh-missing-git-composition-'));
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const dshHome = path.join(tempRoot, 'dsh-home');
+  await mkdir(workspaceRoot);
+  await mkdir(dshHome);
+
+  const manager = createWorktreeManager({
+    dshHome,
+    dsh: {
+      async getWorkspace(workspaceId) {
+        return workspaceId === 'ws_example'
+          ? { workspaceId, projectId: 'project_example', rootPath: workspaceRoot }
+          : undefined;
+      },
+      async getSession() {
+        return undefined;
+      },
+      async listSessions() {
+        return [];
+      },
+    },
+    git: new LocalGitAdapter({ executable: path.join(tempRoot, 'missing-git') }),
+  });
+  const remote = createWorktreeRemoteProjection(manager);
+  const calls = [];
+  const connection = createWorktreeConnectionAdapter({
+    async call(channel, endpoint, payload) {
+      calls.push({ channel, endpoint });
+      const method = endpoint.slice('worktreeManager/'.length);
+      return {
+        ok: true,
+        value: await remote[method](payload.args.input),
+      };
+    },
+  });
+
+  try {
+    const view = await loadWorktreeView(connection, 'ws_example');
+
+    assert.equal(view.readiness.status, 'gitNotInstalled');
+    assert.equal(view.readiness.error.code, 'GIT_NOT_INSTALLED');
+    assert.equal(view.readiness.error.details.workspaceRoot, workspaceRoot);
+    assert.deepEqual(view.readiness.error.details.gitArgs, ['rev-parse', '--is-inside-work-tree']);
+    assert.equal(view.readiness.error.details.gitExitCode, 'ENOENT');
+    assert.equal(view.worktrees.length, 0);
+    assert.equal(view.bindings.length, 0);
+    assert.deepEqual(worktreeSetupCommands(view.readiness.status), []);
+    assert.deepEqual(
+      calls.map(({ channel, endpoint }) => ({ channel, endpoint })).sort((left, right) =>
+        left.endpoint.localeCompare(right.endpoint),
+      ),
+      [
+        { channel: '/api', endpoint: 'worktreeManager/listBindings' },
+        { channel: '/api', endpoint: 'worktreeManager/listBranches' },
+        { channel: '/api', endpoint: 'worktreeManager/listWorktrees' },
+      ],
+    );
+  } finally {
+    connection.dispose();
     await rm(tempRoot, { recursive: true, force: true });
   }
 });

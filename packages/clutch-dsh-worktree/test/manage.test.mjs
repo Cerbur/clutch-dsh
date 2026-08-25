@@ -288,6 +288,31 @@ test('rejects a non-Git Workspace', async () => {
   }
 });
 
+test('reports a missing Git executable separately from a non-Git Workspace', async () => {
+  await withGitFixture(async ({ dsh, dshHome, workspaceRoot, tempRoot }) => {
+    const git = new LocalGitAdapter({ executable: path.join(tempRoot, 'missing-git') });
+    const provider = createWorktreeManager({ dsh, dshHome, git });
+
+    await assert.rejects(
+      provider.listBranches({ workspaceId: 'ws_one' }),
+      (error) => {
+        assert.equal(error?.code, 'GIT_NOT_INSTALLED');
+        assert.equal(error?.details?.workspaceRoot, workspaceRoot);
+        assert.equal(error?.details?.gitExitCode, 'ENOENT');
+        assert.deepEqual(error?.details?.gitArgs, ['rev-parse', '--is-inside-work-tree']);
+        assert.equal(error?.details?.gitStdout, '');
+        assert.equal(error?.details?.gitStderr, '');
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      git.removeWorktree(workspaceRoot, path.join(tempRoot, 'missing-worktree')),
+      (error) => error?.code === 'GIT_NOT_INSTALLED' && error?.details?.operation === 'remove worktree',
+    );
+  });
+});
+
 test('rejects a Git repository without an initial commit', async () => {
   await withGitFixture(async ({ provider }) => {
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'main' }), 'WORKTREE_REQUIRES_INITIAL_COMMIT');

@@ -8,6 +8,7 @@ import { toWorktreeViewError, type WorktreeViewError } from './worktree-view-err
 
 export type WorktreeGitReadiness =
   | { readonly status: 'ready' }
+  | { readonly status: 'gitNotInstalled'; readonly error: WorktreeViewError }
   | { readonly status: 'noRepository'; readonly error: WorktreeViewError }
   | { readonly status: 'noInitialCommit'; readonly error: WorktreeViewError }
   | { readonly status: 'noLocalBranch' };
@@ -95,6 +96,8 @@ export function worktreeSetupCommands(
   status: WorktreeGitReadiness['status'],
 ): readonly string[] {
   switch (status) {
+    case 'gitNotInstalled':
+      return [];
     case 'noRepository':
       return [
         'git init',
@@ -117,6 +120,9 @@ export function worktreeSetupCommands(
 
 function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefined {
   const viewError = toWorktreeViewError(error);
+  if (viewError.code === 'GIT_NOT_INSTALLED') {
+    return { status: 'gitNotInstalled', error: viewError };
+  }
   if (viewError.code === 'WORKSPACE_NOT_GIT_REPOSITORY') {
     return { status: 'noRepository', error: viewError };
   }

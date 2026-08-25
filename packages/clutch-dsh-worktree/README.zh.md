@@ -37,9 +37,10 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   启动 Web UI 的同一个 profile。
 - DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 及其
   `conversation.session.header.actions` seat。
-- Workspace 必须位于 Git repository 中，且至少有一个初始 commit 和本地 branch。如果缺少
-  前置条件，创建弹窗会显示可复制的 setup 命令；插件不会执行这些命令，也不会修改
-  Workspace 文件。
+- Worktree 操作要求 Git 已安装且可在 PATH 中使用。Workspace 必须位于 Git repository 中，
+  且至少有一个初始 commit 和本地 branch。Git 可执行文件缺失时显示安装提示且不显示命令块；
+  缺少 repository、初始 commit 或本地 branch 时显示可复制的 setup 命令。插件不会执行 setup
+  或安装命令，也不会修改 Workspace 文件。
 - package 声明了可安装的 `dsh.bundle` 并提供 `cordis.patch.yml`；浏览器 UI 通过
   `dsh.client` metadata 声明。
 
@@ -164,8 +165,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
    branch 名称为 `dsh/<8-character-random-string>`。
 2. 目标 Worktree 路径必须是绝对路径，属于同一个 Project，且不能是 Project 根目录。相对
    路径、其他 Project 的路径或 Project 根目录都会被拒绝。
-3. 如果缺少 Git、初始 commit 或本地 branch，按照弹窗中的可复制命令修复后重试。插件只
-   展示这些命令，不会执行命令或编辑业务文件。
+3. Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；请
+   安装 Git、重启 DSH 后重试。如果缺少 repository、初始 commit 或本地 branch，按照弹窗中
+   的可复制 setup 命令修复后重试。插件只展示这些提示，不会执行 setup 或安装命令或编辑
+   业务文件。
 
 ### 创建 Main 和 Worktree Session
 
@@ -209,8 +212,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   `detached` 表示 Git Worktree 已被移除，但关系仍然保留。active binding 指向缺失
   Worktree 时会显示明确的 repair 警告或错误，不会静默切换到其他 Worktree。
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar。Git 前置条件失败按
-  Workspace 显示 setup 提示；Connection、Gateway 和未预期的 Worktree domain 错误会保留
-  为可重试错误，不会伪装为空列表。
+  Workspace 显示提示：Git 可执行文件缺失时显示安装提示且不显示命令块，缺少 repository、
+  初始 commit 或本地 branch 时显示可复制的 setup 命令。Connection、Gateway 和未预期的
+  Worktree domain 错误会保留为可重试错误，不会伪装为空列表。
 - 已经 ready 的视角刷新时会保留当前 projection，直到替换数据可用。同一个 Session 的
   snapshot 更新不会清空上下文，也不会触发重复读取；没有缓存视角时，首次进入和显式 Retry
   可以显示 loading 状态。

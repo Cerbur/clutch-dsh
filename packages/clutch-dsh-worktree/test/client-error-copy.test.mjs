@@ -81,6 +81,20 @@ test('formats unavailable Worktree ordering with localized copy', () => {
   );
 });
 
+test('formats missing Git with localized copy', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'GIT_NOT_INSTALLED',
+        message: 'Git is not installed or is not available on PATH.',
+        retryable: true,
+      },
+      t,
+    ),
+    'error.gitNotInstalled',
+  );
+});
+
 test('keeps an unknown DSH or Host message unchanged', () => {
   assert.equal(
     formatWorktreeViewError(

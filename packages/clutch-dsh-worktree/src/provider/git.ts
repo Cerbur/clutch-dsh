@@ -11,6 +11,10 @@ interface GitCommandResult {
   readonly stderr: string;
 }
 
+interface LocalGitAdapterOptions {
+  readonly executable?: string;
+}
+
 // Git 的原始进程证据只在本模块内流转；对外统一转换为稳定的 Provider 错误词汇。
 // Raw Git process evidence stays inside this module and is normalized to the
 // stable Provider error vocabulary at the public boundary.
@@ -39,16 +43,20 @@ class GitCommandError extends Error {
 }
 
 /*
- * 所有 Git 调用都使用参数数组和固定 executable，不经过 shell；因此路径或分支中的 shell
+ * 所有 Git 调用都使用参数数组和配置好的 executable，不经过 shell；因此路径或分支中的 shell
  * 元字符不会被解释。参数的业务合法性仍由上层 Manage 校验。
  *
- * Every Git call uses an argument vector and a fixed executable without a
+ * Every Git call uses an argument vector and a configured executable without a
  * shell, so shell metacharacters in paths or branches are never evaluated.
  * Semantic validation of those values remains the responsibility of Manage.
  */
-async function runGit(args: readonly string[], cwd: string): Promise<GitCommandResult> {
+async function runGit(
+  args: readonly string[],
+  cwd: string,
+  executable: string,
+): Promise<GitCommandResult> {
   try {
-    const result = await execFile('git', [...args], {
+    const result = await execFile(executable, [...args], {
       cwd,
       encoding: 'utf8',
       maxBuffer: 4 * 1024 * 1024,
@@ -83,6 +91,28 @@ function gitDetails(error: GitCommandError): Record<string, string | number | re
   };
 }
 
+function isMissingGit(error: GitCommandError): boolean {
+  return error.exitCode === 'ENOENT';
+}
+
+function missingGitError(
+  operation: string,
+  error: GitCommandError,
+  targetPath?: string,
+  branch?: string,
+): WorktreeProviderError {
+  return providerError(
+    'GIT_NOT_INSTALLED',
+    'Git is not installed or is not available on PATH.',
+    {
+      ...gitDetails(error),
+      ...(targetPath ? { targetPath } : {}),
+      ...(branch ? { branch } : {}),
+      operation,
+    },
+  );
+}
+
 /*
  * 普通 Git 子命令失败统一归一化为 `GIT_OPERATION_FAILED`；仓库无效和缺少首个 commit
  * 则由 `validateRepository` 使用更具体、可操作的错误 code。
@@ -104,6 +134,10 @@ function operationError(
       ...(targetPath ? { targetPath } : {}),
       ...(branch ? { branch } : {}),
     });
+  }
+
+  if (isMissingGit(error)) {
+    return missingGitError(operation, error, targetPath, branch);
   }
 
   const message = error.stderr.trim() || error.stdout.trim() || error.message;
@@ -168,6 +202,12 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
  * remotes.
  */
 export class LocalGitAdapter implements GitWorktreeAdapter {
+  private readonly executable: string;
+
+  constructor(options: LocalGitAdapterOptions = {}) {
+    this.executable = options.executable ?? 'git';
+  }
+
   /**
    * 分开验证“位于非 bare working tree”和“已有可解析的首个 commit”，以返回不同修复语义。
    * Separately verifies “inside a non-bare working tree” and “has a resolvable
@@ -176,9 +216,16 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   async validateRepository(workspaceRoot: string): Promise<void> {
     let result: GitCommandResult;
     try {
-      result = await runGit(['rev-parse', '--is-inside-work-tree'], workspaceRoot);
+      result = await runGit(
+        ['rev-parse', '--is-inside-work-tree'],
+        workspaceRoot,
+        this.executable,
+      );
     } catch (error) {
       if (error instanceof GitCommandError) {
+        if (isMissingGit(error)) {
+          throw missingGitError('validate repository', error);
+        }
         throw providerError('WORKSPACE_NOT_GIT_REPOSITORY', `Workspace is not a Git repository: ${workspaceRoot}`, {
           ...gitDetails(error),
         });
@@ -193,9 +240,16 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
 
     try {
-      await runGit(['rev-parse', '--verify', 'HEAD^{commit}'], workspaceRoot);
+      await runGit(
+        ['rev-parse', '--verify', 'HEAD^{commit}'],
+        workspaceRoot,
+        this.executable,
+      );
     } catch (error) {
       if (error instanceof GitCommandError) {
+        if (isMissingGit(error)) {
+          throw missingGitError('validate repository', error);
+        }
         throw providerError(
           'WORKTREE_REQUIRES_INITIAL_COMMIT',
           `Workspace has no initial commit: ${workspaceRoot}`,
@@ -216,6 +270,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       const result = await runGit(
         ['for-each-ref', '--format=%(refname:short)%00', 'refs/heads/'],
         workspaceRoot,
+        this.executable,
       );
       return result.stdout
         .split('\0')
@@ -233,7 +288,11 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
    */
   async listWorktrees(workspaceRoot: string): Promise<readonly GitWorktreeInfo[]> {
     try {
-      const result = await runGit(['worktree', 'list', '--porcelain'], workspaceRoot);
+      const result = await runGit(
+        ['worktree', 'list', '--porcelain'],
+        workspaceRoot,
+        this.executable,
+      );
       return parseWorktrees(result.stdout);
     } catch (error) {
       throw operationError('list worktrees', workspaceRoot, undefined, undefined, error);
@@ -255,7 +314,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       const args = newBranch
         ? ['worktree', 'add', '-b', newBranch, targetPath, branch]
         : ['worktree', 'add', targetPath, branch];
-      await runGit(args, workspaceRoot);
+      await runGit(args, workspaceRoot, this.executable);
     } catch (error) {
       throw operationError('create worktree', workspaceRoot, targetPath, newBranch ?? branch, error);
     }
@@ -268,7 +327,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
    */
   async removeWorktree(workspaceRoot: string, targetPath: string): Promise<void> {
     try {
-      await runGit(['worktree', 'remove', targetPath], workspaceRoot);
+      await runGit(['worktree', 'remove', targetPath], workspaceRoot, this.executable);
     } catch (error) {
       throw operationError('remove worktree', workspaceRoot, targetPath, undefined, error);
     }

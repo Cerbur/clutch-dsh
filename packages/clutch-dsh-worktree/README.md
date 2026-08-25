@@ -41,9 +41,11 @@ Worktree rows, and the read-only blank-session Hero context.
   must be installed into the same profile that launches the Web UI.
 - DSH Client must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
   `conversation.session.header.actions` seat.
-- A Workspace must be inside a Git repository with an initial commit and at least one local
-  branch. If a prerequisite is missing, the create dialog shows copyable setup commands; the
-  plugin does not run them or modify Workspace files.
+- Git must be installed and available on `PATH` for Worktree operations. A Workspace must be
+  inside a Git repository with an initial commit and at least one local branch. A missing Git
+  executable shows install guidance and no command block; a missing repository, initial commit,
+  or local branch shows copyable setup commands. The plugin does not run setup or installation
+  commands or modify Workspace files.
 - The package declares an installable `dsh.bundle` and provides `cordis.patch.yml`; its browser
   UI is declared through the `dsh.client` metadata.
 
@@ -172,9 +174,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
    The default branch name is `dsh/<8-character-random-string>`.
 2. The target Worktree path must be absolute, belong to the same Project, and differ from the
    Project root. Relative paths, a different Project, or the Project root are rejected.
-3. If Git, an initial commit, or a local branch is missing, follow the copyable commands in the
-   dialog and retry. The plugin only renders those commands; it does not run them or edit
-   business files.
+3. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
+   and no command block; install Git, restart DSH, and retry. If the repository, initial commit,
+   or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
+   renders this guidance; it does not run setup or installation commands or edit business files.
 
 ### Create Main and Worktree Sessions
 
@@ -222,8 +225,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
   was retained. An active binding pointing to a missing Worktree produces an explicit repair
   warning or error; it never silently falls back to another Worktree.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
-  failures are shown per Workspace with setup instructions; Connection, Gateway, and unexpected
-  Worktree-domain failures remain visible as retryable errors rather than empty lists.
+  failures are shown per Workspace: a missing Git executable shows installation guidance without
+  commands, while repository, initial commit, or local branch failures show copyable setup
+  commands. Connection, Gateway, and unexpected Worktree-domain failures remain visible as
+  retryable errors rather than empty lists.
 - Refreshing an already-ready view preserves its current projection until replacement data is
   available. Same-Session snapshot updates do not blank the context or trigger redundant reads;
   initial entry and explicit Retry may show a loading state when no cached view is available.
