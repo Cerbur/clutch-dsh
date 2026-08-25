@@ -51,9 +51,9 @@ import type {
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
+  createWorktreeModalViewLoader,
   createWorktreeRefreshGuard,
   filterArchivedSessionIds,
-  loadWorktreeView,
   loadWorktreeViews,
   mergeWorktreeView,
   reconcileBaseBranchSelection,
@@ -132,6 +132,7 @@ export function WorktreeSurface({
   const [expandedWorktrees, setExpandedWorktrees] = useState<Record<string, boolean>>({});
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
+  const [modalReadLoading, setModalReadLoading] = useState(false);
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
   const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
@@ -159,7 +160,7 @@ export function WorktreeSurface({
   const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
-  const modalReadGuard = useRef(createWorktreeRefreshGuard());
+  const modalReadLoader = useRef(createWorktreeModalViewLoader());
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
@@ -206,7 +207,9 @@ export function WorktreeSurface({
 
   const loadModalWorktreeView = useCallback((workspaceId: string): void => {
     setModalReadError(undefined);
+    setModalReadLoading(true);
     if (manager === undefined) {
+      setModalReadLoading(false);
       setModalReadError({
         code: 'WORKTREE_VIEW_UNAVAILABLE',
         message: '',
@@ -214,20 +217,19 @@ export function WorktreeSurface({
       });
       return;
     }
-    void modalReadGuard.current.run(
-      () => loadWorktreeView(manager, workspaceId),
-      (data) => {
-        const view: WorktreeWorkspaceView = {
-          workspaceId,
-          ...data,
-        };
+    void modalReadLoader.current.load(
+      manager,
+      workspaceId,
+      (view) => {
         modalReadViewRef.current = view;
+        setModalReadLoading(false);
         setReadState((current) => ({
           ...current,
           views: mergeWorktreeView(current.views, view),
         }));
       },
       (error) => {
+        setModalReadLoading(false);
         setModalReadError(toWorktreeViewError(error));
       },
     );
@@ -238,7 +240,11 @@ export function WorktreeSurface({
       void refresh({ preserveCurrent: readStateRef.current.status === 'ready' });
     } else {
       refreshGuard.current.invalidate();
-      modalReadGuard.current.invalidate();
+      modalReadLoader.current.invalidate();
+      modalReadViewRef.current = undefined;
+      setWorktreeModalWorkspaceId(undefined);
+      setModalReadError(undefined);
+      setModalReadLoading(false);
       setReadState(EMPTY_READ_STATE);
     }
   }, [mode, refresh]);
@@ -273,7 +279,10 @@ export function WorktreeSurface({
     : modalReadiness?.status === 'ready'
       ? modalView.branches.length === 0 ? 'noLocalBranch' : undefined
       : modalReadiness?.status;
-  const modalCanCreate = modalSetupStatus === undefined && modalReadiness?.status === 'ready';
+  const modalCanCreate =
+    !modalReadLoading &&
+    modalSetupStatus === undefined &&
+    modalReadiness?.status === 'ready';
 
   useEffect(() => {
     if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
@@ -576,19 +585,21 @@ export function WorktreeSurface({
   };
 
   const closeWorktreeCreator = (): void => {
-    modalReadGuard.current.invalidate();
+    modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     setWorktreeModalWorkspaceId(undefined);
     setModalReadError(undefined);
+    setModalReadLoading(false);
   };
 
   const openWorktreeCreator = (workspace: WorkspaceLike): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
-    modalReadGuard.current.invalidate();
+    modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     setWorktreeModalWorkspaceId(workspace.workspaceId);
     setActionError(undefined);
     setModalReadError(undefined);
+    setModalReadLoading(false);
     if (view === undefined) {
       setSelectedBranch('');
       setNewBranch('');

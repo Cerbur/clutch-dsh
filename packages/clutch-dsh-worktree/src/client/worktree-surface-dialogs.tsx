@@ -247,6 +247,7 @@ export function WorktreeCreateDialog({
             variant="primary"
             disabled={
               actionPending ||
+              !canCreate ||
               selectedBranch.length === 0 ||
               newBranch.trim().length === 0
             }

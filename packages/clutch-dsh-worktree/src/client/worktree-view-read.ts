@@ -41,6 +41,16 @@ export interface LoadWorktreeViewsOptions {
   readonly invalidateWorktreeContext?: () => Promise<void>;
 }
 
+export interface WorktreeModalViewLoader {
+  invalidate(): void;
+  load(
+    manager: WorktreeManager,
+    workspaceId: string,
+    onSuccess: (view: WorktreeWorkspaceView) => void,
+    onError: (error: WorktreeViewError) => void,
+  ): Promise<void>;
+}
+
 /** Reuse the previous ID snapshot when DSH republishes equivalent Workspace items. */
 export function stableWorkspaceIds(
   previous: readonly string[],
@@ -177,6 +187,21 @@ export async function loadWorktreeView(
     readiness: branchesResult.value.length > 0
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },
+  };
+}
+
+/** Isolate modal-target reads from full-surface refresh generations. */
+export function createWorktreeModalViewLoader(): WorktreeModalViewLoader {
+  const guard = createWorktreeRefreshGuard();
+  return {
+    invalidate: guard.invalidate,
+    load(manager, workspaceId, onSuccess, onError) {
+      return guard.run(
+        () => loadWorktreeView(manager, workspaceId),
+        (data) => onSuccess({ workspaceId, ...data }),
+        (error) => onError(toWorktreeViewError(error)),
+      );
+    },
   };
 }
 
