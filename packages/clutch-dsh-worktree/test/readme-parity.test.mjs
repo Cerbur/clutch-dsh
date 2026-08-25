@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
