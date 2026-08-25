@@ -142,7 +142,7 @@ Conversation 上下文显示在已有 Session 的原生标题行；新建会话�
 
 ## 版本与发布
 
-本地路径安装读取当前 checkout，npm 安装读取 registry；两者不是同一个安装来源。`packages/clutch-dsh-worktree/package.json` 的 `version` 是本地和 npm 的唯一版本源。不要在 README 或市场条目中复制当前版本号；发布修复或新功能时，先递增 package version，再通过 `prepack` 构建并发布新的 npm version。完整的版本同步、发布、registry 验证和本地/registry 安装流程见 [`docs/RELEASING.md`](docs/RELEASING.md)。
+本地路径和 Git 依赖安装读取当前 checkout，npm 安装读取 registry；两者不是同一个安装来源。`packages/clutch-dsh-worktree/package.json` 的 `version` 是本地和 npm 的唯一版本源。不要在 README 或市场条目中复制当前版本号；发布修复或新功能时，先递增 package version，再通过 `prepare` 从当前源码生成 `lib/`，然后打包并发布新的 npm version。完整的版本同步、发布、registry 验证和本地/Git/registry 安装流程见 [`docs/RELEASING.md`](docs/RELEASING.md)。
 
 ## 开发与验证
 

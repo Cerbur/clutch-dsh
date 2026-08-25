@@ -9,6 +9,7 @@
     "directory": "packages/clutch-dsh-worktree"
   },
   "homepage": "https://github.com/Cerbur/clutch-dsh/tree/main/packages/clutch-dsh-worktree",
+  "packageManager": "pnpm@10.32.1",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -51,7 +52,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "prepack": "pnpm run build",
+    "prepare": "pnpm run build",
     "build": "tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",

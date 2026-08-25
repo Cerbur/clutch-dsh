@@ -45,6 +45,20 @@ dsh web
 
 如果使用的是 DSH 源码 checkout、系统没有独立的 `dsh` 命令，将 `dsh` 替换为 `pnpm dsh`。两种命令使用相同的 DSH plugin loader。
 
+### Git 依赖与 pnpm 构建脚本授权
+
+Git 依赖安装会执行 package 的 `prepare` 来生成 `lib/`。如果 DSH profile 使用 pnpm
+10 的严格构建脚本策略，授权属于安装方的 `pnpm-workspace.yaml`，不能由插件自身绕过；
+在 profile 的 workspace 配置中加入：
+
+```yaml
+onlyBuiltDependencies:
+  - "@cerbur/clutch-dsh-worktree"
+```
+
+完成授权后重新执行 Git 依赖安装。不要把这段配置写入插件 package；它应由实际信任并安装
+该 Git commit 的 profile 维护者决定。
+
 如果需要重新验证已发布版本，先移除 profile 中的旧 package，再重新添加：
 
 ```bash
@@ -57,11 +71,12 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 发布前必须满足：
 
 - 当前分支是待发布的 `main`，工作区没有未提交的业务改动；
-- `package.json` 保留 `dsh.bundle.patch`、`publishConfig.access: "public"` 和 `prepack`；
+- `package.json` 保留 `dsh.bundle.patch`、`publishConfig.access: "public"` 和 `prepare: "pnpm run build"`；
+- `packageManager` 保持项目实际使用的 `pnpm@10.32.1`，不要借此升级依赖；
 - `npm whoami --registry=https://registry.npmjs.org/` 返回拥有 `@cerbur` scope 的账号；
 - npm 账号已完成邮箱验证和发布所需的 2FA；
 - 官方 DSH package 继续放在 `peerDependencies`，不要复制成 runtime `dependencies`；
-- `lib/` 不提交到 Git，由 `prepack` 在打包时生成。
+- `lib/` 不提交到 Git，由 `prepare` 从当前源码生成；Git 依赖安装和打包/发布都使用同一条构建生命周期。
 
 ## 发布流程
 
@@ -86,7 +101,7 @@ cd packages/clutch-dsh-worktree
 npm pack --dry-run
 ```
 
-预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`npm pack` 与 `npm publish` 都会触发 `prepack`，因此会从当前源码重新构建。
+预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行 `prepare`，因此会从当前源码重新构建；Git 依赖安装也会在获取源码后执行 `prepare`。
 
 ### 3. 先推送对应源码
 
