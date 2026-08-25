@@ -62,6 +62,8 @@ export function formatWorktreeViewError(
       return t('error.worktreeSessionUnavailable');
     case 'SESSION_ARCHIVED':
       return t('error.sessionArchived');
+    case 'GIT_NOT_INSTALLED':
+      return t('error.gitNotInstalled');
     default:
       return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
   }

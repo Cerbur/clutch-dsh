@@ -11,6 +11,7 @@ import {
 import {
   loadWorktreeView,
   toWorktreeViewError,
+  type WorktreeViewData,
   type WorktreeViewError,
 } from './worktree-view.js';
 
@@ -110,6 +111,41 @@ export function createWorktreeContextProjection(
   let scheduleTicket = 0;
   let scheduledCompletion: ScheduledRefresh | undefined;
   let latestRefresh: Promise<void> = Promise.resolve();
+  const viewCache = new Map<string, WorktreeViewData>();
+  let lastObservedIdentity: CurrentIdentity | undefined;
+
+  const sameIdentity = (
+    left: CurrentIdentity | undefined,
+    right: CurrentIdentity,
+  ): boolean => left?.sessionId === right.sessionId
+    && left?.workspaceId === right.workspaceId;
+
+  const workspaceTitleFor = (workspaceId: string): string | undefined =>
+    input.workspaces.getSnapshot().items.find((candidate) => candidate.workspaceId === workspaceId)
+      ?.title;
+
+  const valueFrom = (identity: CurrentIdentity, data: WorktreeViewData): WorktreeSessionContext =>
+    resolveWorktreeSessionContext({
+      currentSessionId: identity.sessionId,
+      currentWorkspaceId: identity.workspaceId,
+      workspaces: input.workspaces.getSnapshot().items,
+      branches: data.branches,
+      worktrees: data.worktrees,
+      bindings: data.bindings,
+    });
+
+  const syncWorkspaceTitle = (identity: CurrentIdentity): void => {
+    const current = store.getSnapshot();
+    if (
+      current.sessionId !== identity.sessionId ||
+      current.workspaceId !== identity.workspaceId ||
+      identity.workspaceId === undefined
+    )
+      return;
+    const workspaceTitle = workspaceTitleFor(identity.workspaceId);
+    if (current.workspaceTitle === workspaceTitle) return;
+    store.set({ ...current, workspaceTitle });
+  };
 
   const setPending = (identity: CurrentIdentity): void => {
     if (identity.workspaceId === undefined) {
@@ -126,14 +162,22 @@ export function createWorktreeContextProjection(
       });
       return;
     }
-    const workspace = input.workspaces.getSnapshot().items.find(
-      (candidate) => candidate.workspaceId === identity.workspaceId,
-    );
+    const cachedView = viewCache.get(identity.workspaceId);
+    if (cachedView !== undefined) {
+      store.set({
+        status: 'ready',
+        ...(identity.sessionId === undefined ? {} : { sessionId: identity.sessionId }),
+        workspaceId: identity.workspaceId,
+        workspaceTitle: workspaceTitleFor(identity.workspaceId),
+        value: valueFrom(identity, cachedView),
+      });
+      return;
+    }
     store.set({
       status: 'loading',
       ...(identity.sessionId === undefined ? {} : { sessionId: identity.sessionId }),
       workspaceId: identity.workspaceId,
-      workspaceTitle: workspace?.title,
+      workspaceTitle: workspaceTitleFor(identity.workspaceId),
       value: notReady(),
     });
   };
@@ -151,6 +195,7 @@ export function createWorktreeContextProjection(
     if (disposed) return;
     const requestGeneration = ++generation;
     const identity = identityFrom(input.sessions, input.workspaces);
+    lastObservedIdentity = identity;
     setPending(identity);
     if (identity.workspaceId === undefined) return;
 
@@ -175,19 +220,15 @@ export function createWorktreeContextProjection(
         });
         return;
       }
+      if (data.readiness.status === 'ready') {
+        viewCache.set(request.workspaceId, data);
+      }
       store.set({
         status: 'ready',
         ...(request.sessionId === undefined ? {} : { sessionId: request.sessionId }),
         workspaceId: request.workspaceId,
         workspaceTitle: workspace?.title,
-        value: resolveWorktreeSessionContext({
-          currentSessionId: request.sessionId,
-          currentWorkspaceId: request.workspaceId,
-          workspaces: input.workspaces.getSnapshot().items,
-          branches: data.branches,
-          worktrees: data.worktrees,
-          bindings: data.bindings,
-        }),
+        value: valueFrom(request, data),
       });
     } catch (error) {
       if (!matchesCurrent(request, requestGeneration)) return;
@@ -214,6 +255,7 @@ export function createWorktreeContextProjection(
 
   const refresh = (): Promise<void> => {
     cancelScheduledRefresh();
+    lastObservedIdentity = identityFrom(input.sessions, input.workspaces);
     const completion = runRefresh();
     latestRefresh = completion;
     return completion;
@@ -221,9 +263,15 @@ export function createWorktreeContextProjection(
 
   const scheduleRefresh = (): void => {
     if (disposed) return;
+    const identity = identityFrom(input.sessions, input.workspaces);
+    if (sameIdentity(lastObservedIdentity, identity)) {
+      syncWorkspaceTitle(identity);
+      return;
+    }
+    lastObservedIdentity = identity;
     generation += 1;
+    setPending(identity);
     if (scheduled) return;
-    setPending(identityFrom(input.sessions, input.workspaces));
     scheduled = true;
     const ticket = ++scheduleTicket;
     const completion = scheduledRefresh();
@@ -278,6 +326,7 @@ export function createWorktreeContextProjection(
       cancelScheduledRefresh();
       unsubscribeSessions();
       unsubscribeWorkspaces();
+      viewCache.clear();
       store.set({ status: 'idle', value: notReady() });
     },
   };

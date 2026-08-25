@@ -20,6 +20,8 @@ function worktreeSetupMessage(
   t: WorktreeCreateDialogProps['t'],
 ): string {
   switch (status) {
+    case 'gitNotInstalled':
+      return t('worktree.setup.gitNotInstalled');
     case 'noRepository':
       return t('worktree.setup.noRepository');
     case 'noInitialCommit':
@@ -222,6 +224,7 @@ export function WorktreeCreateDialog({
   onSubmit,
 }: WorktreeCreateDialogProps) {
   if (workspace === undefined) return null;
+  const setupCommands = setupStatus === undefined ? [] : worktreeSetupCommands(setupStatus);
 
   return (
     <Modal
@@ -301,12 +304,12 @@ export function WorktreeCreateDialog({
               ? t('status.loading')
               : worktreeSetupMessage(setupStatus, t)}
           </p>
-          {setupStatus !== undefined && (
+          {setupCommands.length > 0 && (
             <pre
               className={styles.commandBlock}
               aria-label={t('worktree.setup.commands')}
             >
-              {worktreeSetupCommands(setupStatus).join('\n')}
+              {setupCommands.join('\n')}
             </pre>
           )}
         </div>

@@ -1153,19 +1153,6 @@ export function WorktreeSurface({
         </div>
       </div>
 
-      <div className={styles.railContent}>
-        <button
-          type="button"
-          className={styles.railButton}
-          aria-label={t('mode.exit')}
-          onClick={() => {
-            actions.setViewMode('workspace-session');
-          }}
-        >
-          WT
-        </button>
-      </div>
-
       <WorktreeSessionRenameDialog
         t={t}
         target={sessionRenameTarget}
