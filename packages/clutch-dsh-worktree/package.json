@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-worktree",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.",
   "license": "MIT",
   "repository": {
