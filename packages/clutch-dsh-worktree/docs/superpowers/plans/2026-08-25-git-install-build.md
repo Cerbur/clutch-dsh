@@ -31,7 +31,10 @@ Read the package manifest and assert:
 assert.equal(manifest.packageManager, 'pnpm@10.32.1');
 assert.equal(manifest.scripts.prepare, 'pnpm run build');
 assert.equal(manifest.scripts.prepack, undefined);
-assert.equal(manifest.scripts.build, 'tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs');
+assert.equal(
+  manifest.scripts.build,
+  'tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs',
+);
 assert.deepEqual(manifest.files, ['lib', 'cordis.patch.yml']);
 assert.ok(tsconfig.compilerOptions.lib.includes('DOM.Iterable'));
 ```
@@ -97,3 +100,19 @@ Run `pnpm run test`, `pnpm run check:workspace`, `pnpm run check:patches`, `git 
 - `pnpm run test`: passed with 201 tests.
 - `pnpm run check:workspace`, `pnpm run check:patches`, package `typecheck`, and Prettier checks: passed.
 - A temporary local Git monorepo subdirectory install first reproduced pnpm's unapproved Git build policy error, then passed with the consumer allowlist and verified installed `lib/index.js`, `lib/client.js`, and `cordis.patch.yml`.
+
+## Follow-up correction (2026-08-25)
+
+The Git install reproduction was rerun through the DSH profile path after the original
+verification. pnpm's Git prepare policy is stricter than a package-name-only allowlist: for a
+direct Git dependency it requires the exact key printed in `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`,
+including the resolved commit and `path:/packages/clutch-dsh-worktree`. The earlier release note
+that suggested `onlyBuiltDependencies` or only the package name was incorrect for the current DSH
+profile and has been corrected in `README.md` and `docs/RELEASING.md`.
+
+The generated awesome-dsh-plugin command is not the difference from `dsh-pet`; both use the same
+`github:<repo>#path:/...` source form. After the exact key is accepted, this monorepo's Git
+prepare runs its workspace install before the package build, so the profile also needs a working
+registry/network. No generated `lib/` output was added to Git, and the diagnostic session itself
+did not publish to npm. The maintainer has since published the package, so the npm path is now the
+recommended no-`allowBuilds` installation path.

@@ -1,51 +1,87 @@
 # @cerbur/clutch-dsh-worktree
 
-`@cerbur/clutch-dsh-worktree` 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project/Workspace 和 Session 数据。
+`@cerbur/clutch-dsh-worktree` adds a Git Worktree view to the DSH Web UI. It groups
+Sessions as Workspace → Worktree → Session while keeping DSH as the source of truth for
+Project/Workspace identity, Session metadata, native lists, and conversation history.
+The plugin stores only external Worktree/Session relationship metadata.
 
-English marketplace description:
+## Screenshots
 
-> Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.
+![English Worktree sidebar and blank-session Hero](assets/screenshots/screenshots-en.png)
 
-## 功能
+The English screenshot shows Worktree mode in the Sidebar, a Workspace tree with Main and
+Worktree rows, and the read-only blank-session Hero context.
 
-从 DSH Sidebar footer 打开 Worktree mode 后，可以：
+## Capabilities
 
-- 按 Workspace → Worktree → Session 查看会话；
-- 搜索 Workspace，并从已有 local branch 创建新的 Git Worktree 和 branch；
-- 在 Main 或指定 Worktree 下创建 Session，并直接打开新 Session；
-- 查看 active、detached 和 repair 状态；
-- 通过 active Worktree 的选项菜单移除 Worktree，并在确认弹窗中完成操作；
-- 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单、排序能力；Worktree 可在所属 Workspace 内拖动排序，顺序持久化在 plugin sidecar，Main 固定在第一位。
-- 在已有 Session 的 Conversation 标题行显示只读上下文：`Session title → Agent mode → current branch / Worktree branch`。
-- 在新建会话的 Hero 标题后以只读浮层显示 `Workspace (current branch / Worktree branch)`；重新选择 Workspace 后随当前分支上下文更新。
+- Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
+- Search Workspaces and create a Git Worktree and branch from an existing local branch.
+- Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
+  open it directly.
+- See ready, repair, active, and detached Worktree states, including retryable operation errors.
+- Remove an active Worktree from its options menu with confirmation. Main and detached rows do
+  not expose that menu.
+- Continue using DSH-native Workspace rename/delete/reorder and Session menus. Worktree rows can
+  be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
+  fixed first.
+- Keep the current local branch or Worktree branch visible as read-only context in the existing
+  Conversation title row and in the blank-session Hero.
+- Keep Worktree Sessions in the original DSH Project/Workspace view; the plugin does not copy
+  Session content or modify messages, prompts, transcripts, or history.
 
-Worktree Session 仍属于原始 DSH Project/Workspace，因此切回原生 Project/Session 视角时仍可由 DSH 展示。插件不复制 Session 内容，也不修改消息、prompt、transcript 或历史记录。
+### Compatibility and prerequisites
 
-## 兼容性与前置条件
+- The DSH CLI and the target Web profile must use `dsh-v0.1.0-rc.8`.
+- The target profile, such as `web` or `demo`, must already start successfully, and the plugin
+  must be installed into the same profile that launches the Web UI.
+- DSH Client must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
+  `conversation.session.header.actions` seat.
+- A Workspace must be inside a Git repository with an initial commit and at least one local
+  branch. If a prerequisite is missing, the create dialog shows copyable setup commands; the
+  plugin does not run them or modify Workspace files.
+- The package declares an installable `dsh.bundle` and provides `cordis.patch.yml`; its browser
+  UI is declared through the `dsh.client` metadata.
 
-- DSH CLI 和目标 Web profile 使用 `dsh-v0.1.0-rc.8`；
-- 已有可启动的 DSH profile，例如 `web` 或 `demo`；
-- plugin 安装在实际启动 Web UI 的同一个 profile；
-- DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 的 `conversation.session.header.actions` seat；
-- 要使用 Worktree 功能，目标 Workspace 必须位于 Git repository 中，且至少有一个初始 commit 和本地 branch；如果前置条件不满足，创建弹窗会显示可复制的 Git 命令，但插件不会自动修改 Workspace。
+## Installation
 
-package manifest 已声明可安装的 `dsh.bundle`，并随 package 提供 `cordis.patch.yml`；Web UI 使用另行声明的 `dsh.client` browser entry。
+Use the npm package for the normal user installation. Use a repository checkout to develop or
+validate local source, or use the GitHub source path when installing the source package through a
+marketplace entry.
 
-## 安装
+### Install from npm (recommended)
 
-### 从本地 checkout 安装
+With an installed DSH CLI:
 
-先在 `clutch-dsh` 根目录构建 package：
+```bash
+dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+dsh web
+```
+
+When using a `deepseek-harness` source checkout without a standalone `dsh` command, use the
+equivalent forwarding form:
+
+```bash
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+pnpm dsh web
+```
+
+To inspect the currently published version on the official registry:
+
+```bash
+npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+### Install from a repository checkout
+
+Build the package from the `clutch-dsh` checkout, then install its absolute path into the DSH
+profile:
 
 ```bash
 cd /path/to/clutch-dsh
 pnpm install
 pnpm --filter @cerbur/clutch-dsh-worktree build
-```
 
-再在本地 `deepseek-harness` 根目录构建 DSH，并把 package 安装到目标 profile：
-
-```bash
 cd /path/to/deepseek-harness
 pnpm install
 pnpm run build
@@ -54,38 +90,14 @@ pnpm dsh web --dump-config
 pnpm dsh web
 ```
 
-建议使用绝对路径。`--dump-config` 输出中应能看到 `@cerbur/clutch-dsh-worktree` 的 bundle layer。
-
-如果 profile 之前安装过旧的 unscoped package，先移除旧条目：
+The `--dump-config` output should include the plugin bundle layer. If the profile still contains
+an old unscoped installation, remove it first:
 
 ```bash
 pnpm dsh plugin --profile web remove clutch-dsh-worktree
 ```
 
-### 从 npm registry 安装
-
-已发布的 package 可以直接通过 DSH CLI 安装：
-
-```bash
-dsh plugin --profile web add @cerbur/clutch-dsh-worktree
-dsh web
-```
-
-如果使用的是 `deepseek-harness` 源码 checkout、系统没有独立的 `dsh` 命令，使用等价的转发形式：
-
-```bash
-cd /path/to/deepseek-harness
-pnpm dsh plugin --profile web add @cerbur/clutch-dsh-worktree
-pnpm dsh web
-```
-
-安装前可以查看官方 npm registry 的当前发布版本：
-
-```bash
-npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
-```
-
-从本地 checkout 更新时，只需重新构建 package 并重启 DSH：
+To update a local checkout, rebuild the package and restart DSH:
 
 ```bash
 cd /path/to/clutch-dsh
@@ -94,61 +106,175 @@ cd /path/to/deepseek-harness
 pnpm dsh web
 ```
 
-修改 `package.json`、`cordis.patch.yml` 或 profile bundle 成员后，需要重新执行 `dsh plugin add`。
+After changing `package.json`, `cordis.patch.yml`, or the profile bundle members, run the plugin
+add command again.
 
-### 卸载
+### Install from GitHub source
+
+The source path generated by `awesome-dsh-plugin` is:
+
+```bash
+dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh-worktree"
+```
+
+This is a source Git dependency, not a prebuilt npm package. Its `prepare` lifecycle generates
+`lib/`. The current DSH profile uses pnpm 11 `allowBuilds`: on the first Git installation, pnpm
+intentionally rejects the build and prints a complete key containing the package name, Git URL,
+resolved commit, and subdirectory path. Copy that complete key into the profile's
+`pnpm-workspace.yaml`, for example:
+
+```yaml
+allowBuilds:
+  '@cerbur/clutch-dsh-worktree@git+https://github.com/Cerbur/clutch-dsh#<resolved-commit>&path:/packages/clutch-dsh-worktree': true
+```
+
+Use the exact package key printed by pnpm: `<resolved-commit>`, the Git URL, and the path must
+match the error output. A package-name-only entry is not enough for a direct Git dependency, and
+`onlyBuiltDependencies` is not the configuration used by the current pnpm 11 Git prepare flow.
+After saving the allowlist, rerun the original install command. A new commit requires a new key.
+The allowlist belongs to the profile owner who trusts that Git commit; do not add it to this
+plugin package.
+
+After authorization, Git prepare runs `pnpm install` in the checked-out monorepo and then
+`pnpm run build`, so the profile must be able to reach its configured registry. Registry DNS,
+mirror, or lockfile errors after authorization are installation-environment errors, not
+`allowBuilds` rejections. Use the npm installation above to avoid source-build authorization.
+
+### Uninstall
 
 ```bash
 cd /path/to/deepseek-harness
 pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ```
 
-## 使用说明
+## Usage
 
-1. 启动 DSH Web UI，在 Sidebar footer 打开 Worktree mode。
-2. 使用 Workspace 的 `+` 选择基线 local branch，填写新的 Worktree name；默认 branch 名为 `dsh/<8位随机串>`。如果 Workspace 没有 Git、没有首次 commit 或没有本地 branch，弹窗会先显示对应的可复制修复命令。
-3. 使用 Main 旁边的 `+` 创建普通 DSH Session。
-4. 使用 Worktree 旁边的 `+` 创建 cwd 指向该 Worktree 的 Session；插件完成关系绑定后打开它。
-5. 观察 Worktree 的 ready、repair 或 detached 状态；active Worktree 的选项菜单提供 Remove Worktree 入口，Main 和 detached Worktree 不显示该选项。
+### Open Worktree mode
 
-Workspace 删除只删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
+1. Start the DSH Web UI and select Worktree from the Sidebar footer. Worktree mode is an
+   additive surface; it does not add a separate Workspace/Worktree tab.
+2. Use the Workspace tree to search, expand, and select the Main or Worktree view. Each group
+   initially shows five rows; use Expand more/Collapse for additional rows.
 
-## 界面语言
+![Worktree sidebar and blank-session Hero while using Worktree mode](assets/screenshots/screenshots-en.png)
 
-Worktree mode 跟随 DSH 当前界面语言。语言选择和偏好持久化由 DSH 提供；插件不增加
-独立的语言设置。当前插件随 DSH 提供中文和 English 文案，切换 DSH 语言后，Worktree
-入口、Workspace/Worktree/Session 树、菜单、弹窗、状态和重试提示会同步切换。
+The screenshot above illustrates the Sidebar entry point and the visual context shown in the
+blank-session Hero. The displayed language follows DSH's current language setting.
 
-Workspace、Session、branch、path 以及 DSH/Host 返回的原始错误信息保持原值，便于
-诊断和继续使用 DSH 原生数据。
+### Create a Worktree
 
-Worktree mode 的 Main 分组会显示当前 local branch：English 为 `Local (branch)`，中文为
-`本地（branch）`；如果 DSH 没有返回当前分支，则显示 `Local` 或 `本地`。branch 名称保持
-DSH/Git 原值。
+1. Select a Workspace, press its `+`, choose a baseline local branch, and enter a Worktree name.
+   The default branch name is `dsh/<8-character-random-string>`.
+2. The target Worktree path must be absolute, belong to the same Project, and differ from the
+   Project root. Relative paths, a different Project, or the Project root are rejected.
+3. If Git, an initial commit, or a local branch is missing, follow the copyable commands in the
+   dialog and retry. The plugin only renders those commands; it does not run them or edit
+   business files.
 
-## 当前限制
+### Create Main and Worktree Sessions
 
-DSH rc.8 的原生 `session.create` 不能同时接收 `workspaceId` 和独立 `cwd`。Worktree Session 因此先以 `cwd` 创建，再由插件保存关系，并在当前浏览器内投影 Workspace membership；这不会修改 DSH 源码或 Session metadata。需要 DSH 原生持久 attach 时，仍需 DSH 提供同时支持 Workspace 与独立 cwd 的 API。
+- Use Main's `+` to create a normal DSH Session in the Project-root view.
+- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. On
+  rc.8, the native call is `session.create({ cwd: worktreePath })`; the plugin then saves the
+  external binding, applies a browser-local `{ workspaceId, sessionId }` membership projection,
+  and opens the Session.
+- The connector reuses an unarchived blank Session with the exact target cwd when possible. An
+  already-bound Session opens directly; an unbound candidate is bound before projection and
+  opening. Otherwise the flow is `create → bind → project → open`, and concurrent clicks for the
+  same Worktree are coalesced.
+- If binding fails after DSH has created the Session, the Session ID remains available for Retry
+  or Open recovery. The plugin does not delete or mutate that DSH Session.
+- A provisional blank Session follows DSH's native display rules: it is shown only in the
+  selected view, uses the localized `New Session` label, hides its generated ID, and has no
+  Rename, Fork, or Archive menu. After the first prompt is accepted, it becomes an ordinary
+  Session row; hiding the blank row does not delete the Session or its Worktree binding.
 
-Worktree `+` 会优先复用当前 active Worktree、相同绝对路径下未归档的 blank Session；已绑定的直接打开，未绑定的先保存 binding 再投影和打开。没有可复用候选时才按 `create → bind → project → open` 创建；同一 Client 内对同一 Worktree 的并发点击会合并为一次流程。binding 失败会保留原 Session ID 供恢复，指向缺失 Session 或错误 cwd 的关系则显示可重试的 repair 状态。
+### Reorder and manage Worktrees
 
-未发送第一条 prompt 的 provisional blank Session 遵循 DSH 原生显示规则：仅在当前选中的视角中显示本地化的“新会话”/“New Session”，不显示生成的 Session ID，也不显示重命名、Fork 或归档菜单。首条 prompt 被接受后，原生 Session summary 转为普通会话，Worktree 行恢复显示真实标题和菜单；隐藏 blank 行不会删除 Session 或 Worktree binding。
+- Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
+  the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
+- Use the active Worktree options menu and confirmation dialog to remove a Worktree. Main and
+  detached Worktrees do not show this menu.
+- Removing a Worktree does not delete its Sessions. The relationship remains detached until it
+  is explicitly unbound. Deleting a Workspace removes only DSH's Workspace registration; its
+  directory, Sessions, Git Worktrees, and plugin sidecar remain.
+- DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
+  ordering is limited to the current visual Main or Worktree group.
+- The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
+  DSH reports no current branch. Branch names, paths, Workspace names, Session titles, and raw
+  DSH/Git errors keep their original values.
+- Existing Sessions show read-only context in the form `Session title` → `Agent mode` →
+  `current branch / Worktree branch`. The blank Hero shows `Workspace (branch)` after the native
+  title when its anchors are available.
 
-Worktree 顺序按每个 Workspace 独立持久化在 plugin sidecar 的 `worktrees` 数组中，使用与 DSH 原生 `insertBefore` 相同的 source/anchor 语义。Main 是固定的本地视角，不参与 Worktree 拖动；排序不会修改 DSH Workspace、Session 或 Git Worktree 数据。
+### Understand status and recovery messages
 
-如果 Connection、Gateway 或 Worktree 操作失败，界面会保留可重试的错误，不把失败伪装为空列表。Git 前置条件失败会按 Workspace 独立显示 setup 提示和可复制命令；插件不会自动执行这些命令，也不会写入 README 或 commit。删除 Worktree 不会删除 Session；detached 关系会保留，直到显式解绑。Main 与 Worktree 分组共用一个参数化 split-row；Main 使用相同的 branch/tree icon 和 action rail，但不传入 Worktree remove 菜单。
+- `ready` means the Worktree is available. `repair` identifies a missing or invalid Worktree,
+  Session, binding, or cwd. `detached` means the Git Worktree was removed while the relationship
+  was retained. An active binding pointing to a missing Worktree produces an explicit repair
+  warning or error; it never silently falls back to another Worktree.
+- Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
+  failures are shown per Workspace with setup instructions; Connection, Gateway, and unexpected
+  Worktree-domain failures remain visible as retryable errors rather than empty lists.
+- Refreshing an already-ready view preserves its current projection until replacement data is
+  available. Initial entry and explicit Retry may show a loading state.
 
-Conversation 上下文显示在已有 Session 的原生标题行；新建会话的空白 Hero 使用 plugin-only `shell.overlay` 在原生标题后显示 `Workspace (branch)`。浮层只在原生 `[data-phase="hero"]` 和标题锚点存在时显示，重新选择 Workspace 后会重新读取对应的 local branch 或 active Worktree branch。它仅供展示，不会写回 DSH Workspace 或 Session；binding 处于 detached、invalid、repair 或 unavailable 状态时，标签会消失。由于 rc.8 没有 Hero 标题的 additive slot，浮层位置依赖原生 Hero 的 DOM 结构，未来应优先迁移到正式 slot。
+## Language behavior
 
-## 版本与发布
+Worktree mode follows DSH's current interface language. DSH owns the language preference; the
+plugin does not add an independent language setting. The Worktree entry point, Workspace →
+Worktree → Session tree, menus, dialogs, statuses, and retry messages are localized in English
+and Chinese.
 
-本地路径和 Git 依赖安装读取当前 checkout，npm 安装读取 registry；两者不是同一个安装来源。`packages/clutch-dsh-worktree/package.json` 的 `version` 是本地和 npm 的唯一版本源。不要在 README 或市场条目中复制当前版本号；发布修复或新功能时，先递增 package version，再通过 `prepare` 从当前源码生成 `lib/`，然后打包并发布新的 npm version。完整的版本同步、发布、registry 验证和本地/Git/registry 安装流程见 [`docs/RELEASING.md`](docs/RELEASING.md)。
+Workspace names, Session titles, branch names, paths, and raw DSH/Host error messages remain
+unchanged for diagnosis and continued use of native DSH data. The Main group is localized as
+`Local (branch)` in English and `本地（branch）` in Chinese, with `Local`/`本地` as the fallback
+when no current branch is reported.
 
-## 开发与验证
+## Data boundaries and current limitations
 
-在 workspace 根目录执行：
+DSH owns the original Project/Workspace identity and root, Session identity and metadata, native
+Project/Session lists, messages, prompts, transcripts, and history. The plugin does not copy or
+rewrite any of those values. Its external index lives in the DSH host's plugin data directory or
+an independent sidecar store and may contain only relationship facts such as:
+
+- `projectId`, `worktreeId`, and `sessionId`;
+- an absolute Worktree path, branch, and lifecycle state;
+- binding status and schema version.
+
+The index is not written into a Project working tree or DSH's raw data directory. It does not
+store a copy of `projectRoot` or any Session content. If the sidecar is unavailable or corrupt,
+the native Project/Session view remains readable and the plugin becomes degraded/read-only; an
+empty index must never overwrite the native DSH lists.
+
+Each Session has at most one active Worktree binding, while a Worktree may have multiple bound
+Sessions. Rebinding the same Session to the same Worktree is idempotent; binding it to two active
+Worktrees is a conflict. A Session with no binding, a Main binding, or a detached binding runs
+with the Project root as cwd. An active Worktree binding runs with that Worktree path. The cwd is
+derived for each execution and is never persisted back into DSH Session metadata.
+
+Worktree creation creates the Git Worktree before recording its external relationship. If the
+sidecar write fails, the new Git Worktree is cleaned up when possible. A failed Worktree deletion
+does not change the sidecar state, so the relationship remains retryable. Session creation uses
+the native DSH API before binding; a binding failure never deletes or modifies the already-created
+Session.
+
+The rc.8 `session.create` API cannot receive `workspaceId` and an independent cwd together. The
+Worktree flow therefore uses a browser-local membership projection rather than a persistent DSH
+attach, and it does not modify DSH source, Session metadata, or native Workspace storage. The
+projection is replayed after native list refreshes and removed when the binding disappears or the
+Client is disposed.
+
+The blank Hero context is visual only. Because rc.8 has no additive Hero headline slot, its
+placement depends on the native `[data-phase="hero"]` and title anchors; it disappears when those
+anchors are unavailable and should move to a formal DSH slot when one exists.
+
+## Development and verification
+
+From the workspace root:
 
 ```bash
+cd /path/to/clutch-dsh
 pnpm install
 pnpm run check:workspace
 pnpm run check:patches
@@ -157,23 +283,37 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
 
-完整 workspace 校验：
+For the bilingual README contract and formatting:
 
 ```bash
+cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
+node --test test/readme-parity.test.mjs
+pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
+```
+
+The full workspace check is:
+
+```bash
+cd /path/to/clutch-dsh
 pnpm run check
 ```
 
-维护者请先阅读 [AGENTS.md](AGENTS.md) 了解数据边界、模块权责、生命周期和验证约束；发布流程见 [`docs/RELEASING.md`](docs/RELEASING.md)；浏览器 Consumer 的实现说明位于 [`src/client/README.md`](src/client/README.md)。
+Do not commit generated `lib/`, coverage, sidecar data, or local credentials. See [AGENTS.md](AGENTS.md)
+for package data boundaries and lifecycle rules, [docs/RELEASING.md](docs/RELEASING.md) for
+version and installation-source details, and [src/client/README.md](src/client/README.md) for
+the browser Consumer boundary.
 
-## 插件市场条目建议
+## Marketplace description
 
-向 `awesome-dsh-plugin` 提交时，建议使用 `git` 分类，并保持描述与实际代码一致：
+When submitting to `awesome-dsh-plugin`, use the `git` category and keep the description aligned
+with the package:
 
 ```yaml
 category: git
 description:
   en: Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.
-  zh: 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project 和 Session 数据。
+  zh: 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project/Workspace 和 Session 数据。
 ```
 
-市场投稿还需要在外部仓库中确认 `dsh-plugin` topic、仓库年龄和提交数；这些不是 package README 可以代替设置的内容。
+Marketplace submission also requires external checks such as the `dsh-plugin` topic, repository
+age, and commit count. A package README cannot set those external properties.

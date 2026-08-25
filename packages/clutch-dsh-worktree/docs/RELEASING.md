@@ -47,17 +47,28 @@ dsh web
 
 ### Git 依赖与 pnpm 构建脚本授权
 
-Git 依赖安装会执行 package 的 `prepare` 来生成 `lib/`。如果 DSH profile 使用 pnpm
-10 的严格构建脚本策略，授权属于安装方的 `pnpm-workspace.yaml`，不能由插件自身绕过；
-在 profile 的 workspace 配置中加入：
+awesome-dsh-plugin 生成的 `github:Cerbur/clutch-dsh#path:/packages/clutch-dsh-worktree`
+是源码 Git 依赖。安装时 pnpm 会执行 package 的 `prepare` 生成 `lib/`，因此这条路径不是
+预构建安装。构建脚本授权属于安装方的 `pnpm-workspace.yaml`，不能由插件自身绕过。
+
+当前 DSH profile 使用 pnpm 11 的 `allowBuilds`。首次执行 Git 安装时，pnpm 会故意拒绝
+prepare，并在错误信息里打印一个包含 **包名、Git URL、解析后的 commit 和子目录 path** 的
+完整 key。把那一整行复制到 profile 的 workspace 配置中，例如：
 
 ```yaml
-onlyBuiltDependencies:
-  - "@cerbur/clutch-dsh-worktree"
+allowBuilds:
+  '@cerbur/clutch-dsh-worktree@git+https://github.com/Cerbur/clutch-dsh#<resolved-commit>&path:/packages/clutch-dsh-worktree': true
 ```
 
-完成授权后重新执行 Git 依赖安装。不要把这段配置写入插件 package；它应由实际信任并安装
-该 Git commit 的 profile 维护者决定。
+`<resolved-commit>`、Git URL 和 path 必须以 pnpm 错误提示打印的值为准；只写
+`'@cerbur/clutch-dsh-worktree': true` 对直接 Git 依赖不够。`onlyBuiltDependencies` 也不是
+当前 pnpm 11 Git prepare 使用的配置。保存后重新执行原安装命令；换了 commit 后要为新
+commit 增加对应的 key。不要把这段配置写入插件 package，它应由实际信任并安装该 Git
+commit 的 profile 维护者决定。
+
+授权通过后，Git prepare 还会在 checkout 的 monorepo 中执行一次 `pnpm install`，再执行
+`pnpm run build`。因此 profile 必须能访问其 registry；如果下一步报 registry DNS、镜像
+或 lockfile 错误，那已经不是 `allowBuilds` 拒绝，而是依赖安装环境问题。
 
 如果需要重新验证已发布版本，先移除 profile 中的旧 package，再重新添加：
 
@@ -76,7 +87,7 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 - `npm whoami --registry=https://registry.npmjs.org/` 返回拥有 `@cerbur` scope 的账号；
 - npm 账号已完成邮箱验证和发布所需的 2FA；
 - 官方 DSH package 继续放在 `peerDependencies`，不要复制成 runtime `dependencies`；
-- `lib/` 不提交到 Git，由 `prepare` 从当前源码生成；Git 依赖安装和打包/发布都使用同一条构建生命周期。
+- `lib/` 不提交到 Git，由 `prepare` 从当前源码生成；Git 依赖安装和打包/发布都使用同一条构建生命周期。若要避免 Git prepare 和 `allowBuilds`，应改走已发布的 npm tarball，而不是把构建产物偷偷加入 Git。
 
 ## 发布流程
 
@@ -101,7 +112,7 @@ cd packages/clutch-dsh-worktree
 npm pack --dry-run
 ```
 
-预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行 `prepare`，因此会从当前源码重新构建；Git 依赖安装也会在获取源码后执行 `prepare`。
+预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行 `prepare`，因此会从当前源码重新构建；Git 依赖安装也会在获取源码后执行 `prepare`，并受安装方的 `allowBuilds` 授权控制。
 
 ### 3. 先推送对应源码
 
@@ -139,12 +150,12 @@ test "$LOCAL_VERSION" = "$PUBLISHED_VERSION"
 
 ## 版本不一致时的处理
 
-| 状态 | 处理 |
-| --- | --- |
-| 本地版本 = npm 版本 | 不能再次发布；先 `npm version patch`/`minor`/`major`。 |
-| 本地版本 > npm 版本 | 运行完整校验，推送包含该版本的 `main`，再发布。 |
-| 本地版本 < npm 版本 | 不要降级 `package.json`；从 `main` 同步后递增到下一个未使用版本。 |
-| npm `view` 成功但 DSH 仍装旧版本 | 检查 DSH 使用的 registry 和 profile；必要时移除后重新添加。 |
+| 状态                             | 处理                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| 本地版本 = npm 版本              | 不能再次发布；先 `npm version patch`/`minor`/`major`。                     |
+| 本地版本 > npm 版本              | 运行完整校验，推送包含该版本的 `main`，再发布。                            |
+| 本地版本 < npm 版本              | 不要降级 `package.json`；从 `main` 同步后递增到下一个未使用版本。          |
+| npm `view` 成功但 DSH 仍装旧版本 | 检查 DSH 使用的 registry 和 profile；必要时移除后重新添加。                |
 | npm 官方 registry 成功、镜像 404 | 镜像尚未同步；发布和验证使用 `https://registry.npmjs.org/`，等待镜像刷新。 |
 
 ## awesome-dsh-plugin 收录
