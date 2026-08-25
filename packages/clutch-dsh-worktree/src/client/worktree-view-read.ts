@@ -24,6 +24,18 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+/** Merge one freshly read Workspace projection without clearing other ready views. */
+export function mergeWorktreeView(
+  views: readonly WorktreeWorkspaceView[],
+  nextView: WorktreeWorkspaceView,
+): readonly WorktreeWorkspaceView[] {
+  const index = views.findIndex((view) => view.workspaceId === nextView.workspaceId);
+  if (index === -1) return [...views, nextView];
+  const merged = [...views];
+  merged[index] = nextView;
+  return merged;
+}
+
 export interface LoadWorktreeViewsOptions {
   readonly invalidateContext?: boolean;
   readonly invalidateWorktreeContext?: () => Promise<void>;

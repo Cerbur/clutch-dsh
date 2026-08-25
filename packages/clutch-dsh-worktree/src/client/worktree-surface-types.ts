@@ -271,12 +271,14 @@ export interface WorktreeCreateDialogProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike | undefined;
   readonly view: WorktreeWorkspaceView | undefined;
+  readonly readError?: WorktreeViewError;
   readonly setupStatus: WorktreeSetupStatus | undefined;
   readonly canCreate: boolean;
   readonly selectedBranch: string;
   readonly newBranch: string;
   readonly actionPending: boolean;
   readonly onClose: () => void;
+  readonly onRetry?: () => void;
   readonly onSelectedBranchChange: (branch: string) => void;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;
