@@ -60,28 +60,29 @@ clutch-dsh-worktree 的专属入口：
 
 ```text
 main
-  └─ release/<release-name>-<version>
+  └─ wt-<release-name>-<version>/release
        ├─ wt-<release-name>-<version>/<feature-name>
        └─ wt-<release-name>-<version>/<feature-name>
 ```
 
-- release branch 从 `main` 创建，是目标版本的聚合边界，命名为
-  `release/<release-name>-<version>`。`<release-name>` 使用 package short name，例如
+- release 使用独立 release worktree 作为目标版本的聚合边界，从最新的 `main` 创建，命名为
+  `wt-<release-name>-<version>/release`。`<release-name>` 使用 package short name，例如
   `clutch-dsh-worktree` 使用 `worktree`，`clutch-dsh-discuss` 使用 `discuss`；例如
-  `release/worktree-0.1.4`。
-- package feature worktree 从对应 release branch 创建，命名为
+  `wt-worktree-0.1.4/release`。
+- package feature worktree 从对应 release worktree 的当前基线创建，命名为
   `wt-<release-name>-<version>/<feature-name>`，例如
   `wt-worktree-0.1.4/feat-readme`。
 - 不属于某个 package 的 root/workspace change 使用 `base/feat-<feature-name>`，例如
   `base/feat-xxxx`。
 - 每个 worktree 独立运行与改动匹配的检查，并在交接前整理为一个 scoped commit；commit
   message 必须明确说明改动范围。
-- 合并 worktree 前，必须先将其 rebase 到最新的 release branch，再把该 worktree 的单个
-  scoped commit 合并到 release branch。发生冲突时先解决并重新验证，不能跳过 rebase gate。
-- 在 `npm pack`、npm publish 或最终 release verification 之前，必须先将 release branch
-  rebase 到最新的 `main`，再运行完整检查；发布准备完成后将 release branch 合并回
-  `main`。
-- 本流程只定义分支和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
+- 合并 feature worktree 前，必须先将其 rebase 到 release worktree 的最新基线，再在
+  release worktree 中合并该 worktree 的单个 scoped commit。发生冲突时先解决并重新验证，
+  不能跳过 rebase gate。
+- 在 `npm pack`、npm publish 或最终 release verification 之前，必须将 release worktree
+  更新到最新的 `main`，再运行完整检查；发布准备完成后将 release worktree 的最终提交
+  合并回 `main`。
+- 本流程只定义 worktree、基线和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
   这些操作仍须获得明确授权。
 
 ## 校验命令
