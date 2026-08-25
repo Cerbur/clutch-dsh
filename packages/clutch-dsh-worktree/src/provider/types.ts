@@ -64,7 +64,14 @@ export interface GitWorktreeInfo {
  * removal only, with no arbitrary Git, remote, or working-file operations.
  */
 export interface GitWorktreeAdapter {
+  /** Validate the repository without changing the long-standing adapter contract. */
   validateRepository(workspaceRoot: string): Promise<void>;
+  /**
+   * Resolve the Git worktree/repository root used for repository-wide reads.
+   * Optional for backwards compatibility with injected adapters written before
+   * subdirectory Workspaces were supported; the local adapter always provides it.
+   */
+  resolveRepositoryRoot?(workspaceRoot: string): Promise<string>;
   listBranches(workspaceRoot: string): Promise<readonly string[]>;
   listWorktrees(workspaceRoot: string): Promise<readonly GitWorktreeInfo[]>;
   createWorktree(

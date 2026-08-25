@@ -653,6 +653,19 @@ branch；`No local branch` 不再作为可选项。分支列表的已知 Git 前
 Workspace-local readiness，Worktree/binding 事实仍保留；未知 Connection、Gateway、
 sidecar 或 Worktree 错误继续走原有 retryable error surface。
 
+## 2026-08-26 Imported subdirectory branch follow-up
+
+当 DSH 导入的 Workspace root 是 Git worktree 根目录下的子目录时，Git 的
+`worktree list --porcelain` 仍返回包含该目录的 worktree 根路径。此前 Manage 只比较两个
+路径是否完全相同，导致 `BranchRecord.isCurrent` 永远为 `false`，Worktree 模式的 Main
+分组无法显示当前 branch。
+
+修复在 Git adapter validation 后通过可选的 root resolver 执行
+`git rev-parse --show-toplevel`，再将这个 root 复用于 branch 与 worktree 读取，因此根目录
+和子目录导入会使用完全相同的 Git 信息算法；旧的注入 adapter 没有 resolver 时仍回退到
+原始 Workspace root。新增 Manage 回归测试覆盖寻根和子目录 Workspace。该修复不改变 DSH
+或 sidecar 数据边界。
+
 ## 2026-08-21 UI tree parity follow-up
 
 为对齐 DSH 原生 Workspace tree，Workspace 和 Worktree 的 row body 都是浏览器内存
