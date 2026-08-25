@@ -107,6 +107,42 @@ test('reuses the previous Workspace id array when a snapshot republishes the sam
   assert.notEqual(worktreeView.stableWorkspaceIds(previous, ['ws2', 'ws1']), previous);
 });
 
+test('merges an on-demand Workspace view without dropping ready projections', () => {
+  assert.equal(typeof worktreeView.mergeWorktreeView, 'function');
+  const existing = {
+    workspaceId: 'ws1',
+    worktrees: [],
+    branches: [{ name: 'main', isCurrent: true, checkedOut: true }],
+    bindings: [],
+    readiness: { status: 'ready' },
+  };
+  const imported = {
+    workspaceId: 'ws2',
+    worktrees: [],
+    branches: [{ name: 'main', isCurrent: true, checkedOut: true }],
+    bindings: [],
+    readiness: { status: 'ready' },
+  };
+
+  assert.deepEqual(
+    worktreeView.mergeWorktreeView([existing], imported),
+    [existing, imported],
+  );
+  assert.deepEqual(
+    worktreeView.mergeWorktreeView(
+      [existing, imported],
+      { ...imported, branches: [{ name: 'feature', isCurrent: true, checkedOut: true }] },
+    ),
+    [
+      existing,
+      {
+        ...imported,
+        branches: [{ name: 'feature', isCurrent: true, checkedOut: true }],
+      },
+    ],
+  );
+});
+
 test('invalidates superseded Worktree refresh results', async () => {
   assert.equal(typeof worktreeView.createWorktreeRefreshGuard, 'function');
   const guard = worktreeView.createWorktreeRefreshGuard();
@@ -190,6 +226,143 @@ test('drops stale asynchronous Worktree refresh rejection', async () => {
 
   assert.deepEqual(committed, ['new']);
   assert.deepEqual(errors, []);
+});
+
+test('loads and invalidates modal target projections independently', async () => {
+  assert.equal(typeof worktreeView.createWorktreeModalViewLoader, 'function');
+  const loader = worktreeView.createWorktreeModalViewLoader();
+  const firstWorktrees = deferred();
+  let listWorktrees = () => firstWorktrees.promise;
+  const views = [];
+  const errors = [];
+
+  const staleLoad = loader.load(
+    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
+    'ws-imported',
+    (view) => views.push(view),
+    (error) => errors.push(error),
+  );
+  loader.invalidate();
+  firstWorktrees.resolve([]);
+  await staleLoad;
+
+  assert.deepEqual(views, []);
+  assert.deepEqual(errors, []);
+
+  const failedWorktrees = deferred();
+  listWorktrees = () => failedWorktrees.promise;
+  const failedLoad = loader.load(
+    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
+    'ws-imported',
+    (view) => views.push(view),
+    (error) => errors.push(error),
+  );
+  failedWorktrees.reject({
+    code: 'CONNECTION_CALL_FAILED',
+    message: 'connection unavailable',
+    retryable: true,
+  });
+  await failedLoad;
+
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, 'CONNECTION_CALL_FAILED');
+
+  listWorktrees = async () => [];
+  await loader.load(
+    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
+    'ws-imported',
+    (view) => views.push(view),
+    (error) => errors.push(error),
+  );
+
+  assert.equal(views.length, 1);
+  assert.equal(views[0].workspaceId, 'ws-imported');
+  assert.equal(views[0].readiness.status, 'ready');
+  assert.equal(errors.length, 1);
+
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /const refreshGuard = useRef\(createWorktreeRefreshGuard\(\)\);/);
+  assert.match(source, /const modalReadLoader = useRef\(createWorktreeModalViewLoader\(\)\);/);
+  assert.match(source, /modalReadLoader\.current\.load/);
+});
+
+test('preserves other Workspace projections when modal and full refresh complete out of order', async () => {
+  const modalWorktrees = deferred();
+  const modalRecord = {
+    worktreeId: 'modal-wt',
+    workspaceId: 'ws2',
+    absolutePath: '/tmp/modal-wt',
+    branch: 'modal-branch',
+    status: 'active',
+  };
+  const fullRecord = {
+    worktreeId: 'full-wt',
+    workspaceId: 'ws2',
+    absolutePath: '/tmp/full-wt',
+    branch: 'full-branch',
+    status: 'active',
+  };
+  let ws2ReadCount = 0;
+  const readManager = manager({
+    async listWorktrees({ workspaceId }) {
+      if (workspaceId === 'ws1') return [];
+      ws2ReadCount += 1;
+      return ws2ReadCount === 1 ? modalWorktrees.promise : [fullRecord];
+    },
+    async listBindings() {
+      return [];
+    },
+  });
+  const modalLoader = worktreeView.createWorktreeModalViewLoader();
+  const refreshGuard = worktreeView.createWorktreeRefreshGuard();
+  let modalView;
+  let state = {
+    status: 'ready',
+    views: [{
+      workspaceId: 'ws1',
+      worktrees: [],
+      branches: [{ name: 'main', isCurrent: true, checkedOut: true }],
+      bindings: [],
+      readiness: { status: 'ready' },
+    }],
+  };
+
+  const modalRun = modalLoader.load(
+    readManager,
+    'ws2',
+    (view) => {
+      modalView = view;
+      state = { ...state, views: worktreeView.mergeWorktreeView(state.views, view) };
+    },
+    (error) => {
+      throw error;
+    },
+  );
+  const refreshRun = refreshGuard.run(
+    () => worktreeView.loadWorktreeViews(readManager, ['ws1', 'ws2'], { invalidateContext: false }),
+    (views) => {
+      state = {
+        status: 'ready',
+        views: modalView === undefined
+          ? views
+          : worktreeView.mergeWorktreeView(views, modalView),
+      };
+    },
+    (error) => {
+      throw error;
+    },
+  );
+
+  await refreshRun;
+  modalWorktrees.resolve([modalRecord]);
+  await modalRun;
+
+  assert.equal(state.status, 'ready');
+  assert.deepEqual(state.views.map((view) => view.workspaceId), ['ws1', 'ws2']);
+  assert.equal(state.views[1].worktrees[0].worktreeId, 'modal-wt');
 });
 
 test('preserves a ready Worktree projection during automatic refreshes', async () => {
@@ -851,6 +1024,26 @@ test('uses the DSH Modal primitives for Worktree create and removal dialogs', as
   assert.match(source, /t\('dialog\.closeWorktreeRemove'\)/);
   assert.match(source, /t\('worktree\.removeDescription'/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
+});
+
+test('loads a missing Workspace projection before enabling Worktree creation', async () => {
+  const { coordinator, dialogs, types } = await readSurfaceSources();
+
+  assert.match(coordinator, /loadModalWorktreeView/);
+  assert.match(coordinator, /createWorktreeModalViewLoader/);
+  assert.match(coordinator, /modalReadLoader\.current\.load/);
+  assert.match(coordinator, /setModalReadLoading\(true\)/);
+  assert.match(coordinator, /!modalReadLoading/);
+  assert.match(coordinator, /mergeWorktreeView\(current\.views/);
+  assert.match(coordinator, /\.\.\.current,[\s\S]*views: mergeWorktreeView\(current\.views, view\)/);
+  assert.match(coordinator, /modalReadViewRef\.current === undefined[\s\S]*mergeWorktreeView\(views, modalReadViewRef\.current\)/);
+  assert.match(coordinator, /modalReadLoader\.current\.invalidate\(\);[\s\S]*setWorktreeModalWorkspaceId\(undefined\)/);
+  assert.match(coordinator, /readError=\{modalReadError\}/);
+  assert.match(coordinator, /onRetry=\{\(\) =>/);
+  assert.match(dialogs, /!canCreate/);
+  assert.match(dialogs, /formatWorktreeViewError\(readError, t\)/);
+  assert.match(dialogs, /t\('action\.retry'\)/);
+  assert.match(types, /readonly readError\?: WorktreeViewError/);
 });
 
 test('renders the Worktree footer action like the native Settings row', async () => {

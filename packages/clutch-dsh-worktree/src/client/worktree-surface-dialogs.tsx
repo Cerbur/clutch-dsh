@@ -213,12 +213,14 @@ export function WorktreeCreateDialog({
   t,
   workspace,
   view,
+  readError,
   setupStatus,
   canCreate,
   selectedBranch,
   newBranch,
   actionPending,
   onClose,
+  onRetry,
   onSelectedBranchChange,
   onNewBranchChange,
   onSubmit,
@@ -245,6 +247,7 @@ export function WorktreeCreateDialog({
             variant="primary"
             disabled={
               actionPending ||
+              !canCreate ||
               selectedBranch.length === 0 ||
               newBranch.trim().length === 0
             }
@@ -257,7 +260,27 @@ export function WorktreeCreateDialog({
         </>
       )}
     >
-      {canCreate ? (
+      {readError !== undefined ? (
+        <div
+          className={styles.gitReadiness}
+          data-worktree-readiness="error"
+          role="alert"
+        >
+          <p className={styles.message} data-error="true">
+            {formatWorktreeViewError(readError, t)}
+          </p>
+          {readError.retryable && onRetry !== undefined && (
+            <button
+              type="button"
+              className={styles.retryButton}
+              disabled={actionPending}
+              onClick={onRetry}
+            >
+              {t('action.retry')}
+            </button>
+          )}
+        </div>
+      ) : canCreate ? (
         <>
           <label className={styles.modalField}>
             {t('worktree.baseBranch')}
