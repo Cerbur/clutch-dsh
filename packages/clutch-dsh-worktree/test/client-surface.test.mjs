@@ -74,6 +74,31 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+async function readSurfaceSources() {
+  const [coordinator, rows, dialogs, types] = await Promise.all([
+    readFile(new URL('../src/client/WorktreeSurface.tsx', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/client/worktree-surface-rows.tsx', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/client/worktree-surface-dialogs.tsx', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/client/worktree-surface-types.ts', import.meta.url),
+      'utf8',
+    ),
+  ]);
+  return {
+    coordinator,
+    rows,
+    dialogs,
+    types,
+    combined: [coordinator, rows, dialogs, types].join('\n'),
+  };
+}
+
 test('reuses the previous Workspace id array when a snapshot republishes the same ids', () => {
   const previous = ['ws1', 'ws2'];
   const next = ['ws1', 'ws2'];
@@ -477,10 +502,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
     new URL('../src/client/WorktreeModeAction.tsx', import.meta.url),
     'utf8',
   );
-  const surfaceSource = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const surfaceSource = (await readSurfaceSources()).combined;
 
   assert.match(actionSource, /PropsLocale/);
   assert.match(surfaceSource, /PropsLocale/);
@@ -496,10 +518,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
 });
 
 test('formats Worktree view errors at render time and leaves plugin literals out of state', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /import \{ formatWorktreeViewError \}/);
   assert.match(source, /\{formatWorktreeViewError\(actionError, t\)\}/);
@@ -514,16 +533,14 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKSPACE_DELETE_UNAVAILABLE'/);
   assert.match(source, /code: 'SESSION_RENAME_UNAVAILABLE'/);
-  assert.match(source, /formatWorktreeViewError\(workspaceRenameError, t\)/);
-  assert.match(source, /formatWorktreeViewError\(workspaceDeleteError, t\)/);
-  assert.match(source, /formatWorktreeViewError\(sessionRenameError, t\)/);
+  assert.match(source, /formatWorktreeViewError\(error, t\)/);
+  assert.match(source, /WorktreeWorkspaceRenameDialog/);
+  assert.match(source, /WorktreeWorkspaceDeleteDialog/);
+  assert.match(source, /WorktreeSessionRenameDialog/);
 });
 
 test('renders the Worktree hierarchy with search and nested creation affordances', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.doesNotMatch(source, /Bind current Session/);
   assert.match(source, /t\('workspace\.search'\)/);
@@ -566,10 +583,7 @@ test('bounds the surface to live native sidebar anchors', async () => {
 });
 
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /const createdWorktree = await executeWorktreeAction/);
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
@@ -580,20 +594,14 @@ test('creates a Worktree Session immediately after creating the Worktree', async
 });
 
 test('renders a Main Session action alongside the Main group label', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /createMainSession/);
   assert.match(source, /data-add-main-session/);
 });
 
 test('uses native DSH menus for Session and Workspace row actions', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /from ['"]@deepseek-ai\/dsh-client-ui-primitives['"]/);
   assert.match(source, /\bMenu\b/);
@@ -615,10 +623,7 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
 });
 
 test('matches native Workspace row actions and drag behavior', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /renameWorkspace/);
   assert.match(source, /deleteWorkspace/);
@@ -632,10 +637,7 @@ test('matches native Workspace row actions and drag behavior', async () => {
 });
 
 test('matches native Session grouping, drag, and expand-more behavior', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /insertSessionBefore/);
   assert.match(source, /draggable/);
@@ -652,10 +654,7 @@ test('matches native Session grouping, drag, and expand-more behavior', async ()
 });
 
 test('matches native Worktree drag ordering while keeping Main fixed', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -686,10 +685,7 @@ test('matches native Worktree drag ordering while keeping Main fixed', async () 
 });
 
 test('commits Worktree ordering only from valid same-Workspace drop targets', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const groupRowStart = source.indexOf('function WorktreeGroupRow');
   const groupRowEnd = source.indexOf('/** Worktree-mode Session row', groupRowStart);
   const groupRowSource = source.slice(groupRowStart, groupRowEnd);
@@ -799,10 +795,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
 });
 
 test('renders transient Worktree health with the public StateDot primitive', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /StateDot/);
   assert.match(source, /health/);
@@ -812,10 +805,7 @@ test('renders transient Worktree health with the public StateDot primitive', asy
 });
 
 test('keeps the final surface bounded, scrollable, and action-aligned', async () => {
-  const surfaceSource = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const surfaceSource = (await readSurfaceSources()).combined;
   const styleSource = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -833,13 +823,10 @@ test('keeps the final surface bounded, scrollable, and action-aligned', async ()
 });
 
 test('uses the DSH Modal primitives for Worktree create and removal dialogs', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
 
-  assert.match(source, /open=\{worktreeModalWorkspaceId !== undefined/);
-  assert.match(source, /open=\{worktreeRemoval !== undefined/);
+  assert.match(source, /<WorktreeCreateDialog/);
+  assert.match(source, /<WorktreeRemovalDialog/);
   assert.match(source, /t\('dialog\.closeWorktreeRemove'\)/);
   assert.match(source, /t\('worktree\.removeDescription'/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
@@ -873,10 +860,7 @@ test('renders the Worktree footer action like the native Settings row', async ()
 });
 
 test('matches native Workspace interaction, typography, and action rail', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -956,10 +940,7 @@ test('invalidates the active Session context after Worktree reads but not pure r
 });
 
 test('matches shared Worktree row disclosure and aligned action geometry', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -1006,10 +987,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
 });
 
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -1044,10 +1022,7 @@ test('shares one parameterized group row while gating removal UI by row configur
 });
 
 test('polishes Main and Worktree row hover presentation', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -1084,10 +1059,7 @@ test('polishes Main and Worktree row hover presentation', async () => {
 });
 
 test('renders a localized Main label with the current branch and a fallback', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
     new URL('../src/client/worktree.css', import.meta.url),
     'utf8',
@@ -1125,10 +1097,7 @@ test('reconciles the selected branch after the modal view becomes ready', async 
 });
 
 test('renders setup instructions instead of a fake base-branch option', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const localeSource = await readFile(
     new URL('../src/client/locales.ts', import.meta.url),
     'utf8',
@@ -1141,7 +1110,7 @@ test('renders setup instructions instead of a fake base-branch option', async ()
   assert.match(source, /data-worktree-readiness/);
   assert.match(source, /worktreeSetupCommands/);
   assert.match(source, /<pre[\s\S]*className=\{styles\.commandBlock\}[\s\S]*>/);
-  assert.match(source, /modalView\?\.branches\.map/);
+  assert.match(source, /view\?\.branches\.map/);
   assert.doesNotMatch(source, /<option value="">\{t\('worktree\.noLocalBranch'\)\}<\/option>/);
   assert.match(localeSource, /worktree\.setup\.noRepository/);
   assert.match(localeSource, /worktree\.setup\.noInitialCommit/);
@@ -1150,10 +1119,7 @@ test('renders setup instructions instead of a fake base-branch option', async ()
 });
 
 test('wires native blank Session visibility and menu parity into both tree groups', async () => {
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
+  const source = (await readSurfaceSources()).combined;
   const localeSource = await readFile(
     new URL('../src/client/locales.ts', import.meta.url),
     'utf8',

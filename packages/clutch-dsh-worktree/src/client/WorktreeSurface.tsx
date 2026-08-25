@@ -1,48 +1,53 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { DragEvent as ReactDragEvent } from 'react';
-import type {
-  PropsLocale,
-  PropsRuntime,
-  PropsStore,
-  TranslateNS,
-} from '@deepseek-ai/dsh-client-ui-slots';
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import {
-  Button,
-  HoverCard,
-  IconArchiveOutline20,
   IconBranchOutline16,
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
   IconCloseOutline16,
-  IconEditOutline16,
-  IconEllipsisOutline16,
-  IconFolderClose16,
-  IconFolderOpen16,
   IconPlusOutline16,
   IconSearchOutline16,
-  IconTrashOutline16,
-  Input,
-  Menu,
-  Modal,
-  StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives';
-import type { SessionBinding, WorktreeManager, WorktreeRecord } from '../contract/index.js';
-import { WORKTREE_NS } from './locales.js';
+import type { WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
 import { useSidebarOverlayGeometry } from './sidebar-overlay-geometry.js';
-import type { createWorktreeViewStore } from './view-mode-store.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
 import { formatWorktreeViewError } from './worktree-error-copy.js';
 import {
   filterVisibleSessionIds,
-  isBlankSession,
-  sessionDisplayLabel,
   sessionMatchesQuery,
   type SessionListLike,
 } from './session-view.js';
 import { retryWorktreeSessionBinding } from './worktree-session.js';
+import {
+  WorktreeCreateDialog,
+  WorktreeRemovalDialog,
+  WorktreeSessionRenameDialog,
+  WorktreeWorkspaceDeleteDialog,
+  WorktreeWorkspaceRenameDialog,
+} from './worktree-surface-dialogs.js';
+import {
+  bindingIdsFor,
+  includesText,
+  workspaceMatches,
+} from './worktree-surface-selectors.js';
+import {
+  WorktreeGroupRow,
+  WorktreeSessionGroup,
+  WorktreeWorkspaceRow,
+} from './worktree-surface-rows.js';
+import type {
+  PendingSessionBinding,
+  ReadState,
+  RefreshOptions,
+  SessionDragState,
+  SessionRenameTarget,
+  WorktreeSetupStatus,
+  WorktreeSurfaceProps,
+  WorkspaceDeleteTarget,
+  WorkspaceDragState,
+  WorkspaceLike,
+  WorkspaceListLike,
+  WorkspaceRenameTarget,
+  WorktreeDragState,
+} from './worktree-surface-types.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
@@ -57,193 +62,14 @@ import {
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
-  type WorktreeGitReadiness,
   type WorktreeViewError,
-  type WorktreeWorkspaceView,
-  worktreeSetupCommands,
 } from './worktree-view.js';
 import styles from './worktree.css';
 
-interface WorkspaceLike {
-  readonly workspaceId: string;
-  readonly title: string;
-  readonly sessionIds: readonly string[];
-}
-
-interface WorkspaceListLike {
-  readonly items: readonly WorkspaceLike[];
-  readonly archivedSessionIds?: readonly string[];
-}
-
-/** Apply-time facts and DSH navigation callbacks used by the surface. */
-export interface WorktreeSurfaceInjected {
-  readonly available: boolean;
-  readonly manager?: WorktreeManager;
-  readonly createWorkspace?: () => Promise<void>;
-  readonly createSessionForWorktree?: (
-    input: CreateSessionForWorktreeInput,
-  ) => Promise<string>;
-  readonly invalidateWorktreeContext?: (workspaceId?: string) => Promise<void>;
-  readonly createMainSession?: (workspaceId: string) => void;
-  readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
-  readonly deleteWorkspace?: (workspaceId: string) => Promise<void>;
-  readonly insertWorkspaceBefore?: (
-    workspaceId: string,
-    beforeWorkspaceId?: string,
-  ) => Promise<void>;
-  readonly insertSessionBefore?: (
-    workspaceId: string,
-    sessionId: string,
-    beforeSessionId?: string,
-  ) => Promise<void>;
-  readonly insertWorktreeBefore?: (
-    workspaceId: string,
-    worktreeId: string,
-    beforeWorktreeId?: string,
-  ) => Promise<readonly string[]>;
-  readonly renameSession?: (sessionId: string, title: string) => Promise<void>;
-  readonly forkSession?: (sessionId: string) => void;
-  readonly archiveSession?: (sessionId: string) => Promise<void>;
-  readonly ensureSessionWorkspace?: (workspaceId: string, sessionId: string) => void;
-  readonly syncSessionWorkspaces?: (
-    bindings: readonly { workspaceId: string; sessionId: string }[],
-  ) => void;
-  readonly openSession: (sessionId: string) => void;
-}
-
-/** Props derived from the frame overlay slot, shared state, and injected face. */
-export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
-  PropsStore<ReturnType<typeof createWorktreeViewStore>> &
-  PropsLocale<typeof WORKTREE_NS> &
-  WorktreeSurfaceInjected;
-
-type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
-
-type WorktreeSetupStatus = Exclude<WorktreeGitReadiness['status'], 'ready'>;
-
-function worktreeSetupMessage(
-  status: WorktreeSetupStatus,
-  t: WorktreeTranslate,
-): string {
-  switch (status) {
-    case 'noRepository':
-      return t('worktree.setup.noRepository');
-    case 'noInitialCommit':
-      return t('worktree.setup.noInitialCommit');
-    case 'noLocalBranch':
-      return t('worktree.setup.noLocalBranch');
-  }
-}
-
-interface ReadState {
-  readonly status: 'idle' | 'loading' | 'ready' | 'error';
-  readonly views: readonly WorktreeWorkspaceView[];
-  readonly error?: WorktreeViewError;
-}
-
-interface RefreshOptions {
-  readonly preserveCurrent?: boolean;
-  readonly invalidateContext?: boolean;
-}
-
-interface PendingSessionBinding extends CreateSessionForWorktreeInput {
-  readonly sessionId: string;
-}
-
-interface SessionRenameTarget {
-  readonly sessionId: string;
-  readonly currentTitle: string;
-}
-
-interface WorktreeSessionRowProps {
-  readonly t: WorktreeTranslate;
-  readonly sessionId: string;
-  readonly blank: boolean;
-  readonly label: string;
-  readonly drag: SessionDragProps;
-  readonly actionPending: boolean;
-  readonly onOpen: () => void;
-  readonly onRename?: (sessionId: string, currentTitle: string) => void;
-  readonly onFork?: (sessionId: string) => void;
-  readonly onArchive?: (sessionId: string) => void;
-}
-
-interface SessionDragProps {
-  readonly active: boolean;
-  readonly marker: 'before' | 'after' | null;
-  readonly start: () => void;
-  readonly hover: (half: 'before' | 'after') => void;
-  readonly drop: (half: 'before' | 'after') => void;
-  readonly end: () => void;
-}
-
-interface WorkspaceDragProps {
-  readonly active: boolean;
-  readonly marker: 'before' | 'after' | null;
-  readonly start: () => void;
-  readonly hover: (half: 'before' | 'after') => void;
-  readonly drop: (half: 'before' | 'after') => void;
-  readonly end: () => void;
-}
-
-interface WorktreeDragProps {
-  readonly active: boolean;
-  readonly marker: 'before' | 'after' | null;
-  readonly start: () => void;
-  readonly hover: (half: 'before' | 'after') => void;
-  readonly drop: (half: 'before' | 'after') => void;
-  readonly end: () => void;
-}
-
-interface WorktreeWorkspaceRowProps {
-  readonly t: WorktreeTranslate;
-  readonly workspace: WorkspaceLike;
-  readonly expanded: boolean;
-  readonly actionPending: boolean;
-  readonly menuOpen: boolean;
-  readonly drag: WorkspaceDragProps;
-  readonly onToggle: () => void;
-  readonly onCreateWorktree: () => void;
-  readonly onRename: () => void;
-  readonly onDelete: () => void;
-  readonly onMenuOpenChange: (open: boolean) => void;
-}
-
-interface WorkspaceDragState {
-  readonly workspaceId: string;
-  readonly over: {
-    readonly workspaceId: string;
-    readonly half: 'before' | 'after';
-  } | null;
-}
-
-interface WorkspaceRenameTarget {
-  readonly workspaceId: string;
-  readonly currentTitle: string;
-}
-
-interface WorkspaceDeleteTarget {
-  readonly workspaceId: string;
-  readonly title: string;
-}
-
-interface SessionDragState {
-  readonly groupKey: string;
-  readonly sessionId: string;
-  readonly over: {
-    readonly sessionId: string;
-    readonly half: 'before' | 'after';
-  } | null;
-}
-
-interface WorktreeDragState {
-  readonly workspaceId: string;
-  readonly worktreeId: string;
-  readonly over: {
-    readonly worktreeId: string;
-    readonly half: 'before' | 'after';
-  } | null;
-}
+export type {
+  WorktreeSurfaceInjected,
+  WorktreeSurfaceProps,
+} from './worktree-surface-types.js';
 
 function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
   const viewError = toWorktreeViewError(error);
@@ -259,592 +85,6 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   const stable = stableWorkspaceIds(previousRef.current, next);
   if (stable !== previousRef.current) previousRef.current = stable;
   return previousRef.current;
-}
-
-function sessionLabel(
-  sessionId: string,
-  sessions: SessionListLike,
-  t: WorktreeTranslate,
-): string {
-  return sessionDisplayLabel(sessionId, sessions, t('session.new'));
-}
-
-function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
-  const rect = event.currentTarget.getBoundingClientRect();
-  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-}
-
-function bindingIdsFor(bindings: readonly SessionBinding[], worktreeId: string): readonly string[] {
-  return bindings
-    .filter((binding) => binding.worktreeId === worktreeId)
-    .map((binding) => binding.sessionId);
-}
-
-function includesText(value: string, query: string): boolean {
-  return value.toLocaleLowerCase().includes(query);
-}
-
-function workspaceMatches(
-  workspace: WorkspaceLike,
-  view: WorktreeWorkspaceView | undefined,
-  sessions: SessionListLike,
-  query: string,
-): boolean {
-  if (query.length === 0) return true;
-  if (includesText(workspace.title, query)) return true;
-  if (
-    workspace.sessionIds.some((sessionId) => sessionMatchesQuery(sessionId, sessions, query))
-  ) {
-    return true;
-  }
-  if (view === undefined) return false;
-  if (
-    view.worktrees.some(
-      (record) =>
-        includesText(record.branch, query) || includesText(record.absolutePath, query),
-    )
-  ) {
-    return true;
-  }
-  return view.bindings.some((binding) =>
-    sessionMatchesQuery(binding.sessionId, sessions, query),
-  );
-}
-
-/** Workspace row using the native DSH menu, fixed action column, and drag contract. */
-function WorktreeWorkspaceRow({
-  t,
-  workspace,
-  expanded,
-  actionPending,
-  menuOpen,
-  drag,
-  onToggle,
-  onCreateWorktree,
-  onRename,
-  onDelete,
-  onMenuOpenChange,
-}: WorktreeWorkspaceRowProps) {
-  const workspaceMenuItems = [
-    {
-      id: 'rename',
-      label: t('workspace.rename'),
-      icon: <IconEditOutline16 />,
-      disabled: actionPending,
-    },
-    {
-      id: 'delete',
-      label: t('workspace.delete'),
-      icon: <IconTrashOutline16 />,
-      danger: true,
-      disabled: actionPending,
-    },
-  ];
-  const markerClass = drag.marker === 'before'
-    ? styles.dropBefore
-    : drag.marker === 'after'
-      ? styles.dropAfter
-      : '';
-
-  return (
-    <div
-      className={`${styles.workspaceRow} ${markerClass}`}
-      data-workspace-drag={drag.active ? 'active' : undefined}
-      data-menu-open={menuOpen || undefined}
-      draggable
-      onClick={() => {
-        onToggle();
-      }}
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', workspace.workspaceId);
-        drag.start();
-      }}
-      onDragEnd={drag.end}
-      onDragOver={(event) => {
-        if (!drag.active) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        drag.hover(rowHalf(event));
-      }}
-      onDrop={(event) => {
-        if (!drag.active) return;
-        event.preventDefault();
-        drag.drop(rowHalf(event));
-      }}
-    >
-      <button
-        type="button"
-        className={`${styles.disclosureButton} ${styles.workspaceDisclosure}`}
-        aria-label={t(expanded ? 'workspace.collapse' : 'workspace.expand', {
-          name: workspace.title,
-        })}
-        aria-expanded={expanded}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggle();
-        }}
-      >
-        {expanded ? (
-          <IconChevronDownOutline14 size={18} />
-        ) : (
-          <IconChevronRightOutline14 size={18} />
-        )}
-      </button>
-      <span className={styles.workspaceIcon} aria-hidden="true">
-        {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
-      </span>
-      <span className={styles.workspaceTitle}>{workspace.title}</span>
-      <span className={`${styles.treeActionSlot} ${styles.workspaceActions}`}>
-        <span className={styles.menuAction}>
-          <Menu
-            open={menuOpen}
-            onClose={() => {
-              onMenuOpenChange(false);
-            }}
-            items={workspaceMenuItems}
-            onSelect={(id) => {
-              onMenuOpenChange(false);
-              if (id === 'rename') onRename();
-              if (id === 'delete') onDelete();
-            }}
-            portal
-            closeOnPointerLeave
-            anchor={(
-              <button
-                type="button"
-                className={styles.iconButton}
-                data-workspace-menu
-                aria-label={t('workspace.options', { name: workspace.title })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMenuOpenChange(!menuOpen);
-                }}
-              >
-                <IconEllipsisOutline16 />
-              </button>
-            )}
-          />
-        </span>
-        <button
-          type="button"
-          className={styles.iconButton}
-          data-add-worktree
-          aria-label={t('workspace.addWorktree', { name: workspace.title })}
-          onClick={(event) => {
-            event.stopPropagation();
-            onCreateWorktree();
-          }}
-        >
-          <IconPlusOutline16 />
-        </button>
-      </span>
-    </div>
-  );
-}
-
-type WorktreeGroupKind = 'main' | 'worktree';
-
-interface WorktreeGroupMenuProps {
-  readonly open: boolean;
-  readonly label: string;
-  readonly disabled: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-  readonly onRemove: () => void;
-}
-
-interface WorktreeGroupRowProps {
-  readonly t: WorktreeTranslate;
-  readonly kind: WorktreeGroupKind;
-  readonly label: string;
-  readonly worktreeId?: string;
-  readonly expanded: boolean;
-  readonly icon: ReactNode;
-  readonly workspaceTitle: string;
-  readonly state?: 'done' | 'warning' | 'error';
-  readonly stateLabel?: string;
-  readonly onToggle: () => void;
-  readonly onCreateSession?: () => void;
-  readonly menu?: WorktreeGroupMenuProps;
-  readonly drag?: WorktreeDragProps;
-}
-
-/** Shared Main/Worktree group row with parameterized icon, state, and actions. */
-function WorktreeGroupRow({
-  t,
-  kind,
-  label,
-  worktreeId,
-  expanded,
-  icon,
-  workspaceTitle,
-  state,
-  stateLabel,
-  onToggle,
-  onCreateSession,
-  menu,
-  drag,
-}: WorktreeGroupRowProps) {
-  const main = kind === 'main';
-  const markerClass = drag?.marker === 'before'
-    ? styles.dropBefore
-    : drag?.marker === 'after'
-      ? styles.dropAfter
-      : '';
-  const dragProps = drag === undefined
-    ? {}
-    : {
-        draggable: true,
-        onDragStart: (event: ReactDragEvent<HTMLElement>) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', worktreeId ?? label);
-          drag.start();
-        },
-        onDragEnd: drag.end,
-        onDragOver: (event: ReactDragEvent<HTMLElement>) => {
-          if (!drag.active) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-          drag.hover(rowHalf(event));
-        },
-        onDrop: (event: ReactDragEvent<HTMLElement>) => {
-          if (!drag.active) return;
-          event.preventDefault();
-          drag.drop(rowHalf(event));
-        },
-      };
-
-  const row = (
-    <div
-      className={`${styles.worktreeRow} ${markerClass}`}
-      data-main-group={main ? 'true' : undefined}
-      data-main-expanded={main ? String(expanded) : undefined}
-      data-menu-open={menu?.open ? 'true' : undefined}
-      data-worktree-drag={drag?.active ? 'active' : undefined}
-      {...dragProps}
-      onClick={onToggle}
-    >
-      <button
-        type="button"
-        className={`${styles.disclosureButton} ${styles.worktreeDisclosure}`}
-        aria-label={t(expanded ? 'worktree.collapse' : 'worktree.expand', { name: label })}
-        aria-expanded={expanded}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggle();
-        }}
-      >
-        {expanded ? (
-          <IconChevronDownOutline14 size={18} />
-        ) : (
-          <IconChevronRightOutline14 size={18} />
-        )}
-      </button>
-      <span className={styles.worktreeIcon} aria-hidden="true">
-        {icon}
-      </span>
-      {state !== undefined && stateLabel !== undefined && (
-        <span
-          className={styles.worktreeState}
-          role="img"
-          aria-label={stateLabel}
-          title={stateLabel}
-        >
-          <StateDot state={state} />
-        </span>
-      )}
-      <span className={styles.worktreeLabel}>{label}</span>
-      <span className={styles.treeActionSlot}>
-        {menu !== undefined && (
-          <span className={styles.menuAction}>
-            <Menu
-              open={menu.open}
-              onClose={() => {
-                menu.onOpenChange(false);
-              }}
-              items={[
-                {
-                  id: 'remove',
-                  label: t('worktree.remove'),
-                  icon: <IconTrashOutline16 />,
-                  danger: true,
-                  disabled: menu.disabled,
-                },
-              ]}
-              onSelect={(id) => {
-                menu.onOpenChange(false);
-                if (id === 'remove') menu.onRemove();
-              }}
-              portal
-              closeOnPointerLeave
-              anchor={
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  data-worktree-menu
-                  aria-label={t('worktree.options', { name: menu.label })}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    menu.onOpenChange(!menu.open);
-                  }}
-                >
-                  <IconEllipsisOutline16 />
-                </button>
-              }
-            />
-          </span>
-        )}
-        {onCreateSession !== undefined && (
-          <button
-            type="button"
-            className={styles.iconButton}
-            data-add-main-session={main ? 'true' : undefined}
-            data-add-session={main ? undefined : 'true'}
-            aria-label={t('worktree.addSession', { name: workspaceTitle })}
-            onClick={(event) => {
-              event.stopPropagation();
-              onCreateSession();
-            }}
-          >
-            <IconPlusOutline16 />
-          </button>
-        )}
-      </span>
-    </div>
-  );
-
-  if (main) return row;
-  return (
-    <HoverCard
-      anchor={row}
-      content={<div className={styles.worktreeHoverTitle}>{label}</div>}
-      openDelayMs={500}
-      disabled={menu?.open === true}
-    />
-  );
-}
-
-/** Worktree-mode Session row with the same trailing options menu as native DSH rows. */
-function WorktreeSessionRow({
-  t,
-  sessionId,
-  blank,
-  label,
-  drag,
-  actionPending,
-  onOpen,
-  onRename,
-  onFork,
-  onArchive,
-}: WorktreeSessionRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const markerClass = drag.marker === 'before'
-    ? styles.dropBefore
-    : drag.marker === 'after'
-      ? styles.dropAfter
-      : '';
-  const sessionMenuItems = [
-    {
-      id: 'rename',
-      label: t('session.rename'),
-      icon: <IconEditOutline16 />,
-      disabled: onRename === undefined || actionPending,
-    },
-    {
-      id: 'fork',
-      label: t('session.fork'),
-      icon: <IconBranchOutline16 />,
-      disabled: onFork === undefined || actionPending,
-    },
-    {
-      id: 'archive',
-      label: t('session.archive'),
-      icon: <IconArchiveOutline20 size={16} />,
-      disabled: onArchive === undefined || actionPending,
-    },
-  ];
-
-  return (
-    <div
-      className={`${styles.treeSessionRow} ${markerClass}`}
-      data-session-id={sessionId}
-      data-session-blank={blank ? 'true' : undefined}
-      data-session-drag={drag.active ? 'active' : undefined}
-      data-menu-open={menuOpen || undefined}
-      role="treeitem"
-      draggable
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', sessionId);
-        drag.start();
-      }}
-      onDragEnd={drag.end}
-      onDragOver={(event) => {
-        if (!drag.active) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        drag.hover(rowHalf(event));
-      }}
-      onDrop={(event) => {
-        if (!drag.active) return;
-        event.preventDefault();
-        drag.drop(rowHalf(event));
-      }}
-    >
-      <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
-        <span className={styles.treeGuide} aria-hidden="true">
-          └
-        </span>
-        <span className={styles.sessionLabel}>{label}</span>
-      </button>
-      {!blank && (
-        <span className={styles.rowActions}>
-        <Menu
-          open={menuOpen}
-          onClose={() => {
-            setMenuOpen(false);
-          }}
-          items={sessionMenuItems}
-          onSelect={(id) => {
-            setMenuOpen(false);
-            if (id === 'rename') onRename?.(sessionId, label);
-            if (id === 'fork') onFork?.(sessionId);
-            if (id === 'archive') onArchive?.(sessionId);
-          }}
-          portal
-          closeOnPointerLeave
-          anchor={(
-            <button
-              type="button"
-              className={styles.iconButton}
-              data-session-menu
-              aria-label={t('session.options', { name: label })}
-              onClick={(event) => {
-                event.stopPropagation();
-                setMenuOpen((current) => !current);
-              }}
-            >
-              <IconEllipsisOutline16 />
-            </button>
-          )}
-        />
-        </span>
-      )}
-    </div>
-  );
-}
-
-interface WorktreeSessionGroupProps {
-  readonly t: WorktreeTranslate;
-  readonly groupKey: string;
-  readonly sessionIds: readonly string[];
-  readonly workspaceId: string;
-  readonly expanded: boolean;
-  readonly actionPending: boolean;
-  readonly sessions: SessionListLike;
-  readonly dragState: SessionDragState | undefined;
-  readonly onToggleExpanded: () => void;
-  readonly onStartDrag: (groupKey: string, sessionId: string) => void;
-  readonly onHoverDrag: (sessionId: string, half: 'before' | 'after') => void;
-  readonly onClearDrag: () => void;
-  readonly onFinishDrag: () => void;
-  readonly onCommitDrag: (
-    activeDrag: SessionDragState,
-    over: NonNullable<SessionDragState['over']>,
-    sessionIds: readonly string[],
-    workspaceId: string,
-  ) => void;
-  readonly onOpen: (sessionId: string) => void;
-  readonly onRename?: (sessionId: string, currentTitle: string) => void;
-  readonly onFork?: (sessionId: string) => void;
-  readonly onArchive?: (sessionId: string) => void;
-}
-
-function WorktreeSessionGroup({
-  t,
-  groupKey,
-  sessionIds,
-  workspaceId,
-  expanded,
-  actionPending,
-  sessions,
-  dragState,
-  onToggleExpanded,
-  onStartDrag,
-  onHoverDrag,
-  onClearDrag,
-  onFinishDrag,
-  onCommitDrag,
-  onOpen,
-  onRename,
-  onFork,
-  onArchive,
-}: WorktreeSessionGroupProps) {
-  const visibleSessionIds = expanded ? sessionIds : sessionIds.slice(0, 5);
-  const sameGroupDrag = dragState?.groupKey === groupKey;
-
-  return (
-    <>
-      {visibleSessionIds.map((sessionId) => (
-        <WorktreeSessionRow
-          t={t}
-          key={`${groupKey}:${sessionId}`}
-          sessionId={sessionId}
-          blank={isBlankSession(sessionId, sessions)}
-          label={sessionLabel(sessionId, sessions, t)}
-          drag={{
-            active: sameGroupDrag,
-            marker:
-              sameGroupDrag && dragState.over?.sessionId === sessionId
-                ? dragState.over.half
-                : null,
-            start: () => {
-              onStartDrag(groupKey, sessionId);
-            },
-            hover: (half) => {
-              onHoverDrag(sessionId, half);
-            },
-            drop: (half) => {
-              if (dragState === undefined) return;
-              onCommitDrag(
-                dragState,
-                { sessionId, half },
-                sessionIds,
-                workspaceId,
-              );
-            },
-            end: () => {
-              if (dragState?.over !== null && dragState?.over !== undefined) {
-                onCommitDrag(dragState, dragState.over, sessionIds, workspaceId);
-              } else {
-                onClearDrag();
-              }
-              onFinishDrag();
-            },
-          }}
-          actionPending={actionPending}
-          onOpen={() => {
-            onOpen(sessionId);
-          }}
-          onRename={onRename}
-          onFork={onFork}
-          onArchive={onArchive}
-        />
-      ))}
-      {sessionIds.length > 5 && (
-        <button
-          type="button"
-          className={styles.sessionOverflowButton}
-          aria-expanded={expanded}
-          onClick={onToggleExpanded}
-        >
-          {expanded
-            ? t('session.collapse')
-            : t('session.expandMore', { count: sessionIds.length - 5 })}
-        </button>
-      )}
-    </>
-  );
 }
 
 /**
@@ -1926,286 +1166,84 @@ export function WorktreeSurface({
         </button>
       </div>
 
-      <Modal
-        open={sessionRenameTarget !== undefined}
+      <WorktreeSessionRenameDialog
+        t={t}
+        target={sessionRenameTarget}
+        draft={sessionRenameDraft}
+        pending={sessionRenamePending}
+        error={sessionRenameError}
         onClose={closeSessionRename}
-        closeLabel={t('dialog.close')}
-        title={t('session.rename')}
-        footer={(
-          <>
-            <Button variant="outline" disabled={sessionRenamePending} onClick={closeSessionRename}>
-              {t('dialog.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={sessionRenamePending || sessionRenameDraft.trim().length === 0}
-              onClick={() => {
-                void confirmSessionRename();
-              }}
-            >
-              {t('dialog.rename')}
-            </Button>
-          </>
-        )}
-      >
-        <Input
-          className={styles.renameInput}
-          value={sessionRenameDraft}
-          aria-label={t('session.name')}
-          autoFocus
-          disabled={sessionRenamePending}
-          onFocus={(event) => {
-            event.currentTarget.select();
-          }}
-          onChange={(event) => {
-            setSessionRenameDraft(event.currentTarget.value);
-            setSessionRenameError(undefined);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              void confirmSessionRename();
-            }
-          }}
-        />
-        {sessionRenameError !== undefined && (
-          <p className={styles.renameError} role="alert">
-            {formatWorktreeViewError(sessionRenameError, t)}
-          </p>
-        )}
-      </Modal>
+        onDraftChange={(draft) => {
+          setSessionRenameDraft(draft);
+          setSessionRenameError(undefined);
+        }}
+        onSubmit={confirmSessionRename}
+      />
 
-      {workspaceRenameTarget !== undefined && (
-        <Modal
-          open={workspaceRenameTarget !== undefined}
-          onClose={closeWorkspaceRename}
-          closeLabel={t('dialog.closeWorkspaceRename')}
-          title={t('workspace.renameTitle')}
-          footer={(
-            <>
-              <Button variant="outline" disabled={workspaceRenamePending} onClick={closeWorkspaceRename}>
-                {t('dialog.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={workspaceRenameBlocked}
-                onClick={() => {
-                  void confirmWorkspaceRename();
-                }}
-              >
-                {t('dialog.rename')}
-              </Button>
-            </>
-          )}
-        >
-          <Input
-            className={styles.renameInput}
-            value={workspaceRenameDraft}
-            aria-label={t('workspace.name')}
-            autoFocus
-            disabled={workspaceRenamePending}
-            onFocus={(event) => {
-              event.currentTarget.select();
-            }}
-            onChange={(event) => {
-              setWorkspaceRenameDraft(event.currentTarget.value);
-              setWorkspaceRenameError(undefined);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                void confirmWorkspaceRename();
-              }
-            }}
-          />
-          {workspaceRenameDuplicate && (
-            <p className={styles.renameError} role="alert">
-              {t('workspace.duplicate')}
-            </p>
-          )}
-          {workspaceRenameError !== undefined && (
-            <p className={styles.renameError} role="alert">
-              {formatWorktreeViewError(workspaceRenameError, t)}
-            </p>
-          )}
-        </Modal>
-      )}
+      <WorktreeWorkspaceRenameDialog
+        t={t}
+        target={workspaceRenameTarget}
+        draft={workspaceRenameDraft}
+        pending={workspaceRenamePending}
+        duplicate={workspaceRenameDuplicate}
+        error={workspaceRenameError}
+        onClose={closeWorkspaceRename}
+        onDraftChange={(draft) => {
+          setWorkspaceRenameDraft(draft);
+          setWorkspaceRenameError(undefined);
+        }}
+        onSubmit={confirmWorkspaceRename}
+      />
 
-      {workspaceDeleteTarget !== undefined && (
-        <Modal
-          open={workspaceDeleteTarget !== undefined}
-          onClose={closeWorkspaceDelete}
-          closeLabel={t('dialog.closeWorkspaceDelete')}
-          title={t('workspace.deleteTitle')}
-          description={t('workspace.deleteDescription', { name: workspaceDeleteTarget.title })}
-          footer={(
-            <>
-              <Button variant="outline" disabled={workspaceDeletePending} onClick={closeWorkspaceDelete}>
-                {t('dialog.cancel')}
-              </Button>
-              <Button
-                variant="outline"
-                disabled={workspaceDeletePending}
-                onClick={() => {
-                  void confirmWorkspaceDelete();
-                }}
-              >
-                {t('dialog.delete')}
-              </Button>
-            </>
-          )}
-        >
-          {workspaceDeleteError !== undefined && (
-            <p className={styles.renameError} role="alert">
-              {formatWorktreeViewError(workspaceDeleteError, t)}
-            </p>
-          )}
-        </Modal>
-      )}
+      <WorktreeWorkspaceDeleteDialog
+        t={t}
+        target={workspaceDeleteTarget}
+        pending={workspaceDeletePending}
+        error={workspaceDeleteError}
+        onClose={closeWorkspaceDelete}
+        onSubmit={confirmWorkspaceDelete}
+      />
 
-      {worktreeModalWorkspaceId !== undefined && modalWorkspace !== undefined && (
-        <Modal
-          open={worktreeModalWorkspaceId !== undefined}
-          onClose={() => {
-            if (actionPending) return;
-            setWorktreeModalWorkspaceId(undefined);
-          }}
-          closeLabel={t('dialog.closeWorktreeCreate')}
-          title={t('worktree.createTitle')}
-          description={t('worktree.createDescription', { name: modalWorkspace.title })}
-          footer={(
-            <>
-              <Button
-                variant="outline"
-                disabled={actionPending}
-                onClick={() => {
-                  setWorktreeModalWorkspaceId(undefined);
-                }}
-              >
-                {t('dialog.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={
-                  actionPending ||
-                  selectedBranch.length === 0 ||
-                  newBranch.trim().length === 0
-                }
-                onClick={() => {
-                  void submitWorktree();
-                }}
-              >
-                {t('worktree.create')}
-              </Button>
-            </>
-          )}
-        >
-          {modalCanCreate ? (
-            <>
-              <label className={styles.modalField}>
-                {t('worktree.baseBranch')}
-                <select
-                  className={styles.actionSelect}
-                  aria-label={t('worktree.baseBranch')}
-                  value={selectedBranch}
-                  disabled={actionPending}
-                  onChange={(event) => {
-                    setSelectedBranch(event.currentTarget.value);
-                  }}
-                >
-                  {modalView?.branches.map((branch) => (
-                    <option key={branch.name} value={branch.name}>
-                      {branch.name}
-                      {branch.isCurrent ? t('branch.current') : ''}
-                      {branch.checkedOut ? t('branch.checkedOut') : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.modalField}>
-                {t('worktree.name')}
-                <Input
-                  className={styles.renameInput}
-                  aria-label={t('worktree.name')}
-                  value={newBranch}
-                  placeholder="dsh/12345678"
-                  disabled={actionPending}
-                  onChange={(event) => {
-                    setNewBranch(event.currentTarget.value);
-                  }}
-                />
-              </label>
-            </>
-          ) : (
-            <div
-              className={styles.gitReadiness}
-              data-worktree-readiness={modalSetupStatus ?? 'loading'}
-              role="alert"
-            >
-              <p className={styles.message}>
-                {modalSetupStatus === undefined
-                  ? t('status.loading')
-                  : worktreeSetupMessage(modalSetupStatus, t)}
-              </p>
-              {modalSetupStatus !== undefined && (
-                <pre
-                  className={styles.commandBlock}
-                  aria-label={t('worktree.setup.commands')}
-                >
-                  {worktreeSetupCommands(modalSetupStatus).join('\n')}
-                </pre>
-              )}
-            </div>
-          )}
-        </Modal>
-      )}
+      <WorktreeCreateDialog
+        t={t}
+        workspace={modalWorkspace}
+        view={modalView}
+        setupStatus={modalSetupStatus}
+        canCreate={modalCanCreate}
+        selectedBranch={selectedBranch}
+        newBranch={newBranch}
+        actionPending={actionPending}
+        onClose={() => {
+          setWorktreeModalWorkspaceId(undefined);
+        }}
+        onSelectedBranchChange={setSelectedBranch}
+        onNewBranchChange={setNewBranch}
+        onSubmit={submitWorktree}
+      />
 
-      {worktreeRemoval !== undefined && (
-        <Modal
-          open={worktreeRemoval !== undefined}
-          onClose={() => {
-            if (actionPending) return;
+      <WorktreeRemovalDialog
+        t={t}
+        worktree={worktreeRemoval}
+        actionPending={actionPending}
+        onClose={() => {
+          setWorktreeRemoval(undefined);
+        }}
+        onSubmit={() => {
+          if (manager === undefined || worktreeRemoval === undefined) return;
+          const target = worktreeRemoval;
+          void runMutation(async () => {
+            await executeWorktreeAction(manager, {
+              type: 'removeWorktree',
+              input: {
+                workspaceId: target.workspaceId,
+                worktreeId: target.worktreeId,
+              },
+            });
+            await invalidateWorktreeContext?.(target.workspaceId);
             setWorktreeRemoval(undefined);
-          }}
-          closeLabel={t('dialog.closeWorktreeRemove')}
-          title={t('worktree.remove')}
-          description={t('worktree.removeDescription', { name: worktreeRemoval.branch })}
-          footer={(
-            <>
-              <Button
-                variant="outline"
-                disabled={actionPending}
-                onClick={() => {
-                  setWorktreeRemoval(undefined);
-                }}
-              >
-                {t('dialog.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={actionPending}
-                onClick={() => {
-                  if (manager === undefined) return;
-                  const target = worktreeRemoval;
-                  void runMutation(async () => {
-                    await executeWorktreeAction(manager, {
-                      type: 'removeWorktree',
-                      input: {
-                        workspaceId: target.workspaceId,
-                        worktreeId: target.worktreeId,
-                      },
-                    });
-                    await invalidateWorktreeContext?.(target.workspaceId);
-                    setWorktreeRemoval(undefined);
-                  });
-                }}
-              >
-                {t('worktree.remove')}
-              </Button>
-            </>
-          )}
-        />
-      )}
+          });
+        }}
+      />
 
     </aside>
   );
