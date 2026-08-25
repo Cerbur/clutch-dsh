@@ -148,6 +148,35 @@ test "$LOCAL_VERSION" = "$PUBLISHED_VERSION"
 
 新包在 registry 的 packument 可能比 `npm publish` 的成功响应晚几秒出现；遇到短暂 404 时等待后重试，不要再次发布同一个版本。
 
+### 6. 合并 release 到 `main` 并创建版本 tag
+
+npm 发布结果确认后，先将目标 release worktree 合并回 `main`，并在合并后的 `main` 上完成
+最终验证。验证通过后，使用 `package.json` 的 `version` 创建 annotated tag。tag 名称直接
+使用版本号，不添加 `v` 前缀；已存在的 tag 不得覆盖。
+
+```bash
+cd /path/to/clutch-dsh
+VERSION=$(node -p "require('./packages/clutch-dsh-worktree/package.json').version")
+RELEASE_BRANCH="wt-worktree-${VERSION}/release"
+
+git status --short
+git checkout main
+git merge --no-ff "$RELEASE_BRANCH" -m "merge: release worktree ${VERSION}"
+pnpm run check
+
+test -z "$(git tag --list "$VERSION")"
+git tag -a "$VERSION" -m "release: @cerbur/clutch-dsh-worktree ${VERSION}"
+test "$(git rev-parse "$VERSION^{commit}")" = "$(git rev-parse HEAD)"
+git show --no-patch --decorate "$VERSION"
+```
+
+只有在 release merge、合并后验证和 tag 指向检查都成功后，才按授权将 `main` 与版本 tag
+推送到远端：
+
+```bash
+git push origin main "$VERSION"
+```
+
 ## 版本不一致时的处理
 
 | 状态                             | 处理                                                                       |
