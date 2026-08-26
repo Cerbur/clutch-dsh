@@ -49,8 +49,17 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } 
               worktreeId: 'wt-created',
               ...input,
               absolutePath: '/tmp/wt-created',
+              source: 'plugin',
               status: 'active',
             }
+          : endpoint === 'worktreeManager/importWorktree'
+            ? {
+                worktreeId: 'wt-imported',
+                ...input,
+                branch: 'feature/external',
+                source: 'external',
+                status: 'active',
+              }
           : endpoint === 'worktreeManager/bindSession'
             ? { ...input, status: 'active' }
             : endpoint === 'worktreeManager/removeWorktree'

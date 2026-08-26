@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { WORKTREE_ERROR_CODES, createWorktreeError } from '../lib/index.js';
+import {
+  WORKTREE_ERROR_CODES,
+  WORKTREE_REMOTE_METHODS,
+  createWorktreeError,
+} from '../lib/index.js';
 
 test('exports the approved stable error codes', () => {
   assert.deepEqual(WORKTREE_ERROR_CODES, [
@@ -12,6 +16,8 @@ test('exports the approved stable error codes', () => {
     'WORKTREE_NOT_FOUND',
     'WORKTREE_ORDER_INVALID',
     'WORKTREE_REMOVED',
+    'WORKTREE_IMPORT_INVALID',
+    'WORKTREE_ALREADY_MANAGED',
     'SESSION_NOT_FOUND',
     'SESSION_CWD_MISMATCH',
     'SESSION_ALREADY_BOUND',
@@ -43,7 +49,12 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
     workspaceId: 'ws_example',
     absolutePath: '/tmp/dsh/worktree/wt_example',
     branch: 'feature/example',
+    source: 'plugin',
     status: 'active',
+  };
+  const importCandidate = {
+    absolutePath: '/tmp/external/worktree',
+    branch: 'feature/external',
   };
   const branch = {
     name: 'feature/example',
@@ -60,15 +71,31 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
   assert.deepEqual(Object.keys(worktree).sort(), [
     'absolutePath',
     'branch',
+    'source',
     'status',
     'workspaceId',
     'worktreeId',
   ]);
   assert.deepEqual(Object.keys(branch).sort(), ['checkedOut', 'isCurrent', 'name']);
+  assert.deepEqual(Object.keys(importCandidate).sort(), ['absolutePath', 'branch']);
   assert.deepEqual(Object.keys(binding).sort(), [
     'sessionId',
     'status',
     'workspaceId',
     'worktreeId',
+  ]);
+});
+
+test('exposes the approved nine Manager and Remote methods', () => {
+  assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'listWorktrees',
+    'listImportCandidates',
+    'listBranches',
+    'createWorktree',
+    'importWorktree',
+    'removeWorktree',
+    'insertWorktreeBefore',
+    'listBindings',
+    'bindSession',
   ]);
 });

@@ -55,8 +55,10 @@ async function project<Value>(operation: () => Promise<Value>): Promise<Worktree
 export function createWorktreeRemoteProjection(manager: WorktreeManager): WorktreeRemoteManager {
   return {
     listWorktrees: (input) => project(() => manager.listWorktrees(input)),
+    listImportCandidates: (input) => project(() => manager.listImportCandidates(input)),
     listBranches: (input) => project(() => manager.listBranches(input)),
     createWorktree: (input) => project(() => manager.createWorktree(input)),
+    importWorktree: (input) => project(() => manager.importWorktree(input)),
     removeWorktree: (input) =>
       project(async () => {
         await manager.removeWorktree(input);

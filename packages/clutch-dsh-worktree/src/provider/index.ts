@@ -13,6 +13,7 @@ export {
 } from './sidecar.js';
 export {
   SIDECAR_SCHEMA_VERSION,
+  LEGACY_SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,
   isWorktreeProviderError,
   providerError,

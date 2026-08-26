@@ -5,7 +5,11 @@ import type {
   PropsStore,
   TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots';
-import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
+import type {
+  WorktreeImportCandidate,
+  WorktreeManager,
+  WorktreeRecord,
+} from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
 import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
@@ -74,6 +78,18 @@ export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
 export type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
 
 export type WorktreeSetupStatus = Exclude<WorktreeGitReadiness['status'], 'ready'>;
+
+export type WorktreeRegistrationMode = 'create' | 'import';
+
+export type ImportCandidatesState =
+  | { readonly status: 'idle'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | { readonly status: 'loading'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | { readonly status: 'ready'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | {
+      readonly status: 'error';
+      readonly candidates: readonly WorktreeImportCandidate[];
+      readonly error: WorktreeViewError;
+    };
 
 export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
@@ -276,11 +292,17 @@ export interface WorktreeCreateDialogProps {
   readonly readError?: WorktreeViewError;
   readonly setupStatus: WorktreeSetupStatus | undefined;
   readonly canCreate: boolean;
+  readonly mode: WorktreeRegistrationMode;
+  readonly importCandidates: ImportCandidatesState;
+  readonly selectedImportPath: string | undefined;
   readonly selectedBranch: string;
   readonly newBranch: string;
   readonly actionPending: boolean;
   readonly onClose: () => void;
   readonly onRetry?: () => void;
+  readonly onModeChange: (mode: WorktreeRegistrationMode) => void;
+  readonly onRetryImportCandidates: () => void;
+  readonly onSelectedImportPathChange: (absolutePath: string) => void;
   readonly onSelectedBranchChange: (branch: string) => void;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;

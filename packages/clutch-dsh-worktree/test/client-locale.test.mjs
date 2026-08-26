@@ -52,3 +52,23 @@ test('uses native-compatible blank Session labels', () => {
   assert.equal(zh['session.new'], '新会话');
   assert.equal(en['session.new'], 'New Session');
 });
+
+test('localizes the external Worktree import and removal warning', () => {
+  for (const key of [
+    'worktree.tabCreate',
+    'worktree.tabImport',
+    'worktree.importDescription',
+    'worktree.importLoading',
+    'worktree.importEmpty',
+    'worktree.importPlaceholder',
+    'worktree.importSelected',
+    'worktree.import',
+    'worktree.removeExternalDescription',
+    'error.worktreeImportInvalid',
+    'error.worktreeAlreadyManaged',
+    'error.worktreeRegistrationSessionUnavailable',
+  ]) {
+    assert.ok(zh[key].length > 0, `zh.${key} must be present`);
+    assert.ok(en[key].length > 0, `en.${key} must be present`);
+  }
+});

@@ -66,6 +66,7 @@ function manager(overrides = {}) {
           workspaceId: 'ws1',
           absolutePath: '/tmp/wt1',
           branch: 'main',
+          source: 'plugin',
           status: 'active',
         },
       ];
@@ -82,6 +83,20 @@ function manager(overrides = {}) {
         workspaceId: 'ws1',
         branch: input.newBranch ?? input.branch,
         absolutePath: '/tmp/created',
+        source: 'plugin',
+        status: 'active',
+      };
+    },
+    async listImportCandidates() {
+      return [];
+    },
+    async importWorktree(input) {
+      return {
+        worktreeId: 'imported',
+        workspaceId: input.workspaceId,
+        branch: 'feature/external',
+        absolutePath: input.absolutePath,
+        source: 'external',
         status: 'active',
       };
     },
@@ -676,7 +691,7 @@ test('preserves an endpoint failure as an explicit retryable view error', async 
   });
 });
 
-test('executes create and remove actions through the Manager contract', async () => {
+test('executes create, import, and remove actions through the Manager contract', async () => {
   const calls = [];
   const worktreeManager = manager({
     async createWorktree(input) {
@@ -685,6 +700,10 @@ test('executes create and remove actions through the Manager contract', async ()
     },
     async removeWorktree(input) {
       calls.push(['removeWorktree', input]);
+    },
+    async importWorktree(input) {
+      calls.push(['importWorktree', input]);
+      return manager().importWorktree(input);
     },
   });
 
@@ -696,17 +715,98 @@ test('executes create and remove actions through the Manager contract', async ()
     type: 'removeWorktree',
     input: { workspaceId: 'ws1', worktreeId: 'wt1' },
   });
+  const imported = await executeWorktreeAction(worktreeManager, {
+    type: 'importWorktree',
+    input: { workspaceId: 'ws1', absolutePath: '/tmp/external' },
+  });
   assert.deepEqual(calls, [
     ['createWorktree', { workspaceId: 'ws1', branch: 'main', newBranch: 'dsh/12345678' }],
     ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }],
   ]);
   assert.deepEqual(created, {
     worktreeId: 'created',
     workspaceId: 'ws1',
     branch: 'dsh/12345678',
     absolutePath: '/tmp/created',
+    source: 'plugin',
     status: 'active',
   });
+  assert.deepEqual(imported, {
+    worktreeId: 'imported',
+    workspaceId: 'ws1',
+    branch: 'feature/external',
+    absolutePath: '/tmp/external',
+    source: 'external',
+    status: 'active',
+  });
+});
+
+test('adds a Create/Import dialog that retains the existing shared Session registration flow', async () => {
+  const { coordinator, dialogs, types } = await readSurfaceSources();
+
+  assert.match(types, /export type WorktreeRegistrationMode = 'create' \| 'import';/);
+  assert.match(types, /export type ImportCandidatesState =/);
+  assert.match(types, /WorktreeImportCandidate/);
+  assert.match(dialogs, /role="tablist"/);
+  assert.match(dialogs, /role="tab"/);
+  assert.match(dialogs, /aria-selected=\{mode === 'create'\}/);
+  assert.match(dialogs, /aria-selected=\{mode === 'import'\}/);
+  assert.match(dialogs, /candidate\.branch/);
+  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.match(dialogs, /t\('worktree\.import'\)/);
+  assert.match(dialogs, /t\('worktree\.importDescription'/);
+  assert.match(dialogs, /t\('worktree\.importEmpty'\)/);
+  assert.match(dialogs, /t\('worktree\.importLoading'\)/);
+  assert.match(dialogs, /t\('worktree\.importPlaceholder'\)/);
+  assert.match(dialogs, /t\('action\.retry'\)/);
+
+  assert.match(coordinator, /const \[worktreeModalMode, setWorktreeModalMode\] =\s*useState<WorktreeRegistrationMode>\('create'\)/);
+  assert.match(coordinator, /const \[importCandidates, setImportCandidates\] =\s*useState<ImportCandidatesState>/);
+  assert.match(coordinator, /const \[selectedImportPath, setSelectedImportPath\] =\s*useState<string \| undefined>\(\)/);
+  assert.match(coordinator, /manager\.listImportCandidates\(\{ workspaceId \}\)/);
+  assert.match(coordinator, /type: 'importWorktree'/);
+  assert.match(coordinator, /absolutePath: selectedImportCandidate!\.absolutePath/);
+  assert.match(coordinator, /const continueWorktreeRegistration = async/);
+  assert.match(coordinator, /await continueWorktreeRegistration\(registeredWorktree\)/);
+  assert.match(coordinator, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
+  assert.match(coordinator, /await refresh\(\{ preserveCurrent: true \}\)/);
+});
+
+test('renders import candidates in a native dropdown instead of a flat candidate list', async () => {
+  const { dialogs } = await readSurfaceSources();
+
+  assert.match(dialogs, /<select[\s\S]*className=\{styles\.worktreeImportSelect\}/);
+  assert.match(dialogs, /value=\{selectedImportPath \?\? ''\}/);
+  assert.match(
+    dialogs,
+    /onSelectedImportPathChange\(event\.currentTarget\.value\)/,
+  );
+  assert.match(dialogs, /<option value="" disabled>/);
+  assert.match(dialogs, /<option key=\{candidate\.absolutePath\} value=\{candidate\.absolutePath\}>/);
+  assert.match(dialogs, /candidate\.branch/);
+  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.doesNotMatch(dialogs, /data-worktree-import-candidate/);
+});
+
+test('keeps modal candidate state current without blanking ready Worktrees', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const loadStart = source.indexOf('const loadImportCandidates =');
+  const loadEnd = source.indexOf('const continueWorktreeRegistration =', loadStart);
+
+  assert.notEqual(loadStart, -1);
+  assert.notEqual(loadEnd, -1);
+  const loadSource = source.slice(loadStart, loadEnd);
+  assert.match(loadSource, /candidates: current\.candidates/);
+  assert.match(loadSource, /importCandidatesGuard\.current/);
+  assert.match(loadSource, /worktreeModalWorkspaceId/);
+  assert.match(loadSource, /setImportCandidates\(\(current\) => \(\{\s*status: 'error',\s*candidates: current\.candidates/);
+  assert.match(source, /setWorktreeModalMode\('create'\)/);
+  assert.match(source, /setImportCandidates\(\{ status: 'idle', candidates: \[\] \}\)/);
+  assert.match(source, /setSelectedImportPath\(undefined\)/);
 });
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
@@ -746,11 +846,11 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.match(source, /import \{ formatWorktreeViewError \}/);
   assert.match(source, /\{formatWorktreeViewError\(actionError, t\)\}/);
   assert.match(source, /\{formatWorktreeViewError\(readState\.error, t\)\}/);
-  assert.match(source, /code: 'WORKTREE_CREATED_SESSION_UNAVAILABLE'/);
+  assert.match(source, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKTREE_RECORD_MISSING'/);
   assert.doesNotMatch(source, /message: t\('error\.workspaceOrderingUnavailable'\)/);
   assert.doesNotMatch(source, /message: t\('error\.sessionOrderingUnavailable'\)/);
-  assert.doesNotMatch(source, /message: t\('error\.worktreeCreatedSessionUnavailable'\)/);
+  assert.doesNotMatch(source, /message: t\('error\.worktreeRegistrationSessionUnavailable'\)/);
   assert.doesNotMatch(source, /message: t\('error\.sessionCreationUnavailable'\)/);
   assert.doesNotMatch(source, /throw new Error\(t\('error\.worktreeRecordMissing'\)\)/);
   assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
@@ -808,10 +908,11 @@ test('bounds the surface to live native sidebar anchors', async () => {
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
   const source = (await readSurfaceSources()).combined;
 
-  assert.match(source, /const createdWorktree = await executeWorktreeAction/);
+  assert.match(source, /const registeredWorktree = worktreeModalMode === 'create'/);
+  assert.match(source, /await continueWorktreeRegistration\(registeredWorktree\)/);
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
-  assert.match(source, /worktreeId: createdWorktree\.worktreeId/);
-  assert.match(source, /cwd: createdWorktree\.absolutePath/);
+  assert.match(source, /worktreeId: registeredWorktree\.worktreeId/);
+  assert.match(source, /cwd: registeredWorktree\.absolutePath/);
   assert.match(source, /t\('worktree\.name'\)/);
   assert.match(source, /dsh\//);
 });
@@ -972,12 +1073,12 @@ test('preserves the Worktree projection for action refreshes', async () => {
   );
   assert.match(runMutationSource, /await refresh\(\{ preserveCurrent: true \}\)/);
 
-  const submitWorktreeSource = section(
-    'const submitWorktree = async',
-    '  const createSession = async',
+  const registrationSource = section(
+    'const continueWorktreeRegistration = async',
+    '  const submitWorktree = async',
   );
   assert.equal(
-    (submitWorktreeSource.match(/await refresh\(\{ preserveCurrent: true \}\)/g) ?? []).length,
+    (registrationSource.match(/await refresh\(\{ preserveCurrent: true \}\)/g) ?? []).length,
     2,
   );
 
@@ -1034,7 +1135,7 @@ test('keeps the final surface bounded, scrollable, and action-aligned', async ()
     'utf8',
   );
 
-  assert.doesNotMatch(surfaceSource, /role="tablist"|role='tablist'/);
+  assert.match(surfaceSource, /role="tablist"/);
   assert.doesNotMatch(surfaceSource, /Workspace<\/button>[\s\S]*Worktree<\/button>/);
   assert.match(surfaceSource, /data-worktree-surface/);
   assert.match(styleSource, /overflow: auto/);

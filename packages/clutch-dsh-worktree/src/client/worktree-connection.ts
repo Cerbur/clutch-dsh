@@ -16,8 +16,10 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   listWorktrees: 'worktreeManager/listWorktrees',
+  listImportCandidates: 'worktreeManager/listImportCandidates',
   listBranches: 'worktreeManager/listBranches',
   createWorktree: 'worktreeManager/createWorktree',
+  importWorktree: 'worktreeManager/importWorktree',
   removeWorktree: 'worktreeManager/removeWorktree',
   insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   listBindings: 'worktreeManager/listBindings',
@@ -168,8 +170,10 @@ export function createWorktreeConnectionAdapter(
 
   return {
     listWorktrees: (input) => invoke('listWorktrees', input),
+    listImportCandidates: (input) => invoke('listImportCandidates', input),
     listBranches: (input) => invoke('listBranches', input),
     createWorktree: (input) => invoke('createWorktree', input),
+    importWorktree: (input) => invoke('importWorktree', input),
     async removeWorktree(input): Promise<void> {
       await invoke<null>('removeWorktree', input);
     },

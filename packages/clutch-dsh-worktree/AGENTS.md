@@ -74,6 +74,9 @@ degraded/read-only 状态，不能用空索引覆盖 DSH 原始列表。
 
 ## 关系、cwd 与生命周期
 
+`WorktreeRecord.source` records provenance only: `plugin` is created in the plugin-managed root and `external` is an existing linked Git Worktree registered in place. The source does not change health, ordering, binding, Session, browser membership projection, runtime cwd, or removal capabilities.
+- External import only registers an existing linked Worktree in the sidecar; it never moves, copies, edits, or otherwise mutates the external directory. The first-version candidate surface includes only branch-attached, non-root, unmanaged Worktrees. Detached HEAD entries are excluded and cannot be imported.
+- Duplicate identity uses the canonical physical path. An active external record for the same Workspace and path is idempotent; a plugin-managed or otherwise incompatible managed record returns `WORKTREE_ALREADY_MANAGED`.
 - 一个 Session 最多绑定一个 active Worktree；一个 Worktree 可以绑定多个 Session。
 - 没有 binding、main binding 或 detached binding 时，运行时 cwd 使用 Project 根目录。
 - active Worktree binding 时，cwd 使用对应 Worktree 路径。
@@ -92,6 +95,11 @@ Worktree 与 Session 的顺序约束：
 5. 创建 Session 时先调用 DSH 原生 Session API，再写入外部 binding。
 6. binding 写入失败时不得删除或修改已创建的 DSH Session；界面必须保留 Session ID 供重试或直接打开。
 
+Plugin-created and external Worktrees share the real `git worktree remove` path. Git removal
+must succeed before the sidecar record is marked `removed` and bindings become `detached`.
+Removing an external Worktree is destructive and may delete its linked Worktree directory;
+the Client confirmation copy must say so. If Git succeeds but sidecar synchronization fails,
+the failure remains visible and retryable.
 Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工作树中的业务文件。
 
 ## 模块职责与依赖方向
@@ -109,6 +117,9 @@ contract  ←  provider
 拥有稳定的 Service Definition vocabulary、ID/状态/关系类型、manager interface、
 plain JSON projection 和 runtime cwd contract。
 
+`WorktreeRecord.source` is the stable `plugin | external` provenance field, and the contract
+also exposes the read-only `WorktreeImportCandidate` projection plus `listImportCandidates` and
+`importWorktree`. The contract remains browser-safe and contains no Git or sidecar classes.
 不得依赖 Git、sidecar、Node-only API、React、DSH mutation API 或具体 transport。
 
 ### `src/provider/`
@@ -121,6 +132,7 @@ worktree 信息时，默认 `LocalGitAdapter` 通过可选的 `resolveRepository
 Git worktree root。Manage 在该 resolver 存在时统一使用 root 读取，旧的注入 adapter 没有
 resolver 时保留原始 Workspace root 作为兼容回退。
 
+The sidecar schema is versioned from v1 to v2. Legacy records are read-normalized with `source: 'plugin'`; the next successful mutation atomically persists v2. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never become an empty candidate list. Provider errors include `WORKTREE_IMPORT_INVALID` and `WORKTREE_ALREADY_MANAGED`.
 Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路由、原始 DSH 数据
 迁移或 Project/Session 内容写入。
 
@@ -130,6 +142,10 @@ Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路
 冲突与幂等、main/active/detached cwd 解析、创建/删除恢复顺序和 degraded-state
 决策。
 
+`createWorktree` and `importWorktree` are the only separate acquisition entry points. After a
+record exists, both use the same health, ordering, binding, Session creation/recovery, runtime
+cwd, and removal orchestration. Import validates absolute existing paths against the current
+Workspace repository and never calls Git add/remove.
 Manage 不执行具体 Git command，不实现 sidecar 文件格式细节，不拥有 DSH 原始数据，
 也不负责 Web UI 或 transport。
 
@@ -160,6 +176,10 @@ Client 不执行 Git，不读取 sidecar 文件，不导入 Provider、Manage �
 [`src/client/README.md`](src/client/README.md)。
 
 ## Current upstream Client workaround 与当前界面约束
+The Import tab keeps candidate and selection state in the browser and uses the existing `/api`
+Connection. Successful import enters the same Session create → bind → native membership
+projection → open → preserve-ready-refresh flow as Create; browser code never reads Git or the
+sidecar directly.
 
 当前 upstream DSH 的 Worktree Session flow 使用原生 `session.create({ cwd: worktreePath })`
 创建 DSH Session，binding 成功后只在浏览器内把 `{ workspaceId, sessionId }` 投影到 native
@@ -169,6 +189,8 @@ Workspace list 刷新后重放 projection，binding 消失或 Client dispose 时
 Client surface 的当前约束：
 
 - Worktree mode 只从 Sidebar footer action 进入，不添加独立 Workspace/Worktree Tab；
+- Workspace `+` 继续打开同一个弹窗，默认显示 `Create`；`Import` 只展示同一 Workspace 中未被 sidecar 管理、非 repository root、branch-attached 的 Git Worktrees，第一版不展示 detached HEAD；
+- Import registers the selected directory in place and then creates a Session through the same binding, membership projection, open, refresh-preservation, and recovery flow as Create; external removal warns that the linked directory may be deleted；
 - overlay 的可见区间由 native New Session 与 Sidebar footer anchors 动态派生，缺少 anchor 时保持零覆盖；
 - Workspace rename/delete/reorder 和 Session 菜单、排序继续使用 DSH 原生 Client API；
 - Main 与 Worktree 共用 parameterized split-row，Session reorder 限定在当前视觉分组内；
@@ -190,6 +212,9 @@ Client surface 的当前约束：
 - plugin index 不可用时 Project/Session 视角仍可用；
 - Worktree 模式创建的 Session 能在原始 Project session 列表中出现；
 - Client `/api` 调用、双层错误、dispose abort 和 native list projection 的生命周期。
+- WorktreeRecord source provenance, v1-to-v2 sidecar read normalization and first-mutation migration；
+- external candidate filtering, same-path idempotency, plugin-managed conflict (`WORKTREE_ALREADY_MANAGED`), detached/invalid import rejection, and import-without-Git-mutation；
+- external and plugin real Git removal, detached binding retention, Session/binding failure recovery after import, and ready-content-preserving refresh；
 - 任意 Client refresh、native list/membership projection 或异步错误切换不得先清空当前 ready 内容而触发白屏；已有内容刷新必须保留当前 projection，loading 空态只允许首次进入 Worktree mode 或显式 retry，新增刷新路径必须有回归测试覆盖。
 
 常用检查命令（从 workspace 根目录执行）：

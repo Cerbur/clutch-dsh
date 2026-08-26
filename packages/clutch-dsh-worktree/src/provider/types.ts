@@ -12,7 +12,8 @@ import type {
  * The only supported on-disk sidecar format; unknown versions are treated as
  * corruption rather than guessed or silently migrated.
  */
-export const SIDECAR_SCHEMA_VERSION = 1 as const;
+export const LEGACY_SIDECAR_SCHEMA_VERSION = 1 as const;
+export const SIDECAR_SCHEMA_VERSION = 2 as const;
 
 /**
  * 从 DSH 投影出的最小 Workspace 事实；Provider 不拥有、复制或写回这些数据。
