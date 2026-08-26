@@ -79,6 +79,21 @@ main
 - 合并 feature worktree 前，必须先将其 rebase 到 release worktree 的最新基线，再在
   release worktree 中合并该 worktree 的单个 scoped commit。发生冲突时先解决并重新验证，
   不能跳过 rebase gate。
+- `feature worktree → release worktree → main` 的每次回合并都有干净工作区门禁：源 feature
+  worktree 和目标 release worktree 在合并前都必须没有 staged、unstaged 或 untracked 改动；
+  其中 feature worktree 的检查是硬性条件，不得以 dirty feature worktree 合并。至少执行：
+
+  ```bash
+  FEATURE_WORKTREE=/path/to/feature-worktree
+  RELEASE_WORKTREE=/path/to/release-worktree
+
+  test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+  test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+  ```
+
+  feature rebase 完成后必须再次检查 feature worktree；任一检查有输出都必须停止，先将改动
+  整理进 feature 的 scoped commit 并重新验证，不能用 stash 或忽略输出代替该门禁。合并完成
+  后还要检查 release worktree 干净，再进入下一阶段。
 - 在 `npm pack`、npm publish 或最终 release verification 之前，必须将 release worktree
   更新到最新的 `main`，再运行完整检查；发布准备完成后将 release worktree 的最终提交
   合并回 `main`。
