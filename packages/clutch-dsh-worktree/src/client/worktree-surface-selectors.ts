@@ -76,3 +76,68 @@ export function workspaceMatches(
     sessionMatchesQuery(binding.sessionId, sessions, query),
   );
 }
+
+export type CurrentSessionLocation =
+  | {
+      readonly sessionId: string;
+      readonly workspaceId: string;
+      readonly groupKey: string;
+      readonly kind: 'main';
+    }
+  | {
+      readonly sessionId: string;
+      readonly workspaceId: string;
+      readonly groupKey: string;
+      readonly kind: 'worktree';
+      readonly worktreeId: string;
+    };
+
+export function resolveCurrentSessionLocation(
+  currentSessionId: string | undefined,
+  workspaces: readonly Pick<WorkspaceLike, 'workspaceId' | 'sessionIds'>[],
+  views: readonly WorktreeWorkspaceView[],
+): CurrentSessionLocation | undefined {
+  if (currentSessionId === undefined) return undefined;
+  const workspace = workspaces.find((candidate) =>
+    candidate.sessionIds.includes(currentSessionId),
+  );
+  if (workspace === undefined) return undefined;
+  const view = views.find((candidate) => candidate.workspaceId === workspace.workspaceId);
+  if (view === undefined) return undefined;
+  const binding = view.bindings.find((candidate) =>
+    candidate.sessionId === currentSessionId,
+  );
+  if (binding === undefined) {
+    return {
+      sessionId: currentSessionId,
+      workspaceId: workspace.workspaceId,
+      groupKey: 'main:' + workspace.workspaceId,
+      kind: 'main',
+    };
+  }
+  const worktree = view.worktrees.find((candidate) =>
+    candidate.worktreeId === binding.worktreeId &&
+    candidate.workspaceId === workspace.workspaceId,
+  );
+  if (worktree === undefined) return undefined;
+  return {
+    sessionId: currentSessionId,
+    workspaceId: workspace.workspaceId,
+    groupKey: 'worktree:' + worktree.worktreeId,
+    kind: 'worktree',
+    worktreeId: worktree.worktreeId,
+  };
+}
+
+export function currentSessionRevealKeys(
+  location: CurrentSessionLocation | undefined,
+): readonly string[] {
+  if (location === undefined) return [];
+  return [
+    'workspace:' + location.workspaceId,
+    location.kind === 'main'
+      ? 'main:' + location.workspaceId
+      : 'worktree:' + location.worktreeId,
+    'session-group:' + location.groupKey,
+  ];
+}

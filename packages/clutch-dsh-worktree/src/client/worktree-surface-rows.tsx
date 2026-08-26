@@ -323,6 +323,7 @@ export function WorktreeSessionRow({
   t,
   sessionId,
   blank,
+  current,
   label,
   drag,
   actionPending,
@@ -363,9 +364,11 @@ export function WorktreeSessionRow({
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
       data-session-blank={blank ? 'true' : undefined}
+      data-session-current={current ? 'true' : undefined}
       data-session-drag={drag.active ? 'active' : undefined}
       data-menu-open={menuOpen || undefined}
       role="treeitem"
+      aria-current={current ? 'true' : undefined}
       draggable
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
@@ -386,9 +389,6 @@ export function WorktreeSessionRow({
       }}
     >
       <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
-        <span className={styles.treeGuide} aria-hidden="true">
-          └
-        </span>
         <span className={styles.sessionLabel}>{label}</span>
       </button>
       {!blank && (
@@ -433,6 +433,7 @@ export function WorktreeSessionGroup({
   groupKey,
   sessionIds,
   workspaceId,
+  currentSessionId,
   expanded,
   actionPending,
   sessions,
@@ -459,6 +460,7 @@ export function WorktreeSessionGroup({
           key={`${groupKey}:${sessionId}`}
           sessionId={sessionId}
           blank={isBlankSession(sessionId, sessions)}
+          current={sessionId === currentSessionId}
           label={sessionLabel(sessionId, sessions, t)}
           drag={{
             active: sameGroupDrag,

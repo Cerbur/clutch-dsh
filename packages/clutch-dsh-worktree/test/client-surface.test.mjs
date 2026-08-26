@@ -55,6 +55,14 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
       clientReadme,
     ),
   );
+  assert.match(readme, /current Session.*highlight|highlight.*current Session/i);
+  assert.match(readme, /temporar(y|ily).*reveal|temporary.*expand/i);
+  assert.match(readme, /does not change.*persisted.*expansion|persisted.*expansion.*unchanged/i);
+  assert.match(readmeZh, /当前 Session.*高亮|高亮.*当前 Session/);
+  assert.match(readmeZh, /临时.*展开|临时.*定位/);
+  assert.match(readmeZh, /不改变.*展开选择|展开选择.*不改变/);
+  assert.match(clientReadme, /current Session.*browser-local|当前 Session.*浏览器本地/i);
+  assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
 });
 
 function manager(overrides = {}) {
@@ -1350,6 +1358,34 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
+test('reduces the left offset before the nested tree line', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf('.treeChildren {');
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  assert.match(styles.slice(ruleStart, ruleEnd + 1), /margin-left: 16px;/);
+});
+
+test('indents Session tabs by the Worktree icon width', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf('.treeSessionRow {');
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(sessionRule, /margin-left: 22px;/);
+  assert.match(sessionRule, /width: calc\(100% - 22px\);/);
+});
+
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
@@ -1508,6 +1544,86 @@ test('wires native blank Session visibility and menu parity into both tree group
   assert.match(source, /interface WorktreeSessionRowProps \{[\s\S]*readonly blank: boolean/);
   assert.match(rowSource, /data-session-blank/);
   assert.match(rowSource, /\{!blank && \(/);
+});
+
+test('marks only the DSH current Session row without changing row controls', async () => {
+  const { rows, types } = await readSurfaceSources();
+  assert.match(types, /readonly current: boolean/);
+  assert.match(types, /readonly currentSessionId\?: string/);
+  assert.match(rows, /data-session-current=\{current \? 'true' : undefined\}/);
+  assert.match(rows, /aria-current=\{current \? 'true' : undefined\}/);
+  assert.match(rows, /current=\{sessionId === currentSessionId\}/);
+  assert.match(await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  ), /\.treeSessionRow\[data-session-current='true'\]/);
+});
+
+test('removes the unnecessary Session tree guide glyph', async () => {
+  const { rows } = await readSurfaceSources();
+  assert.doesNotMatch(rows, /styles\.treeGuide/);
+  assert.doesNotMatch(rows, /└/);
+});
+
+test('keeps current Session highlight without a leading inset frame', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf(".treeSessionRow[data-session-current='true'] {");
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  const currentRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(currentRule, /background: var\(--dsw-alias-interactive-bg-hover\)/);
+  assert.doesNotMatch(currentRule, /box-shadow/);
+  assert.match(
+    styles,
+    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 600;/,
+  );
+});
+
+test('temporarily reveals the current Session path without persisting it', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /const currentSessionId = sessions\.current/);
+  assert.match(source, /resolveCurrentSessionLocation/);
+  assert.match(source, /currentSessionReveal/);
+  assert.match(source, /currentSessionRevealKeys/);
+  assert.match(source, /setSearchQuery\(''\)/);
+  assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
+  assert.match(source, /sessionIds\.length > 5/);
+  assert.match(source, /suppressedKeys/);
+  assert.match(source, /expandState\.actions\.toggleWorkspace/);
+  assert.match(source, /expandState\.actions\.toggleMain/);
+  assert.match(source, /expandState\.actions\.toggleWorktree/);
+  assert.doesNotMatch(source, /currentSessionReveal.*localStorage/);
+});
+
+test('positions the current Worktree Session after commit and cancels stale work', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const positionSource = await readFile(
+    new URL('../src/client/worktree-session-position.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /useLayoutEffect/);
+  assert.match(source, /locateGenerationRef/);
+  assert.match(source, /positionedLocateGenerationRef/);
+  assert.match(source, /requestAnimationFrame/);
+  assert.match(source, /cancelAnimationFrame/);
+  assert.match(source, /scrollCurrentSessionIntoView/);
+  assert.match(source, /generation !== locateGenerationRef\.current/);
+  assert.match(positionSource, /querySelectorAll<HTMLElement>\('\[data-session-id\]'\)/);
+  assert.match(positionSource, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.doesNotMatch(source, /document\.querySelector/);
 });
 
 test('routes pending Worktree Session Retry through the browser recovery helper', async () => {

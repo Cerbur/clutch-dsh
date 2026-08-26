@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   IconBranchOutline16,
   IconCloseOutline16,
@@ -33,8 +41,11 @@ import {
   clearSessionGroupExpansion,
   includesText,
   isCompleteWorktreeWorkspaceSnapshot,
+  currentSessionRevealKeys,
+  resolveCurrentSessionLocation,
   workspaceMatches,
 } from './worktree-surface-selectors.js';
+import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
 import {
   WorktreeGroupRow,
   WorktreeSessionGroup,
@@ -92,6 +103,11 @@ function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
 const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
 type ExpandedSessionGroups = Record<string, boolean>;
 
+interface CurrentSessionRevealState {
+  readonly sessionId: string;
+  readonly suppressedKeys: Readonly<Record<string, true>>;
+}
+
 function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
   const next = workspaces.map((workspace) => workspace.workspaceId);
   const previousRef = useRef<readonly string[]>([]);
@@ -133,6 +149,7 @@ export function WorktreeSurface({
   const mode = effectiveViewMode(preferredMode, available && manager !== undefined);
   const sessions = useSessions((state) => state) as SessionListLike;
   const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const currentSessionId = sessions.current;
   const workspaceIds = useStableWorkspaceIds(workspaces.items);
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
   const expandSnapshot = useSyncExternalStore(
@@ -143,6 +160,12 @@ export function WorktreeSurface({
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentSessionReveal, setCurrentSessionReveal] =
+    useState<CurrentSessionRevealState>();
+  const searchQueryRef = useRef(searchQuery);
+  searchQueryRef.current = searchQuery;
+  const locateGenerationRef = useRef(0);
+  const positionedLocateGenerationRef = useRef<number>();
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
   const [modalReadLoading, setModalReadLoading] = useState(false);
@@ -286,6 +309,68 @@ export function WorktreeSurface({
     () => new Map(readState.views.map((view) => [view.workspaceId, view])),
     [readState.views],
   );
+
+  const currentSessionLocation = useMemo(
+    () =>
+      readState.status === 'ready'
+        ? resolveCurrentSessionLocation(currentSessionId, workspaces.items, readState.views)
+        : undefined,
+    [currentSessionId, readState.status, readState.views, workspaces.items],
+  );
+  const currentRevealKeys = useMemo(
+    () => new Set(currentSessionRevealKeys(currentSessionLocation)),
+    [currentSessionLocation],
+  );
+  const isCurrentSessionReveal = (key: string): boolean =>
+    currentSessionReveal !== undefined &&
+    currentSessionReveal.sessionId === currentSessionId &&
+    currentRevealKeys.has(key) &&
+    currentSessionReveal.suppressedKeys[key] !== true;
+
+  useLayoutEffect(() => {
+    locateGenerationRef.current += 1;
+    positionedLocateGenerationRef.current = undefined;
+    if (mode !== 'worktree') {
+      setCurrentSessionReveal(undefined);
+      return;
+    }
+    if (searchQueryRef.current.trim().length > 0) setSearchQuery('');
+    setCurrentSessionReveal(
+      currentSessionId === undefined
+        ? undefined
+        : { sessionId: currentSessionId, suppressedKeys: {} },
+    );
+  }, [currentSessionId, mode]);
+
+  useLayoutEffect(() => {
+    if (
+      mode !== 'worktree' ||
+      currentSessionId === undefined ||
+      currentSessionLocation === undefined
+    ) {
+      return;
+    }
+    const generation = locateGenerationRef.current;
+    if (positionedLocateGenerationRef.current === generation) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      if (cancelled || generation !== locateGenerationRef.current) return;
+      if (!scrollCurrentSessionIntoView(ref.current, currentSessionId)) return;
+      positionedLocateGenerationRef.current = generation;
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    currentSessionId,
+    currentSessionLocation,
+    currentSessionReveal,
+    expandSnapshot,
+    mode,
+    query,
+    readState.status,
+  ]);
 
   useEffect(() => {
     if (
@@ -622,28 +707,91 @@ export function WorktreeSurface({
     setExpandedSessionGroups((current) => clearSessionGroupExpansion(current, groupKeys));
   };
 
+  const suppressCurrentSessionReveal = (key: string): boolean => {
+    if (!isCurrentSessionReveal(key)) return false;
+    setCurrentSessionReveal((current) => {
+      if (current === undefined || current.sessionId !== currentSessionId) return current;
+      return {
+        ...current,
+        suppressedKeys: { ...current.suppressedKeys, [key]: true },
+      };
+    });
+    return true;
+  };
+
   const toggleWorkspace = (workspaceId: string): void => {
-    const wasExpanded = isWorkspaceExpanded(expandSnapshot, workspaceId);
+    const persistedExpanded = isWorkspaceExpanded(expandSnapshot, workspaceId);
+    const autoExpanded = isCurrentSessionReveal('workspace:' + workspaceId);
+    const visuallyExpanded = persistedExpanded || autoExpanded;
+    if (visuallyExpanded && autoExpanded) {
+      suppressCurrentSessionReveal('workspace:' + workspaceId);
+    }
+    if (visuallyExpanded && !persistedExpanded) {
+      clearSessionGroups([
+        'main:' + workspaceId,
+        ...(
+          viewByWorkspace.get(workspaceId)?.worktrees.map((record) => record.worktreeId) ?? []
+        ).map((worktreeId) => 'worktree:' + worktreeId),
+      ]);
+      return;
+    }
     expandState.actions.toggleWorkspace(workspaceId);
-    if (!wasExpanded) return;
-    const worktreeIds = viewByWorkspace.get(workspaceId)?.worktrees
-      .map((record) => record.worktreeId) ?? [];
-    clearSessionGroups([
-      'main:' + workspaceId,
-      ...worktreeIds.map((worktreeId) => 'worktree:' + worktreeId),
-    ]);
+    if (visuallyExpanded) {
+      clearSessionGroups([
+        'main:' + workspaceId,
+        ...(
+          viewByWorkspace.get(workspaceId)?.worktrees.map((record) => record.worktreeId) ?? []
+        ).map((worktreeId) => 'worktree:' + worktreeId),
+      ]);
+    }
   };
 
   const toggleMain = (workspaceId: string): void => {
-    const wasExpanded = isMainExpanded(expandSnapshot, workspaceId);
+    const persistedExpanded = isMainExpanded(expandSnapshot, workspaceId);
+    const autoExpanded = isCurrentSessionReveal('main:' + workspaceId);
+    const visuallyExpanded = persistedExpanded || autoExpanded;
+    if (visuallyExpanded && autoExpanded) {
+      suppressCurrentSessionReveal('main:' + workspaceId);
+    }
+    if (visuallyExpanded && !persistedExpanded) {
+      clearSessionGroups(['main:' + workspaceId]);
+      return;
+    }
     expandState.actions.toggleMain(workspaceId);
-    if (wasExpanded) clearSessionGroups(['main:' + workspaceId]);
+    if (visuallyExpanded) clearSessionGroups(['main:' + workspaceId]);
   };
 
   const toggleWorktree = (worktreeId: string): void => {
-    const wasExpanded = isWorktreeExpanded(expandSnapshot, worktreeId);
+    const persistedExpanded = isWorktreeExpanded(expandSnapshot, worktreeId);
+    const autoExpanded = isCurrentSessionReveal('worktree:' + worktreeId);
+    const visuallyExpanded = persistedExpanded || autoExpanded;
+    if (visuallyExpanded && autoExpanded) {
+      suppressCurrentSessionReveal('worktree:' + worktreeId);
+    }
+    if (visuallyExpanded && !persistedExpanded) {
+      clearSessionGroups(['worktree:' + worktreeId]);
+      return;
+    }
     expandState.actions.toggleWorktree(worktreeId);
-    if (wasExpanded) clearSessionGroups(['worktree:' + worktreeId]);
+    if (visuallyExpanded) clearSessionGroups(['worktree:' + worktreeId]);
+  };
+
+  const toggleSessionGroup = (groupKey: string): void => {
+    const autoExpanded = isCurrentSessionReveal('session-group:' + groupKey);
+    const transientExpanded = expandedSessionGroups[groupKey] === true;
+    if (autoExpanded) {
+      suppressCurrentSessionReveal('session-group:' + groupKey);
+      setExpandedSessionGroups((current) => {
+        const next = { ...current };
+        delete next[groupKey];
+        return next;
+      });
+      return;
+    }
+    setExpandedSessionGroups((current) => ({
+      ...current,
+      [groupKey]: !transientExpanded,
+    }));
   };
 
   const closeWorktreeCreator = (force = false): void => {
@@ -974,7 +1122,9 @@ export function WorktreeSurface({
                   const mainLabel = currentBranch === undefined
                     ? t('worktree.main')
                     : t('worktree.mainWithBranch', { branch: currentBranch });
-                  const expanded = isWorkspaceExpanded(expandSnapshot, workspace.workspaceId);
+                  const expanded =
+                    isWorkspaceExpanded(expandSnapshot, workspace.workspaceId) ||
+                    isCurrentSessionReveal('workspace:' + workspace.workspaceId);
                   const workspaceMatchesQuery = includesText(workspace.title, query);
                   const allWorkspaceSessionIds = filterArchivedSessionIds(
                     workspaceSessionIds(workspaces, workspace.workspaceId, sessions.ids),
@@ -990,8 +1140,15 @@ export function WorktreeSurface({
                     (sessionId) =>
                       workspaceMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                   );
-                  const mainExpanded = isMainExpanded(expandSnapshot, workspace.workspaceId);
+                  const mainExpanded =
+                    isMainExpanded(expandSnapshot, workspace.workspaceId) ||
+                    isCurrentSessionReveal('main:' + workspace.workspaceId);
                   const mainGroupKey = `main:${workspace.workspaceId}`;
+                  const sessionIds = visibleMainSessionIds;
+                  const mainSessionGroupExpanded =
+                    expandedSessionGroups[mainGroupKey] === true ||
+                    (sessionIds.length > 5 &&
+                      isCurrentSessionReveal('session-group:' + mainGroupKey));
                   const worktrees = view?.worktrees ?? [];
                   const sameWorkspaceWorktreeDrag =
                     worktreeDrag?.workspaceId === workspace.workspaceId;
@@ -1085,17 +1242,15 @@ export function WorktreeSurface({
                             <WorktreeSessionGroup
                               t={t}
                               groupKey={mainGroupKey}
-                              sessionIds={visibleMainSessionIds}
+                              sessionIds={sessionIds}
                               workspaceId={workspace.workspaceId}
-                              expanded={expandedSessionGroups[mainGroupKey] === true}
+                              currentSessionId={currentSessionId}
+                              expanded={mainSessionGroupExpanded}
                               actionPending={actionPending}
                               sessions={sessions}
                               dragState={sessionDrag}
                               onToggleExpanded={() => {
-                                setExpandedSessionGroups((current) => ({
-                                  ...current,
-                                  [mainGroupKey]: current[mainGroupKey] !== true,
-                                }));
+                                toggleSessionGroup(mainGroupKey);
                               }}
                               onStartDrag={(groupKey, sessionId) => {
                                 sessionDropCommitted.current = false;
@@ -1157,6 +1312,11 @@ export function WorktreeSurface({
                                 worktreeMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                             );
                             const worktreeGroupKey = `worktree:${record.worktreeId}`;
+                            const sessionIds = visibleWorktreeSessionIds;
+                            const sessionGroupExpanded =
+                              expandedSessionGroups[worktreeGroupKey] === true ||
+                              (sessionIds.length > 5 &&
+                                isCurrentSessionReveal('session-group:' + worktreeGroupKey));
                             const state = record.status === 'removed'
                               ? 'warning'
                               : record.health === 'repair'
@@ -1167,10 +1327,9 @@ export function WorktreeSurface({
                               : record.health === 'repair'
                                 ? t('worktree.repair')
                                 : t('worktree.ready');
-                            const worktreeExpanded = isWorktreeExpanded(
-                              expandSnapshot,
-                              record.worktreeId,
-                            );
+                            const worktreeExpanded =
+                              isWorktreeExpanded(expandSnapshot, record.worktreeId) ||
+                              isCurrentSessionReveal('worktree:' + record.worktreeId);
                             return (
                               <div
                                 key={record.worktreeId}
@@ -1263,17 +1422,15 @@ export function WorktreeSurface({
                                   <WorktreeSessionGroup
                                     t={t}
                                     groupKey={worktreeGroupKey}
-                                    sessionIds={visibleWorktreeSessionIds}
+                                    sessionIds={sessionIds}
                                     workspaceId={workspace.workspaceId}
-                                    expanded={expandedSessionGroups[worktreeGroupKey] === true}
+                                    currentSessionId={currentSessionId}
+                                    expanded={sessionGroupExpanded}
                                     actionPending={actionPending}
                                     sessions={sessions}
                                     dragState={sessionDrag}
                                     onToggleExpanded={() => {
-                                      setExpandedSessionGroups((current) => ({
-                                        ...current,
-                                        [worktreeGroupKey]: current[worktreeGroupKey] !== true,
-                                      }));
+                                      toggleSessionGroup(worktreeGroupKey);
                                     }}
                                     onStartDrag={(groupKey, sessionId) => {
                                       sessionDropCommitted.current = false;

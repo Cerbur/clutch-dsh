@@ -33,6 +33,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
 - Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
+- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow, clears a hiding search, and scrolls the row into view; this browser-local behavior does not change persisted expansion choices.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
 - Keep Conversation and Hero context stable across same-Session snapshot updates and Session
