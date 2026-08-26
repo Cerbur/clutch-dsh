@@ -41,21 +41,20 @@ package 的 DSH `peerDependencies` 使用 `*`，让 profile 中的 current upstr
 安装约束；`devDependencies` 只用于当前 checkout 的本地 typecheck、build 和 test，不是发布后的
 runtime 版本承诺。
 
-## Release log
+## 发布日志
 
-`RELEASE-LOG.md` is a repository document containing the user-facing changes for each published
-package version. It is bilingual in one file, with the Chinese section before the English section.
-Before incrementing `package.json.version` or creating the feature scoped release commit, update
-the candidate entry from the release branch's commit history:
+`RELEASE-LOG.md` 是仓库内记录每个已发布 package 版本面向用户的更新文档。同一文件同时
+包含中英文内容，中文段落在英文段落之前。在递增 `package.json.version` 或创建 feature
+scoped release commit 之前，先根据 release branch 的提交历史更新候选版本条目：
 
 ```bash
 git log --reverse --no-merges --format='%h%x09%s' main..wt-worktree-<version>/release
 ```
 
-Group the commit subjects into concise Added/Improved/Fixed/Removed sentences, with one sentence
-per change and Chinese first. Do not copy commit hashes or subjects into the release log. This is
-a commit-history summary, not a second source-code review; do not reread implementation files to
-reconstruct the release description. `RELEASE-LOG.md` is not included in the npm package files.
+根据 commit subject 整理简洁的“新增 / 优化 / 删除”内容，每件事只写一句，中文在上。
+不要把 commit hash 或 subject 写入 release log。这是基于 commit history 的发布摘要，不是
+第二次源码审查；不要重新阅读实现文件来还原发布说明。`RELEASE-LOG.md` 不包含在 npm
+package files 中。
 
 ## 安装来源
 
@@ -152,10 +151,9 @@ test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=al
 worktree 只合并已经通过门禁的单个 feature scoped commit。release 回合并 `main` 前，同样
 要确认 release 和 `main` 两个 worktree 都干净；合并后再运行完整 release verification。
 
-Feature worktrees are authoring and verification workspaces only. Never run `npm pack` or
-`npm publish` from a feature worktree. After the feature scoped commit passes the clean/rebase
-gate and is merged into the release worktree, run all release packaging and publishing commands
-from the release worktree.
+Feature worktree 仅用于编写、验证和提交变更。禁止在 feature worktree 中执行 `npm pack`
+或 `npm publish`。feature scoped commit 通过 clean/rebase 门禁并合并到 release worktree
+后，所有 release 打包和发布命令都必须从 release worktree 执行。
 
 ## 发布前提
 
