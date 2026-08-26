@@ -1358,6 +1358,34 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
+test('reduces the left offset before the nested tree line', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf('.treeChildren {');
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  assert.match(styles.slice(ruleStart, ruleEnd + 1), /margin-left: 16px;/);
+});
+
+test('indents Session tabs by the Worktree icon width', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf('.treeSessionRow {');
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(sessionRule, /margin-left: 22px;/);
+  assert.match(sessionRule, /width: calc\(100% - 22px\);/);
+});
+
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(

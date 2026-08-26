@@ -612,7 +612,7 @@
 }
 
 .treeChildren {
-  margin-left: 24px;
+  margin-left: 16px;
   padding: 2px 0 5px 12px;
   border-left: 1px solid var(--dsw-alias-border-l1);
 }
@@ -654,7 +654,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
+  width: calc(100% - 22px);
+  margin-left: 22px;
   min-width: 0;
   min-height: 31px;
   box-sizing: border-box;
