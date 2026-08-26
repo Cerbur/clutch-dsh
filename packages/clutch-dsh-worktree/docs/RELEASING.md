@@ -101,12 +101,12 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 
 ## 开发与回合并流程
 
-0.1.6 的 worktree 关系从 `main` 向下建立，回合并必须按以下方向进行：
+每个 release version 的 worktree 关系从 `main` 向下建立，回合并必须按以下方向进行：
 
 ```text
 main
-  └─ wt-worktree-0.1.6/release
-       └─ wt-worktree-0.1.6/<feature-name>
+  └─ wt-worktree-<version>/release
+       └─ wt-worktree-<version>/<feature-name>
 
 feat worktree → release worktree → main
 ```
@@ -118,8 +118,8 @@ feat worktree → release worktree → main
 ```bash
 FEATURE_WORKTREE=/path/to/feature-worktree
 RELEASE_WORKTREE=/path/to/release-worktree
-FEATURE_BRANCH='wt-worktree-0.1.6/<feature-name>'
-RELEASE_BRANCH='wt-worktree-0.1.6/release'
+FEATURE_BRANCH='wt-worktree-<version>/<feature-name>'
+RELEASE_BRANCH='wt-worktree-<version>/release'
 
 test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
 test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
