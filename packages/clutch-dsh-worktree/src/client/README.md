@@ -64,6 +64,14 @@ available for retry or direct navigation; it must not trigger Session deletion.
 
 ## Worktree surface contract
 
+### Browser-local expansion state
+
+The Client persists Workspace, Main, and Worktree expansion exceptions under
+clutch-dsh-worktree.expand-state in browser-local storage. Missing IDs are
+expanded by default. The five-row Session overflow control remains transient,
+and parent collapse clears its affected temporary group state. Storage failure
+falls back to in-memory behavior and does not change DSH or sidecar data.
+
 The Worktree surface is additive:
 
 - the Sidebar footer action is the only entry point;

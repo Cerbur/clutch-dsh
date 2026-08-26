@@ -7,6 +7,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots';
 import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
+import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike } from './session-view.js';
 import type {
@@ -30,6 +31,7 @@ export interface WorkspaceListLike {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly expandState: WorktreeExpandStateStore;
   readonly manager?: WorktreeManager;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (

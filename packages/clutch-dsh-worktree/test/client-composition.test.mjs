@@ -277,3 +277,20 @@ test('Client fiber disposal aborts an in-flight Worktree Connection call', async
   assert.equal(signal.aborted, true);
   await assert.rejects(pending);
 });
+
+test('injects a separate structural expand-state store alongside view mode', async () => {
+  const fixture = await loadClientEntry();
+  const overlay = fixture.registrationsBySlot.get('shell.overlay');
+  const injected = overlay.options.inject();
+  const viewStore = overlay.options.store.create();
+
+  assert.equal(typeof injected.expandState.getSnapshot, 'function');
+  assert.equal(typeof injected.expandState.subscribe, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleWorkspace, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleMain, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleWorktree, 'function');
+  assert.equal(typeof injected.expandState.actions.retain, 'function');
+  assert.notEqual(injected.expandState, viewStore);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});

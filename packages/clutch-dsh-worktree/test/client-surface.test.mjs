@@ -17,6 +17,7 @@ import * as worktreeView from '../lib/client/worktree-view.js';
 
 test('documents persistent Worktree ordering and fixed Main behavior', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
   const clientReadme = await readFile(
     new URL('../src/client/README.md', import.meta.url),
     'utf8',
@@ -26,6 +27,34 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(readme, /Main.*固定|Main.*fixed/i);
   assert.match(clientReadme, /persistent Worktree order|持久.*Worktree.*顺序/i);
   assert.match(clientReadme, /Main.*fixed|Main.*固定/i);
+  assert.match(readme, /browser-local.*expansion|expansion.*browser-local/i);
+  assert.match(readme, /Session.*overflow.*transient|Session.*five-row.*refresh/i);
+  assert.match(readmeZh, /浏览器本地.*展开|展开.*浏览器本地/);
+  assert.match(readmeZh, /Session.*临时|五行.*刷新/);
+  assert.match(clientReadme, /browser-local.*expansion|浏览器本地.*展开/i);
+  assert.ok(
+    readme.includes(
+      'Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
+    ),
+  );
+  assert.ok(
+    readmeZh.includes(
+      '将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
+    ),
+  );
+  assert.ok(clientReadme.includes('clutch-dsh-worktree.expand-state'));
+  assert.match(clientReadme, /Missing IDs are\s+expanded by default\./);
+  assert.ok(
+    /The five-row Session overflow control remains transient,/.test(clientReadme),
+  );
+  assert.ok(
+    /and parent collapse clears its affected temporary group state\./.test(clientReadme),
+  );
+  assert.ok(
+    /Storage failure\s+falls back to in-memory behavior and does not change DSH or sidecar data\./.test(
+      clientReadme,
+    ),
+  );
 });
 
 function manager(overrides = {}) {
@@ -1235,8 +1264,8 @@ test('shares one parameterized group row while gating removal UI by row configur
   assert.match(source, /kind="worktree"[\s\S]*icon=\{<IconBranchOutline16 \/>\}/);
   assert.match(source, /data-add-main-session/);
   assert.match(source, /data-add-session/);
-  assert.match(source, /expandedMains/);
-  assert.match(source, /expandedWorktrees/);
+  assert.match(source, /isMainExpanded/);
+  assert.match(source, /isWorktreeExpanded/);
   assert.match(source, /interface WorktreeGroupMenuProps/);
   assert.match(source, /menu\?: WorktreeGroupMenuProps/);
   assert.match(source, /worktreeRemoval/);
@@ -1398,4 +1427,41 @@ test('does not expose Worktree plus for removed or repair Worktrees', async () =
   );
 
   assert.match(source, /record\.status === 'active' && record\.health !== 'repair'/);
+});
+
+test('uses the injected expand-state store for structural rows', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const types = await readFile(
+    new URL('../src/client/worktree-surface-types.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /useSyncExternalStore/);
+  assert.match(source, /expandState\.actions\.toggleWorkspace/);
+  assert.match(source, /expandState\.actions\.toggleMain/);
+  assert.match(source, /expandState\.actions\.toggleWorktree/);
+  assert.match(source, /isWorkspaceExpanded/);
+  assert.match(source, /isMainExpanded/);
+  assert.match(source, /isWorktreeExpanded/);
+  assert.doesNotMatch(source, /useState<Record<string, boolean>>/);
+  assert.match(types, /WorktreeExpandStateStore/);
+  assert.match(types, /readonly expandState:/);
+});
+
+test('clears transient groups on parent collapse and prunes only ready snapshots', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /clearSessionGroupExpansion/);
+  assert.match(source, /readState\.status !== 'ready'/);
+  assert.match(source, /isCompleteWorktreeWorkspaceSnapshot/);
+  assert.match(source, /expandState\.actions\.retain\(/);
+  assert.match(source, /main:/);
+  assert.match(source, /worktree:/);
+  assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
 });

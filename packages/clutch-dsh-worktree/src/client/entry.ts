@@ -15,6 +15,7 @@ import { WorktreeHeaderContext } from './WorktreeContext.js';
 import { WorktreeModeAction } from './WorktreeModeAction.js';
 import { WorktreeOverlay } from './WorktreeOverlay.js';
 import { createWorktreeContextProjection } from './worktree-context-store.js';
+import { createWorktreeExpandStateStore } from './worktree-expand-state.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
 import {
   createVirtualWorkspaceMembership,
@@ -100,6 +101,7 @@ export function apply(ctx: ClientContext): void {
   );
   void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
+  const expandState = createWorktreeExpandStateStore(createSnapshotStore);
 
   const ensureSessionWorkspace = (workspaceId: string, sessionId: string): void => {
     virtualWorkspaceMembership.ensure({ workspaceId, sessionId });
@@ -159,6 +161,7 @@ export function apply(ctx: ClientContext): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          expandState,
           hooks: { worktreeContext: contextProjection.store },
           manager,
           createWorkspace: async () => {

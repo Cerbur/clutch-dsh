@@ -27,6 +27,25 @@ export function bindingIdsFor(
     .map((binding) => binding.sessionId);
 }
 
+export function clearSessionGroupExpansion(
+  current: Readonly<Record<string, boolean>>,
+  groupKeys: readonly string[],
+): Record<string, boolean> {
+  const next = { ...current };
+  for (const key of groupKeys) delete next[key];
+  return next;
+}
+
+export function isCompleteWorktreeWorkspaceSnapshot(
+  workspaceIds: readonly string[],
+  views: readonly WorktreeWorkspaceView[],
+): boolean {
+  if (views.length !== workspaceIds.length) return false;
+  const expected = new Set(workspaceIds);
+  const actual = new Set(views.map((view) => view.workspaceId));
+  return actual.size === expected.size && [...expected].every((id) => actual.has(id));
+}
+
 export function includesText(value: string, query: string): boolean {
   return value.toLocaleLowerCase().includes(query);
 }

@@ -24,6 +24,7 @@ Worktree rows, and the read-only blank-session Hero context.
 - Continue using DSH-native Workspace rename/delete/reorder and Session menus. Worktree rows can
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
+- Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
 - Keep Conversation and Hero context stable across same-Session snapshot updates and Session
