@@ -99,6 +99,43 @@ dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 ```
 
+## 开发与回合并流程
+
+0.1.6 的 worktree 关系从 `main` 向下建立，回合并必须按以下方向进行：
+
+```text
+main
+  └─ wt-worktree-0.1.6/release
+       └─ wt-worktree-0.1.6/<feature-name>
+
+feat worktree → release worktree → main
+```
+
+每次回合并前，源 worktree 和目标 worktree 都必须干净。特别是 feature merge 回 release
+时，feature worktree 是硬性门禁：必须已经整理成 scoped commit，不能存在 staged、unstaged
+或 untracked 改动。使用以下检查；命令没有输出才算通过：
+
+```bash
+FEATURE_WORKTREE=/path/to/feature-worktree
+RELEASE_WORKTREE=/path/to/release-worktree
+FEATURE_BRANCH='wt-worktree-0.1.6/<feature-name>'
+RELEASE_BRANCH='wt-worktree-0.1.6/release'
+
+test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+
+git -C "$FEATURE_WORKTREE" rebase "$RELEASE_BRANCH"
+test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+git -C "$RELEASE_WORKTREE" merge --no-ff "$FEATURE_BRANCH" \
+  -m "merge: integrate ${FEATURE_BRANCH}"
+test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
+```
+
+任一 clean 检查有输出都必须停止，先在对应 worktree 整理提交并重新验证；不能用 stash 或
+忽略输出代替门禁。发生冲突时在 feature worktree 解决 rebase 冲突并重新运行检查；release
+worktree 只合并已经通过门禁的单个 feature scoped commit。release 回合并 `main` 前，同样
+要确认 release 和 `main` 两个 worktree 都干净；合并后再运行完整 release verification。
+
 ## 发布前提
 
 发布前必须满足：
