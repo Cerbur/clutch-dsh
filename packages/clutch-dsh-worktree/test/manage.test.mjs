@@ -678,7 +678,7 @@ test('removes an imported Worktree before detaching its active binding without t
 
 test('rejects import validation failures and managed physical paths', async () => {
   await withGitFixture(async ({ provider, workspaceRoot, tempRoot }) => {
-    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    await addExternalWorktree(workspaceRoot, tempRoot);
     const outsidePath = path.join(tempRoot, 'outside');
     const filePath = path.join(tempRoot, 'not-a-directory');
     await mkdir(outsidePath);

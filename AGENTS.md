@@ -94,9 +94,9 @@ main
   feature rebase 完成后必须再次检查 feature worktree；任一检查有输出都必须停止，先将改动
   整理进 feature 的 scoped commit 并重新验证，不能用 stash 或忽略输出代替该门禁。合并完成
   后还要检查 release worktree 干净，再进入下一阶段。
-- 在 `npm pack`、npm publish 或最终 release verification 之前，必须将 release worktree
-  更新到最新的 `main`，再运行完整检查；发布准备完成后将 release worktree 的最终提交
-  合并回 `main`。
+- feature worktree 只用于编写、验证和提交 scoped change；`npm pack`、`npm publish` 和最终
+  release verification 必须在 feature commit 合并后的 release worktree 中执行。发布准备
+  完成且 npm registry 验证通过后，再将 release worktree 的最终提交合并回 `main`。
 - 本流程只定义 worktree、基线和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
   这些操作仍须获得明确授权。
 
