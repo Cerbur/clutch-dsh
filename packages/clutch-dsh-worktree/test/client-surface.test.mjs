@@ -1531,6 +1531,31 @@ test('marks only the DSH current Session row without changing row controls', asy
   ), /\.treeSessionRow\[data-session-current='true'\]/);
 });
 
+test('removes the unnecessary Session tree guide glyph', async () => {
+  const { rows } = await readSurfaceSources();
+  assert.doesNotMatch(rows, /styles\.treeGuide/);
+  assert.doesNotMatch(rows, /└/);
+});
+
+test('keeps current Session highlight without a leading inset frame', async () => {
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+  const ruleStart = styles.indexOf(".treeSessionRow[data-session-current='true'] {");
+  const ruleEnd = styles.indexOf('}', ruleStart);
+  assert.notEqual(ruleStart, -1);
+  assert.notEqual(ruleEnd, -1);
+
+  const currentRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(currentRule, /background: var\(--dsw-alias-interactive-bg-hover\)/);
+  assert.doesNotMatch(currentRule, /box-shadow/);
+  assert.match(
+    styles,
+    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 600;/,
+  );
+});
+
 test('temporarily reveals the current Session path without persisting it', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

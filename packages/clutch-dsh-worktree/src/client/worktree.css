@@ -668,7 +668,6 @@
 
 .treeSessionRow[data-session-current='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
-  box-shadow: inset 2px 0 0 var(--dsw-alias-brand-primary);
 }
 
 .treeSessionRow[data-session-current='true'] .treeSessionContent {
@@ -762,13 +761,6 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 13px;
   line-height: 20px;
-}
-
-.treeGuide {
-  flex: none;
-  width: 20px;
-  color: var(--dsw-alias-label-tertiary);
-  text-align: center;
 }
 
 .emptyNested {

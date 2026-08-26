@@ -389,9 +389,6 @@ export function WorktreeSessionRow({
       }}
     >
       <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
-        <span className={styles.treeGuide} aria-hidden="true">
-          └
-        </span>
         <span className={styles.sessionLabel}>{label}</span>
       </button>
       {!blank && (
