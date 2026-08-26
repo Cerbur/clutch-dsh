@@ -18,6 +18,8 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_NOT_FOUND',
   'WORKTREE_ORDER_INVALID',
   'WORKTREE_REMOVED',
+  'WORKTREE_IMPORT_INVALID',
+  'WORKTREE_ALREADY_MANAGED',
   'SESSION_NOT_FOUND',
   'SESSION_CWD_MISMATCH',
   'SESSION_ALREADY_BOUND',
@@ -39,6 +41,8 @@ export type SessionId = string;
  */
 export type WorktreeStatus = 'active' | 'removed';
 
+export type WorktreeSource = 'plugin' | 'external';
+
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
 export type WorktreeHealth = 'ready' | 'repair';
 
@@ -57,9 +61,15 @@ export interface WorktreeRecord {
   readonly workspaceId: WorkspaceId;
   readonly absolutePath: string;
   readonly branch: string;
+  readonly source: WorktreeSource;
   readonly status: WorktreeStatus;
   /** Runtime-only; never written to the sidecar. */
   readonly health?: WorktreeHealth;
+}
+
+export interface WorktreeImportCandidate {
+  readonly absolutePath: string;
+  readonly branch: string;
 }
 
 /**
@@ -121,6 +131,10 @@ export interface WorktreeManager {
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
 
+  listImportCandidates(input: {
+    readonly workspaceId: string;
+  }): Promise<readonly WorktreeImportCandidate[]>;
+
   /**
    * 列出本地分支及其主 Workspace/任意 worktree checkout 状态。
    * Lists local branches together with their main-Workspace and any-worktree checkout state.
@@ -138,6 +152,11 @@ export interface WorktreeManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+  }): Promise<WorktreeRecord>;
+
+  importWorktree(input: {
+    readonly workspaceId: string;
+    readonly absolutePath: string;
   }): Promise<WorktreeRecord>;
 
   /**
@@ -180,8 +199,10 @@ export interface WorktreeManager {
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'listWorktrees',
+  'listImportCandidates',
   'listBranches',
   'createWorktree',
+  'importWorktree',
   'removeWorktree',
   'insertWorktreeBefore',
   'listBindings',
@@ -207,6 +228,10 @@ export interface WorktreeRemoteManager {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
 
+  listImportCandidates(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly WorktreeImportCandidate[]>>;
+
   listBranches(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
@@ -215,6 +240,11 @@ export interface WorktreeRemoteManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+  }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
+
+  importWorktree(input: {
+    workspaceId: WorkspaceId;
+    absolutePath: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
 
   removeWorktree(input: {

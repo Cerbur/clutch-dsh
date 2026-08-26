@@ -12,10 +12,18 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 中文截图展示了侧边栏中的 Worktree 模式、包含 Main 和 Worktree 行的 Workspace 树，以及
 新会话空白 Hero 中的只读上下文。
 
+![英文 Worktree 创建/导入弹窗](assets/screenshots/screenshots-import.png)
+
+导入截图展示了现有 Workspace `+` 弹窗：默认选中创建，旁边是导入 Tab，并在普通下拉框中
+使用安全的示例 branch 和路径值。
+
 ## 能力
 
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
+- 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
+- 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
+- plugin 创建和导入的 Worktree 都通过真实的 `git worktree remove` 移除；移除导入的 Worktree 可能删除其关联目录，确认弹窗会明确提示。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 active Worktree 的选项菜单和确认弹窗移除 Worktree；Main 和 detached 行不显示该菜单。
@@ -188,6 +196,20 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
    的可复制 setup 命令修复后重试。插件只展示这些提示，不会执行 setup 或安装命令或编辑
    业务文件。
 
+### 导入已有 Worktree
+
+1. 选择 Workspace，点击旁边的 `+`，再选择 `导入` Tab。弹窗通过现有 DSH `/api` Connection
+   加载该 repository 的 Git Worktree 候选项。
+2. 第一版只列出绑定 branch、不是 repository root、且未出现在 plugin sidecar 中的 Worktree。
+   detached HEAD 会被省略；候选项通过普通下拉框选择，每个选项先显示 branch，再显示绝对路径
+   作为诊断信息。
+3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
+   工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的
+   `bind → membership projection → open → refresh` 流程。
+4. 同一 Workspace、同一物理路径的 active external 导入是幂等的。已经由 plugin 管理的路径
+   返回 `WORKTREE_ALREADY_MANAGED`；无效或过期候选项返回 `WORKTREE_IMPORT_INVALID`，修复
+   repository 状态后可以重试。
+
 ### 创建 Main 和 Worktree Session
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
@@ -209,6 +231,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
 - 使用 active Worktree 的选项菜单和确认弹窗移除 Worktree。Main 和 detached Worktree 不显示
   该菜单。
+- 导入的 Worktree 与 plugin 创建的 Worktree 显示相同的 active 选项菜单。两种来源都执行真实
+  `git worktree remove`；导入项的确认文案会警告关联 Worktree 目录可能被删除。Session 会
+  保留为 detached binding。
 - 移除 Worktree 不会删除其 Session。关系会保留为 detached，直到显式解绑。删除 Workspace
   只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin
   sidecar 会保留。
@@ -256,6 +281,7 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 
 - `projectId`、`worktreeId` 和 `sessionId`；
 - 绝对 Worktree 路径、branch 和生命周期状态；
+- Worktree 来源（`plugin` 或 `external`）；
 - binding 状态和 schema version。
 
 索引不会写入 Project 工作树或 DSH 原始数据目录，也不会保存 `projectRoot` 副本或任何

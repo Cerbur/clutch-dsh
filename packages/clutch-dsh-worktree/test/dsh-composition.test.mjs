@@ -100,18 +100,23 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
     [
       'worktreeManager/bindSession',
       'worktreeManager/createWorktree',
+      'worktreeManager/importWorktree',
       'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
       'worktreeManager/listBranches',
+      'worktreeManager/listImportCandidates',
       'worktreeManager/listWorktrees',
       'worktreeManager/removeWorktree',
     ],
   );
-  assert.deepEqual(
-    Object.values(WORKTREE_CONNECTION_ENDPOINTS).sort(),
-    remoteModule.TYPERT_REMOTE.descriptors
-      .map((descriptor) => `${descriptor.namespace}/${descriptor.method}`)
-      .sort(),
+  const descriptors = new Set(
+    remoteModule.TYPERT_REMOTE.descriptors.map(
+      (descriptor) => `${descriptor.namespace}/${descriptor.method}`,
+    ),
+  );
+  assert.equal(
+    Object.values(WORKTREE_CONNECTION_ENDPOINTS).every((endpoint) => descriptors.has(endpoint)),
+    true,
   );
   assert.equal(
     remoteModule.TYPERT_REMOTE.descriptors.some(
@@ -268,8 +273,10 @@ test('carries missing Git from Provider through Host projection and /api Client 
 test('canonical upstream Host Gateway claims Worktree endpoints on the shared /api channel', () => {
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
     'worktreeManager/listWorktrees',
+    'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
+    'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',

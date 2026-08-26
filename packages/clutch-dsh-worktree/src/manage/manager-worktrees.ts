@@ -1,13 +1,21 @@
 import path from 'node:path';
 
-import type { BranchRecord, WorktreeId, WorktreeRecord, WorkspaceId } from '../contract/index.js';
+import type {
+  BranchRecord,
+  WorktreeId,
+  WorktreeImportCandidate,
+  WorktreeRecord,
+  WorkspaceId,
+} from '../contract/index.js';
 import { type SidecarSnapshot, providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
   asGitError,
   asSidecarError,
+  canonicalPath,
   describeError,
   generatedId,
+  isDirectory,
   pathExists,
   requireWorkspace,
   samePhysicalPath,
@@ -55,6 +63,34 @@ export async function listWorktrees(
     nextRecords.push({ ...durableRecord, health: ready ? 'ready' : 'repair' });
   }
   return nextRecords;
+}
+
+/** List branch-attached Git Worktrees that have no sidecar record at the same physical path. */
+export async function listImportCandidates(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<readonly WorktreeImportCandidate[]> {
+  const workspace = await requireWorkspace(context, input.workspaceId);
+  await context.git.validateRepository(workspace.rootPath);
+  const [gitWorktrees, snapshot] = await Promise.all([
+    context.git.listWorktrees(workspace.rootPath),
+    context.sidecar.read(input.workspaceId),
+  ]);
+  const candidates: WorktreeImportCandidate[] = [];
+  for (const worktree of gitWorktrees) {
+    if (!worktree.branch || await samePhysicalPath(worktree.absolutePath, workspace.rootPath)) continue;
+    let managed = false;
+    for (const record of snapshot.worktrees) {
+      if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
+        managed = true;
+        break;
+      }
+    }
+    if (!managed) {
+      candidates.push({ absolutePath: await canonicalPath(worktree.absolutePath), branch: worktree.branch });
+    }
+  }
+  return candidates;
 }
 
 /** Project local branches against all Git worktrees and mark checkout/current state. */
@@ -176,6 +212,7 @@ export async function createWorktree(
     workspaceId: input.workspaceId,
     absolutePath: targetPath,
     branch: targetBranch,
+    source: 'plugin',
     status: 'active',
   };
 
@@ -225,6 +262,113 @@ export async function createWorktree(
     }
     throw sidecarError;
   }
+}
+
+/** Register a pre-existing branch-attached Git Worktree without performing a Git mutation. */
+export async function importWorktree(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId; readonly absolutePath: string },
+): Promise<WorktreeRecord> {
+  const workspace = await requireWorkspace(context, input.workspaceId);
+  if (typeof input.absolutePath !== 'string' || !path.isAbsolute(input.absolutePath)) {
+    throw providerError('WORKTREE_IMPORT_INVALID', 'An absolute Worktree path is required', {
+      workspaceId: input.workspaceId,
+      absolutePath: typeof input.absolutePath === 'string' ? input.absolutePath : '',
+    });
+  }
+  const requestedPath = path.resolve(input.absolutePath);
+  if (!(await isDirectory(requestedPath))) {
+    throw providerError('WORKTREE_IMPORT_INVALID', `Worktree path is not a directory: ${requestedPath}`, {
+      workspaceId: input.workspaceId,
+      absolutePath: requestedPath,
+    });
+  }
+  await context.git.validateRepository(workspace.rootPath);
+  const gitWorktrees = await context.git.listWorktrees(workspace.rootPath);
+  const gitWorktree = await findGitWorktreeByPhysicalPath(gitWorktrees, requestedPath);
+  if (!gitWorktree || !gitWorktree.branch || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
+    throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${requestedPath}`, {
+      workspaceId: input.workspaceId,
+      absolutePath: requestedPath,
+    });
+  }
+
+  const normalizedPath = await canonicalPath(gitWorktree.absolutePath);
+  const current = await context.sidecar.read(input.workspaceId);
+  const existing = await findSidecarWorktreeByPhysicalPath(current.worktrees, normalizedPath);
+  if (existing) return importConflictOrExisting(existing, input.workspaceId, normalizedPath);
+
+  const worktreeId = generatedId(context.idFactory);
+  try {
+    return await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
+      await context.git.validateRepository(workspace.rootPath);
+      const liveWorktree = await findGitWorktreeByPhysicalPath(
+        await context.git.listWorktrees(workspace.rootPath),
+        normalizedPath,
+      );
+      if (
+        !liveWorktree ||
+        !liveWorktree.branch ||
+        await samePhysicalPath(liveWorktree.absolutePath, workspace.rootPath)
+      ) {
+        throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${normalizedPath}`, {
+          workspaceId: input.workspaceId,
+          absolutePath: normalizedPath,
+        });
+      }
+      const livePath = await canonicalPath(liveWorktree.absolutePath);
+      const concurrent = await findSidecarWorktreeByPhysicalPath(snapshot.worktrees, normalizedPath);
+      if (concurrent) return { result: importConflictOrExisting(concurrent, input.workspaceId, normalizedPath), snapshot, changed: false };
+      if (snapshot.worktrees.some((candidate) => candidate.worktreeId === worktreeId)) {
+        throw providerError('SIDECAR_CORRUPT', `Generated Worktree ID is already recorded: ${worktreeId}`, { worktreeId });
+      }
+      const record: WorktreeRecord = {
+        worktreeId,
+        workspaceId: input.workspaceId,
+        absolutePath: livePath,
+        branch: liveWorktree.branch,
+        source: 'external',
+        status: 'active',
+      };
+      return { result: record, snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, record] } };
+    });
+  } catch (error) {
+    throw asSidecarError(error, input.workspaceId);
+  }
+}
+
+async function findGitWorktreeByPhysicalPath<Worktree extends { readonly absolutePath: string }>(
+  worktrees: readonly Worktree[],
+  absolutePath: string,
+): Promise<Worktree | undefined> {
+  for (const worktree of worktrees) {
+    if (await samePhysicalPath(worktree.absolutePath, absolutePath)) return worktree;
+  }
+  return undefined;
+}
+
+async function findSidecarWorktreeByPhysicalPath(
+  worktrees: readonly WorktreeRecord[],
+  absolutePath: string,
+): Promise<WorktreeRecord | undefined> {
+  return findGitWorktreeByPhysicalPath(worktrees, absolutePath);
+}
+
+function importConflictOrExisting(
+  existing: WorktreeRecord,
+  workspaceId: string,
+  absolutePath: string,
+): WorktreeRecord {
+  if (existing.status === 'active' && existing.source === 'external' && existing.workspaceId === workspaceId) {
+    return existing;
+  }
+  throw providerError('WORKTREE_ALREADY_MANAGED', `Worktree path is already managed: ${absolutePath}`, {
+    workspaceId,
+    absolutePath,
+    worktreeId: existing.worktreeId,
+    source: existing.source,
+    status: existing.status,
+  });
 }
 
 /** Remove Git state first, then mark the relation removed while preserving detached bindings. */

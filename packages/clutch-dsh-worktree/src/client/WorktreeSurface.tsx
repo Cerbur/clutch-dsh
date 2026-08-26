@@ -42,6 +42,7 @@ import {
 } from './worktree-surface-rows.js';
 import type {
   PendingSessionBinding,
+  ImportCandidatesState,
   ReadState,
   RefreshOptions,
   SessionDragState,
@@ -54,6 +55,7 @@ import type {
   WorkspaceListLike,
   WorkspaceRenameTarget,
   WorktreeDragState,
+  WorktreeRegistrationMode,
 } from './worktree-surface-types.js';
 import {
   executeWorktreeAction,
@@ -144,6 +146,11 @@ export function WorktreeSurface({
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
   const [modalReadLoading, setModalReadLoading] = useState(false);
+  const [worktreeModalMode, setWorktreeModalMode] =
+    useState<WorktreeRegistrationMode>('create');
+  const [importCandidates, setImportCandidates] =
+    useState<ImportCandidatesState>({ status: 'idle', candidates: [] });
+  const [selectedImportPath, setSelectedImportPath] = useState<string | undefined>();
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
   const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
@@ -173,6 +180,9 @@ export function WorktreeSurface({
   const refreshGuard = useRef(createWorktreeRefreshGuard());
   const modalReadLoader = useRef(createWorktreeModalViewLoader());
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
+  const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
+  const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);
+  modalWorkspaceIdRef.current = worktreeModalWorkspaceId;
   const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
@@ -340,6 +350,26 @@ export function WorktreeSurface({
       setActionPending(false);
     }
   };
+
+  const loadImportCandidates = useCallback(async (workspaceId: string): Promise<void> => {
+    if (manager === undefined) return;
+    setImportCandidates((current) => ({ status: 'loading', candidates: current.candidates }));
+    await importCandidatesGuard.current.run(
+      () => manager.listImportCandidates({ workspaceId }),
+      (candidates) => {
+        if (modalWorkspaceIdRef.current !== workspaceId) return;
+        setImportCandidates({ status: 'ready', candidates });
+      },
+      (error) => {
+        if (modalWorkspaceIdRef.current !== workspaceId) return;
+        setImportCandidates((current) => ({
+          status: 'error',
+          candidates: current.candidates,
+          error: toWorktreeViewError(error),
+        }));
+      },
+    );
+  }, [manager]);
 
   const workspaceRenameTrimmed = workspaceRenameDraft.trim();
   const workspaceRenameDuplicate = workspaceRenameTarget !== undefined &&
@@ -616,9 +646,11 @@ export function WorktreeSurface({
     if (wasExpanded) clearSessionGroups(['worktree:' + worktreeId]);
   };
 
-  const closeWorktreeCreator = (): void => {
+  const closeWorktreeCreator = (force = false): void => {
+    if (actionPending && !force) return;
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
+    importCandidatesGuard.current.invalidate();
     setWorktreeModalWorkspaceId(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
@@ -628,7 +660,11 @@ export function WorktreeSurface({
     const view = viewByWorkspace.get(workspace.workspaceId);
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
+    importCandidatesGuard.current.invalidate();
     setWorktreeModalWorkspaceId(workspace.workspaceId);
+    setWorktreeModalMode('create');
+    setImportCandidates({ status: 'idle', candidates: [] });
+    setSelectedImportPath(undefined);
     setActionError(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
@@ -645,64 +681,85 @@ export function WorktreeSurface({
     ]));
   };
 
-  const submitWorktree = async (): Promise<void> => {
-    const worktreeName = newBranch.trim();
+  const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
+    setWorktreeModalMode(mode);
     if (
-      manager === undefined ||
-      modalWorkspace === undefined ||
-      !modalCanCreate ||
-      selectedBranch.length === 0 ||
-      worktreeName.length === 0
+      mode === 'import' &&
+      worktreeModalWorkspaceId !== undefined &&
+      importCandidates.status === 'idle'
     ) {
+      void loadImportCandidates(worktreeModalWorkspaceId);
+    }
+  };
+
+  const continueWorktreeRegistration = async (registeredWorktree: WorktreeRecord): Promise<void> => {
+    closeWorktreeCreator(true);
+    if (createSessionCallback === undefined) {
+      await refresh({ preserveCurrent: true });
+      setActionError({
+        code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE',
+        message: '',
+        retryable: true,
+      });
       return;
     }
-    const input = {
-      workspaceId: modalWorkspace.workspaceId,
-      branch: selectedBranch,
-      newBranch: worktreeName,
+
+    const sessionInput: CreateSessionForWorktreeInput = {
+      workspaceId: registeredWorktree.workspaceId,
+      worktreeId: registeredWorktree.worktreeId,
+      cwd: registeredWorktree.absolutePath,
     };
+    try {
+      await createSessionCallback(sessionInput);
+      await invalidateWorktreeContext?.(registeredWorktree.workspaceId);
+    } catch (error) {
+      if (error instanceof WorktreeSessionBindingError && error.retryable) {
+        setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
+      }
+      throw error;
+    }
+    await refresh({ preserveCurrent: true });
+  };
+
+  const submitWorktree = async (): Promise<void> => {
+    const worktreeName = newBranch.trim();
+    const selectedImportCandidate = importCandidates.candidates.find(
+      (candidate) => candidate.absolutePath === selectedImportPath,
+    );
+    if (manager === undefined || modalWorkspace === undefined) return;
+    if (
+      worktreeModalMode === 'create' &&
+      (!modalCanCreate || selectedBranch.length === 0 || worktreeName.length === 0)
+    ) return;
+    if (worktreeModalMode === 'import' && selectedImportCandidate === undefined) return;
     setActionPending(true);
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
-      const createdWorktree = await executeWorktreeAction(manager, {
-        type: 'createWorktree',
-        input,
-      });
-      if (createdWorktree === undefined) {
+      const registeredWorktree = worktreeModalMode === 'create'
+        ? await executeWorktreeAction(manager, {
+            type: 'createWorktree',
+            input: {
+              workspaceId: modalWorkspace.workspaceId,
+              branch: selectedBranch,
+              newBranch: worktreeName,
+            },
+          })
+        : await executeWorktreeAction(manager, {
+            type: 'importWorktree',
+            input: {
+              workspaceId: modalWorkspace.workspaceId,
+              absolutePath: selectedImportCandidate!.absolutePath,
+            },
+          });
+      if (registeredWorktree === undefined) {
         throw {
           code: 'WORKTREE_RECORD_MISSING',
           message: '',
           retryable: true,
         };
       }
-      closeWorktreeCreator();
-
-      if (createSessionCallback === undefined) {
-        await refresh({ preserveCurrent: true });
-        setActionError({
-          code: 'WORKTREE_CREATED_SESSION_UNAVAILABLE',
-          message: '',
-          retryable: true,
-        });
-        return;
-      }
-
-      const sessionInput: CreateSessionForWorktreeInput = {
-        workspaceId: createdWorktree.workspaceId,
-        worktreeId: createdWorktree.worktreeId,
-        cwd: createdWorktree.absolutePath,
-      };
-      try {
-        await createSessionCallback(sessionInput);
-        await invalidateWorktreeContext?.(createdWorktree.workspaceId);
-      } catch (error) {
-        if (error instanceof WorktreeSessionBindingError && error.retryable) {
-          setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
-        }
-        throw error;
-      }
-      await refresh({ preserveCurrent: true });
+      await continueWorktreeRegistration(registeredWorktree);
     } catch (error) {
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -1309,6 +1366,9 @@ export function WorktreeSurface({
         readError={modalReadError}
         setupStatus={modalSetupStatus}
         canCreate={modalCanCreate}
+        mode={worktreeModalMode}
+        importCandidates={importCandidates}
+        selectedImportPath={selectedImportPath}
         selectedBranch={selectedBranch}
         newBranch={newBranch}
         actionPending={actionPending}
@@ -1320,6 +1380,13 @@ export function WorktreeSurface({
           setNewBranch('');
           loadModalWorktreeView(worktreeModalWorkspaceId);
         }}
+        onModeChange={changeWorktreeModalMode}
+        onRetryImportCandidates={() => {
+          if (worktreeModalWorkspaceId !== undefined) {
+            void loadImportCandidates(worktreeModalWorkspaceId);
+          }
+        }}
+        onSelectedImportPathChange={setSelectedImportPath}
         onSelectedBranchChange={setSelectedBranch}
         onNewBranchChange={setNewBranch}
         onSubmit={submitWorktree}

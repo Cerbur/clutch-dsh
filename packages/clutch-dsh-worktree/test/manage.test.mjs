@@ -99,8 +99,16 @@ function makeRecord({ workspaceId = 'ws_one', worktreeId = 'wt_seed', absolutePa
     workspaceId,
     absolutePath,
     branch,
+    source: 'plugin',
     status: 'active',
   };
+}
+
+async function addExternalWorktree(workspaceRoot, tempRoot, branch = 'feature/external') {
+  const externalPath = path.join(tempRoot, branch.replaceAll('/', '-'));
+  await runGit(workspaceRoot, ['branch', branch]);
+  await runGit(workspaceRoot, ['worktree', 'add', externalPath, branch]);
+  return externalPath;
 }
 
 function makeBinding({ workspaceId = 'ws_one', worktreeId = 'wt_seed', sessionId = 'session_seed' } = {}) {
@@ -520,6 +528,7 @@ test('creates a generated Worktree and persists only approved relation metadata'
     const expectedPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId);
 
     assert.equal(record.absolutePath, expectedPath);
+    assert.equal(record.source, 'plugin');
     assert.equal(path.isAbsolute(record.absolutePath), true);
     assert.equal(await exists(record.absolutePath), true);
     assert.deepEqual(await sidecar.read('ws_one'), {
@@ -548,6 +557,189 @@ test('creates a generated Worktree and persists only approved relation metadata'
     assert.equal(sidecarText.includes(workspaceRoot), false);
     await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId });
     assert.deepEqual(await readFile(dshFixturePath), dshFixtureBefore);
+  });
+});
+
+test('lists only unmanaged branch-attached external Worktrees in Git list order', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/external');
+    const detachedPath = path.join(tempRoot, 'detached');
+    await runGit(workspaceRoot, ['worktree', 'add', '--detach', detachedPath, 'HEAD']);
+    await runGit(workspaceRoot, ['branch', 'feature/plugin']);
+    await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/plugin' });
+
+    assert.deepEqual(await provider.listImportCandidates({ workspaceId: 'ws_one' }), [
+      { absolutePath: await realpath(externalPath), branch: 'feature/external' },
+    ]);
+  });
+});
+
+test('imports an external Worktree without mutating Git or its directory and is idempotent', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot, sidecar }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const directoryBefore = await readFile(path.join(externalPath, 'README.md'));
+    const gitBefore = (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout;
+
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    assert.deepEqual(imported, {
+      worktreeId: imported.worktreeId,
+      workspaceId: 'ws_one',
+      absolutePath: await realpath(externalPath),
+      branch: 'feature/external',
+      source: 'external',
+      status: 'active',
+    });
+    assert.deepEqual(await readFile(path.join(externalPath, 'README.md')), directoryBefore);
+    assert.equal((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, gitBefore);
+    assert.deepEqual(
+      await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath }),
+      imported,
+    );
+    assert.equal((await sidecar.read('ws_one')).worktrees.length, 1);
+  });
+});
+
+test('imports an external Worktree through a physical-path alias and stores its canonical path', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const aliasPath = path.join(tempRoot, 'external-alias');
+    await symlink(externalPath, aliasPath, 'dir');
+
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: aliasPath });
+    assert.equal(imported.absolutePath, await realpath(externalPath));
+  });
+});
+
+test('revalidates Git membership inside the serialized import mutation', async () => {
+  await withGitFixture(async ({ dsh, dshHome, workspaceRoot, tempRoot, sidecar }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const raceSidecar = {
+      read: (...args) => sidecar.read(...args),
+      async mutate(workspaceId, mutation) {
+        await runGit(workspaceRoot, ['worktree', 'remove', '--force', externalPath]);
+        return sidecar.mutate(workspaceId, mutation);
+      },
+    };
+    const provider = createWorktreeManager({ dsh, dshHome, sidecar: raceSidecar });
+
+    await expectCode(
+      provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath }),
+      'WORKTREE_IMPORT_INVALID',
+    );
+    assert.deepEqual((await sidecar.read('ws_one')).worktrees, []);
+  });
+});
+
+test('keeps historical sidecar records out of import candidates', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot, sidecar }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((record) =>
+          record.worktreeId === imported.worktreeId ? { ...record, status: 'removed' } : record,
+        ),
+      },
+    }));
+
+    assert.deepEqual(await provider.listImportCandidates({ workspaceId: 'ws_one' }), []);
+  });
+});
+
+test('removes an imported Worktree before detaching its active binding without touching DSH bytes', async () => {
+  await withGitFixture(async ({ dsh, dshHome, provider, sidecar, workspaceRoot, tempRoot }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const fixturePath = path.join(dshHome, 'dsh-owned.json');
+    await writeFile(fixturePath, '{"session":"owned","messages":["keep"]}\n');
+    const fixtureBefore = await readFile(fixturePath);
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    dsh.addSession({
+      sessionId: 'session_external_remove',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: imported.absolutePath,
+    });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: imported.worktreeId,
+      sessionId: 'session_external_remove',
+    });
+
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: imported.worktreeId });
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(await exists(externalPath), false);
+    assert.equal(snapshot.worktrees[0].status, 'removed');
+    assert.equal(snapshot.bindings[0].status, 'detached');
+    assert.deepEqual(await readFile(fixturePath), fixtureBefore);
+  });
+});
+
+test('rejects import validation failures and managed physical paths', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot);
+    const outsidePath = path.join(tempRoot, 'outside');
+    const filePath = path.join(tempRoot, 'not-a-directory');
+    await mkdir(outsidePath);
+    await writeFile(filePath, 'not a directory');
+
+    for (const absolutePath of [
+      'relative/path',
+      path.join(tempRoot, 'missing'),
+      filePath,
+      outsidePath,
+      workspaceRoot,
+    ]) {
+      await expectCode(provider.importWorktree({ workspaceId: 'ws_one', absolutePath }), 'WORKTREE_IMPORT_INVALID');
+    }
+
+    const detachedPath = path.join(tempRoot, 'detached-import');
+    await runGit(workspaceRoot, ['worktree', 'add', '--detach', detachedPath, 'HEAD']);
+    await expectCode(
+      provider.importWorktree({ workspaceId: 'ws_one', absolutePath: detachedPath }),
+      'WORKTREE_IMPORT_INVALID',
+    );
+    const otherRepository = await createGitWorkspace();
+    try {
+      await expectCode(
+        provider.importWorktree({ workspaceId: 'ws_one', absolutePath: otherRepository.workspaceRoot }),
+        'WORKTREE_IMPORT_INVALID',
+      );
+    } finally {
+      await rm(otherRepository.tempRoot, { recursive: true, force: true });
+    }
+
+    await runGit(workspaceRoot, ['branch', 'feature/plugin-path']);
+    const plugin = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/plugin-path' });
+    await expectCode(provider.importWorktree({ workspaceId: 'ws_one', absolutePath: plugin.absolutePath }), 'WORKTREE_ALREADY_MANAGED');
+  });
+});
+
+test('normalizes v1 reads and writes source-aware schema v2 on mutation', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const worktreeRoot = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
+    const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
+    await mkdir(path.dirname(shardPath), { recursive: true });
+    await writeFile(shardPath, `${JSON.stringify({
+      schemaVersion: 1,
+      workspaceId: 'ws_one',
+      worktrees: [{
+        worktreeId: 'wt_v1',
+        workspaceId: 'ws_one',
+        absolutePath: path.join(worktreeRoot, 'wt_v1'),
+        branch: 'feature/v1',
+        status: 'active',
+      }],
+      bindings: [],
+    })}\n`);
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].source, 'plugin');
+    assert.equal(JSON.parse(await readFile(shardPath, 'utf8')).schemaVersion, 1);
+
+    await sidecar.mutate('ws_one', (snapshot) => ({ result: undefined, snapshot }));
+    const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
+    assert.equal(persisted.schemaVersion, 2);
+    assert.equal(persisted.worktrees[0].source, 'plugin');
   });
 });
 

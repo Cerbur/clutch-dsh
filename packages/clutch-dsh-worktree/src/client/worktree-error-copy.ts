@@ -39,6 +39,12 @@ export function formatWorktreeViewError(
       return t('error.worktreeCreatedSessionUnavailable');
     case 'WORKTREE_RECORD_MISSING':
       return t('error.worktreeRecordMissing');
+    case 'WORKTREE_IMPORT_INVALID':
+      return t('error.worktreeImportInvalid');
+    case 'WORKTREE_ALREADY_MANAGED':
+      return t('error.worktreeAlreadyManaged');
+    case 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE':
+      return t('error.worktreeRegistrationSessionUnavailable');
     case 'WORKSPACE_RENAME_UNAVAILABLE':
       return t('error.workspaceRenameUnavailable');
     case 'WORKSPACE_DELETE_UNAVAILABLE':

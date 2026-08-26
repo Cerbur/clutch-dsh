@@ -7,8 +7,8 @@ type Extends<Left, Right> = Left extends Right ? true : false;
 type Expect<Value extends true> = Value;
 type GeneratedWireManager = {
   [Method in keyof WorktreeRemoteManager]: (
-    ...args: Parameters<WorktreeRemoteManager[Method]>
-  ) => Promise<RemoteResult<Awaited<ReturnType<WorktreeRemoteManager[Method]>>>>;
+    ...args: Parameters<NonNullable<WorktreeRemoteManager[Method]>>
+  ) => Promise<RemoteResult<Awaited<ReturnType<NonNullable<WorktreeRemoteManager[Method]>>>>>;
 };
 type GeneratedNamespaceMatchesHostContract = Expect<
   Extends<TypertClientRemote['worktreeManager'], GeneratedWireManager>

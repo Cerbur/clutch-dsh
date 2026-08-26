@@ -97,6 +97,8 @@ test('connection-backed Worktree Manager remains available when canonical Remote
   assert.equal(injected.available, true);
   assert.equal(typeof injected.manager.listWorktrees, 'function');
   assert.equal(typeof injected.manager.createWorktree, 'function');
+  assert.equal(typeof injected.manager.listImportCandidates, 'function');
+  assert.equal(typeof injected.manager.importWorktree, 'function');
   await injected.manager.listWorktrees({ workspaceId: 'ws1' });
   assert.equal(fixture.rpcCalls[0].endpoint, 'worktreeManager/listWorktrees');
 });
@@ -120,6 +122,7 @@ test('Worktree Session membership is projected before opening and survives a bin
                 worktreeId: 'wt-one',
                 branch: 'feature/one',
                 absolutePath: '/tmp/wt-one',
+                source: 'plugin',
                 status: 'active',
                 health: 'ready',
               }]
@@ -175,6 +178,7 @@ test('Worktree plus reuses a bound blank Session through the Client entry', asyn
                 worktreeId: 'wt-one',
                 branch: 'feature/one',
                 absolutePath: '/tmp/wt-one',
+                source: 'plugin',
                 status: 'active',
                 health: 'ready',
               }]

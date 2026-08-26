@@ -9,8 +9,10 @@ import {
 
 const METHODS = [
   ['listWorktrees', { workspaceId: 'ws1' }, []],
+  ['listImportCandidates', { workspaceId: 'ws1' }, []],
   ['listBranches', { workspaceId: 'ws1' }, []],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
+  ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }, { worktreeId: 'wt_external' }],
   ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }, null],
   ['insertWorktreeBefore', {
     workspaceId: 'ws1',
@@ -57,8 +59,10 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
     'worktreeManager/listWorktrees',
+    'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
+    'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
@@ -149,4 +153,21 @@ test('dispose aborts in-flight calls and rejects new calls', async () => {
     assert.equal(error.retryable, false);
     return true;
   });
+});
+
+test('dispose aborts an in-flight external Worktree import request', async () => {
+  let signal;
+  const adapter = createWorktreeConnectionAdapter({
+    call: (_channel, _endpoint, _payload, requestSignal) => {
+      signal = requestSignal;
+      return new Promise((_resolve, reject) => {
+        requestSignal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    },
+  });
+
+  const pending = adapter.importWorktree({ workspaceId: 'ws1', absolutePath: '/tmp/external' });
+  adapter.dispose();
+  assert.equal(signal.aborted, true);
+  await assert.rejects(pending, (error) => error?.code === 'CLIENT_DISPOSED');
 });

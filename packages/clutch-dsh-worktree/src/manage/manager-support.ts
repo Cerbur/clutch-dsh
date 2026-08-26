@@ -48,6 +48,15 @@ export async function samePhysicalPath(left: string, right: string): Promise<boo
   }
 }
 
+/** Resolve an existing path to its physical identity, preserving an absolute fallback for unavailable paths. */
+export async function canonicalPath(filePath: string): Promise<string> {
+  try {
+    return await realpath(filePath);
+  } catch {
+    return path.resolve(filePath);
+  }
+}
+
 // 已存在的受信边界不允许是 symlink，避免后续创建绕过 DSH Home 的物理目录约束。
 // Existing trusted boundaries may not be symlinks, preventing later creation from escaping the physical DSH Home boundary.
 export async function rejectSymlink(filePath: string, label: string): Promise<void> {

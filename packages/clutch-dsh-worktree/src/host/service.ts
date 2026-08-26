@@ -6,6 +6,8 @@ import type {
   SessionBinding,
   WorktreeId,
   WorktreeRecord,
+  WorktreeImportCandidate,
+  WorkspaceId,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -73,6 +75,13 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  listImportCandidates(input: {
+    readonly workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly WorktreeImportCandidate[]>> {
+    return this.remote.listImportCandidates(input);
+  }
+
+  @Remote
   listBranches(input: {
     readonly workspaceId: string;
   }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>> {
@@ -86,6 +95,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly newBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>> {
     return this.remote.createWorktree(input);
+  }
+
+  @Remote
+  importWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly absolutePath: string;
+  }): Promise<WorktreeRemoteResult<WorktreeRecord>> {
+    return this.remote.importWorktree(input);
   }
 
   @Remote
