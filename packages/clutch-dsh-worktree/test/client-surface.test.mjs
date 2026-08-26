@@ -1523,6 +1523,27 @@ test('marks only the DSH current Session row without changing row controls', asy
   ), /\.treeSessionRow\[data-session-current='true'\]/);
 });
 
+test('temporarily reveals the current Session path without persisting it', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /const currentSessionId = sessions\.current/);
+  assert.match(source, /resolveCurrentSessionLocation/);
+  assert.match(source, /currentSessionReveal/);
+  assert.match(source, /currentSessionRevealKeys/);
+  assert.match(source, /setSearchQuery\(''\)/);
+  assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
+  assert.match(source, /sessionIds\.length > 5/);
+  assert.match(source, /suppressedKeys/);
+  assert.match(source, /expandState\.actions\.toggleWorkspace/);
+  assert.match(source, /expandState\.actions\.toggleMain/);
+  assert.match(source, /expandState\.actions\.toggleWorktree/);
+  assert.doesNotMatch(source, /currentSessionReveal.*localStorage/);
+});
+
 test('routes pending Worktree Session Retry through the browser recovery helper', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
