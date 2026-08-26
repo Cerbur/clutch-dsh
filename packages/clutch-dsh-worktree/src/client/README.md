@@ -91,6 +91,24 @@ expanded by default. The five-row Session overflow control remains transient,
 and parent collapse clears its affected temporary group state. Storage failure
 falls back to in-memory behavior and does not change DSH or sidecar data.
 
+### Current Session reveal and positioning
+
+The Worktree surface reads DSH sessions.current as the only current-Session fact.
+The matching Main, active Worktree, or detached Worktree row receives the current
+marker. When Worktree mode opens or sessions.current changes, the Client clears
+a search that would hide the row, temporarily expands the Workspace/Main/Worktree
+path and five-row Session overflow, and scrolls the row into the nearest visible
+area of the Worktree overlay.
+Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
+
+The current Session reveal and suppression are browser-local, in-memory
+presentation state. Automatic reveal never mutates clutch-dsh-worktree.expand-state,
+DSH Workspace/Session data, Worktree bindings, or sidecar records. A user's manual
+collapse wins for the current Session, and the suppression resets when the current
+Session changes or Worktree mode exits. Ordinary refreshes do not re-scroll an
+unchanged current Session; missing or incomplete targets remain a normal unresolved
+view state rather than a new domain error.
+
 The Worktree surface is additive:
 
 - the Sidebar footer action is the only entry point;

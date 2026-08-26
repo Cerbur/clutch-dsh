@@ -55,6 +55,14 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
       clientReadme,
     ),
   );
+  assert.match(readme, /current Session.*highlight|highlight.*current Session/i);
+  assert.match(readme, /temporar(y|ily).*reveal|temporary.*expand/i);
+  assert.match(readme, /does not change.*persisted.*expansion|persisted.*expansion.*unchanged/i);
+  assert.match(readmeZh, /当前 Session.*高亮|高亮.*当前 Session/);
+  assert.match(readmeZh, /临时.*展开|临时.*定位/);
+  assert.match(readmeZh, /不改变.*展开选择|展开选择.*不改变/);
+  assert.match(clientReadme, /current Session.*browser-local|当前 Session.*浏览器本地/i);
+  assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
 });
 
 function manager(overrides = {}) {
