@@ -1544,6 +1544,27 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.doesNotMatch(source, /currentSessionReveal.*localStorage/);
 });
 
+test('positions the current Worktree Session after commit and cancels stale work', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const positionSource = await readFile(
+    new URL('../src/client/worktree-session-position.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /useLayoutEffect/);
+  assert.match(source, /locateGenerationRef/);
+  assert.match(source, /positionedLocateGenerationRef/);
+  assert.match(source, /requestAnimationFrame/);
+  assert.match(source, /cancelAnimationFrame/);
+  assert.match(source, /scrollCurrentSessionIntoView/);
+  assert.match(source, /generation !== locateGenerationRef\.current/);
+  assert.match(positionSource, /querySelectorAll<HTMLElement>\('\[data-session-id\]'\)/);
+  assert.match(positionSource, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.doesNotMatch(source, /document\.querySelector/);
+});
+
 test('routes pending Worktree Session Retry through the browser recovery helper', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

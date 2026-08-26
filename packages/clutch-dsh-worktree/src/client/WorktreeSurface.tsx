@@ -45,6 +45,7 @@ import {
   resolveCurrentSessionLocation,
   workspaceMatches,
 } from './worktree-surface-selectors.js';
+import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
 import {
   WorktreeGroupRow,
   WorktreeSessionGroup,
@@ -340,6 +341,36 @@ export function WorktreeSurface({
         : { sessionId: currentSessionId, suppressedKeys: {} },
     );
   }, [currentSessionId, mode]);
+
+  useLayoutEffect(() => {
+    if (
+      mode !== 'worktree' ||
+      currentSessionId === undefined ||
+      currentSessionLocation === undefined
+    ) {
+      return;
+    }
+    const generation = locateGenerationRef.current;
+    if (positionedLocateGenerationRef.current === generation) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      if (cancelled || generation !== locateGenerationRef.current) return;
+      if (!scrollCurrentSessionIntoView(ref.current, currentSessionId)) return;
+      positionedLocateGenerationRef.current = generation;
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    currentSessionId,
+    currentSessionLocation,
+    currentSessionReveal,
+    expandSnapshot,
+    mode,
+    query,
+    readState.status,
+  ]);
 
   useEffect(() => {
     if (
