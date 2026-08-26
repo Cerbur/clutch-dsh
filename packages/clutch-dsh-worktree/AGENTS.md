@@ -44,7 +44,9 @@ packages/clutch-dsh-worktree/
 - 本 package 的开发和验证以官方 DeepSeek Harness 仓库的当前默认分支源码 checkout 为准；该仓库当前默认分支是 `master`，不是历史 DSH prerelease。active manifest 和当前文档不得重新固定历史 prerelease。
 - npm 已发布的 `name + version` 不能覆盖；新发布必须先使用 `npm version patch|minor|major --no-git-tag-version` 递增版本。
 - `publishConfig.access` 必须保持 `public`，`publishConfig.registry` 指向官方 npm registry，`prepare` 必须从当前源码生成 `lib/`；Git 依赖安装和打包/发布共用这条生命周期。
-- 发布顺序固定为：递增 package version → `pnpm run check` → `npm pack --dry-run` → 提交并推送 `main` → `npm publish --access public --registry=https://registry.npmjs.org/` → 用 `npm view` 比较本地和 npm version。
+- `RELEASE-LOG.md` 是仓库内的双语版本更新记录，中文段落必须在英文段落之前；在递增 package version 和创建 feature scoped commit 之前，必须根据 `git log` 的 commit 信息整理新增、优化、修复和删除内容，每件事只写一句，不在日志中保留 commit hash 或 subject，也不通过重新阅读源码整理发布摘要。
+- feature worktree 只用于编写、验证和提交 scoped change，绝不能从 feature worktree 执行 npm publish；只有将 feature commit 按 clean/rebase/merge 门禁合并到 release worktree 后，才能在 release worktree 中执行发布前检查、`npm pack --dry-run` 和由用户手动执行的 `npm publish --access public --registry=https://registry.npmjs.org/`。
+- 发布顺序固定为：feature worktree 更新 `RELEASE-LOG.md` 与相关文档 → 递增 package version → feature 检查并创建单个 scoped commit → rebase 后合并到 release worktree → 在 release worktree 检查并预览 tarball → 交给用户从 release worktree 手动 publish → 在 release worktree 验证 npm version → 完成最终验证后将 release merge 回 `main`。
 - 本地 checkout 安装使用绝对路径；已发布版本使用 `dsh plugin --profile web add @cerbur/clutch-dsh-worktree`。DSH 源码 checkout 使用等价的 `pnpm dsh` 转发命令。
 - npm 官方 registry 与本机镜像的同步可能存在延迟；发布和版本验证必须显式指定 `https://registry.npmjs.org/`，遇到短暂 404 时等待重试，不重复发布同一版本。
 
@@ -231,6 +233,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 
 - `README.md`：面向安装者、使用者和插件市场维护者的英文公开事实、安装、能力和限制；
 - `README.zh.md`：与 `README.md` 同步的中文公开事实、安装、能力和限制；
+- `RELEASE-LOG.md`：仓库内的双语版本更新摘要，中文在上、英文在下，不进入 npm package files；
 - `AGENTS.md`：本 package 的架构、数据边界、模块权责、生命周期和维护约束；
 - `src/client/README.md`：浏览器 Consumer 的实现边界和交互细节；
 - `docs/RELEASING.md`：版本同步、npm 发布和本地/registry 安装流程；

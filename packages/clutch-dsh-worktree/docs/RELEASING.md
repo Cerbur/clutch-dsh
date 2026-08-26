@@ -41,6 +41,22 @@ package 的 DSH `peerDependencies` 使用 `*`，让 profile 中的 current upstr
 安装约束；`devDependencies` 只用于当前 checkout 的本地 typecheck、build 和 test，不是发布后的
 runtime 版本承诺。
 
+## Release log
+
+`RELEASE-LOG.md` is a repository document containing the user-facing changes for each published
+package version. It is bilingual in one file, with the Chinese section before the English section.
+Before incrementing `package.json.version` or creating the feature scoped release commit, update
+the candidate entry from the release branch's commit history:
+
+```bash
+git log --reverse --no-merges --format='%h%x09%s' main..wt-worktree-<version>/release
+```
+
+Group the commit subjects into concise Added/Improved/Fixed/Removed sentences, with one sentence
+per change and Chinese first. Do not copy commit hashes or subjects into the release log. This is
+a commit-history summary, not a second source-code review; do not reread implementation files to
+reconstruct the release description. `RELEASE-LOG.md` is not included in the npm package files.
+
 ## 安装来源
 
 ### 本地 checkout
@@ -136,11 +152,16 @@ test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=al
 worktree 只合并已经通过门禁的单个 feature scoped commit。release 回合并 `main` 前，同样
 要确认 release 和 `main` 两个 worktree 都干净；合并后再运行完整 release verification。
 
+Feature worktrees are authoring and verification workspaces only. Never run `npm pack` or
+`npm publish` from a feature worktree. After the feature scoped commit passes the clean/rebase
+gate and is merged into the release worktree, run all release packaging and publishing commands
+from the release worktree.
+
 ## 发布前提
 
 发布前必须满足：
 
-- 当前分支是待发布的 `main`，工作区没有未提交的业务改动；
+- 待发布的 release worktree 和 feature worktree 均已通过 clean/rebase/merge 门禁；npm 发布必须从 release worktree 执行，且发布前不要把 release worktree 合并回 `main`；
 - `package.json` 保留 `dsh.bundle.patch`、`publishConfig.access: "public"` 和 `prepare: "pnpm run build"`；
 - `packageManager` 保持项目实际使用的 `pnpm@10.32.1`，不要借此升级依赖；
 - `npm whoami --registry=https://registry.npmjs.org/` 返回拥有 `@cerbur` scope 的账号；
@@ -150,53 +171,76 @@ worktree 只合并已经通过门禁的单个 feature scoped commit。release �
 
 ## 发布流程
 
-### 1. 递增版本
+### 1. 更新 release log 与其他文档
 
-从 package 目录执行，按变更类型选择 `patch`、`minor` 或 `major`：
+在 feature worktree 汇总本版本的 feature commits 后，先按上面的 `git log` 命令更新
+`RELEASE-LOG.md`，中文段落在上、英文段落在下；每件新增、优化、修复或删除的功能只写
+一句，不写 commit hash 或 subject。再同步 README、AGENTS、计划或其他受到公开行为影响
+的文档。文档和 release log 完成后，才能递增 package version 和创建 feature scoped commit。
+
+### 2. 递增版本
+
+从 feature worktree 的 package 目录执行，按变更类型选择 `patch`、`minor` 或 `major`：
 
 ```bash
-cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
+cd /path/to/feature-worktree/packages/clutch-dsh-worktree
 npm version patch --no-git-tag-version
 ```
 
 发布新功能通常使用 `minor`，兼容性破坏使用 `major`，缺陷修复使用 `patch`。不要手工把版本改回已经存在于 npm 的版本。
 
-### 2. 检查并预览 tarball
+### 3. 在 feature worktree 检查并提交
+
+在 feature worktree 运行与改动匹配的检查，然后创建单个 scoped commit。feature worktree
+不执行 `npm pack` 或 `npm publish`。
 
 ```bash
-cd /path/to/clutch-dsh
+cd /path/to/feature-worktree
+git status --short
+git diff --check
+git commit -m "chore(worktree): prepare release metadata"
+```
+
+提交必须是单个 scoped feature commit，且 feature/release worktree 都必须干净。
+
+### 4. 按 clean/rebase/merge 门禁合并到 release worktree
+
+按照上面的命令检查两个 worktree 干净，将 feature branch rebase 到最新 release branch，
+再在 release worktree 中以 `--no-ff` 合并单个 feature scoped commit。合并后确认 release
+worktree 干净。
+
+### 5. 在 release worktree 检查并预览 tarball
+
+```bash
+RELEASE_WORKTREE=/path/to/release-worktree
+cd "$RELEASE_WORKTREE"
 pnpm run check
 
-cd packages/clutch-dsh-worktree
+cd "$RELEASE_WORKTREE/packages/clutch-dsh-worktree"
 npm pack --dry-run
 ```
 
-预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行 `prepare`，因此会从当前源码重新构建；Git 依赖安装也会在获取源码后执行 `prepare`，并受安装方的 `allowBuilds` 授权控制。
+预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和 `lib/`，不要求包含
+仓库内的 `RELEASE-LOG.md`。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行 `prepare`，
+因此会从当前源码重新构建；Git 依赖安装也会在获取源码后执行 `prepare`，并受安装方的
+`allowBuilds` 授权控制。
 
-### 3. 先推送对应源码
+不要在用户确认 publish 前把 release worktree 合并回 `main`。
 
-```bash
-cd /path/to/clutch-dsh
-git status --short
-git add -- packages/clutch-dsh-worktree/package.json
-git commit -m "chore(worktree): release package"
-git push origin main
-```
-
-GitHub `main` 上的 package version、README 和代码必须与即将发布的 tarball 一致。
-
-### 4. 发布到官方 npm registry
-
-即使本机默认 registry 是镜像，也要显式指定 npmjs：
+### 6. 交给用户从 release worktree 手动发布
 
 ```bash
-cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
+cd "$RELEASE_WORKTREE/packages/clutch-dsh-worktree"
 npm publish --access public --registry=https://registry.npmjs.org/
 ```
 
-### 5. 验证发布结果
+上面的命令必须由用户手动执行，且当前目录必须属于 release worktree；agent 不代替用户
+执行 `npm publish`。发布完成后再通知 agent 继续验证。
+
+### 7. 验证发布结果
 
 ```bash
+cd "$RELEASE_WORKTREE/packages/clutch-dsh-worktree"
 npm view @cerbur/clutch-dsh-worktree name version dist-tags.latest dist.tarball repository \
   --json --registry=https://registry.npmjs.org/
 
@@ -207,7 +251,7 @@ test "$LOCAL_VERSION" = "$PUBLISHED_VERSION"
 
 新包在 registry 的 packument 可能比 `npm publish` 的成功响应晚几秒出现；遇到短暂 404 时等待后重试，不要再次发布同一个版本。
 
-### 6. 合并 release 到 `main` 并创建版本 tag
+### 8. 合并 release 到 `main` 并创建版本 tag
 
 npm 发布结果确认后，先将目标 release worktree 合并回 `main`，并在合并后的 `main` 上完成
 最终验证。验证通过后，使用 `package.json` 的 `version` 创建 annotated tag。tag 名称直接
