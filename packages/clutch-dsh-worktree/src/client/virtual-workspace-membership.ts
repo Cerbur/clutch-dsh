@@ -85,7 +85,7 @@ export function createVirtualWorkspaceMembership<
     }
   };
 
-  // DSH rc.8 publishes Workspace baselines through `set()`. Decorate that
+  // The current upstream DSH publishes Workspace baselines through `set()`. Decorate that
   // browser-local write seam so native subscribers receive the projection in
   // the same notification instead of observing a raw snapshot first.
   list.set = (next: T): void => {

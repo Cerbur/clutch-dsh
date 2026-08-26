@@ -308,7 +308,7 @@ test('binds an existing blank Session before projecting and opening it', async (
   ]);
 });
 
-test('creates, binds, projects, and opens in the rc.8-compatible order', async () => {
+test('creates, binds, projects, and opens in the upstream-compatible order', async () => {
   const calls = [];
   const connector = createWorktreeSessionConnector({
     manager: {

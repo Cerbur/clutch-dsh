@@ -51,7 +51,7 @@ export type {
 } from './worktree-connection.js';
 export type { WorktreeViewActions, WorktreeViewMode, WorktreeViewState } from './view-mode.js';
 
-/** rc.8 runtime exposes create(), while the published Client type omits it. */
+/** The current upstream runtime exposes create(), while the published Client type omits it. */
 interface WorktreeSessionCreator {
   create(input: { cwd: string }): Promise<SessionId>;
 }

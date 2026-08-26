@@ -99,7 +99,7 @@ function contextAriaLabel(state: WorktreeContextState, t: WorktreeTranslate): st
 
 /**
  * Browser-local Hero suffix. It intentionally uses the frame overlay because
- * rc.8 exposes no additive slot beside the native Hero headline.
+ * The current upstream DSH exposes no additive slot beside the native Hero headline.
  */
 export function WorktreeHeroContext({
   useWorktreeContext,

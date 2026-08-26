@@ -19,6 +19,28 @@ npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.o
 
 两条命令输出相同，才表示当前 checkout 与 npm release 对齐。
 
+## DSH source baseline
+
+本 package 的开发和验证以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)
+的当前默认分支源码 checkout 为准，不再把历史 DSH prerelease 作为运行时约束。该仓库当前
+默认分支是 `master`，不是 `main`；如果 upstream 后续切换默认分支，应跟随仓库的当前默认分支。
+upstream 仍是 developer preview，package 和 API contract 可能变化。
+
+准备 DSH checkout：
+
+```bash
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+git fetch origin
+git pull --ff-only origin master
+pnpm install
+pnpm run build
+```
+
+package 的 DSH `peerDependencies` 使用 `*`，让 profile 中的 current upstream runtime 满足
+安装约束；`devDependencies` 只用于当前 checkout 的本地 typecheck、build 和 test，不是发布后的
+runtime 版本承诺。
+
 ## 安装来源
 
 ### 本地 checkout

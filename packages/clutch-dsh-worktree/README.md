@@ -36,7 +36,11 @@ Worktree rows, and the read-only blank-session Hero context.
 
 ### Compatibility and prerequisites
 
-- The DSH CLI and the target Web profile must use `dsh-v0.1.0-rc.8`.
+- For development and source validation, use a clean checkout of the official [DeepSeek Harness
+  repository](https://github.com/deepseek-ai/deepseek-harness) on its current default branch. The
+  repository currently uses `master` rather than `main`; it is developer-preview software, so its
+  package and API contracts may change. Run the upstream install/build steps before installing
+  this plugin into that profile.
 - The target profile, such as `web` or `demo`, must already start successfully, and the plugin
   must be installed into the same profile that launches the Web UI.
 - DSH Client must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
@@ -77,6 +81,20 @@ To inspect the currently published version on the official registry:
 
 ```bash
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+### Prepare the current upstream DSH checkout
+
+For source-based development or validation, prepare the upstream checkout first. The current
+upstream default branch is `master`; follow the repository's default branch if it changes later.
+
+```bash
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+git fetch origin
+git pull --ff-only origin master
+pnpm install
+pnpm run build
 ```
 
 ### Install from a repository checkout
@@ -182,8 +200,8 @@ blank-session Hero. The displayed language follows DSH's current language settin
 ### Create Main and Worktree Sessions
 
 - Use Main's `+` to create a normal DSH Session in the Project-root view.
-- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. On
-  rc.8, the native call is `session.create({ cwd: worktreePath })`; the plugin then saves the
+- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The
+  plugin calls the upstream runtime with `session.create({ cwd: worktreePath })`, then saves the
   external binding, applies a browser-local `{ workspaceId, sessionId }` membership projection,
   and opens the Session.
 - The connector reuses an unarchived blank Session with the exact target cwd when possible. An
@@ -275,15 +293,16 @@ does not change the sidecar state, so the relationship remains retryable. Sessio
 the native DSH API before binding; a binding failure never deletes or modifies the already-created
 Session.
 
-The rc.8 `session.create` API cannot receive `workspaceId` and an independent cwd together. The
-Worktree flow therefore uses a browser-local membership projection rather than a persistent DSH
-attach, and it does not modify DSH source, Session metadata, or native Workspace storage. The
-projection is replayed after native list refreshes and removed when the binding disappears or the
-Client is disposed.
+The Worktree session flow sends the independent Worktree cwd through the upstream DSH runtime and
+keeps `{ workspaceId, sessionId }` as a browser-local membership projection rather than a
+persistent DSH attach. It does not modify DSH source, Session metadata, or native Workspace
+storage. The projection is replayed after native list refreshes and removed when the binding
+disappears or the Client is disposed.
 
-The blank Hero context is visual only. Because rc.8 has no additive Hero headline slot, its
-placement depends on the native `[data-phase="hero"]` and title anchors; it disappears when those
-anchors are unavailable and should move to a formal DSH slot when one exists.
+The blank Hero context is visual only. Because the current upstream DSH source checkout has no
+additive Hero headline slot, its placement depends on the native `[data-phase="hero"]` and title
+anchors; it disappears when those anchors are unavailable and should move to a formal DSH slot
+when one exists.
 
 ## Development and verification
 

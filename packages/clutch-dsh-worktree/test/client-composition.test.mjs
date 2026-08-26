@@ -132,8 +132,8 @@ test('declares the native Conversation package without depending on a Hero conte
   const source = await readFile(new URL('../src/client/entry.ts', import.meta.url), 'utf8');
 
   assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'), true);
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '*');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.1-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);

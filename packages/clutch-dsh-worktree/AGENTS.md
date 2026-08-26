@@ -41,6 +41,7 @@ packages/clutch-dsh-worktree/
 ## 版本、发布与安装来源
 
 - `package.json.version` 是本地 checkout、GitHub `main` 和 npm release 的唯一版本源；README 和市场 YAML 不复制当前版本号。
+- 本 package 的开发和验证以官方 DeepSeek Harness 仓库的当前默认分支源码 checkout 为准；该仓库当前默认分支是 `master`，不是历史 DSH prerelease。active manifest 和当前文档不得重新固定历史 prerelease。
 - npm 已发布的 `name + version` 不能覆盖；新发布必须先使用 `npm version patch|minor|major --no-git-tag-version` 递增版本。
 - `publishConfig.access` 必须保持 `public`，`publishConfig.registry` 指向官方 npm registry，`prepare` 必须从当前源码生成 `lib/`；Git 依赖安装和打包/发布共用这条生命周期。
 - 发布顺序固定为：递增 package version → `pnpm run check` → `npm pack --dry-run` → 提交并推送 `main` → `npm publish --access public --registry=https://registry.npmjs.org/` → 用 `npm view` 比较本地和 npm version。
@@ -140,7 +141,7 @@ Manage 不执行具体 Git command，不实现 sidecar 文件格式细节，不�
 
 当前 Cordis patch 装载 `clutch-dsh-worktree-host`，并从 DSH 的 `dshHomePath()` 注入
 绝对 DSH Home。官方 `dsh-typert-loader` 从 `./package.json` 和 `./typert` 注册
-descriptor，rc.8 `TypertGateway` 在已有 `/api` Connection channel 接管
+descriptor，当前 upstream DSH 的 `TypertGateway` 在已有 `/api` Connection channel 接管
 `worktreeManager/<method>`。本 plugin 不创建第二套 RPC 或 transport。
 
 `DshHostReadAdapter` 只读取 workspace registry、live Session header 和
@@ -158,13 +159,12 @@ Client 不执行 Git，不读取 sidecar 文件，不导入 Provider、Manage �
 详细的 Connection、slot、overlay 和 disposal 规则见
 [`src/client/README.md`](src/client/README.md)。
 
-## rc.8 Client workaround 与当前界面约束
+## Current upstream Client workaround 与当前界面约束
 
-rc.8 的原生 `session.create` 不能同时传 `workspaceId` 和独立 `cwd`。因此 Worktree
-`+` 使用 `session.create({ cwd: worktreePath })` 创建 DSH Session，binding 成功后
-只在浏览器内把 `{ workspaceId, sessionId }` 投影到 native Workspace list；native
-Workspace data、Host API、DSH 源码和 Session metadata 不被修改。native Workspace
-list 刷新后重放 projection，binding 消失或 Client dispose 时撤销 projection。
+当前 upstream DSH 的 Worktree Session flow 使用原生 `session.create({ cwd: worktreePath })`
+创建 DSH Session，binding 成功后只在浏览器内把 `{ workspaceId, sessionId }` 投影到 native
+Workspace list；native Workspace data、Host API、DSH 源码和 Session metadata 不被修改。native
+Workspace list 刷新后重放 projection，binding 消失或 Client dispose 时撤销 projection。
 
 Client surface 的当前约束：
 

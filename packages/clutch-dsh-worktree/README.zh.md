@@ -32,7 +32,10 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 
 ### 兼容性与前置条件
 
-- DSH CLI 和目标 Web profile 必须使用 `dsh-v0.1.0-rc.8`。
+- 开发和源码验证应使用官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)
+  的干净 checkout，并跟随仓库当前默认分支。该仓库当前使用 `master` 而不是 `main`，且仍是
+  developer preview，package 和 API contract 可能变化；在向 profile 安装本 plugin 前，先完成
+  upstream 的安装和构建步骤。
 - 目标 profile（例如 `web` 或 `demo`）必须已经可以正常启动，且 plugin 必须安装到实际
   启动 Web UI 的同一个 profile。
 - DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 及其
@@ -71,6 +74,20 @@ pnpm dsh web
 
 ```bash
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+### 准备当前 upstream DSH checkout
+
+进行源码开发或验证时，先准备 upstream checkout。当前 upstream 默认分支是 `master`；如果仓库
+未来切换默认分支，应跟随仓库的当前默认分支。
+
+```bash
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+git fetch origin
+git pull --ff-only origin master
+pnpm install
+pnpm run build
 ```
 
 ### 从仓库 checkout 安装
@@ -173,9 +190,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ### 创建 Main 和 Worktree Session
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
-- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。在 rc.8 中，
-  原生调用为 `session.create({ cwd: worktreePath })`；插件随后保存外部 binding，在当前
-  浏览器内应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
+- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 upstream
+  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding，在当前浏览器内
+  应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
 - 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
   会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
   `create → bind → project → open`，同一个 Worktree 的并发点击会合并。
@@ -253,14 +270,14 @@ Worktree binding 使用对应的 Worktree 路径。cwd 在每次执行时派生�
 创建的 Git Worktree。删除 Worktree 失败时不会改变 sidecar 状态，因此关系仍可重试。创建
 Session 时先调用 DSH 原生 API，再写入 binding；binding 失败不会删除或修改已创建的 Session。
 
-rc.8 的 `session.create` API 不能同时接收 `workspaceId` 和独立 cwd。因此 Worktree 流程
-使用浏览器本地 membership projection，而不是持久化的 DSH attach，并且不会修改 DSH 源码、
-Session metadata 或原生 Workspace 存储。native list 刷新后会重放 projection；binding 消失
-或 Client dispose 时会移除 projection。
+Worktree Session 流程将独立的 Worktree cwd 交给 upstream DSH runtime，并将
+`{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
+attach。它不会修改 DSH 源码、Session metadata 或原生 Workspace 存储。native list 刷新后会
+重放 projection；binding 消失或 Client dispose 时会移除 projection。
 
-空白 Hero 上下文只用于展示。由于 rc.8 没有 additive Hero headline slot，它的位置依赖原生
-`[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，未来有正式 DSH slot 时应迁移到
-该 slot。
+空白 Hero 上下文只用于展示。由于当前 upstream DSH source checkout 没有 additive Hero
+headline slot，它的位置依赖原生 `[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，
+未来有正式 DSH slot 时应迁移到该 slot。
 
 ## 开发与验证
 

@@ -25,7 +25,7 @@ Workspace's current local branch or active Worktree branch, so changing the
 Workspace causes the displayed suffix to refresh.
 
 The Hero companion is deliberately visual rather than a native Conversation
-slot: rc.8 has no additive Hero headline seat. It never renames the native
+slot: the current upstream DSH source checkout has no additive Hero headline seat. It never renames the native
 Workspace, replaces the Workspace picker or Agent mode seat, and hides itself
 when the native Hero anchor is unavailable. A future DSH Hero slot would be a
 more stable placement.
@@ -47,15 +47,15 @@ complete branch or `Workspace (branch)` value through the native `HoverCard` aft
 the standard 500 ms hover delay. The Hero chip remains pointer-hoverable while its
 placement measurement stays attached to the actual chip element.
 
-## rc.8 Session membership projection
+## Current upstream Session membership projection
 
-rc.8 cannot pass `workspaceId` and Worktree `cwd` together to native
-`session.create`. The Worktree `+` therefore:
+The Worktree `+` sends the Worktree `cwd` through the current upstream DSH runtime
+and keeps the Workspace membership projection browser-local. It therefore:
 
 1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
 2. binds the returned Session ID through the injected manager;
 3. projects `{ workspaceId, sessionId }` in browser memory so the current native Workspace list can resolve the Session;
-4. applies that projection at the rc.8 Workspace-list `set()` boundary so native subscribers do not observe a raw snapshot first, and replays it after native list refreshes;
+4. applies that projection at the current upstream Workspace-list `set()` boundary so native subscribers do not observe a raw snapshot first, and replays it after native list refreshes;
 5. removes it when the binding disappears or the Client fiber is disposed.
 
 This projection is not a persistent DSH attach and does not modify DSH source, Session
