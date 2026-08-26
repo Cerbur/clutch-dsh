@@ -1,6 +1,7 @@
 import type {
   BranchRecord,
   SessionBinding,
+  WorktreeImportCandidate,
   WorktreeManager,
   WorktreeRecord,
   WorktreeRemoteManager,
@@ -10,8 +11,10 @@ import type {
 // These lists are deliberately independent of the interfaces so omissions or accidental expansion fail at type-check time.
 const expectedManagerKeys = [
   'listWorktrees',
+  'listImportCandidates',
   'listBranches',
   'createWorktree',
+  'importWorktree',
   'removeWorktree',
   'insertWorktreeBefore',
   'listBindings',
@@ -19,8 +22,10 @@ const expectedManagerKeys = [
 ] as const;
 const expectedRemoteKeys = [
   'listWorktrees',
+  'listImportCandidates',
   'listBranches',
   'createWorktree',
+  'importWorktree',
   'removeWorktree',
   'insertWorktreeBefore',
   'listBindings',
@@ -41,9 +46,23 @@ type ManagerKeysMatchSpec = Expect<
 type RemoteKeysMatchSpec = Expect<
   Equal<keyof WorktreeRemoteManager, (typeof expectedRemoteKeys)[number]>
 >;
+type ImportManagerMethodsAreRequired = Expect<
+  Equal<
+    Pick<WorktreeManager, 'listImportCandidates' | 'importWorktree'>,
+    Required<Pick<WorktreeManager, 'listImportCandidates' | 'importWorktree'>>
+  >
+>;
+type ImportRemoteMethodsAreRequired = Expect<
+  Equal<
+    Pick<WorktreeRemoteManager, 'listImportCandidates' | 'importWorktree'>,
+    Required<Pick<WorktreeRemoteManager, 'listImportCandidates' | 'importWorktree'>>
+  >
+>;
 
 const managerKeysMatchSpec: ManagerKeysMatchSpec = true;
 const remoteKeysMatchSpec: RemoteKeysMatchSpec = true;
+const importManagerMethodsAreRequired: ImportManagerMethodsAreRequired = true;
+const importRemoteMethodsAreRequired: ImportRemoteMethodsAreRequired = true;
 
 // 这些编译契约 fixture 固定公开 DTO 的最小可构造形状；它们不导出，也不充当运行时 validator。
 // These compile-contract fixtures pin the minimum constructible public DTO shapes; they are neither exported nor used as runtime validators.
@@ -52,7 +71,12 @@ const worktree: WorktreeRecord = {
   workspaceId: 'ws_example',
   absolutePath: '/tmp/dsh/worktree/wt_example',
   branch: 'feature/example',
+  source: 'plugin',
   status: 'active',
+};
+const importCandidate: WorktreeImportCandidate = {
+  absolutePath: '/tmp/external/worktree',
+  branch: 'feature/external',
 };
 const branch: BranchRecord = {
   name: 'feature/example',
@@ -70,8 +94,11 @@ const binding: SessionBinding = {
 // `void` only satisfies no-unused checks; the contract proofs are the type assignments above.
 void managerKeysMatchSpec;
 void remoteKeysMatchSpec;
+void importManagerMethodsAreRequired;
+void importRemoteMethodsAreRequired;
 void expectedManagerKeys;
 void expectedRemoteKeys;
 void worktree;
+void importCandidate;
 void branch;
 void binding;

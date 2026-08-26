@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import type { BranchRecord, SessionBinding, WorktreeId, WorktreeRecord, WorkspaceId } from '../contract/index.js';
+import type {
+  BranchRecord,
+  SessionBinding,
+  WorktreeId,
+  WorktreeImportCandidate,
+  WorktreeRecord,
+  WorkspaceId,
+} from '../contract/index.js';
 import { LocalGitAdapter } from '../provider/git.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar.js';
 import { providerError } from '../provider/types.js';
@@ -13,8 +20,10 @@ import {
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
   createWorktree,
+  importWorktree,
   insertWorktreeBefore,
   listBranches,
+  listImportCandidates,
   listWorktrees,
   removeWorktree,
 } from './manager-worktrees.js';
@@ -51,6 +60,12 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return listWorktrees(this.context, input);
   }
 
+  listImportCandidates(input: {
+    readonly workspaceId: WorkspaceId;
+  }): Promise<readonly WorktreeImportCandidate[]> {
+    return listImportCandidates(this.context, input);
+  }
+
   listBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
     return listBranches(this.context, input);
   }
@@ -61,6 +76,13 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly newBranch?: string;
   }): Promise<WorktreeRecord> {
     return createWorktree(this.context, input);
+  }
+
+  importWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly absolutePath: string;
+  }): Promise<WorktreeRecord> {
+    return importWorktree(this.context, input);
   }
 
   removeWorktree(input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string }): Promise<void> {

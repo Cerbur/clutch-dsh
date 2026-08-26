@@ -17,6 +17,20 @@ function createManager(overrides = {}) {
         workspaceId: input.workspaceId,
         absolutePath: '/tmp/dsh/worktree/wt_example',
         branch: input.branch,
+        source: 'plugin',
+        status: 'active',
+      };
+    },
+    async listImportCandidates() {
+      return [];
+    },
+    async importWorktree(input) {
+      return {
+        worktreeId: 'wt_external',
+        workspaceId: input.workspaceId,
+        absolutePath: input.absolutePath,
+        branch: 'feature/external',
+        source: 'external',
         status: 'active',
       };
     },
@@ -48,6 +62,10 @@ test('projects every approved Manager operation as a serializable result', async
     ok: true,
     value: [],
   });
+  assert.deepEqual(await remote.listImportCandidates({ workspaceId: 'ws_example' }), {
+    ok: true,
+    value: [],
+  });
   assert.deepEqual(
     await remote.createWorktree({ workspaceId: 'ws_example', branch: 'feature/example' }),
     {
@@ -57,6 +75,21 @@ test('projects every approved Manager operation as a serializable result', async
         workspaceId: 'ws_example',
         absolutePath: '/tmp/dsh/worktree/wt_example',
         branch: 'feature/example',
+        source: 'plugin',
+        status: 'active',
+      },
+    },
+  );
+  assert.deepEqual(
+    await remote.importWorktree({ workspaceId: 'ws_example', absolutePath: '/tmp/external' }),
+    {
+      ok: true,
+      value: {
+        worktreeId: 'wt_external',
+        workspaceId: 'ws_example',
+        absolutePath: '/tmp/external',
+        branch: 'feature/external',
+        source: 'external',
         status: 'active',
       },
     },

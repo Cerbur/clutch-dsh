@@ -95,6 +95,37 @@ test('formats missing Git with localized copy', () => {
   );
 });
 
+test('formats external import and registration errors with localized primary copy', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'WORKTREE_IMPORT_INVALID', message: '/private/path leaked', retryable: false },
+      t,
+    ),
+    'error.worktreeImportInvalid',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'WORKTREE_ALREADY_MANAGED', message: 'managed /private/path', retryable: false },
+      t,
+    ),
+    'error.worktreeAlreadyManaged',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'WORKTREE_RECORD_MISSING', message: '', retryable: true },
+      t,
+    ),
+    'error.worktreeRecordMissing',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      { code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE', message: '', retryable: true },
+      t,
+    ),
+    'error.worktreeRegistrationSessionUnavailable',
+  );
+});
+
 test('keeps an unknown DSH or Host message unchanged', () => {
   assert.equal(
     formatWorktreeViewError(

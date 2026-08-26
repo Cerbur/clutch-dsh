@@ -49,21 +49,21 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   });
 });
 
-test('targets the rc.8 DSH graph without depending on the canonical Remote client assembly', () => {
-  const dshDependencyVersions = [
-    ...Object.entries(packageManifest.peerDependencies ?? {}),
-    ...Object.entries(packageManifest.devDependencies ?? {}),
-  ].filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
+test('accepts the current upstream DSH graph without pinning runtime peers', () => {
+  const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
+    .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
+  const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
+    .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
 
-  assert.ok(dshDependencyVersions.length > 0);
-  for (const [name, version] of dshDependencyVersions) {
-    assert.equal(version, '0.1.0-rc.8', `${name} must target dsh-v0.1.0-rc.8`);
+  assert.ok(dshPeerDependencies.length > 0);
+  assert.ok(dshDevDependencies.length > 0);
+  for (const [name, version] of dshPeerDependencies) {
+    assert.equal(version, '*', `${name} must accept the current upstream DSH checkout`);
   }
-  assert.equal(
-    packageManifest.peerDependencies['@deepseek-ai/dsh-client-connection'],
-    '0.1.0-rc.8',
-  );
-  assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-connection'], '0.1.0-rc.8');
+  for (const [name, version] of dshDevDependencies) {
+    assert.equal(version, '0.1.1-rc.2', `${name} must match the current upstream DSH package snapshot`);
+  }
+  assert.doesNotMatch(JSON.stringify(packageManifest), /0\.1\.0-rc\.8/);
   assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
 });
@@ -71,11 +71,11 @@ test('targets the rc.8 DSH graph without depending on the canonical Remote clien
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.1.0-rc.8',
+    '*',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.1.0-rc.8',
+    '0.1.1-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
 });
@@ -100,18 +100,23 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
     [
       'worktreeManager/bindSession',
       'worktreeManager/createWorktree',
+      'worktreeManager/importWorktree',
       'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
       'worktreeManager/listBranches',
+      'worktreeManager/listImportCandidates',
       'worktreeManager/listWorktrees',
       'worktreeManager/removeWorktree',
     ],
   );
-  assert.deepEqual(
-    Object.values(WORKTREE_CONNECTION_ENDPOINTS).sort(),
-    remoteModule.TYPERT_REMOTE.descriptors
-      .map((descriptor) => `${descriptor.namespace}/${descriptor.method}`)
-      .sort(),
+  const descriptors = new Set(
+    remoteModule.TYPERT_REMOTE.descriptors.map(
+      (descriptor) => `${descriptor.namespace}/${descriptor.method}`,
+    ),
+  );
+  assert.equal(
+    Object.values(WORKTREE_CONNECTION_ENDPOINTS).every((endpoint) => descriptors.has(endpoint)),
+    true,
   );
   assert.equal(
     remoteModule.TYPERT_REMOTE.descriptors.some(
@@ -265,11 +270,13 @@ test('carries missing Git from Provider through Host projection and /api Client 
   }
 });
 
-test('canonical rc.8 Host Gateway claims Worktree endpoints on the shared /api channel', () => {
+test('canonical upstream Host Gateway claims Worktree endpoints on the shared /api channel', () => {
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
     'worktreeManager/listWorktrees',
+    'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
+    'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',

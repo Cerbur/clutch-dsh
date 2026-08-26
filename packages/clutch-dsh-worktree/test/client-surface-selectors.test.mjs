@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
+import * as selectors from '../lib/client/worktree-surface-selectors.js';
+
+const {
   bindingIdsFor,
+  clearSessionGroupExpansion,
+  isCompleteWorktreeWorkspaceSnapshot,
   sessionLabel,
   workspaceMatches,
-} from '../lib/client/worktree-surface-selectors.js';
+} = selectors;
 
 const sessions = {
   ids: ['session-title', 'session-blank', 'session-other'],
@@ -82,4 +86,52 @@ test('blank Session ids and titles do not match, while labels keep the blank cop
 test('bindingIdsFor keeps binding order and selects only the requested Worktree', () => {
   assert.deepEqual(bindingIdsFor(view.bindings, 'worktree-1'), ['session-other']);
   assert.deepEqual(bindingIdsFor(view.bindings, 'missing-worktree'), []);
+});
+
+test('clears only the transient Session groups belonging to a collapsed parent', () => {
+  const current = {
+    'main:ws-one': true,
+    'worktree:wt-one': true,
+    'worktree:wt-two': true,
+    'main:ws-two': true,
+  };
+
+  assert.deepEqual(
+    clearSessionGroupExpansion(current, ['main:ws-one', 'worktree:wt-one']),
+    {
+      'worktree:wt-two': true,
+      'main:ws-two': true,
+    },
+  );
+  assert.deepEqual(current, {
+    'main:ws-one': true,
+    'worktree:wt-one': true,
+    'worktree:wt-two': true,
+    'main:ws-two': true,
+  });
+});
+
+test('requires the ready Worktree snapshot to cover the current Workspace ids', () => {
+  assert.equal(typeof isCompleteWorktreeWorkspaceSnapshot, 'function');
+  assert.equal(
+    isCompleteWorktreeWorkspaceSnapshot(
+      ['workspace-one', 'workspace-two'],
+      [{ workspaceId: 'workspace-one' }],
+    ),
+    false,
+  );
+  assert.equal(
+    isCompleteWorktreeWorkspaceSnapshot(
+      ['workspace-one', 'workspace-two'],
+      [{ workspaceId: 'workspace-one' }, { workspaceId: 'workspace-one' }],
+    ),
+    false,
+  );
+  assert.equal(
+    isCompleteWorktreeWorkspaceSnapshot(
+      ['workspace-one', 'workspace-two'],
+      [{ workspaceId: 'workspace-two' }, { workspaceId: 'workspace-one' }],
+    ),
+    true,
+  );
 });

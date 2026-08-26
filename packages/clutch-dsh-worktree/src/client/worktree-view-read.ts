@@ -24,9 +24,31 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+/** Merge one freshly read Workspace projection without clearing other ready views. */
+export function mergeWorktreeView(
+  views: readonly WorktreeWorkspaceView[],
+  nextView: WorktreeWorkspaceView,
+): readonly WorktreeWorkspaceView[] {
+  const index = views.findIndex((view) => view.workspaceId === nextView.workspaceId);
+  if (index === -1) return [...views, nextView];
+  const merged = [...views];
+  merged[index] = nextView;
+  return merged;
+}
+
 export interface LoadWorktreeViewsOptions {
   readonly invalidateContext?: boolean;
   readonly invalidateWorktreeContext?: () => Promise<void>;
+}
+
+export interface WorktreeModalViewLoader {
+  invalidate(): void;
+  load(
+    manager: WorktreeManager,
+    workspaceId: string,
+    onSuccess: (view: WorktreeWorkspaceView) => void,
+    onError: (error: WorktreeViewError) => void,
+  ): Promise<void>;
 }
 
 /** Reuse the previous ID snapshot when DSH republishes equivalent Workspace items. */
@@ -165,6 +187,21 @@ export async function loadWorktreeView(
     readiness: branchesResult.value.length > 0
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },
+  };
+}
+
+/** Isolate modal-target reads from full-surface refresh generations. */
+export function createWorktreeModalViewLoader(): WorktreeModalViewLoader {
+  const guard = createWorktreeRefreshGuard();
+  return {
+    invalidate: guard.invalidate,
+    load(manager, workspaceId, onSuccess, onError) {
+      return guard.run(
+        () => loadWorktreeView(manager, workspaceId),
+        (data) => onSuccess({ workspaceId, ...data }),
+        (error) => onError(toWorktreeViewError(error)),
+      );
+    },
   };
 }
 

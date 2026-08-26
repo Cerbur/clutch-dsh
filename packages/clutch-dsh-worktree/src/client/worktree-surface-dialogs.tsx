@@ -213,18 +213,31 @@ export function WorktreeCreateDialog({
   t,
   workspace,
   view,
+  readError,
   setupStatus,
   canCreate,
+  mode,
+  importCandidates,
+  selectedImportPath,
   selectedBranch,
   newBranch,
   actionPending,
   onClose,
+  onRetry,
+  onModeChange,
+  onRetryImportCandidates,
+  onSelectedImportPathChange,
   onSelectedBranchChange,
   onNewBranchChange,
   onSubmit,
 }: WorktreeCreateDialogProps) {
   if (workspace === undefined) return null;
   const setupCommands = setupStatus === undefined ? [] : worktreeSetupCommands(setupStatus);
+  const importing = mode === 'import';
+  const importBlocked =
+    actionPending ||
+    importCandidates.status === 'loading' ||
+    selectedImportPath === undefined;
 
   return (
     <Modal
@@ -235,7 +248,9 @@ export function WorktreeCreateDialog({
       }}
       closeLabel={t('dialog.closeWorktreeCreate')}
       title={t('worktree.createTitle')}
-      description={t('worktree.createDescription', { name: workspace.title })}
+      description={importing
+        ? t('worktree.importDescription', { name: workspace.title })
+        : t('worktree.createDescription', { name: workspace.title })}
       footer={(
         <>
           <Button variant="outline" disabled={actionPending} onClick={onClose}>
@@ -244,20 +259,112 @@ export function WorktreeCreateDialog({
           <Button
             variant="primary"
             disabled={
-              actionPending ||
-              selectedBranch.length === 0 ||
-              newBranch.trim().length === 0
+              importing
+                ? importBlocked
+                : actionPending ||
+                  !canCreate ||
+                  selectedBranch.length === 0 ||
+                  newBranch.trim().length === 0
             }
             onClick={() => {
               void onSubmit();
             }}
           >
-            {t('worktree.create')}
+            {importing ? t('worktree.import') : t('worktree.create')}
           </Button>
         </>
       )}
     >
-      {canCreate ? (
+      <div className={styles.worktreeModalTabs} role="tablist" aria-label={t('worktree.title')}>
+        <button
+          className={styles.worktreeModalTab}
+          type="button"
+          role="tab"
+          aria-selected={mode === 'create'}
+          disabled={actionPending}
+          onClick={() => {
+            onModeChange('create');
+          }}
+        >
+          {t('worktree.tabCreate')}
+        </button>
+        <button
+          className={styles.worktreeModalTab}
+          type="button"
+          role="tab"
+          aria-selected={mode === 'import'}
+          disabled={actionPending}
+          onClick={() => {
+            onModeChange('import');
+          }}
+        >
+          {t('worktree.tabImport')}
+        </button>
+      </div>
+      {importing ? (
+        <div className={styles.worktreeImportCandidates} role="tabpanel">
+          {importCandidates.status === 'loading' && importCandidates.candidates.length === 0 && (
+            <p className={styles.message}>{t('worktree.importLoading')}</p>
+          )}
+          {importCandidates.status === 'error' && (
+            <div className={styles.worktreeImportError} role="alert">
+              <p className={styles.message}>
+                {formatWorktreeViewError(importCandidates.error, t)}
+              </p>
+              <Button variant="outline" disabled={actionPending} onClick={onRetryImportCandidates}>
+                {t('action.retry')}
+              </Button>
+            </div>
+          )}
+          {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
+            <p className={styles.message}>{t('worktree.importEmpty')}</p>
+          )}
+          {importCandidates.candidates.length > 0 && (
+            <label className={styles.modalField}>
+              {t('worktree.tabImport')}
+              <select
+                className={styles.worktreeImportSelect}
+                data-worktree-import-select
+                aria-label={t('worktree.tabImport')}
+                value={selectedImportPath ?? ''}
+                disabled={actionPending}
+                onChange={(event) => {
+                  onSelectedImportPathChange(event.currentTarget.value);
+                }}
+              >
+                <option value="" disabled>
+                  {t('worktree.importPlaceholder')}
+                </option>
+                {importCandidates.candidates.map((candidate) => (
+                  <option key={candidate.absolutePath} value={candidate.absolutePath}>
+                    {candidate.branch} — {candidate.absolutePath}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      ) : readError !== undefined ? (
+        <div
+          className={styles.gitReadiness}
+          data-worktree-readiness="error"
+          role="alert"
+        >
+          <p className={styles.message} data-error="true">
+            {formatWorktreeViewError(readError, t)}
+          </p>
+          {readError.retryable && onRetry !== undefined && (
+            <button
+              type="button"
+              className={styles.retryButton}
+              disabled={actionPending}
+              onClick={onRetry}
+            >
+              {t('action.retry')}
+            </button>
+          )}
+        </div>
+      ) : canCreate ? (
         <>
           <label className={styles.modalField}>
             {t('worktree.baseBranch')}
@@ -336,7 +443,9 @@ export function WorktreeRemovalDialog({
       }}
       closeLabel={t('dialog.closeWorktreeRemove')}
       title={t('worktree.remove')}
-      description={t('worktree.removeDescription', { name: worktree.branch })}
+      description={worktree.source === 'external'
+        ? t('worktree.removeExternalDescription', { name: worktree.branch })
+        : t('worktree.removeDescription', { name: worktree.branch })}
       footer={(
         <>
           <Button variant="outline" disabled={actionPending} onClick={onClose}>

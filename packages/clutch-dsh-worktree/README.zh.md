@@ -12,15 +12,25 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 中文截图展示了侧边栏中的 Worktree 模式、包含 Main 和 Worktree 行的 Workspace 树，以及
 新会话空白 Hero 中的只读上下文。
 
+![英文 Worktree 创建/导入弹窗](assets/screenshots/screenshots-import.png)
+
+导入截图展示了现有 Workspace `+` 弹窗：默认选中创建，旁边是导入 Tab，并在普通下拉框中
+使用安全的示例 branch 和路径值。
+
 ## 能力
 
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
+- 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
+- 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
+- plugin 创建和导入的 Worktree 都通过真实的 `git worktree remove` 移除；移除导入的 Worktree 可能删除其关联目录，确认弹窗会明确提示。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 active Worktree 的选项菜单和确认弹窗移除 Worktree；Main 和 detached 行不显示该菜单。
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
+- 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
+- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径和 Session 五行溢出，清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
 - 在同一个 Session 的 snapshot 更新以及 Session 切换期间保持 Conversation 和 Hero 上下文
@@ -32,7 +42,10 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 
 ### 兼容性与前置条件
 
-- DSH CLI 和目标 Web profile 必须使用 `dsh-v0.1.0-rc.8`。
+- 开发和源码验证应使用官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)
+  的干净 checkout，并跟随仓库当前默认分支。该仓库当前使用 `master` 而不是 `main`，且仍是
+  developer preview，package 和 API contract 可能变化；在向 profile 安装本 plugin 前，先完成
+  upstream 的安装和构建步骤。
 - 目标 profile（例如 `web` 或 `demo`）必须已经可以正常启动，且 plugin 必须安装到实际
   启动 Web UI 的同一个 profile。
 - DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 及其
@@ -71,6 +84,20 @@ pnpm dsh web
 
 ```bash
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+### 准备当前 upstream DSH checkout
+
+进行源码开发或验证时，先准备 upstream checkout。当前 upstream 默认分支是 `master`；如果仓库
+未来切换默认分支，应跟随仓库的当前默认分支。
+
+```bash
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+git fetch origin
+git pull --ff-only origin master
+pnpm install
+pnpm run build
 ```
 
 ### 从仓库 checkout 安装
@@ -170,12 +197,26 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
    的可复制 setup 命令修复后重试。插件只展示这些提示，不会执行 setup 或安装命令或编辑
    业务文件。
 
+### 导入已有 Worktree
+
+1. 选择 Workspace，点击旁边的 `+`，再选择 `导入` Tab。弹窗通过现有 DSH `/api` Connection
+   加载该 repository 的 Git Worktree 候选项。
+2. 第一版只列出绑定 branch、不是 repository root、且未出现在 plugin sidecar 中的 Worktree。
+   detached HEAD 会被省略；候选项通过普通下拉框选择，每个选项先显示 branch，再显示绝对路径
+   作为诊断信息。
+3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
+   工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的
+   `bind → membership projection → open → refresh` 流程。
+4. 同一 Workspace、同一物理路径的 active external 导入是幂等的。已经由 plugin 管理的路径
+   返回 `WORKTREE_ALREADY_MANAGED`；无效或过期候选项返回 `WORKTREE_IMPORT_INVALID`，修复
+   repository 状态后可以重试。
+
 ### 创建 Main 和 Worktree Session
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
-- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。在 rc.8 中，
-  原生调用为 `session.create({ cwd: worktreePath })`；插件随后保存外部 binding，在当前
-  浏览器内应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
+- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 upstream
+  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding，在当前浏览器内
+  应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
 - 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
   会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
   `create → bind → project → open`，同一个 Worktree 的并发点击会合并。
@@ -191,14 +232,18 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
 - 使用 active Worktree 的选项菜单和确认弹窗移除 Worktree。Main 和 detached Worktree 不显示
   该菜单。
+- 导入的 Worktree 与 plugin 创建的 Worktree 显示相同的 active 选项菜单。两种来源都执行真实
+  `git worktree remove`；导入项的确认文案会警告关联 Worktree 目录可能被删除。Session 会
+  保留为 detached binding。
 - 移除 Worktree 不会删除其 Session。关系会保留为 detached，直到显式解绑。删除 Workspace
   只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin
   sidecar 会保留。
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
   限定在当前视觉 Main 或 Worktree 分组中。
 - Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时
-  回退为 `本地`。branch 名称、路径、Workspace 名称、Session 标题以及原始 DSH/Git 错误
-  信息保持原值。
+  回退为 `本地`。如果导入的 Workspace 是 Git 仓库中的子目录，会先解析 Git 根目录，再
+  复用与 Git 根目录相同的 branch/worktree 信息。branch 名称、路径、Workspace 名称、Session
+  标题以及原始 DSH/Git 错误信息保持原值。
 - 已有 Session 会在标题行显示只读上下文，格式为 `Session title` → `Agent mode` →
   `current branch / Worktree branch`。过长值在紧凑 chip 中折叠，并通过 hover card 显示完整
   内容。原生标题存在且有锚点时，新会话空白 Hero 会在标题后显示 `Workspace (branch)`，并
@@ -237,6 +282,7 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 
 - `projectId`、`worktreeId` 和 `sessionId`；
 - 绝对 Worktree 路径、branch 和生命周期状态；
+- Worktree 来源（`plugin` 或 `external`）；
 - binding 状态和 schema version。
 
 索引不会写入 Project 工作树或 DSH 原始数据目录，也不会保存 `projectRoot` 副本或任何
@@ -252,14 +298,14 @@ Worktree binding 使用对应的 Worktree 路径。cwd 在每次执行时派生�
 创建的 Git Worktree。删除 Worktree 失败时不会改变 sidecar 状态，因此关系仍可重试。创建
 Session 时先调用 DSH 原生 API，再写入 binding；binding 失败不会删除或修改已创建的 Session。
 
-rc.8 的 `session.create` API 不能同时接收 `workspaceId` 和独立 cwd。因此 Worktree 流程
-使用浏览器本地 membership projection，而不是持久化的 DSH attach，并且不会修改 DSH 源码、
-Session metadata 或原生 Workspace 存储。native list 刷新后会重放 projection；binding 消失
-或 Client dispose 时会移除 projection。
+Worktree Session 流程将独立的 Worktree cwd 交给 upstream DSH runtime，并将
+`{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
+attach。它不会修改 DSH 源码、Session metadata 或原生 Workspace 存储。native list 刷新后会
+重放 projection；binding 消失或 Client dispose 时会移除 projection。
 
-空白 Hero 上下文只用于展示。由于 rc.8 没有 additive Hero headline slot，它的位置依赖原生
-`[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，未来有正式 DSH slot 时应迁移到
-该 slot。
+空白 Hero 上下文只用于展示。由于当前 upstream DSH source checkout 没有 additive Hero
+headline slot，它的位置依赖原生 `[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，
+未来有正式 DSH slot 时应迁移到该 slot。
 
 ## 开发与验证
 

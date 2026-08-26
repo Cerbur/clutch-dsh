@@ -12,14 +12,17 @@ const worktree = {
   workspaceId: 'ws_example',
   absolutePath: '/tmp/dsh/worktree/wt_example',
   branch: 'feature/example',
+  source: 'plugin',
   status: 'active',
 };
 
-test('exposes only the seven browser-safe Worktree Manager methods', () => {
+test('publishes the nine browser-safe Worktree Manager method names', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'listWorktrees',
+    'listImportCandidates',
     'listBranches',
     'createWorktree',
+    'importWorktree',
     'removeWorktree',
     'insertWorktreeBefore',
     'listBindings',
@@ -37,14 +40,20 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
       const value = endpoint.endsWith('/listWorktrees')
         ? [worktree]
         : endpoint.endsWith('/createWorktree')
-          ? worktree
-          : endpoint.endsWith('/bindSession')
+        ? worktree
+        : endpoint.endsWith('/bindSession')
             ? {
                 workspaceId: input.workspaceId,
                 worktreeId: input.worktreeId,
                 sessionId: input.sessionId,
                 status: 'active',
               }
+            : endpoint.endsWith('/importWorktree')
+              ? {
+                  ...worktree,
+                  absolutePath: input.absolutePath,
+                  source: 'external',
+                }
             : endpoint.endsWith('/insertWorktreeBefore')
               ? ['wt_example']
               : endpoint.endsWith('/removeWorktree')
@@ -56,10 +65,19 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
   const manager = createWorktreeConnectionAdapter(rpc);
 
   assert.deepEqual(await manager.listWorktrees({ workspaceId: 'ws_example' }), [worktree]);
+  assert.deepEqual(await manager.listImportCandidates({ workspaceId: 'ws_example' }), []);
   assert.deepEqual(await manager.listBranches({ workspaceId: 'ws_example' }), []);
   assert.deepEqual(
     await manager.createWorktree({ workspaceId: 'ws_example', branch: 'feature/example' }),
     worktree,
+  );
+  assert.deepEqual(
+    await manager.importWorktree({ workspaceId: 'ws_example', absolutePath: '/tmp/external' }),
+    {
+      ...worktree,
+      absolutePath: '/tmp/external',
+      source: 'external',
+    },
   );
   assert.equal(
     await manager.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),

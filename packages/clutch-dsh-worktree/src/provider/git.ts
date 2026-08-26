@@ -1,4 +1,5 @@
 import { execFile as execFileCallback } from 'node:child_process';
+import path from 'node:path';
 import { promisify } from 'node:util';
 
 import type { GitWorktreeAdapter, GitWorktreeInfo } from './types.js';
@@ -257,6 +258,30 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         );
       }
       throw error;
+    }
+  }
+
+  /** Resolve the Git worktree/repository root for repository-wide reads. */
+  async resolveRepositoryRoot(workspaceRoot: string): Promise<string> {
+    try {
+      const rootResult = await runGit(
+        ['rev-parse', '--show-toplevel'],
+        workspaceRoot,
+        this.executable,
+      );
+      const repositoryRoot = rootResult.stdout.trim();
+      if (repositoryRoot.length === 0) {
+        throw providerError('GIT_OPERATION_FAILED', `Git did not return a repository root: ${workspaceRoot}`, {
+          workspaceRoot,
+          operation: 'resolve repository root',
+        });
+      }
+      return path.isAbsolute(repositoryRoot)
+        ? path.resolve(repositoryRoot)
+        : path.resolve(workspaceRoot, repositoryRoot);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('resolve repository root', workspaceRoot, undefined, undefined, error);
     }
   }
 

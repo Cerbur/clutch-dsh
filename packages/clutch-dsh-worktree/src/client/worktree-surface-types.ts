@@ -5,8 +5,13 @@ import type {
   PropsStore,
   TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots';
-import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
+import type {
+  WorktreeImportCandidate,
+  WorktreeManager,
+  WorktreeRecord,
+} from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
+import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike } from './session-view.js';
 import type {
@@ -30,6 +35,7 @@ export interface WorkspaceListLike {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly expandState: WorktreeExpandStateStore;
   readonly manager?: WorktreeManager;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (
@@ -72,6 +78,18 @@ export type WorktreeSurfaceProps = PropsRuntime<'shell.overlay'> &
 export type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
 
 export type WorktreeSetupStatus = Exclude<WorktreeGitReadiness['status'], 'ready'>;
+
+export type WorktreeRegistrationMode = 'create' | 'import';
+
+export type ImportCandidatesState =
+  | { readonly status: 'idle'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | { readonly status: 'loading'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | { readonly status: 'ready'; readonly candidates: readonly WorktreeImportCandidate[] }
+  | {
+      readonly status: 'error';
+      readonly candidates: readonly WorktreeImportCandidate[];
+      readonly error: WorktreeViewError;
+    };
 
 export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
@@ -124,6 +142,7 @@ export interface WorktreeSessionRowProps {
   readonly t: WorktreeTranslate;
   readonly sessionId: string;
   readonly blank: boolean;
+  readonly current: boolean;
   readonly label: string;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
@@ -178,6 +197,7 @@ export interface WorktreeSessionGroupProps {
   readonly groupKey: string;
   readonly sessionIds: readonly string[];
   readonly workspaceId: string;
+  readonly currentSessionId?: string;
   readonly expanded: boolean;
   readonly actionPending: boolean;
   readonly sessions: SessionListLike;
@@ -271,12 +291,20 @@ export interface WorktreeCreateDialogProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike | undefined;
   readonly view: WorktreeWorkspaceView | undefined;
+  readonly readError?: WorktreeViewError;
   readonly setupStatus: WorktreeSetupStatus | undefined;
   readonly canCreate: boolean;
+  readonly mode: WorktreeRegistrationMode;
+  readonly importCandidates: ImportCandidatesState;
+  readonly selectedImportPath: string | undefined;
   readonly selectedBranch: string;
   readonly newBranch: string;
   readonly actionPending: boolean;
   readonly onClose: () => void;
+  readonly onRetry?: () => void;
+  readonly onModeChange: (mode: WorktreeRegistrationMode) => void;
+  readonly onRetryImportCandidates: () => void;
+  readonly onSelectedImportPathChange: (absolutePath: string) => void;
   readonly onSelectedBranchChange: (branch: string) => void;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;

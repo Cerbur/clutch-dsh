@@ -12,10 +12,18 @@ The plugin stores only external Worktree/Session relationship metadata.
 The English screenshot shows Worktree mode in the Sidebar, a Workspace tree with Main and
 Worktree rows, and the read-only blank-session Hero context.
 
+![English Worktree Create/Import dialog](assets/screenshots/screenshots-import.png)
+
+The Import screenshot shows the existing Workspace `+` dialog with Create selected by default,
+the adjacent Import tab, and a standard dropdown containing safe example branch/path values.
+
 ## Capabilities
 
 - Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
+- Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
+- Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
+- Remove plugin-created and imported Worktrees through real `git worktree remove`; removing an imported Worktree can delete its linked directory and is called out in the confirmation dialog.
 - Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
   open it directly.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
@@ -24,6 +32,8 @@ Worktree rows, and the read-only blank-session Hero context.
 - Continue using DSH-native Workspace rename/delete/reorder and Session menus. Worktree rows can
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
+- Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
+- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow, clears a hiding search, and scrolls the row into view; this browser-local behavior does not change persisted expansion choices.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
 - Keep Conversation and Hero context stable across same-Session snapshot updates and Session
@@ -36,7 +46,11 @@ Worktree rows, and the read-only blank-session Hero context.
 
 ### Compatibility and prerequisites
 
-- The DSH CLI and the target Web profile must use `dsh-v0.1.0-rc.8`.
+- For development and source validation, use a clean checkout of the official [DeepSeek Harness
+  repository](https://github.com/deepseek-ai/deepseek-harness) on its current default branch. The
+  repository currently uses `master` rather than `main`; it is developer-preview software, so its
+  package and API contracts may change. Run the upstream install/build steps before installing
+  this plugin into that profile.
 - The target profile, such as `web` or `demo`, must already start successfully, and the plugin
   must be installed into the same profile that launches the Web UI.
 - DSH Client must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
@@ -77,6 +91,20 @@ To inspect the currently published version on the official registry:
 
 ```bash
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
+```
+
+### Prepare the current upstream DSH checkout
+
+For source-based development or validation, prepare the upstream checkout first. The current
+upstream default branch is `master`; follow the repository's default branch if it changes later.
+
+```bash
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+git fetch origin
+git pull --ff-only origin master
+pnpm install
+pnpm run build
 ```
 
 ### Install from a repository checkout
@@ -176,14 +204,30 @@ blank-session Hero. The displayed language follows DSH's current language settin
    Project root. Relative paths, a different Project, or the Project root are rejected.
 3. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
    and no command block; install Git, restart DSH, and retry. If the repository, initial commit,
-   or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
-   renders this guidance; it does not run setup or installation commands or edit business files.
+  or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
+  renders this guidance; it does not run setup or installation commands or edit business files.
+
+### Import an existing Worktree
+
+1. Select a Workspace, press its `+`, and choose the `Import` tab. The dialog loads Git-linked
+   Worktrees for that repository through the existing DSH `/api` Connection.
+2. The first version lists only branch-attached, non-root Worktrees that are not already present
+   in the plugin sidecar. Detached HEAD entries are intentionally omitted. Candidates are presented
+   in a standard dropdown; each option shows its branch first and absolute path as secondary
+   diagnostic text.
+3. Choose an option and select `Import Worktree`. Registration writes only the plugin sidecar;
+   the existing Worktree directory and Git working state remain in place. Import then creates or
+   reuses a Session at that Worktree cwd and runs the same bind → membership projection → open →
+   refresh flow as Create.
+4. An active external import for the same Workspace and physical path is idempotent. A path already
+   managed by the plugin returns `WORKTREE_ALREADY_MANAGED`; invalid or stale candidates return
+   `WORKTREE_IMPORT_INVALID` and can be retried after the repository state is fixed.
 
 ### Create Main and Worktree Sessions
 
 - Use Main's `+` to create a normal DSH Session in the Project-root view.
-- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. On
-  rc.8, the native call is `session.create({ cwd: worktreePath })`; the plugin then saves the
+- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The
+  plugin calls the upstream runtime with `session.create({ cwd: worktreePath })`, then saves the
   external binding, applies a browser-local `{ workspaceId, sessionId }` membership projection,
   and opens the Session.
 - The connector reuses an unarchived blank Session with the exact target cwd when possible. An
@@ -203,14 +247,19 @@ blank-session Hero. The displayed language follows DSH's current language settin
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
 - Use the active Worktree options menu and confirmation dialog to remove a Worktree. Main and
   detached Worktrees do not show this menu.
+- Imported Worktrees expose the same active options menu as plugin-created Worktrees. Removing
+  either source runs real `git worktree remove`; for an imported Worktree, the confirmation warns
+  that the linked Worktree directory may be deleted. Sessions are retained as detached bindings.
 - Removing a Worktree does not delete its Sessions. The relationship remains detached until it
   is explicitly unbound. Deleting a Workspace removes only DSH's Workspace registration; its
   directory, Sessions, Git Worktrees, and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
   ordering is limited to the current visual Main or Worktree group.
 - The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
-  DSH reports no current branch. Branch names, paths, Workspace names, Session titles, and raw
-  DSH/Git errors keep their original values.
+  DSH reports no current branch. When a Workspace is imported from a Git subdirectory, the Git
+  root is resolved first and the same branch/worktree information is used as for the root.
+  Branch names, paths, Workspace names, Session titles, and raw DSH/Git errors keep their
+  original values.
 - Existing Sessions show read-only context in the form `Session title` → `Agent mode` →
   `current branch / Worktree branch`. Long values remain ellipsized in the compact chip and show
   their complete value in a hover card. The blank Hero shows `Workspace (branch)` after the native
@@ -254,6 +303,7 @@ an independent sidecar store and may contain only relationship facts such as:
 
 - `projectId`, `worktreeId`, and `sessionId`;
 - an absolute Worktree path, branch, and lifecycle state;
+- the Worktree source (`plugin` or `external`);
 - binding status and schema version.
 
 The index is not written into a Project working tree or DSH's raw data directory. It does not
@@ -273,15 +323,16 @@ does not change the sidecar state, so the relationship remains retryable. Sessio
 the native DSH API before binding; a binding failure never deletes or modifies the already-created
 Session.
 
-The rc.8 `session.create` API cannot receive `workspaceId` and an independent cwd together. The
-Worktree flow therefore uses a browser-local membership projection rather than a persistent DSH
-attach, and it does not modify DSH source, Session metadata, or native Workspace storage. The
-projection is replayed after native list refreshes and removed when the binding disappears or the
-Client is disposed.
+The Worktree session flow sends the independent Worktree cwd through the upstream DSH runtime and
+keeps `{ workspaceId, sessionId }` as a browser-local membership projection rather than a
+persistent DSH attach. It does not modify DSH source, Session metadata, or native Workspace
+storage. The projection is replayed after native list refreshes and removed when the binding
+disappears or the Client is disposed.
 
-The blank Hero context is visual only. Because rc.8 has no additive Hero headline slot, its
-placement depends on the native `[data-phase="hero"]` and title anchors; it disappears when those
-anchors are unavailable and should move to a formal DSH slot when one exists.
+The blank Hero context is visual only. Because the current upstream DSH source checkout has no
+additive Hero headline slot, its placement depends on the native `[data-phase="hero"]` and title
+anchors; it disappears when those anchors are unavailable and should move to a formal DSH slot
+when one exists.
 
 ## Development and verification
 

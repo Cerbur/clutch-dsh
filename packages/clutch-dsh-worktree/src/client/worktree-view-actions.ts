@@ -34,6 +34,10 @@ export type WorktreeViewAction =
       readonly input: Parameters<WorktreeManager['createWorktree']>[0];
     }
   | {
+      readonly type: 'importWorktree';
+      readonly input: Parameters<WorktreeManager['importWorktree']>[0];
+    }
+  | {
       readonly type: 'removeWorktree';
       readonly input: Parameters<WorktreeManager['removeWorktree']>[0];
     };
@@ -68,6 +72,9 @@ export async function executeWorktreeAction(
 ): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
     return manager.createWorktree(action.input);
+  }
+  if (action.type === 'importWorktree') {
+    return manager.importWorktree(action.input);
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);

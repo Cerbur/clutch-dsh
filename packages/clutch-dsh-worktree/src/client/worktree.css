@@ -80,6 +80,49 @@
   display: none;
 }
 
+.worktreeModalTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.worktreeModalTab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.worktreeModalTab[aria-selected='true'] {
+  border-bottom-color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.worktreeImportCandidates {
+  display: grid;
+  gap: 8px;
+}
+
+.worktreeImportSelect {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.worktreeImportError {
+  display: grid;
+  gap: 8px;
+}
+
 .closeButton {
   border: 0;
   border-radius: 8px;
@@ -335,7 +378,8 @@
 }
 
 .searchInput:focus,
-.actionSelect:focus {
+.actionSelect:focus,
+.worktreeImportSelect:focus {
   border-color: #3b82f6;
 }
 
@@ -568,7 +612,7 @@
 }
 
 .treeChildren {
-  margin-left: 24px;
+  margin-left: 16px;
   padding: 2px 0 5px 12px;
   border-left: 1px solid var(--dsw-alias-border-l1);
 }
@@ -610,7 +654,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
+  width: calc(100% - 22px);
+  margin-left: 22px;
   min-width: 0;
   min-height: 31px;
   box-sizing: border-box;
@@ -620,6 +665,14 @@
 .treeSessionRow:hover,
 .treeSessionRow[data-menu-open='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeSessionRow[data-session-current='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeSessionRow[data-session-current='true'] .treeSessionContent {
+  font-weight: 600;
 }
 
 .treeSessionRow.dropBefore::before,
@@ -709,13 +762,6 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 13px;
   line-height: 20px;
-}
-
-.treeGuide {
-  flex: none;
-  width: 20px;
-  color: var(--dsw-alias-label-tertiary);
-  text-align: center;
 }
 
 .emptyNested {

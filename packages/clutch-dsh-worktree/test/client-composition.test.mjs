@@ -132,8 +132,8 @@ test('declares the native Conversation package without depending on a Hero conte
   const source = await readFile(new URL('../src/client/entry.ts', import.meta.url), 'utf8');
 
   assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'), true);
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.0-rc.8');
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '*');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.1-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);
@@ -276,4 +276,21 @@ test('Client fiber disposal aborts an in-flight Worktree Connection call', async
 
   assert.equal(signal.aborted, true);
   await assert.rejects(pending);
+});
+
+test('injects a separate structural expand-state store alongside view mode', async () => {
+  const fixture = await loadClientEntry();
+  const overlay = fixture.registrationsBySlot.get('shell.overlay');
+  const injected = overlay.options.inject();
+  const viewStore = overlay.options.store.create();
+
+  assert.equal(typeof injected.expandState.getSnapshot, 'function');
+  assert.equal(typeof injected.expandState.subscribe, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleWorkspace, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleMain, 'function');
+  assert.equal(typeof injected.expandState.actions.toggleWorktree, 'function');
+  assert.equal(typeof injected.expandState.actions.retain, 'function');
+  assert.notEqual(injected.expandState, viewStore);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
 });
