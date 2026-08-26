@@ -666,6 +666,15 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.treeSessionRow[data-session-current='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-brand-primary);
+}
+
+.treeSessionRow[data-session-current='true'] .treeSessionContent {
+  font-weight: 600;
+}
+
 .treeSessionRow.dropBefore::before,
 .treeSessionRow.dropAfter::after {
   position: absolute;

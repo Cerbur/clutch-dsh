@@ -1510,6 +1510,19 @@ test('wires native blank Session visibility and menu parity into both tree group
   assert.match(rowSource, /\{!blank && \(/);
 });
 
+test('marks only the DSH current Session row without changing row controls', async () => {
+  const { rows, types } = await readSurfaceSources();
+  assert.match(types, /readonly current: boolean/);
+  assert.match(types, /readonly currentSessionId\?: string/);
+  assert.match(rows, /data-session-current=\{current \? 'true' : undefined\}/);
+  assert.match(rows, /aria-current=\{current \? 'true' : undefined\}/);
+  assert.match(rows, /current=\{sessionId === currentSessionId\}/);
+  assert.match(await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  ), /\.treeSessionRow\[data-session-current='true'\]/);
+});
+
 test('routes pending Worktree Session Retry through the browser recovery helper', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

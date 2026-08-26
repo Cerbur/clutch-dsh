@@ -142,6 +142,7 @@ export interface WorktreeSessionRowProps {
   readonly t: WorktreeTranslate;
   readonly sessionId: string;
   readonly blank: boolean;
+  readonly current: boolean;
   readonly label: string;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
@@ -196,6 +197,7 @@ export interface WorktreeSessionGroupProps {
   readonly groupKey: string;
   readonly sessionIds: readonly string[];
   readonly workspaceId: string;
+  readonly currentSessionId?: string;
   readonly expanded: boolean;
   readonly actionPending: boolean;
   readonly sessions: SessionListLike;
