@@ -57,6 +57,7 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 dsh web
 ```
 
-本地 checkout 安装、版本同步和发布流程分别见
-[`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md)
-和 [`packages/clutch-dsh-worktree/docs/RELEASING.md`](packages/clutch-dsh-worktree/docs/RELEASING.md)。
+本地 checkout 安装、版本同步见
+[`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md)；plugin 发布的
+通用流程见根目录 [`docs/RELEASING.md`](docs/RELEASING.md)，各包参数与安装来源见各包自己的
+`docs/RELEASING.md`。

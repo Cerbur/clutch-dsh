@@ -99,6 +99,15 @@ main
   完成且 npm registry 验证通过后，再将 release worktree 的最终提交合并回 `main`。
 - 本流程只定义 worktree、基线和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
   这些操作仍须获得明确授权。
+- 每个可发布 plugin package 的完整发布生命周期（release log 规则、版本递增、clean/rebase/merge
+  门禁、npm pack/publish 验证顺序）统一记录在 docs/RELEASING.md。所有可发布 package 遵循同一套
+  流程；package 自己的 docs/RELEASING.md 只记录包参数、安装来源和该包特有的约束，不复制通用流程。
+- 发布成功后创建 annotated release tag，tag 名称固定为 <release-name>-release-<version>：前半部分是
+  package short name，后半部分是合并进 main 后该 package 的 package.json 版本。例如
+  `clutch-dsh-worktree` 发布 `0.1.6` 时打 tag `worktree-release-0.1.6`，`clutch-dsh-discuss`
+  发布时对应 `discuss-release-<version>`；不使用 `v` 前缀或其他变体，已存在的 tag 不得覆盖。
+- 新增可发布 plugin package（例如开始开发 clutch-dsh-discuss）时，在该 package 目录内新建自己的
+  docs/RELEASING.md，列出包参数表中的实际值和该包特有约束，并引用根目录文档；不要复制完整流程。
 
 ## 校验命令
 

@@ -46,11 +46,11 @@ packages/clutch-dsh-worktree/
 - `publishConfig.access` 必须保持 `public`，`publishConfig.registry` 指向官方 npm registry，`prepare` 必须从当前源码生成 `lib/`；Git 依赖安装和打包/发布共用这条生命周期。
 - `RELEASE-LOG.md` 是仓库内的双语版本更新记录，中文段落必须在英文段落之前；在递增 package version 和创建 feature scoped commit 之前，必须根据 `git log` 的 commit 信息整理新增、优化、修复和删除内容，每件事只写一句，不在日志中保留 commit hash 或 subject，也不通过重新阅读源码整理发布摘要。
 - feature worktree 只用于编写、验证和提交 scoped change，绝不能从 feature worktree 执行 npm publish；只有将 feature commit 按 clean/rebase/merge 门禁合并到 release worktree 后，才能在 release worktree 中执行发布前检查、`npm pack --dry-run` 和由用户手动执行的 `npm publish --access public --registry=https://registry.npmjs.org/`。
-- 发布顺序固定为：feature worktree 更新 `RELEASE-LOG.md` 与相关文档 → 递增 package version → feature 检查并创建单个 scoped commit → rebase 后合并到 release worktree → 在 release worktree 检查并预览 tarball → 交给用户从 release worktree 手动 publish → 在 release worktree 验证 npm version → 完成最终验证后将 release merge 回 `main`。
+- 发布顺序固定为：feature worktree 更新 `RELEASE-LOG.md` 与相关文档 → 递增 package version → feature 检查并创建单个 scoped commit → rebase 后合并到 release worktree → 在 release worktree 检查并预览 tarball → 交给用户从 release worktree 手动 publish → 在 release worktree 验证 npm version → 完成最终验证后将 release merge 回 `main` → 创建 `<release-name>-release-<version>` 格式的 annotated tag（本包即 `worktree-release-<version>`）。完整生命周期由仓库根目录的 docs/RELEASING.md 统一定义，对所有可发布 package（含未来的 clutch-dsh-discuss）生效。
 - 本地 checkout 安装使用绝对路径；已发布版本使用 `dsh plugin --profile web add @cerbur/clutch-dsh-worktree`。DSH 源码 checkout 使用等价的 `pnpm dsh` 转发命令。
 - npm 官方 registry 与本机镜像的同步可能存在延迟；发布和版本验证必须显式指定 `https://registry.npmjs.org/`，遇到短暂 404 时等待重试，不重复发布同一版本。
 
-完整命令、版本不一致处理和安装验证见 [`docs/RELEASING.md`](docs/RELEASING.md)。
+通用发布流程、版本不一致处理与 release tag 规则见根目录 [`../../docs/RELEASING.md`](../../docs/RELEASING.md)；本包参数、安装来源和包内验证见 [`docs/RELEASING.md`](docs/RELEASING.md)。
 
 ## DSH 数据边界
 
@@ -236,7 +236,7 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 - `RELEASE-LOG.md`：仓库内的双语版本更新摘要，中文在上、英文在下，不进入 npm package files；
 - `AGENTS.md`：本 package 的架构、数据边界、模块权责、生命周期和维护约束；
 - `src/client/README.md`：浏览器 Consumer 的实现边界和交互细节；
-- `docs/RELEASING.md`：版本同步、npm 发布和本地/registry 安装流程；
+- `docs/RELEASING.md`：本包参数、版本约束、npm 版本检查和本地/registry/Git 安装流程；通用发布流程见根目录 `docs/RELEASING.md`；
 - `docs/superpowers/specs/`：已确认的设计与决策；
 - `docs/superpowers/plans/`：实现步骤、验证命令和交接记录。
 
