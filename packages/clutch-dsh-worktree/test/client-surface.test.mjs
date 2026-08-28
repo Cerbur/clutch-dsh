@@ -1677,7 +1677,10 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
-  assert.match(source, /shouldRevealCurrentSessionGroup\(sessionIds, currentSessionId\)/);
+  assert.match(
+    source,
+    /isSessionGroupAutoExpanded\(\s*sessionIds,\s*currentSessionId,/,
+  );
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
   assert.match(source, /expandState\.actions\.toggleMain/);

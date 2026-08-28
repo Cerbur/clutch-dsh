@@ -6,6 +6,7 @@ import {
   resolveCurrentSessionLocation,
   shouldRevealCurrentSessionGroup,
 } from '../lib/client/worktree-surface-selectors.js';
+import * as surfaceSelectors from '../lib/client/worktree-surface-selectors.js';
 
 const workspaces = [
   {
@@ -164,5 +165,27 @@ test('reveals Session overflow only when the current Session is outside the firs
   assert.equal(
     shouldRevealCurrentSessionGroup(['session-1', 'session-2'], undefined),
     false,
+  );
+});
+
+test('does not treat an in-range current Session reveal as an expanded group', () => {
+  assert.equal(typeof surfaceSelectors.isSessionGroupAutoExpanded, 'function');
+  if (typeof surfaceSelectors.isSessionGroupAutoExpanded !== 'function') return;
+
+  assert.equal(
+    surfaceSelectors.isSessionGroupAutoExpanded(
+      ['session-1', 'session-2', 'session-3', 'session-4', 'session-5'],
+      'session-1',
+      true,
+    ),
+    false,
+  );
+  assert.equal(
+    surfaceSelectors.isSessionGroupAutoExpanded(
+      ['session-1', 'session-2', 'session-3', 'session-4', 'session-5', 'session-6'],
+      'session-6',
+      true,
+    ),
+    true,
   );
 });

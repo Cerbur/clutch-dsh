@@ -149,3 +149,11 @@ export function shouldRevealCurrentSessionGroup(
   if (currentSessionId === undefined || sessionIds.length <= 5) return false;
   return sessionIds.indexOf(currentSessionId) >= 5;
 }
+
+export function isSessionGroupAutoExpanded(
+  sessionIds: readonly string[],
+  currentSessionId: string | undefined,
+  currentSessionRevealActive: boolean,
+): boolean {
+  return currentSessionRevealActive && shouldRevealCurrentSessionGroup(sessionIds, currentSessionId);
+}

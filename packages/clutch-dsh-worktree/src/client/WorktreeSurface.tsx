@@ -53,8 +53,8 @@ import {
   includesText,
   isCompleteWorktreeWorkspaceSnapshot,
   currentSessionRevealKeys,
+  isSessionGroupAutoExpanded,
   resolveCurrentSessionLocation,
-  shouldRevealCurrentSessionGroup,
   workspaceMatches,
 } from './worktree-surface-selectors.js';
 import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
@@ -930,8 +930,7 @@ export function WorktreeSurface({
     if (visuallyExpanded) clearSessionGroups(['worktree:' + worktreeId]);
   };
 
-  const toggleSessionGroup = (groupKey: string): void => {
-    const autoExpanded = isCurrentSessionReveal('session-group:' + groupKey);
+  const toggleSessionGroup = (groupKey: string, autoExpanded: boolean): void => {
     const transientExpanded = expandedSessionGroups[groupKey] === true;
     if (autoExpanded) {
       suppressCurrentSessionReveal('session-group:' + groupKey);
@@ -1339,10 +1338,14 @@ export function WorktreeSurface({
                     orderedVisibleMainSessionIds.length === visibleMainSessionIds.length
                       ? orderedVisibleMainSessionIds
                       : visibleMainSessionIds;
+                  const mainSessionGroupAutoExpanded = isSessionGroupAutoExpanded(
+                    sessionIds,
+                    currentSessionId,
+                    isCurrentSessionReveal('session-group:' + mainGroupKey),
+                  );
                   const mainSessionGroupExpanded =
                     expandedSessionGroups[mainGroupKey] === true ||
-                    (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
-                      isCurrentSessionReveal('session-group:' + mainGroupKey));
+                    mainSessionGroupAutoExpanded;
                   const worktrees = view?.worktrees ?? [];
                   const sameWorkspaceWorktreeDrag =
                     worktreeDrag?.workspaceId === workspace.workspaceId;
@@ -1460,7 +1463,7 @@ export function WorktreeSurface({
                               sessionPresentations={sessionPresentations}
                               dragState={sessionDrag}
                               onToggleExpanded={() => {
-                                toggleSessionGroup(mainGroupKey);
+                                toggleSessionGroup(mainGroupKey, mainSessionGroupAutoExpanded);
                               }}
                               onStartDrag={(groupKey, sessionId) => {
                                 sessionDropCommitted.current = false;
@@ -1537,10 +1540,14 @@ export function WorktreeSurface({
                               visibleWorktreeSessionIds.length
                                 ? orderedVisibleWorktreeSessionIds
                                 : visibleWorktreeSessionIds;
+                            const sessionGroupAutoExpanded = isSessionGroupAutoExpanded(
+                              sessionIds,
+                              currentSessionId,
+                              isCurrentSessionReveal('session-group:' + worktreeGroupKey),
+                            );
                             const sessionGroupExpanded =
                               expandedSessionGroups[worktreeGroupKey] === true ||
-                              (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
-                                isCurrentSessionReveal('session-group:' + worktreeGroupKey));
+                              sessionGroupAutoExpanded;
                             const state =
                               record.status === 'removed'
                                 ? 'warning'
@@ -1661,7 +1668,10 @@ export function WorktreeSurface({
                                     sessionPresentations={sessionPresentations}
                                     dragState={sessionDrag}
                                     onToggleExpanded={() => {
-                                      toggleSessionGroup(worktreeGroupKey);
+                                      toggleSessionGroup(
+                                        worktreeGroupKey,
+                                        sessionGroupAutoExpanded,
+                                      );
                                     }}
                                     onStartDrag={(groupKey, sessionId) => {
                                       sessionDropCommitted.current = false;
