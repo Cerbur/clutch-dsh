@@ -776,15 +776,6 @@
   background: transparent;
 }
 
-.sessionStatusSlot {
-  display: inline-flex;
-  flex: 0 0 18px;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  min-height: 20px;
-}
-
 .sessionTrailing {
   position: relative;
   display: inline-flex;
@@ -810,7 +801,7 @@
   pointer-events: none;
 }
 
-.sessionActivity {
+.sessionStatus {
   display: inline-flex;
   align-items: center;
   justify-content: center;

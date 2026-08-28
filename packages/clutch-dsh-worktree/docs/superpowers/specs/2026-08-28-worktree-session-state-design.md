@@ -23,8 +23,8 @@ boundaries.
 ## Confirmed decisions
 
 1. Pending interaction follows native priority. If a Session is both pending and running, its
-   primary status is the warning state; the right-side ongoing dot is suppressed for that row.
-   Group aggregation still counts it as ongoing.
+   primary status is the warning state; the right-side warning dot is shown for that row and the
+   ongoing dot is suppressed. Group aggregation still counts it as ongoing.
 2. Relative time follows native behavior. It is recalculated on Session snapshot renders; no
    independent minute ticker is added in `0.1.7`.
 3. Running subagent descendants count as ongoing for their parent row and for collapsed group
@@ -48,8 +48,8 @@ The local upstream checkout is `/Users/yuancheng/Documents/Code/deepseek-harness
 
 `packages/client/ui-primitives/src/StateDot.tsx` defines the browser-safe primitive. Its
 `ongoing` state is an eight-cell crisp-edge SVG using the native
-`dsh-state-dot-chase` animation. The plugin must import this component and pass
-`state="ongoing"`; it must not reimplement the animation.
+`dsh-state-dot-chase` animation. The plugin must import this component and pass the derived
+`ongoing`, `warning`, or `done` state; it must not reimplement the animation.
 
 ### Status and time
 
@@ -61,8 +61,9 @@ The local upstream checkout is `/Users/yuancheng/Documents/Code/deepseek-harness
 4. completed → `done` with a completed label;
 5. idle → `done` with an idle label.
 
-The plugin keeps this priority. Its requested layout moves only the primary `ongoing` dot to
-the Session row’s right metadata slot; warning/completed dots remain in the leading status slot.
+The plugin keeps this priority. Every visible primary status dot is rendered in the Session row's
+right metadata slot: ongoing, warning, and completed states replace relative time there. Idle
+keeps no visible primary dot and uses the relative-time slot.
 
 Native `updatedAt` is the later of creation and the latest human-authored prompt. The host only
 updates it for `session/event` `user/message` events with source kind `user`, and ignores older
@@ -120,14 +121,14 @@ rendering and aggregation so status priority cannot diverge.
 
 ### Session row
 
-| Primary state       | Leading slot                            | Trailing slot at rest                                 | Hover/menu                   |
-| ------------------- | --------------------------------------- | ----------------------------------------------------- | ---------------------------- |
-| Waiting interaction | native warning dot and accessible label | relative time, if available                           | metadata hides; actions show |
-| Own running         | no duplicate ongoing dot                | native ongoing dot, replacing time                    | dot hides; actions show      |
-| Running subagent    | no duplicate ongoing dot                | native ongoing dot and subagent label, replacing time | dot hides; actions show      |
-| Completed           | native done dot and completed label     | relative time, if available                           | metadata hides; actions show |
-| Idle                | no visible primary dot                  | relative time, if available                           | metadata hides; actions show |
-| Blank               | none                                    | none                                                  | existing blank-row behavior  |
+| Primary state       | Trailing slot at rest                                  | Hover/menu                   |
+| ------------------- | ------------------------------------------------------ | ---------------------------- |
+| Waiting interaction | native warning dot and accessible label, replacing time | dot hides; actions show      |
+| Own running         | native ongoing dot, replacing time                     | dot hides; actions show      |
+| Running subagent    | native ongoing dot and subagent label, replacing time  | dot hides; actions show      |
+| Completed           | native done dot and completed label, replacing time    | dot hides; actions show      |
+| Idle                | relative time, if available                            | metadata hides; actions show |
+| Blank               | none                                                   | existing blank-row behavior |
 
 The trailing metadata and existing action menu share a fixed-width region. Switching between
 them must not move the title or change row width. Accessible localized status text remains even

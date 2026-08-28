@@ -13,14 +13,15 @@ async function sources() {
   return { rows, css, surface, types };
 }
 
-test('renders native Session status and right-side time/activity slots', async () => {
+test('renders every visible Session status in the right-side rail', async () => {
   const { rows, css, surface, types } = await sources();
 
   assert.match(rows, /sessionPresentation/);
   assert.match(rows, /data-session-status/);
-  assert.match(rows, /data-session-activity/);
+  assert.match(rows, /const showTrailingStatus/);
+  assert.match(rows, /showTrailingStatus/);
+  assert.match(rows, /presentation\.status\.state/);
   assert.match(rows, /data-session-time/);
-  assert.match(rows, /StateDot state=\{['"]ongoing['"]\}/);
   assert.match(rows, /relativeTime\(/);
   assert.match(rows, /session\.status\.subagentsRunning/);
   assert.match(rows, /hasOngoingSession/);
@@ -34,9 +35,11 @@ test('renders native Session status and right-side time/activity slots', async (
   assert.match(types, /readonly presentation\??:/);
   assert.match(types, /sessionPresentations/);
   assert.match(css, /\.sessionTrailing/);
-  assert.match(css, /\.sessionActivity/);
+  assert.match(css, /\.sessionStatus/);
   assert.match(css, /\.sessionTime/);
-  assert.match(css, /\.sessionStatusSlot/);
+  assert.doesNotMatch(rows, /sessionStatusSlot/);
+  assert.doesNotMatch(css, /\.sessionStatusSlot/);
+  assert.doesNotMatch(css, /\.sessionActivity/);
   assert.match(css, /\.groupActivity/);
   assert.match(css, /data-group-activity/);
 });

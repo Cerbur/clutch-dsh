@@ -130,10 +130,11 @@ The Worktree surface is additive:
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
 - Session rows derive one native-compatible status presentation from the DSH Session snapshot.
-  The existing native `StateDot` is reused directly: running or running-subagent activity occupies
-  the trailing metadata slot, while warning and completed states keep a leading dot. The trailing
-  slot swaps to the existing Session menu on hover, focus, or menu-open without adding plugin
-  animation CSS. Native relative-time buckets use DSH `updatedAt`; blank rows have no timestamp.
+  The existing native `StateDot` is reused directly: running, running-subagent, warning, and
+  completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use
+  that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
+  timestamp. The trailing slot swaps to the existing Session menu on hover, focus, or menu-open
+  without adding plugin animation CSS.
 - Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
   search filtering and the five-row limit are applied. When collapsed, the flag renders one native
   ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield

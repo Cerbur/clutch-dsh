@@ -438,13 +438,12 @@ export function WorktreeSessionRow({
     },
   ];
   const statusLabel = presentation === undefined ? undefined : sessionStatusLabel(t, presentation);
-  const showLeadingStatus =
+  const showTrailingStatus =
     !blank &&
     presentation !== undefined &&
-    (presentation.status.state === 'warning' || presentation.completed);
-  const showTrailingActivity = !blank && presentation?.status.state === 'ongoing';
+    (presentation.status.state !== 'done' || presentation.completed);
   const timeValue =
-    !blank && !showTrailingActivity && presentation?.updatedAt !== undefined
+    !blank && !showTrailingStatus && presentation?.updatedAt !== undefined
       ? relativeTime(presentation.updatedAt, Date.now())
       : undefined;
   const timeLabel = timeValue === undefined ? undefined : sessionTimeLabel(t, timeValue);
@@ -479,33 +478,20 @@ export function WorktreeSessionRow({
       }}
     >
       <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
-        {!blank && (
-          <span
-            className={styles.sessionStatusSlot}
-            data-session-status={statusLabel}
-            role={showLeadingStatus ? 'img' : undefined}
-            aria-label={showLeadingStatus ? statusLabel : undefined}
-            title={showLeadingStatus ? statusLabel : undefined}
-          >
-            {showLeadingStatus && presentation !== undefined && (
-              <StateDot state={presentation.status.state} />
-            )}
-          </span>
-        )}
         <span className={styles.sessionLabel}>{label}</span>
       </button>
       {!blank && (
         <span className={styles.sessionTrailing}>
           <span className={styles.sessionMeta}>
-            {showTrailingActivity ? (
+            {showTrailingStatus && presentation !== undefined ? (
               <span
-                className={styles.sessionActivity}
-                data-session-activity
+                className={styles.sessionStatus}
+                data-session-status={statusLabel}
                 role="img"
                 aria-label={statusLabel}
                 title={statusLabel}
               >
-                <StateDot state={'ongoing'} />
+                <StateDot state={presentation.status.state} />
               </span>
             ) : timeLabel !== undefined ? (
               <span className={styles.sessionTime} data-session-time>

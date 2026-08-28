@@ -143,14 +143,16 @@ Run existing refresh, projection, drag, and expand tests before moving on.
 
 ### Red
 
-Assert running own/subagent rows show the right ongoing dot and no time; pending rows show the
-warning and time; completed rows show done and time; idle rows show time; blank rows show none;
-hover/menu hides metadata and reveals actions; title width/row height remain stable.
+Assert running own/subagent rows show the right ongoing dot and no time; pending and completed
+rows show their warning/done dot in the right rail instead of time; idle rows show time; blank
+rows show none; hover/menu hides metadata and reveals actions; title width/row height remain
+stable.
 
 ### Green
 
 - Add a status presentation prop rather than recomputing in JSX.
-- Add leading warning/completed status slots and a trailing time/ongoing metadata slot.
+- Use one trailing status/time metadata slot for every visible Session status; do not render a
+  leading status slot.
 - Import the existing native `StateDot`; add accessible visually hidden labels.
 - Use existing hover/menu selectors to swap metadata for actions without adding animation rules.
 
@@ -244,3 +246,11 @@ outside this task.
   reported 278/278 tests passing. `git diff --check` passed. No version bump, push, publish,
   or merge was performed; the scoped commit is created only to satisfy the requested rebase
   gate.
+
+## Follow-up checkpoint — 2026-08-28
+
+- Confirmed that every visible non-idle Session status uses the right metadata rail: ongoing,
+  warning, and completed dots replace relative time; idle keeps the relative-time label.
+- Removed the empty leading status slot so Session titles retain the requested left alignment.
+- Added and passed a focused regression assertion for the right-only status rail; the package test
+  suite remains 278/278 passing.

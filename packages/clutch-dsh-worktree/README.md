@@ -34,8 +34,9 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Preserve an explicit restriction selected in DSH's native Access UI. If the custom preset is
   unavailable, fall back to `workspace-write + ask` when possible; if the permission capability
   cannot be verified, show a retryable degraded state instead of claiming Full Access.
-- Reuse the native animated `StateDot` for running Sessions and show native relative time for the
-  last human-authored Session message; hover or an open menu gives the trailing slot back to the
+- Reuse the native `StateDot` for Session status indicators. Running, running-subagent, warning,
+  and completed states occupy the trailing slot; idle Sessions show native relative time for the
+  last human-authored message there. Hover or an open menu gives the trailing slot back to the
   existing actions menu.
 - Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
   states without copying the animation implementation into the plugin.
@@ -266,9 +267,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Session activity and ordering
 
-- Session rows reuse DSH's native `StateDot`: running Sessions and Sessions with running subagents
-  replace the trailing relative time with the animated dot. Waiting approval, plan review, and
-  question states use the native warning dot; completed Sessions keep the native completed dot.
+- Session rows reuse DSH's native `StateDot`: running Sessions, Sessions with running subagents,
+  waiting approval, plan review, question, and completed states show their status dot in the
+  trailing slot instead of relative time. Idle Sessions use that slot for the native compact
+  relative-time label.
 - The trailing metadata uses the native compact buckets (`now`, minutes, hours, days, months, and
   years). It is based on DSH's `updatedAt`, which advances with the latest human-authored message;
   blank New Session rows have no time label. The display follows snapshot renders and does not add
