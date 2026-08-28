@@ -139,6 +139,9 @@ The Worktree surface is additive:
   that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
   timestamp. The trailing slot swaps to the existing Session menu on hover, focus, or menu-open
   without adding plugin animation CSS.
+- Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
+  complete title, relative time, and current status; the card is suppressed while the Session menu
+  is open or a row is being dragged.
 - Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
   search filtering and the five-row limit are applied. When collapsed, the flag renders one native
   ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield

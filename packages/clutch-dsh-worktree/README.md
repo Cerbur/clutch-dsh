@@ -38,6 +38,8 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   and completed states occupy the trailing slot; idle Sessions show native relative time for the
   last human-authored message there. Hover or an open menu gives the trailing slot back to the
   existing actions menu.
+- Show the native DSH Session hover detail card with the complete title, relative time, and current
+  status; the card yields to the Session actions menu and row dragging.
 - Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
   states without copying the animation implementation into the plugin.
 - Show one native running indicator on a collapsed Workspace, Main, or Worktree when any of its
@@ -276,6 +278,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
   years). It is based on DSH's `updatedAt`, which advances with the latest human-authored message;
   blank New Session rows have no time label. The display follows snapshot renders and does not add
   an independent minute ticker.
+- Hovering a Worktree Session row opens the native detail card after 500 ms with its full title,
+  relative time, and status; the card is suppressed while the Session menu is open or a row is
+  being dragged.
 - A collapsed Workspace, Main group, or Worktree group shows the same running dot when any
   non-archived member is ongoing, including activity hidden by search. Expanding the group hides
   the aggregate dot; hover, focus, or an open menu reveals the existing action controls.

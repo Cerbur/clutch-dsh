@@ -33,6 +33,8 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   `workspace-write + ask`；如果无法验证权限能力，则显示可重试的降级状态，不伪称已获得完全访问。
 - 复用原生动画 `StateDot` 展示运行中的 Session，并为最近一条用户发送的 Session 消息显示
   原生相对时间；hover 或打开菜单时，右侧位置让位给已有的操作菜单。
+- 使用 DSH 原生 Session hover 详情卡片展示完整标题、相对时间和当前状态；打开 Session 操作
+  菜单或拖拽行时，详情卡片让位。
 - 补齐原生的等待审批、计划待审、等待回答、已完成、空闲和运行中子代理状态；插件不会复制
   原生动画实现。
 - 当折叠的 Workspace、Main 或 Worktree 中存在任一未归档的活动 Session 时，在其右侧显示
@@ -255,6 +257,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 右侧元数据使用原生紧凑时间单位（刚刚、分钟、小时、天、月、年），来源是 DSH 的
   `updatedAt`，该字段随最近一条用户消息推进；空白 New Session 不显示时间。时间只在 snapshot
   render 时按原生规则重新计算，不额外增加每分钟 ticker。
+- 将鼠标悬停在 Worktree Session 行上 500 毫秒后，会打开原生详情卡片，展示完整标题、相对时间
+  和状态；Session 菜单打开或行正在拖拽时不显示卡片。
 - 折叠的 Workspace、Main 或 Worktree 分组，只要任一未归档成员正在运行就显示相同的原生运行点，
   即使该 Session 被搜索隐藏也会计入。展开后隐藏聚合点；hover、focus 或打开菜单时显示原有
   操作控件。

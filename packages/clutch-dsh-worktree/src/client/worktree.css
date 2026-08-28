@@ -547,6 +547,35 @@
   overflow-wrap: anywhere;
 }
 
+/* Native Session hover card: full title, relative time, and current status. */
+.sessionHoverContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessionHoverTitle {
+  color: #FFFFFF;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: break-word;
+}
+
+.sessionHoverTime {
+  color: #CFD3D6;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sessionHoverStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ADB2B8;
+  font-size: 12px;
+  line-height: 20px;
+}
+
 .treeActionSlot,
 .workspaceActions {
   position: relative;

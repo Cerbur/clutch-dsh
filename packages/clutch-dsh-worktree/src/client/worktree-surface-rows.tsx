@@ -22,6 +22,7 @@ import {
   relativeTime,
   type RelativeTime,
   type SessionPresentation,
+  type SessionStatusPresentation,
 } from './session-view.js';
 import { sessionLabel } from './worktree-surface-selectors.js';
 import type {
@@ -39,17 +40,17 @@ function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
 
 function sessionStatusLabel(
   t: WorktreeSessionRowProps['t'],
-  presentation: SessionPresentation,
+  status: SessionStatusPresentation,
 ): string {
-  switch (presentation.status.labelKey) {
+  switch (status.labelKey) {
     case 'running':
       return t('session.status.running');
     case 'subagentsRunning':
       return t(
-        presentation.runningSubagentCount === 1
+        status.runningSubagentCount === 1
           ? 'session.status.subagentsRunning.one'
           : 'session.status.subagentsRunning.other',
-        { n: presentation.runningSubagentCount },
+        { n: status.runningSubagentCount },
       );
     case 'idle':
       return t('session.status.idle');
@@ -79,6 +80,72 @@ function sessionTimeLabel(t: WorktreeSessionRowProps['t'], value: RelativeTime):
     case 'years':
       return t('session.time.years', { n: value.n });
   }
+}
+
+/** Native Workspace hover-card time copy, including the trailing "ago" marker. */
+function sessionHoverTimeLabel(
+  t: WorktreeSessionRowProps['t'],
+  value: RelativeTime,
+): string {
+  const label = sessionTimeLabel(t, value);
+  return value.unit === 'now' ? label : t('session.time.ago', { t: label });
+}
+
+/** Native Workspace hover-card status list, including a secondary subagent status when relevant. */
+function sessionHoverStatuses(
+  presentation: SessionPresentation,
+): readonly SessionStatusPresentation[] {
+  if (
+    presentation.runningSubagentCount === 0 ||
+    presentation.status.labelKey === 'subagentsRunning'
+  ) {
+    return [presentation.status];
+  }
+  return [
+    presentation.status,
+    {
+      state: 'ongoing',
+      labelKey: 'subagentsRunning',
+      runningSubagentCount: presentation.runningSubagentCount,
+    },
+  ];
+}
+
+/** Native Workspace Session hover-card details, adapted to the Worktree row projection. */
+function WorktreeSessionHoverContent({
+  label,
+  blank,
+  presentation,
+  t,
+}: {
+  readonly label: string;
+  readonly blank: boolean;
+  readonly presentation?: SessionPresentation;
+  readonly t: WorktreeSessionRowProps['t'];
+}) {
+  const statuses = presentation === undefined ? [] : sessionHoverStatuses(presentation);
+  const timeValue =
+    !blank && presentation?.updatedAt !== undefined
+      ? relativeTime(presentation.updatedAt, Date.now())
+      : undefined;
+
+  return (
+    <div className={styles.sessionHoverContent}>
+      <div className={styles.sessionHoverTitle}>{label}</div>
+      {!blank && timeValue !== undefined && (
+        <div className={styles.sessionHoverTime}>{sessionHoverTimeLabel(t, timeValue)}</div>
+      )}
+      {statuses.map((status) => (
+        <div
+          className={styles.sessionHoverStatus}
+          key={`${status.labelKey}-${status.runningSubagentCount}`}
+        >
+          <StateDot state={status.state} />
+          <span>{sessionStatusLabel(t, status)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** Workspace row using the native DSH menu, fixed action column, and drag contract. */
@@ -437,7 +504,9 @@ export function WorktreeSessionRow({
       disabled: onArchive === undefined || actionPending,
     },
   ];
-  const statusLabel = presentation === undefined ? undefined : sessionStatusLabel(t, presentation);
+  const statusLabel = presentation === undefined
+    ? undefined
+    : sessionStatusLabel(t, presentation.status);
   const showTrailingStatus =
     !blank &&
     presentation !== undefined &&
@@ -448,7 +517,7 @@ export function WorktreeSessionRow({
       : undefined;
   const timeLabel = timeValue === undefined ? undefined : sessionTimeLabel(t, timeValue);
 
-  return (
+  const row = (
     <div
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
@@ -533,6 +602,25 @@ export function WorktreeSessionRow({
         </span>
       )}
     </div>
+  );
+
+  return (
+    <HoverCard
+      anchor={row}
+      content={(
+        <WorktreeSessionHoverContent
+          label={label}
+          blank={blank}
+          presentation={presentation}
+          t={t}
+        />
+      )}
+      openDelayMs={500}
+      disabled={menuOpen || drag.active}
+      copyText={blank ? undefined : label}
+      copyLabel={t('copy')}
+      copiedLabel={t('hover.copied')}
+    />
   );
 }
 

@@ -1538,6 +1538,36 @@ test('polishes Main and Worktree row hover presentation', async () => {
   );
 });
 
+test('keeps the native Session hover detail card on Worktree rows', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  const rowStart = source.indexOf('export function WorktreeSessionRow');
+  const rowEnd = source.indexOf('export function WorktreeSessionGroup', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(source, /function WorktreeSessionHoverContent/);
+  assert.match(source, /session\.time\.ago/);
+  assert.match(rowSource, /return \(\s*<HoverCard/);
+  assert.match(rowSource, /content=\{[\s\S]*WorktreeSessionHoverContent/);
+  assert.match(rowSource, /disabled=\{menuOpen \|\| drag\.active\}/);
+  assert.match(rowSource, /copyText=\{blank \? undefined : label\}/);
+  assert.match(rowSource, /copyLabel=\{t\('copy'\)\}/);
+  assert.match(rowSource, /copiedLabel=\{t\('hover\.copied'\)\}/);
+  assert.match(source, /value\.unit === 'now'/);
+  assert.match(
+    styles,
+    /\.sessionHoverContent\s*\{[\s\S]*display: flex;[\s\S]*gap: 8px;/,
+  );
+  assert.match(styles, /\.sessionHoverTitle\s*\{[\s\S]*font-size: 14px;/);
+  assert.match(styles, /\.sessionHoverStatus\s*\{[\s\S]*display: flex;/);
+});
+
 test('renders a localized Main label with the current branch and a fallback', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
