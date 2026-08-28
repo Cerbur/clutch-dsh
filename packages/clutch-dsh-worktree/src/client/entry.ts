@@ -36,6 +36,11 @@ import type {
 import type {
   WorktreePermissionNotice,
 } from './worktree-surface-types.js';
+import {
+  createWorktreeSessionForkCoordinator,
+  type WorktreeForkInput,
+  type WorktreeForkSessionListReader,
+} from './worktree-session-fork.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
 
 declare module '@deepseek-ai/cordis' {
@@ -77,6 +82,10 @@ interface WorkspaceListSnapshot {
   }[];
   readonly recentWorkspaceId?: string;
   readonly archivedSessionIds?: readonly string[];
+}
+
+interface ForkableSessions {
+  fork?: (input: WorktreeForkInput) => Promise<string>;
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
@@ -149,6 +158,56 @@ export function apply(ctx: ClientContext): void {
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
   };
+
+  const forkableSessions = ctx.sessions as unknown as ForkableSessions;
+  const nativeFork = forkableSessions.fork;
+  const findWorktreeSessionBinding = async (sessionId: string) => {
+    const workspaceIds = ctx.workspaces.list.getSnapshot().items.map(
+      (workspace) => workspace.workspaceId,
+    );
+    const results = await Promise.allSettled(
+      workspaceIds.map(async (workspaceId) => {
+        const bindings = await manager.listBindings({ workspaceId });
+        return bindings.find(
+          (binding) => binding.sessionId === sessionId && binding.status === 'active',
+        );
+      }),
+    );
+    const found = results.find(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof manager.listBindings>>[number] | undefined> =>
+        result.status === 'fulfilled' && result.value !== undefined,
+    );
+    if (found !== undefined) return found.value;
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failed !== undefined) throw failed.reason;
+    return undefined;
+  };
+  const forkCoordinator = typeof nativeFork !== 'function'
+    ? undefined
+    : createWorktreeSessionForkCoordinator({
+        fork: (input) => nativeFork.call(ctx.sessions, input),
+        findBinding: findWorktreeSessionBinding,
+        bindSession: (input) => manager.bindSession(input),
+        sessions: ctx.sessions.list as unknown as WorktreeForkSessionListReader,
+      });
+  if (forkCoordinator !== undefined) {
+    forkableSessions.fork = (input) => forkCoordinator.fork(input);
+    const reconcileForkChildren = (): void => {
+      void forkCoordinator.reconcile();
+    };
+    const unsubscribeSessionList = ctx.sessions.list.subscribe(reconcileForkChildren);
+    const unsubscribeWorkspaceList = ctx.workspaces.list.subscribe(reconcileForkChildren);
+    ctx.effect(
+      () => () => {
+        unsubscribeSessionList();
+        unsubscribeWorkspaceList();
+        forkCoordinator.dispose();
+        forkableSessions.fork = nativeFork;
+      },
+      'clutch-dsh-worktree: Session fork cleanup',
+    );
+    void forkCoordinator.reconcile();
+  }
   const worktreeSessionConnector = createWorktreeSessionConnector({
     manager,
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
@@ -275,11 +334,11 @@ export function apply(ctx: ClientContext): void {
             if (!result.ok) throw new Error(result.error.message);
           },
           forkSession: (sessionId: string) => {
-            void ctx.sessions
-              .fork({
-                sessionId: sessionId as SessionId,
-                increaseTitle: true,
-              })
+            if (forkableSessions.fork === undefined) return;
+            void ctx.sessions.fork({
+              sessionId: sessionId as SessionId,
+              increaseTitle: true,
+            })
               .then((childId) => {
                 ctx.sessions.open(childId);
               })
@@ -293,6 +352,12 @@ export function apply(ctx: ClientContext): void {
             ),
           ensureSessionWorkspace,
           syncSessionWorkspaces,
+          forkRecovery: forkCoordinator?.recovery,
+          retryForkSession: forkCoordinator === undefined
+            ? undefined
+            : async (key: string) => {
+                await forkCoordinator.retry(key);
+              },
           openSession: (sessionId: string) => {
             ctx.sessions.open(sessionId as SessionId);
           },

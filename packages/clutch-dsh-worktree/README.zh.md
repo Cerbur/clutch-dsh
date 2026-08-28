@@ -41,6 +41,11 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   一个原生运行指示器；展开后恢复普通操作栏。
 - 用户在 Session 中发送新消息后，该 Session 会移动到当前 Main 或 Worktree 视觉分组的队首。
   该排序只保存在浏览器本地，不修改 DSH Workspace 顺序或 Worktree sidecar。
+- 从 DSH 原生 Workspace session list tab、Worktree view 或 Conversation fork 操作 fork
+  Session。parent 有 active Worktree binding 时，child 会先绑定到同一个 Worktree，再在 binding
+  refresh 完成后加入浏览器本地 Workspace membership projection；child 仍然是普通 DSH Session。
+  这一时序避免 child 短暂出现在 Main/Local。sidecar 失败时 child 会保留，并显示可重试的
+  binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
   active Worktree 额外显示“移除 Worktree”并要求确认。
@@ -59,6 +64,9 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   对齐原生字体和排版，Sidebar 折叠后不再额外显示 `WT` 按钮。
 - Worktree Session 仍出现在原始 DSH Project/Workspace 视角中；插件不复制 Session 内容，
   也不修改消息、prompt、transcript 或历史记录。
+- Worktree fork 的 membership 不会写入 DSH 持久化的 `Workspace.sessionIds`。plugin 加载期间，
+  浏览器可以通过本地 projection 显示 child；不加载 plugin 时，child 仍在 DSH 全局 Session 管理中，
+  但不会被持久化挂到 native Workspace root membership 下。
 
 ### 兼容性与前置条件
 
@@ -270,6 +278,20 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   操作控件。
 - 用户发送新消息后，Session 会移动到当前 Main 或 Worktree 视觉分组队首。promotion、已观察
   时间戳和每组顺序只存在浏览器本地；手动拖动仍先调用 DSH 原生排序 API，成功后再更新本地顺序。
+
+### Fork Worktree Session
+
+- 可以使用任意 DSH 原生 fork 入口：Session list 中的 tab、Worktree Session 菜单或
+  Conversation fork 操作。插件包装共享的 DSH `sessions.fork` service，因此原生的 fork cut、
+  标题递增和 child lineage 语义保持不变。
+- DSH 创建 child 后，插件读取 parent 的 active sidecar binding，通过现有 `/api` Manager 写入
+  child binding。随后 Worktree view 先刷新 binding，再重放浏览器本地 Workspace membership
+  projection，因此 child 不会短暂出现在 Main/Local；刷新期间保留 ready 内容。
+- 如果 child 已创建但 sidecar 查询或 binding 失败，DSH 仍保留 child，plugin 显示 Retry Binding/
+  Open Created Session 恢复操作。后续 plugin 初始化也会根据原生 Session lineage summary 重试可恢复
+  的 fork child；不会自动绑定无关的 subagent。
+- 这一流程不会把 child 持久化写入 DSH `Workspace.sessionIds`。native DSH Workspace view 只有在
+  plugin 加载期间才能看到临时浏览器 projection；native Workspace 持久化数据保持不变。
 
 ### 排序与管理 Worktree
 

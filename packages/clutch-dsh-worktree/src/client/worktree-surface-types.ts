@@ -19,6 +19,7 @@ import type {
   WorktreeFullAccessConfirmationController,
 } from './worktree-permission.js';
 import type { WorktreeSessionOrderStore } from './worktree-session-order.js';
+import type { WorktreeForkRecoveryStore } from './worktree-session-fork.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike, SessionPresentation } from './session-view.js';
 import type {
@@ -107,6 +108,8 @@ export interface WorktreeSurfaceInjected {
   readonly renameSession?: (sessionId: string, title: string) => Promise<void>;
   readonly forkSession?: (sessionId: string) => void;
   readonly archiveSession?: (sessionId: string) => Promise<void>;
+  readonly forkRecovery?: WorktreeForkRecoveryStore;
+  readonly retryForkSession?: (key: string) => Promise<void>;
   readonly ensureSessionWorkspace?: (workspaceId: string, sessionId: string) => void;
   readonly syncSessionWorkspaces?: (
     bindings: readonly { workspaceId: string; sessionId: string }[],

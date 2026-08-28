@@ -87,6 +87,23 @@ This projection is not a persistent DSH attach and does not modify DSH source, S
 metadata or native Workspace storage. A binding failure leaves the created Session ID
 available for retry or direct navigation; it must not trigger Session deletion.
 
+## Forked Worktree Sessions
+
+The Client wraps the shared native `ctx.sessions.fork` service, which is the entry point used by
+the native Workspace Session tab, the Worktree Session menu, and the Conversation fork action.
+The wrapper passes through the native `sessionId`, optional `atSeq`, and `increaseTitle` options.
+After native DSH creates the child, the Client finds the parent's active sidecar binding, calls the
+existing `bindSession` Manager method for the child, and lets the Worktree view refresh read the
+new binding before applying the browser-local `{ workspaceId, sessionId }` membership projection.
+This keeps the child from briefly appearing in Main/Local; refreshes preserve ready content.
+
+The child is never written to DSH's durable `Workspace.sessionIds`. A loaded plugin can therefore
+make the child visible in the browser's temporary Workspace projection, while DSH continues to own
+the global Session record and content. If sidecar lookup or binding fails after native creation, the
+child remains available; the Client exposes retry/open recovery and reconciles eligible non-subagent
+children from native `parentId` summaries during Client startup or later list refreshes. Client
+disposal stops late projection callbacks without deleting the DSH child.
+
 ## Worktree surface contract
 
 ### Browser-local expansion state

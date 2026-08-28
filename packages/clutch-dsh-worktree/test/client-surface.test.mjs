@@ -1006,6 +1006,17 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
   );
 });
 
+test('refreshes the ready Worktree projection after fork binding and exposes recovery retry', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /forkRecovery/);
+  assert.match(source, /retryForkSession/);
+  assert.match(source, /data-fork-recovery/);
+  assert.match(source, /refresh\(\{ preserveCurrent: true/);
+});
+
 test('matches native Workspace row actions and drag behavior', async () => {
   const source = (await readSurfaceSources()).combined;
 

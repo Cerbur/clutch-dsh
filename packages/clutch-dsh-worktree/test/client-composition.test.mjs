@@ -63,6 +63,94 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /ctx\.workspaces\.insertSessionBefore/);
 });
 
+test('wraps the shared native fork entry point for Worktree child binding', async () => {
+  const source = await readFile(
+    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
+    'utf8',
+  );
+  assert.match(source, /createWorktreeSessionForkCoordinator/);
+  assert.match(source, /sessions\.fork/);
+  assert.match(source, /forkCoordinator\.reconcile\(\)/);
+  assert.match(source, /forkCoordinator\.dispose\(\)/);
+  assert.match(source, /ensureSessionWorkspace/);
+  assert.match(source, /manager\.listBindings/);
+});
+
+test('binds a native fork child through the existing browser-local membership overlay', async () => {
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-session'],
+      byId: { 'parent-session': { blank: false } },
+      current: 'parent-session',
+    },
+    fork: async (input) => {
+      assert.deepEqual(input, {
+        sessionId: 'parent-session',
+        atSeq: 17,
+        increaseTitle: true,
+      });
+      return 'child-session';
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        if (endpoint === 'worktreeManager/listBindings') {
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: input.workspaceId === 'workspace-current'
+                ? [{
+                    workspaceId: 'workspace-current',
+                    worktreeId: 'worktree-one',
+                    sessionId: 'parent-session',
+                    status: 'active',
+                  }]
+                : [],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: { ...input, status: 'active' } },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  assert.notEqual(fixture.fakeContext.sessions.fork, fixture.nativeFork);
+  assert.equal(
+    await fixture.fakeContext.sessions.fork({
+      sessionId: 'parent-session',
+      atSeq: 17,
+      increaseTitle: true,
+    }),
+    'child-session',
+  );
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current'],
+  );
+  fixture.registrationsBySlot.get('shell.overlay').options.inject().syncSessionWorkspaces([
+    { workspaceId: 'workspace-current', sessionId: 'child-session' },
+  ]);
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current', 'child-session'],
+  );
+  assert.deepEqual(
+    fixture.fakeContext.sessions.list.getSnapshot().ids,
+    ['parent-session'],
+  );
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+  assert.equal(fixture.fakeContext.sessions.fork, fixture.nativeFork);
+});
+
 test('routes Worktree Session creation through the browser Session connector', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /createWorktreeSessionConnector/);

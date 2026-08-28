@@ -82,6 +82,10 @@ import type {
   WorktreePermissionNotice,
 } from './worktree-surface-types.js';
 import type { WorktreeFullAccessConfirmationInput } from './worktree-permission.js';
+import type {
+  WorktreeForkRecovery,
+  WorktreeForkRecoveryStore,
+} from './worktree-session-fork.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
@@ -121,6 +125,11 @@ const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): WorktreePermissionNotice | undefine
 const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
 const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT =
   (): WorktreeFullAccessConfirmationInput | undefined => undefined;
+const EMPTY_FORK_RECOVERY_SNAPSHOT = { revision: 0, pending: [] } as const;
+const EMPTY_FORK_RECOVERY_STORE: WorktreeForkRecoveryStore = {
+  getSnapshot: () => EMPTY_FORK_RECOVERY_SNAPSHOT,
+  subscribe: () => () => {},
+};
 type ExpandedSessionGroups = Record<string, boolean>;
 
 interface WorktreeCreateDefaults {
@@ -146,6 +155,18 @@ function updatedAtById(
   return Object.fromEntries(
     sessionIds.map((sessionId) => [sessionId, sessions.byId[sessionId]?.updatedAt]),
   );
+}
+
+function forkRecoveryError(recovery: WorktreeForkRecovery): WorktreeViewError {
+  const error = toNativeWorktreeViewError(recovery.error);
+  return {
+    ...error,
+    code: error.code === 'WORKTREE_VIEW_FAILED' ? 'SESSION_BINDING_FAILED' : error.code,
+    details: {
+      ...(error.details ?? {}),
+      sessionId: recovery.childSessionId,
+    },
+  };
 }
 
 function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
@@ -188,6 +209,8 @@ export function WorktreeSurface({
   renameSession,
   forkSession,
   archiveSession,
+  forkRecovery,
+  retryForkSession,
   ensureSessionWorkspace,
   syncSessionWorkspaces,
   openSession,
@@ -196,6 +219,12 @@ export function WorktreeSurface({
   const mode = effectiveViewMode(preferredMode, available && manager !== undefined);
   const sessions = useSessions((state) => state) as SessionListLike;
   const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const forkRecoveryStore = forkRecovery ?? EMPTY_FORK_RECOVERY_STORE;
+  const forkRecoverySnapshot = useSyncExternalStore(
+    forkRecoveryStore.subscribe,
+    forkRecoveryStore.getSnapshot,
+    forkRecoveryStore.getSnapshot,
+  );
   const currentSessionId = sessions.current;
   const workspaceIds = useStableWorkspaceIds(workspaces.items);
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
@@ -261,6 +290,7 @@ export function WorktreeSurface({
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
   const [actionError, setActionError] = useState<WorktreeViewError>();
   const [actionPending, setActionPending] = useState(false);
+  const [forkRetryKey, setForkRetryKey] = useState<string>();
   const [sessionRenameTarget, setSessionRenameTarget] = useState<SessionRenameTarget>();
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   const [sessionRenamePending, setSessionRenamePending] = useState(false);
@@ -280,6 +310,7 @@ export function WorktreeSurface({
   const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
+  const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
   const modalReadLoader = useRef(createWorktreeModalViewLoader());
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
@@ -378,6 +409,18 @@ export function WorktreeSurface({
       setReadState(EMPTY_READ_STATE);
     }
   }, [mode, refresh]);
+
+  useEffect(() => {
+    if (forkRecoveryRevisionRef.current === forkRecoverySnapshot.revision) return;
+    forkRecoveryRevisionRef.current = forkRecoverySnapshot.revision;
+    if (mode !== 'worktree' || manager === undefined) return;
+    void refresh({
+      preserveCurrent: readStateRef.current.status === 'ready',
+      invalidateContext: false,
+    }).catch(() => {
+      // Recovery state remains visible; the next explicit retry can refresh it again.
+    });
+  }, [forkRecoverySnapshot.revision, manager, mode, refresh]);
 
   useEffect(() => {
     if (readState.status !== 'ready' || syncSessionWorkspaces === undefined) return;
@@ -1153,6 +1196,18 @@ export function WorktreeSurface({
     }
   };
 
+  const retryForkBinding = async (key: string): Promise<void> => {
+    if (retryForkSession === undefined || forkRetryKey !== undefined) return;
+    setForkRetryKey(key);
+    try {
+      await retryForkSession(key);
+    } catch (error) {
+      setActionError(toNativeWorktreeViewError(error));
+    } finally {
+      setForkRetryKey(undefined);
+    }
+  };
+
   const openWorkspaceSession = (workspaceId: string, sessionId: string): void => {
     ensureSessionWorkspace?.(workspaceId, sessionId);
     openWorktreeSession({ open: openSession }, sessionId);
@@ -1226,6 +1281,45 @@ export function WorktreeSurface({
               </p>
             </div>
           )}
+          {forkRecoverySnapshot.pending.map((recovery) => {
+            const recoveryViewError = forkRecoveryError(recovery);
+            return (
+              <div
+                key={recovery.key}
+                className={styles.error}
+                role="alert"
+                data-fork-recovery={recovery.key}
+              >
+                <p className={styles.message} data-error="true">
+                  {formatWorktreeViewError(recoveryViewError, t)}
+                </p>
+                <div className={styles.recoveryActions}>
+                  {retryForkSession !== undefined && recoveryViewError.retryable && (
+                    <button
+                      type="button"
+                      className={styles.actionButton}
+                      disabled={forkRetryKey !== undefined}
+                      onClick={() => {
+                        void retryForkBinding(recovery.key);
+                      }}
+                    >
+                      {t('action.retryBinding')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.actionButton}
+                    disabled={forkRetryKey !== undefined}
+                    onClick={() => {
+                      openSession(recovery.childSessionId);
+                    }}
+                  >
+                    {t('action.openCreatedSession')}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
           {actionError !== undefined && (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
