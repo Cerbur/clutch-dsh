@@ -1686,6 +1686,19 @@ test('does not expose Worktree plus for removed or repair Worktrees', async () =
   assert.match(source, /record\.status === 'active' && record\.health !== 'repair'/);
 });
 
+test('uses the native Project-add icon for the Add Workspace button', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /IconProjectAddOutline16/);
+  assert.match(
+    source,
+    /aria-label=\{t\('workspace\.add'\)\}[\s\S]*?<IconProjectAddOutline16 \/>/,
+  );
+});
+
 test('uses the injected expand-state store for structural rows', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),

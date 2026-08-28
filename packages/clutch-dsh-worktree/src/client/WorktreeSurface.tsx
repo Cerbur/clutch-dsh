@@ -10,6 +10,7 @@ import {
 import {
   IconBranchOutline16,
   IconCloseOutline16,
+  IconProjectAddOutline16,
   IconPlusOutline16,
   IconSearchOutline16,
   RiskConfirmation,
@@ -1098,7 +1099,7 @@ export function WorktreeSurface({
               if (createWorkspace !== undefined) void runMutation(createWorkspace);
             }}
           >
-            <IconPlusOutline16 />
+            <IconProjectAddOutline16 />
           </button>
         </div>
 
