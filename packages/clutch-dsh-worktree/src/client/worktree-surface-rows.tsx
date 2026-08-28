@@ -396,6 +396,14 @@ export function WorktreeGroupRow({
                 menu.onOpenChange(false);
               }}
               items={[
+                ...(menu.showCreate
+                  ? [{
+                      id: 'create',
+                      label: t('worktree.createNew'),
+                      icon: <IconPlusOutline16 />,
+                      disabled: menu.disabled || menu.onCreateWorktree === undefined,
+                    }]
+                  : []),
                 {
                   id: 'copy-path',
                   label: t('worktree.copyPath'),
@@ -414,6 +422,7 @@ export function WorktreeGroupRow({
               ]}
               onSelect={(id) => {
                 menu.onOpenChange(false);
+                if (id === 'create' && menu.showCreate) menu.onCreateWorktree?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);
                 if (id === 'remove' && menu.showRemove) menu.onRemove?.();
               }}

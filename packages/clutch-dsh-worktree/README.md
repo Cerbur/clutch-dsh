@@ -50,6 +50,9 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
   with confirmation.
+- Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
+  uses the selected row's current branch as its base and suggests the next available numbered
+  name, such as `feature-2` or `feature-3`; detached Worktrees do not expose this action.
 - Continue using DSH-native Workspace rename/delete/reorder and Session menus. Worktree rows can
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
@@ -221,9 +224,12 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 1. Select a Workspace, press its `+`, choose a baseline local branch, and enter a Worktree name.
    The default branch name is `dsh/<8-character-random-string>`.
-2. The target Worktree path must be absolute, belong to the same Project, and differ from the
+2. To create a sibling from an existing Worktree, open that active Worktree's options menu and
+   choose `Create new Worktree`. The dialog preselects the Worktree branch as the base and
+   chooses the next available numeric suffix for the name; existing names are skipped.
+3. The target Worktree path must be absolute, belong to the same Project, and differ from the
    Project root. Relative paths, a different Project, or the Project root are rejected.
-3. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
+4. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
    and no command block; install Git, restart DSH, and retry. If the repository, initial commit,
    or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
    renders this guidance; it does not run setup or installation commands or edit business files.
