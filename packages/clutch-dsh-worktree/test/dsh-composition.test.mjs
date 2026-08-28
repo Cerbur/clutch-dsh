@@ -86,6 +86,8 @@ test('mounts the Host service through the package bundle patch', async () => {
   assert.match(patch, /id: clutch-dsh-worktree-host/);
   assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree['"]/);
   assert.match(patch, /dshHome: !!js dshHomePath\(\)/);
+  assert.match(patch, /id: permission/);
+  assert.match(patch, /worktree-full-access/);
 });
 
 test('generates exactly the browser-safe Worktree Remote descriptors', async () => {
@@ -100,12 +102,14 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
     [
       'worktreeManager/bindSession',
       'worktreeManager/createWorktree',
+      'worktreeManager/ensureWorktreePermission',
       'worktreeManager/importWorktree',
       'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
       'worktreeManager/listBranches',
       'worktreeManager/listImportCandidates',
       'worktreeManager/listWorktrees',
+      'worktreeManager/normalizeDetachedWorktreePermissions',
       'worktreeManager/removeWorktree',
     ],
   );
@@ -281,5 +285,7 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
+    'worktreeManager/ensureWorktreePermission',
+    'worktreeManager/normalizeDetachedWorktreePermissions',
   ]);
 });

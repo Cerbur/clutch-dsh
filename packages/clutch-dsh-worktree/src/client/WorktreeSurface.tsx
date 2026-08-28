@@ -12,6 +12,7 @@ import {
   IconCloseOutline16,
   IconPlusOutline16,
   IconSearchOutline16,
+  RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
@@ -22,7 +23,10 @@ import {
   isWorktreeExpanded,
 } from './worktree-expand-state.js';
 import { effectiveViewMode, unboundSessionIds, workspaceSessionIds } from './view-mode.js';
-import { formatWorktreeViewError } from './worktree-error-copy.js';
+import {
+  formatWorktreePermissionNotice,
+  formatWorktreeViewError,
+} from './worktree-error-copy.js';
 import {
   filterVisibleSessionIds,
   sessionMatchesQuery,
@@ -67,7 +71,9 @@ import type {
   WorkspaceRenameTarget,
   WorktreeDragState,
   WorktreeRegistrationMode,
+  WorktreePermissionNotice,
 } from './worktree-surface-types.js';
+import type { WorktreeFullAccessConfirmationInput } from './worktree-permission.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
@@ -83,6 +89,7 @@ import {
   toRetryableWorktreeOrderError,
   toWorktreeViewError,
   WorktreeSessionBindingError,
+  WorktreeSessionPermissionError,
   type CreateSessionForWorktreeInput,
   type WorktreeViewError,
   type WorktreeWorkspaceView,
@@ -101,6 +108,13 @@ function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
 }
 
 const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
+const EMPTY_PERMISSION_NOTICE: WorktreePermissionNotice | undefined = undefined;
+const EMPTY_PERMISSION_NOTICE_SUBSCRIBE = (): (() => void) => () => {};
+const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): WorktreePermissionNotice | undefined =>
+  EMPTY_PERMISSION_NOTICE;
+const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
+const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT =
+  (): WorktreeFullAccessConfirmationInput | undefined => undefined;
 type ExpandedSessionGroups = Record<string, boolean>;
 
 interface CurrentSessionRevealState {
@@ -129,6 +143,12 @@ export function WorktreeSurface({
   available,
   expandState,
   manager,
+  permission,
+  confirmFullAccess,
+  fullAccessConfirmation,
+  onPermissionResult,
+  onPermissionNotice,
+  permissionNotice,
   invalidateWorktreeContext,
   createWorkspace,
   createSessionForWorktree: createSessionCallback,
@@ -157,6 +177,28 @@ export function WorktreeSurface({
     expandState.getSnapshot,
     expandState.getSnapshot,
   );
+  const permissionNoticeSnapshot = useSyncExternalStore(
+    permissionNotice?.subscribe ?? EMPTY_PERMISSION_NOTICE_SUBSCRIBE,
+    permissionNotice?.getSnapshot ?? EMPTY_PERMISSION_NOTICE_SNAPSHOT,
+    permissionNotice?.getSnapshot ?? EMPTY_PERMISSION_NOTICE_SNAPSHOT,
+  );
+  const fullAccessConfirmationSnapshot = useSyncExternalStore(
+    fullAccessConfirmation?.subscribe ?? EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE,
+    fullAccessConfirmation?.getSnapshot ?? EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
+    fullAccessConfirmation?.getSnapshot ?? EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
+  );
+  const fullAccessConfirmationKey = fullAccessConfirmationSnapshot === undefined
+    ? ''
+    : [
+        fullAccessConfirmationSnapshot.workspaceId,
+        fullAccessConfirmationSnapshot.worktreeId,
+        fullAccessConfirmationSnapshot.sessionId,
+        fullAccessConfirmationSnapshot.cwd,
+      ].join('\u0000');
+  const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
+  useEffect(() => {
+    setFullAccessAcknowledged(false);
+  }, [fullAccessConfirmationKey]);
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
@@ -864,6 +906,13 @@ export function WorktreeSurface({
       if (error instanceof WorktreeSessionBindingError && error.retryable) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
       }
+      if (error instanceof WorktreeSessionPermissionError && error.retryable) {
+        setPendingSessionBinding({
+          ...sessionInput,
+          sessionId: error.sessionId,
+          permissionRequired: true,
+        });
+      }
       throw error;
     }
     await refresh({ preserveCurrent: true });
@@ -935,6 +984,13 @@ export function WorktreeSurface({
       if (error instanceof WorktreeSessionBindingError && error.retryable) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId });
       }
+      if (error instanceof WorktreeSessionPermissionError && error.retryable) {
+        setPendingSessionBinding({
+          ...input,
+          sessionId: error.sessionId,
+          permissionRequired: true,
+        });
+      }
       setActionError(toWorktreeViewError(error));
     } finally {
       setActionPending(false);
@@ -958,6 +1014,9 @@ export function WorktreeSurface({
         ensureSessionWorkspace: (workspaceId, sessionId) => {
           ensureSessionWorkspace?.(workspaceId, sessionId);
         },
+        permission,
+        confirmFullAccess,
+        onPermissionResult,
         openSession,
       });
       setPendingSessionBinding(undefined);
@@ -1044,6 +1103,13 @@ export function WorktreeSurface({
         </div>
 
         <div className={styles.content} tabIndex={0}>
+          {permissionNoticeSnapshot !== undefined && (
+            <div className={styles.notice} role="status" data-worktree-permission-notice>
+              <p className={styles.message}>
+                {formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t)}
+              </p>
+            </div>
+          )}
           {actionError !== undefined && (
             <div className={styles.error} role="alert" data-worktree-error>
               <p className={styles.message} data-error="true">
@@ -1061,19 +1127,21 @@ export function WorktreeSurface({
                   >
                     {t('action.retryBinding')}
                   </button>
-                  <button
-                    type="button"
-                    className={styles.actionButton}
-                    disabled={actionPending}
-                    onClick={() => {
-                      const sessionId = pendingSessionBinding.sessionId;
-                      setPendingSessionBinding(undefined);
-                      setActionError(undefined);
-                      openSession(sessionId);
-                    }}
-                  >
-                    {t('action.openCreatedSession')}
-                  </button>
+                  {!pendingSessionBinding.permissionRequired && (
+                    <button
+                      type="button"
+                      className={styles.actionButton}
+                      disabled={actionPending}
+                      onClick={() => {
+                        const sessionId = pendingSessionBinding.sessionId;
+                        setPendingSessionBinding(undefined);
+                        setActionError(undefined);
+                        openSession(sessionId);
+                      }}
+                    >
+                      {t('action.openCreatedSession')}
+                    </button>
+                  )}
                 </div>
               )}
               {actionError.retryable && (
@@ -1566,10 +1634,33 @@ export function WorktreeSurface({
                 workspaceId: target.workspaceId,
                 worktreeId: target.worktreeId,
               },
-            });
+            }, permission, onPermissionNotice);
             await invalidateWorktreeContext?.(target.workspaceId);
             setWorktreeRemoval(undefined);
           });
+        }}
+      />
+
+      <RiskConfirmation
+        open={fullAccessConfirmationSnapshot !== undefined}
+        title={t('permission.fullAccessTitle')}
+        description={fullAccessConfirmationSnapshot === undefined
+          ? ''
+          : t('permission.fullAccessDescription', {
+              cwd: fullAccessConfirmationSnapshot.cwd,
+            })}
+        acknowledgeLabel={t('permission.fullAccessAcknowledge')}
+        cancelLabel={t('dialog.cancel')}
+        confirmLabel={t('permission.fullAccessEnable')}
+        acknowledged={fullAccessAcknowledged}
+        onAcknowledgedChange={setFullAccessAcknowledged}
+        onCancel={() => {
+          setFullAccessAcknowledged(false);
+          fullAccessConfirmation?.resolve(false);
+        }}
+        onConfirm={() => {
+          setFullAccessAcknowledged(false);
+          fullAccessConfirmation?.resolve(true);
         }}
       />
 

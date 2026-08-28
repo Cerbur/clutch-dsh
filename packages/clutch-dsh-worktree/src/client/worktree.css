@@ -207,6 +207,14 @@
   border-radius: 7px;
 }
 
+.notice {
+  margin: 12px 0 0;
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-button-elevated-fill);
+}
+
 .retryButton,
 .actionButton {
   border: 0;

@@ -1,3 +1,9 @@
+import type {
+  WorktreePermissionNormalizationRequest,
+  WorktreePermissionRequest,
+  WorktreePermissionResult,
+} from './worktree-permission.js';
+
 /**
  * 插件的稳定、浏览器安全契约层；这里只定义领域值与服务形状，不依赖 Git、sidecar 或 Node runtime。
  * Stable, browser-safe contract layer for the plugin; it defines domain values and service shapes without Git, sidecar, or Node runtime dependencies.
@@ -27,6 +33,7 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'SIDECAR_CORRUPT',
   'SIDECAR_SYNC_REQUIRED',
   'GIT_OPERATION_FAILED',
+  'WORKTREE_PERMISSION_BINDING_REQUIRED',
 ] as const);
 
 export type WorktreeErrorCode = (typeof WORKTREE_ERROR_CODES)[number];
@@ -42,6 +49,8 @@ export type SessionId = string;
 export type WorktreeStatus = 'active' | 'removed';
 
 export type WorktreeSource = 'plugin' | 'external';
+
+export * from './worktree-permission.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
 export type WorktreeHealth = 'ready' | 'repair';
@@ -207,6 +216,8 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
+  'ensureWorktreePermission',
+  'normalizeDetachedWorktreePermissions',
 ] as const);
 
 export type WorktreeRemoteMethod = (typeof WORKTREE_REMOTE_METHODS)[number];
@@ -267,4 +278,12 @@ export interface WorktreeRemoteManager {
     worktreeId: WorktreeId;
     sessionId: SessionId;
   }): Promise<WorktreeRemoteResult<SessionBinding>>;
+
+  ensureWorktreePermission(
+    input: WorktreePermissionRequest,
+  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
+
+  normalizeDetachedWorktreePermissions(
+    input: WorktreePermissionNormalizationRequest,
+  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
 }

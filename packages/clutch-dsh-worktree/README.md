@@ -26,6 +26,14 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Remove plugin-created and imported Worktrees through real `git worktree remove`; removing an imported Worktree can delete its linked directory and is called out in the confirmation dialog.
 - Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
   open it directly.
+- For active Worktree Sessions, request the named `worktree-full-access` preset after an
+  explicit confirmation. It combines DSH `danger-full-access` with `ask`: it removes filesystem
+  confinement for linked Git metadata while keeping approval prompts enabled; network and
+  process policy are unchanged. The native Access menu marks `Worktree Full Access` with a
+  Worktree branch icon.
+- Preserve an explicit restriction selected in DSH's native Access UI. If the custom preset is
+  unavailable, fall back to `workspace-write + ask` when possible; if the permission capability
+  cannot be verified, show a retryable degraded state instead of claiming Full Access.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Remove an active Worktree from its options menu with confirmation. Main and detached rows do
   not expose that menu.
@@ -236,6 +244,11 @@ blank-session Hero. The displayed language follows DSH's current language settin
   same Worktree are coalesced.
 - If binding fails after DSH has created the Session, the Session ID remains available for Retry
   or Open recovery. The plugin does not delete or mutate that DSH Session.
+- Before opening an active Worktree Session, the plugin explains in a DSH-styled in-page dialog why
+  linked Git metadata may need access outside the Session directory. The dialog requires an explicit
+  risk acknowledgement; cancelling keeps the Session and binding, does not change permissions, and
+  leaves a retryable pending state. The native DSH Access selector remains the way to switch to
+  another permission mode.
 - A provisional blank Session follows DSH's native display rules: it is shown only in the
   selected view, uses the localized `New Session` label, hides its generated ID, and has no
   Rename, Fork, or Archive menu. After the first prompt is accepted, it becomes an ordinary
@@ -253,6 +266,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - Removing a Worktree does not delete its Sessions. The relationship remains detached until it
   is explicitly unbound. Deleting a Workspace removes only DSH's Workspace registration; its
   directory, Sessions, Git Worktrees, and plugin sidecar remain.
+- After a successful removal, detached Sessions that still have Full Access are normalized to
+  `workspace-write + ask` when the public DSH permission service is available. An unavailable
+  service is reported as an unverified, retryable warning; it never grants Full Access to a
+  detached Session.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
   ordering is limited to the current visual Main or Worktree group.
 - The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
@@ -278,6 +295,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
   commands, while repository, initial commit, or local branch failures show copyable setup
   commands. Connection, Gateway, and unexpected Worktree-domain failures remain visible as
   retryable errors rather than empty lists.
+- Permission status is also explicit: Full Access, fallback `workspace-write`, preserved user
+  restriction, unverified capability, confirmation pending, and retryable setup failure are not
+  silently collapsed into an empty or falsely successful Worktree state.
 - Refreshing an already-ready view preserves its current projection until replacement data is
   available. Same-Session snapshot updates do not blank the context or trigger redundant reads;
   initial entry and explicit Retry may show a loading state when no cached view is available.
@@ -328,6 +348,11 @@ keeps `{ workspaceId, sessionId }` as a browser-local membership projection rath
 persistent DSH attach. It does not modify DSH source, Session metadata, or native Workspace
 storage. The projection is replayed after native list refreshes and removed when the binding
 disappears or the Client is disposed.
+
+Permission changes use only the public DSH per-Session permission service and its
+`permission/preset`, `sandbox/mode`, and `approval/policy` records. The plugin does not write
+messages, prompts, transcripts, Workspace data, or Session metadata, and cannot enlarge a
+filesystem sandbox imposed by the host running DSH.
 
 The blank Hero context is visual only. Because the current upstream DSH source checkout has no
 additive Hero headline slot, its placement depends on the native `[data-phase="hero"]` and title

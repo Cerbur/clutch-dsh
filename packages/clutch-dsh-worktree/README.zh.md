@@ -25,6 +25,12 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
 - plugin 创建和导入的 Worktree 都通过真实的 `git worktree remove` 移除；移除导入的 Worktree 可能删除其关联目录，确认弹窗会明确提示。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
+- 对 active Worktree Session，先经明确确认，再请求命名的 `worktree-full-access` 预设。它将
+  DSH 的 `danger-full-access` 与 `ask` 组合：关闭关联 Git 元数据的文件系统限制，但保留
+  审批提示；网络和进程策略不变。原生 Access 菜单中的 `Worktree Full Access` 会显示
+  Worktree branch 图标。
+- 保留用户在 DSH 原生 Access 界面中选择的限制。如果自定义预设不可用，在可能时回退到
+  `workspace-write + ask`；如果无法验证权限能力，则显示可重试的降级状态，不伪称已获得完全访问。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 active Worktree 的选项菜单和确认弹窗移除 Worktree；Main 和 detached 行不显示该菜单。
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
@@ -222,6 +228,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   `create → bind → project → open`，同一个 Worktree 的并发点击会合并。
 - 如果 DSH 创建 Session 后 binding 失败，Session ID 仍会保留，可用于 Retry 或 Open 恢复。
   插件不会删除或修改该 DSH Session。
+- 打开 active Worktree Session 前，插件会在 DSH 风格的页面内弹窗中说明关联 Git 元数据为什么
+  可能需要访问 Session 目录之外的内容。弹窗要求明确勾选风险确认；取消会保留 Session 和
+  binding，不改变权限，并留下可重试的待处理状态。需要切换到其他权限模式时，继续使用 DSH
+  原生 Access 选择器。
 - provisional blank Session 遵循 DSH 原生显示规则：只在当前选中的视角中显示，使用本地化
   的 `New Session` 文案，不显示生成的 ID，也没有 Rename、Fork 或 Archive 菜单。接受第一条
   prompt 后，它会变为普通 Session 行；隐藏 blank 行不会删除 Session 或 Worktree binding。
@@ -238,6 +248,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 移除 Worktree 不会删除其 Session。关系会保留为 detached，直到显式解绑。删除 Workspace
   只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin
   sidecar 会保留。
+- Worktree 成功移除后，如果公共 DSH 权限服务可用，仍处于完全访问的 detached Session 会
+  归一化为 `workspace-write + ask`。权限服务不可用时显示未验证且可重试的警告；不会向
+  detached Session 自动授予完全访问。
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
   限定在当前视觉 Main 或 Worktree 分组中。
 - Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时
@@ -263,6 +276,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 已经 ready 的视角刷新时会保留当前 projection，直到替换数据可用。同一个 Session 的
   snapshot 更新不会清空上下文，也不会触发重复读取；没有缓存视角时，首次进入和显式 Retry
   可以显示 loading 状态。
+- 权限状态会明确显示为完全访问、回退到 `workspace-write`、保留用户限制、能力未验证、
+  等待确认或可重试的设置失败，不会静默折叠为空列表或伪造成功。
 
 ## 界面语言
 
@@ -302,6 +317,10 @@ Worktree Session 流程将独立的 Worktree cwd 交给 upstream DSH runtime，�
 `{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
 attach。它不会修改 DSH 源码、Session metadata 或原生 Workspace 存储。native list 刷新后会
 重放 projection；binding 消失或 Client dispose 时会移除 projection。
+
+权限变更只使用 DSH 公共的 per-Session 权限服务及其 `permission/preset`、`sandbox/mode`、
+`approval/policy` 记录。插件不会写入消息、prompt、transcript、Workspace 数据或 Session
+metadata，也不能扩大运行 DSH 的宿主沙箱边界。
 
 空白 Hero 上下文只用于展示。由于当前 upstream DSH source checkout 没有 additive Hero
 headline slot，它的位置依赖原生 `[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，

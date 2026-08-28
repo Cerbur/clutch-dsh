@@ -750,6 +750,46 @@ test('executes create, import, and remove actions through the Manager contract',
   });
 });
 
+test('normalizes detached Worktree Session permissions after removal', async () => {
+  const calls = [];
+  const notices = [];
+  const worktreeManager = manager({
+    async removeWorktree(input) {
+      calls.push(['removeWorktree', input]);
+    },
+  });
+  const permission = {
+    async normalizeDetachedWorktreePermissions(input) {
+      calls.push(['normalizeDetachedWorktreePermissions', input]);
+      return {
+        status: 'normalized-workspace-write',
+        sessionIds: ['session-one'],
+        retryable: false,
+      };
+    },
+  };
+
+  await executeWorktreeAction(worktreeManager, {
+    type: 'removeWorktree',
+    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+  }, permission, (input, result) => {
+    notices.push({ input, result });
+  });
+
+  assert.deepEqual(calls, [
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+  ]);
+  assert.deepEqual(notices, [{
+    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    result: {
+      status: 'normalized-workspace-write',
+      sessionIds: ['session-one'],
+      retryable: false,
+    },
+  }]);
+});
+
 test('adds a Create/Import dialog that retains the existing shared Session registration flow', async () => {
   const { coordinator, dialogs, types } = await readSurfaceSources();
 
