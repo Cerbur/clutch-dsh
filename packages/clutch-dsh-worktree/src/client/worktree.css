@@ -207,6 +207,14 @@
   border-radius: 7px;
 }
 
+.notice {
+  margin: 12px 0 0;
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-button-elevated-fill);
+}
+
 .retryButton,
 .actionButton {
   border: 0;
@@ -290,7 +298,11 @@
   border-radius: 6px;
   background: var(--dsw-alias-button-elevated-fill);
   color: var(--dsw-alias-label-secondary);
-  font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px/16px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   white-space: pre-wrap;
 }
 
@@ -535,6 +547,35 @@
   overflow-wrap: anywhere;
 }
 
+/* Native Session hover card: full title, relative time, and current status. */
+.sessionHoverContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessionHoverTitle {
+  color: #FFFFFF;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: break-word;
+}
+
+.sessionHoverTime {
+  color: #CFD3D6;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sessionHoverStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ADB2B8;
+  font-size: 12px;
+  line-height: 20px;
+}
+
 .treeActionSlot,
 .workspaceActions {
   position: relative;
@@ -557,6 +598,51 @@
   position: absolute;
   top: 0;
   right: 0;
+}
+
+.groupActivity {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.workspaceRow[data-group-activity='true'] .groupActivity,
+.worktreeRow[data-group-activity='true'] .groupActivity {
+  visibility: visible;
+}
+
+.workspaceRow[data-group-activity='true']:hover .groupActivity,
+.worktreeRow[data-group-activity='true']:hover .groupActivity,
+.workspaceRow[data-group-activity='true'][data-menu-open='true'] .groupActivity,
+.worktreeRow[data-group-activity='true'][data-menu-open='true'] .groupActivity,
+.workspaceRow[data-group-activity='true']:focus-within .groupActivity,
+.worktreeRow[data-group-activity='true']:focus-within .groupActivity {
+  visibility: hidden;
+}
+
+.workspaceRow[data-group-activity='true'] .treeActionSlot > .iconButton:last-child,
+.worktreeRow[data-group-activity='true'] .treeActionSlot > .iconButton:last-child {
+  visibility: hidden;
+}
+
+.workspaceRow[data-group-activity='true']:hover .treeActionSlot > .iconButton:last-child,
+.worktreeRow[data-group-activity='true']:hover .treeActionSlot > .iconButton:last-child,
+.workspaceRow[data-group-activity='true'][data-menu-open='true']
+  .treeActionSlot
+  > .iconButton:last-child,
+.worktreeRow[data-group-activity='true'][data-menu-open='true']
+  .treeActionSlot
+  > .iconButton:last-child,
+.workspaceRow[data-group-activity='true']:focus-within .treeActionSlot > .iconButton:last-child,
+.worktreeRow[data-group-activity='true']:focus-within .treeActionSlot > .iconButton:last-child {
+  visibility: visible;
 }
 
 .menuAction {
@@ -719,11 +805,46 @@
   background: transparent;
 }
 
-.rowActions {
-  display: none;
-  flex: none;
+.sessionTrailing {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 52px;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  width: 52px;
+  height: 28px;
+  margin-left: auto;
+}
+
+.sessionMeta,
+.rowActions {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.sessionMeta {
+  color: var(--dsw-alias-label-tertiary);
+  pointer-events: none;
+}
+
+.sessionStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.sessionTime {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+  font-size: 12px;
+  line-height: 20px;
 }
 
 .sessionOverflowButton {
@@ -748,8 +869,19 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.rowActions {
+  display: none;
+}
+
+.treeSessionRow:hover .sessionMeta,
+.treeSessionRow[data-menu-open='true'] .sessionMeta,
+.sessionTrailing:focus-within .sessionMeta {
+  visibility: hidden;
+}
+
 .treeSessionRow:hover .rowActions,
-.treeSessionRow[data-menu-open='true'] .rowActions {
+.treeSessionRow[data-menu-open='true'] .rowActions,
+.sessionTrailing:focus-within .rowActions {
   display: inline-flex;
 }
 

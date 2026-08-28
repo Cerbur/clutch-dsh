@@ -41,6 +41,29 @@ export class WorktreeSessionBindingError extends Error {
   }
 }
 
+/** A Session is retained after permission confirmation or permission setup needs retry. */
+export class WorktreeSessionPermissionError extends Error {
+  readonly code: string;
+  readonly retryable = true;
+  readonly details: Readonly<Record<string, unknown>>;
+  readonly sessionId: string;
+  readonly createdSession: boolean;
+  readonly cause: unknown;
+
+  constructor(sessionId: string, createdSession: boolean, cause?: unknown) {
+    const reason = cause instanceof Error ? cause.message : cause === undefined ? '' : String(cause);
+    super(reason);
+    this.name = 'WorktreeSessionPermissionError';
+    this.code = cause === undefined
+      ? 'WORKTREE_PERMISSION_CONFIRMATION_REQUIRED'
+      : 'WORKTREE_PERMISSION_FAILED';
+    this.details = { sessionId };
+    this.sessionId = sessionId;
+    this.createdSession = createdSession;
+    this.cause = cause;
+  }
+}
+
 function recordDetails(value: unknown): Readonly<Record<string, unknown>> | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
   const details = (value as { readonly details?: unknown }).details;
@@ -56,7 +79,7 @@ export function toWorktreeViewError(error: unknown): WorktreeViewError {
       readonly message?: unknown;
       readonly retryable?: unknown;
     };
-    const details = error instanceof WorktreeSessionBindingError
+    const details = error instanceof WorktreeSessionBindingError || error instanceof WorktreeSessionPermissionError
       ? { ...(recordDetails(error) ?? {}), sessionId: error.sessionId }
       : recordDetails(error);
     return {

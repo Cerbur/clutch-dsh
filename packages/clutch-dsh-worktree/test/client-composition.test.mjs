@@ -46,15 +46,12 @@ test('publishes an official DSH client-module handoff with a browser-safe apply 
 });
 
 test('injects native Session actions into the Worktree surface', async () => {
-  const source = await readFile(
-    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
-    'utf8',
-  );
+  const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /renameSession/);
   assert.match(source, /forkSession/);
   assert.match(source, /archiveSession/);
   assert.match(source, /ctx\.sessions\.binding/);
-  assert.match(source, /ctx\.sessions\.fork/);
+  assert.match(source, /ctx\.sessions\s*\.fork/);
   assert.match(source, /ctx\.workspaces\.archiveSession/);
   assert.match(source, /renameWorkspace/);
   assert.match(source, /deleteWorkspace/);
@@ -66,11 +63,96 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /ctx\.workspaces\.insertSessionBefore/);
 });
 
-test('routes Worktree Session creation through the browser Session connector', async () => {
+test('wraps the shared native fork entry point for Worktree child binding', async () => {
   const source = await readFile(
     path.join(packageDirectory, 'src', 'client', 'entry.ts'),
     'utf8',
   );
+  assert.match(source, /createWorktreeSessionForkCoordinator/);
+  assert.match(source, /sessions\.fork/);
+  assert.match(source, /forkCoordinator\.reconcile\(\)/);
+  assert.match(source, /forkCoordinator\.dispose\(\)/);
+  assert.match(source, /ensureSessionWorkspace/);
+  assert.match(source, /manager\.listBindings/);
+});
+
+test('binds a native fork child through the existing browser-local membership overlay', async () => {
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-session'],
+      byId: { 'parent-session': { blank: false } },
+      current: 'parent-session',
+    },
+    fork: async (input) => {
+      assert.deepEqual(input, {
+        sessionId: 'parent-session',
+        atSeq: 17,
+        increaseTitle: true,
+      });
+      return 'child-session';
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        if (endpoint === 'worktreeManager/listBindings') {
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: input.workspaceId === 'workspace-current'
+                ? [{
+                    workspaceId: 'workspace-current',
+                    worktreeId: 'worktree-one',
+                    sessionId: 'parent-session',
+                    status: 'active',
+                  }]
+                : [],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: { ...input, status: 'active' } },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  assert.notEqual(fixture.fakeContext.sessions.fork, fixture.nativeFork);
+  assert.equal(
+    await fixture.fakeContext.sessions.fork({
+      sessionId: 'parent-session',
+      atSeq: 17,
+      increaseTitle: true,
+    }),
+    'child-session',
+  );
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current'],
+  );
+  fixture.registrationsBySlot.get('shell.overlay').options.inject().syncSessionWorkspaces([
+    { workspaceId: 'workspace-current', sessionId: 'child-session' },
+  ]);
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current', 'child-session'],
+  );
+  assert.deepEqual(
+    fixture.fakeContext.sessions.list.getSnapshot().ids,
+    ['parent-session'],
+  );
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+  assert.equal(fixture.fakeContext.sessions.fork, fixture.nativeFork);
+});
+
+test('routes Worktree Session creation through the browser Session connector', async () => {
+  const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /createWorktreeSessionConnector/);
   assert.match(source, /worktreeSessionConnector\.create\(input\)/);
   assert.match(source, /worktreeSessionConnector\.dispose\(\)/);
@@ -118,7 +200,8 @@ test('contributes context to the active Session title row and the Hero overlay',
     -5,
   );
   const store = fixture.registrationsBySlot
-    .get('conversation.session.header.actions').options.inject().hooks.worktreeContext;
+    .get('conversation.session.header.actions')
+    .options.inject().hooks.worktreeContext;
   assert.equal(typeof store.getSnapshot, 'function');
   const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
   assert.equal(overlay.hooks.worktreeContext, store);
@@ -131,7 +214,10 @@ test('declares the native Conversation package without depending on a Hero conte
   const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
   const source = await readFile(new URL('../src/client/entry.ts', import.meta.url), 'utf8');
 
-  assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'), true);
+  assert.equal(
+    manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'),
+    true,
+  );
   assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '*');
   assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.1-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
@@ -141,10 +227,7 @@ test('declares the native Conversation package without depending on a Hero conte
 });
 
 test('declares the DSH locale service and namespace on both Client Slots', async () => {
-  const source = await readFile(
-    path.join(packageDirectory, 'src', 'client', 'entry.ts'),
-    'utf8',
-  );
+  const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /@deepseek-ai\/dsh-client-locale\/client/);
   assert.match(source, /locale:\s*WORKTREE_NS/);
   assert.equal(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'), true);
@@ -156,14 +239,8 @@ test('declares the DSH locale service and namespace on both Client Slots', async
     'en',
     'zh',
   ]);
-  assert.equal(
-    fixture.registrationsBySlot.get('sidebar.footer.action').options.locale,
-    'worktree',
-  );
-  assert.equal(
-    fixture.registrationsBySlot.get('shell.overlay').options.locale,
-    'worktree',
-  );
+  assert.equal(fixture.registrationsBySlot.get('sidebar.footer.action').options.locale, 'worktree');
+  assert.equal(fixture.registrationsBySlot.get('shell.overlay').options.locale, 'worktree');
 
   for (const dispose of fixture.disposers.reverse()) dispose();
   assert.equal(fixture.fakeContext.localeRegistrations.length, 0);
@@ -291,6 +368,20 @@ test('injects a separate structural expand-state store alongside view mode', asy
   assert.equal(typeof injected.expandState.actions.toggleWorktree, 'function');
   assert.equal(typeof injected.expandState.actions.retain, 'function');
   assert.notEqual(injected.expandState, viewStore);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('injects a separate browser-local Session order store', async () => {
+  const fixture = await loadClientEntry();
+  const overlay = fixture.registrationsBySlot.get('shell.overlay');
+  const injected = overlay.options.inject();
+
+  assert.equal(typeof injected.sessionOrder.getSnapshot, 'function');
+  assert.equal(typeof injected.sessionOrder.subscribe, 'function');
+  assert.equal(typeof injected.sessionOrder.actions.reconcile, 'function');
+  assert.equal(typeof injected.sessionOrder.actions.setOrder, 'function');
+  assert.notEqual(injected.sessionOrder, injected.expandState);
 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });

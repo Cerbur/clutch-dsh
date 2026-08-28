@@ -8,7 +8,7 @@ const packageDirectory = path.resolve('.');
  * table and a small slot/context fixture. The real Client loader owns the
  * same registration call; this fixture only supplies its platform modules.
  */
-export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } = {}) {
+export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, fork } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
@@ -16,6 +16,7 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } 
   const openedSessions = [];
   const startedSessions = [];
   const createdSessions = [];
+  const forkCalls = [];
   const rpcCalls = [];
   const localeRegistrations = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
@@ -137,24 +138,33 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } 
     },
   };
 
+  const fakeSessions = {
+    list: {
+      getSnapshot: () => sessionListSnapshot ?? ({ current: 'session-current' }),
+      subscribe: () => () => {},
+    },
+    async create(input) {
+      createdSessions.push(input);
+      return 'session-created';
+    },
+    open(sessionId) {
+      openedSessions.push(sessionId);
+    },
+  };
+  if (fork !== undefined) {
+    fakeSessions.fork = async (input) => {
+      forkCalls.push(input);
+      return fork(input);
+    };
+  }
+  const nativeFork = fakeSessions.fork;
+
   const fakeContext = {
     connection: { rpc: connectionRpc },
     locale,
     localeRegistrations,
     remote,
-    sessions: {
-      list: {
-        getSnapshot: () => sessionListSnapshot ?? ({ current: 'session-current' }),
-        subscribe: () => () => {},
-      },
-      async create(input) {
-        createdSessions.push(input);
-        return 'session-created';
-      },
-      open(sessionId) {
-        openedSessions.push(sessionId);
-      },
-    },
+    sessions: fakeSessions,
     workspaces: {
       list: workspaceList,
       startSession(workspaceId) {
@@ -215,6 +225,8 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot } 
     openedSessions,
     startedSessions,
     createdSessions,
+    forkCalls,
+    nativeFork,
     rpcCalls,
   };
 }

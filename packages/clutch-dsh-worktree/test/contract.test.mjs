@@ -25,6 +25,7 @@ test('exports the approved stable error codes', () => {
     'SIDECAR_CORRUPT',
     'SIDECAR_SYNC_REQUIRED',
     'GIT_OPERATION_FAILED',
+    'WORKTREE_PERMISSION_BINDING_REQUIRED',
   ]);
 });
 
@@ -86,7 +87,7 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
   ]);
 });
 
-test('exposes the approved nine Manager and Remote methods', () => {
+test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'listWorktrees',
     'listImportCandidates',
@@ -97,5 +98,7 @@ test('exposes the approved nine Manager and Remote methods', () => {
     'insertWorktreeBefore',
     'listBindings',
     'bindSession',
+    'ensureWorktreePermission',
+    'normalizeDetachedWorktreePermissions',
   ]);
 });

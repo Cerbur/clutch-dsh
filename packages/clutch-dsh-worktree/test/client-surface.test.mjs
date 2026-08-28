@@ -4,6 +4,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 import {
+  createNumberedWorktreeName,
   createDefaultWorktreeName,
   executeWorktreeAction,
   loadWorktreeView,
@@ -627,6 +628,17 @@ test('generates an available dsh Worktree name and rolls after a collision', () 
   assert.equal(generated.length, 2);
 });
 
+test('generates the next available numbered name from a selected Worktree', () => {
+  assert.equal(
+    createNumberedWorktreeName('feature', ['feature', 'feature-2', 'feature-4']),
+    'feature-3',
+  );
+  assert.equal(
+    createNumberedWorktreeName('feature-3', ['feature', 'feature-2', 'feature-3', 'feature-4']),
+    'feature-5',
+  );
+});
+
 test('loads independent Worktree projections for every Workspace', async () => {
   const calls = [];
   const data = await loadWorktreeViews(
@@ -748,6 +760,46 @@ test('executes create, import, and remove actions through the Manager contract',
     source: 'external',
     status: 'active',
   });
+});
+
+test('normalizes detached Worktree Session permissions after removal', async () => {
+  const calls = [];
+  const notices = [];
+  const worktreeManager = manager({
+    async removeWorktree(input) {
+      calls.push(['removeWorktree', input]);
+    },
+  });
+  const permission = {
+    async normalizeDetachedWorktreePermissions(input) {
+      calls.push(['normalizeDetachedWorktreePermissions', input]);
+      return {
+        status: 'normalized-workspace-write',
+        sessionIds: ['session-one'],
+        retryable: false,
+      };
+    },
+  };
+
+  await executeWorktreeAction(worktreeManager, {
+    type: 'removeWorktree',
+    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+  }, permission, (input, result) => {
+    notices.push({ input, result });
+  });
+
+  assert.deepEqual(calls, [
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+  ]);
+  assert.deepEqual(notices, [{
+    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    result: {
+      status: 'normalized-workspace-write',
+      sessionIds: ['session-one'],
+      retryable: false,
+    },
+  }]);
 });
 
 test('adds a Create/Import dialog that retains the existing shared Session registration flow', async () => {
@@ -916,7 +968,7 @@ test('bounds the surface to live native sidebar anchors', async () => {
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
   const source = (await readSurfaceSources()).combined;
 
-  assert.match(source, /const registeredWorktree = worktreeModalMode === 'create'/);
+  assert.match(source, /const\s+registeredWorktree\s*=\s*worktreeModalMode\s*===\s*'create'/);
   assert.match(source, /await continueWorktreeRegistration\(registeredWorktree\)/);
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
   assert.match(source, /worktreeId: registeredWorktree\.worktreeId/);
@@ -952,6 +1004,17 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
     source,
     /className=\{styles\.inlineButton\}[\s\S]*?>\s*Remove\s*</,
   );
+});
+
+test('refreshes the ready Worktree projection after fork binding and exposes recovery retry', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /forkRecovery/);
+  assert.match(source, /retryForkSession/);
+  assert.match(source, /data-fork-recovery/);
+  assert.match(source, /refresh\(\{ preserveCurrent: true/);
 });
 
 test('matches native Workspace row actions and drag behavior', async () => {
@@ -1412,13 +1475,83 @@ test('shares one parameterized group row while gating removal UI by row configur
   const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
   const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
   const mainCallSource = source.slice(mainCallStart, mainCallEnd);
-  assert.doesNotMatch(mainCallSource, /\bmenu=/);
+  assert.match(mainCallSource, /\bmenu=/);
+  assert.match(mainCallSource, /showRemove: false/);
   const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
   const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
   const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
-  assert.match(worktreeCallSource, /\bmenu=\{\s*record\.status === 'active'/);
+  assert.match(worktreeCallSource, /\bmenu=\{\{/);
+  assert.match(worktreeCallSource, /showRemove: record\.status === 'active'/);
   assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
   assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
+});
+
+test('copies Main and Worktree paths while gating removal through menu visibility', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const locales = await readFile(
+    new URL('../src/client/locales.ts', import.meta.url),
+    'utf8',
+  );
+  const groupRowStart = source.indexOf('function WorktreeGroupRow');
+  const groupRowEnd = source.indexOf('/** Worktree-mode Session row', groupRowStart);
+  assert.notEqual(groupRowStart, -1);
+  assert.notEqual(groupRowEnd, -1);
+  const groupRowSource = source.slice(groupRowStart, groupRowEnd);
+
+  assert.match(groupRowSource, /IconCopyOutline16/);
+  assert.match(groupRowSource, /writeClipboard/);
+  assert.match(groupRowSource, /id: 'copy-path'/);
+  assert.match(groupRowSource, /void writeClipboard\(menu\.copyPath\)/);
+  assert.match(groupRowSource, /menu\.showRemove\s*\?\s*\[/);
+  assert.match(source, /readonly copyPath: string;/);
+  assert.match(source, /readonly showRemove: boolean;/);
+
+  const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
+  const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = source.slice(mainCallStart, mainCallEnd);
+  assert.match(mainCallSource, /menu=\{\{[\s\S]*copyPath: workspace\.path/);
+  assert.match(mainCallSource, /showRemove: false/);
+
+  const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
+  const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /menu=\{\{/);
+  assert.match(worktreeCallSource, /copyPath: record\.absolutePath/);
+  assert.match(worktreeCallSource, /showRemove: record\.status === 'active'/);
+  assert.doesNotMatch(worktreeCallSource, /menu=\{\s*record\.status === 'active'/);
+
+  assert.match(locales, /'worktree\.copyPath': '复制路径'/);
+  assert.match(locales, /'worktree\.copyPath': 'Copy path'/);
+});
+
+test('offers Local and Worktree creation through shared menu parameters', async () => {
+  const { coordinator, rows, types } = await readSurfaceSources();
+
+  assert.match(rows, /id: 'create'/);
+  assert.match(rows, /label: t\('worktree\.createNew'\)/);
+  assert.match(rows, /icon: <IconPlusOutline16 \/>/);
+  assert.match(rows, /menu\.showCreate/);
+  assert.match(rows, /if \(id === 'create' && menu\.showCreate\) menu\.onCreateWorktree\?\.\(\)/);
+  assert.match(types, /readonly showCreate: boolean;/);
+  assert.match(types, /readonly onCreateWorktree\?: \(\) => void;/);
+  assert.match(coordinator, /createNumberedWorktreeName/);
+  assert.match(
+    coordinator,
+    /onCreateWorktree: record\.status === 'active'[\s\S]*openWorktreeCreator\(workspace, \{[\s\S]*baseBranch: record\.branch[\s\S]*newBranch: createNumberedWorktreeName\(\s*record\.branch/,
+  );
+
+  const mainCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="main"'));
+  const mainCallEnd = coordinator.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = coordinator.slice(mainCallStart, mainCallEnd);
+  assert.match(mainCallSource, /showCreate: currentBranch !== undefined/);
+  assert.match(mainCallSource, /onCreateWorktree:/);
+  assert.match(mainCallSource, /baseBranch: currentBranch/);
+  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*currentBranch/);
+
+  const worktreeCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="worktree"'));
+  const worktreeCallEnd = coordinator.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = coordinator.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /showCreate: record\.status === 'active'/);
 });
 
 test('polishes Main and Worktree row hover presentation', async () => {
@@ -1458,6 +1591,36 @@ test('polishes Main and Worktree row hover presentation', async () => {
   );
 });
 
+test('keeps the native Session hover detail card on Worktree rows', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  const rowStart = source.indexOf('export function WorktreeSessionRow');
+  const rowEnd = source.indexOf('export function WorktreeSessionGroup', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(source, /function WorktreeSessionHoverContent/);
+  assert.match(source, /session\.time\.ago/);
+  assert.match(rowSource, /return \(\s*<HoverCard/);
+  assert.match(rowSource, /content=\{[\s\S]*WorktreeSessionHoverContent/);
+  assert.match(rowSource, /disabled=\{menuOpen \|\| drag\.active\}/);
+  assert.match(rowSource, /copyText=\{blank \? undefined : label\}/);
+  assert.match(rowSource, /copyLabel=\{t\('copy'\)\}/);
+  assert.match(rowSource, /copiedLabel=\{t\('hover\.copied'\)\}/);
+  assert.match(source, /value\.unit === 'now'/);
+  assert.match(
+    styles,
+    /\.sessionHoverContent\s*\{[\s\S]*display: flex;[\s\S]*gap: 8px;/,
+  );
+  assert.match(styles, /\.sessionHoverTitle\s*\{[\s\S]*font-size: 14px;/);
+  assert.match(styles, /\.sessionHoverStatus\s*\{[\s\S]*display: flex;/);
+});
+
 test('renders a localized Main label with the current branch and a fallback', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
@@ -1471,7 +1634,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   );
   assert.match(
     source,
-    /const mainLabel = currentBranch === undefined\s+\? t\('worktree\.main'\)\s+: t\('worktree\.mainWithBranch', \{ branch: currentBranch \}\);/,
+    /const\s+mainLabel\s*=\s*currentBranch\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*currentBranch\s*\}\);/,
   );
   assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
@@ -1597,7 +1760,10 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
-  assert.match(source, /sessionIds\.length > 5/);
+  assert.match(
+    source,
+    /isSessionGroupAutoExpanded\(\s*sessionIds,\s*currentSessionId,/,
+  );
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
   assert.match(source, /expandState\.actions\.toggleMain/);
@@ -1644,6 +1810,19 @@ test('does not expose Worktree plus for removed or repair Worktrees', async () =
   );
 
   assert.match(source, /record\.status === 'active' && record\.health !== 'repair'/);
+});
+
+test('uses the native Project-add icon for the Add Workspace button', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /IconProjectAddOutline16/);
+  assert.match(
+    source,
+    /aria-label=\{t\('workspace\.add'\)\}[\s\S]*?<IconProjectAddOutline16 \/>/,
+  );
 });
 
 test('uses the injected expand-state store for structural rows', async () => {

@@ -13,3 +13,16 @@ export type {
   WorktreeConnectionErrorOptions,
   WorktreeConnectionRpc,
 } from './worktree-connection.js';
+export {
+  createWorktreeFullAccessConfirmationController,
+  worktreeFullAccessConfirmationMessage,
+} from './worktree-permission.js';
+export type {
+  WorktreeFullAccessConfirmationController,
+  WorktreeFullAccessConfirmationInput,
+} from './worktree-permission.js';
+export {
+  WORKTREE_PERMISSION_ICON_ATTRIBUTE,
+  decorateWorktreePermissionIcons,
+  installWorktreePermissionIcon,
+} from './worktree-permission-icon.js';

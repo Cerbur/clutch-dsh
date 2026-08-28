@@ -1,4 +1,9 @@
-import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
+import type {
+  WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionResult,
+  WorktreeRecord,
+} from '../contract/index.js';
 import { WorktreeSessionBindingError } from './worktree-view-errors.js';
 
 function browserRandomUuid(): string {
@@ -20,6 +25,27 @@ export function createDefaultWorktreeName(
     if (!usedNames.has(candidate)) return candidate;
   }
   throw new Error('Unable to generate an available default Worktree name.');
+}
+
+/** Generate the next available numeric sibling name for a selected Worktree. */
+export function createNumberedWorktreeName(
+  baseName: string,
+  existingNames: Iterable<string>,
+): string {
+  const normalizedBaseName = baseName.trim();
+  const usedNames = new Set([...existingNames].map((name) => name.trim()));
+  const numberedBase = normalizedBaseName.match(/^(.*)-(\d+)$/);
+  const prefix = numberedBase?.[1] || normalizedBaseName || 'worktree';
+  const parsedNumber = numberedBase === null ? 1 : Number(numberedBase[2]);
+  let number = Number.isSafeInteger(parsedNumber) ? parsedNumber + 1 : 2;
+
+  for (let attempt = 0; attempt < 10000; attempt += 1) {
+    const candidate = `${prefix}-${number}`;
+    if (!usedNames.has(candidate)) return candidate;
+    number += 1;
+  }
+
+  throw new Error('Unable to generate an available numbered Worktree name.');
 }
 
 export interface CreateSessionForWorktreeInput {
@@ -69,6 +95,11 @@ export function resolveWorktreeMove(
 export async function executeWorktreeAction(
   manager: WorktreeManager,
   action: WorktreeViewAction,
+  permission?: Pick<WorktreePermissionManager, 'normalizeDetachedWorktreePermissions'>,
+  onPermissionResult?: (
+    input: { readonly workspaceId: string; readonly worktreeId: string },
+    result: WorktreePermissionResult,
+  ) => void,
 ): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
     return manager.createWorktree(action.input);
@@ -78,6 +109,16 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
+    const result = await permission?.normalizeDetachedWorktreePermissions({
+      workspaceId: action.input.workspaceId,
+      worktreeId: action.input.worktreeId,
+    });
+    if (result !== undefined) {
+      onPermissionResult?.({
+        workspaceId: action.input.workspaceId,
+        worktreeId: action.input.worktreeId,
+      }, result);
+    }
     return;
   }
 }
@@ -89,7 +130,7 @@ export async function executeWorktreeAction(
 export async function createSessionForWorktree(input: CreateSessionForWorktreeInput & {
   readonly createSession: (input: { cwd: string }) => Promise<string>;
   readonly manager: Pick<WorktreeManager, 'bindSession'>;
-  readonly beforeOpen?: (sessionId: string) => void;
+  readonly beforeOpen?: (sessionId: string) => void | Promise<void>;
   readonly openSession: (sessionId: string) => void;
 }): Promise<string> {
   const sessionId = await input.createSession({ cwd: input.cwd });
@@ -102,7 +143,7 @@ export async function createSessionForWorktree(input: CreateSessionForWorktreeIn
   } catch (error) {
     throw new WorktreeSessionBindingError(sessionId, error);
   }
-  input.beforeOpen?.(sessionId);
+  await input.beforeOpen?.(sessionId);
   input.openSession(sessionId);
   return sessionId;
 }

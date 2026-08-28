@@ -16,7 +16,7 @@ const worktree = {
   status: 'active',
 };
 
-test('publishes the nine browser-safe Worktree Manager method names', () => {
+test('publishes the browser-safe Worktree Manager method names', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'listWorktrees',
     'listImportCandidates',
@@ -27,6 +27,8 @@ test('publishes the nine browser-safe Worktree Manager method names', () => {
     'insertWorktreeBefore',
     'listBindings',
     'bindSession',
+    'ensureWorktreePermission',
+    'normalizeDetachedWorktreePermissions',
   ]);
   assert.equal(WORKTREE_REMOTE_METHODS.includes('resolveRuntimeCwd'), false);
 });
@@ -58,6 +60,10 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
               ? ['wt_example']
               : endpoint.endsWith('/removeWorktree')
                 ? null
+                : endpoint.endsWith('/ensureWorktreePermission')
+                  ? { status: 'unverified', retryable: true }
+                : endpoint.endsWith('/normalizeDetachedWorktreePermissions')
+                  ? { status: 'no-op', sessionIds: [], retryable: false }
                 : [];
       return { ok: true, value: { ok: true, value } };
     },

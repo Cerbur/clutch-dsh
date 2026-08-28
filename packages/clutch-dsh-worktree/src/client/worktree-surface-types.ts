@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
 import type {
   PropsLocale,
   PropsRuntime,
@@ -8,12 +9,19 @@ import type {
 import type {
   WorktreeImportCandidate,
   WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionResult,
   WorktreeRecord,
 } from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
 import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
+import type {
+  WorktreeFullAccessConfirmationController,
+} from './worktree-permission.js';
+import type { WorktreeSessionOrderStore } from './worktree-session-order.js';
+import type { WorktreeForkRecoveryStore } from './worktree-session-fork.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
-import type { SessionListLike } from './session-view.js';
+import type { SessionListLike, SessionPresentation } from './session-view.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -23,6 +31,7 @@ import type {
 
 export interface WorkspaceLike {
   readonly workspaceId: string;
+  readonly path: string;
   readonly title: string;
   readonly sessionIds: readonly string[];
 }
@@ -32,15 +41,52 @@ export interface WorkspaceListLike {
   readonly archivedSessionIds?: readonly string[];
 }
 
+export interface WorktreePermissionNotice {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly sessionId?: string;
+  readonly result: WorktreePermissionResult;
+}
+
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly expandState: WorktreeExpandStateStore;
+  readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
+  readonly permission?: Pick<
+    WorktreePermissionManager,
+    'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
+  >;
+  readonly confirmFullAccess?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId: string;
+      readonly cwd: string;
+    },
+  ) => boolean | Promise<boolean>;
+  readonly fullAccessConfirmation?: WorktreeFullAccessConfirmationController;
+  readonly onPermissionResult?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId: string;
+      readonly cwd: string;
+    },
+    result: WorktreePermissionResult,
+  ) => void;
+  readonly onPermissionNotice?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId?: string;
+    },
+    result: WorktreePermissionResult,
+  ) => void;
+  readonly permissionNotice?: ObservableSnapshot<WorktreePermissionNotice | undefined>;
   readonly createWorkspace?: () => Promise<void>;
-  readonly createSessionForWorktree?: (
-    input: CreateSessionForWorktreeInput,
-  ) => Promise<string>;
+  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
   readonly invalidateWorktreeContext?: (workspaceId?: string) => Promise<void>;
   readonly createMainSession?: (workspaceId: string) => void;
   readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
@@ -62,6 +108,8 @@ export interface WorktreeSurfaceInjected {
   readonly renameSession?: (sessionId: string, title: string) => Promise<void>;
   readonly forkSession?: (sessionId: string) => void;
   readonly archiveSession?: (sessionId: string) => Promise<void>;
+  readonly forkRecovery?: WorktreeForkRecoveryStore;
+  readonly retryForkSession?: (key: string) => Promise<void>;
   readonly ensureSessionWorkspace?: (workspaceId: string, sessionId: string) => void;
   readonly syncSessionWorkspaces?: (
     bindings: readonly { workspaceId: string; sessionId: string }[],
@@ -104,6 +152,7 @@ export interface RefreshOptions {
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
+  readonly permissionRequired?: boolean;
 }
 
 export interface SessionRenameTarget {
@@ -144,6 +193,7 @@ export interface WorktreeSessionRowProps {
   readonly blank: boolean;
   readonly current: boolean;
   readonly label: string;
+  readonly presentation?: SessionPresentation;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
   readonly onOpen: () => void;
@@ -156,6 +206,7 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
+  readonly hasOngoingSession: boolean;
   readonly actionPending: boolean;
   readonly menuOpen: boolean;
   readonly drag: WorkspaceDragProps;
@@ -169,9 +220,13 @@ export interface WorktreeWorkspaceRowProps {
 export interface WorktreeGroupMenuProps {
   readonly open: boolean;
   readonly label: string;
+  readonly copyPath: string;
+  readonly showCreate: boolean;
+  readonly showRemove: boolean;
   readonly disabled: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onRemove: () => void;
+  readonly onCreateWorktree?: () => void;
+  readonly onRemove?: () => void;
 }
 
 export type WorktreeGroupKind = 'main' | 'worktree';
@@ -182,6 +237,7 @@ export interface WorktreeGroupRowProps {
   readonly label: string;
   readonly worktreeId?: string;
   readonly expanded: boolean;
+  readonly hasOngoingSession: boolean;
   readonly icon: ReactNode;
   readonly workspaceTitle: string;
   readonly state?: 'done' | 'warning' | 'error';
@@ -201,6 +257,7 @@ export interface WorktreeSessionGroupProps {
   readonly expanded: boolean;
   readonly actionPending: boolean;
   readonly sessions: SessionListLike;
+  readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly dragState: SessionDragState | undefined;
   readonly onToggleExpanded: () => void;
   readonly onStartDrag: (groupKey: string, sessionId: string) => void;

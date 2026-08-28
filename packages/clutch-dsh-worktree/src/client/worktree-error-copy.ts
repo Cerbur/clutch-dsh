@@ -1,4 +1,5 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
+import type { WorktreePermissionResult } from '../contract/index.js';
 import type { WorktreeViewError } from './worktree-view.js';
 import { WORKTREE_NS } from './locales.js';
 
@@ -11,6 +12,22 @@ function detail(error: WorktreeViewError, name: string): string {
 
 function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
   return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
+}
+
+export function formatWorktreePermissionNotice(
+  result: WorktreePermissionResult,
+  t: WorktreeTranslate,
+): string {
+  switch (result.status) {
+    case 'fallback-workspace-write':
+      return t('permission.fallbackWorkspaceWrite');
+    case 'user-restricted':
+      return t('permission.userRestricted');
+    case 'unverified':
+      return t('permission.unverified');
+    default:
+      return t('permission.unavailable');
+  }
 }
 
 export function formatWorktreeViewError(
@@ -58,6 +75,10 @@ export function formatWorktreeViewError(
       });
     case 'SESSION_ALREADY_BOUND':
       return t('error.sessionAlreadyBound');
+    case 'WORKTREE_PERMISSION_CONFIRMATION_REQUIRED':
+      return t('error.worktreePermissionConfirmationRequired');
+    case 'WORKTREE_PERMISSION_FAILED':
+      return t('error.worktreePermissionFailed', { reason: reason(error, t) });
     case 'SESSION_LIST_NOT_READY':
       return t('error.sessionListNotReady');
     case 'SESSION_FACTS_INCOMPLETE':

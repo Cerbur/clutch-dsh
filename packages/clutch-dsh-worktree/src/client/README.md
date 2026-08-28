@@ -8,6 +8,9 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, the nine `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and outer/inner error normalization. The import endpoints are `listImportCandidates` and `importWorktree`; no second transport is added.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
+- Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
+  browser Client serializes concurrent confirmation requests, requires the native checkbox
+  acknowledgement, and fails pending requests closed when the Client fiber is disposed.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 
@@ -27,10 +30,11 @@ text. The browser never reads Git, the sidecar, or a generated `./remote` artifa
 place and the returned WorktreeRecord carries `source: 'external'`.
 
 After registration, Import and Create share the same Session continuation: create or reuse the
-DSH Session at the Worktree cwd, bind it, apply the browser-local native Workspace membership
-projection, open the Session, refresh while preserving ready content, and expose the same Retry /
-Open recovery when Session creation or binding fails. Client disposal aborts both candidate reads
-and import mutations and releases the membership projection.
+DSH Session at the Worktree cwd, bind and open it, then refresh the browser-local native Workspace
+membership projection while preserving ready content. A newly created Worktree Session is not
+eagerly projected before that binding refresh, so it does not briefly appear in Main. The same
+Retry / Open recovery is exposed when Session creation or binding fails. Client disposal aborts
+both candidate reads and import mutations and releases the membership projection.
 
 ## Conversation context
 
@@ -73,13 +77,32 @@ and keeps the Workspace membership projection browser-local. It therefore:
 
 1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
 2. binds the returned Session ID through the injected manager;
-3. projects `{ workspaceId, sessionId }` in browser memory so the current native Workspace list can resolve the Session;
-4. applies that projection at the current upstream Workspace-list `set()` boundary so native subscribers do not observe a raw snapshot first, and replays it after native list refreshes;
-5. removes it when the binding disappears or the Client fiber is disposed.
+3. opens the Session without eagerly projecting a newly created ID into native Workspace membership;
+4. refreshes the binding projection at the current upstream Workspace-list `set()` boundary so the
+   newly bound Session resolves in its Worktree view and native subscribers do not observe a raw
+   snapshot first; the projection is replayed after native list refreshes;
+5. removes the projection when the binding disappears or the Client fiber is disposed.
 
 This projection is not a persistent DSH attach and does not modify DSH source, Session
 metadata or native Workspace storage. A binding failure leaves the created Session ID
 available for retry or direct navigation; it must not trigger Session deletion.
+
+## Forked Worktree Sessions
+
+The Client wraps the shared native `ctx.sessions.fork` service, which is the entry point used by
+the native Workspace Session tab, the Worktree Session menu, and the Conversation fork action.
+The wrapper passes through the native `sessionId`, optional `atSeq`, and `increaseTitle` options.
+After native DSH creates the child, the Client finds the parent's active sidecar binding, calls the
+existing `bindSession` Manager method for the child, and lets the Worktree view refresh read the
+new binding before applying the browser-local `{ workspaceId, sessionId }` membership projection.
+This keeps the child from briefly appearing in Main/Local; refreshes preserve ready content.
+
+The child is never written to DSH's durable `Workspace.sessionIds`. A loaded plugin can therefore
+make the child visible in the browser's temporary Workspace projection, while DSH continues to own
+the global Session record and content. If sidecar lookup or binding fails after native creation, the
+child remains available; the Client exposes retry/open recovery and reconciles eligible non-subagent
+children from native `parentId` summaries during Client startup or later list refreshes. Client
+disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
@@ -97,8 +120,9 @@ The Worktree surface reads DSH sessions.current as the only current-Session fact
 The matching Main, active Worktree, or detached Worktree row receives the current
 marker. When Worktree mode opens or sessions.current changes, the Client clears
 a search that would hide the row, temporarily expands the Workspace/Main/Worktree
-path and five-row Session overflow, and scrolls the row into the nearest visible
-area of the Worktree overlay.
+path, expands the five-row Session overflow only when the current row is outside
+the first five, and scrolls the row into the nearest visible area of the Worktree
+overlay.
 Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
 
 The current Session reveal and suppression are browser-local, in-memory
@@ -126,8 +150,31 @@ The Worktree surface is additive:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
+- Session rows derive one native-compatible status presentation from the DSH Session snapshot.
+  The existing native `StateDot` is reused directly: running, running-subagent, warning, and
+  completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use
+  that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
+  timestamp. The trailing slot swaps to the existing Session menu on hover, focus, or menu-open
+  without adding plugin animation CSS.
+- Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
+  complete title, relative time, and current status; the card is suppressed while the Session menu
+  is open or a row is being dragged.
+- Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
+  search filtering and the five-row limit are applied. When collapsed, the flag renders one native
+  ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions. Main and Worktree share the same parameterized group-row path.
+- A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
+  Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
+  observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates
+  DSH Workspace data for automatic promotion; manual drag updates the local order only after the
+  native DSH ordering call succeeds.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
-- Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and has no Worktree menu; active Worktree rows expose the Worktree options menu and removal confirmation, while detached rows remain visible and read-only;
+- Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and exposes the same options menu for copying its DSH Workspace path; active Worktree rows expose the shared options menu with Copy path and removal confirmation, while detached/removed rows keep only Copy path and remain read-only;
+- Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and
+  exposes the shared options menu with Copy path and, when a current local branch exists, Create new
+  Worktree; active Worktree rows expose Copy path, Create new Worktree, and removal confirmation;
+  detached/removed rows keep only Copy path and remain read-only. Create new Worktree opens the shared
+  Create dialog with the selected row's current branch as the base and the next available numbered name;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, including a Workspace imported from a Git subdirectory after the Host resolves its Git root, and falls back to `Local` / `本地` when it does not;
 - For Worktree creation, Git must be installed and available on `PATH`, plus a repository with an initial commit and at least one local branch. A missing Git executable renders install guidance and no command block; repository, commit, or local-branch prerequisites render copyable setup commands. The Client does not run setup or installation commands or modify Workspace files;
 - Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open. The same complete-value hover behavior is available for the Conversation Header and blank Hero context chips.

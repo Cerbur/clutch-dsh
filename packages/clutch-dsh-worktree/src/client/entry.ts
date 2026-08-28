@@ -16,6 +16,7 @@ import { WorktreeModeAction } from './WorktreeModeAction.js';
 import { WorktreeOverlay } from './WorktreeOverlay.js';
 import { createWorktreeContextProjection } from './worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './worktree-expand-state.js';
+import { createWorktreeSessionOrderStore } from './worktree-session-order.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
 import {
   createVirtualWorkspaceMembership,
@@ -25,6 +26,21 @@ import {
   createWorktreeSessionConnector,
   type WorktreeSessionSnapshotReader,
 } from './worktree-session.js';
+import {
+  createWorktreeFullAccessConfirmationController,
+} from './worktree-permission.js';
+import { installWorktreePermissionIcon } from './worktree-permission-icon.js';
+import type {
+  WorktreePermissionResult,
+} from '../contract/index.js';
+import type {
+  WorktreePermissionNotice,
+} from './worktree-surface-types.js';
+import {
+  createWorktreeSessionForkCoordinator,
+  type WorktreeForkInput,
+  type WorktreeForkSessionListReader,
+} from './worktree-session-fork.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
 
 declare module '@deepseek-ai/cordis' {
@@ -60,11 +76,16 @@ interface WorktreeSessionCreator {
 interface WorkspaceListSnapshot {
   readonly items: readonly {
     readonly workspaceId: string;
+    readonly path: string;
     readonly title: string;
     readonly sessionIds: readonly string[];
   }[];
   readonly recentWorkspaceId?: string;
   readonly archivedSessionIds?: readonly string[];
+}
+
+interface ForkableSessions {
+  fork?: (input: WorktreeForkInput) => Promise<string>;
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
@@ -75,11 +96,33 @@ export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces'
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
 export function apply(ctx: ClientContext): void {
+  if (typeof document !== 'undefined') {
+    ctx.effect(
+      () => installWorktreePermissionIcon(document),
+      'clutch-dsh-worktree: permission icon cleanup',
+    );
+  }
   ctx.effect(
     () => ctx.locale.register(WORKTREE_NS, { zh, en }),
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
+  const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
+  const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
+  const permissionManager = typeof document !== 'undefined' ? manager : undefined;
+  const reportPermissionNotice = (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId?: string;
+    },
+    result: WorktreePermissionResult,
+  ): void => {
+    const visible = result.status === 'fallback-workspace-write' ||
+      result.status === 'user-restricted' ||
+      result.status === 'unverified';
+    permissionNotice.set(visible ? { ...input, result } : undefined);
+  };
   const sessions = ctx.sessions as typeof ctx.sessions & WorktreeSessionCreator;
   const virtualWorkspaceMembership = createVirtualWorkspaceMembership(
     ctx.workspaces.list as unknown as WritableWorkspaceList<WorkspaceListSnapshot>,
@@ -92,6 +135,10 @@ export function apply(ctx: ClientContext): void {
   });
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(
+    () => () => fullAccessConfirmation.dispose(),
+    'clutch-dsh-worktree: Full Access confirmation cleanup',
+  );
+  ctx.effect(
     () => () => virtualWorkspaceMembership.dispose(),
     'clutch-dsh-worktree: Workspace membership cleanup',
   );
@@ -102,6 +149,8 @@ export function apply(ctx: ClientContext): void {
   void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);
+  const sessionOrder = createWorktreeSessionOrderStore(createSnapshotStore);
+  ctx.effect(() => () => sessionOrder.dispose(), 'clutch-dsh-worktree: Session order cleanup');
 
   const ensureSessionWorkspace = (workspaceId: string, sessionId: string): void => {
     virtualWorkspaceMembership.ensure({ workspaceId, sessionId });
@@ -109,14 +158,69 @@ export function apply(ctx: ClientContext): void {
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
   };
+
+  const forkableSessions = ctx.sessions as unknown as ForkableSessions;
+  const nativeFork = forkableSessions.fork;
+  const findWorktreeSessionBinding = async (sessionId: string) => {
+    const workspaceIds = ctx.workspaces.list.getSnapshot().items.map(
+      (workspace) => workspace.workspaceId,
+    );
+    const results = await Promise.allSettled(
+      workspaceIds.map(async (workspaceId) => {
+        const bindings = await manager.listBindings({ workspaceId });
+        return bindings.find(
+          (binding) => binding.sessionId === sessionId && binding.status === 'active',
+        );
+      }),
+    );
+    const found = results.find(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof manager.listBindings>>[number] | undefined> =>
+        result.status === 'fulfilled' && result.value !== undefined,
+    );
+    if (found !== undefined) return found.value;
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failed !== undefined) throw failed.reason;
+    return undefined;
+  };
+  const forkCoordinator = typeof nativeFork !== 'function'
+    ? undefined
+    : createWorktreeSessionForkCoordinator({
+        fork: (input) => nativeFork.call(ctx.sessions, input),
+        findBinding: findWorktreeSessionBinding,
+        bindSession: (input) => manager.bindSession(input),
+        sessions: ctx.sessions.list as unknown as WorktreeForkSessionListReader,
+      });
+  if (forkCoordinator !== undefined) {
+    forkableSessions.fork = (input) => forkCoordinator.fork(input);
+    const reconcileForkChildren = (): void => {
+      void forkCoordinator.reconcile();
+    };
+    const unsubscribeSessionList = ctx.sessions.list.subscribe(reconcileForkChildren);
+    const unsubscribeWorkspaceList = ctx.workspaces.list.subscribe(reconcileForkChildren);
+    ctx.effect(
+      () => () => {
+        unsubscribeSessionList();
+        unsubscribeWorkspaceList();
+        forkCoordinator.dispose();
+        forkableSessions.fork = nativeFork;
+      },
+      'clutch-dsh-worktree: Session fork cleanup',
+    );
+    void forkCoordinator.reconcile();
+  }
   const worktreeSessionConnector = createWorktreeSessionConnector({
     manager,
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
     archivedSessionIds: () =>
-      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot)
-        .archivedSessionIds ?? [],
+      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot).archivedSessionIds ??
+      [],
     createSession: async (input) => String(await sessions.create(input)),
     ensureSessionWorkspace,
+    permission: permissionManager,
+    confirmFullAccess: permissionManager === undefined
+      ? undefined
+      : fullAccessConfirmation.request,
+    onPermissionResult: reportPermissionNotice,
     openSession: (sessionId) => {
       ctx.sessions.open(sessionId as SessionId);
     },
@@ -162,8 +266,19 @@ export function apply(ctx: ClientContext): void {
         inject: () => ({
           available: true,
           expandState,
+          sessionOrder,
           hooks: { worktreeContext: contextProjection.store },
           manager,
+          permission: permissionManager,
+          confirmFullAccess: permissionManager === undefined
+            ? undefined
+            : fullAccessConfirmation.request,
+          fullAccessConfirmation: typeof document === 'undefined'
+            ? undefined
+            : fullAccessConfirmation,
+          onPermissionResult: reportPermissionNotice,
+          onPermissionNotice: reportPermissionNotice,
+          permissionNotice,
           createWorkspace: async () => {
             const workspacePath = await ctx.workspaces.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
@@ -183,14 +298,9 @@ export function apply(ctx: ClientContext): void {
             );
           },
           deleteWorkspace: async (workspaceId: string) => {
-            await ctx.workspaces.delete(
-              workspaceId as Parameters<typeof ctx.workspaces.delete>[0],
-            );
+            await ctx.workspaces.delete(workspaceId as Parameters<typeof ctx.workspaces.delete>[0]);
           },
-          insertWorkspaceBefore: async (
-            workspaceId: string,
-            beforeWorkspaceId?: string,
-          ) => {
+          insertWorkspaceBefore: async (workspaceId: string, beforeWorkspaceId?: string) => {
             await ctx.workspaces.insertBefore(
               workspaceId as Parameters<typeof ctx.workspaces.insertBefore>[0],
               beforeWorkspaceId as Parameters<typeof ctx.workspaces.insertBefore>[1],
@@ -211,11 +321,12 @@ export function apply(ctx: ClientContext): void {
             workspaceId: string,
             worktreeId: string,
             beforeWorktreeId?: string,
-          ) => manager.insertWorktreeBefore({
-            workspaceId,
-            worktreeId,
-            beforeWorktreeId,
-          }),
+          ) =>
+            manager.insertWorktreeBefore({
+              workspaceId,
+              worktreeId,
+              beforeWorktreeId,
+            }),
           renameSession: async (sessionId: string, title: string) => {
             const session = ctx.sessions.binding(sessionId as SessionId)?.session;
             if (session === undefined) throw new Error(`unknown session "${sessionId}"`);
@@ -223,6 +334,7 @@ export function apply(ctx: ClientContext): void {
             if (!result.ok) throw new Error(result.error.message);
           },
           forkSession: (sessionId: string) => {
+            if (forkableSessions.fork === undefined) return;
             void ctx.sessions.fork({
               sessionId: sessionId as SessionId,
               increaseTitle: true,
@@ -240,6 +352,12 @@ export function apply(ctx: ClientContext): void {
             ),
           ensureSessionWorkspace,
           syncSessionWorkspaces,
+          forkRecovery: forkCoordinator?.recovery,
+          retryForkSession: forkCoordinator === undefined
+            ? undefined
+            : async (key: string) => {
+                await forkCoordinator.retry(key);
+              },
           openSession: (sessionId: string) => {
             ctx.sessions.open(sessionId as SessionId);
           },

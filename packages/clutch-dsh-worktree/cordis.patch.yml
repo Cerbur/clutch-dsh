@@ -1,3 +1,24 @@
+- id: permission
+  # DSH patch rows replace the whole config. Keep the upstream presets and add
+  # one named bundle; the plugin applies it only after an active Worktree
+  # binding is confirmed by the Host.
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+      worktree-full-access:
+        sandbox: danger-full-access
+        approval: ask
+        name: Worktree Full Access
+        description: Full file access for Worktree metadata while keeping approval prompts enabled.
+
 - insert:
     - id: clutch-dsh-worktree-host
       name: '@cerbur/clutch-dsh-worktree'

@@ -30,6 +30,8 @@ const expectedRemoteKeys = [
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
+  'ensureWorktreePermission',
+  'normalizeDetachedWorktreePermissions',
 ] as const;
 
 type Equal<Left, Right> =

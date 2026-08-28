@@ -1,5 +1,41 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.7 — 2026-08-28
+
+### 中文
+
+#### 新增
+
+- 为绑定 Worktree 的 Session 提供经原生确认的完整访问权限流程，并继续保留审批提示。
+- 使用原生 Workspace 添加图标作为 Worktree 入口。
+- 支持从 Worktree 菜单复制路径。
+- 支持显示 Session 的原生工作状态。
+- 在 Worktree 菜单中提供 active Worktree 创建入口，并支持 Local Worktree 创建。
+- 支持将 fork 出的 Session 绑定到 Worktree。
+
+#### 优化
+
+- 优化 Session 状态点、尾部布局和可见位置，并恢复 Session header hover card 与原生 hover 详情。
+- 保留手动 Session overflow 展开状态。
+- 延迟 fork Session 的 Worktree membership 投影，避免过早显示不完整关系。
+
+### English
+
+#### Added
+
+- Add a native-confirmed Full Access flow for Sessions bound to a Worktree while keeping approval prompts enabled.
+- Use the native Workspace add icon as the Worktree entry point.
+- Add a copy-path action to the Worktree menu.
+- Show the native working state for Sessions.
+- Add an active Worktree creation entry to the Worktree menu and support Local Worktree creation.
+- Bind forked Sessions to their Worktree.
+
+#### Improved
+
+- Improve Session status dots, trailing layout, and visible placement, and restore the Session header hover card and native hover details.
+- Preserve manual Session overflow expansion.
+- Delay forked Session Worktree membership projection to avoid showing an incomplete relationship too early.
+
 ## 0.1.6 — 2026-08-26
 
 ### 中文

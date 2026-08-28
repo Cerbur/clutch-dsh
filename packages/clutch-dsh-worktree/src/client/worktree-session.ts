@@ -2,6 +2,8 @@ import type {
   SessionBinding,
   WorktreeHealth,
   WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionResult,
   WorktreeStatus,
 } from '../contract/index.js';
 import {
@@ -9,6 +11,9 @@ import {
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
 } from './worktree-view.js';
+import { WorktreeSessionPermissionError } from './worktree-view-errors.js';
+
+export { WorktreeSessionPermissionError } from './worktree-view-errors.js';
 
 export interface WorktreeSessionSummary {
   readonly blank?: boolean;
@@ -70,6 +75,22 @@ export interface WorktreeSessionConnectorOptions {
   readonly createSession: (input: { readonly cwd: string }) => Promise<string>;
   readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
+  readonly permission?: Pick<WorktreePermissionManager, 'ensureWorktreePermission'>;
+  readonly confirmFullAccess?: (input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly sessionId: string;
+    readonly cwd: string;
+  }) => boolean | Promise<boolean>;
+  readonly onPermissionResult?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId: string;
+      readonly cwd: string;
+    },
+    result: WorktreePermissionResult,
+  ) => void;
 }
 
 export interface WorktreeSessionConnector {
@@ -79,6 +100,72 @@ export interface WorktreeSessionConnector {
 
 export interface PendingWorktreeSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
+  readonly permissionRequired?: boolean;
+}
+
+interface EnsureWorktreeSessionPermissionInput {
+  readonly permission?: Pick<WorktreePermissionManager, 'ensureWorktreePermission'>;
+  readonly confirmFullAccess?: WorktreeSessionConnectorOptions['confirmFullAccess'];
+  readonly onPermissionResult?: WorktreeSessionConnectorOptions['onPermissionResult'];
+  readonly sessionId: string;
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly cwd: string;
+  readonly createdSession: boolean;
+}
+
+/**
+ * Keep the confirmation and second permission call in one place for new,
+ * reused, and retried Sessions. The Host still validates the relation.
+ */
+export async function ensureWorktreeSessionPermission(
+  input: EnsureWorktreeSessionPermissionInput,
+): Promise<void> {
+  if (input.permission === undefined) return;
+  const request = {
+    workspaceId: input.workspaceId,
+    worktreeId: input.worktreeId,
+    sessionId: input.sessionId,
+    binding: 'active' as const,
+  };
+  let result: WorktreePermissionResult;
+  try {
+    result = await input.permission.ensureWorktreePermission(request);
+  } catch (error) {
+    throw new WorktreeSessionPermissionError(input.sessionId, input.createdSession, error);
+  }
+  if (result.status === 'confirmation-required') {
+    let confirmed: boolean;
+    try {
+      confirmed = input.confirmFullAccess === undefined
+        ? false
+        : await input.confirmFullAccess({
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+            sessionId: input.sessionId,
+            cwd: input.cwd,
+          });
+    } catch (error) {
+      throw new WorktreeSessionPermissionError(input.sessionId, input.createdSession, error);
+    }
+    if (!confirmed) {
+      throw new WorktreeSessionPermissionError(input.sessionId, input.createdSession);
+    }
+    try {
+      result = await input.permission.ensureWorktreePermission({ ...request, confirmed: true });
+    } catch (error) {
+      throw new WorktreeSessionPermissionError(input.sessionId, input.createdSession, error);
+    }
+  }
+  if (result.status === 'confirmation-required') {
+    throw new WorktreeSessionPermissionError(input.sessionId, input.createdSession);
+  }
+  input.onPermissionResult?.({
+    workspaceId: input.workspaceId,
+    worktreeId: input.worktreeId,
+    sessionId: input.sessionId,
+    cwd: input.cwd,
+  }, result);
 }
 
 export function resolveWorktreeSessionAction(
@@ -169,6 +256,9 @@ export async function retryWorktreeSessionBinding(input: {
   readonly archived: boolean;
   readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
+  readonly permission?: Pick<WorktreePermissionManager, 'ensureWorktreePermission'>;
+  readonly confirmFullAccess?: WorktreeSessionConnectorOptions['confirmFullAccess'];
+  readonly onPermissionResult?: WorktreeSessionConnectorOptions['onPermissionResult'];
 }): Promise<string> {
   if (input.archived) {
     throw new WorktreeSessionActionError('SESSION_ARCHIVED', '', false, {
@@ -184,6 +274,16 @@ export async function retryWorktreeSessionBinding(input: {
   } catch (error) {
     throw new WorktreeSessionBindingError(input.pending.sessionId, error);
   }
+  await ensureWorktreeSessionPermission({
+    permission: input.permission,
+    confirmFullAccess: input.confirmFullAccess,
+    onPermissionResult: input.onPermissionResult,
+    sessionId: input.pending.sessionId,
+    workspaceId: input.pending.workspaceId,
+    worktreeId: input.pending.worktreeId,
+    cwd: input.pending.cwd,
+    createdSession: true,
+  });
   input.ensureSessionWorkspace(input.pending.workspaceId, input.pending.sessionId);
   input.openSession(input.pending.sessionId);
   return input.pending.sessionId;
@@ -218,6 +318,16 @@ export function createWorktreeSessionConnector(
       bindings,
     });
     if (action.kind === 'open-bound') {
+      await ensureWorktreeSessionPermission({
+        permission: options.permission,
+        confirmFullAccess: options.confirmFullAccess,
+        onPermissionResult: options.onPermissionResult,
+        sessionId: action.sessionId,
+        workspaceId: input.workspaceId,
+        worktreeId: input.worktreeId,
+        cwd: input.cwd,
+        createdSession: false,
+      });
       options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
       if (!disposed) options.openSession(action.sessionId);
       return action.sessionId;
@@ -232,6 +342,16 @@ export function createWorktreeSessionConnector(
       } catch (error) {
         throw new WorktreeSessionBindingError(action.sessionId, error);
       }
+      await ensureWorktreeSessionPermission({
+        permission: options.permission,
+        confirmFullAccess: options.confirmFullAccess,
+        onPermissionResult: options.onPermissionResult,
+        sessionId: action.sessionId,
+        workspaceId: input.workspaceId,
+        worktreeId: input.worktreeId,
+        cwd: input.cwd,
+        createdSession: false,
+      });
       if (!disposed) {
         options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
         if (!disposed) options.openSession(action.sessionId);
@@ -244,9 +364,18 @@ export function createWorktreeSessionConnector(
       ...input,
       createSession: options.createSession,
       manager: options.manager,
-      beforeOpen: (sessionId) => {
+      beforeOpen: async (sessionId) => {
         if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
-        options.ensureSessionWorkspace(input.workspaceId, sessionId);
+        await ensureWorktreeSessionPermission({
+          permission: options.permission,
+          confirmFullAccess: options.confirmFullAccess,
+          onPermissionResult: options.onPermissionResult,
+          sessionId,
+          workspaceId: input.workspaceId,
+          worktreeId: input.worktreeId,
+          cwd: input.cwd,
+          createdSession: true,
+        });
       },
       openSession: (sessionId) => {
         if (!disposed) options.openSession(sessionId);
