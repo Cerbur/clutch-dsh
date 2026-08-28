@@ -52,7 +52,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
 - Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
-- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow, clears a hiding search, and scrolls the row into view; this browser-local behavior does not change persisted expansion choices.
+- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow only when the row is outside the first five, clears a hiding search, and scrolls the row into view; this browser-local behavior does not change persisted expansion choices.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
 - Keep Conversation and Hero context stable across same-Session snapshot updates and Session
@@ -236,8 +236,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
    diagnostic text.
 3. Choose an option and select `Import Worktree`. Registration writes only the plugin sidecar;
    the existing Worktree directory and Git working state remain in place. Import then creates or
-   reuses a Session at that Worktree cwd and runs the same bind → membership projection → open →
-   refresh flow as Create.
+   reuses a Session at that Worktree cwd and runs the same bind → open → binding refresh flow as
+   Create. Newly created Sessions are not projected into native Workspace membership before the
+   binding refresh.
 4. An active external import for the same Workspace and physical path is idempotent. A path already
    managed by the plugin returns `WORKTREE_ALREADY_MANAGED`; invalid or stale candidates return
    `WORKTREE_IMPORT_INVALID` and can be retried after the repository state is fixed.
@@ -247,12 +248,12 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - Use Main's `+` to create a normal DSH Session in the Project-root view.
 - Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The
   plugin calls the upstream runtime with `session.create({ cwd: worktreePath })`, then saves the
-  external binding, applies a browser-local `{ workspaceId, sessionId }` membership projection,
-  and opens the Session.
+  external binding and opens the Session. The browser-local `{ workspaceId, sessionId }` membership
+  projection is refreshed afterward, so the newly created Session does not briefly appear in Main.
 - The connector reuses an unarchived blank Session with the exact target cwd when possible. An
   already-bound Session opens directly; an unbound candidate is bound before projection and
-  opening. Otherwise the flow is `create → bind → project → open`, and concurrent clicks for the
-  same Worktree are coalesced.
+  opening. Otherwise the new-Session flow is `create → bind → open → refresh`, and concurrent
+  clicks for the same Worktree are coalesced.
 - If binding fails after DSH has created the Session, the Session ID remains available for Retry
   or Open recovery. The plugin does not delete or mutate that DSH Session.
 - Before opening an active Worktree Session, the plugin explains in a DSH-styled in-page dialog why

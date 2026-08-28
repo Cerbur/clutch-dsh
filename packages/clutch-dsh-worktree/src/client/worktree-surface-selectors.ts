@@ -141,3 +141,11 @@ export function currentSessionRevealKeys(
     'session-group:' + location.groupKey,
   ];
 }
+
+export function shouldRevealCurrentSessionGroup(
+  sessionIds: readonly string[],
+  currentSessionId: string | undefined,
+): boolean {
+  if (currentSessionId === undefined || sessionIds.length <= 5) return false;
+  return sessionIds.indexOf(currentSessionId) >= 5;
+}

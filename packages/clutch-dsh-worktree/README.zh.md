@@ -45,7 +45,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
-- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径和 Session 五行溢出，清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
+- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
 - 在同一个 Session 的 snapshot 更新以及 Session 切换期间保持 Conversation 和 Hero 上下文
@@ -221,7 +221,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
    作为诊断信息。
 3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
    工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的
-   `bind → membership projection → open → refresh` 流程。
+   `bind → open → binding refresh` 流程；新建 Session 不会在 binding 刷新前投影到原生
+   Workspace membership。
 4. 同一 Workspace、同一物理路径的 active external 导入是幂等的。已经由 plugin 管理的路径
    返回 `WORKTREE_ALREADY_MANAGED`；无效或过期候选项返回 `WORKTREE_IMPORT_INVALID`，修复
    repository 状态后可以重试。
@@ -230,11 +231,12 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
 - 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 upstream
-  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding，在当前浏览器内
-  应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
+  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding 并打开该 Session。
+  当前浏览器内的 `{ workspaceId, sessionId }` membership projection 会在之后刷新，因此新建
+  Session 不会短暂出现在 Main 中。
 - 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
   会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
-  `create → bind → project → open`，同一个 Worktree 的并发点击会合并。
+  新建路径执行 `create → bind → open → refresh`，同一个 Worktree 的并发点击会合并。
 - 如果 DSH 创建 Session 后 binding 失败，Session ID 仍会保留，可用于 Retry 或 Open 恢复。
   插件不会删除或修改该 DSH Session。
 - 打开 active Worktree Session 前，插件会在 DSH 风格的页面内弹窗中说明关联 Git 元数据为什么

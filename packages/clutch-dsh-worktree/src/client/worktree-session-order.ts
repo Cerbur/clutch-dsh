@@ -145,8 +145,11 @@ export function nextSessionOrderAccount(input: {
   }
 
   const observedUpdatedAt: Record<string, number> = {};
+  const previousIds = new Set(previous.order);
+  const newlyObserved: string[] = [];
   const promoted: { id: string; timestamp: number; index: number }[] = [];
   for (const [index, id] of order.entries()) {
+    if (!previousIds.has(id)) newlyObserved.push(id);
     const previousTimestamp = previous.observedUpdatedAt[id];
     const timestamp = input.updatedAtById[id];
     if (isValidTimestamp(previousTimestamp)) observedUpdatedAt[id] = previousTimestamp;
@@ -161,9 +164,16 @@ export function nextSessionOrderAccount(input: {
   }
 
   promoted.sort((left, right) => right.timestamp - left.timestamp || left.index - right.index);
-  const promotedIds = new Set(promoted.map(({ id }) => id));
+  const promotedIds = new Set([
+    ...newlyObserved,
+    ...promoted.map(({ id }) => id),
+  ]);
   return {
-    order: [...promoted.map(({ id }) => id), ...order.filter((id) => !promotedIds.has(id))],
+    order: [
+      ...newlyObserved,
+      ...promoted.map(({ id }) => id),
+      ...order.filter((id) => !promotedIds.has(id)),
+    ],
     observedUpdatedAt,
   };
 }

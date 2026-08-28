@@ -87,8 +87,9 @@ The new test must fail because the module/API is absent.
 ### Green
 
 Implement a deterministic pure transition and a small snapshot store. The transition reconciles
-IDs, records first-seen timestamps without mass promotion, promotes strictly newer timestamps,
-and retains the highest observed value. The store persists only account keys, Session IDs, and
+IDs, moves newly observed IDs to the account head in incoming order, records first-seen
+timestamps without re-sorting the initial baseline, promotes strictly newer timestamps, and
+retains the highest observed value. The store persists only account keys, Session IDs, and
 numeric timestamps, normalizes malformed storage, and exposes `getSnapshot`, `subscribe`,
 `reconcile`, `setOrder`, and `dispose`.
 
@@ -237,8 +238,9 @@ outside this task.
 
 - Implemented the browser-safe native Session status/time projection, including pending
   interaction, completed, and subagent lineage states, while reusing the upstream `StateDot`.
-- Implemented independent browser-local per-group Session ordering with strict `updatedAt`
-  promotion; automatic promotion does not call DSH ordering or mutate the sidecar.
+- Implemented independent browser-local per-group Session ordering: newly observed Sessions enter
+  the account head, existing Sessions use strict `updatedAt` promotion, and automatic promotion
+  does not call DSH ordering or mutate the sidecar.
 - Wired complete-membership ongoing aggregation to Workspace, Main, and Worktree rows, with
   collapsed-only indicators and hover/focus/menu action handoff.
 - Synchronized `README.md`, `README.zh.md`, and `src/client/README.md` with the confirmed design.
@@ -254,3 +256,14 @@ outside this task.
 - Removed the empty leading status slot so Session titles retain the requested left alignment.
 - Added and passed a focused regression assertion for the right-only status rail; the package test
   suite remains 278/278 passing.
+
+## Regression follow-up checkpoint — 2026-08-28
+
+- Traced the new-Session-at-tail regression to the order test and implementation introduced by
+  `7f3e555`, which intentionally appended first-seen IDs and therefore contradicted the requested
+  native queue-head behavior.
+- Traced the Worktree-to-Main flash to the create path projecting native Workspace membership in
+  `beforeOpen` before the binding refresh; restored the earlier create ordering so new Worktree
+  Sessions bind and open before the refreshed projection adds them to the Worktree view.
+- Added focused regressions for newly observed IDs and create/membership timing; focused tests pass
+  46/46. Full package verification remains to be run after this follow-up.

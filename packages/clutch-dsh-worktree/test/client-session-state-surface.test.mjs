@@ -49,3 +49,13 @@ test('does not define a second StateDot animation in the Worktree CSS', async ()
   assert.doesNotMatch(css, /@keyframes/);
   assert.doesNotMatch(css, /animation(?:-name|-delay)?\s*:/);
 });
+
+test('keeps Session titles roomy and offsets trailing time from Worktree actions', async () => {
+  const { css } = await sources();
+
+  assert.match(
+    css,
+    /\.sessionTrailing\s*\{[\s\S]*?flex:\s*0 0 52px;[\s\S]*?width:\s*52px;/,
+  );
+  assert.match(css, /\.sessionTime\s*\{[\s\S]*?margin-right:\s*4px;/);
+});

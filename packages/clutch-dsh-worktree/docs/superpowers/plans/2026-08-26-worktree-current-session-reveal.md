@@ -85,7 +85,8 @@ Files:
 Interfaces:
 
 - Consumes: a current Session ID, Workspace membership items, and the latest ready WorktreeWorkspaceView list.
-- Produces: CurrentSessionLocation, resolveCurrentSessionLocation, and currentSessionRevealKeys for WorktreeSurface and later tests.
+- Produces: CurrentSessionLocation, resolveCurrentSessionLocation, currentSessionRevealKeys, and
+  shouldRevealCurrentSessionGroup for WorktreeSurface and focused tests.
 
 - [ ] Step 1: Write failing selector tests.
 
@@ -499,7 +500,7 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
-  assert.match(source, /sessionIds\.length > 5/);
+  assert.match(source, /shouldRevealCurrentSessionGroup\(sessionIds, currentSessionId\)/);
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
   assert.match(source, /expandState\.actions\.toggleMain/);
@@ -623,12 +624,14 @@ const worktreeExpanded =
 ~~~
 
 The Session group effective value must preserve existing transient state and
-add the current reveal key:
+add the current reveal key only when the current Session is outside the first
+five rows:
 
 ~~~ts
 const sessionGroupExpanded =
   expandedSessionGroups[groupKey] === true ||
-  isCurrentSessionReveal('session-group:' + groupKey);
+  (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
+    isCurrentSessionReveal('session-group:' + groupKey));
 ~~~
 
 Use these effective values for row props and WorktreeSessionGroup expanded.
@@ -744,8 +747,9 @@ overflow controls. The Main call must retain its existing group key and add:
 ~~~tsx
 groupKey={mainGroupKey}
 currentSessionId={currentSessionId}
-expanded={expandedSessionGroups[mainGroupKey] === true ||
-  isCurrentSessionReveal('session-group:' + mainGroupKey)}
+  expanded={expandedSessionGroups[mainGroupKey] === true ||
+  (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
+    isCurrentSessionReveal('session-group:' + mainGroupKey))}
 onToggleExpanded={() => {
   toggleSessionGroup(mainGroupKey);
 }}
@@ -1021,13 +1025,13 @@ Expected: FAIL only for the new current-Session documentation assertions.
 Add one English capability bullet near the existing expansion-state bullet:
 
 ~~~text
-- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow, clears a hiding search, and scrolls the row into view without changing persisted expansion choices.
+- Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow only when the row is outside the first five, clears a hiding search, and scrolls the row into view without changing persisted expansion choices.
 ~~~
 
 Add the corresponding Chinese bullet in the same capability position:
 
 ~~~text
-- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径和 Session 五行溢出，清空隐藏它的搜索并滚动定位，同时不改变已保存的展开选择。
+- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位，同时不改变已保存的展开选择。
 ~~~
 
 Keep the bilingual source-of-truth wording, storage key, Session naming, and
@@ -1045,8 +1049,9 @@ The Worktree surface reads DSH sessions.current as the only current-Session fact
 The matching Main, active Worktree, or detached Worktree row receives the current
 marker. When Worktree mode opens or sessions.current changes, the Client clears
 a search that would hide the row, temporarily expands the Workspace/Main/Worktree
-path and five-row Session overflow, and scrolls the row into the nearest visible
-area of the Worktree overlay.
+path, expands the five-row Session overflow only when the current row is outside
+the first five, and scrolls the row into the nearest visible area of the Worktree
+overlay.
 
 Reveal and suppression are in-memory presentation state. Automatic reveal never
 mutates clutch-dsh-worktree.expand-state, DSH Workspace/Session data, Worktree
@@ -1143,3 +1148,12 @@ wt-worktree-0.1.6/feat-current-session-reveal after the existing spec commit
 Do not rebase, merge, push, publish, or modify the release worktree as part of
 executing this plan. The release-branch rebase/merge gate is handled separately
 after this feature worktree has been reviewed and authorized.
+
+## Regression follow-up — 2026-08-28
+
+The current-session reveal originally expanded any Session group with more than
+five rows. After Session ordering was corrected to put a newly observed Session
+at the account head, that rule expanded the whole Worktree unnecessarily after
+creation. The implementation now expands Session overflow only when the current
+Session is outside the first five rows; structural ancestor reveal and
+overlay-scoped positioning remain unchanged.

@@ -54,6 +54,7 @@ import {
   isCompleteWorktreeWorkspaceSnapshot,
   currentSessionRevealKeys,
   resolveCurrentSessionLocation,
+  shouldRevealCurrentSessionGroup,
   workspaceMatches,
 } from './worktree-surface-selectors.js';
 import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
@@ -1340,7 +1341,7 @@ export function WorktreeSurface({
                       : visibleMainSessionIds;
                   const mainSessionGroupExpanded =
                     expandedSessionGroups[mainGroupKey] === true ||
-                    (sessionIds.length > 5 &&
+                    (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
                       isCurrentSessionReveal('session-group:' + mainGroupKey));
                   const worktrees = view?.worktrees ?? [];
                   const sameWorkspaceWorktreeDrag =
@@ -1538,7 +1539,7 @@ export function WorktreeSurface({
                                 : visibleWorktreeSessionIds;
                             const sessionGroupExpanded =
                               expandedSessionGroups[worktreeGroupKey] === true ||
-                              (sessionIds.length > 5 &&
+                              (shouldRevealCurrentSessionGroup(sessionIds, currentSessionId) &&
                                 isCurrentSessionReveal('session-group:' + worktreeGroupKey));
                             const state =
                               record.status === 'removed'

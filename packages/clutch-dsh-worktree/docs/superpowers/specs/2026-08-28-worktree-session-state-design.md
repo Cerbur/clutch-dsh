@@ -167,9 +167,9 @@ type SessionOrderAccount =
 For each account, the pure transition:
 
 1. removes IDs no longer present;
-2. appends new IDs in incoming DSH/plugin order;
-3. records timestamps without promoting on first observation;
-4. promotes Sessions with strictly newer valid timestamps, newest first;
+2. promotes IDs absent from the previous account order to the head, preserving incoming order;
+3. records timestamps for first observations without re-sorting the initial baseline;
+4. promotes existing Sessions with strictly newer valid timestamps, newest first;
 5. records the highest observed timestamp;
 6. preserves manual order until a later activity promotion.
 
@@ -186,6 +186,8 @@ only after success.
 - Host, Provider, Manage, sidecar schema, and transport remain unchanged.
 - Refresh/error transitions preserve usable ready content and current order; malformed optional
   fields degrade only their signal.
+- A newly created Worktree Session is not eagerly projected into native Workspace membership before
+  binding refresh; the refreshed binding projection prevents a transient Main row.
 - Dispose removes the browser store subscription and performs no external mutation.
 - State labels are visually hidden but localized; animation/color is never the only status
   signal. Blank rows have no misleading metadata.

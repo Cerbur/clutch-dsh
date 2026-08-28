@@ -96,13 +96,13 @@ test('orders multiple promoted Sessions by newest timestamp and preserves manual
   );
 });
 
-test('appends new IDs and prunes removed IDs without promoting a first observation', () => {
+test('promotes a newly observed Session to the head while pruning removed IDs', () => {
   assert.deepEqual(
     nextSessionOrderAccount({
-      baseIds: ['b', 'd'],
+      baseIds: ['new', 'b'],
       updatedAtById: timestamps([
+        ['new', 40],
         ['b', 20],
-        ['d', 40],
       ]),
       previous: {
         order: ['a', 'b', 'c'],
@@ -110,8 +110,8 @@ test('appends new IDs and prunes removed IDs without promoting a first observati
       },
     }),
     {
-      order: ['b', 'd'],
-      observedUpdatedAt: { b: 20, d: 40 },
+      order: ['new', 'b'],
+      observedUpdatedAt: { new: 40, b: 20 },
     },
   );
 });

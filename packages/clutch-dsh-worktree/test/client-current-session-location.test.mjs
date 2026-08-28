@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   currentSessionRevealKeys,
   resolveCurrentSessionLocation,
+  shouldRevealCurrentSessionGroup,
 } from '../lib/client/worktree-surface-selectors.js';
 
 const workspaces = [
@@ -143,4 +144,25 @@ test('derives stable reveal keys from IDs and not labels or array positions', ()
     'worktree:wt-active',
     'session-group:worktree:wt-active',
   ]);
+});
+
+test('reveals Session overflow only when the current Session is outside the first five rows', () => {
+  assert.equal(
+    shouldRevealCurrentSessionGroup(
+      ['session-new', 'session-2', 'session-3', 'session-4', 'session-5', 'session-6'],
+      'session-new',
+    ),
+    false,
+  );
+  assert.equal(
+    shouldRevealCurrentSessionGroup(
+      ['session-1', 'session-2', 'session-3', 'session-4', 'session-5', 'session-current'],
+      'session-current',
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRevealCurrentSessionGroup(['session-1', 'session-2'], undefined),
+    false,
+  );
 });

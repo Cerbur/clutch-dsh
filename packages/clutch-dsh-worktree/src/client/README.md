@@ -30,10 +30,11 @@ text. The browser never reads Git, the sidecar, or a generated `./remote` artifa
 place and the returned WorktreeRecord carries `source: 'external'`.
 
 After registration, Import and Create share the same Session continuation: create or reuse the
-DSH Session at the Worktree cwd, bind it, apply the browser-local native Workspace membership
-projection, open the Session, refresh while preserving ready content, and expose the same Retry /
-Open recovery when Session creation or binding fails. Client disposal aborts both candidate reads
-and import mutations and releases the membership projection.
+DSH Session at the Worktree cwd, bind and open it, then refresh the browser-local native Workspace
+membership projection while preserving ready content. A newly created Worktree Session is not
+eagerly projected before that binding refresh, so it does not briefly appear in Main. The same
+Retry / Open recovery is exposed when Session creation or binding fails. Client disposal aborts
+both candidate reads and import mutations and releases the membership projection.
 
 ## Conversation context
 
@@ -76,9 +77,11 @@ and keeps the Workspace membership projection browser-local. It therefore:
 
 1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
 2. binds the returned Session ID through the injected manager;
-3. projects `{ workspaceId, sessionId }` in browser memory so the current native Workspace list can resolve the Session;
-4. applies that projection at the current upstream Workspace-list `set()` boundary so native subscribers do not observe a raw snapshot first, and replays it after native list refreshes;
-5. removes it when the binding disappears or the Client fiber is disposed.
+3. opens the Session without eagerly projecting a newly created ID into native Workspace membership;
+4. refreshes the binding projection at the current upstream Workspace-list `set()` boundary so the
+   newly bound Session resolves in its Worktree view and native subscribers do not observe a raw
+   snapshot first; the projection is replayed after native list refreshes;
+5. removes the projection when the binding disappears or the Client fiber is disposed.
 
 This projection is not a persistent DSH attach and does not modify DSH source, Session
 metadata or native Workspace storage. A binding failure leaves the created Session ID
@@ -100,8 +103,9 @@ The Worktree surface reads DSH sessions.current as the only current-Session fact
 The matching Main, active Worktree, or detached Worktree row receives the current
 marker. When Worktree mode opens or sessions.current changes, the Client clears
 a search that would hide the row, temporarily expands the Workspace/Main/Worktree
-path and five-row Session overflow, and scrolls the row into the nearest visible
-area of the Worktree overlay.
+path, expands the five-row Session overflow only when the current row is outside
+the first five, and scrolls the row into the nearest visible area of the Worktree
+overlay.
 Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
 
 The current Session reveal and suppression are browser-local, in-memory

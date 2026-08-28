@@ -376,7 +376,6 @@ export function createWorktreeSessionConnector(
           cwd: input.cwd,
           createdSession: true,
         });
-        options.ensureSessionWorkspace(input.workspaceId, sessionId);
       },
       openSession: (sessionId) => {
         if (!disposed) options.openSession(sessionId);
