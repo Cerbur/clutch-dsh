@@ -25,7 +25,7 @@ function sessionList(overrides = {}) {
   };
 }
 
-test('forks with native options, binds the child, and projects Worktree membership', async () => {
+test('forks with native options and waits for Worktree membership refresh', async () => {
   const calls = [];
   const coordinator = createWorktreeSessionForkCoordinator({
     fork: async (input) => {
@@ -42,6 +42,9 @@ test('forks with native options, binds the child, and projects Worktree membersh
     },
     ensureSessionWorkspace: (workspaceId, sessionId) => {
       calls.push(['ensureSessionWorkspace', workspaceId, sessionId]);
+    },
+    onBound: (childBinding) => {
+      calls.push(['onBound', childBinding]);
     },
   });
 
@@ -60,7 +63,12 @@ test('forks with native options, binds the child, and projects Worktree membersh
       worktreeId: 'worktree-one',
       sessionId: 'child-session',
     }],
-    ['ensureSessionWorkspace', 'workspace-one', 'child-session'],
+    ['onBound', {
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionId: 'child-session',
+      status: 'active',
+    }],
   ]);
   assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
   assert.equal(coordinator.recovery.getSnapshot().revision, 1);
@@ -87,7 +95,7 @@ test('leaves a Main Session fork alone when no active Worktree binding exists', 
   coordinator.dispose();
 });
 
-test('keeps the native child when sidecar binding fails and retries the same child', async () => {
+test('keeps the native child when sidecar binding fails and retries without eager projection', async () => {
   let shouldFail = true;
   const ensured = [];
   const coordinator = createWorktreeSessionForkCoordinator({
@@ -115,7 +123,7 @@ test('keeps the native child when sidecar binding fails and retries the same chi
 
   shouldFail = false;
   assert.equal(await coordinator.retry(failed.pending[0].key), true);
-  assert.deepEqual(ensured, [['workspace-one', 'child-session']]);
+  assert.deepEqual(ensured, []);
   assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
   coordinator.dispose();
 });
@@ -161,7 +169,6 @@ test('reconciles only persisted fork children, not subagents or unrelated sessio
       worktreeId: 'worktree-one',
       sessionId: 'child-session',
     }],
-    ['ensureSessionWorkspace', 'workspace-one', 'child-session'],
   ]);
   coordinator.dispose();
 });

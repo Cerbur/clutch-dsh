@@ -188,7 +188,6 @@ export function apply(ctx: ClientContext): void {
         fork: (input) => nativeFork.call(ctx.sessions, input),
         findBinding: findWorktreeSessionBinding,
         bindSession: (input) => manager.bindSession(input),
-        ensureSessionWorkspace,
         sessions: ctx.sessions.list as unknown as WorktreeForkSessionListReader,
       });
   if (forkCoordinator !== undefined) {

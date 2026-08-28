@@ -20,7 +20,10 @@
 
 ### 2. Bind after native Session creation
 
-child 先由 DSH 创建并发布。plugin 只在 fork 成功后读取 Workspace binding，并调用已有 `bindSession`。binding 成功后调用已有的 browser-local membership projection，把 `{ workspaceId, sessionId: childId }` 放入 native Workspace list 的临时视图，并打开 child。
+child 先由 DSH 创建并发布。plugin 只在 fork 成功后读取 Workspace binding，并调用已有 `bindSession`。
+binding 成功后只触发 Worktree view 的保留刷新；刷新读取到 child binding 后，再由已有的
+browser-local membership projection 把 `{ workspaceId, sessionId: childId }` 放入 native Workspace
+list 的临时视图并打开 child。这样 child 不会在 binding refresh 前短暂落入 Main/Local。
 
 如果 sidecar 查询或 binding 失败，不删除、不回滚 DSH 已创建的 child；child 仍返回给原生调用方并可以打开，同时记录 retryable recovery。下一次 plugin 初始化会扫描带有 `parentId` 的 Session summary，重新为仍有 active Worktree parent binding 的 child 尝试 binding。
 

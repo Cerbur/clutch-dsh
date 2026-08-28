@@ -42,9 +42,10 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 用户在 Session 中发送新消息后，该 Session 会移动到当前 Main 或 Worktree 视觉分组的队首。
   该排序只保存在浏览器本地，不修改 DSH Workspace 顺序或 Worktree sidecar。
 - 从 DSH 原生 Workspace session list tab、Worktree view 或 Conversation fork 操作 fork
-  Session。parent 有 active Worktree binding 时，child 会绑定到同一个 Worktree，并加入浏览器本地
-  Workspace membership projection；child 仍然是普通 DSH Session。sidecar 失败时 child 会保留，
-  并显示可重试的 binding 恢复操作。
+  Session。parent 有 active Worktree binding 时，child 会先绑定到同一个 Worktree，再在 binding
+  refresh 完成后加入浏览器本地 Workspace membership projection；child 仍然是普通 DSH Session。
+  这一时序避免 child 短暂出现在 Main/Local。sidecar 失败时 child 会保留，并显示可重试的
+  binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
   active Worktree 额外显示“移除 Worktree”并要求确认。
@@ -278,8 +279,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   Conversation fork 操作。插件包装共享的 DSH `sessions.fork` service，因此原生的 fork cut、
   标题递增和 child lineage 语义保持不变。
 - DSH 创建 child 后，插件读取 parent 的 active sidecar binding，通过现有 `/api` Manager 写入
-  child binding，并重放浏览器本地 Workspace membership projection。随后 Worktree view 会在保留
-  ready 内容的情况下刷新。
+  child binding。随后 Worktree view 先刷新 binding，再重放浏览器本地 Workspace membership
+  projection，因此 child 不会短暂出现在 Main/Local；刷新期间保留 ready 内容。
 - 如果 child 已创建但 sidecar 查询或 binding 失败，DSH 仍保留 child，plugin 显示 Retry Binding/
   Open Created Session 恢复操作。后续 plugin 初始化也会根据原生 Session lineage summary 重试可恢复
   的 fork child；不会自动绑定无关的 subagent。

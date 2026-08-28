@@ -47,9 +47,10 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Promote a Session to the head of its Main or Worktree visual group after a newer user message.
   This ordering is browser-local and does not mutate DSH Workspace order or the Worktree sidecar.
 - Fork a Session from the native DSH Workspace tab, the Worktree view, or the Conversation fork
-  action. When the parent has an active Worktree binding, the child is bound to the same Worktree
-  and added to the browser-local Workspace membership projection; the child remains a normal DSH
-  Session. A sidecar failure keeps the child available and exposes retryable binding recovery.
+  action. When the parent has an active Worktree binding, the child is bound to the same Worktree,
+  then added to the browser-local Workspace membership projection after the binding refresh; the
+  child remains a normal DSH Session. The refresh ordering keeps it from briefly appearing in
+  Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
@@ -302,8 +303,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
   Conversation fork action. The plugin wraps the shared DSH `sessions.fork` service, so the
   original fork cut, title increment, and child lineage stay native.
 - After DSH creates the child, the plugin looks up the parent's active sidecar binding, writes the
-  child binding through the existing `/api` Manager, and replays the browser-local Workspace
-  membership projection. The Worktree view then refreshes while retaining its ready content.
+  child binding through the existing `/api` Manager. The Worktree view refreshes the binding before
+  replaying the browser-local Workspace membership projection, so the child does not briefly appear
+  in Main/Local; ready content is retained during that refresh.
 - If the child is created but sidecar lookup or binding fails, DSH keeps the child and the plugin
   shows Retry Binding/Open Created Session recovery. A later plugin initialization also retries
   recoverable fork children from native Session lineage summaries; it never binds unrelated

@@ -133,6 +133,13 @@ test('binds a native fork child through the existing browser-local membership ov
   );
   assert.deepEqual(
     fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
+    ['session-current'],
+  );
+  fixture.registrationsBySlot.get('shell.overlay').options.inject().syncSessionWorkspaces([
+    { workspaceId: 'workspace-current', sessionId: 'child-session' },
+  ]);
+  assert.deepEqual(
+    fixture.fakeContext.workspaces.list.getSnapshot().items[0].sessionIds,
     ['session-current', 'child-session'],
   );
   assert.deepEqual(

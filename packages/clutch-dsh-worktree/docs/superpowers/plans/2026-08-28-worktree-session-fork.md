@@ -11,7 +11,7 @@
 ## Global constraints
 
 - 只修改 `@cerbur/clutch-dsh-worktree` package；不修改 `/Users/yuancheng/Documents/Code/deepseek-harness`。
-- 复用现有 `/api` Connection、`WorktreeManager.bindSession`、`ensureSessionWorkspace` 和 `open`；不创建第二套 RPC 或 sidecar。
+- 复用现有 `/api` Connection、`WorktreeManager.bindSession`、binding refresh 后的 browser-local membership projection 和 `open`；不创建第二套 RPC 或 sidecar。
 - native fork 已成功时，任何 plugin sidecar 失败都不得删除或拒绝已创建 child；必须保留可诊断、可重试状态。
 - 不把 Worktree child 写入 native `Workspace.sessionIds`；native list 的临时可见性只通过已有 browser-local projection。
 - 新增行为先写失败测试并运行确认 RED，再写最小实现。
@@ -44,7 +44,7 @@
 ## Task 3: Wire the shared DSH fork entry point
 
 - [x] 在 `entry.ts` 保存原始 `ctx.sessions.fork`，安装包装器并在 plugin dispose 时恢复。
-- [x] 用现有 manager/listBindings 查询 binding；复用 `ensureSessionWorkspace` 做浏览器本地 membership projection。
+- [x] 用现有 manager/listBindings 查询 binding；fork bind 成功后等待 Worktree binding refresh，再复用现有 browser-local membership projection，避免 child 先进入 Main/Local。
 - [x] 用 snapshot/revision 通知 Worktree surface 保留当前 ready 内容并重新读取 bindings。
 - [x] 确保 native Worktree tab fork 与 conversation fork 都只经过同一 wrapper，不新增上游 patch。
 - [x] 扩展 composition fixture，使没有 fork 能力的旧 fixture 仍能安全加载，具备 fork 的 fixture 验证包装行为。

@@ -53,10 +53,8 @@ export interface WorktreeForkCoordinatorOptions {
     worktreeId: string;
     sessionId: string;
   }) => Promise<unknown>;
-  /** Existing browser-local native Workspace membership projection. */
-  readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly sessions?: WorktreeForkSessionListReader;
-  /** Called after a child binding has been committed and projected. */
+  /** Called after a child binding has been committed and before the view refresh. */
   readonly onBound?: (binding: SessionBinding) => void;
 }
 
@@ -153,7 +151,6 @@ export function createWorktreeSessionForkCoordinator(
         sessionId: childSessionId,
       });
       if (disposed) return { bound: false };
-      options.ensureSessionWorkspace(target.workspaceId, childSessionId);
       const childBinding: SessionBinding = {
         workspaceId: target.workspaceId,
         worktreeId: target.worktreeId,
