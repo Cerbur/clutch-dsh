@@ -6,6 +6,7 @@ import {
   IconBranchOutline16,
   IconChevronDownOutline14,
   IconChevronRightOutline14,
+  IconCopyOutline16,
   IconEditOutline16,
   IconEllipsisOutline16,
   IconFolderClose16,
@@ -14,6 +15,7 @@ import {
   IconTrashOutline16,
   Menu,
   StateDot,
+  writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { isBlankSession } from './session-view.js';
 import { sessionLabel } from './worktree-surface-selectors.js';
@@ -258,16 +260,25 @@ export function WorktreeGroupRow({
               }}
               items={[
                 {
-                  id: 'remove',
-                  label: t('worktree.remove'),
-                  icon: <IconTrashOutline16 />,
-                  danger: true,
+                  id: 'copy-path',
+                  label: t('worktree.copyPath'),
+                  icon: <IconCopyOutline16 />,
                   disabled: menu.disabled,
                 },
+                ...(menu.showRemove
+                  ? [{
+                      id: 'remove',
+                      label: t('worktree.remove'),
+                      icon: <IconTrashOutline16 />,
+                      danger: true,
+                      disabled: menu.disabled || menu.onRemove === undefined,
+                    }]
+                  : []),
               ]}
               onSelect={(id) => {
                 menu.onOpenChange(false);
-                if (id === 'remove') menu.onRemove();
+                if (id === 'copy-path') void writeClipboard(menu.copyPath);
+                if (id === 'remove' && menu.showRemove) menu.onRemove?.();
               }}
               portal
               closeOnPointerLeave

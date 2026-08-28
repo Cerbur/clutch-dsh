@@ -35,8 +35,9 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   unavailable, fall back to `workspace-write + ask` when possible; if the permission capability
   cannot be verified, show a retryable degraded state instead of claiming Full Access.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
-- Remove an active Worktree from its options menu with confirmation. Main and detached rows do
-  not expose that menu.
+- Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
+  Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
+  with confirmation.
 - Continue using DSH-native Workspace rename/delete/reorder and Session menus. Worktree rows can
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
@@ -258,8 +259,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 - Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
-- Use the active Worktree options menu and confirmation dialog to remove a Worktree. Main and
-  detached Worktrees do not show this menu.
+- Open the shared Main and Worktree options menu to copy the selected row's absolute path. Main
+  and detached/removed Worktrees show only `Copy path`; active Worktrees also show `Remove
+  Worktree` with a confirmation dialog.
 - Imported Worktrees expose the same active options menu as plugin-created Worktrees. Removing
   either source runs real `git worktree remove`; for an imported Worktree, the confirmation warns
   that the linked Worktree directory may be deleted. Sessions are retained as detached bindings.

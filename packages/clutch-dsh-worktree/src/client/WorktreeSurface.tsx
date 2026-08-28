@@ -11,7 +11,6 @@ import {
   IconBranchOutline16,
   IconCloseOutline16,
   IconProjectAddOutline16,
-  IconPlusOutline16,
   IconSearchOutline16,
   RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives';
@@ -218,6 +217,7 @@ export function WorktreeSurface({
     useState<ImportCandidatesState>({ status: 'idle', candidates: [] });
   const [selectedImportPath, setSelectedImportPath] = useState<string | undefined>();
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
+  const [openMainMenuId, setOpenMainMenuId] = useState<string>();
   const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -1299,6 +1299,16 @@ export function WorktreeSurface({
                             onToggle={() => {
                               toggleMain(workspace.workspaceId);
                             }}
+                            menu={{
+                              open: openMainMenuId === workspace.workspaceId,
+                              label: mainLabel,
+                              copyPath: workspace.path,
+                              showRemove: false,
+                              disabled: actionPending,
+                              onOpenChange: (open) => {
+                                setOpenMainMenuId(open ? workspace.workspaceId : undefined);
+                              },
+                            }}
                             onCreateSession={
                               createMainSession === undefined
                                 ? undefined
@@ -1429,24 +1439,24 @@ export function WorktreeSurface({
                                         }
                                       : undefined
                                   }
-                                  menu={
-                                    record.status === 'active'
-                                      ? {
-                                          open: openWorktreeMenuId === record.worktreeId,
-                                          label: record.branch,
-                                          disabled: actionPending,
-                                          onOpenChange: (open) => {
-                                            setOpenWorktreeMenuId(
-                                              open ? record.worktreeId : undefined,
-                                            );
-                                          },
-                                          onRemove: () => {
-                                            setWorktreeRemoval(record);
-                                            setActionError(undefined);
-                                          },
+                                  menu={{
+                                    open: openWorktreeMenuId === record.worktreeId,
+                                    label: record.branch,
+                                    copyPath: record.absolutePath,
+                                    showRemove: record.status === 'active',
+                                    disabled: actionPending,
+                                    onOpenChange: (open) => {
+                                      setOpenWorktreeMenuId(
+                                        open ? record.worktreeId : undefined,
+                                      );
+                                    },
+                                    onRemove: record.status === 'active'
+                                      ? () => {
+                                          setWorktreeRemoval(record);
+                                          setActionError(undefined);
                                         }
-                                      : undefined
-                                  }
+                                      : undefined,
+                                  }}
                                   drag={{
                                     active: sameWorkspaceWorktreeDrag,
                                     marker:

@@ -32,7 +32,8 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 保留用户在 DSH 原生 Access 界面中选择的限制。如果自定义预设不可用，在可能时回退到
   `workspace-write + ask`；如果无法验证权限能力，则显示可重试的降级状态，不伪称已获得完全访问。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
-- 通过 active Worktree 的选项菜单和确认弹窗移除 Worktree；Main 和 detached 行不显示该菜单。
+- 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
+  active Worktree 额外显示“移除 Worktree”并要求确认。
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
@@ -240,8 +241,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 - 在所属 Workspace 内拖动 Worktree。排序持久化在 plugin sidecar 的有序 `worktrees` 数组中；
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
-- 使用 active Worktree 的选项菜单和确认弹窗移除 Worktree。Main 和 detached Worktree 不显示
-  该菜单。
+- 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。Main 和 detached/removed Worktree
+  只显示“复制路径”；active Worktree 还显示“移除 Worktree”并要求确认。
 - 导入的 Worktree 与 plugin 创建的 Worktree 显示相同的 active 选项菜单。两种来源都执行真实
   `git worktree remove`；导入项的确认文案会警告关联 Worktree 目录可能被删除。Session 会
   保留为 detached binding。

@@ -70,6 +70,7 @@ interface WorktreeSessionCreator {
 interface WorkspaceListSnapshot {
   readonly items: readonly {
     readonly workspaceId: string;
+    readonly path: string;
     readonly title: string;
     readonly sessionIds: readonly string[];
   }[];

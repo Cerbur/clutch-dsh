@@ -1452,13 +1452,53 @@ test('shares one parameterized group row while gating removal UI by row configur
   const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
   const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
   const mainCallSource = source.slice(mainCallStart, mainCallEnd);
-  assert.doesNotMatch(mainCallSource, /\bmenu=/);
+  assert.match(mainCallSource, /\bmenu=/);
+  assert.match(mainCallSource, /showRemove: false/);
   const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
   const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
   const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
-  assert.match(worktreeCallSource, /\bmenu=\{\s*record\.status === 'active'/);
+  assert.match(worktreeCallSource, /\bmenu=\{\{/);
+  assert.match(worktreeCallSource, /showRemove: record\.status === 'active'/);
   assert.doesNotMatch(styles, /\.mainRow|\.mainLabel|\.mainDisclosure/);
   assert.match(source, /mainExpanded && \(\s*<WorktreeSessionGroup/);
+});
+
+test('copies Main and Worktree paths while gating removal through menu visibility', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const locales = await readFile(
+    new URL('../src/client/locales.ts', import.meta.url),
+    'utf8',
+  );
+  const groupRowStart = source.indexOf('function WorktreeGroupRow');
+  const groupRowEnd = source.indexOf('/** Worktree-mode Session row', groupRowStart);
+  assert.notEqual(groupRowStart, -1);
+  assert.notEqual(groupRowEnd, -1);
+  const groupRowSource = source.slice(groupRowStart, groupRowEnd);
+
+  assert.match(groupRowSource, /IconCopyOutline16/);
+  assert.match(groupRowSource, /writeClipboard/);
+  assert.match(groupRowSource, /id: 'copy-path'/);
+  assert.match(groupRowSource, /void writeClipboard\(menu\.copyPath\)/);
+  assert.match(groupRowSource, /menu\.showRemove\s*\?\s*\[/);
+  assert.match(source, /readonly copyPath: string;/);
+  assert.match(source, /readonly showRemove: boolean;/);
+
+  const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
+  const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = source.slice(mainCallStart, mainCallEnd);
+  assert.match(mainCallSource, /menu=\{\{[\s\S]*copyPath: workspace\.path/);
+  assert.match(mainCallSource, /showRemove: false/);
+
+  const worktreeCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="worktree"'));
+  const worktreeCallEnd = source.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = source.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /menu=\{\{/);
+  assert.match(worktreeCallSource, /copyPath: record\.absolutePath/);
+  assert.match(worktreeCallSource, /showRemove: record\.status === 'active'/);
+  assert.doesNotMatch(worktreeCallSource, /menu=\{\s*record\.status === 'active'/);
+
+  assert.match(locales, /'worktree\.copyPath': '复制路径'/);
+  assert.match(locales, /'worktree\.copyPath': 'Copy path'/);
 });
 
 test('polishes Main and Worktree row hover presentation', async () => {

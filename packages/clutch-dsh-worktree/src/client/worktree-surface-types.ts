@@ -29,6 +29,7 @@ import type {
 
 export interface WorkspaceLike {
   readonly workspaceId: string;
+  readonly path: string;
   readonly title: string;
   readonly sessionIds: readonly string[];
 }
@@ -214,9 +215,11 @@ export interface WorktreeWorkspaceRowProps {
 export interface WorktreeGroupMenuProps {
   readonly open: boolean;
   readonly label: string;
+  readonly copyPath: string;
+  readonly showRemove: boolean;
   readonly disabled: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onRemove: () => void;
+  readonly onRemove?: () => void;
 }
 
 export type WorktreeGroupKind = 'main' | 'worktree';
