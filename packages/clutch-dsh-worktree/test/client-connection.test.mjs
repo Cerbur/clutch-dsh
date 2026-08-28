@@ -21,6 +21,15 @@ const METHODS = [
   }, ['wt1', 'wt2']],
   ['listBindings', { workspaceId: 'ws1' }, []],
   ['bindSession', { workspaceId: 'ws1', worktreeId: 'wt1', sessionId: 's1' }, { sessionId: 's1' }],
+  ['ensureWorktreePermission', {
+    workspaceId: 'ws1',
+    worktreeId: 'wt1',
+    sessionId: 's1',
+  }, { status: 'unverified', retryable: true }],
+  ['normalizeDetachedWorktreePermissions', {
+    workspaceId: 'ws1',
+    worktreeId: 'wt1',
+  }, { status: 'no-op', sessionIds: [], retryable: false }],
 ];
 
 function successfulRpc(calls) {
@@ -67,6 +76,8 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
+    'worktreeManager/ensureWorktreePermission',
+    'worktreeManager/normalizeDetachedWorktreePermissions',
   ]);
   adapter.dispose();
 });

@@ -25,6 +25,16 @@ import {
   createWorktreeSessionConnector,
   type WorktreeSessionSnapshotReader,
 } from './worktree-session.js';
+import {
+  createWorktreeFullAccessConfirmationController,
+} from './worktree-permission.js';
+import { installWorktreePermissionIcon } from './worktree-permission-icon.js';
+import type {
+  WorktreePermissionResult,
+} from '../contract/index.js';
+import type {
+  WorktreePermissionNotice,
+} from './worktree-surface-types.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
 
 declare module '@deepseek-ai/cordis' {
@@ -75,11 +85,33 @@ export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces'
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
 export function apply(ctx: ClientContext): void {
+  if (typeof document !== 'undefined') {
+    ctx.effect(
+      () => installWorktreePermissionIcon(document),
+      'clutch-dsh-worktree: permission icon cleanup',
+    );
+  }
   ctx.effect(
     () => ctx.locale.register(WORKTREE_NS, { zh, en }),
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
+  const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
+  const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
+  const permissionManager = typeof document !== 'undefined' ? manager : undefined;
+  const reportPermissionNotice = (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId?: string;
+    },
+    result: WorktreePermissionResult,
+  ): void => {
+    const visible = result.status === 'fallback-workspace-write' ||
+      result.status === 'user-restricted' ||
+      result.status === 'unverified';
+    permissionNotice.set(visible ? { ...input, result } : undefined);
+  };
   const sessions = ctx.sessions as typeof ctx.sessions & WorktreeSessionCreator;
   const virtualWorkspaceMembership = createVirtualWorkspaceMembership(
     ctx.workspaces.list as unknown as WritableWorkspaceList<WorkspaceListSnapshot>,
@@ -91,6 +123,10 @@ export function apply(ctx: ClientContext): void {
     storeFactory: createSnapshotStore,
   });
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
+  ctx.effect(
+    () => () => fullAccessConfirmation.dispose(),
+    'clutch-dsh-worktree: Full Access confirmation cleanup',
+  );
   ctx.effect(
     () => () => virtualWorkspaceMembership.dispose(),
     'clutch-dsh-worktree: Workspace membership cleanup',
@@ -117,6 +153,11 @@ export function apply(ctx: ClientContext): void {
         .archivedSessionIds ?? [],
     createSession: async (input) => String(await sessions.create(input)),
     ensureSessionWorkspace,
+    permission: permissionManager,
+    confirmFullAccess: permissionManager === undefined
+      ? undefined
+      : fullAccessConfirmation.request,
+    onPermissionResult: reportPermissionNotice,
     openSession: (sessionId) => {
       ctx.sessions.open(sessionId as SessionId);
     },
@@ -164,6 +205,16 @@ export function apply(ctx: ClientContext): void {
           expandState,
           hooks: { worktreeContext: contextProjection.store },
           manager,
+          permission: permissionManager,
+          confirmFullAccess: permissionManager === undefined
+            ? undefined
+            : fullAccessConfirmation.request,
+          fullAccessConfirmation: typeof document === 'undefined'
+            ? undefined
+            : fullAccessConfirmation,
+          onPermissionResult: reportPermissionNotice,
+          onPermissionNotice: reportPermissionNotice,
+          permissionNotice,
           createWorkspace: async () => {
             const workspacePath = await ctx.workspaces.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });

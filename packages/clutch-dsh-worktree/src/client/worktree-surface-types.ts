@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
 import type {
   PropsLocale,
   PropsRuntime,
@@ -8,10 +9,15 @@ import type {
 import type {
   WorktreeImportCandidate,
   WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionResult,
   WorktreeRecord,
 } from '../contract/index.js';
 import { WORKTREE_NS } from './locales.js';
 import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
+import type {
+  WorktreeFullAccessConfirmationController,
+} from './worktree-permission.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike } from './session-view.js';
 import type {
@@ -32,11 +38,49 @@ export interface WorkspaceListLike {
   readonly archivedSessionIds?: readonly string[];
 }
 
+export interface WorktreePermissionNotice {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly sessionId?: string;
+  readonly result: WorktreePermissionResult;
+}
+
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly expandState: WorktreeExpandStateStore;
   readonly manager?: WorktreeManager;
+  readonly permission?: Pick<
+    WorktreePermissionManager,
+    'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
+  >;
+  readonly confirmFullAccess?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId: string;
+      readonly cwd: string;
+    },
+  ) => boolean | Promise<boolean>;
+  readonly fullAccessConfirmation?: WorktreeFullAccessConfirmationController;
+  readonly onPermissionResult?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId: string;
+      readonly cwd: string;
+    },
+    result: WorktreePermissionResult,
+  ) => void;
+  readonly onPermissionNotice?: (
+    input: {
+      readonly workspaceId: string;
+      readonly worktreeId: string;
+      readonly sessionId?: string;
+    },
+    result: WorktreePermissionResult,
+  ) => void;
+  readonly permissionNotice?: ObservableSnapshot<WorktreePermissionNotice | undefined>;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (
     input: CreateSessionForWorktreeInput,
@@ -104,6 +148,7 @@ export interface RefreshOptions {
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
+  readonly permissionRequired?: boolean;
 }
 
 export interface SessionRenameTarget {

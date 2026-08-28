@@ -14,6 +14,7 @@ export {
   WORKTREE_REMOTE_METHODS,
   createWorktreeError,
 } from './contract/index.js';
+export { WORKTREE_FULL_ACCESS_PRESET } from './contract/index.js';
 export type {
   BranchRecord,
   BindingStatus,
@@ -34,6 +35,19 @@ export type {
   WorktreeId,
   WorkspaceId,
   SessionId,
+  WorktreePermissionApprovalPolicy,
+  WorktreePermissionBinding,
+  WorktreePermissionCapability,
+  WorktreePermissionCurrentState,
+  WorktreePermissionDecision,
+  WorktreePermissionDecisionInput,
+  WorktreePermissionManager,
+  WorktreePermissionNormalizationRequest,
+  WorktreePermissionPort,
+  WorktreePermissionRequest,
+  WorktreePermissionResult,
+  WorktreePermissionSandboxMode,
+  WorktreePermissionStatus,
 } from './contract/index.js';
 export { LocalGitAdapter } from './provider/git.js';
 export {
@@ -66,8 +80,15 @@ export {
   DshHostReadAdapter,
   WorktreeRemoteService,
   createWorktreeRemoteProjection,
+  createDshWorktreePermissionAdapter,
+  createWorktreePermissionManager,
 } from './host/index.js';
-export type { DshHostReadContext, WorktreeHostConfig } from './host/index.js';
+export type {
+  DshHostReadContext,
+  DshWorktreePermissionAdapterOptions,
+  WorktreeHostConfig,
+  WorktreePermissionManagerOptions,
+} from './host/index.js';
 
 // bundle patch 以默认导出装载同一个 Cordis 服务；命名导出保留给显式 Host 组合。
 // The bundle patch loads the same Cordis service through the default export; the named

@@ -1,4 +1,9 @@
-import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
+import type {
+  WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionResult,
+  WorktreeRecord,
+} from '../contract/index.js';
 import { WorktreeSessionBindingError } from './worktree-view-errors.js';
 
 function browserRandomUuid(): string {
@@ -69,6 +74,11 @@ export function resolveWorktreeMove(
 export async function executeWorktreeAction(
   manager: WorktreeManager,
   action: WorktreeViewAction,
+  permission?: Pick<WorktreePermissionManager, 'normalizeDetachedWorktreePermissions'>,
+  onPermissionResult?: (
+    input: { readonly workspaceId: string; readonly worktreeId: string },
+    result: WorktreePermissionResult,
+  ) => void,
 ): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
     return manager.createWorktree(action.input);
@@ -78,6 +88,16 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
+    const result = await permission?.normalizeDetachedWorktreePermissions({
+      workspaceId: action.input.workspaceId,
+      worktreeId: action.input.worktreeId,
+    });
+    if (result !== undefined) {
+      onPermissionResult?.({
+        workspaceId: action.input.workspaceId,
+        worktreeId: action.input.worktreeId,
+      }, result);
+    }
     return;
   }
 }
@@ -89,7 +109,7 @@ export async function executeWorktreeAction(
 export async function createSessionForWorktree(input: CreateSessionForWorktreeInput & {
   readonly createSession: (input: { cwd: string }) => Promise<string>;
   readonly manager: Pick<WorktreeManager, 'bindSession'>;
-  readonly beforeOpen?: (sessionId: string) => void;
+  readonly beforeOpen?: (sessionId: string) => void | Promise<void>;
   readonly openSession: (sessionId: string) => void;
 }): Promise<string> {
   const sessionId = await input.createSession({ cwd: input.cwd });
@@ -102,7 +122,7 @@ export async function createSessionForWorktree(input: CreateSessionForWorktreeIn
   } catch (error) {
     throw new WorktreeSessionBindingError(sessionId, error);
   }
-  input.beforeOpen?.(sessionId);
+  await input.beforeOpen?.(sessionId);
   input.openSession(sessionId);
   return sessionId;
 }

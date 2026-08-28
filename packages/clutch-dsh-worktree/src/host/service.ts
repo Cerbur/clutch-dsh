@@ -7,6 +7,9 @@ import type {
   WorktreeId,
   WorktreeRecord,
   WorktreeImportCandidate,
+  WorktreePermissionRequest,
+  WorktreePermissionNormalizationRequest,
+  WorktreePermissionResult,
   WorkspaceId,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
@@ -17,6 +20,11 @@ import {
   type DshHostReadContext,
 } from './dsh-read-adapter.js';
 import { createWorktreeRemoteProjection } from './remote.js';
+import {
+  createDshWorktreePermissionAdapter,
+  type DshWorktreePermissionAdapterOptions,
+} from './worktree-permission.js';
+import { createWorktreePermissionManager } from './worktree-permission-manager.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -54,10 +62,36 @@ export class WorktreeRemoteService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
+    const dsh = new DshHostReadAdapter(ctx as Context & DshHostReadContext);
+    const manager = createWorktreeManager({
+      dsh,
+      dshHome: config.dshHome,
+    });
+    // Permission presets are an optional DSH capability. Read them through a
+    // structural seam so an older profile can still mount this plugin and
+    // report `unverified` instead of failing during composition.
+    const optionalServices: Pick<
+      DshWorktreePermissionAdapterOptions,
+      'permissionPresets' | 'sandboxPolicy'
+    > = {
+      permissionPresets: ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'],
+      sandboxPolicy: ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'],
+    };
+    const permissionAdapter = createDshWorktreePermissionAdapter({
+      sessions: {
+        get: (sessionId) => (ctx as unknown as {
+          readonly sessions: { get(id: string): unknown };
+        }).sessions.get(sessionId),
+      },
+      permissionPresets: optionalServices.permissionPresets,
+      sandboxPolicy: optionalServices.sandboxPolicy,
+    });
     this.remote = createWorktreeRemoteProjection(
-      createWorktreeManager({
-        dsh: new DshHostReadAdapter(ctx as Context & DshHostReadContext),
-        dshHome: config.dshHome,
+      manager,
+      createWorktreePermissionManager({
+        manager,
+        dsh,
+        permissions: permissionAdapter,
       }),
     );
   }
@@ -136,6 +170,20 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly sessionId: string;
   }): Promise<WorktreeRemoteResult<SessionBinding>> {
     return this.remote.bindSession(input);
+  }
+
+  @Remote
+  ensureWorktreePermission(
+    input: WorktreePermissionRequest,
+  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>> {
+    return this.remote.ensureWorktreePermission(input);
+  }
+
+  @Remote
+  normalizeDetachedWorktreePermissions(
+    input: WorktreePermissionNormalizationRequest,
+  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>> {
+    return this.remote.normalizeDetachedWorktreePermissions(input);
   }
 }
 

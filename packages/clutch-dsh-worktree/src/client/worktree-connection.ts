@@ -3,6 +3,8 @@ import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/cli
 import type {
   WorktreeError,
   WorktreeManager,
+  WorktreePermissionManager,
+  WorktreePermissionNormalizationRequest,
   WorktreeRemoteMethod,
   WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -24,6 +26,8 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
+  ensureWorktreePermission: 'worktreeManager/ensureWorktreePermission',
+  normalizeDetachedWorktreePermissions: 'worktreeManager/normalizeDetachedWorktreePermissions',
 }) satisfies Readonly<Record<WorktreeRemoteMethod, string>>;
 
 /** Deliberately narrow transport seam: the adapter only needs `call`. */
@@ -52,7 +56,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager {
   /** Abort all requests owned by this Client plugin instance. */
   dispose(): void;
 }
@@ -182,6 +186,9 @@ export function createWorktreeConnectionAdapter(
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
+    ensureWorktreePermission: (input) => invoke('ensureWorktreePermission', input),
+    normalizeDetachedWorktreePermissions: (input: WorktreePermissionNormalizationRequest) =>
+      invoke('normalizeDetachedWorktreePermissions', input),
     dispose(): void {
       if (disposed) return;
       disposed = true;

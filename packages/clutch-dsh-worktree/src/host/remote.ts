@@ -3,6 +3,7 @@ import {
   createWorktreeError,
   type WorktreeError,
   type WorktreeManager,
+  type WorktreePermissionManager,
   type WorktreeRemoteManager,
   type WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -52,7 +53,10 @@ async function project<Value>(operation: () => Promise<Value>): Promise<Worktree
  * @param manager - Host 内已组合完成的用例接口。 / Fully composed Host use-case port.
  * @returns 可供生成 Remote 暴露的安全投影。 / Safe projection for generated Remote export.
  */
-export function createWorktreeRemoteProjection(manager: WorktreeManager): WorktreeRemoteManager {
+export function createWorktreeRemoteProjection(
+  manager: WorktreeManager,
+  permissions?: WorktreePermissionManager,
+): WorktreeRemoteManager {
   return {
     listWorktrees: (input) => project(() => manager.listWorktrees(input)),
     listImportCandidates: (input) => project(() => manager.listImportCandidates(input)),
@@ -70,5 +74,17 @@ export function createWorktreeRemoteProjection(manager: WorktreeManager): Worktr
     insertWorktreeBefore: (input) => project(() => manager.insertWorktreeBefore(input)),
     listBindings: (input) => project(() => manager.listBindings(input)),
     bindSession: (input) => project(() => manager.bindSession(input)),
+    ensureWorktreePermission: (input) =>
+      project(() =>
+        permissions === undefined
+          ? Promise.resolve({ status: 'unverified', retryable: true })
+          : permissions.ensureWorktreePermission(input),
+      ),
+    normalizeDetachedWorktreePermissions: (input) =>
+      project(() =>
+        permissions === undefined
+          ? Promise.resolve({ status: 'unverified', sessionIds: [], retryable: true })
+          : permissions.normalizeDetachedWorktreePermissions(input),
+      ),
   };
 }

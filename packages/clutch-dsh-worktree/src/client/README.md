@@ -8,6 +8,9 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, the nine `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and outer/inner error normalization. The import endpoints are `listImportCandidates` and `importWorktree`; no second transport is added.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
+- Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
+  browser Client serializes concurrent confirmation requests, requires the native checkbox
+  acknowledgement, and fails pending requests closed when the Client fiber is disposed.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 
