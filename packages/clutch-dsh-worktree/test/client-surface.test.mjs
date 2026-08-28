@@ -1513,23 +1513,34 @@ test('copies Main and Worktree paths while gating removal through menu visibilit
   assert.match(locales, /'worktree\.copyPath': 'Copy path'/);
 });
 
-test('offers a numbered Worktree clone action from active Worktree menus', async () => {
+test('offers Local and Worktree creation through shared menu parameters', async () => {
   const { coordinator, rows, types } = await readSurfaceSources();
 
   assert.match(rows, /id: 'create'/);
   assert.match(rows, /label: t\('worktree\.createNew'\)/);
   assert.match(rows, /icon: <IconPlusOutline16 \/>/);
-  assert.match(rows, /if \(id === 'create'\) menu\.onCreateWorktree\(\)/);
-  assert.match(types, /readonly onCreateWorktree: \(\) => void/);
+  assert.match(rows, /menu\.showCreate/);
+  assert.match(rows, /if \(id === 'create' && menu\.showCreate\) menu\.onCreateWorktree\?\.\(\)/);
+  assert.match(types, /readonly showCreate: boolean;/);
+  assert.match(types, /readonly onCreateWorktree\?: \(\) => void;/);
   assert.match(coordinator, /createNumberedWorktreeName/);
   assert.match(
     coordinator,
-    /onCreateWorktree: \(\) => \{[\s\S]*openWorktreeCreator\(workspace, \{[\s\S]*baseBranch: record\.branch[\s\S]*newBranch: createNumberedWorktreeName\(\s*record\.branch/,
+    /onCreateWorktree: record\.status === 'active'[\s\S]*openWorktreeCreator\(workspace, \{[\s\S]*baseBranch: record\.branch[\s\S]*newBranch: createNumberedWorktreeName\(\s*record\.branch/,
   );
 
   const mainCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="main"'));
   const mainCallEnd = coordinator.indexOf('\n                          />', mainCallStart);
-  assert.doesNotMatch(coordinator.slice(mainCallStart, mainCallEnd), /onCreateWorktree|createNumberedWorktreeName/);
+  const mainCallSource = coordinator.slice(mainCallStart, mainCallEnd);
+  assert.match(mainCallSource, /showCreate: currentBranch !== undefined/);
+  assert.match(mainCallSource, /onCreateWorktree:/);
+  assert.match(mainCallSource, /baseBranch: currentBranch/);
+  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*currentBranch/);
+
+  const worktreeCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="worktree"'));
+  const worktreeCallEnd = coordinator.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = coordinator.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /showCreate: record\.status === 'active'/);
 });
 
 test('polishes Main and Worktree row hover presentation', async () => {

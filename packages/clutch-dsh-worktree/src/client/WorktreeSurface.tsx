@@ -1447,12 +1447,24 @@ export function WorktreeSurface({
                               open: openMainMenuId === workspace.workspaceId,
                               label: mainLabel,
                               copyPath: workspace.path,
-                              showCreate: false,
+                              showCreate: currentBranch !== undefined,
                               showRemove: false,
                               disabled: actionPending,
                               onOpenChange: (open) => {
                                 setOpenMainMenuId(open ? workspace.workspaceId : undefined);
                               },
+                              onCreateWorktree:
+                                currentBranch === undefined
+                                  ? undefined
+                                  : () => {
+                                      openWorktreeCreator(workspace, {
+                                        baseBranch: currentBranch,
+                                        newBranch: createNumberedWorktreeName(
+                                          currentBranch,
+                                          workspaceWorktreeNames,
+                                        ),
+                                      });
+                                    },
                             }}
                             onCreateSession={
                               createMainSession === undefined
