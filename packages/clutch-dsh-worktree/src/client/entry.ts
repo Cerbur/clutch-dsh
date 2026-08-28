@@ -16,6 +16,7 @@ import { WorktreeModeAction } from './WorktreeModeAction.js';
 import { WorktreeOverlay } from './WorktreeOverlay.js';
 import { createWorktreeContextProjection } from './worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './worktree-expand-state.js';
+import { createWorktreeSessionOrderStore } from './worktree-session-order.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
 import {
   createVirtualWorkspaceMembership,
@@ -139,6 +140,8 @@ export function apply(ctx: ClientContext): void {
   void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);
+  const sessionOrder = createWorktreeSessionOrderStore(createSnapshotStore);
+  ctx.effect(() => () => sessionOrder.dispose(), 'clutch-dsh-worktree: Session order cleanup');
 
   const ensureSessionWorkspace = (workspaceId: string, sessionId: string): void => {
     virtualWorkspaceMembership.ensure({ workspaceId, sessionId });
@@ -150,8 +153,8 @@ export function apply(ctx: ClientContext): void {
     manager,
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
     archivedSessionIds: () =>
-      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot)
-        .archivedSessionIds ?? [],
+      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot).archivedSessionIds ??
+      [],
     createSession: async (input) => String(await sessions.create(input)),
     ensureSessionWorkspace,
     permission: permissionManager,
@@ -204,6 +207,7 @@ export function apply(ctx: ClientContext): void {
         inject: () => ({
           available: true,
           expandState,
+          sessionOrder,
           hooks: { worktreeContext: contextProjection.store },
           manager,
           permission: permissionManager,
@@ -235,14 +239,9 @@ export function apply(ctx: ClientContext): void {
             );
           },
           deleteWorkspace: async (workspaceId: string) => {
-            await ctx.workspaces.delete(
-              workspaceId as Parameters<typeof ctx.workspaces.delete>[0],
-            );
+            await ctx.workspaces.delete(workspaceId as Parameters<typeof ctx.workspaces.delete>[0]);
           },
-          insertWorkspaceBefore: async (
-            workspaceId: string,
-            beforeWorkspaceId?: string,
-          ) => {
+          insertWorkspaceBefore: async (workspaceId: string, beforeWorkspaceId?: string) => {
             await ctx.workspaces.insertBefore(
               workspaceId as Parameters<typeof ctx.workspaces.insertBefore>[0],
               beforeWorkspaceId as Parameters<typeof ctx.workspaces.insertBefore>[1],
@@ -263,11 +262,12 @@ export function apply(ctx: ClientContext): void {
             workspaceId: string,
             worktreeId: string,
             beforeWorktreeId?: string,
-          ) => manager.insertWorktreeBefore({
-            workspaceId,
-            worktreeId,
-            beforeWorktreeId,
-          }),
+          ) =>
+            manager.insertWorktreeBefore({
+              workspaceId,
+              worktreeId,
+              beforeWorktreeId,
+            }),
           renameSession: async (sessionId: string, title: string) => {
             const session = ctx.sessions.binding(sessionId as SessionId)?.session;
             if (session === undefined) throw new Error(`unknown session "${sessionId}"`);
@@ -275,10 +275,11 @@ export function apply(ctx: ClientContext): void {
             if (!result.ok) throw new Error(result.error.message);
           },
           forkSession: (sessionId: string) => {
-            void ctx.sessions.fork({
-              sessionId: sessionId as SessionId,
-              increaseTitle: true,
-            })
+            void ctx.sessions
+              .fork({
+                sessionId: sessionId as SessionId,
+                increaseTitle: true,
+              })
               .then((childId) => {
                 ctx.sessions.open(childId);
               })

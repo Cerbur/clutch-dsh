@@ -956,7 +956,7 @@ test('bounds the surface to live native sidebar anchors', async () => {
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
   const source = (await readSurfaceSources()).combined;
 
-  assert.match(source, /const registeredWorktree = worktreeModalMode === 'create'/);
+  assert.match(source, /const\s+registeredWorktree\s*=\s*worktreeModalMode\s*===\s*'create'/);
   assert.match(source, /await continueWorktreeRegistration\(registeredWorktree\)/);
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
   assert.match(source, /worktreeId: registeredWorktree\.worktreeId/);
@@ -1538,6 +1538,36 @@ test('polishes Main and Worktree row hover presentation', async () => {
   );
 });
 
+test('keeps the native Session hover detail card on Worktree rows', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(
+    new URL('../src/client/worktree.css', import.meta.url),
+    'utf8',
+  );
+
+  const rowStart = source.indexOf('export function WorktreeSessionRow');
+  const rowEnd = source.indexOf('export function WorktreeSessionGroup', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(source, /function WorktreeSessionHoverContent/);
+  assert.match(source, /session\.time\.ago/);
+  assert.match(rowSource, /return \(\s*<HoverCard/);
+  assert.match(rowSource, /content=\{[\s\S]*WorktreeSessionHoverContent/);
+  assert.match(rowSource, /disabled=\{menuOpen \|\| drag\.active\}/);
+  assert.match(rowSource, /copyText=\{blank \? undefined : label\}/);
+  assert.match(rowSource, /copyLabel=\{t\('copy'\)\}/);
+  assert.match(rowSource, /copiedLabel=\{t\('hover\.copied'\)\}/);
+  assert.match(source, /value\.unit === 'now'/);
+  assert.match(
+    styles,
+    /\.sessionHoverContent\s*\{[\s\S]*display: flex;[\s\S]*gap: 8px;/,
+  );
+  assert.match(styles, /\.sessionHoverTitle\s*\{[\s\S]*font-size: 14px;/);
+  assert.match(styles, /\.sessionHoverStatus\s*\{[\s\S]*display: flex;/);
+});
+
 test('renders a localized Main label with the current branch and a fallback', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(
@@ -1551,7 +1581,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   );
   assert.match(
     source,
-    /const mainLabel = currentBranch === undefined\s+\? t\('worktree\.main'\)\s+: t\('worktree\.mainWithBranch', \{ branch: currentBranch \}\);/,
+    /const\s+mainLabel\s*=\s*currentBranch\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*currentBranch\s*\}\);/,
   );
   assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
@@ -1677,7 +1707,10 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
-  assert.match(source, /sessionIds\.length > 5/);
+  assert.match(
+    source,
+    /isSessionGroupAutoExpanded\(\s*sessionIds,\s*currentSessionId,/,
+  );
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
   assert.match(source, /expandState\.actions\.toggleMain/);

@@ -107,7 +107,8 @@ The effective expansion of a structural row is:
 
 The effective expansion of a Session group is:
 
-    existing transient group expansion OR current-session temporary reveal
+    existing transient group expansion OR current-session temporary reveal when
+    the current Session is outside the first five rows
 
 When the current Session changes, the old reveal path and its temporary manual
 suppression are discarded. The previous path therefore returns to the user's
@@ -169,8 +170,9 @@ identity.
 
 ### worktree-surface-selectors.ts
 
-Add pure helpers to resolve a current Session location and to derive stable
-reveal keys. The helpers must be deterministic and independent of React,
+Add pure helpers to resolve a current Session location, derive stable reveal
+keys, and decide whether Session overflow is needed for the current row. The
+helpers must be deterministic and independent of React,
 browser APIs, Git, sidecar storage, and DSH mutation APIs.
 
 The resolver must distinguish Main from Worktree by the existing binding
@@ -258,6 +260,7 @@ does not repair, remove, or rebind detached records.
 - current Session receives the selected marker and old current rows lose it;
 - collapsed Workspace, Main, and Worktree ancestors are temporarily revealed;
 - a current Session after the fifth row temporarily reveals Session overflow;
+- a current Session within the first five rows does not expand Session overflow;
 - automatic reveal does not mutate the persisted expand-state snapshot;
 - manual collapse hides an automatically revealed path immediately and remains
   suppressed until current Session changes;

@@ -31,13 +31,23 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   Worktree branch 图标。
 - 保留用户在 DSH 原生 Access 界面中选择的限制。如果自定义预设不可用，在可能时回退到
   `workspace-write + ask`；如果无法验证权限能力，则显示可重试的降级状态，不伪称已获得完全访问。
+- 复用原生动画 `StateDot` 展示运行中的 Session，并为最近一条用户发送的 Session 消息显示
+  原生相对时间；hover 或打开菜单时，右侧位置让位给已有的操作菜单。
+- 使用 DSH 原生 Session hover 详情卡片展示完整标题、相对时间和当前状态；打开 Session 操作
+  菜单或拖拽行时，详情卡片让位。
+- 补齐原生的等待审批、计划待审、等待回答、已完成、空闲和运行中子代理状态；插件不会复制
+  原生动画实现。
+- 当折叠的 Workspace、Main 或 Worktree 中存在任一未归档的活动 Session 时，在其右侧显示
+  一个原生运行指示器；展开后恢复普通操作栏。
+- 用户在 Session 中发送新消息后，该 Session 会移动到当前 Main 或 Worktree 视觉分组的队首。
+  该排序只保存在浏览器本地，不修改 DSH Workspace 顺序或 Worktree sidecar。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
   active Worktree 额外显示“移除 Worktree”并要求确认。
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
-- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径和 Session 五行溢出，清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
+- 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
 - 在同一个 Session 的 snapshot 更新以及 Session 切换期间保持 Conversation 和 Hero 上下文
@@ -213,7 +223,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
    作为诊断信息。
 3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
    工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的
-   `bind → membership projection → open → refresh` 流程。
+   `bind → open → binding refresh` 流程；新建 Session 不会在 binding 刷新前投影到原生
+   Workspace membership。
 4. 同一 Workspace、同一物理路径的 active external 导入是幂等的。已经由 plugin 管理的路径
    返回 `WORKTREE_ALREADY_MANAGED`；无效或过期候选项返回 `WORKTREE_IMPORT_INVALID`，修复
    repository 状态后可以重试。
@@ -222,11 +233,12 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
 - 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 upstream
-  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding，在当前浏览器内
-  应用 `{ workspaceId, sessionId }` membership projection，并打开该 Session。
+  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding 并打开该 Session。
+  当前浏览器内的 `{ workspaceId, sessionId }` membership projection 会在之后刷新，因此新建
+  Session 不会短暂出现在 Main 中。
 - 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
   会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
-  `create → bind → project → open`，同一个 Worktree 的并发点击会合并。
+  新建路径执行 `create → bind → open → refresh`，同一个 Worktree 的并发点击会合并。
 - 如果 DSH 创建 Session 后 binding 失败，Session ID 仍会保留，可用于 Retry 或 Open 恢复。
   插件不会删除或修改该 DSH Session。
 - 打开 active Worktree Session 前，插件会在 DSH 风格的页面内弹窗中说明关联 Git 元数据为什么
@@ -236,6 +248,22 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - provisional blank Session 遵循 DSH 原生显示规则：只在当前选中的视角中显示，使用本地化
   的 `New Session` 文案，不显示生成的 ID，也没有 Rename、Fork 或 Archive 菜单。接受第一条
   prompt 后，它会变为普通 Session 行；隐藏 blank 行不会删除 Session 或 Worktree binding。
+
+### Session 活动与排序
+
+- Session 行复用 DSH 原生 `StateDot`：运行中的 Session 以及存在运行中子代理的 Session，使用
+  右侧动画点替代相对时间。等待审批、计划待审和等待回答使用原生 warning 点；已完成 Session
+  保留原生 completed 点。
+- 右侧元数据使用原生紧凑时间单位（刚刚、分钟、小时、天、月、年），来源是 DSH 的
+  `updatedAt`，该字段随最近一条用户消息推进；空白 New Session 不显示时间。时间只在 snapshot
+  render 时按原生规则重新计算，不额外增加每分钟 ticker。
+- 将鼠标悬停在 Worktree Session 行上 500 毫秒后，会打开原生详情卡片，展示完整标题、相对时间
+  和状态；Session 菜单打开或行正在拖拽时不显示卡片。
+- 折叠的 Workspace、Main 或 Worktree 分组，只要任一未归档成员正在运行就显示相同的原生运行点，
+  即使该 Session 被搜索隐藏也会计入。展开后隐藏聚合点；hover、focus 或打开菜单时显示原有
+  操作控件。
+- 用户发送新消息后，Session 会移动到当前 Main 或 Worktree 视觉分组队首。promotion、已观察
+  时间戳和每组顺序只存在浏览器本地；手动拖动仍先调用 DSH 原生排序 API，成功后再更新本地顺序。
 
 ### 排序与管理 Worktree
 

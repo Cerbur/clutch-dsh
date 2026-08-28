@@ -18,8 +18,9 @@ import type { WorktreeExpandStateStore } from './worktree-expand-state.js';
 import type {
   WorktreeFullAccessConfirmationController,
 } from './worktree-permission.js';
+import type { WorktreeSessionOrderStore } from './worktree-session-order.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
-import type { SessionListLike } from './session-view.js';
+import type { SessionListLike, SessionPresentation } from './session-view.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -50,6 +51,7 @@ export interface WorktreePermissionNotice {
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly expandState: WorktreeExpandStateStore;
+  readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
   readonly permission?: Pick<
     WorktreePermissionManager,
@@ -83,9 +85,7 @@ export interface WorktreeSurfaceInjected {
   ) => void;
   readonly permissionNotice?: ObservableSnapshot<WorktreePermissionNotice | undefined>;
   readonly createWorkspace?: () => Promise<void>;
-  readonly createSessionForWorktree?: (
-    input: CreateSessionForWorktreeInput,
-  ) => Promise<string>;
+  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
   readonly invalidateWorktreeContext?: (workspaceId?: string) => Promise<void>;
   readonly createMainSession?: (workspaceId: string) => void;
   readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
@@ -190,6 +190,7 @@ export interface WorktreeSessionRowProps {
   readonly blank: boolean;
   readonly current: boolean;
   readonly label: string;
+  readonly presentation?: SessionPresentation;
   readonly drag: SessionDragProps;
   readonly actionPending: boolean;
   readonly onOpen: () => void;
@@ -202,6 +203,7 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
+  readonly hasOngoingSession: boolean;
   readonly actionPending: boolean;
   readonly menuOpen: boolean;
   readonly drag: WorkspaceDragProps;
@@ -230,6 +232,7 @@ export interface WorktreeGroupRowProps {
   readonly label: string;
   readonly worktreeId?: string;
   readonly expanded: boolean;
+  readonly hasOngoingSession: boolean;
   readonly icon: ReactNode;
   readonly workspaceTitle: string;
   readonly state?: 'done' | 'warning' | 'error';
@@ -249,6 +252,7 @@ export interface WorktreeSessionGroupProps {
   readonly expanded: boolean;
   readonly actionPending: boolean;
   readonly sessions: SessionListLike;
+  readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly dragState: SessionDragState | undefined;
   readonly onToggleExpanded: () => void;
   readonly onStartDrag: (groupKey: string, sessionId: string) => void;

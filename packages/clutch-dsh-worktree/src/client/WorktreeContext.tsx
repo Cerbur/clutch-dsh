@@ -5,7 +5,7 @@ import type {
   PropsRuntime,
   TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots';
-import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { HoverCard, IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { WorktreeSessionContext } from './worktree-context.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
@@ -39,10 +39,16 @@ function WorktreeContextLabel({
     ? t('context.main', { name: value.label })
     : t('context.worktree', { name: value.label });
   return (
-    <span className={styles.headerContext} title={value.label} aria-label={ariaLabel}>
-      <IconBranchOutline16 size={14} className={styles.contextIcon} aria-hidden="true" />
-      <span className={styles.contextLabel}>{value.label}</span>
-    </span>
+    <HoverCard
+      anchor={
+        <span className={styles.headerContext} title={value.label} aria-label={ariaLabel}>
+          <IconBranchOutline16 size={14} className={styles.contextIcon} aria-hidden="true" />
+          <span className={styles.contextLabel}>{value.label}</span>
+        </span>
+      }
+      content={<div className={styles.contextHoverTitle}>{value.label}</div>}
+      openDelayMs={500}
+    />
   );
 }
 

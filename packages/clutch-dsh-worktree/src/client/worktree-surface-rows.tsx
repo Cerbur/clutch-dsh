@@ -17,7 +17,13 @@ import {
   StateDot,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
-import { isBlankSession } from './session-view.js';
+import {
+  isBlankSession,
+  relativeTime,
+  type RelativeTime,
+  type SessionPresentation,
+  type SessionStatusPresentation,
+} from './session-view.js';
 import { sessionLabel } from './worktree-surface-selectors.js';
 import type {
   WorktreeGroupRowProps,
@@ -32,11 +38,122 @@ function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
 }
 
+function sessionStatusLabel(
+  t: WorktreeSessionRowProps['t'],
+  status: SessionStatusPresentation,
+): string {
+  switch (status.labelKey) {
+    case 'running':
+      return t('session.status.running');
+    case 'subagentsRunning':
+      return t(
+        status.runningSubagentCount === 1
+          ? 'session.status.subagentsRunning.one'
+          : 'session.status.subagentsRunning.other',
+        { n: status.runningSubagentCount },
+      );
+    case 'idle':
+      return t('session.status.idle');
+    case 'waitingApproval':
+      return t('session.status.waitingApproval');
+    case 'planReview':
+      return t('session.status.planReview');
+    case 'waitingAnswer':
+      return t('session.status.waitingAnswer');
+    case 'completed':
+      return t('session.status.completed');
+  }
+}
+
+function sessionTimeLabel(t: WorktreeSessionRowProps['t'], value: RelativeTime): string {
+  switch (value.unit) {
+    case 'now':
+      return t('session.time.now');
+    case 'minutes':
+      return t('session.time.minutes', { n: value.n });
+    case 'hours':
+      return t('session.time.hours', { n: value.n });
+    case 'days':
+      return t('session.time.days', { n: value.n });
+    case 'months':
+      return t('session.time.months', { n: value.n });
+    case 'years':
+      return t('session.time.years', { n: value.n });
+  }
+}
+
+/** Native Workspace hover-card time copy, including the trailing "ago" marker. */
+function sessionHoverTimeLabel(
+  t: WorktreeSessionRowProps['t'],
+  value: RelativeTime,
+): string {
+  const label = sessionTimeLabel(t, value);
+  return value.unit === 'now' ? label : t('session.time.ago', { t: label });
+}
+
+/** Native Workspace hover-card status list, including a secondary subagent status when relevant. */
+function sessionHoverStatuses(
+  presentation: SessionPresentation,
+): readonly SessionStatusPresentation[] {
+  if (
+    presentation.runningSubagentCount === 0 ||
+    presentation.status.labelKey === 'subagentsRunning'
+  ) {
+    return [presentation.status];
+  }
+  return [
+    presentation.status,
+    {
+      state: 'ongoing',
+      labelKey: 'subagentsRunning',
+      runningSubagentCount: presentation.runningSubagentCount,
+    },
+  ];
+}
+
+/** Native Workspace Session hover-card details, adapted to the Worktree row projection. */
+function WorktreeSessionHoverContent({
+  label,
+  blank,
+  presentation,
+  t,
+}: {
+  readonly label: string;
+  readonly blank: boolean;
+  readonly presentation?: SessionPresentation;
+  readonly t: WorktreeSessionRowProps['t'];
+}) {
+  const statuses = presentation === undefined ? [] : sessionHoverStatuses(presentation);
+  const timeValue =
+    !blank && presentation?.updatedAt !== undefined
+      ? relativeTime(presentation.updatedAt, Date.now())
+      : undefined;
+
+  return (
+    <div className={styles.sessionHoverContent}>
+      <div className={styles.sessionHoverTitle}>{label}</div>
+      {!blank && timeValue !== undefined && (
+        <div className={styles.sessionHoverTime}>{sessionHoverTimeLabel(t, timeValue)}</div>
+      )}
+      {statuses.map((status) => (
+        <div
+          className={styles.sessionHoverStatus}
+          key={`${status.labelKey}-${status.runningSubagentCount}`}
+        >
+          <StateDot state={status.state} />
+          <span>{sessionStatusLabel(t, status)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Workspace row using the native DSH menu, fixed action column, and drag contract. */
 export function WorktreeWorkspaceRow({
   t,
   workspace,
   expanded,
+  hasOngoingSession,
   actionPending,
   menuOpen,
   drag,
@@ -61,16 +178,14 @@ export function WorktreeWorkspaceRow({
       disabled: actionPending,
     },
   ];
-  const markerClass = drag.marker === 'before'
-    ? styles.dropBefore
-    : drag.marker === 'after'
-      ? styles.dropAfter
-      : '';
+  const markerClass =
+    drag.marker === 'before' ? styles.dropBefore : drag.marker === 'after' ? styles.dropAfter : '';
 
   return (
     <div
       className={`${styles.workspaceRow} ${markerClass}`}
       data-workspace-drag={drag.active ? 'active' : undefined}
+      data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
       data-menu-open={menuOpen || undefined}
       draggable
       onClick={() => {
@@ -118,6 +233,15 @@ export function WorktreeWorkspaceRow({
       </span>
       <span className={styles.workspaceTitle}>{workspace.title}</span>
       <span className={`${styles.treeActionSlot} ${styles.workspaceActions}`}>
+        <span
+          className={styles.groupActivity}
+          data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
+          role={hasOngoingSession && !expanded ? 'img' : undefined}
+          aria-label={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+          title={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+        >
+          {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
+        </span>
         <span className={styles.menuAction}>
           <Menu
             open={menuOpen}
@@ -132,7 +256,7 @@ export function WorktreeWorkspaceRow({
             }}
             portal
             closeOnPointerLeave
-            anchor={(
+            anchor={
               <button
                 type="button"
                 className={styles.iconButton}
@@ -145,7 +269,7 @@ export function WorktreeWorkspaceRow({
               >
                 <IconEllipsisOutline16 />
               </button>
-            )}
+            }
           />
         </span>
         <button
@@ -172,6 +296,7 @@ export function WorktreeGroupRow({
   label,
   worktreeId,
   expanded,
+  hasOngoingSession,
   icon,
   workspaceTitle,
   state,
@@ -182,39 +307,42 @@ export function WorktreeGroupRow({
   drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
-  const markerClass = drag?.marker === 'before'
-    ? styles.dropBefore
-    : drag?.marker === 'after'
-      ? styles.dropAfter
-      : '';
-  const dragProps = drag === undefined
-    ? {}
-    : {
-        draggable: true,
-        onDragStart: (event: ReactDragEvent<HTMLElement>) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', worktreeId ?? label);
-          drag.start();
-        },
-        onDragEnd: drag.end,
-        onDragOver: (event: ReactDragEvent<HTMLElement>) => {
-          if (!drag.active) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-          drag.hover(rowHalf(event));
-        },
-        onDrop: (event: ReactDragEvent<HTMLElement>) => {
-          if (!drag.active) return;
-          event.preventDefault();
-          drag.drop(rowHalf(event));
-        },
-      };
+  const markerClass =
+    drag?.marker === 'before'
+      ? styles.dropBefore
+      : drag?.marker === 'after'
+        ? styles.dropAfter
+        : '';
+  const dragProps =
+    drag === undefined
+      ? {}
+      : {
+          draggable: true,
+          onDragStart: (event: ReactDragEvent<HTMLElement>) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', worktreeId ?? label);
+            drag.start();
+          },
+          onDragEnd: drag.end,
+          onDragOver: (event: ReactDragEvent<HTMLElement>) => {
+            if (!drag.active) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            drag.hover(rowHalf(event));
+          },
+          onDrop: (event: ReactDragEvent<HTMLElement>) => {
+            if (!drag.active) return;
+            event.preventDefault();
+            drag.drop(rowHalf(event));
+          },
+        };
 
   const row = (
     <div
       className={`${styles.worktreeRow} ${markerClass}`}
       data-main-group={main ? 'true' : undefined}
       data-main-expanded={main ? String(expanded) : undefined}
+      data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
       data-menu-open={menu?.open ? 'true' : undefined}
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
@@ -251,6 +379,15 @@ export function WorktreeGroupRow({
       )}
       <span className={styles.worktreeLabel}>{label}</span>
       <span className={styles.treeActionSlot}>
+        <span
+          className={styles.groupActivity}
+          data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
+          role={hasOngoingSession && !expanded ? 'img' : undefined}
+          aria-label={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+          title={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+        >
+          {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
+        </span>
         {menu !== undefined && (
           <span className={styles.menuAction}>
             <Menu
@@ -342,13 +479,11 @@ export function WorktreeSessionRow({
   onRename,
   onFork,
   onArchive,
+  presentation,
 }: WorktreeSessionRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const markerClass = drag.marker === 'before'
-    ? styles.dropBefore
-    : drag.marker === 'after'
-      ? styles.dropAfter
-      : '';
+  const markerClass =
+    drag.marker === 'before' ? styles.dropBefore : drag.marker === 'after' ? styles.dropAfter : '';
   const sessionMenuItems = [
     {
       id: 'rename',
@@ -369,8 +504,20 @@ export function WorktreeSessionRow({
       disabled: onArchive === undefined || actionPending,
     },
   ];
+  const statusLabel = presentation === undefined
+    ? undefined
+    : sessionStatusLabel(t, presentation.status);
+  const showTrailingStatus =
+    !blank &&
+    presentation !== undefined &&
+    (presentation.status.state !== 'done' || presentation.completed);
+  const timeValue =
+    !blank && !showTrailingStatus && presentation?.updatedAt !== undefined
+      ? relativeTime(presentation.updatedAt, Date.now())
+      : undefined;
+  const timeLabel = timeValue === undefined ? undefined : sessionTimeLabel(t, timeValue);
 
-  return (
+  const row = (
     <div
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
@@ -403,39 +550,77 @@ export function WorktreeSessionRow({
         <span className={styles.sessionLabel}>{label}</span>
       </button>
       {!blank && (
-        <span className={styles.rowActions}>
-          <Menu
-            open={menuOpen}
-            onClose={() => {
-              setMenuOpen(false);
-            }}
-            items={sessionMenuItems}
-            onSelect={(id) => {
-              setMenuOpen(false);
-              if (id === 'rename') onRename?.(sessionId, label);
-              if (id === 'fork') onFork?.(sessionId);
-              if (id === 'archive') onArchive?.(sessionId);
-            }}
-            portal
-            closeOnPointerLeave
-            anchor={(
-              <button
-                type="button"
-                className={styles.iconButton}
-                data-session-menu
-                aria-label={t('session.options', { name: label })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
+        <span className={styles.sessionTrailing}>
+          <span className={styles.sessionMeta}>
+            {showTrailingStatus && presentation !== undefined ? (
+              <span
+                className={styles.sessionStatus}
+                data-session-status={statusLabel}
+                role="img"
+                aria-label={statusLabel}
+                title={statusLabel}
               >
-                <IconEllipsisOutline16 />
-              </button>
-            )}
-          />
+                <StateDot state={presentation.status.state} />
+              </span>
+            ) : timeLabel !== undefined ? (
+              <span className={styles.sessionTime} data-session-time>
+                {timeLabel}
+              </span>
+            ) : null}
+          </span>
+          <span className={styles.rowActions}>
+            <Menu
+              open={menuOpen}
+              onClose={() => {
+                setMenuOpen(false);
+              }}
+              items={sessionMenuItems}
+              onSelect={(id) => {
+                setMenuOpen(false);
+                if (id === 'rename') onRename?.(sessionId, label);
+                if (id === 'fork') onFork?.(sessionId);
+                if (id === 'archive') onArchive?.(sessionId);
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  data-session-menu
+                  aria-label={t('session.options', { name: label })}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMenuOpen((current) => !current);
+                  }}
+                >
+                  <IconEllipsisOutline16 />
+                </button>
+              }
+            />
+          </span>
         </span>
       )}
     </div>
+  );
+
+  return (
+    <HoverCard
+      anchor={row}
+      content={(
+        <WorktreeSessionHoverContent
+          label={label}
+          blank={blank}
+          presentation={presentation}
+          t={t}
+        />
+      )}
+      openDelayMs={500}
+      disabled={menuOpen || drag.active}
+      copyText={blank ? undefined : label}
+      copyLabel={t('copy')}
+      copiedLabel={t('hover.copied')}
+    />
   );
 }
 
@@ -448,6 +633,7 @@ export function WorktreeSessionGroup({
   expanded,
   actionPending,
   sessions,
+  sessionPresentations,
   dragState,
   onToggleExpanded,
   onStartDrag,
@@ -473,12 +659,11 @@ export function WorktreeSessionGroup({
           blank={isBlankSession(sessionId, sessions)}
           current={sessionId === currentSessionId}
           label={sessionLabel(sessionId, sessions, t)}
+          presentation={sessionPresentations[sessionId]}
           drag={{
             active: sameGroupDrag,
             marker:
-              sameGroupDrag && dragState.over?.sessionId === sessionId
-                ? dragState.over.half
-                : null,
+              sameGroupDrag && dragState.over?.sessionId === sessionId ? dragState.over.half : null,
             start: () => {
               onStartDrag(groupKey, sessionId);
             },
@@ -487,12 +672,7 @@ export function WorktreeSessionGroup({
             },
             drop: (half) => {
               if (dragState === undefined) return;
-              onCommitDrag(
-                dragState,
-                { sessionId, half },
-                sessionIds,
-                workspaceId,
-              );
+              onCommitDrag(dragState, { sessionId, half }, sessionIds, workspaceId);
             },
             end: () => {
               if (dragState?.over !== null && dragState?.over !== undefined) {

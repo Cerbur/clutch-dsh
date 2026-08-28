@@ -309,7 +309,7 @@ test('binds an existing blank Session before projecting and opening it', async (
   ]);
 });
 
-test('creates, binds, projects, and opens in the upstream-compatible order', async () => {
+test('creates, binds, and opens without projecting before the binding refresh', async () => {
   const calls = [];
   const connector = createWorktreeSessionConnector({
     manager: {
@@ -349,7 +349,6 @@ test('creates, binds, projects, and opens in the upstream-compatible order', asy
   assert.deepEqual(calls, [
     ['create', { cwd: '/tmp/worktree-one' }],
     ['bind', 'created-blank'],
-    ['ensure', 'ws-one', 'created-blank'],
     ['open', 'created-blank'],
   ]);
 });
@@ -430,7 +429,6 @@ test('confirms Worktree Full Access after binding and before opening a new Sessi
       binding: 'active',
       confirmed: true,
     }],
-    ['ensure', 'ws-one', 'permission-session'],
     ['open', 'permission-session'],
   ]);
 });
@@ -762,7 +760,6 @@ test('coalesces concurrent creates for the same Worktree and clears the key afte
   assert.equal(await first, 'coalesced-session');
   assert.deepEqual(calls, [
     ['bind', 'coalesced-session'],
-    ['ensure', 'ws-one', 'coalesced-session'],
     ['open', 'coalesced-session'],
   ]);
 });

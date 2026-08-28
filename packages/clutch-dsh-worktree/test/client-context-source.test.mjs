@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 
-test('keeps the Session header native title and adds a Hero title overlay', async () => {
+test('keeps the Session header hover card and adds a Hero title overlay', async () => {
   const source = await readFile(new URL('../src/client/WorktreeContext.tsx', import.meta.url), 'utf8');
   const heroSource = await readFile(
     new URL('../src/client/WorktreeHeroContext.tsx', import.meta.url),
@@ -15,8 +15,12 @@ test('keeps the Session header native title and adds a Hero title overlay', asyn
   assert.match(source, /WorktreeHeaderContext/);
   assert.match(source, /conversation\.session\.header\.actions/);
   assert.match(source, /title=\{value\.label\}/);
-  assert.doesNotMatch(source, /\bHoverCard\b/);
-  assert.doesNotMatch(source, /contextHoverTitle/);
+  assert.match(source, /\bHoverCard\b/);
+  assert.match(source, /openDelayMs=\{500\}/);
+  assert.match(
+    source,
+    /content=\{<div className=\{styles\.contextHoverTitle\}>\{value\.label\}<\/div>\}/,
+  );
   assert.match(heroSource, /WorktreeHeroContext/);
   assert.match(heroSource, /data-phase/);
   assert.match(heroSource, /querySelector/);
