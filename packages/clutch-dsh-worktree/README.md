@@ -46,6 +46,10 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   non-archived Sessions is active; expanded groups keep their normal action rail instead.
 - Promote a Session to the head of its Main or Worktree visual group after a newer user message.
   This ordering is browser-local and does not mutate DSH Workspace order or the Worktree sidecar.
+- Fork a Session from the native DSH Workspace tab, the Worktree view, or the Conversation fork
+  action. When the parent has an active Worktree binding, the child is bound to the same Worktree
+  and added to the browser-local Workspace membership projection; the child remains a normal DSH
+  Session. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
@@ -64,6 +68,10 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   `WT` button when the Sidebar is collapsed.
 - Keep Worktree Sessions in the original DSH Project/Workspace view; the plugin does not copy
   Session content or modify messages, prompts, transcripts, or history.
+- Worktree fork membership is not written to DSH's durable `Workspace.sessionIds`. While this
+  plugin is loaded, the browser can show the child through its local projection; without the
+  plugin, the child remains in DSH's global Session management but is not durably attached to the
+  native Workspace root membership.
 
 ### Compatibility and prerequisites
 
@@ -287,6 +295,22 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - A newer user message promotes its Session to the head of the current Main or Worktree visual
   group. The promotion, observed timestamps, and per-group order live only in browser-local state;
   successful manual drag still uses the native DSH ordering API before updating that local order.
+
+### Fork Worktree Sessions
+
+- Use any native DSH fork entry point: a Session-list tab, a Worktree Session menu, or the
+  Conversation fork action. The plugin wraps the shared DSH `sessions.fork` service, so the
+  original fork cut, title increment, and child lineage stay native.
+- After DSH creates the child, the plugin looks up the parent's active sidecar binding, writes the
+  child binding through the existing `/api` Manager, and replays the browser-local Workspace
+  membership projection. The Worktree view then refreshes while retaining its ready content.
+- If the child is created but sidecar lookup or binding fails, DSH keeps the child and the plugin
+  shows Retry Binding/Open Created Session recovery. A later plugin initialization also retries
+  recoverable fork children from native Session lineage summaries; it never binds unrelated
+  subagents automatically.
+- This flow does not persist the child into DSH `Workspace.sessionIds`. The native DSH Workspace
+  view can only see the temporary browser projection while the plugin is loaded; the durable native
+  Workspace data is unchanged.
 
 ### Reorder and manage Worktrees
 
