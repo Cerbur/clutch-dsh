@@ -85,6 +85,7 @@ import type { WorktreeFullAccessConfirmationInput } from './worktree-permission.
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
+  createNumberedWorktreeName,
   createWorktreeModalViewLoader,
   createWorktreeRefreshGuard,
   filterArchivedSessionIds,
@@ -121,6 +122,11 @@ const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
 const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT =
   (): WorktreeFullAccessConfirmationInput | undefined => undefined;
 type ExpandedSessionGroups = Record<string, boolean>;
+
+interface WorktreeCreateDefaults {
+  readonly baseBranch?: string;
+  readonly newBranch?: string;
+}
 
 interface CurrentSessionRevealState {
   readonly sessionId: string;
@@ -957,7 +963,10 @@ export function WorktreeSurface({
     setModalReadLoading(false);
   };
 
-  const openWorktreeCreator = (workspace: WorkspaceLike): void => {
+  const openWorktreeCreator = (
+    workspace: WorkspaceLike,
+    defaults: WorktreeCreateDefaults = {},
+  ): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
@@ -970,18 +979,16 @@ export function WorktreeSurface({
     setModalReadError(undefined);
     setModalReadLoading(false);
     if (view === undefined) {
-      setSelectedBranch('');
-      setNewBranch('');
+      setSelectedBranch(defaults.baseBranch ?? '');
+      setNewBranch(defaults.newBranch ?? '');
       loadModalWorktreeView(workspace.workspaceId);
       return;
     }
-    setSelectedBranch(selectDefaultBaseBranch(view.branches));
-    setNewBranch(
-      createDefaultWorktreeName([
-        ...view.branches.map((branch) => branch.name),
-        ...view.worktrees.map((worktree) => worktree.branch),
-      ]),
-    );
+    setSelectedBranch(defaults.baseBranch ?? selectDefaultBaseBranch(view.branches));
+    setNewBranch(defaults.newBranch ?? createDefaultWorktreeName([
+      ...view.branches.map((branch) => branch.name),
+      ...view.worktrees.map((worktree) => worktree.branch),
+    ]));
   };
 
   const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
@@ -1347,6 +1354,10 @@ export function WorktreeSurface({
                     expandedSessionGroups[mainGroupKey] === true ||
                     mainSessionGroupAutoExpanded;
                   const worktrees = view?.worktrees ?? [];
+                  const workspaceWorktreeNames = [
+                    ...(view?.branches.map((branch) => branch.name) ?? []),
+                    ...(view?.worktrees.map((worktree) => worktree.branch) ?? []),
+                  ];
                   const sameWorkspaceWorktreeDrag =
                     worktreeDrag?.workspaceId === workspace.workspaceId;
 
@@ -1436,11 +1447,24 @@ export function WorktreeSurface({
                               open: openMainMenuId === workspace.workspaceId,
                               label: mainLabel,
                               copyPath: workspace.path,
+                              showCreate: currentBranch !== undefined,
                               showRemove: false,
                               disabled: actionPending,
                               onOpenChange: (open) => {
                                 setOpenMainMenuId(open ? workspace.workspaceId : undefined);
                               },
+                              onCreateWorktree:
+                                currentBranch === undefined
+                                  ? undefined
+                                  : () => {
+                                      openWorktreeCreator(workspace, {
+                                        baseBranch: currentBranch,
+                                        newBranch: createNumberedWorktreeName(
+                                          currentBranch,
+                                          workspaceWorktreeNames,
+                                        ),
+                                      });
+                                    },
                             }}
                             onCreateSession={
                               createMainSession === undefined
@@ -1601,6 +1625,7 @@ export function WorktreeSurface({
                                     open: openWorktreeMenuId === record.worktreeId,
                                     label: record.branch,
                                     copyPath: record.absolutePath,
+                                    showCreate: record.status === 'active',
                                     showRemove: record.status === 'active',
                                     disabled: actionPending,
                                     onOpenChange: (open) => {
@@ -1608,6 +1633,17 @@ export function WorktreeSurface({
                                         open ? record.worktreeId : undefined,
                                       );
                                     },
+                                    onCreateWorktree: record.status === 'active'
+                                      ? () => {
+                                          openWorktreeCreator(workspace, {
+                                            baseBranch: record.branch,
+                                            newBranch: createNumberedWorktreeName(
+                                              record.branch,
+                                              workspaceWorktreeNames,
+                                            ),
+                                          });
+                                        }
+                                      : undefined,
                                     onRemove: record.status === 'active'
                                       ? () => {
                                           setWorktreeRemoval(record);

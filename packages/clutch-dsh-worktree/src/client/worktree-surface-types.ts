@@ -218,9 +218,11 @@ export interface WorktreeGroupMenuProps {
   readonly open: boolean;
   readonly label: string;
   readonly copyPath: string;
+  readonly showCreate: boolean;
   readonly showRemove: boolean;
   readonly disabled: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  readonly onCreateWorktree?: () => void;
   readonly onRemove?: () => void;
 }
 

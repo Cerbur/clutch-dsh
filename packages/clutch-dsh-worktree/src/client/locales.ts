@@ -32,6 +32,7 @@ export const zh = {
   'worktree.collapse': '收起 {name}',
   'worktree.options': 'Worktree 选项：{name}',
   'worktree.copyPath': '复制路径',
+  'worktree.createNew': '创建新的 Worktree',
   'worktree.remove': '移除 Worktree',
   'worktree.removeDescription': '移除“{name}”？Session 会保留在 DSH 中，并作为已分离关系继续可用。',
   'worktree.removeExternalDescription':
@@ -171,6 +172,7 @@ export const en = {
   'worktree.collapse': 'Collapse {name}',
   'worktree.options': 'Worktree options for {name}',
   'worktree.copyPath': 'Copy path',
+  'worktree.createNew': 'Create new Worktree',
   'worktree.remove': 'Remove Worktree',
   'worktree.removeDescription':
     'Remove {name}? Sessions stay in DSH and remain available as detached bindings.',

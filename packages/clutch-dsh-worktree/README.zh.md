@@ -44,6 +44,9 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
   active Worktree 额外显示“移除 Worktree”并要求确认。
+- 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
+  为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree
+  不显示该动作。
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
@@ -207,9 +210,12 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 1. 选择 Workspace，点击它旁边的 `+`，选择基线 local branch，并填写 Worktree name。默认
    branch 名称为 `dsh/<8-character-random-string>`。
-2. 目标 Worktree 路径必须是绝对路径，属于同一个 Project，且不能是 Project 根目录。相对
+2. 如果要从已有 Worktree 创建同级 Worktree，打开该 active Worktree 的选项菜单并选择
+   `创建新的 Worktree`。弹窗会以当前 Worktree branch 作为基线，并为名称选择下一个可用的
+   递增序号；已有名称会被跳过。
+3. 目标 Worktree 路径必须是绝对路径，属于同一个 Project，且不能是 Project 根目录。相对
    路径、其他 Project 的路径或 Project 根目录都会被拒绝。
-3. Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；请
+4. Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；请
    安装 Git、重启 DSH 后重试。如果缺少 repository、初始 commit 或本地 branch，按照弹窗中
    的可复制 setup 命令修复后重试。插件只展示这些提示，不会执行 setup 或安装命令或编辑
    业务文件。

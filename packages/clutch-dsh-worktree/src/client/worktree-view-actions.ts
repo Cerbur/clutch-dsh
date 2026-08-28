@@ -27,6 +27,27 @@ export function createDefaultWorktreeName(
   throw new Error('Unable to generate an available default Worktree name.');
 }
 
+/** Generate the next available numeric sibling name for a selected Worktree. */
+export function createNumberedWorktreeName(
+  baseName: string,
+  existingNames: Iterable<string>,
+): string {
+  const normalizedBaseName = baseName.trim();
+  const usedNames = new Set([...existingNames].map((name) => name.trim()));
+  const numberedBase = normalizedBaseName.match(/^(.*)-(\d+)$/);
+  const prefix = numberedBase?.[1] || normalizedBaseName || 'worktree';
+  const parsedNumber = numberedBase === null ? 1 : Number(numberedBase[2]);
+  let number = Number.isSafeInteger(parsedNumber) ? parsedNumber + 1 : 2;
+
+  for (let attempt = 0; attempt < 10000; attempt += 1) {
+    const candidate = `${prefix}-${number}`;
+    if (!usedNames.has(candidate)) return candidate;
+    number += 1;
+  }
+
+  throw new Error('Unable to generate an available numbered Worktree name.');
+}
+
 export interface CreateSessionForWorktreeInput {
   readonly workspaceId: string;
   readonly worktreeId: string;

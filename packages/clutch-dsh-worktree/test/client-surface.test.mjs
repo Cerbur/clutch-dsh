@@ -4,6 +4,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 import {
+  createNumberedWorktreeName,
   createDefaultWorktreeName,
   executeWorktreeAction,
   loadWorktreeView,
@@ -625,6 +626,17 @@ test('generates an available dsh Worktree name and rolls after a collision', () 
 
   assert.equal(name, 'dsh/87654321');
   assert.equal(generated.length, 2);
+});
+
+test('generates the next available numbered name from a selected Worktree', () => {
+  assert.equal(
+    createNumberedWorktreeName('feature', ['feature', 'feature-2', 'feature-4']),
+    'feature-3',
+  );
+  assert.equal(
+    createNumberedWorktreeName('feature-3', ['feature', 'feature-2', 'feature-3', 'feature-4']),
+    'feature-5',
+  );
 });
 
 test('loads independent Worktree projections for every Workspace', async () => {
@@ -1499,6 +1511,36 @@ test('copies Main and Worktree paths while gating removal through menu visibilit
 
   assert.match(locales, /'worktree\.copyPath': '复制路径'/);
   assert.match(locales, /'worktree\.copyPath': 'Copy path'/);
+});
+
+test('offers Local and Worktree creation through shared menu parameters', async () => {
+  const { coordinator, rows, types } = await readSurfaceSources();
+
+  assert.match(rows, /id: 'create'/);
+  assert.match(rows, /label: t\('worktree\.createNew'\)/);
+  assert.match(rows, /icon: <IconPlusOutline16 \/>/);
+  assert.match(rows, /menu\.showCreate/);
+  assert.match(rows, /if \(id === 'create' && menu\.showCreate\) menu\.onCreateWorktree\?\.\(\)/);
+  assert.match(types, /readonly showCreate: boolean;/);
+  assert.match(types, /readonly onCreateWorktree\?: \(\) => void;/);
+  assert.match(coordinator, /createNumberedWorktreeName/);
+  assert.match(
+    coordinator,
+    /onCreateWorktree: record\.status === 'active'[\s\S]*openWorktreeCreator\(workspace, \{[\s\S]*baseBranch: record\.branch[\s\S]*newBranch: createNumberedWorktreeName\(\s*record\.branch/,
+  );
+
+  const mainCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="main"'));
+  const mainCallEnd = coordinator.indexOf('\n                          />', mainCallStart);
+  const mainCallSource = coordinator.slice(mainCallStart, mainCallEnd);
+  assert.match(mainCallSource, /showCreate: currentBranch !== undefined/);
+  assert.match(mainCallSource, /onCreateWorktree:/);
+  assert.match(mainCallSource, /baseBranch: currentBranch/);
+  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*currentBranch/);
+
+  const worktreeCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="worktree"'));
+  const worktreeCallEnd = coordinator.indexOf('\n                                />', worktreeCallStart);
+  const worktreeCallSource = coordinator.slice(worktreeCallStart, worktreeCallEnd);
+  assert.match(worktreeCallSource, /showCreate: record\.status === 'active'/);
 });
 
 test('polishes Main and Worktree row hover presentation', async () => {
