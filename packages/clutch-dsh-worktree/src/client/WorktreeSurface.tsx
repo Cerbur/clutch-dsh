@@ -28,10 +28,17 @@ import {
   formatWorktreeViewError,
 } from './worktree-error-copy.js';
 import {
+  deriveSessionPresentationIndex,
   filterVisibleSessionIds,
+  hasOngoingSession,
   sessionMatchesQuery,
   type SessionListLike,
 } from './session-view.js';
+import {
+  nextSessionOrderAccount,
+  reorderSessionIds,
+  type SessionOrderAccountState,
+} from './worktree-session-order.js';
 import { retryWorktreeSessionBinding } from './worktree-session.js';
 import {
   WorktreeCreateDialog,
@@ -96,10 +103,7 @@ import {
 } from './worktree-view.js';
 import styles from './worktree.css';
 
-export type {
-  WorktreeSurfaceInjected,
-  WorktreeSurfaceProps,
-} from './worktree-surface-types.js';
+export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './worktree-surface-types.js';
 
 function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
   const viewError = toWorktreeViewError(error);
@@ -122,6 +126,21 @@ interface CurrentSessionRevealState {
   readonly suppressedKeys: Readonly<Record<string, true>>;
 }
 
+interface SessionOrderInput {
+  readonly accountKey: string;
+  readonly sessionIds: readonly string[];
+  readonly updatedAtById: Readonly<Record<string, number | undefined>>;
+}
+
+function updatedAtById(
+  sessionIds: readonly string[],
+  sessions: SessionListLike,
+): Readonly<Record<string, number | undefined>> {
+  return Object.fromEntries(
+    sessionIds.map((sessionId) => [sessionId, sessions.byId[sessionId]?.updatedAt]),
+  );
+}
+
 function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
   const next = workspaces.map((workspace) => workspace.workspaceId);
   const previousRef = useRef<readonly string[]>([]);
@@ -142,6 +161,7 @@ export function WorktreeSurface({
   t,
   available,
   expandState,
+  sessionOrder,
   manager,
   permission,
   confirmFullAccess,
@@ -199,11 +219,19 @@ export function WorktreeSurface({
   useEffect(() => {
     setFullAccessAcknowledged(false);
   }, [fullAccessConfirmationKey]);
+  const sessionOrderSnapshot = useSyncExternalStore(
+    sessionOrder.subscribe,
+    sessionOrder.getSnapshot,
+    sessionOrder.getSnapshot,
+  );
+  const sessionPresentations = useMemo(
+    () => deriveSessionPresentationIndex(sessions),
+    [sessions.byId],
+  );
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentSessionReveal, setCurrentSessionReveal] =
-    useState<CurrentSessionRevealState>();
+  const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
   const locateGenerationRef = useRef(0);
@@ -211,10 +239,11 @@ export function WorktreeSurface({
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
   const [modalReadLoading, setModalReadLoading] = useState(false);
-  const [worktreeModalMode, setWorktreeModalMode] =
-    useState<WorktreeRegistrationMode>('create');
-  const [importCandidates, setImportCandidates] =
-    useState<ImportCandidatesState>({ status: 'idle', candidates: [] });
+  const [worktreeModalMode, setWorktreeModalMode] = useState<WorktreeRegistrationMode>('create');
+  const [importCandidates, setImportCandidates] = useState<ImportCandidatesState>({
+    status: 'idle',
+    candidates: [],
+  });
   const [selectedImportPath, setSelectedImportPath] = useState<string | undefined>();
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
   const [openMainMenuId, setOpenMainMenuId] = useState<string>();
@@ -253,74 +282,81 @@ export function WorktreeSurface({
   const collapsed = width <= 64;
   const query = searchQuery.trim().toLocaleLowerCase();
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
-  const pendingSessionArchived = pendingSessionBinding !== undefined &&
+  const pendingSessionArchived =
+    pendingSessionBinding !== undefined &&
     archivedSessionIds.includes(pendingSessionBinding.sessionId);
 
-  const refresh = useCallback(async (options: RefreshOptions = {}): Promise<void> => {
-    if (manager === undefined) {
-      refreshGuard.current.invalidate();
-      setReadState(EMPTY_READ_STATE);
-      return;
-    }
-    const preserveCurrent = options.preserveCurrent === true;
-    if (!preserveCurrent) {
-      setReadState({ status: 'loading', views: [] });
-    }
-    await refreshGuard.current.run(
-      () => loadWorktreeViews(manager, workspaceIds, {
-        invalidateContext: options.invalidateContext !== false,
-        invalidateWorktreeContext,
-      }),
-      (views) => {
-        setReadState({
-          status: 'ready',
-          views: modalReadViewRef.current === undefined
-            ? views
-            : mergeWorktreeView(views, modalReadViewRef.current),
-        });
-      },
-      (error) => {
-        if (preserveCurrent) throw error;
-        setReadState({
-          status: 'error',
-          views: modalReadViewRef.current === undefined
-            ? []
-            : [modalReadViewRef.current],
-          error: toWorktreeViewError(error),
-        });
-      },
-    );
-  }, [invalidateWorktreeContext, manager, workspaceIds]);
+  const refresh = useCallback(
+    async (options: RefreshOptions = {}): Promise<void> => {
+      if (manager === undefined) {
+        refreshGuard.current.invalidate();
+        setReadState(EMPTY_READ_STATE);
+        return;
+      }
+      const preserveCurrent = options.preserveCurrent === true;
+      if (!preserveCurrent) {
+        setReadState({ status: 'loading', views: [] });
+      }
+      await refreshGuard.current.run(
+        () =>
+          loadWorktreeViews(manager, workspaceIds, {
+            invalidateContext: options.invalidateContext !== false,
+            invalidateWorktreeContext,
+          }),
+        (views) => {
+          setReadState({
+            status: 'ready',
+            views:
+              modalReadViewRef.current === undefined
+                ? views
+                : mergeWorktreeView(views, modalReadViewRef.current),
+          });
+        },
+        (error) => {
+          if (preserveCurrent) throw error;
+          setReadState({
+            status: 'error',
+            views: modalReadViewRef.current === undefined ? [] : [modalReadViewRef.current],
+            error: toWorktreeViewError(error),
+          });
+        },
+      );
+    },
+    [invalidateWorktreeContext, manager, workspaceIds],
+  );
 
-  const loadModalWorktreeView = useCallback((workspaceId: string): void => {
-    setModalReadError(undefined);
-    setModalReadLoading(true);
-    if (manager === undefined) {
-      setModalReadLoading(false);
-      setModalReadError({
-        code: 'WORKTREE_VIEW_UNAVAILABLE',
-        message: '',
-        retryable: true,
-      });
-      return;
-    }
-    void modalReadLoader.current.load(
-      manager,
-      workspaceId,
-      (view) => {
-        modalReadViewRef.current = view;
+  const loadModalWorktreeView = useCallback(
+    (workspaceId: string): void => {
+      setModalReadError(undefined);
+      setModalReadLoading(true);
+      if (manager === undefined) {
         setModalReadLoading(false);
-        setReadState((current) => ({
-          ...current,
-          views: mergeWorktreeView(current.views, view),
-        }));
-      },
-      (error) => {
-        setModalReadLoading(false);
-        setModalReadError(toWorktreeViewError(error));
-      },
-    );
-  }, [manager]);
+        setModalReadError({
+          code: 'WORKTREE_VIEW_UNAVAILABLE',
+          message: '',
+          retryable: true,
+        });
+        return;
+      }
+      void modalReadLoader.current.load(
+        manager,
+        workspaceId,
+        (view) => {
+          modalReadViewRef.current = view;
+          setModalReadLoading(false);
+          setReadState((current) => ({
+            ...current,
+            views: mergeWorktreeView(current.views, view),
+          }));
+        },
+        (error) => {
+          setModalReadLoading(false);
+          setModalReadError(toWorktreeViewError(error));
+        },
+      );
+    },
+    [manager],
+  );
 
   useEffect(() => {
     if (mode === 'worktree') {
@@ -352,6 +388,79 @@ export function WorktreeSurface({
     () => new Map(readState.views.map((view) => [view.workspaceId, view])),
     [readState.views],
   );
+
+  const sessionOrderInputs = useMemo<readonly SessionOrderInput[]>(() => {
+    if (readState.status !== 'ready') return [];
+    const inputs: SessionOrderInput[] = [];
+    for (const workspace of workspaces.items) {
+      const view = viewByWorkspace.get(workspace.workspaceId);
+      const allWorkspaceSessionIds = filterArchivedSessionIds(
+        workspaceSessionIds(workspaces, workspace.workspaceId, sessions.ids),
+        archivedSessionIds,
+      );
+      const bindings = view?.bindings ?? [];
+      const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
+      const mainSessionIds = filterVisibleSessionIds(
+        unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
+        sessions,
+      );
+      inputs.push({
+        accountKey: `main:${workspace.workspaceId}`,
+        sessionIds: mainSessionIds,
+        updatedAtById: updatedAtById(mainSessionIds, sessions),
+      });
+      for (const record of view?.worktrees ?? []) {
+        const worktreeSessionIds = filterVisibleSessionIds(
+          filterArchivedSessionIds(
+            bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+              sessions.ids.includes(sessionId),
+            ),
+            archivedSessionIds,
+          ),
+          sessions,
+        );
+        inputs.push({
+          accountKey: `worktree:${record.worktreeId}`,
+          sessionIds: worktreeSessionIds,
+          updatedAtById: updatedAtById(worktreeSessionIds, sessions),
+        });
+      }
+    }
+    return inputs;
+  }, [
+    archivedSessionIds,
+    readState.status,
+    sessions.byId,
+    sessions.ids,
+    viewByWorkspace,
+    workspaces,
+    workspaces.items,
+  ]);
+
+  const orderedSessionIdsByAccount = useMemo(() => {
+    const ordered = new Map<string, readonly string[]>();
+    for (const input of sessionOrderInputs) {
+      const previous: SessionOrderAccountState | undefined =
+        sessionOrderSnapshot.accounts[input.accountKey];
+      ordered.set(
+        input.accountKey,
+        nextSessionOrderAccount({
+          baseIds: input.sessionIds,
+          updatedAtById: input.updatedAtById,
+          previous,
+        }).order,
+      );
+    }
+    return ordered;
+  }, [sessionOrderInputs, sessionOrderSnapshot]);
+
+  useEffect(() => {
+    if (mode !== 'worktree' || readState.status !== 'ready') return;
+    for (const input of sessionOrderInputs) {
+      sessionOrder.actions.reconcile(input.accountKey, input.sessionIds, input.updatedAtById);
+    }
+    sessionOrder.actions.retain(sessionOrderInputs.map((input) => input.accountKey));
+  }, [mode, readState.status, sessionOrder, sessionOrderInputs]);
 
   const currentSessionLocation = useMemo(
     () =>
@@ -419,12 +528,11 @@ export function WorktreeSurface({
     if (
       readState.status !== 'ready' ||
       !isCompleteWorktreeWorkspaceSnapshot(workspaceIds, readState.views)
-    ) return;
+    )
+      return;
     expandState.actions.retain(
       workspaceIds,
-      readState.views.flatMap((view) =>
-        view.worktrees.map((record) => record.worktreeId),
-      ),
+      readState.views.flatMap((view) => view.worktrees.map((record) => record.worktreeId)),
     );
   }, [expandState, readState.status, readState.views, workspaceIds]);
 
@@ -436,15 +544,16 @@ export function WorktreeSurface({
       ? undefined
       : viewByWorkspace.get(worktreeModalWorkspaceId);
   const modalReadiness = modalView?.readiness;
-  const modalSetupStatus: WorktreeSetupStatus | undefined = modalView === undefined
-    ? undefined
-    : modalReadiness?.status === 'ready'
-      ? modalView.branches.length === 0 ? 'noLocalBranch' : undefined
-      : modalReadiness?.status;
+  const modalSetupStatus: WorktreeSetupStatus | undefined =
+    modalView === undefined
+      ? undefined
+      : modalReadiness?.status === 'ready'
+        ? modalView.branches.length === 0
+          ? 'noLocalBranch'
+          : undefined
+        : modalReadiness?.status;
   const modalCanCreate =
-    !modalReadLoading &&
-    modalSetupStatus === undefined &&
-    modalReadiness?.status === 'ready';
+    !modalReadLoading && modalSetupStatus === undefined && modalReadiness?.status === 'ready';
 
   useEffect(() => {
     if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
@@ -453,9 +562,7 @@ export function WorktreeSurface({
       setNewBranch('');
       return;
     }
-    setSelectedBranch((current) =>
-      reconcileBaseBranchSelection(current, modalView.branches),
-    );
+    setSelectedBranch((current) => reconcileBaseBranchSelection(current, modalView.branches));
     setNewBranch((current) => {
       if (current.length > 0) return current;
       const existingNames = [
@@ -479,28 +586,32 @@ export function WorktreeSurface({
     }
   };
 
-  const loadImportCandidates = useCallback(async (workspaceId: string): Promise<void> => {
-    if (manager === undefined) return;
-    setImportCandidates((current) => ({ status: 'loading', candidates: current.candidates }));
-    await importCandidatesGuard.current.run(
-      () => manager.listImportCandidates({ workspaceId }),
-      (candidates) => {
-        if (modalWorkspaceIdRef.current !== workspaceId) return;
-        setImportCandidates({ status: 'ready', candidates });
-      },
-      (error) => {
-        if (modalWorkspaceIdRef.current !== workspaceId) return;
-        setImportCandidates((current) => ({
-          status: 'error',
-          candidates: current.candidates,
-          error: toWorktreeViewError(error),
-        }));
-      },
-    );
-  }, [manager]);
+  const loadImportCandidates = useCallback(
+    async (workspaceId: string): Promise<void> => {
+      if (manager === undefined) return;
+      setImportCandidates((current) => ({ status: 'loading', candidates: current.candidates }));
+      await importCandidatesGuard.current.run(
+        () => manager.listImportCandidates({ workspaceId }),
+        (candidates) => {
+          if (modalWorkspaceIdRef.current !== workspaceId) return;
+          setImportCandidates({ status: 'ready', candidates });
+        },
+        (error) => {
+          if (modalWorkspaceIdRef.current !== workspaceId) return;
+          setImportCandidates((current) => ({
+            status: 'error',
+            candidates: current.candidates,
+            error: toWorktreeViewError(error),
+          }));
+        },
+      );
+    },
+    [manager],
+  );
 
   const workspaceRenameTrimmed = workspaceRenameDraft.trim();
-  const workspaceRenameDuplicate = workspaceRenameTarget !== undefined &&
+  const workspaceRenameDuplicate =
+    workspaceRenameTarget !== undefined &&
     workspaceRenameTrimmed.length > 0 &&
     workspaces.items.some(
       (workspace) =>
@@ -594,19 +705,17 @@ export function WorktreeSurface({
     workspaceDropCommitted.current = true;
     setWorkspaceDrag(undefined);
     const rows = workspaces.items;
-    const targetIndex = rows.findIndex(
-      (workspace) => workspace.workspaceId === over.workspaceId,
-    );
+    const targetIndex = rows.findIndex((workspace) => workspace.workspaceId === over.workspaceId);
     const sourceIndex = rows.findIndex(
       (workspace) => workspace.workspaceId === activeDrag.workspaceId,
     );
     if (targetIndex === -1 || sourceIndex === -1) return;
-    const beforeWorkspaceId = over.half === 'before'
-      ? over.workspaceId
-      : rows[targetIndex + 1]?.workspaceId;
-    const anchorIndex = beforeWorkspaceId === undefined
-      ? rows.length
-      : rows.findIndex((workspace) => workspace.workspaceId === beforeWorkspaceId);
+    const beforeWorkspaceId =
+      over.half === 'before' ? over.workspaceId : rows[targetIndex + 1]?.workspaceId;
+    const anchorIndex =
+      beforeWorkspaceId === undefined
+        ? rows.length
+        : rows.findIndex((workspace) => workspace.workspaceId === beforeWorkspaceId);
     if (
       beforeWorkspaceId === activeDrag.workspaceId ||
       anchorIndex === sourceIndex ||
@@ -640,12 +749,9 @@ export function WorktreeSurface({
     const targetIndex = sessionIds.indexOf(over.sessionId);
     const sourceIndex = sessionIds.indexOf(activeDrag.sessionId);
     if (targetIndex === -1 || sourceIndex === -1) return;
-    const beforeSessionId = over.half === 'before'
-      ? over.sessionId
-      : sessionIds[targetIndex + 1];
-    const anchorIndex = beforeSessionId === undefined
-      ? sessionIds.length
-      : sessionIds.indexOf(beforeSessionId);
+    const beforeSessionId = over.half === 'before' ? over.sessionId : sessionIds[targetIndex + 1];
+    const anchorIndex =
+      beforeSessionId === undefined ? sessionIds.length : sessionIds.indexOf(beforeSessionId);
     if (
       beforeSessionId === activeDrag.sessionId ||
       anchorIndex === sourceIndex ||
@@ -662,9 +768,17 @@ export function WorktreeSurface({
       return;
     }
     setActionError(undefined);
-    void insertSessionBefore(workspaceId, activeDrag.sessionId, beforeSessionId).catch((error) => {
-      setActionError(toWorktreeViewError(error));
-    });
+    const currentOrder = sessionOrderSnapshot.accounts[activeDrag.groupKey]?.order ?? sessionIds;
+    void insertSessionBefore(workspaceId, activeDrag.sessionId, beforeSessionId)
+      .then(() => {
+        sessionOrder.actions.setOrder(
+          activeDrag.groupKey,
+          reorderSessionIds(currentOrder, activeDrag.sessionId, over.sessionId, over.half),
+        );
+      })
+      .catch((error) => {
+        setActionError(toWorktreeViewError(error));
+      });
   };
 
   const commitWorktreeDrag = (
@@ -693,11 +807,7 @@ export function WorktreeSurface({
       return;
     }
     setActionError(undefined);
-    void insertWorktreeBefore(
-      workspaceId,
-      activeDrag.worktreeId,
-      move.beforeWorktreeId,
-    )
+    void insertWorktreeBefore(workspaceId, activeDrag.worktreeId, move.beforeWorktreeId)
       .then(() => refresh({ preserveCurrent: true, invalidateContext: false }))
       .catch((error) => {
         setActionError(toRetryableWorktreeOrderError(error));
@@ -866,10 +976,12 @@ export function WorktreeSurface({
       return;
     }
     setSelectedBranch(selectDefaultBaseBranch(view.branches));
-    setNewBranch(createDefaultWorktreeName([
-      ...view.branches.map((branch) => branch.name),
-      ...view.worktrees.map((worktree) => worktree.branch),
-    ]));
+    setNewBranch(
+      createDefaultWorktreeName([
+        ...view.branches.map((branch) => branch.name),
+        ...view.worktrees.map((worktree) => worktree.branch),
+      ]),
+    );
   };
 
   const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
@@ -883,7 +995,9 @@ export function WorktreeSurface({
     }
   };
 
-  const continueWorktreeRegistration = async (registeredWorktree: WorktreeRecord): Promise<void> => {
+  const continueWorktreeRegistration = async (
+    registeredWorktree: WorktreeRecord,
+  ): Promise<void> => {
     closeWorktreeCreator(true);
     if (createSessionCallback === undefined) {
       await refresh({ preserveCurrent: true });
@@ -928,28 +1042,30 @@ export function WorktreeSurface({
     if (
       worktreeModalMode === 'create' &&
       (!modalCanCreate || selectedBranch.length === 0 || worktreeName.length === 0)
-    ) return;
+    )
+      return;
     if (worktreeModalMode === 'import' && selectedImportCandidate === undefined) return;
     setActionPending(true);
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
-      const registeredWorktree = worktreeModalMode === 'create'
-        ? await executeWorktreeAction(manager, {
-            type: 'createWorktree',
-            input: {
-              workspaceId: modalWorkspace.workspaceId,
-              branch: selectedBranch,
-              newBranch: worktreeName,
-            },
-          })
-        : await executeWorktreeAction(manager, {
-            type: 'importWorktree',
-            input: {
-              workspaceId: modalWorkspace.workspaceId,
-              absolutePath: selectedImportCandidate!.absolutePath,
-            },
-          });
+      const registeredWorktree =
+        worktreeModalMode === 'create'
+          ? await executeWorktreeAction(manager, {
+              type: 'createWorktree',
+              input: {
+                workspaceId: modalWorkspace.workspaceId,
+                branch: selectedBranch,
+                newBranch: worktreeName,
+              },
+            })
+          : await executeWorktreeAction(manager, {
+              type: 'importWorktree',
+              input: {
+                workspaceId: modalWorkspace.workspaceId,
+                absolutePath: selectedImportCandidate!.absolutePath,
+              },
+            });
       if (registeredWorktree === undefined) {
         throw {
           code: 'WORKTREE_RECORD_MISSING',
@@ -999,11 +1115,8 @@ export function WorktreeSurface({
   };
 
   const retrySessionBinding = async (): Promise<void> => {
-    if (
-      manager === undefined ||
-      pendingSessionBinding === undefined ||
-      pendingSessionArchived
-    ) return;
+    if (manager === undefined || pendingSessionBinding === undefined || pendingSessionArchived)
+      return;
     const pending = pendingSessionBinding;
     setActionPending(true);
     setActionError(undefined);
@@ -1041,12 +1154,7 @@ export function WorktreeSurface({
   if (mode !== 'worktree') return null;
 
   const visibleWorkspaces = workspaces.items.filter((workspace) =>
-    workspaceMatches(
-      workspace,
-      viewByWorkspace.get(workspace.workspaceId),
-      sessions,
-      query,
-    ),
+    workspaceMatches(workspace, viewByWorkspace.get(workspace.workspaceId), sessions, query),
   );
 
   return (
@@ -1185,12 +1293,11 @@ export function WorktreeSurface({
               ) : (
                 visibleWorkspaces.map((workspace) => {
                   const view = viewByWorkspace.get(workspace.workspaceId);
-                  const currentBranch = view?.branches.find(
-                    (branch) => branch.isCurrent,
-                  )?.name;
-                  const mainLabel = currentBranch === undefined
-                    ? t('worktree.main')
-                    : t('worktree.mainWithBranch', { branch: currentBranch });
+                  const currentBranch = view?.branches.find((branch) => branch.isCurrent)?.name;
+                  const mainLabel =
+                    currentBranch === undefined
+                      ? t('worktree.main')
+                      : t('worktree.mainWithBranch', { branch: currentBranch });
                   const expanded =
                     isWorkspaceExpanded(expandSnapshot, workspace.workspaceId) ||
                     isCurrentSessionReveal('workspace:' + workspace.workspaceId);
@@ -1199,21 +1306,38 @@ export function WorktreeSurface({
                     workspaceSessionIds(workspaces, workspace.workspaceId, sessions.ids),
                     archivedSessionIds,
                   );
+                  const workspaceActivitySessionIds = filterVisibleSessionIds(
+                    allWorkspaceSessionIds,
+                    sessions,
+                  );
+                  const workspaceHasOngoingSession = hasOngoingSession(
+                    workspaceActivitySessionIds,
+                    sessionPresentations,
+                  );
                   const bindings = view?.bindings ?? [];
                   const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
                   const mainSessionIds = filterVisibleSessionIds(
                     unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
                     sessions,
                   );
+                  const mainGroupKey = `main:${workspace.workspaceId}`;
+                  const orderedMainSessionIds =
+                    orderedSessionIdsByAccount.get(mainGroupKey) ?? mainSessionIds;
                   const visibleMainSessionIds = mainSessionIds.filter(
+                    (sessionId) =>
+                      workspaceMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
+                  );
+                  const orderedVisibleMainSessionIds = orderedMainSessionIds.filter(
                     (sessionId) =>
                       workspaceMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
                   );
                   const mainExpanded =
                     isMainExpanded(expandSnapshot, workspace.workspaceId) ||
                     isCurrentSessionReveal('main:' + workspace.workspaceId);
-                  const mainGroupKey = `main:${workspace.workspaceId}`;
-                  const sessionIds = visibleMainSessionIds;
+                  const sessionIds =
+                    orderedVisibleMainSessionIds.length === visibleMainSessionIds.length
+                      ? orderedVisibleMainSessionIds
+                      : visibleMainSessionIds;
                   const mainSessionGroupExpanded =
                     expandedSessionGroups[mainGroupKey] === true ||
                     (sessionIds.length > 5 &&
@@ -1232,6 +1356,7 @@ export function WorktreeSurface({
                         t={t}
                         workspace={workspace}
                         expanded={expanded}
+                        hasOngoingSession={workspaceHasOngoingSession}
                         actionPending={actionPending}
                         menuOpen={openWorkspaceMenuId === workspace.workspaceId}
                         drag={{
@@ -1294,6 +1419,10 @@ export function WorktreeSurface({
                             kind="main"
                             label={mainLabel}
                             expanded={mainExpanded}
+                            hasOngoingSession={hasOngoingSession(
+                              mainSessionIds,
+                              sessionPresentations,
+                            )}
                             icon={<IconBranchOutline16 />}
                             workspaceTitle={workspace.title}
                             onToggle={() => {
@@ -1327,6 +1456,7 @@ export function WorktreeSurface({
                               expanded={mainSessionGroupExpanded}
                               actionPending={actionPending}
                               sessions={sessions}
+                              sessionPresentations={sessionPresentations}
                               dragState={sessionDrag}
                               onToggleExpanded={() => {
                                 toggleSessionGroup(mainGroupKey);
@@ -1388,24 +1518,40 @@ export function WorktreeSurface({
                             }
                             const visibleWorktreeSessionIds = worktreeSessionIds.filter(
                               (sessionId) =>
-                                worktreeMatchesQuery || sessionMatchesQuery(sessionId, sessions, query),
+                                worktreeMatchesQuery ||
+                                sessionMatchesQuery(sessionId, sessions, query),
                             );
                             const worktreeGroupKey = `worktree:${record.worktreeId}`;
-                            const sessionIds = visibleWorktreeSessionIds;
+                            const orderedWorktreeSessionIds =
+                              orderedSessionIdsByAccount.get(worktreeGroupKey) ??
+                              worktreeSessionIds;
+                            const orderedVisibleWorktreeSessionIds =
+                              orderedWorktreeSessionIds.filter(
+                                (sessionId) =>
+                                  worktreeMatchesQuery ||
+                                  sessionMatchesQuery(sessionId, sessions, query),
+                              );
+                            const sessionIds =
+                              orderedVisibleWorktreeSessionIds.length ===
+                              visibleWorktreeSessionIds.length
+                                ? orderedVisibleWorktreeSessionIds
+                                : visibleWorktreeSessionIds;
                             const sessionGroupExpanded =
                               expandedSessionGroups[worktreeGroupKey] === true ||
                               (sessionIds.length > 5 &&
                                 isCurrentSessionReveal('session-group:' + worktreeGroupKey));
-                            const state = record.status === 'removed'
-                              ? 'warning'
-                              : record.health === 'repair'
-                                ? 'error'
-                                : 'done';
-                            const stateLabel = record.status === 'removed'
-                              ? t('worktree.detached')
-                              : record.health === 'repair'
-                                ? t('worktree.repair')
-                                : t('worktree.ready');
+                            const state =
+                              record.status === 'removed'
+                                ? 'warning'
+                                : record.health === 'repair'
+                                  ? 'error'
+                                  : 'done';
+                            const stateLabel =
+                              record.status === 'removed'
+                                ? t('worktree.detached')
+                                : record.health === 'repair'
+                                  ? t('worktree.repair')
+                                  : t('worktree.ready');
                             const worktreeExpanded =
                               isWorktreeExpanded(expandSnapshot, record.worktreeId) ||
                               isCurrentSessionReveal('worktree:' + record.worktreeId);
@@ -1421,6 +1567,10 @@ export function WorktreeSurface({
                                   label={record.branch}
                                   worktreeId={record.worktreeId}
                                   expanded={worktreeExpanded}
+                                  hasOngoingSession={hasOngoingSession(
+                                    worktreeSessionIds,
+                                    sessionPresentations,
+                                  )}
                                   icon={<IconBranchOutline16 />}
                                   workspaceTitle={workspace.title}
                                   state={state}
@@ -1507,6 +1657,7 @@ export function WorktreeSurface({
                                     expanded={sessionGroupExpanded}
                                     actionPending={actionPending}
                                     sessions={sessions}
+                                    sessionPresentations={sessionPresentations}
                                     dragState={sessionDrag}
                                     onToggleExpanded={() => {
                                       toggleSessionGroup(worktreeGroupKey);
@@ -1674,6 +1825,7 @@ export function WorktreeSurface({
           fullAccessConfirmation?.resolve(true);
         }}
       />
+
 
     </aside>
   );

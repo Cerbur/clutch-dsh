@@ -34,6 +34,15 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Preserve an explicit restriction selected in DSH's native Access UI. If the custom preset is
   unavailable, fall back to `workspace-write + ask` when possible; if the permission capability
   cannot be verified, show a retryable degraded state instead of claiming Full Access.
+- Reuse the native animated `StateDot` for running Sessions and show native relative time for the
+  last human-authored Session message; hover or an open menu gives the trailing slot back to the
+  existing actions menu.
+- Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
+  states without copying the animation implementation into the plugin.
+- Show one native running indicator on a collapsed Workspace, Main, or Worktree when any of its
+  non-archived Sessions is active; expanded groups keep their normal action rail instead.
+- Promote a Session to the head of its Main or Worktree visual group after a newer user message.
+  This ordering is browser-local and does not mutate DSH Workspace order or the Worktree sidecar.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
@@ -213,8 +222,8 @@ blank-session Hero. The displayed language follows DSH's current language settin
    Project root. Relative paths, a different Project, or the Project root are rejected.
 3. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
    and no command block; install Git, restart DSH, and retry. If the repository, initial commit,
-  or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
-  renders this guidance; it does not run setup or installation commands or edit business files.
+   or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
+   renders this guidance; it does not run setup or installation commands or edit business files.
 
 ### Import an existing Worktree
 
@@ -254,6 +263,22 @@ blank-session Hero. The displayed language follows DSH's current language settin
   selected view, uses the localized `New Session` label, hides its generated ID, and has no
   Rename, Fork, or Archive menu. After the first prompt is accepted, it becomes an ordinary
   Session row; hiding the blank row does not delete the Session or its Worktree binding.
+
+### Session activity and ordering
+
+- Session rows reuse DSH's native `StateDot`: running Sessions and Sessions with running subagents
+  replace the trailing relative time with the animated dot. Waiting approval, plan review, and
+  question states use the native warning dot; completed Sessions keep the native completed dot.
+- The trailing metadata uses the native compact buckets (`now`, minutes, hours, days, months, and
+  years). It is based on DSH's `updatedAt`, which advances with the latest human-authored message;
+  blank New Session rows have no time label. The display follows snapshot renders and does not add
+  an independent minute ticker.
+- A collapsed Workspace, Main group, or Worktree group shows the same running dot when any
+  non-archived member is ongoing, including activity hidden by search. Expanding the group hides
+  the aggregate dot; hover, focus, or an open menu reveals the existing action controls.
+- A newer user message promotes its Session to the head of the current Main or Worktree visual
+  group. The promotion, observed timestamps, and per-group order live only in browser-local state;
+  successful manual drag still uses the native DSH ordering API before updating that local order.
 
 ### Reorder and manage Worktrees
 

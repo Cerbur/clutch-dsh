@@ -956,7 +956,7 @@ test('bounds the surface to live native sidebar anchors', async () => {
 test('creates a Worktree Session immediately after creating the Worktree', async () => {
   const source = (await readSurfaceSources()).combined;
 
-  assert.match(source, /const registeredWorktree = worktreeModalMode === 'create'/);
+  assert.match(source, /const\s+registeredWorktree\s*=\s*worktreeModalMode\s*===\s*'create'/);
   assert.match(source, /await continueWorktreeRegistration\(registeredWorktree\)/);
   assert.match(source, /await createSessionCallback\(sessionInput\)/);
   assert.match(source, /worktreeId: registeredWorktree\.worktreeId/);
@@ -1551,7 +1551,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   );
   assert.match(
     source,
-    /const mainLabel = currentBranch === undefined\s+\? t\('worktree\.main'\)\s+: t\('worktree\.mainWithBranch', \{ branch: currentBranch \}\);/,
+    /const\s+mainLabel\s*=\s*currentBranch\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*currentBranch\s*\}\);/,
   );
   assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);

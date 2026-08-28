@@ -129,6 +129,20 @@ The Worktree surface is additive:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
+- Session rows derive one native-compatible status presentation from the DSH Session snapshot.
+  The existing native `StateDot` is reused directly: running or running-subagent activity occupies
+  the trailing metadata slot, while warning and completed states keep a leading dot. The trailing
+  slot swaps to the existing Session menu on hover, focus, or menu-open without adding plugin
+  animation CSS. Native relative-time buckets use DSH `updatedAt`; blank rows have no timestamp.
+- Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
+  search filtering and the five-row limit are applied. When collapsed, the flag renders one native
+  ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions. Main and Worktree share the same parameterized group-row path.
+- A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
+  Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
+  observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates
+  DSH Workspace data for automatic promotion; manual drag updates the local order only after the
+  native DSH ordering call succeeds.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and exposes the same options menu for copying its DSH Workspace path; active Worktree rows expose the shared options menu with Copy path and removal confirmation, while detached/removed rows keep only Copy path and remain read-only;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, including a Workspace imported from a Git subdirectory after the Host resolves its Git root, and falls back to `Local` / `本地` when it does not;
