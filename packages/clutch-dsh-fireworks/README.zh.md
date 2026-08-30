@@ -51,6 +51,9 @@ pnpm dsh web
 DSH Web profile 及其原生 UI 必须已经可以正常启动。修改 package manifest 或
 `cordis.patch.yml` 后，需要重新执行源码安装命令。
 
+上述源码安装流程会显式构建本地 checkout。生成的 `lib/` 不提交到仓库，因此应使用上述
+本地 checkout 流程，而不要直接从原始的 `github:` package path 安装。
+
 ## 详细使用
 
 由 Agent 自主判断什么时刻值得庆祝。手动测试时可以使用以下指令：
@@ -63,6 +66,10 @@ DSH Web profile 及其原生 UI 必须已经可以正常启动。修改 package 
 tool result 会出现在会话中，礼花层会覆盖当前选中的 session 播放几秒：
 
 ![礼花动画示意](assets/screenshots/fireworks-mvp.svg)
+
+在 DSH Web UI 中成功调用后的效果如下：
+
+![DSH Web UI 中成功调用礼花工具](assets/screenshots/screenshots-zh.png)
 
 打开会话时如果 projection 中已经有旧信号，第一次观察会被静默记录，因此刷新页面不会
 重复播放历史礼花。当前 DSH tool contract 不会为嵌套 Code Mode dispatch 提供

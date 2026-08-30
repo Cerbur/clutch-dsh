@@ -142,8 +142,8 @@ npm pack --dry-run
 ```
 
 预览结果必须包含 `README.md`、`package.json`、`cordis.patch.yml` 和生成的 `lib/`；仓库内文档
-（例如 `RELEASE-LOG.md`）不要求包含。`pnpm pack`、`npm pack` 和 `npm publish` 都会执行
-`prepare`，因此会从当前源码重新构建。
+（例如 `RELEASE-LOG.md`）不要求包含。打包前必须按目标 package 的说明显式完成构建；不能
+假设 `npm pack` 会触发只在发布阶段运行的构建脚本。
 
 在用户确认发布前，不要把 release worktree 合并回 `main`。
 
@@ -155,8 +155,8 @@ npm publish --access public --registry=https://registry.npmjs.org/
 ```
 
 发布命令必须由用户手动执行，且当前目录必须属于 release worktree；agent 不代替用户执行
-`npm publish`。发布完成后由用户通知 agent 继续验证。发布前提（npm 账号、2FA、`prepare`、
-`publishConfig` 等）以目标 package 的 `docs/RELEASING.md` 为准。
+`npm publish`。发布完成后由用户通知 agent 继续验证。发布前提（npm 账号、2FA、`prepare` 或
+`prepublishOnly`、`publishConfig` 等）以目标 package 的 `docs/RELEASING.md` 为准。
 
 ### 7. 验证发布结果
 

@@ -19,6 +19,16 @@
 - Keep English and Chinese README sections in this order: overview with screenshot, capabilities, installation with npm first then source, and detailed usage with image.
 - Do not commit, publish, push, merge, or create release tags without explicit user authorization; local build and pack preview are allowed.
 
+## Post-release correction for 0.1.1
+
+The initial 0.1.0 manifest below used a `prepare` build and wildcard DSH peer ranges. After the
+package was published, release feedback identified two packaging issues: GitHub dependency
+installs can unexpectedly build from source, and npm semver excludes DSH prerelease hosts from a
+wildcard peer range. The 0.1.1 release changes the package manifest to use `prepublishOnly` and
+explicit prerelease-aware peer ranges, updates the release instructions to build before pack
+preview, and documents that generated `lib/` is not committed. The MVP runtime architecture is
+unchanged.
+
 ## File map
 
 Create the new plugin under `/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_6b92994f-f9a5-4cc2-acca-5e7d1c63dda3/packages/clutch-dsh-fireworks`:

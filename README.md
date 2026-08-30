@@ -49,15 +49,23 @@ pnpm run typecheck
 
 ## 已发布 plugin
 
-当前可安装的 plugin package 是 `@cerbur/clutch-dsh-worktree`。在已安装 DSH CLI
-的环境中使用：
+当前可安装的 plugin packages 包括：
+
+| Plugin name                                                               | Screenshot                                                                                                                  | 功能描述                                                                                                 |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="240" alt="clutch-dsh-worktree 截图">   | 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project 和 Session 数据。 |
+| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="clutch-dsh-fireworks 截图"> | 通过 `happy_fireworks` Agent 工具为 DSH Web UI 增加庆祝礼花覆盖层。                                      |
+
+在已安装 DSH CLI 的环境中，可以安装需要的 plugin：
 
 ```bash
 dsh plugin --profile web add @cerbur/clutch-dsh-worktree
+dsh plugin --profile web add @cerbur/clutch-dsh-fireworks
 dsh web
 ```
 
 本地 checkout 安装、版本同步见
-[`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md)；plugin 发布的
-通用流程见根目录 [`docs/RELEASING.md`](docs/RELEASING.md)，各包参数与安装来源见各包自己的
-`docs/RELEASING.md`。
+[`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md) 和
+[`packages/clutch-dsh-fireworks/README.md`](packages/clutch-dsh-fireworks/README.md)；plugin
+发布的通用流程见根目录 [`docs/RELEASING.md`](docs/RELEASING.md)，各包参数与安装来源见各包
+自己的 `docs/RELEASING.md`。
