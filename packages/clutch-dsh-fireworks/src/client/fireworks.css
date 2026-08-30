@@ -1,0 +1,91 @@
+.overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.banner {
+  position: absolute;
+  z-index: 2;
+  top: 16%;
+  left: 50%;
+  max-width: min(76vw, 560px);
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(111, 67, 220, 0.92), rgba(232, 74, 157, 0.92));
+  box-shadow: 0 12px 36px rgba(80, 35, 122, 0.28);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: fireworks-banner 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.particles {
+  position: absolute;
+  inset: 0;
+}
+
+.particle {
+  position: absolute;
+  display: block;
+  font-size: clamp(22px, 3.2vw, 46px);
+  line-height: 1;
+  transform-origin: center;
+  animation: fireworks-drift var(--fireworks-duration) cubic-bezier(0.22, 0.61, 0.36, 1)
+    var(--fireworks-delay) both;
+  filter: drop-shadow(0 4px 8px rgba(109, 56, 126, 0.18));
+}
+
+.particle[src] {
+  width: clamp(24px, 3.5vw, 48px);
+  height: clamp(24px, 3.5vw, 48px);
+  object-fit: contain;
+}
+
+@keyframes fireworks-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -14px, 0) rotate(var(--fireworks-rotation)) scale(0.75);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 30vh, 0) rotate(calc(var(--fireworks-rotation) + 160deg))
+      scale(var(--fireworks-scale));
+  }
+}
+
+@keyframes fireworks-banner {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-16px) scale(0.88);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+  .banner {
+    animation-duration: 1ms;
+  }
+}

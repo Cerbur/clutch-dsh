@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Happy fireworks overlay preview</title>
+  <desc id="desc">A DSH conversation surface covered by emoji fireworks after a successful tool call.</desc>
+  <rect width="1200" height="680" rx="28" fill="#eef3f8"/>
+  <rect x="120" y="48" width="1032" height="584" rx="24" fill="#fff" stroke="#d8e0e8"/>
+  <rect x="120" y="48" width="1032" height="72" rx="24" fill="#f8fafc"/>
+  <text x="158" y="92" font-family="system-ui, sans-serif" font-size="24" font-weight="700" fill="#263241">DSH conversation</text>
+  <rect x="424" y="150" width="352" height="54" rx="27" fill="#7a50df"/>
+  <text x="600" y="184" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#fff">MVP shipped! 🎉</text>
+  <g font-family="system-ui, sans-serif" font-size="46" text-anchor="middle">
+    <text x="210" y="198">✨</text><text x="338" y="302">🎊</text><text x="492" y="252">🌟</text>
+    <text x="720" y="300">🎉</text><text x="910" y="218">💫</text><text x="1038" y="356">🎊</text>
+    <text x="244" y="462">🌟</text><text x="440" y="542">🎉</text><text x="680" y="484">✨</text>
+    <text x="882" y="548">🌟</text><text x="1060" y="500">🎉</text>
+  </g>
+  <g fill="#ef4d8d"><circle cx="286" cy="250" r="8"/><circle cx="815" cy="252" r="7"/><circle cx="610" cy="420" r="8"/></g>
+  <g fill="#f4b635"><circle cx="370" cy="420" r="7"/><circle cx="1002" cy="280" r="8"/></g>
+  <rect x="270" y="566" width="732" height="38" rx="19" fill="#f3f6f9"/>
+</svg>
