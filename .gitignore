@@ -4,3 +4,4 @@ coverage/
 .pnpm-store/
 .DS_Store
 *.tsbuildinfo
+.playwright-cli/
