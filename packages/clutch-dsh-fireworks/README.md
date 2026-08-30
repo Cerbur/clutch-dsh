@@ -53,6 +53,10 @@ pnpm dsh web
 The DSH Web profile and its native UI must already start successfully. Re-run the source install
 command after changing the package manifest or `cordis.patch.yml`.
 
+The documented source-install flow builds the local checkout explicitly. Generated `lib/` is not
+committed, so use that local checkout flow instead of installing the package directly from a raw
+`github:` package path.
+
 ## Usage
 
 An agent decides when a result is worth celebrating. A useful instruction for a manual test is:
@@ -66,6 +70,10 @@ The tool result appears in the conversation, and the visual layer appears over t
 selected session for a few seconds:
 
 ![Fireworks animation concept](assets/screenshots/fireworks-mvp.svg)
+
+The same successful tool call in the DSH Web UI looks like this:
+
+![Successful fireworks tool call in the DSH Web UI](assets/screenshots/screenshots-zh.png)
 
 The first signal already present when a session is opened is intentionally silent, so a refresh
 does not replay old celebrations. In the current DSH tool contract, nested Code Mode dispatches
