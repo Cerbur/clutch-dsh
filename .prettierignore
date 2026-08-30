@@ -1,3 +1,4 @@
 AGENTS.md
 pnpm-lock.yaml
 packages/clutch-dsh-worktree/
+**/lib/**
