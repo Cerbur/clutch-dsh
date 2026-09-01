@@ -733,7 +733,7 @@ test('executes create, import, and remove actions through the Manager contract',
   });
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
   });
   const imported = await executeWorktreeAction(worktreeManager, {
     type: 'importWorktree',
@@ -741,7 +741,7 @@ test('executes create, import, and remove actions through the Manager contract',
   });
   assert.deepEqual(calls, [
     ['createWorktree', { workspaceId: 'ws1', branch: 'main', newBranch: 'dsh/12345678' }],
-    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }],
   ]);
   assert.deepEqual(created, {
@@ -783,13 +783,13 @@ test('normalizes detached Worktree Session permissions after removal', async () 
 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
   }, permission, (input, result) => {
     notices.push({ input, result });
   });
 
   assert.deepEqual(calls, [
-    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
   ]);
   assert.deepEqual(notices, [{
@@ -1004,6 +1004,24 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
     source,
     /className=\{styles\.inlineButton\}[\s\S]*?>\s*Remove\s*</,
   );
+});
+
+test('adds Copy session ID to the Worktree Session menu', async () => {
+  const { rows } = await readSurfaceSources();
+  const locales = await readFile(
+    new URL('../src/client/locales.ts', import.meta.url),
+    'utf8',
+  );
+  const sessionRowStart = rows.indexOf('/** Worktree-mode Session row');
+  assert.notEqual(sessionRowStart, -1);
+  const sessionRow = rows.slice(sessionRowStart);
+
+  assert.match(sessionRow, /IconCopyOutline16/);
+  assert.match(sessionRow, /id: 'copy-session-id'/);
+  assert.match(sessionRow, /label: t\('session\.copyId'\)/);
+  assert.match(sessionRow, /void writeClipboard\(sessionId\)/);
+  assert.match(locales, /'session\.copyId': '复制 Session ID'/);
+  assert.match(locales, /'session\.copyId': 'Copy session ID'/);
 });
 
 test('refreshes the ready Worktree projection after fork binding and exposes recovery retry', async () => {
@@ -1803,13 +1821,14 @@ test('routes pending Worktree Session Retry through the browser recovery helper'
   assert.doesNotMatch(source, /await manager\.bindSession\(\{[\s\S]*pendingSessionBinding/);
 });
 
-test('does not expose Worktree plus for removed or repair Worktrees', async () => {
+test('does not expose Worktree plus for removed, repair, or recovery-needed Worktrees', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /record\.status === 'active' && record\.health !== 'repair'/);
+  assert.match(source, /record\.health !== 'recovery-needed'/);
 });
 
 test('uses the native Project-add icon for the Add Workspace button', async () => {

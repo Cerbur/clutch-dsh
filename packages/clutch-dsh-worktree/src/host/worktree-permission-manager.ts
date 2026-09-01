@@ -73,7 +73,11 @@ export function createWorktreePermissionManager(
           { workspaceId: input.workspaceId, worktreeId: input.worktreeId },
         );
       }
-      if (worktree.status !== 'active' || worktree.health === 'repair') {
+      if (
+        worktree.status !== 'active' ||
+        worktree.health === 'repair' ||
+        worktree.health === 'recovery-needed'
+      ) {
         throw providerError(
           'WORKTREE_REMOVED',
           `Worktree "${input.worktreeId}" is not active`,

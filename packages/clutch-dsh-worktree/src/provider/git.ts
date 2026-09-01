@@ -1,94 +1,61 @@
-import { execFile as execFileCallback } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
-import type { GitWorktreeAdapter, GitWorktreeInfo } from './types.js';
+import {
+  GitCommandError,
+  runGit,
+} from './subprocess.js';
+import type { GitCommandResult } from './subprocess.js';
+import type {
+  GitCommandOptions,
+  GitBranchWorktreeInfo,
+  GitSubprocessRuntime,
+  GitWorktreeAdapter,
+  GitWorktreeInfo,
+} from './types.js';
 import { WorktreeProviderError, providerError } from './types.js';
 
-const execFile = promisify(execFileCallback);
-
-interface GitCommandResult {
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-interface LocalGitAdapterOptions {
+export interface LocalGitAdapterOptions extends GitCommandOptions {
   readonly executable?: string;
+  /** Test/embedded-runtime prefix; the normal Git executable needs no prefix. */
+  readonly executableArgs?: readonly string[];
+  readonly timeoutMs?: number;
+  readonly graceMs?: number;
+  /** Bounded best-effort wait after terminating a Git subprocess tree. */
+  readonly cleanupTimeoutMs?: number;
+  readonly maxOutputBytes?: number;
+  readonly subprocess?: GitSubprocessRuntime;
 }
 
-// Git 的原始进程证据只在本模块内流转；对外统一转换为稳定的 Provider 错误词汇。
-// Raw Git process evidence stays inside this module and is normalized to the
-// stable Provider error vocabulary at the public boundary.
-class GitCommandError extends Error {
-  readonly args: readonly string[];
-  readonly cwd: string;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number | string | null;
-
-  constructor(
-    args: readonly string[],
-    cwd: string,
-    stdout: string,
-    stderr: string,
-    exitCode: number | string | null,
-  ) {
-    super(stderr || stdout || `git exited with ${String(exitCode)}`);
-    this.name = 'GitCommandError';
-    this.args = args;
-    this.cwd = cwd;
-    this.stdout = stdout;
-    this.stderr = stderr;
-    this.exitCode = exitCode;
-  }
-}
-
-/*
- * 所有 Git 调用都使用参数数组和配置好的 executable，不经过 shell；因此路径或分支中的 shell
- * 元字符不会被解释。参数的业务合法性仍由上层 Manage 校验。
- *
- * Every Git call uses an argument vector and a configured executable without a
- * shell, so shell metacharacters in paths or branches are never evaluated.
- * Semantic validation of those values remains the responsibility of Manage.
- */
-async function runGit(
-  args: readonly string[],
-  cwd: string,
-  executable: string,
-): Promise<GitCommandResult> {
-  try {
-    const result = await execFile(executable, [...args], {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 4 * 1024 * 1024,
-    });
-    return { stdout: result.stdout, stderr: result.stderr };
-  } catch (error) {
-    const commandError = error as {
-      readonly stdout?: string;
-      readonly stderr?: string;
-      readonly code?: number | string;
-    };
-    throw new GitCommandError(
-      args,
-      cwd,
-      commandError.stdout ?? '',
-      commandError.stderr ?? '',
-      commandError.code ?? null,
-    );
-  }
-}
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_GRACE_MS = 1_000;
+const DEFAULT_CLEANUP_TIMEOUT_MS = 5_000;
+const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_TIMEOUT_MS = 2_147_483_647;
+const MAX_GRACE_MS = 2_147_483_647;
+const MAX_DIAGNOSTIC_BYTES = 32 * 1024;
 
 // 保留 cwd、参数、stdout、stderr 和退出码，避免稳定错误 code 丢失现场诊断信息。
 // Preserve cwd, arguments, stdout, stderr, and exit code so a stable error code
 // does not discard the evidence needed for diagnosis.
-function gitDetails(error: GitCommandError): Record<string, string | number | readonly string[]> {
+function boundedDiagnostic(value: string): string {
+  return value.length <= MAX_DIAGNOSTIC_BYTES
+    ? value
+    : `${value.slice(0, MAX_DIAGNOSTIC_BYTES)}\n[diagnostic output truncated]`;
+}
+
+function gitDetails(error: GitCommandError): Record<string, string | number | boolean | readonly string[]> {
   return {
     workspaceRoot: error.cwd,
     gitArgs: error.args,
-    gitStdout: error.stdout,
-    gitStderr: error.stderr,
+    gitStdout: boundedDiagnostic(error.stdout),
+    gitStderr: boundedDiagnostic(error.stderr),
     gitExitCode: typeof error.exitCode === 'number' ? error.exitCode : String(error.exitCode),
+    ...(error.timedOut ? { gitTimedOut: true } : {}),
+    ...(error.aborted ? { gitAborted: true } : {}),
+    ...(error.outputTruncated ? { gitOutputTruncated: true } : {}),
+    ...(error.processTreeDidNotExit ? { gitProcessTreeDidNotExit: true } : {}),
+    ...(error.signal ? { gitSignal: error.signal } : {}),
   };
 }
 
@@ -164,13 +131,15 @@ function operationError(
  */
 function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = [];
-  let current: { absolutePath?: string; branch?: string } = {};
+  let current: { absolutePath?: string; branch?: string; headCommit?: string; detached?: boolean } = {};
 
   const flush = () => {
     if (current.absolutePath) {
       worktrees.push({
         absolutePath: current.absolutePath,
         ...(current.branch ? { branch: current.branch } : {}),
+        ...(current.headCommit ? { headCommit: current.headCommit } : {}),
+        detached: current.detached ?? !current.branch,
       });
     }
     current = {};
@@ -188,10 +157,39 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
     }
     if (line.startsWith('branch refs/heads/')) {
       current.branch = line.slice('branch refs/heads/'.length);
+      current.detached = false;
+      continue;
+    }
+    if (line.startsWith('HEAD ')) {
+      current.headCommit = line.slice('HEAD '.length);
+      continue;
+    }
+    if (line === 'detached') {
+      current.detached = true;
     }
   }
   flush();
   return worktrees;
+}
+
+/** Parse `for-each-ref` branch/path pairs without relying on whitespace delimiters. */
+function parseBranchWorktreePaths(output: string): readonly GitBranchWorktreeInfo[] {
+  const fields = output.split('\0');
+  const branches: GitBranchWorktreeInfo[] = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const name = (fields[index] ?? '').replace(/^\r?\n/u, '');
+    const worktreePath = fields[index + 1] ?? '';
+    if (!name) continue;
+    branches.push({
+      name,
+      ...(worktreePath ? { worktreePath } : {}),
+    });
+  }
+  return branches;
+}
+
+function isUnsupportedWorktreePathAtom(error: unknown): boolean {
+  return error instanceof GitCommandError && /unknown field name:\s*worktreepath/iu.test(error.stderr);
 }
 
 /**
@@ -204,9 +202,51 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
  */
 export class LocalGitAdapter implements GitWorktreeAdapter {
   private readonly executable: string;
+  private readonly executableArgs: readonly string[];
+  private readonly timeoutMs: number;
+  private readonly graceMs: number;
+  private readonly cleanupTimeoutMs: number;
+  private readonly maxOutputBytes: number;
+  private readonly defaultSignal?: AbortSignal;
+  private readonly subprocess?: GitSubprocessRuntime;
 
   constructor(options: LocalGitAdapterOptions = {}) {
     this.executable = options.executable ?? 'git';
+    this.executableArgs = options.executableArgs ?? [];
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
+    this.cleanupTimeoutMs = options.cleanupTimeoutMs ?? Math.max(DEFAULT_CLEANUP_TIMEOUT_MS, this.graceMs);
+    this.maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+    this.defaultSignal = options.signal;
+    this.subprocess = options.subprocess;
+    if (!Number.isInteger(this.timeoutMs) || this.timeoutMs <= 0 || this.timeoutMs > MAX_TIMEOUT_MS ||
+      !Number.isInteger(this.graceMs) || this.graceMs <= 0 || this.graceMs > MAX_GRACE_MS ||
+      !Number.isInteger(this.cleanupTimeoutMs) || this.cleanupTimeoutMs <= 0 || this.cleanupTimeoutMs > MAX_TIMEOUT_MS ||
+      !Number.isInteger(this.maxOutputBytes) || this.maxOutputBytes <= 0) {
+      throw providerError('GIT_OPERATION_FAILED', 'Invalid Git subprocess limits', {
+        timeoutMs: this.timeoutMs,
+        graceMs: this.graceMs,
+        cleanupTimeoutMs: this.cleanupTimeoutMs,
+        maxOutputBytes: this.maxOutputBytes,
+      });
+    }
+  }
+
+  private run(
+    args: readonly string[],
+    cwd: string,
+    options: GitCommandOptions = {},
+    readOnly = true,
+  ): Promise<GitCommandResult> {
+    return runGit(args, cwd, this.executable, this.executableArgs, {
+      timeoutMs: this.timeoutMs,
+      graceMs: this.graceMs,
+      cleanupTimeoutMs: this.cleanupTimeoutMs,
+      maxOutputBytes: this.maxOutputBytes,
+      readOnly,
+      signal: options.signal ?? this.defaultSignal,
+      subprocess: this.subprocess,
+    });
   }
 
   /**
@@ -214,19 +254,20 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
    * Separately verifies “inside a non-bare working tree” and “has a resolvable
    * initial commit” so callers receive distinct repair semantics.
    */
-  async validateRepository(workspaceRoot: string): Promise<void> {
+  async validateRepository(workspaceRoot: string, options: GitCommandOptions = {}): Promise<void> {
     let result: GitCommandResult;
     try {
-      result = await runGit(
+      result = await this.run(
         ['rev-parse', '--is-inside-work-tree'],
         workspaceRoot,
-        this.executable,
+        options,
       );
     } catch (error) {
       if (error instanceof GitCommandError) {
         if (isMissingGit(error)) {
           throw missingGitError('validate repository', error);
         }
+        if (error.timedOut || error.aborted) throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
         throw providerError('WORKSPACE_NOT_GIT_REPOSITORY', `Workspace is not a Git repository: ${workspaceRoot}`, {
           ...gitDetails(error),
         });
@@ -241,16 +282,17 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
 
     try {
-      await runGit(
+      await this.run(
         ['rev-parse', '--verify', 'HEAD^{commit}'],
         workspaceRoot,
-        this.executable,
+        options,
       );
     } catch (error) {
       if (error instanceof GitCommandError) {
         if (isMissingGit(error)) {
           throw missingGitError('validate repository', error);
         }
+        if (error.timedOut || error.aborted) throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
         throw providerError(
           'WORKTREE_REQUIRES_INITIAL_COMMIT',
           `Workspace has no initial commit: ${workspaceRoot}`,
@@ -262,12 +304,12 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   }
 
   /** Resolve the Git worktree/repository root for repository-wide reads. */
-  async resolveRepositoryRoot(workspaceRoot: string): Promise<string> {
+  async resolveRepositoryRoot(workspaceRoot: string, options: GitCommandOptions = {}): Promise<string> {
     try {
-      const rootResult = await runGit(
+      const rootResult = await this.run(
         ['rev-parse', '--show-toplevel'],
         workspaceRoot,
-        this.executable,
+        options,
       );
       const repositoryRoot = rootResult.stdout.trim();
       if (repositoryRoot.length === 0) {
@@ -276,12 +318,44 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           operation: 'resolve repository root',
         });
       }
-      return path.isAbsolute(repositoryRoot)
+      return await realpath(path.isAbsolute(repositoryRoot)
         ? path.resolve(repositoryRoot)
-        : path.resolve(workspaceRoot, repositoryRoot);
+        : path.resolve(workspaceRoot, repositoryRoot));
     } catch (error) {
       if (error instanceof WorktreeProviderError) throw error;
       throw operationError('resolve repository root', workspaceRoot, undefined, undefined, error);
+    }
+  }
+
+  /** Resolve the canonical linked-worktree and shared Git metadata identity. */
+  async resolveRepositoryIdentity(workspaceRoot: string, options: GitCommandOptions = {}) {
+    try {
+      const result = await this.run(
+        ['rev-parse', '--show-toplevel', '--git-common-dir', '--verify', 'HEAD^{commit}'],
+        workspaceRoot,
+        options,
+      );
+      const lines = result.stdout.split(/\r?\n/u);
+      if (lines.at(-1) === '') lines.pop();
+      const [topLevel, commonDirectory, headCommit] = lines;
+      if (!topLevel || !commonDirectory || !headCommit) {
+        throw providerError('GIT_OPERATION_FAILED', `Git returned an incomplete repository identity: ${workspaceRoot}`, {
+          workspaceRoot,
+          operation: 'resolve repository identity',
+        });
+      }
+      return {
+        identity: {
+          topLevel: await realpath(path.isAbsolute(topLevel) ? path.resolve(topLevel) : path.resolve(workspaceRoot, topLevel)),
+          commonDirectory: await realpath(path.isAbsolute(commonDirectory)
+            ? path.resolve(commonDirectory)
+            : path.resolve(workspaceRoot, commonDirectory)),
+        },
+        headCommit,
+      };
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('resolve repository identity', workspaceRoot, undefined, undefined, error);
     }
   }
 
@@ -290,12 +364,12 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
    * Lists local branches under `refs/heads/` only; NUL delimiting avoids
    * depending on human-facing formatting or whitespace tokenization.
    */
-  async listBranches(workspaceRoot: string): Promise<readonly string[]> {
+  async listBranches(workspaceRoot: string, options: GitCommandOptions = {}): Promise<readonly string[]> {
     try {
-      const result = await runGit(
+      const result = await this.run(
         ['for-each-ref', '--format=%(refname:short)%00', 'refs/heads/'],
         workspaceRoot,
-        this.executable,
+        options,
       );
       return result.stdout
         .split('\0')
@@ -307,16 +381,51 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   }
 
   /**
+   * Read local branches and their checkout paths in one Git invocation when the
+   * installed Git supports the `worktreepath` format atom.
+   */
+  async listBranchesWithWorktreePaths(
+    workspaceRoot: string,
+    options: GitCommandOptions = {},
+  ): Promise<readonly GitBranchWorktreeInfo[]> {
+    try {
+      const result = await this.run(
+        ['for-each-ref', '--format=%(refname:short)%00%(worktreepath)%00', 'refs/heads/'],
+        workspaceRoot,
+        options,
+      );
+      return parseBranchWorktreePaths(result.stdout);
+    } catch (error) {
+      if (!isUnsupportedWorktreePathAtom(error)) {
+        throw operationError('list branches', workspaceRoot, undefined, undefined, error);
+      }
+      const [branches, worktrees] = await Promise.all([
+        this.listBranches(workspaceRoot, options),
+        this.listWorktrees(workspaceRoot, options),
+      ]);
+      const worktreePathByBranch = new Map(
+        worktrees.flatMap((worktree) => worktree.branch
+          ? [[worktree.branch, worktree.absolutePath] as const]
+          : []),
+      );
+      return branches.map((name) => ({
+        name,
+        ...(worktreePathByBranch.has(name) ? { worktreePath: worktreePathByBranch.get(name) } : {}),
+      }));
+    }
+  }
+
+  /**
    * 使用 porcelain 输出枚举已注册 Worktree；无法映射到本地 branch 的条目不会被丢弃。
    * Enumerates registered Worktrees through porcelain output; entries that do
    * not map to a local branch are not discarded.
    */
-  async listWorktrees(workspaceRoot: string): Promise<readonly GitWorktreeInfo[]> {
+  async listWorktrees(workspaceRoot: string, options: GitCommandOptions = {}): Promise<readonly GitWorktreeInfo[]> {
     try {
-      const result = await runGit(
+      const result = await this.run(
         ['worktree', 'list', '--porcelain'],
         workspaceRoot,
-        this.executable,
+        options,
       );
       return parseWorktrees(result.stdout);
     } catch (error) {
@@ -334,12 +443,13 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     targetPath: string,
     branch: string,
     newBranch?: string,
+    options: GitCommandOptions = {},
   ): Promise<void> {
     try {
       const args = newBranch
         ? ['worktree', 'add', '-b', newBranch, targetPath, branch]
         : ['worktree', 'add', targetPath, branch];
-      await runGit(args, workspaceRoot, this.executable);
+      await this.run(args, workspaceRoot, options, false);
     } catch (error) {
       throw operationError('create worktree', workspaceRoot, targetPath, newBranch ?? branch, error);
     }
@@ -350,9 +460,9 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
    * Executes non-forced `git worktree remove <targetPath>` only; Git safety
    * refusals are surfaced as explicit errors.
    */
-  async removeWorktree(workspaceRoot: string, targetPath: string): Promise<void> {
+  async removeWorktree(workspaceRoot: string, targetPath: string, options: GitCommandOptions = {}): Promise<void> {
     try {
-      await runGit(['worktree', 'remove', targetPath], workspaceRoot, this.executable);
+      await this.run(['worktree', 'remove', targetPath], workspaceRoot, options, false);
     } catch (error) {
       throw operationError('remove worktree', workspaceRoot, targetPath, undefined, error);
     }

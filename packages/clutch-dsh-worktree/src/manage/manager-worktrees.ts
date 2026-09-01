@@ -7,6 +7,7 @@ import type {
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
+import { createWorktreeMutationToken } from '../provider/mutation-token.js';
 import { type SidecarSnapshot, providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
@@ -23,31 +24,70 @@ import {
   validatePhysicalGeneratedPath,
 } from './manager-support.js';
 
+function projectRuntimeRecord(
+  snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
+  record: WorktreeRecord,
+  health?: WorktreeRecord['health'],
+): WorktreeRecord {
+  const { health: _health, mutationToken: _mutationToken, ...durableRecord } = record;
+  void _health;
+  void _mutationToken;
+  if (record.status !== 'active') return durableRecord;
+  return {
+    ...durableRecord,
+    mutationToken: createWorktreeMutationToken(snapshot, record),
+    ...(health === undefined ? {} : { health }),
+  };
+}
+
+function assertMutationToken(
+  snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
+  record: WorktreeRecord,
+  token: string | undefined,
+): void {
+  const expected = createWorktreeMutationToken(snapshot, record);
+  if (token === undefined || token !== expected) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Worktree state changed after it was loaded', {
+      workspaceId: record.workspaceId,
+      worktreeId: record.worktreeId,
+    });
+  }
+}
+
 /** Return the sidecar Worktree projection with runtime Git health attached. */
 export async function listWorktrees(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId },
 ): Promise<readonly WorktreeRecord[]> {
   const workspace = await requireWorkspace(context, input.workspaceId);
-  const records = (await context.sidecar.read(input.workspaceId)).worktrees;
+  const snapshot = await context.sidecar.read(input.workspaceId);
+  const records = snapshot.worktrees;
+  const recoveryNeeded = snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0;
+  if (recoveryNeeded && records.length === 0) {
+    throw providerError('WORKTREE_RECOVERY_REQUIRED', `Workspace Worktree state needs recovery: ${input.workspaceId}`, {
+      workspaceId: input.workspaceId,
+      ...(snapshot.pendingOperation ? { operationId: snapshot.pendingOperation.id } : {}),
+    });
+  }
   let gitWorktrees: readonly { readonly absolutePath: string }[];
   try {
-    gitWorktrees = await context.git.listWorktrees(workspace.rootPath);
+    const gitRoot = context.git.resolveRepositoryRoot
+      ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+      : workspace.rootPath;
+    gitWorktrees = await context.git.listWorktrees(gitRoot);
   } catch {
-    return records.map((record) => {
-      const { health: _health, ...durableRecord } = record;
-      void _health;
-      return record.status === 'active'
-        ? { ...durableRecord, health: 'repair' as const }
-        : durableRecord;
-    });
+    return records.map((record) => projectRuntimeRecord(
+      snapshot,
+      record,
+      record.status === 'active'
+        ? recoveryNeeded ? 'recovery-needed' : 'repair'
+        : undefined,
+    ));
   }
   const nextRecords: WorktreeRecord[] = [];
   for (const record of records) {
-    const { health: _health, ...durableRecord } = record;
-    void _health;
     if (record.status !== 'active') {
-      nextRecords.push(durableRecord);
+      nextRecords.push(projectRuntimeRecord(snapshot, record));
       continue;
     }
     let ready = false;
@@ -60,7 +100,13 @@ export async function listWorktrees(
         break;
       }
     }
-    nextRecords.push({ ...durableRecord, health: ready ? 'ready' : 'repair' });
+    nextRecords.push({
+      ...projectRuntimeRecord(
+        snapshot,
+        record,
+        recoveryNeeded ? 'recovery-needed' : ready ? 'ready' : 'repair',
+      ),
+    });
   }
   return nextRecords;
 }
@@ -72,13 +118,16 @@ export async function listImportCandidates(
 ): Promise<readonly WorktreeImportCandidate[]> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   await context.git.validateRepository(workspace.rootPath);
+  const gitRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+    : workspace.rootPath;
   const [gitWorktrees, snapshot] = await Promise.all([
-    context.git.listWorktrees(workspace.rootPath),
+    context.git.listWorktrees(gitRoot),
     context.sidecar.read(input.workspaceId),
   ]);
   const candidates: WorktreeImportCandidate[] = [];
   for (const worktree of gitWorktrees) {
-    if (!worktree.branch || await samePhysicalPath(worktree.absolutePath, workspace.rootPath)) continue;
+    if (!worktree.branch || await samePhysicalPath(worktree.absolutePath, gitRoot)) continue;
     let managed = false;
     for (const record of snapshot.worktrees) {
       if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
@@ -103,6 +152,18 @@ export async function listBranches(
   const gitRoot = context.git.resolveRepositoryRoot
     ? await context.git.resolveRepositoryRoot(workspace.rootPath)
     : workspace.rootPath;
+  if (context.git.listBranchesWithWorktreePaths) {
+    const branchFacts = await context.git.listBranchesWithWorktreePaths(gitRoot);
+    const rows: BranchRecord[] = [];
+    for (const branch of branchFacts) {
+      rows.push({
+        name: branch.name,
+        isCurrent: branch.worktreePath !== undefined && await samePhysicalPath(branch.worktreePath, gitRoot),
+        checkedOut: branch.worktreePath !== undefined,
+      });
+    }
+    return rows;
+  }
   const [branches, worktrees] = await Promise.all([
     context.git.listBranches(gitRoot),
     context.git.listWorktrees(gitRoot),
@@ -130,7 +191,8 @@ export async function createWorktree(
   input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
 ): Promise<WorktreeRecord> {
   const workspace = await requireWorkspace(context, input.workspaceId);
-  await context.git.validateRepository(workspace.rootPath);
+  const transactional = context.sidecar.runExclusive !== undefined;
+  if (!transactional) await context.git.validateRepository(workspace.rootPath);
 
   if (typeof input.branch !== 'string' || input.branch.length === 0) {
     throw providerError('GIT_OPERATION_FAILED', 'A local branch is required', {
@@ -159,30 +221,31 @@ export async function createWorktree(
     });
   }
 
-  const branches = await context.git.listBranches(workspace.rootPath);
-  if (!branches.includes(baseBranch)) {
-    throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
-      workspaceRoot: workspace.rootPath,
-      branch: baseBranch,
-    });
-  }
-
   const targetBranch = newBranch ?? baseBranch;
-  if (newBranch !== undefined && branches.includes(newBranch)) {
-    throw providerError('WORKTREE_BRANCH_CONFLICT', `New branch already exists: ${newBranch}`, {
-      workspaceRoot: workspace.rootPath,
-      branch: newBranch,
-      baseBranch,
-    });
-  }
+  if (!transactional) {
+    const branches = await context.git.listBranches(workspace.rootPath);
+    if (!branches.includes(baseBranch)) {
+      throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
+        workspaceRoot: workspace.rootPath,
+        branch: baseBranch,
+      });
+    }
+    if (newBranch !== undefined && branches.includes(newBranch)) {
+      throw providerError('WORKTREE_BRANCH_CONFLICT', `New branch already exists: ${newBranch}`, {
+        workspaceRoot: workspace.rootPath,
+        branch: newBranch,
+        baseBranch,
+      });
+    }
 
-  const existingGitWorktrees = await context.git.listWorktrees(workspace.rootPath);
-  if (existingGitWorktrees.some((worktree) => worktree.branch === targetBranch)) {
-    throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already checked out: ${targetBranch}`, {
-      workspaceRoot: workspace.rootPath,
-      branch: targetBranch,
-      baseBranch,
-    });
+    const existingGitWorktrees = await context.git.listWorktrees(workspace.rootPath);
+    if (existingGitWorktrees.some((worktree) => worktree.branch === targetBranch)) {
+      throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already checked out: ${targetBranch}`, {
+        workspaceRoot: workspace.rootPath,
+        branch: targetBranch,
+        baseBranch,
+      });
+    }
   }
 
   const worktreeId = generatedId(context.idFactory);
@@ -197,6 +260,21 @@ export async function createWorktree(
       workspaceRoot: workspace.rootPath,
       targetPath,
       worktreeId,
+    });
+  }
+
+  // The default Workspace-sharded sidecar exposes the transaction seam. Legacy
+  // injected stores keep the previous path below for compatibility with older
+  // Host compositions and failure-injection tests.
+  if (transactional) {
+    return context.transaction.create({
+      workspaceId: input.workspaceId,
+      workspaceRoot: workspace.rootPath,
+      targetPath,
+      worktreeId,
+      baseBranch,
+      newBranch,
+      targetBranch,
     });
   }
 
@@ -281,6 +359,14 @@ export async function importWorktree(
     throw providerError('WORKTREE_IMPORT_INVALID', `Worktree path is not a directory: ${requestedPath}`, {
       workspaceId: input.workspaceId,
       absolutePath: requestedPath,
+    });
+  }
+  if (context.sidecar.runExclusive) {
+    return context.transaction.import({
+      workspaceId: input.workspaceId,
+      workspaceRoot: workspace.rootPath,
+      absolutePath: requestedPath,
+      worktreeId: generatedId(context.idFactory),
     });
   }
   await context.git.validateRepository(workspace.rootPath);
@@ -374,9 +460,18 @@ function importConflictOrExisting(
 /** Remove Git state first, then mark the relation removed while preserving detached bindings. */
 export async function removeWorktree(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string },
+  input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string; readonly mutationToken: string },
 ): Promise<void> {
   const workspace = await requireWorkspace(context, input.workspaceId);
+  if (context.sidecar.runExclusive) {
+    await context.transaction.remove({
+      workspaceId: input.workspaceId,
+      workspaceRoot: workspace.rootPath,
+      worktreeId: input.worktreeId,
+      mutationToken: input.mutationToken,
+    });
+    return;
+  }
   let gitRemoved = false;
 
   try {
@@ -393,6 +488,7 @@ export async function removeWorktree(
           worktreeId: input.worktreeId,
         });
       }
+      assertMutationToken(snapshot, record, input.mutationToken);
 
       try {
         await context.git.removeWorktree(workspace.rootPath, record.absolutePath);
@@ -446,6 +542,18 @@ export async function removeWorktree(
     }
     throw error;
   }
+}
+
+/** Reconcile one Workspace's durable Git/sidecar operation marker. */
+export async function recoverWorktrees(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<void> {
+  const workspace = await requireWorkspace(context, input.workspaceId);
+  await context.transaction.recover({
+    workspaceId: input.workspaceId,
+    workspaceRoot: workspace.rootPath,
+  });
 }
 
 export async function insertWorktreeBefore(

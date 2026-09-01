@@ -60,6 +60,14 @@ export function formatWorktreeViewError(
       return t('error.worktreeImportInvalid');
     case 'WORKTREE_ALREADY_MANAGED':
       return t('error.worktreeAlreadyManaged');
+    case 'WORKTREE_MUTATION_BUSY':
+      return t('error.worktreeMutationBusy');
+    case 'WORKTREE_STATE_CONFLICT':
+      return t('error.worktreeStateConflict');
+    case 'WORKTREE_RECOVERY_REQUIRED':
+      return t('error.worktreeRecoveryRequired');
+    case 'WORKTREE_IDENTITY_CHANGED':
+      return t('error.worktreeIdentityChanged');
     case 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE':
       return t('error.worktreeRegistrationSessionUnavailable');
     case 'WORKSPACE_RENAME_UNAVAILABLE':

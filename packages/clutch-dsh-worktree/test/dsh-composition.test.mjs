@@ -20,6 +20,45 @@ const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const packageManifestPath = path.join(packageDirectory, 'package.json');
 const packageManifest = JSON.parse(await readFile(packageManifestPath, 'utf8'));
 
+function emptyCollectedReader() {
+  return {
+    readFrom() {
+      return { text: '', nextOffset: 0, lossy: false };
+    },
+  };
+}
+
+function createFakeSubprocessRuntime(calls, stdout = '') {
+  return {
+    async resolveExecutable(command, env, signal) {
+      calls.push({ type: 'resolve', command, env, signal });
+      return '/execution-world/bin/git';
+    },
+    spawn(spec) {
+      calls.push({ type: 'spawn', spec });
+      return {
+        pid: 42,
+        stdin: undefined,
+        stdout: undefined,
+        stderr: undefined,
+        collected: {
+          stdout: {
+            readFrom() {
+              return { text: stdout, nextOffset: stdout.length, lossy: false };
+            },
+          },
+          stderr: emptyCollectedReader(),
+        },
+        done: Promise.resolve({ exitCode: 0, signal: null }),
+        terminate() {},
+        async waitForExit() {
+          return true;
+        },
+      };
+    },
+  };
+}
+
 test('publishes the generated Host and Client Remote contribution entries', () => {
   assert.equal(packageManifest.name, '@cerbur/clutch-dsh-worktree');
   assert.equal(packageManifest.exports['.'].default, './lib/index.js');
@@ -78,6 +117,8 @@ test('depends on and injects the DSH locale service', () => {
     '0.1.1-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
+  assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-subprocess-local'], undefined);
 });
 
 test('mounts the Host service through the package bundle patch', async () => {
@@ -162,6 +203,8 @@ test('loads the package and calls its Host Remote through the real DSH compositi
   host.provide('sessionPersistence', {
     list: async () => [],
   });
+  const subprocessCalls = [];
+  host.provide('subprocess', createFakeSubprocessRuntime(subprocessCalls, `${workspaceRoot}\n`));
 
   try {
     await host.plugin(TypertRegistry);
@@ -204,6 +247,19 @@ test('loads the package and calls its Host Remote through the real DSH compositi
       rpcId: 'rpc-worktree-list',
       result: { ok: true, value: { ok: true, value: [] } },
     });
+    assert.equal(subprocessCalls.some(({ type }) => type === 'spawn'), true);
+    const worktreeListCall = subprocessCalls.find(({ type, spec }) =>
+      type === 'spawn' && spec.argv.includes('worktree') && spec.argv.includes('list'),
+    );
+    assert.deepEqual(
+      worktreeListCall?.spec.argv,
+      [
+        '/execution-world/bin/git',
+        'worktree',
+        'list',
+        '--porcelain',
+      ],
+    );
   } finally {
     await host.fiber.dispose();
     await rm(tempRoot, { recursive: true, force: true });

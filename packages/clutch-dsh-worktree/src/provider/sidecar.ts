@@ -1,6 +1,7 @@
 import type { SessionBinding, WorktreeId, WorktreeRecord } from '../contract/index.js';
 
 import {
+  type LockedSidecarStore,
   type SidecarMutation,
   type SidecarSnapshot,
   type SidecarStore,
@@ -70,10 +71,19 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
     return this.persistence.mutate(workspaceId, mutation);
   }
 
+  /** Hold the shard lock across a compound Git/sidecar transaction. */
+  runExclusive<T>(
+    workspaceId: string,
+    operation: (locked: LockedSidecarStore) => Promise<T>,
+  ): Promise<T> {
+    return this.persistence.runExclusive(workspaceId, operation);
+  }
+
   /** Idempotently insert a Worktree record by ID. */
   async upsertWorktree(record: WorktreeRecord): Promise<WorktreeRecord> {
-    const { health: _health, ...withoutHealth } = record;
+    const { health: _health, mutationToken: _mutationToken, ...withoutHealth } = record;
     void _health;
+    void _mutationToken;
     const persistedRecord: WorktreeRecord = { ...withoutHealth, source: record.source ?? 'plugin' };
     return this.mutate(record.workspaceId, (snapshot) => {
       const existing = snapshot.worktrees.find(

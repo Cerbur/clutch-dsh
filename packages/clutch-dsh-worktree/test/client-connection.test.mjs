@@ -13,7 +13,7 @@ const METHODS = [
   ['listBranches', { workspaceId: 'ws1' }, []],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
   ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }, { worktreeId: 'wt_external' }],
-  ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }, null],
+  ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }, null],
   ['insertWorktreeBefore', {
     workspaceId: 'ws1',
     worktreeId: 'wt1',

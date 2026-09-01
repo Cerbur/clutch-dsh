@@ -1,5 +1,39 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.8 — 2026-09-01
+
+### 中文
+
+#### 新增
+
+- 增加事务化 Git mutation kernel，统一 repository lock、sidecar journal 和失败恢复。
+- 通过 DSH subprocess runtime 执行 Git 操作，并限制进程生命周期和诊断输出。
+- 支持从 Session 菜单复制非空 Worktree Session 的 ID。
+
+#### 优化
+
+- 合并 repository identity 与 branch checkout facts 的 Git 查询，同时兼容不支持相关 ref-format atom 的旧版 Git。
+
+#### 修复
+
+- 强制 Worktree 删除使用最新 mutation token，并修复子目录 Workspace health、sidecar repository 归一化和 Git subprocess cleanup 的错误分类。
+
+### English
+
+#### Added
+
+- Add a transactional Git mutation kernel with repository locking, sidecar journaling, and failure recovery.
+- Run Git operations through the DSH subprocess runtime with bounded process lifetime and diagnostics.
+- Add a menu action to copy the ID of any non-blank Worktree Session.
+
+#### Improved
+
+- Consolidate repository identity and branch checkout fact reads while retaining compatibility with Git versions that lack the related ref-format atom.
+
+#### Fixed
+
+- Require a fresh mutation token for Worktree removal and correct subdirectory Workspace health, sidecar repository normalization, and Git subprocess cleanup classification.
+
 ## 0.1.7 — 2026-08-28
 
 ### 中文

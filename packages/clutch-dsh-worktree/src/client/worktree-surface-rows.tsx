@@ -512,6 +512,11 @@ export function WorktreeSessionRow({
       icon: <IconArchiveOutline20 size={16} />,
       disabled: onArchive === undefined || actionPending,
     },
+    {
+      id: 'copy-session-id',
+      label: t('session.copyId'),
+      icon: <IconCopyOutline16 />,
+    },
   ];
   const statusLabel = presentation === undefined
     ? undefined
@@ -589,6 +594,7 @@ export function WorktreeSessionRow({
                 if (id === 'rename') onRename?.(sessionId, label);
                 if (id === 'fork') onFork?.(sessionId);
                 if (id === 'archive') onArchive?.(sessionId);
+                if (id === 'copy-session-id') void writeClipboard(sessionId);
               }}
               portal
               closeOnPointerLeave

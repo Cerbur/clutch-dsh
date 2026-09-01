@@ -48,6 +48,28 @@ test('resolves the bound active Worktree branch for the current Session', () => 
   });
 });
 
+test('does not expose a Worktree context while recovery is required', () => {
+  assert.deepEqual(resolveWorktreeSessionContext(baseInput({
+    worktrees: [{
+      worktreeId: 'wt1',
+      workspaceId: 'ws1',
+      absolutePath: '/tmp/wt1',
+      branch: 'feature/context',
+      status: 'active',
+      health: 'recovery-needed',
+    }],
+    bindings: [{
+      workspaceId: 'ws1',
+      worktreeId: 'wt1',
+      sessionId: 'session-1',
+      status: 'active',
+    }],
+  })), {
+    kind: 'none',
+    reason: 'repair',
+  });
+});
+
 test('hides stale or detached Worktree context instead of falling back to Main', () => {
   const detached = resolveWorktreeSessionContext(baseInput({
     bindings: [{

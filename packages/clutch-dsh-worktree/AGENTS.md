@@ -134,7 +134,56 @@ worktree 信息时，默认 `LocalGitAdapter` 通过可选的 `resolveRepository
 Git worktree root。Manage 在该 resolver 存在时统一使用 root 读取，旧的注入 adapter 没有
 resolver 时保留原始 Workspace root 作为兼容回退。
 
-The sidecar schema is versioned from v1 to v2. Legacy records are read-normalized with `source: 'plugin'`; the next successful mutation atomically persists v2. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never become an empty candidate list. Provider errors include `WORKTREE_IMPORT_INVALID` and `WORKTREE_ALREADY_MANAGED`.
+For branch selection and create preflight, the adapter may expose the optional
+`listBranchesWithWorktreePaths` read. `LocalGitAdapter` uses Git's
+`%(worktreepath)` ref-format atom to combine local-branch and checkout facts in one
+bounded subprocess, and falls back to the existing `listBranches` plus
+`listWorktrees` reads when an older Git rejects that atom. This seam is Provider/
+Manage-internal; the browser Remote still receives only `BranchRecord`.
+
+默认 Host Git 执行通过 DSH 的 `ctx.subprocess` capability 注入 `LocalGitAdapter`。Provider
+只依赖 `@deepseek-ai/dsh-subprocess` 的最小结构化 Service Definition，不实例化或打包
+`dsh-subprocess-local`；具体执行世界由 DSH profile 组合。所有 Git 调用继续使用直接 argv、
+显式 cwd、bounded output 和 Provider-owned 错误映射，不经过 PowerShell、CMD、bash 或其他
+shell。直接构造 adapter 且没有 subprocess capability 时才保留 Node `execFile` 兼容路径。
+
+The default Host Git path is backed by the DSH `ctx.subprocess` capability injected into
+`LocalGitAdapter`. Provider code consumes only the minimal structured
+`@deepseek-ai/dsh-subprocess` Service Definition; it does not instantiate or bundle
+`dsh-subprocess-local`, whose execution world belongs to the DSH profile composition. Git calls
+remain direct argv with explicit cwd, bounded output, and Provider-owned error mapping; they never
+run through PowerShell, CMD, bash, or another shell. A directly constructed adapter without the
+capability retains the Node `execFile` compatibility path.
+
+The runtime-backed runner owns both the command deadline and a separate bounded cleanup deadline.
+After cancellation or normal command completion it asks the subprocess tree to terminate and waits
+only within that cleanup bound; an unresolved tree becomes a `GIT_OPERATION_FAILED` diagnostic with
+`gitProcessTreeDidNotExit` instead of hanging a Worktree mutation indefinitely. `LocalGitAdapter`
+uses an explicit `GIT_OPTIONAL_LOCKS=undefined` mutation tombstone so an ambient read-only override
+cannot weaken Git writes. `WorktreeManagerService.close()` is idempotent, aborts its shared Git
+signal, and waits for admitted operations; Host registers that close operation with the Cordis
+fiber lifecycle.
+
+The sidecar schema is versioned from v1/v2 to v3. v1 records are read-normalized with
+`source: 'plugin'`; v2 records retain their explicit source, both legacy versions expose
+revision `0` in memory, and the first successful mutation atomically persists v3. A transitional
+v3 snapshot that still contains a raw provider repository identity is accepted, normalized to an
+opaque `repositoryFingerprint`, and cleaned on the next stable write. Unknown versions, invalid
+JSON, and invariant violations remain corruption errors and are never silently reset to an empty
+state. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never
+become an empty candidate list. Provider errors include `WORKTREE_IMPORT_INVALID`,
+`WORKTREE_ALREADY_MANAGED`, `WORKTREE_MUTATION_BUSY`, `WORKTREE_STATE_CONFLICT`,
+`WORKTREE_RECOVERY_REQUIRED`, and `WORKTREE_IDENTITY_CHANGED`.
+
+`SidecarPersistence` serializes each Workspace shard with a cross-process lock under
+`$dshHome/clutch-dsh-worktree/locks` and publishes complete snapshots through a same-directory
+temporary file plus atomic rename. `WorktreeMutationTransaction` composes that shard lock with a
+repository-common-directory lock, writes durable pending markers for Git create/remove, verifies
+the observed Git result, and only then publishes stable sidecar state. Startup recovery may
+finalize or clear an operation when identity is certain; it never deletes an unknown path, uses
+force removal, or changes a DSH Session. Uncertain Git/sidecar state remains blocked until an
+explicit recovery path resolves it. Runtime mutation tokens are opaque stale-read witnesses and
+are never persisted.
 Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路由、原始 DSH 数据
 迁移或 Project/Session 内容写入。
 
@@ -151,6 +200,11 @@ Workspace repository and never calls Git add/remove.
 Manage 不执行具体 Git command，不实现 sidecar 文件格式细节，不拥有 DSH 原始数据，
 也不负责 Web UI 或 transport。
 
+Manage owns the lifetime boundary around the default Git Provider: it rejects new operations once
+closed, aborts the shared Provider signal, and waits for already-admitted operations before Host
+disposal completes. The Host must register this close operation with its Cordis fiber; callers that
+inject a custom Git adapter remain responsible for providing their own lifecycle-aware cancellation.
+
 ### `src/host/`
 
 是 DSH composition root。它组合真实 DSH read adapter 与 Manage，创建
@@ -161,6 +215,10 @@ Manage 不执行具体 Git command，不实现 sidecar 文件格式细节，不�
 绝对 DSH Home。官方 `dsh-typert-loader` 从 `./package.json` 和 `./typert` 注册
 descriptor，当前 upstream DSH 的 `TypertGateway` 在已有 `/api` Connection channel 接管
 `worktreeManager/<method>`。本 plugin 不创建第二套 RPC 或 transport。
+
+The Host registers `WorktreeManagerService.close()` as a Cordis effect so a disposed Host cannot
+leave a Git subprocess tree or an in-flight Provider operation behind. This cleanup is lifecycle
+infrastructure only and does not add a Remote method.
 
 `DshHostReadAdapter` 只读取 workspace registry、live Session header 和
 `sessionPersistence.list()` 等 header facts，不加载 transcript；`resolveRuntimeCwd`
@@ -199,6 +257,8 @@ Client surface 的当前约束：
 - 每组默认显示五行，更多内容使用 Expand more/Collapse；
 - Main 与 Worktree 共用 parameterized split-row；active Worktree 通过可选参数暴露 remove menu、确认弹窗和状态，Main 与 detached binding 不传入 menu，因此不显示 Worktree remove 选项；
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar；
+- Worktree health also exposes `recovery-needed` while a durable Git/sidecar operation or recovery
+  issue is unresolved; this is a runtime projection and is not persisted;
 - Connection/Gateway/domain 失败必须显示 retryable error，不能伪装成空列表。
 
 ## 实现与验证要求
@@ -214,7 +274,8 @@ Client surface 的当前约束：
 - plugin index 不可用时 Project/Session 视角仍可用；
 - Worktree 模式创建的 Session 能在原始 Project session 列表中出现；
 - Client `/api` 调用、双层错误、dispose abort 和 native list projection 的生命周期。
-- WorktreeRecord source provenance, v1-to-v2 sidecar read normalization and first-mutation migration；
+- WorktreeRecord source provenance, v1/v2-to-v3 sidecar read normalization and first-mutation migration；
+- v3 revision, opaque repository fingerprint, durable create/remove pending operation, safe startup recovery, cross-process locking, and stale mutation-token checks；
 - external candidate filtering, same-path idempotency, plugin-managed conflict (`WORKTREE_ALREADY_MANAGED`), detached/invalid import rejection, and import-without-Git-mutation；
 - external and plugin real Git removal, detached binding retention, Session/binding failure recovery after import, and ready-content-preserving refresh；
 - 任意 Client refresh、native list/membership projection 或异步错误切换不得先清空当前 ready 内容而触发白屏；已有内容刷新必须保留当前 projection，loading 空态只允许首次进入 Worktree mode 或显式 retry，新增刷新路径必须有回归测试覆盖。

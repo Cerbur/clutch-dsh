@@ -58,6 +58,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
+- 在普通 Worktree Session 的 Session 操作菜单中复制 Session ID。
 - 在同一个 Session 的 snapshot 更新以及 Session 切换期间保持 Conversation 和 Hero 上下文
   稳定；替换读取进行时保留上一次有效上下文。
 - 过长的 branch 名称在 chip 中折叠，并通过原生 hover card 展示完整值；Sidebar footer action
@@ -324,6 +325,7 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ### 理解状态与恢复提示
 
 - `ready` 表示 Worktree 可用。`repair` 表示 Worktree、Session、binding 或 cwd 缺失/无效。
+  `recovery-needed` 表示 Git/sidecar 操作或身份校验尚未解决，破坏性操作会被阻止。
   `detached` 表示 Git Worktree 已被移除，但关系仍然保留。active binding 指向缺失
   Worktree 时会显示明确的 repair 警告或错误，不会静默切换到其他 Worktree。
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar。Git 前置条件失败按
@@ -361,14 +363,30 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 Session 内容。如果 sidecar 不可用或损坏，原生 Project/Session 视角仍然可读，插件进入
 degraded/read-only 状态；不能用空索引覆盖 DSH 原生列表。
 
+sidecar 兼容读取 v1 和 v2 snapshot。旧记录会先在内存中归一化，第一次成功 mutation 会
+以原子方式将 shard 升级为 v3。新的 v3 snapshot 使用 revision、不可逆向还原的 repository
+fingerprint，以及为 Git create/remove 保存的 durable pending-operation metadata。早期 v3
+实现可能写入的 raw repository 字段也可以读取，并会在下一次稳定写入时清理。无效 JSON、
+未知 schema version 和关系不变量错误都会报告为 corruption，不会静默重置为空索引。
+
 一个 Session 最多绑定一个 active Worktree，一个 Worktree 可以绑定多个 Session。Session
 重复绑定同一个 Worktree 是幂等的，绑定两个 active Worktree 会产生 conflict。没有 binding、
 使用 Main binding 或处于 detached binding 的 Session 使用 Project 根目录作为 cwd；active
 Worktree binding 使用对应的 Worktree 路径。cwd 在每次执行时派生，不会写回 DSH Session 元数据。
 
-创建 Worktree 时先创建 Git Worktree，再记录外部关系。sidecar 写入失败时会尽可能清理刚
-创建的 Git Worktree。删除 Worktree 失败时不会改变 sidecar 状态，因此关系仍可重试。创建
-Session 时先调用 DSH 原生 API，再写入 binding；binding 失败不会删除或修改已创建的 Session。
+创建 Worktree 时先创建 Git Worktree，再记录外部关系。Git create/remove mutation 会按
+Workspace 和 repository 串行化跨 Host 进程执行，写入 durable pending operation，并在确认
+实际 Git 结果后才发布稳定 sidecar 状态。如果 create 无法对账，或 path/repository identity
+发生变化，操作会明确保留为可恢复状态；插件不会使用 force remove，也不会删除未知目录。
+sidecar 写入失败时会尽可能清理刚创建的 Git Worktree。删除 Worktree 失败时不会静默改变
+关系，因此关系仍可重试，或会标记为 `recovery-needed`。创建 Session 时先调用 DSH 原生
+API，再写入 binding；binding 失败不会删除或修改已创建的 Session。
+
+Host 启动时，插件会针对已知 DSH Workspace 执行一次尽力而为的安全恢复。只有在 Git path
+和 repository identity 都能确认时，才会完成 pending create/remove；否则保留 marker，并
+显示 `WORKTREE_RECOVERY_REQUIRED` 或 `WORKTREE_IDENTITY_CHANGED`。它不会猜测性清理破坏性
+状态。破坏性操作还可以携带最新 Worktree projection 生成的 opaque mutation token，避免
+过期 UI 对已变化的记录执行操作。
 
 Worktree Session 流程将独立的 Worktree cwd 交给 upstream DSH runtime，并将
 `{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH

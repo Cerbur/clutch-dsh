@@ -86,7 +86,11 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
     },
   );
   assert.equal(
-    await manager.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),
+    await manager.removeWorktree({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+      mutationToken: 'token-example',
+    }),
     undefined,
   );
   assert.deepEqual(
