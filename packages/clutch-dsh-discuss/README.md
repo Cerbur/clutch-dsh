@@ -1,108 +1,89 @@
-# clutch-dsh-discuss
+# @cerbur/clutch-dsh-discuss
 
-`clutch-dsh-discuss` 是一个面向需求讨论和设计产出的 planned plugin idea。
+## Feature introduction
 
-当前目录只保存想法记录，尚未包含 `package.json`、`src` 或可运行实现；它作为规划入口存在，不属于当前 workspace 的 runtime package。
+`@cerbur/clutch-dsh-discuss` adds a small, predictable discussion entrypoint to a DSH
+profile. It keeps the conversation in DSH and steers the approved brainstorming workflow
+when the user wants to turn a topic into a reviewed design document.
 
-完整的 idea 记录位于根目录的 [clutch-dsh-discuss idea](../../docs/ideas/2026-08-18-clutch-dsh-discuss.md)。本 README 保留 plugin 级别的初步体验和讨论边界，后续以根文档和各 package 规划入口的最新记录为准。
+![clutch-dsh-discuss MVP flow](assets/screenshots/discuss-mvp.svg)
 
-## 想解决的问题
+The plugin has no custom UI, session store, or persistence layer. Its runtime behavior is
+limited to one bundled skill and one human command, so the normal DSH conversation and
+plugin precedence rules remain in control.
 
-传统 agent 或 Codex 式的 brainstorming 主要依赖连续对话。用户需要在一长段文字中理解当前讨论阶段、记住待选方向，再用自然语言回应。这个 plugin 希望把需求澄清过程变成更容易跟随的引导式体验，让用户通过逐步选择和补充信息，参与形成一个可复用的 design doc。
+## Capabilities
 
-## 核心体验
+- Register the `brainstorming` skill with both model and user invocation enabled.
+- Bundle the brainstorming instructions and their visual companion and spec-reviewer
+  resources with the package.
+- Register `/discuss [topic]` as a human command with an optional topic and
+  `recordInput: false`, avoiding a duplicate command message in the conversation log.
+- Steer `/discuss` to `/brainstorming` and steer `/discuss <topic>` to one user message
+  containing `/brainstorming`, a blank line, and the trimmed topic.
+- Direct approved design documents to
+  `docs/clutch/specs/YYYY-MM-DD-<topic>-design.md`.
+- Return an explicit command error when the receiving agent cannot accept the steered
+  message.
 
-用户加载 plugin 后，可以启动一个 discussion session：
+The package uses `package.json` as the source of truth for its version. The README and
+installation commands intentionally do not repeat a version number.
 
-1. plugin 先引导用户说明想讨论的需求或问题。
-2. 当用户点击“讨论一个需求”后，界面拉起输入框，接收需求背景、目标或已有想法。
-3. 系统根据当前讨论阶段，逐步展示交互式卡片，让用户选择方向、约束、优先级或下一步关注点。
-4. 用户完成若干轮选择和补充后，系统整合讨论内容，生成一份 design doc。
-5. 用户可以继续修改、补充或确认 design doc，再决定是否进入后续实现规划。
+## Installation
 
-期望的体验更接近一个有明确步骤、可视化选项和阶段反馈的 guided session，而不是只有聊天消息流的 brainstorming。
+### Install from npm
 
-## 初步流程
+With an installed DSH CLI, add the plugin to the profile that will run the Web UI:
 
-```text
-加载 plugin
-  -> 启动 discussion session
-  -> 输入需求
-  -> 交互式卡片：澄清目标 / 选择方向 / 补充约束
-  -> 交互式卡片：确认范围和成功标准
-  -> 汇总讨论结果
-  -> 生成 design doc
-  -> 用户确认或继续修改
+```bash
+dsh plugin --profile web add @cerbur/clutch-dsh-discuss
+dsh web
 ```
 
-## 可能的 session 状态
+When using a DeepSeek Harness source checkout without a standalone `dsh` command, use the
+equivalent `pnpm dsh` form.
 
-以下状态只是用于帮助后续讨论的初始模型，不代表已经确定的接口：
+### Install from a repository checkout
 
-- `intake`：收集需求和背景。
-- `clarify`：澄清目标、用户、问题和约束。
-- `explore`：展示候选方向，帮助用户比较取舍。
-- `shape`：收敛范围、交互、数据流和验收标准。
-- `draft`：生成 design doc 草稿。
-- `review`：等待用户确认或提出修改。
+Build the package from the `clutch-dsh` checkout, then add its absolute path to the DSH
+profile:
 
-## 设计边界
+```bash
+cd /path/to/clutch-dsh
+pnpm install
+pnpm --filter @cerbur/clutch-dsh-discuss build
 
-- 讨论过程应保留为 session，便于用户返回上下文并继续推进。
-- 卡片内容应由当前讨论上下文驱动，而不是固定展示一套问卷。
-- 用户既可以点击选项，也应该能够通过输入框补充无法预先枚举的内容。
-- design doc 是讨论结果的结构化投影，不应丢失用户明确给出的原始约束和决策理由。
-- plugin 的第一阶段重点是讨论体验和 design doc 产出，不预设直接修改代码或自动执行实现。
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-discuss
+pnpm dsh web
+```
 
-## 待决策项
+The profile must already provide the DSH command and skill services. The package declares
+those DSH packages as peer dependencies and does not copy them into runtime dependencies.
 
-### 交互逻辑由什么承载
+## Detailed usage
 
-目前尚未决定是新增一个 tool 来实现交互式讨论逻辑，还是使用其他机制，例如：
+After installation, use the command from a DSH conversation:
 
-- tool 负责推进 session，Consumer 负责渲染输入框和卡片；
-- 由 host/plugin UI 提供原生的 guided session 能力，plugin 只提供状态和 schema；
-- 采用事件或结构化 response，让上层 UI 根据 response type 自己渲染交互；
-- 先实现一个最小的 tool contract，再根据实际 UI 能力演进为更完整的交互协议。
+```text
+/discuss
+```
 
-这个选择需要结合 DSH/Cordis 当前可提供的 UI、tool response 和 session API 再确定。
+This starts the brainstorming workflow without a topic. To provide a starting point, pass
+ordinary text after the command:
 
-### 其他需要在设计阶段确认的问题
+```text
+/discuss Design a login flow for invited users
+```
 
-- 交互式卡片支持哪些类型：单选、多选、排序、文本补充、确认等。
-- 卡片由模型生成、由 plugin 根据 schema 生成，还是两者结合。
-- 用户跳过、返回、修改上一选择时，session 如何回退和重算后续卡片。
-- design doc 是否使用仓库现有的 superpowers spec 格式，还是定义独立模板。
-- design doc 生成后由谁持久化、展示和导出。
-- 讨论 session 与普通 DSH session 的关系，以及是否需要独立的 session 类型或 metadata。
-- 如何处理模型生成的候选项不完整、重复或与已有约束冲突的情况。
+The plugin trims the input and sends the brainstorming gesture as one user message. The
+skill then requires project-context exploration, clarification, alternative approaches,
+design approval, spec self-review, and user review before implementation planning. The
+bundled resource directory contains the visual-companion and spec-reviewer templates used
+by that workflow.
 
-## 当前状态
+![Detailed `/discuss` to design-document flow](assets/screenshots/discuss-mvp.svg)
 
-Idea only。下一步应先确认 DSH/Cordis 能提供的 UI 和结构化交互能力，再为最小可行的 discussion session 设计 Service Definition、Provider 和 Consumer 的边界。
-
-## 模块职责草案
-
-以下内容合并自早期的 Provider/Consumer 规划记录。它们描述的是
-`clutch-dsh-discuss` 当前按功能划分的职责，不代表仓库要求所有 plugin
-采用相同的模块名称或目录结构。
-
-### Provider 职责
-
-- 推进 discussion session 的状态变化。
-- 保存和恢复讨论上下文及用户选择。
-- 校验用户输入与交互式卡片回答。
-- 根据讨论结果组装 design doc。
-- 与 DSH/Cordis 的 session、tool 或其他交互承载机制对接。
-
-交互逻辑究竟由新增 tool 承载，还是由 host/plugin UI、事件或结构化
-response 承载，仍需结合 DSH/Cordis 能力确定；Provider 不在当前阶段提前
-锁定具体实现。
-
-### Consumer 职责
-
-- 提供“讨论一个需求”的入口。
-- 拉起需求输入框并展示当前 discussion session 阶段。
-- 渲染交互式卡片，支持选择、补充和确认。
-- 让用户返回、修改或跳过前一步讨论。
-- 展示、编辑和确认最终 design doc。
+The command itself does not create a session or write a file. Once the user approves a
+design, the skill's documented destination is `docs/clutch/specs/`; subsequent planning or
+implementation remains an ordinary DSH workflow.

@@ -1,0 +1,184 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1200"
+  height="420"
+  viewBox="0 0 1200 420"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">clutch-dsh-discuss MVP flow</title>
+  <desc id="desc">
+    A topic enters through the discuss command, activates the brainstorming skill, and produces an
+    approved design document under docs/clutch/specs.
+  </desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <linearGradient id="command" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="skill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <linearGradient id="document" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#9333ea" />
+    </linearGradient>
+    <marker
+      id="arrow"
+      markerHeight="10"
+      markerWidth="10"
+      orient="auto-start-reverse"
+      refX="8"
+      refY="5"
+    >
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
+    </marker>
+  </defs>
+  <rect width="1200" height="420" rx="28" fill="url(#background)" />
+  <text
+    x="600"
+    y="58"
+    fill="#0f172a"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="30"
+    font-weight="700"
+    text-anchor="middle"
+  >
+    Discuss → Brainstorm → Design
+  </text>
+  <text
+    x="600"
+    y="92"
+    fill="#475569"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="16"
+    text-anchor="middle"
+  >
+    One ordinary DSH conversation, with an explicit approval gate
+  </text>
+
+  <g transform="translate(70 145)">
+    <rect width="300" height="170" rx="20" fill="url(#command)" />
+    <text
+      x="28"
+      y="45"
+      fill="#bfdbfe"
+      font-family="system-ui, sans-serif"
+      font-size="14"
+      font-weight="700"
+      letter-spacing="1.5"
+    >
+      ENTRYPOINT
+    </text>
+    <text
+      x="28"
+      y="88"
+      fill="#ffffff"
+      font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+      font-size="23"
+      font-weight="700"
+    >
+      /discuss [topic]
+    </text>
+    <text x="28" y="122" fill="#dbeafe" font-family="system-ui, sans-serif" font-size="15">
+      Trim input and steer one
+    </text>
+    <text x="28" y="146" fill="#dbeafe" font-family="system-ui, sans-serif" font-size="15">
+      user message into DSH.
+    </text>
+  </g>
+
+  <path
+    d="M 390 230 H 470"
+    fill="none"
+    stroke="#475569"
+    stroke-width="4"
+    marker-end="url(#arrow)"
+  />
+
+  <g transform="translate(450 145)">
+    <rect width="300" height="170" rx="20" fill="url(#skill)" />
+    <text
+      x="28"
+      y="45"
+      fill="#99f6e4"
+      font-family="system-ui, sans-serif"
+      font-size="14"
+      font-weight="700"
+      letter-spacing="1.5"
+    >
+      RUNTIME SKILL
+    </text>
+    <text
+      x="28"
+      y="88"
+      fill="#ffffff"
+      font-family="system-ui, sans-serif"
+      font-size="23"
+      font-weight="700"
+    >
+      brainstorming
+    </text>
+    <text x="28" y="122" fill="#ccfbf1" font-family="system-ui, sans-serif" font-size="15">
+      Clarify, compare approaches,
+    </text>
+    <text x="28" y="146" fill="#ccfbf1" font-family="system-ui, sans-serif" font-size="15">
+      and request design approval.
+    </text>
+  </g>
+
+  <path
+    d="M 770 230 H 850"
+    fill="none"
+    stroke="#475569"
+    stroke-width="4"
+    marker-end="url(#arrow)"
+  />
+
+  <g transform="translate(830 145)">
+    <rect width="300" height="170" rx="20" fill="url(#document)" />
+    <text
+      x="28"
+      y="45"
+      fill="#ddd6fe"
+      font-family="system-ui, sans-serif"
+      font-size="14"
+      font-weight="700"
+      letter-spacing="1.5"
+    >
+      APPROVED OUTPUT
+    </text>
+    <text
+      x="28"
+      y="88"
+      fill="#ffffff"
+      font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+      font-size="19"
+      font-weight="700"
+    >
+      docs/clutch/specs/
+    </text>
+    <text x="28" y="122" fill="#ede9fe" font-family="system-ui, sans-serif" font-size="15">
+      Self-review, user review,
+    </text>
+    <text x="28" y="146" fill="#ede9fe" font-family="system-ui, sans-serif" font-size="15">
+      then implementation planning.
+    </text>
+  </g>
+
+  <text
+    x="600"
+    y="370"
+    fill="#64748b"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="14"
+    text-anchor="middle"
+  >
+    @cerbur/clutch-dsh-discuss · no custom UI · no independent session store
+  </text>
+</svg>
