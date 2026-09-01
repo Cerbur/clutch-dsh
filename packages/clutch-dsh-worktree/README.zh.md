@@ -58,6 +58,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
+- 在普通 Worktree Session 的 Session 操作菜单中复制 Session ID。
 - 在同一个 Session 的 snapshot 更新以及 Session 切换期间保持 Conversation 和 Hero 上下文
   稳定；替换读取进行时保留上一次有效上下文。
 - 过长的 branch 名称在 chip 中折叠，并通过原生 hover card 展示完整值；Sidebar footer action

@@ -1006,6 +1006,24 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
   );
 });
 
+test('adds Copy session ID to the Worktree Session menu', async () => {
+  const { rows } = await readSurfaceSources();
+  const locales = await readFile(
+    new URL('../src/client/locales.ts', import.meta.url),
+    'utf8',
+  );
+  const sessionRowStart = rows.indexOf('/** Worktree-mode Session row');
+  assert.notEqual(sessionRowStart, -1);
+  const sessionRow = rows.slice(sessionRowStart);
+
+  assert.match(sessionRow, /IconCopyOutline16/);
+  assert.match(sessionRow, /id: 'copy-session-id'/);
+  assert.match(sessionRow, /label: t\('session\.copyId'\)/);
+  assert.match(sessionRow, /void writeClipboard\(sessionId\)/);
+  assert.match(locales, /'session\.copyId': '复制 Session ID'/);
+  assert.match(locales, /'session\.copyId': 'Copy session ID'/);
+});
+
 test('refreshes the ready Worktree projection after fork binding and exposes recovery retry', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
