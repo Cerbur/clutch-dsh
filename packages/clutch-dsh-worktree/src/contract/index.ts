@@ -33,6 +33,10 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'SIDECAR_CORRUPT',
   'SIDECAR_SYNC_REQUIRED',
   'GIT_OPERATION_FAILED',
+  'WORKTREE_MUTATION_BUSY',
+  'WORKTREE_STATE_CONFLICT',
+  'WORKTREE_RECOVERY_REQUIRED',
+  'WORKTREE_IDENTITY_CHANGED',
   'WORKTREE_PERMISSION_BINDING_REQUIRED',
 ] as const);
 
@@ -53,7 +57,7 @@ export type WorktreeSource = 'plugin' | 'external';
 export * from './worktree-permission.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
-export type WorktreeHealth = 'ready' | 'repair';
+export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed';
 
 /**
  * Session 与 Worktree 的关系状态；删除 Worktree 只会将关系转为 `detached`，不会删除 Session。
@@ -74,6 +78,8 @@ export interface WorktreeRecord {
   readonly status: WorktreeStatus;
   /** Runtime-only; never written to the sidecar. */
   readonly health?: WorktreeHealth;
+  /** Opaque runtime-only snapshot token for destructive-action stale-state checks. */
+  readonly mutationToken?: string;
 }
 
 export interface WorktreeImportCandidate {
@@ -172,7 +178,11 @@ export interface WorktreeManager {
    * 删除 Git Worktree 后保留 record，并将其 active bindings 转为 detached；不会删除任何 DSH Session。
    * Removes the Git Worktree while retaining its record and detaching active bindings; no DSH Session is deleted.
    */
-  removeWorktree(input: { workspaceId: WorkspaceId; worktreeId: WorktreeId }): Promise<void>;
+  removeWorktree(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    mutationToken: string;
+  }): Promise<void>;
 
   /**
    * Move one Worktree within the Workspace's durable order. With an anchor it
@@ -261,6 +271,7 @@ export interface WorktreeRemoteManager {
   removeWorktree(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
+    mutationToken: string;
   }): Promise<WorktreeRemoteResult<null>>;
 
   insertWorktreeBefore(input: {

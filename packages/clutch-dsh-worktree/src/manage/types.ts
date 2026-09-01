@@ -2,6 +2,7 @@ import type { WorktreeManager } from '../contract/index.js';
 import type {
   DshReadAdapter,
   GitWorktreeAdapter,
+  GitSubprocessRuntime,
   SidecarStore,
 } from '../provider/types.js';
 
@@ -21,6 +22,9 @@ export interface RuntimeCwdInput {
 export interface WorktreeManagerOptions {
   readonly dsh: DshReadAdapter;
   readonly dshHome: string;
+
+  /** Optional DSH process capability used by the default local Git adapter. */
+  readonly subprocess?: GitSubprocessRuntime;
 
   /**
    * 可替换的底层端口主要用于 Host 组合与确定性测试；缺省时使用本地实现。
@@ -46,4 +50,10 @@ export interface WorktreeManagerService extends WorktreeManager {
    * Re-derives cwd from the DSH Workspace and sidecar on every call; a broken active relation fails explicitly instead of silently falling back.
    */
   resolveRuntimeCwd(input: RuntimeCwdInput): Promise<string>;
+
+  /** Reconcile durable Git/sidecar operation markers for one Workspace. */
+  recoverWorktrees(input: { workspaceId: string }): Promise<void>;
+
+  /** Abort new work and wait for in-flight provider work before Host disposal completes. */
+  close(): Promise<void>;
 }

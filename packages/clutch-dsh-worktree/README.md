@@ -354,9 +354,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 ### Understand status and recovery messages
 
 - `ready` means the Worktree is available. `repair` identifies a missing or invalid Worktree,
-  Session, binding, or cwd. `detached` means the Git Worktree was removed while the relationship
-  was retained. An active binding pointing to a missing Worktree produces an explicit repair
-  warning or error; it never silently falls back to another Worktree.
+  Session, binding, or cwd. `recovery-needed` means a Git/sidecar operation or identity check is
+  unresolved and destructive actions are blocked. `detached` means the Git Worktree was removed
+  while the relationship was retained. An active binding pointing to a missing Worktree produces
+  an explicit repair warning or error; it never silently falls back to another Worktree.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
   failures are shown per Workspace: a missing Git executable shows installation guidance without
   commands, while repository, initial commit, or local branch failures show copyable setup
@@ -398,17 +399,35 @@ store a copy of `projectRoot` or any Session content. If the sidecar is unavaila
 the native Project/Session view remains readable and the plugin becomes degraded/read-only; an
 empty index must never overwrite the native DSH lists.
 
+The sidecar accepts v1 and v2 snapshots for backwards-compatible reads. Legacy records are
+normalized in memory, and the first successful mutation atomically upgrades the shard to v3.
+New v3 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
+metadata for Git create/remove. A transitional v3 snapshot containing an older raw repository
+field is read and cleaned on its next stable write. Invalid JSON, unknown schema versions, and
+invariant violations are reported as corruption rather than reset to an empty index.
+
 Each Session has at most one active Worktree binding, while a Worktree may have multiple bound
 Sessions. Rebinding the same Session to the same Worktree is idempotent; binding it to two active
 Worktrees is a conflict. A Session with no binding, a Main binding, or a detached binding runs
 with the Project root as cwd. An active Worktree binding runs with that Worktree path. The cwd is
 derived for each execution and is never persisted back into DSH Session metadata.
 
-Worktree creation creates the Git Worktree before recording its external relationship. If the
-sidecar write fails, the new Git Worktree is cleaned up when possible. A failed Worktree deletion
-does not change the sidecar state, so the relationship remains retryable. Session creation uses
-the native DSH API before binding; a binding failure never deletes or modifies the already-created
-Session.
+Worktree creation creates the Git Worktree before recording its external relationship. Git
+create/remove mutations are serialized across Host processes per Workspace and repository,
+record a durable pending operation, and verify the actual Git result before publishing stable
+sidecar state. If a create cannot be reconciled or a path/repository identity changes, the
+operation remains explicitly recoverable; the plugin never uses force removal or deletes an
+unknown directory. If a sidecar write fails, the new Git Worktree is cleaned up when possible. A
+failed Worktree deletion does not silently change the relation, so it remains retryable or is
+marked `recovery-needed`. Session creation uses the native DSH API before binding; a binding
+failure never deletes or modifies the already-created Session.
+
+On Host startup, the plugin performs a best-effort safe recovery for known DSH Workspaces. It may
+finalize a pending create/remove only when Git path and repository identity are certain; otherwise
+it retains the marker and surfaces `WORKTREE_RECOVERY_REQUIRED` or
+`WORKTREE_IDENTITY_CHANGED`. It never guesses at destructive cleanup. A destructive action may
+also carry an opaque mutation token from the latest Worktree projection so a stale UI cannot act
+on a changed record.
 
 The Worktree session flow sends the independent Worktree cwd through the upstream DSH runtime and
 keeps `{ workspaceId, sessionId }` as a browser-local membership projection rather than a

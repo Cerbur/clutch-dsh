@@ -95,7 +95,11 @@ test('projects every approved Manager operation as a serializable result', async
     },
   );
   assert.deepEqual(
-    await remote.removeWorktree({ workspaceId: 'ws_example', worktreeId: 'wt_example' }),
+    await remote.removeWorktree({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+      mutationToken: 'token-example',
+    }),
     { ok: true, value: null },
   );
   assert.deepEqual(

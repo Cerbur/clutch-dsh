@@ -72,7 +72,7 @@ export function resolveWorktreeSessionContext(
       return none(record === undefined ? 'stale' : 'workspace-mismatch');
     }
     if (record.status !== 'active') return none('stale');
-    if (record.health === 'repair') return none('repair');
+    if (record.health === 'repair' || record.health === 'recovery-needed') return none('repair');
     if (record.branch.length === 0) return none('not-ready');
 
     return {

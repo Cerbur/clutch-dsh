@@ -63,6 +63,13 @@ export class DshHostReadAdapter implements DshReadAdapter {
     return { workspaceId: workspace.id, rootPath: workspace.path };
   }
 
+  async listWorkspaces(): Promise<readonly DshWorkspaceSummary[]> {
+    return this.ctx.workspaceRegistry.list().map((workspace) => ({
+      workspaceId: workspace.id,
+      rootPath: workspace.path,
+    }));
+  }
+
   async getSession(sessionId: string): Promise<DshSessionSummary | undefined> {
     // live header 优先，持久化列表只补齐未加载的 Session；两条路径都不读取 transcript。
     // Live headers win; the persistence list only fills unloaded Sessions, and neither

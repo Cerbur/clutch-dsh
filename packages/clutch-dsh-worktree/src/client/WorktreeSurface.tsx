@@ -1669,13 +1669,15 @@ export function WorktreeSurface({
                             const state =
                               record.status === 'removed'
                                 ? 'warning'
-                                : record.health === 'repair'
+                                : record.health === 'repair' || record.health === 'recovery-needed'
                                   ? 'error'
                                   : 'done';
                             const stateLabel =
                               record.status === 'removed'
                                 ? t('worktree.detached')
-                                : record.health === 'repair'
+                                : record.health === 'recovery-needed'
+                                  ? t('worktree.recovery')
+                                  : record.health === 'repair'
                                   ? t('worktree.repair')
                                   : t('worktree.ready');
                             const worktreeExpanded =
@@ -1705,7 +1707,7 @@ export function WorktreeSurface({
                                     toggleWorktree(record.worktreeId);
                                   }}
                                   onCreateSession={
-                                    record.status === 'active' && record.health !== 'repair'
+                                    record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed'
                                       ? () => {
                                           void createSession({
                                             workspaceId: record.workspaceId,
@@ -1719,15 +1721,15 @@ export function WorktreeSurface({
                                     open: openWorktreeMenuId === record.worktreeId,
                                     label: record.branch,
                                     copyPath: record.absolutePath,
-                                    showCreate: record.status === 'active',
-                                    showRemove: record.status === 'active',
+                                    showCreate: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed',
+                                    showRemove: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed',
                                     disabled: actionPending,
                                     onOpenChange: (open) => {
                                       setOpenWorktreeMenuId(
                                         open ? record.worktreeId : undefined,
                                       );
                                     },
-                                    onCreateWorktree: record.status === 'active'
+                                    onCreateWorktree: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed'
                                       ? () => {
                                           openWorktreeCreator(workspace, {
                                             baseBranch: record.branch,
@@ -1930,12 +1932,26 @@ export function WorktreeSurface({
         onSubmit={() => {
           if (manager === undefined || worktreeRemoval === undefined) return;
           const target = worktreeRemoval;
+          const mutationToken = target.mutationToken;
+          if (mutationToken === undefined) {
+            setActionError({
+              code: 'WORKTREE_STATE_CONFLICT',
+              message: '',
+              retryable: true,
+              details: {
+                workspaceId: target.workspaceId,
+                worktreeId: target.worktreeId,
+              },
+            });
+            return;
+          }
           void runMutation(async () => {
             await executeWorktreeAction(manager, {
               type: 'removeWorktree',
               input: {
                 workspaceId: target.workspaceId,
                 worktreeId: target.worktreeId,
+                mutationToken,
               },
             }, permission, onPermissionNotice);
             await invalidateWorktreeContext?.(target.workspaceId);

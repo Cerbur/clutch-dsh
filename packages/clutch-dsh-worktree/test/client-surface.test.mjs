@@ -733,7 +733,7 @@ test('executes create, import, and remove actions through the Manager contract',
   });
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
   });
   const imported = await executeWorktreeAction(worktreeManager, {
     type: 'importWorktree',
@@ -741,7 +741,7 @@ test('executes create, import, and remove actions through the Manager contract',
   });
   assert.deepEqual(calls, [
     ['createWorktree', { workspaceId: 'ws1', branch: 'main', newBranch: 'dsh/12345678' }],
-    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }],
   ]);
   assert.deepEqual(created, {
@@ -783,13 +783,13 @@ test('normalizes detached Worktree Session permissions after removal', async () 
 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
   }, permission, (input, result) => {
     notices.push({ input, result });
   });
 
   assert.deepEqual(calls, [
-    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
   ]);
   assert.deepEqual(notices, [{
@@ -1803,13 +1803,14 @@ test('routes pending Worktree Session Retry through the browser recovery helper'
   assert.doesNotMatch(source, /await manager\.bindSession\(\{[\s\S]*pendingSessionBinding/);
 });
 
-test('does not expose Worktree plus for removed or repair Worktrees', async () => {
+test('does not expose Worktree plus for removed, repair, or recovery-needed Worktrees', async () => {
   const source = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
 
   assert.match(source, /record\.status === 'active' && record\.health !== 'repair'/);
+  assert.match(source, /record\.health !== 'recovery-needed'/);
 });
 
 test('uses the native Project-add icon for the Add Workspace button', async () => {

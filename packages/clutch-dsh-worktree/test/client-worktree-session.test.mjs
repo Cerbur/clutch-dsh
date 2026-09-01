@@ -200,6 +200,7 @@ test('rejects removed and repair Worktrees before considering Sessions', () => {
   for (const candidate of [
     target({ status: 'removed' }),
     target({ health: 'repair' }),
+    target({ health: 'recovery-needed' }),
   ]) {
     assert.deepEqual(
       resolveWorktreeSessionAction({

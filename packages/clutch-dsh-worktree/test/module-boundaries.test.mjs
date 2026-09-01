@@ -6,9 +6,10 @@ import test from 'node:test';
 const sourceRoot = path.resolve('src');
 
 test('keeps contract, provider, manage, host, and client as separate internal modules', async () => {
-  const [contract, provider, manage, hostRemote, client] = await Promise.all([
+  const [contract, provider, providerSubprocess, manage, hostRemote, client] = await Promise.all([
     readFile(path.join(sourceRoot, 'contract', 'index.ts'), 'utf8'),
     readFile(path.join(sourceRoot, 'provider', 'index.ts'), 'utf8'),
+    readFile(path.join(sourceRoot, 'provider', 'subprocess.ts'), 'utf8'),
     readFile(path.join(sourceRoot, 'manage', 'manager.ts'), 'utf8'),
     readFile(path.join(sourceRoot, 'host', 'remote.ts'), 'utf8'),
     readFile(path.join(sourceRoot, 'client', 'index.ts'), 'utf8'),
@@ -22,4 +23,6 @@ test('keeps contract, provider, manage, host, and client as separate internal mo
   assert.doesNotMatch(hostRemote, /\.\.\/provider/);
   assert.doesNotMatch(client, /\.\.\/provider|node:/);
   assert.doesNotMatch(client, /\$mount/);
+  assert.doesNotMatch(providerSubprocess, /\.\.\/(?:manage|host|client)/);
+  assert.doesNotMatch(providerSubprocess, /shell:\s*true|powershell|cmd(?:\.exe)?|bash/i);
 });

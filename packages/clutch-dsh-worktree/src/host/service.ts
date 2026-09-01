@@ -14,7 +14,9 @@ import type {
   WorktreeRemoteManager,
   WorktreeRemoteResult,
 } from '../contract/index.js';
+import type { GitSubprocessRuntime } from '../provider/types.js';
 import { createWorktreeManager } from '../manage/index.js';
+import type { WorktreeManagerService } from '../manage/index.js';
 import {
   DshHostReadAdapter,
   type DshHostReadContext,
@@ -53,6 +55,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // DSH mutation API is injected here.
   static inject = ['workspaceRegistry', 'sessions', 'sessionPersistence'];
 
+  private readonly manager: WorktreeManagerService;
   private readonly remote: WorktreeRemoteManager;
 
   /**
@@ -63,10 +66,17 @@ export class WorktreeRemoteService extends TypertRemoteService {
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
     const dsh = new DshHostReadAdapter(ctx as Context & DshHostReadContext);
+    const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
     const manager = createWorktreeManager({
       dsh,
       dshHome: config.dshHome,
+      subprocess,
     });
+    this.manager = manager;
+    ctx.effect(
+      () => () => this.manager.close(),
+      'clutch-dsh-worktree: Host manager cleanup',
+    );
     // Permission presets are an optional DSH capability. Read them through a
     // structural seam so an older profile can still mount this plugin and
     // report `unverified` instead of failing during composition.
@@ -143,6 +153,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   removeWorktree(input: {
     readonly workspaceId: string;
     readonly worktreeId: string;
+    readonly mutationToken: string;
   }): Promise<WorktreeRemoteResult<null>> {
     return this.remote.removeWorktree(input);
   }

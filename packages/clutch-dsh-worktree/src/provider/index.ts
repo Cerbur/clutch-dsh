@@ -18,12 +18,24 @@ export {
   isWorktreeProviderError,
   providerError,
 } from './types.js';
+export { CrossProcessMutationLock } from './mutation-lock.js';
+export { createWorktreeMutationToken } from './mutation-token.js';
+export { createRepositoryFingerprint } from './repository-fingerprint.js';
+export { WorktreeMutationTransaction } from './transaction.js';
 export type {
   DshReadAdapter,
   DshSessionSummary,
   DshWorkspaceSummary,
+  GitBranchWorktreeInfo,
+  GitCommandOptions,
+  GitSubprocessRuntime,
   GitWorktreeAdapter,
+  GitRepositoryInspection,
   GitWorktreeInfo,
+  LockedSidecarStore,
+  PendingOperation,
+  RecoveryIssue,
+  RepositoryIdentity,
   SidecarMutation,
   SidecarSnapshot,
   SidecarStore,

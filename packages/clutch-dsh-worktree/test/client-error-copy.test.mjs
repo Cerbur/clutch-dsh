@@ -126,6 +126,20 @@ test('formats external import and registration errors with localized primary cop
   );
 });
 
+test('formats mutation safety errors with localized recovery copy', () => {
+  for (const [code, key] of [
+    ['WORKTREE_MUTATION_BUSY', 'error.worktreeMutationBusy'],
+    ['WORKTREE_STATE_CONFLICT', 'error.worktreeStateConflict'],
+    ['WORKTREE_RECOVERY_REQUIRED', 'error.worktreeRecoveryRequired'],
+    ['WORKTREE_IDENTITY_CHANGED', 'error.worktreeIdentityChanged'],
+  ]) {
+    assert.equal(
+      formatWorktreeViewError({ code, message: 'raw diagnostic', retryable: true }, t),
+      key,
+    );
+  }
+});
+
 test('keeps an unknown DSH or Host message unchanged', () => {
   assert.equal(
     formatWorktreeViewError(

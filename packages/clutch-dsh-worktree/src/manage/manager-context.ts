@@ -1,5 +1,6 @@
 import type { WorktreeManagerOptions } from './types.js';
 import type { GitWorktreeAdapter, SidecarStore } from '../provider/types.js';
+import type { WorktreeMutationTransaction } from '../provider/transaction.js';
 
 /** Internal Manage composition context shared by the responsibility-specific use-case modules. */
 export interface WorktreeManagerContext {
@@ -7,5 +8,6 @@ export interface WorktreeManagerContext {
   readonly dshHome: string;
   readonly git: GitWorktreeAdapter;
   readonly sidecar: SidecarStore;
+  readonly transaction: WorktreeMutationTransaction;
   readonly idFactory: () => string;
 }

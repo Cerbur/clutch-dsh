@@ -51,6 +51,12 @@ export type {
 } from './contract/index.js';
 export { LocalGitAdapter } from './provider/git.js';
 export {
+  CrossProcessMutationLock,
+  WorktreeMutationTransaction,
+  createWorktreeMutationToken,
+  createRepositoryFingerprint,
+} from './provider/index.js';
+export {
   WorkspaceShardedSidecarRepository,
   validateSidecarSnapshot,
 } from './provider/sidecar.js';
@@ -64,8 +70,16 @@ export type {
   DshReadAdapter,
   DshSessionSummary,
   DshWorkspaceSummary,
+  GitBranchWorktreeInfo,
+  GitCommandOptions,
+  GitRepositoryInspection,
+  GitSubprocessRuntime,
   GitWorktreeAdapter,
   GitWorktreeInfo,
+  LockedSidecarStore,
+  PendingOperation,
+  RecoveryIssue,
+  RepositoryIdentity,
   SidecarMutation,
   SidecarSnapshot,
   SidecarStore,

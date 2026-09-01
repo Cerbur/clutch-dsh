@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { CrossProcessMutationLock } from './mutation-lock.js';
 import {
+  type LockedSidecarStore,
   type SidecarMutation,
   type SidecarSnapshot,
   WorktreeProviderError,
@@ -10,43 +12,20 @@ import {
 } from './types.js';
 import { corrupt, emptySnapshot, validateSidecarSnapshot } from './sidecar-schema.js';
 
-/*
- * 互斥范围是“同一 repository 实例 + 同一 Workspace key”。它让该实例内的 mutation
- * 依次读取最新快照，但不会假装协调其他进程或其他 repository 实例；异常也会在 finally
- * 中释放队列，避免后续操作永久阻塞。
- *
- * Mutual exclusion is scoped to one repository instance and one Workspace key.
- * It makes mutations in that instance read the latest snapshot serially, but
- * does not pretend to coordinate another process or another repository instance.
- */
-class KeyedMutex {
-  private readonly tails = new Map<string, Promise<void>>();
-
-  async run<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.tails.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    this.tails.set(key, current);
-    await previous;
-    try {
-      return await operation();
-    } finally {
-      release();
-      if (this.tails.get(key) === current) this.tails.delete(key);
-    }
-  }
+interface ReadSnapshot {
+  readonly snapshot: SidecarSnapshot;
+  readonly needsMigration: boolean;
 }
 
-/** Owns sidecar file paths, per-Workspace serialization, and atomic disk I/O. */
+/** Owns sidecar file paths, cross-process serialization, schema migration, and atomic disk I/O. */
 export class SidecarPersistence {
   readonly pluginRoot: string;
   readonly worktreeRoot: string;
   readonly workspaceRoot: string;
+  readonly lockRoot: string;
 
   private readonly dshHome: string;
-  private readonly mutex = new KeyedMutex();
+  private readonly mutationLock: CrossProcessMutationLock;
 
   constructor({ dshHome }: { readonly dshHome: string }) {
     if (!path.isAbsolute(dshHome)) {
@@ -56,6 +35,8 @@ export class SidecarPersistence {
     this.pluginRoot = path.join(this.dshHome, 'clutch-dsh-worktree');
     this.worktreeRoot = path.join(this.pluginRoot, 'worktree');
     this.workspaceRoot = path.join(this.pluginRoot, 'workspaces');
+    this.lockRoot = path.join(this.pluginRoot, 'locks');
+    this.mutationLock = new CrossProcessMutationLock({ lockRoot: this.lockRoot });
   }
 
   getShardPath(workspaceId: string): string {
@@ -63,6 +44,33 @@ export class SidecarPersistence {
   }
 
   async read(workspaceId: string): Promise<SidecarSnapshot> {
+    return (await this.readSnapshot(workspaceId)).snapshot;
+  }
+
+  async runExclusive<T>(
+    workspaceId: string,
+    operation: (locked: LockedSidecarStore) => Promise<T>,
+  ): Promise<T> {
+    // Validate the lock/storage boundary before creating a lock directory. A
+    // symlinked lock root must not become an alternate write location.
+    await this.assertStorageBoundary();
+    return this.mutationLock.run(`workspace:${workspaceId}`, async (lock) => {
+      lock.assertHeld();
+      const locked: LockedSidecarStore = {
+        read: async () => {
+          lock.assertHeld();
+          return (await this.readSnapshot(workspaceId)).snapshot;
+        },
+        mutate: async <Value>(mutation: (snapshot: SidecarSnapshot) => SidecarMutation<Value> | Promise<SidecarMutation<Value>>) => {
+          lock.assertHeld();
+          return this.mutateLocked(workspaceId, mutation, lock);
+        },
+      };
+      return operation(locked);
+    });
+  }
+
+  private async readSnapshot(workspaceId: string): Promise<ReadSnapshot> {
     await this.assertStorageBoundary();
     const shardPath = this.getShardPath(workspaceId);
     let text: string;
@@ -70,7 +78,9 @@ export class SidecarPersistence {
       text = await readFile(shardPath, 'utf8');
     } catch (error) {
       // ENOENT is an uninitialized state; other filesystem failures remain unavailable.
-      if ((error as { readonly code?: string }).code === 'ENOENT') return emptySnapshot(workspaceId);
+      if ((error as { readonly code?: string }).code === 'ENOENT') {
+        return { snapshot: emptySnapshot(workspaceId), needsMigration: false };
+      }
       throw providerError('SIDECAR_UNAVAILABLE', `Unable to read sidecar shard: ${shardPath}`, {
         path: shardPath,
         cause: String(error),
@@ -90,23 +100,65 @@ export class SidecarPersistence {
     if (snapshot.workspaceId !== workspaceId) {
       throw corrupt(shardPath, 'sidecar shard Workspace identity does not match its filename');
     }
-    return snapshot;
+    const parsedObject = parsed !== null && typeof parsed === 'object'
+      ? parsed as { readonly repository?: unknown; readonly pendingOperation?: unknown }
+      : undefined;
+    const legacyRepositoryField = parsedObject?.repository !== undefined ||
+      (parsedObject?.pendingOperation !== null &&
+        typeof parsedObject?.pendingOperation === 'object' &&
+        parsedObject.pendingOperation !== undefined &&
+        'repository' in parsedObject.pendingOperation);
+    return {
+      snapshot,
+      needsMigration: (parsed !== null && typeof parsed === 'object' &&
+        (parsed as { readonly schemaVersion?: unknown }).schemaVersion !== snapshot.schemaVersion) ||
+        legacyRepositoryField,
+    };
   }
 
   async mutate<T>(
     workspaceId: string,
     mutation: (snapshot: SidecarSnapshot) => SidecarMutation<T> | Promise<SidecarMutation<T>>,
   ): Promise<T> {
-    return this.mutex.run(workspaceId, async () => {
-      const current = await this.read(workspaceId);
-      const result = await mutation(current);
-      const next = validateSidecarSnapshot(result.snapshot, this.getShardPath(workspaceId), this.worktreeRoot);
-      if (next.workspaceId !== workspaceId) {
-        throw corrupt(this.getShardPath(workspaceId), 'sidecar mutation changed the Workspace identity');
+    return this.runExclusive(workspaceId, async (locked) => {
+      const current = await locked.read();
+      if (current.pendingOperation !== undefined || (current.recoveryIssues?.length ?? 0) > 0) {
+        const operationId = current.pendingOperation?.id;
+        throw providerError(
+          'WORKTREE_RECOVERY_REQUIRED',
+          operationId
+            ? `Workspace has a pending Worktree operation: ${operationId}`
+            : `Workspace has unresolved Worktree recovery issues: ${workspaceId}`,
+          {
+            workspaceId,
+            ...(operationId ? { operationId } : {}),
+            ...(current.recoveryIssues ? { recoveryCodes: current.recoveryIssues.map((issue) => issue.code) } : {}),
+          },
+        );
       }
-      if (result.changed !== false) await this.write(next);
-      return result.result;
+      return locked.mutate(mutation);
     });
+  }
+
+  private async mutateLocked<T>(
+    workspaceId: string,
+    mutation: (snapshot: SidecarSnapshot) => SidecarMutation<T> | Promise<SidecarMutation<T>>,
+    lock: { assertHeld(): void },
+  ): Promise<T> {
+    const current = await this.readSnapshot(workspaceId);
+    const result = await mutation(current.snapshot);
+    lock.assertHeld();
+    const next = stripLegacyRepositoryFields(
+      validateSidecarSnapshot(result.snapshot, this.getShardPath(workspaceId), this.worktreeRoot),
+    );
+    if (next.workspaceId !== workspaceId) {
+      throw corrupt(this.getShardPath(workspaceId), 'sidecar mutation changed the Workspace identity');
+    }
+    const shouldWrite = result.changed !== false || current.needsMigration;
+    if (shouldWrite) {
+      await this.write({ ...next, revision: nextRevision(current.snapshot.revision, result.changed !== false) });
+    }
+    return result.result;
   }
 
   private async write(snapshot: SidecarSnapshot): Promise<void> {
@@ -122,8 +174,10 @@ export class SidecarPersistence {
         encoding: 'utf8',
         mode: 0o600,
       });
+      await syncFile(temporaryPath);
       // Readers observe either the complete old file or complete new file.
       await rename(temporaryPath, shardPath);
+      await syncDirectory(this.workspaceRoot);
     } catch (error) {
       throw providerError('SIDECAR_UNAVAILABLE', `Unable to atomically write sidecar shard: ${shardPath}`, {
         path: shardPath,
@@ -149,6 +203,7 @@ export class SidecarPersistence {
       [this.pluginRoot, 'plugin sidecar root'],
       [this.worktreeRoot, 'Worktree root'],
       [this.workspaceRoot, 'Workspace shard root'],
+      [this.lockRoot, 'Mutation lock root'],
     ] as const) {
       try {
         if ((await lstat(pathname)).isSymbolicLink()) {
@@ -165,5 +220,46 @@ export class SidecarPersistence {
         });
       }
     }
+  }
+}
+
+function stripLegacyRepositoryFields(snapshot: SidecarSnapshot): SidecarSnapshot {
+  const { repository: _repository, pendingOperation, ...withoutRepository } = snapshot;
+  void _repository;
+  if (pendingOperation === undefined) return withoutRepository;
+  const { repository: _pendingRepository, ...withoutPendingRepository } = pendingOperation;
+  void _pendingRepository;
+  return {
+    ...withoutRepository,
+    pendingOperation: withoutPendingRepository,
+  };
+}
+
+function nextRevision(current: string, changed: boolean): string {
+  if (!changed) return current;
+  return (BigInt(current) + 1n).toString();
+}
+
+async function syncFile(pathname: string): Promise<void> {
+  const handle = await open(pathname, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function syncDirectory(pathname: string): Promise<void> {
+  try {
+    const handle = await open(pathname, 'r');
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    const code = (error as { readonly code?: string }).code;
+    // Windows and some filesystems do not support opening directories for fsync.
+    if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EISDIR' && code !== 'EPERM') throw error;
   }
 }

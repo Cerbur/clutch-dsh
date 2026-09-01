@@ -726,3 +726,20 @@ Provider、Remote 和 Browser Consumer。
 - main、active worktree、detached 三种关系状态均有读取、展示、运行时 cwd 和修复规则。
 - project-session 兼容性由 DSH 原始列表保证，插件只提供 Worktree 视角投影。
 - 所有跨任务使用的类型和函数名称已在前置任务中定义。
+
+## 2026-08-28 Git mutation kernel reliability amendment
+
+The original v1/v2 sidecar plan is superseded for persistence details by
+[`docs/superpowers/specs/2026-08-28-worktree-git-mutation-kernel.md`](../specs/2026-08-28-worktree-git-mutation-kernel.md).
+The product model and DSH data boundary remain unchanged. The implementation promotes the
+sidecar to v3 while keeping v1 and v2 readable: legacy records are normalized in memory, the
+first successful mutation atomically writes v3, and corrupt/unknown data is never reset.
+
+The amendment adds a Provider-owned transaction seam for Git create/remove, cross-process
+Workspace and repository locks, durable pending operations, repository-common-directory
+fingerprints, startup reconciliation, bounded/non-interactive Git subprocesses, and an opaque
+runtime mutation token for stale destructive UI actions. External import remains a sidecar-only
+registration, detached bindings and DSH Sessions remain intact, and recovery never performs
+guessing-based deletion or force removal. The feature worktree carries the implementation and
+its real temporary-Git, crash-window, migration, lock, path-safety, and Client/Host regression
+tests; release metadata and commit/merge steps remain governed by the package release workflow.

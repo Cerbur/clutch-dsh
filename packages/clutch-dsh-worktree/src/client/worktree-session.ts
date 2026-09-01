@@ -171,7 +171,11 @@ export async function ensureWorktreeSessionPermission(
 export function resolveWorktreeSessionAction(
   input: ResolveWorktreeSessionActionInput,
 ): WorktreeSessionAction {
-  if (input.target.status !== 'active' || input.target.health === 'repair') {
+  if (
+    input.target.status !== 'active' ||
+    input.target.health === 'repair' ||
+    input.target.health === 'recovery-needed'
+  ) {
     return { kind: 'reject', reason: 'worktree-not-available' };
   }
   if (input.sessions.phase !== 'ready') {
