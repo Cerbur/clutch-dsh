@@ -1,6 +1,6 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
-## Unreleased
+## 0.1.8 — 2026-09-01
 
 ### 中文
 
@@ -8,6 +8,7 @@
 
 - 增加事务化 Git mutation kernel，统一 repository lock、sidecar journal 和失败恢复。
 - 通过 DSH subprocess runtime 执行 Git 操作，并限制进程生命周期和诊断输出。
+- 支持从 Session 菜单复制非空 Worktree Session 的 ID。
 
 #### 优化
 
@@ -23,6 +24,7 @@
 
 - Add a transactional Git mutation kernel with repository locking, sidecar journaling, and failure recovery.
 - Run Git operations through the DSH subprocess runtime with bounded process lifetime and diagnostics.
+- Add a menu action to copy the ID of any non-blank Worktree Session.
 
 #### Improved
 
