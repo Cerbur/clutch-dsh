@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-discuss",
-  "version": "0.1.0",
+  "version": "0.0.1-alpha",
   "description": "Adds a /discuss command that activates the DSH brainstorming skill.",
   "license": "MIT",
   "repository": {

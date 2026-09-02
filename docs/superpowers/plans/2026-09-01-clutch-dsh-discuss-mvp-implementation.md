@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the installable `@cerbur/clutch-dsh-discuss@0.1.0` atomic DSH plugin with a `/discuss [topic]` command that invokes the bundled `brainstorming` skill and keeps design documents under `docs/clutch/specs/`.
+**Goal:** Build the installable `@cerbur/clutch-dsh-discuss@0.0.1-alpha` atomic DSH plugin with a `/discuss [topic]` command that invokes the bundled `brainstorming` skill and keeps design documents under `docs/clutch/specs/`.
 
 **Architecture:** The package is a thin Cordis plugin whose `apply()` registers one runtime skill and one human command through the existing `skills` and `commands` services. The command creates an ordinary DSH user message and calls `agent.steer()`; the existing `@deepseek-ai/dsh-skill` loader owns skill injection and the skill owns the conversational design workflow. The package has no plugin-owned session state, projection, tool, UI, or filesystem write path.
 
@@ -33,7 +33,7 @@
 
 **Interfaces:**
 
-- Produces package identity `@cerbur/clutch-dsh-discuss`, version `0.1.0`, role metadata, `dsh.bundle.patch`, and the `commands`/`skills` peer contracts consumed by later tasks.
+- Produces package identity `@cerbur/clutch-dsh-discuss`, version `0.0.1-alpha`, role metadata, `dsh.bundle.patch`, and the `commands`/`skills` peer contracts consumed by later tasks.
 
 - [x] **Step 1: Write the failing manifest and patch test**
 
@@ -50,7 +50,7 @@ test('manifest describes the atomic discuss plugin and publishes runtime resourc
   const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'package.json'), 'utf8'));
 
   assert.equal(manifest.name, '@cerbur/clutch-dsh-discuss');
-  assert.equal(manifest.version, '0.1.0');
+  assert.equal(manifest.version, '0.0.1-alpha');
   assert.equal(manifest.type, 'module');
   assert.deepEqual(manifest.files, ['lib', 'cordis.patch.yml', 'skills', 'assets']);
   assert.equal(manifest.exports['.'].import, './lib/index.js');
@@ -97,7 +97,7 @@ Create `packages/clutch-dsh-discuss/package.json` with the exact runtime and dev
 ```json
 {
   "name": "@cerbur/clutch-dsh-discuss",
-  "version": "0.1.0",
+  "version": "0.0.1-alpha",
   "description": "Adds a /discuss command that activates the DSH brainstorming skill.",
   "license": "MIT",
   "repository": {
@@ -901,7 +901,7 @@ Use `/discuss` for a blank intake, or `/discuss Build a login flow` to seed the 
 
 `README.zh.md` must convey the same commands, paths, package name, service requirements, and limitations with headings `功能介绍`, `能力`, `安装`, and `详细使用` in that order; npm installation comes before repository/source installation.
 
-Create `RELEASE-LOG.md` with the initial bilingual `0.1.0` entry, Chinese section before English, and create `docs/RELEASING.md` with actual values `@cerbur/clutch-dsh-discuss`, `discuss`, `packages/clutch-dsh-discuss`, `cordis.patch.yml`, and the absolute source-install command. State that build/test validation redirects to a temporary output directory because the release worktree contains a pre-existing untracked `lib/`.
+Create `RELEASE-LOG.md` with the initial bilingual `0.0.1-alpha` entry, Chinese section before English, and create `docs/RELEASING.md` with actual values `@cerbur/clutch-dsh-discuss`, `discuss`, `packages/clutch-dsh-discuss`, `cordis.patch.yml`, and the absolute source-install command. State that build/test validation redirects to a temporary output directory because the release worktree contains a pre-existing untracked `lib/`.
 
 - [x] **Step 6: Add the portable SVG flow asset and root README entry**
 
@@ -1022,7 +1022,7 @@ git commit -m "docs(discuss): record MVP implementation verification"
 
 ## Plan Self-Review
 
-- Spec coverage: package shape, exact command messages, recordInput behavior, skill metadata/body split, precedence-compatible runtime registration, resource base, errors, documentation, patch entry, version `0.1.0`, no custom state/UI/tool, and protected untracked files are each covered by a task.
+- Spec coverage: package shape, exact command messages, recordInput behavior, skill metadata/body split, precedence-compatible runtime registration, resource base, errors, documentation, patch entry, version `0.0.1-alpha`, no custom state/UI/tool, and protected untracked files are each covered by a task.
 - Placeholder scan: no implementation step depends on `TBD`, `TODO`, “similar to Task N”, or an unspecified error/edge-case action; the only path placeholders are user-facing absolute-install examples required by the documentation.
 - Type consistency: `createDiscussCommand()` returns `CommandDefinition`; `createBrainstormingSkill()` and `loadBrainstormingSkill()` return `SkillRegistration`; `apply()` consumes both and registers skill before command; test imports use the isolated `CLUTCH_DSH_DISCUSS_TEST_LIB` path.
 - API correction: the design's generic `dsh-tool-skill` wording maps to the actual installed `@deepseek-ai/dsh-skill` package in this release lockfile; behavior and the approved architecture are unchanged.

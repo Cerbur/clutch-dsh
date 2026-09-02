@@ -10,7 +10,7 @@ test('manifest describes the atomic discuss plugin and publishes runtime resourc
   const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'package.json'), 'utf8'));
 
   assert.equal(manifest.name, '@cerbur/clutch-dsh-discuss');
-  assert.equal(manifest.version, '0.1.0');
+  assert.equal(manifest.version, '0.0.1-alpha');
   assert.equal(manifest.type, 'module');
   assert.deepEqual(manifest.files, ['lib', 'cordis.patch.yml', 'skills', 'assets']);
   assert.equal(manifest.exports['.'].import, './lib/index.js');
