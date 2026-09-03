@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createWorktreeContextProjection } from '../lib/client/worktree-context-store.js';
+import { createWorktreeViewReader } from '../lib/client/worktree-view-read.js';
 
 function snapshot(initial) {
   let value = initial;
@@ -42,7 +43,21 @@ function createSnapshotStore(initial) {
 }
 
 function createProjection(input) {
-  return createWorktreeContextProjection({ ...input, storeFactory: createSnapshotStore });
+  const reader = input.viewReader ?? createWorktreeViewReader(input.manager);
+  const projectionInput = { ...input };
+  delete projectionInput.manager;
+  const projection = createWorktreeContextProjection({
+    ...projectionInput,
+    viewReader: reader,
+    storeFactory: createSnapshotStore,
+  });
+  const dispose = projection.dispose;
+  projection.dispose = () => {
+    dispose();
+    reader.dispose();
+  };
+  projection.viewReader = reader;
+  return projection;
 }
 
 function activeWorktree(branch, workspaceId = 'ws1', worktreeId = 'wt1') {
@@ -192,10 +207,12 @@ test('projects the recent Workspace local branch for a Hero without a Session', 
 test('uses the provided DSH-compatible SnapshotStore factory', () => {
   let calls = 0;
   let providedStore;
+  const manager = managerWith({ worktrees: [], branches: [], bindings: [] });
+  const viewReader = createWorktreeViewReader(manager);
   const projection = createWorktreeContextProjection({
     sessions: snapshot({ current: undefined, byId: {} }),
     workspaces: snapshot({ items: [] }),
-    manager: managerWith({ worktrees: [], branches: [], bindings: [] }),
+    viewReader,
     storeFactory(initial) {
       calls += 1;
       providedStore = createSnapshotStore(initial);
@@ -206,21 +223,20 @@ test('uses the provided DSH-compatible SnapshotStore factory', () => {
   assert.equal(calls, 1);
   assert.equal(projection.store, providedStore);
   projection.dispose();
+  viewReader.dispose();
 });
 
 test('late data for the previous Session cannot overwrite the current Session', async () => {
   const first = deferred();
-  const second = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {}, s2: {} } });
-  const projection = projectionWithSequencedReads({ sessions, reads: [first, second] });
+  const projection = projectionWithSequencedReads({ sessions, reads: [first] });
 
   const firstRefresh = projection.refresh();
   sessions.set({ current: 's2', byId: { s1: {}, s2: {} } });
   assert.deepEqual(projection.store.getSnapshot().value, { kind: 'none', reason: 'not-ready' });
   const secondRefresh = projection.refresh();
-  second.resolve(dataFor('s2', 'feature/two'));
+  first.resolve(dataFor('s2', 'feature/two'));
   await secondRefresh;
-  first.resolve(dataFor('s1', 'feature/one'));
   await firstRefresh;
 
   assert.equal(projection.store.getSnapshot().sessionId, 's2');
@@ -271,8 +287,7 @@ test('deduplicates same-tick Session and Workspace refresh schedules', async () 
 
   assert.deepEqual(manager.calls, { listWorktrees: 1, listBranches: 1, listBindings: 1 });
   pending.resolve(dataFor('s2', 'feature/two'));
-  await new Promise(globalThis.queueMicrotask);
-  await new Promise(globalThis.queueMicrotask);
+  await new Promise((resolve) => globalThis.setImmediate(resolve));
   assert.equal(projection.store.getSnapshot().value.label, 'feature/two');
   projection.dispose();
 });
@@ -305,10 +320,9 @@ test('keeps the current context when a same-identity Session snapshot updates', 
 
 test('resolves a changed Session immediately from cached Workspace facts', async () => {
   const first = deferred();
-  const second = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {}, s2: {} } });
   const workspaces = snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1', 's2'] }] });
-  const manager = managerWithViewReads([first, second]);
+  const manager = managerWithViewReads([first]);
   const projection = createProjection({ sessions, workspaces, manager });
 
   const initial = projection.refresh();
@@ -323,18 +337,16 @@ test('resolves a changed Session immediately from cached Workspace facts', async
   await initial;
 
   sessions.set({ current: 's2', byId: { s1: {}, s2: {} } });
-  assert.equal(projection.store.getSnapshot().value.label, 'feature/two');
+  assert.equal(projection.store.getSnapshot().value.label, 'feature/one');
   assert.equal(projection.store.getSnapshot().sessionId, 's2');
 
-  await new Promise(globalThis.queueMicrotask);
-  assert.equal(manager.calls.listWorktrees, 2);
-  second.resolve({
-    worktrees: [activeWorktree('feature/two', 'ws1', 'wt2')],
-    branches: [currentBranch('main')],
-    bindings: [activeBinding('s2', 'wt2', 'ws1')],
+  await new Promise((resolve) => globalThis.setImmediate(resolve));
+  assert.equal(projection.store.getSnapshot().value.label, 'feature/two');
+  assert.deepEqual(manager.calls, {
+    listWorktrees: 1,
+    listBranches: 1,
+    listBindings: 1,
   });
-  await new Promise(globalThis.queueMicrotask);
-  await new Promise(globalThis.queueMicrotask);
   projection.dispose();
 });
 
@@ -382,7 +394,12 @@ test('invalidates the matching Workspace and waits for the refreshed data', asyn
   const first = deferred();
   const second = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {} } });
-  const projection = projectionWithSequencedReads({ sessions, reads: [first, second] });
+  const manager = managerWithViewReads([first, second]);
+  const projection = createProjection({
+    sessions,
+    workspaces: snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] }),
+    manager,
+  });
 
   const initial = projection.refresh();
   first.resolve(dataFor('s1', 'feature/one'));
@@ -402,14 +419,45 @@ test('invalidates the matching Workspace and waits for the refreshed data', asyn
   projection.dispose();
 });
 
+test('shares a targeted read between the surface and Context invalidation', async () => {
+  const first = deferred();
+  const second = deferred();
+  const sessions = snapshot({ current: 's1', byId: { s1: {} } });
+  const manager = managerWithViewReads([first, second]);
+  const projection = createProjection({
+    sessions,
+    workspaces: snapshot({ items: [{ workspaceId: 'ws1', sessionIds: ['s1'] }] }),
+    manager,
+  });
+
+  const initial = projection.refresh();
+  first.resolve(dataFor('s1', 'feature/one'));
+  await initial;
+
+  const contextRefresh = projection.invalidate('ws1');
+  const surfaceRead = projection.viewReader.read('ws1');
+
+  assert.deepEqual(manager.calls, {
+    listWorktrees: 2,
+    listBranches: 2,
+    listBindings: 2,
+  });
+  assert.equal(projection.store.getSnapshot().value.label, 'feature/one');
+  second.resolve(dataFor('s1', 'feature/two'));
+  const [view] = await Promise.all([surfaceRead, contextRefresh]);
+
+  assert.equal(view.workspaceId, 'ws1');
+  assert.equal(projection.store.getSnapshot().value.label, 'feature/two');
+  projection.dispose();
+});
+
 test('invalidation waits for a newer matching Session refresh', async () => {
   const first = deferred();
   const invalidatedRead = deferred();
-  const replacement = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {}, s2: {} } });
   const projection = projectionWithSequencedReads({
     sessions,
-    reads: [first, invalidatedRead, replacement],
+    reads: [first, invalidatedRead],
   });
 
   const initial = projection.refresh();
@@ -421,12 +469,11 @@ test('invalidation waits for a newer matching Session refresh', async () => {
   });
   sessions.set({ current: 's2', byId: { s1: {}, s2: {} } });
   await new Promise(globalThis.queueMicrotask);
-  invalidatedRead.resolve(dataFor('s1', 'feature/two'));
   await new Promise(globalThis.queueMicrotask);
   await new Promise(globalThis.queueMicrotask);
 
   assert.equal(settled, false);
-  replacement.resolve(dataFor('s2', 'feature/three'));
+  invalidatedRead.resolve(dataFor('s2', 'feature/three'));
   await invalidation;
   assert.equal(projection.store.getSnapshot().value.label, 'feature/three');
   projection.dispose();
@@ -483,6 +530,7 @@ test('refreshes the current branch while retaining the previous label', async ()
   const initial = projection.refresh();
   first.resolve({ worktrees: [], branches: [currentBranch('main')], bindings: [] });
   await initial;
+  projection.viewReader.invalidate('ws1');
   const refreshed = projection.refresh();
   assert.deepEqual(projection.store.getSnapshot().value, {
     kind: 'main',

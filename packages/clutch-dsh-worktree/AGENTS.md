@@ -261,6 +261,21 @@ Client surface 的当前约束：
   issue is unresolved; this is a runtime projection and is not persisted;
 - Connection/Gateway/domain 失败必须显示 retryable error，不能伪装成空列表。
 
+Refresh scope is determined by the smallest affected identity.
+
+- A Worktree mutation or binding change updates only the affected Worktree
+  projection and refreshes at most its owning Workspace.
+- A Workspace-scoped change refreshes only the affected Workspace.
+- Context projection is invalidated only when the current Session/Workspace is affected.
+- Global refresh is reserved for initial Worktree entry, reconnect/baseline recovery,
+  explicit global retry, or a deliberately diagnosed unknown scope.
+- Targeted refreshes merge into the existing ready projection and never clear unrelated
+  Workspaces.
+- Stale-result guards are not request deduplication; equivalent in-flight targeted reads
+  must be shared.
+- The `listBindings` interface is Workspace-scoped; Worktree-level updates use a targeted
+  Workspace read plus a local Worktree merge.
+
 ## 实现与验证要求
 
 实现或修改行为时至少覆盖：

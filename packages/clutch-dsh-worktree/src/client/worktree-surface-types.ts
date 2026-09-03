@@ -28,6 +28,7 @@ import type {
   WorktreeViewError,
   WorktreeWorkspaceView,
 } from './worktree-view.js';
+import type { WorktreeViewReader } from './worktree-view-read.js';
 
 export interface WorkspaceLike {
   readonly workspaceId: string;
@@ -54,6 +55,7 @@ export interface WorktreeSurfaceInjected {
   readonly expandState: WorktreeExpandStateStore;
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
+  readonly viewReader: WorktreeViewReader;
   readonly permission?: Pick<
     WorktreePermissionManager,
     'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
@@ -143,11 +145,23 @@ export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly views: readonly WorktreeWorkspaceView[];
   readonly error?: WorktreeViewError;
+  readonly targetError?: TargetedWorktreeReadError;
+}
+
+export type WorktreeRefreshScope =
+  | { readonly kind: 'global' }
+  | { readonly kind: 'workspace'; readonly workspaceId: string }
+  | { readonly kind: 'workspaces'; readonly workspaceIds: readonly string[] };
+
+export interface TargetedWorktreeReadError {
+  readonly workspaceIds: readonly string[];
+  readonly error: WorktreeViewError;
 }
 
 export interface RefreshOptions {
   readonly preserveCurrent?: boolean;
   readonly invalidateContext?: boolean;
+  readonly scope?: WorktreeRefreshScope;
 }
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {

@@ -196,6 +196,79 @@ test('merges an on-demand Workspace view without dropping ready projections', ()
   );
 });
 
+test('merges targeted Workspace views while preserving order and references', () => {
+  assert.equal(typeof worktreeView.mergeWorktreeViews, 'function');
+  const ws1 = {
+    workspaceId: 'ws1',
+    worktrees: [],
+    branches: [],
+    bindings: [],
+    readiness: { status: 'ready' },
+  };
+  const ws2 = {
+    workspaceId: 'ws2',
+    worktrees: [],
+    branches: [],
+    bindings: [],
+    readiness: { status: 'ready' },
+  };
+  const updatedWs2 = { ...ws2, bindings: [{ workspaceId: 'ws2', worktreeId: 'wt2', sessionId: 's2', status: 'active' }] };
+
+  const updated = worktreeView.mergeWorktreeViews([ws1, ws2], ['ws1', 'ws2'], [updatedWs2]);
+  assert.equal(updated[0], ws1);
+  assert.equal(updated[1], updatedWs2);
+  assert.deepEqual(
+    worktreeView.mergeWorktreeViews(updated, ['ws2', 'ws1'], []),
+    [updatedWs2, ws1],
+  );
+  assert.deepEqual(
+    worktreeView.mergeWorktreeViews(updated, ['ws1'], []),
+    [ws1],
+  );
+});
+
+test('routes Surface reads through explicit shared-reader scopes', async () => {
+  const { coordinator, types } = await readSurfaceSources();
+  const refreshStart = coordinator.indexOf('const refresh = useCallback');
+  const refreshEnd = coordinator.indexOf('  useEffect(() => {', refreshStart);
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(refreshEnd, -1);
+  const refreshSource = coordinator.slice(refreshStart, refreshEnd);
+
+  assert.match(types, /type WorktreeRefreshScope/);
+  assert.match(types, /TargetedWorktreeReadError/);
+  assert.match(types, /targetError\?: TargetedWorktreeReadError/);
+  assert.match(coordinator, /viewReader/);
+  assert.match(refreshSource, /viewReader\.readMany\(/);
+  assert.match(refreshSource, /viewReader\.read\(/);
+  assert.match(refreshSource, /targetRefreshGuards/);
+  assert.doesNotMatch(refreshSource, /loadWorktreeViews\(/);
+  assert.match(coordinator, /previousWorkspaceIdsRef/);
+  assert.match(coordinator, /addedWorkspaceIds/);
+  assert.match(coordinator, /mergeWorktreeViews\(current\.views, workspaceIds, \[\]\)/);
+  assert.match(coordinator, /data-worktree-target-error/);
+});
+
+test('records the minimum-scope refresh invariant in package instructions', async () => {
+  const agents = await readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
+  const invariant = `Refresh scope is determined by the smallest affected identity.
+
+- A Worktree mutation or binding change updates only the affected Worktree
+  projection and refreshes at most its owning Workspace.
+- A Workspace-scoped change refreshes only the affected Workspace.
+- Context projection is invalidated only when the current Session/Workspace is affected.
+- Global refresh is reserved for initial Worktree entry, reconnect/baseline recovery,
+  explicit global retry, or a deliberately diagnosed unknown scope.
+- Targeted refreshes merge into the existing ready projection and never clear unrelated
+  Workspaces.
+- Stale-result guards are not request deduplication; equivalent in-flight targeted reads
+  must be shared.
+- The \`listBindings\` interface is Workspace-scoped; Worktree-level updates use a targeted
+  Workspace read plus a local Worktree merge.`;
+
+  assert.ok(agents.includes(invariant));
+});
+
 test('invalidates superseded Worktree refresh results', async () => {
   assert.equal(typeof worktreeView.createWorktreeRefreshGuard, 'function');
   const guard = worktreeView.createWorktreeRefreshGuard();
@@ -283,14 +356,15 @@ test('drops stale asynchronous Worktree refresh rejection', async () => {
 
 test('loads and invalidates modal target projections independently', async () => {
   assert.equal(typeof worktreeView.createWorktreeModalViewLoader, 'function');
-  const loader = worktreeView.createWorktreeModalViewLoader();
   const firstWorktrees = deferred();
   let listWorktrees = () => firstWorktrees.promise;
+  const readManager = manager({ listWorktrees: (...args) => listWorktrees(...args) });
+  const reader = worktreeView.createWorktreeViewReader(readManager);
+  const loader = worktreeView.createWorktreeModalViewLoader(reader);
   const views = [];
   const errors = [];
 
   const staleLoad = loader.load(
-    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
     'ws-imported',
     (view) => views.push(view),
     (error) => errors.push(error),
@@ -302,10 +376,10 @@ test('loads and invalidates modal target projections independently', async () =>
   assert.deepEqual(views, []);
   assert.deepEqual(errors, []);
 
+  reader.invalidate('ws-imported');
   const failedWorktrees = deferred();
   listWorktrees = () => failedWorktrees.promise;
   const failedLoad = loader.load(
-    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
     'ws-imported',
     (view) => views.push(view),
     (error) => errors.push(error),
@@ -320,9 +394,9 @@ test('loads and invalidates modal target projections independently', async () =>
   assert.equal(errors.length, 1);
   assert.equal(errors[0].code, 'CONNECTION_CALL_FAILED');
 
+  reader.invalidate('ws-imported');
   listWorktrees = async () => [];
   await loader.load(
-    manager({ listWorktrees: (...args) => listWorktrees(...args) }),
     'ws-imported',
     (view) => views.push(view),
     (error) => errors.push(error),
@@ -332,14 +406,7 @@ test('loads and invalidates modal target projections independently', async () =>
   assert.equal(views[0].workspaceId, 'ws-imported');
   assert.equal(views[0].readiness.status, 'ready');
   assert.equal(errors.length, 1);
-
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
-  assert.match(source, /const refreshGuard = useRef\(createWorktreeRefreshGuard\(\)\);/);
-  assert.match(source, /const modalReadLoader = useRef\(createWorktreeModalViewLoader\(\)\);/);
-  assert.match(source, /modalReadLoader\.current\.load/);
+  reader.dispose();
 });
 
 test('preserves other Workspace projections when modal and full refresh complete out of order', async () => {
@@ -369,7 +436,8 @@ test('preserves other Workspace projections when modal and full refresh complete
       return [];
     },
   });
-  const modalLoader = worktreeView.createWorktreeModalViewLoader();
+  const modalReader = worktreeView.createWorktreeViewReader(readManager);
+  const modalLoader = worktreeView.createWorktreeModalViewLoader(modalReader);
   const refreshGuard = worktreeView.createWorktreeRefreshGuard();
   let modalView;
   let state = {
@@ -384,7 +452,6 @@ test('preserves other Workspace projections when modal and full refresh complete
   };
 
   const modalRun = modalLoader.load(
-    readManager,
     'ws2',
     (view) => {
       modalView = view;
@@ -395,7 +462,7 @@ test('preserves other Workspace projections when modal and full refresh complete
     },
   );
   const refreshRun = refreshGuard.run(
-    () => worktreeView.loadWorktreeViews(readManager, ['ws1', 'ws2'], { invalidateContext: false }),
+    () => worktreeView.loadWorktreeViews(readManager, ['ws1', 'ws2']),
     (views) => {
       state = {
         status: 'ready',
@@ -416,6 +483,7 @@ test('preserves other Workspace projections when modal and full refresh complete
   assert.equal(state.status, 'ready');
   assert.deepEqual(state.views.map((view) => view.workspaceId), ['ws1', 'ws2']);
   assert.equal(state.views[1].worktrees[0].worktreeId, 'modal-wt');
+  modalReader.dispose();
 });
 
 test('preserves a ready Worktree projection during automatic refreshes', async () => {
@@ -830,7 +898,10 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   assert.match(coordinator, /const continueWorktreeRegistration = async/);
   assert.match(coordinator, /await continueWorktreeRegistration\(registeredWorktree\)/);
   assert.match(coordinator, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
-  assert.match(coordinator, /await refresh\(\{ preserveCurrent: true \}\)/);
+  assert.match(
+    coordinator,
+    /scope: \{ kind: 'workspace', workspaceId: registeredWorktree\.workspaceId \}/,
+  );
 });
 
 test('renders import candidates in a native dropdown instead of a flat candidate list', async () => {
@@ -1032,7 +1103,9 @@ test('refreshes the ready Worktree projection after fork binding and exposes rec
   assert.match(source, /forkRecovery/);
   assert.match(source, /retryForkSession/);
   assert.match(source, /data-fork-recovery/);
-  assert.match(source, /refresh\(\{ preserveCurrent: true/);
+  assert.match(source, /refresh\(\{[\s\S]*preserveCurrent: true/);
+  assert.match(source, /forkRecoverySnapshot\.affectedWorkspaceIds\.length === 0\) return/);
+  assert.match(source, /scope: \{[\s\S]*kind: 'workspaces',[\s\S]*affectedWorkspaceIds/);
 });
 
 test('matches native Workspace row actions and drag behavior', async () => {
@@ -1136,7 +1209,7 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   );
   assert.match(
     commitSource,
-    /\.then\(\(\) => refresh\(\{ preserveCurrent: true, invalidateContext: false \}\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
+    /\.then\(\(\) => refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\)\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
   assert.match(source, /\{actionError\.retryable && \(/);
@@ -1160,14 +1233,14 @@ test('preserves the Worktree projection for action refreshes', async () => {
     'const runMutation = async',
     '  const workspaceRenameTrimmed',
   );
-  assert.match(runMutationSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+  assert.match(runMutationSource, /refreshOptions/);
 
   const registrationSource = section(
     'const continueWorktreeRegistration = async',
     '  const submitWorktree = async',
   );
   assert.equal(
-    (registrationSource.match(/await refresh\(\{ preserveCurrent: true \}\)/g) ?? []).length,
+    (registrationSource.match(/kind: 'workspace', workspaceId: registeredWorktree\.workspaceId/g) ?? []).length,
     2,
   );
 
@@ -1175,13 +1248,13 @@ test('preserves the Worktree projection for action refreshes', async () => {
     'const createSession = async',
     '  const retrySessionBinding = async',
   );
-  assert.match(createSessionSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+  assert.match(createSessionSource, /kind: 'workspace', workspaceId: input\.workspaceId/);
 
   const retryBindingSource = section(
     'const retrySessionBinding = async',
     '  return (',
   );
-  assert.match(retryBindingSource, /await refresh\(\{ preserveCurrent: true \}\)/);
+  assert.match(retryBindingSource, /kind: 'workspace', workspaceId: pending\.workspaceId/);
 
   const initialReadSource = section(
     "useEffect(() => {\n    if (mode === 'worktree')",
@@ -1196,7 +1269,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
   const actionRetryEnd = source.indexOf("          {readState.status === 'loading'", actionRetryStart);
   assert.notEqual(actionRetryStart, -1);
   assert.notEqual(actionRetryEnd, -1);
-  assert.match(source.slice(actionRetryStart, actionRetryEnd), /void refresh\(\);/);
+  assert.match(source.slice(actionRetryStart, actionRetryEnd), /kind: 'global'/);
 
   const readErrorStart = source.indexOf(
     "{readState.status === 'error' && readState.error !== undefined ?",
@@ -1204,7 +1277,29 @@ test('preserves the Worktree projection for action refreshes', async () => {
   const readErrorEnd = source.indexOf(") : readState.status === 'ready' ?", readErrorStart);
   assert.notEqual(readErrorStart, -1);
   assert.notEqual(readErrorEnd, -1);
-  assert.match(source.slice(readErrorStart, readErrorEnd), /void refresh\(\);/);
+  assert.match(source.slice(readErrorStart, readErrorEnd), /kind: 'global'/);
+});
+
+test('keeps targeted refresh errors local and retryable', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const refreshStart = source.indexOf('const refresh = useCallback');
+  const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
+  const refreshSource = source.slice(refreshStart, refreshEnd);
+  const targetErrorStart = source.indexOf('{readState.targetError !== undefined && (');
+  const targetErrorEnd = source.indexOf('{readState.status === \'loading\'', targetErrorStart);
+
+  assert.match(refreshSource, /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[\]\)/);
+  assert.match(refreshSource, /status: 'ready',\s*views: mergeWorktreeViews/);
+  assert.match(refreshSource, /retryable: true/);
+  assert.match(refreshSource, /if \(!workspaceIdsRef\.current\.includes\(workspaceId\)\) return/);
+  assert.notEqual(targetErrorStart, -1);
+  assert.notEqual(targetErrorEnd, -1);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /data-worktree-target-error/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /kind: 'workspaces'/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
 });
 
 test('renders transient Worktree health with the public StateDot primitive', async () => {
@@ -1255,7 +1350,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   assert.match(coordinator, /!modalReadLoading/);
   assert.match(coordinator, /mergeWorktreeView\(current\.views/);
   assert.match(coordinator, /\.\.\.current,[\s\S]*views: mergeWorktreeView\(current\.views, view\)/);
-  assert.match(coordinator, /modalReadViewRef\.current === undefined[\s\S]*mergeWorktreeView\(views, modalReadViewRef\.current\)/);
+  assert.match(coordinator, /modalReadViewRef\.current === undefined[\s\S]*mergeWorktreeView\(merged, modalReadViewRef\.current\)/);
   assert.match(coordinator, /modalReadLoader\.current\.invalidate\(\);[\s\S]*setWorktreeModalWorkspaceId\(undefined\)/);
   assert.match(coordinator, /readError=\{modalReadError\}/);
   assert.match(coordinator, /onRetry=\{\(\) =>/);
@@ -1369,27 +1464,16 @@ test('matches native Workspace interaction, typography, and action rail', async 
   assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
 });
 
-test('invalidates the active Session context after Worktree reads but not pure reorder refreshes', async () => {
+test('keeps low-level Worktree reads free of implicit Context invalidation', async () => {
   let invalidations = 0;
   const invalidateWorktreeContext = async () => {
     invalidations += 1;
   };
 
-  await loadWorktreeViews(manager(), ['ws1'], { invalidateWorktreeContext });
-  assert.equal(invalidations, 1);
-
   await loadWorktreeViews(manager(), ['ws1'], {
-    invalidateContext: false,
     invalidateWorktreeContext,
   });
-  assert.equal(invalidations, 1);
-
-  const source = await readFile(
-    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-    'utf8',
-  );
-  assert.match(source, /invalidateWorktreeContext/);
-  assert.match(source, /refresh\(\{ preserveCurrent: true, invalidateContext: false \}\)/);
+  assert.equal(invalidations, 0);
 });
 
 test('matches shared Worktree row disclosure and aligned action geometry', async () => {

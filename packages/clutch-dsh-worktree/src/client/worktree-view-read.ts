@@ -24,6 +24,30 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
 }
 
+export interface WorktreeViewReader {
+  /** Mark one Workspace stale for the next generation. */
+  invalidate(workspaceId: string): void;
+
+  /** Return one complete Workspace view, sharing its current generation. */
+  read(workspaceId: string): Promise<WorktreeWorkspaceView>;
+
+  /** Read exactly this ordered set; duplicate IDs share one read. */
+  readMany(workspaceIds: readonly string[]): Promise<readonly WorktreeWorkspaceView[]>;
+
+  /** Make cache entries and late callbacks inert. */
+  dispose(): void;
+}
+
+interface WorktreeViewReaderEntry {
+  generation: number;
+  stale: boolean;
+  view?: WorktreeWorkspaceView;
+  inFlight?: {
+    generation: number;
+    promise: Promise<WorktreeWorkspaceView>;
+  };
+}
+
 /** Merge one freshly read Workspace projection without clearing other ready views. */
 export function mergeWorktreeView(
   views: readonly WorktreeWorkspaceView[],
@@ -36,15 +60,23 @@ export function mergeWorktreeView(
   return merged;
 }
 
-export interface LoadWorktreeViewsOptions {
-  readonly invalidateContext?: boolean;
-  readonly invalidateWorktreeContext?: () => Promise<void>;
+/** Merge explicit Workspace updates while preserving current order and ready references. */
+export function mergeWorktreeViews(
+  existing: readonly WorktreeWorkspaceView[],
+  workspaceIds: readonly string[],
+  updates: readonly WorktreeWorkspaceView[],
+): readonly WorktreeWorkspaceView[] {
+  const byWorkspaceId = new Map(existing.map((view) => [view.workspaceId, view]));
+  for (const update of updates) byWorkspaceId.set(update.workspaceId, update);
+  return [...new Set(workspaceIds)].flatMap((workspaceId) => {
+    const view = byWorkspaceId.get(workspaceId);
+    return view === undefined ? [] : [view];
+  });
 }
 
 export interface WorktreeModalViewLoader {
   invalidate(): void;
   load(
-    manager: WorktreeManager,
     workspaceId: string,
     onSuccess: (view: WorktreeWorkspaceView) => void,
     onError: (error: WorktreeViewError) => void,
@@ -154,6 +186,63 @@ function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefi
   return undefined;
 }
 
+/** Share complete Workspace reads without allowing stale generations to repopulate the cache. */
+export function createWorktreeViewReader(manager: WorktreeManager): WorktreeViewReader {
+  const entries = new Map<string, WorktreeViewReaderEntry>();
+  let disposed = false;
+
+  const entryFor = (workspaceId: string): WorktreeViewReaderEntry => {
+    const current = entries.get(workspaceId);
+    if (current !== undefined) return current;
+    const created: WorktreeViewReaderEntry = { generation: 0, stale: false };
+    entries.set(workspaceId, created);
+    return created;
+  };
+
+  const read = (workspaceId: string): Promise<WorktreeWorkspaceView> => {
+    if (disposed) return Promise.reject(new Error('Worktree view reader disposed'));
+    const entry = entryFor(workspaceId);
+    if (!entry.stale && entry.view !== undefined) return Promise.resolve(entry.view);
+    if (entry.inFlight?.generation === entry.generation) return entry.inFlight.promise;
+
+    const generation = entry.generation;
+    const promise = loadWorktreeView(manager, workspaceId)
+      .then((data) => {
+        const view: WorktreeWorkspaceView = { workspaceId, ...data };
+        if (!disposed && entries.get(workspaceId) === entry && entry.generation === generation) {
+          entry.view = view;
+          entry.stale = false;
+        }
+        return view;
+      })
+      .finally(() => {
+        if (entry.inFlight?.promise === promise) entry.inFlight = undefined;
+      });
+    entry.inFlight = { generation, promise };
+    return promise;
+  };
+
+  return {
+    invalidate(workspaceId): void {
+      if (disposed) return;
+      const entry = entryFor(workspaceId);
+      entry.generation += 1;
+      entry.stale = true;
+      entry.view = undefined;
+    },
+    read,
+    readMany(workspaceIds): Promise<readonly WorktreeWorkspaceView[]> {
+      const uniqueIds = [...new Set(workspaceIds)];
+      return Promise.all(uniqueIds.map((workspaceId) => read(workspaceId)));
+    },
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      entries.clear();
+    },
+  };
+}
+
 /** Read all three Worktree projections needed by the surface in one refresh. */
 export async function loadWorktreeView(
   manager: WorktreeManager,
@@ -190,15 +279,17 @@ export async function loadWorktreeView(
   };
 }
 
-/** Isolate modal-target reads from full-surface refresh generations. */
-export function createWorktreeModalViewLoader(): WorktreeModalViewLoader {
+/** Isolate modal-target callbacks while sharing the Client Workspace reader. */
+export function createWorktreeModalViewLoader(
+  reader: WorktreeViewReader,
+): WorktreeModalViewLoader {
   const guard = createWorktreeRefreshGuard();
   return {
     invalidate: guard.invalidate,
-    load(manager, workspaceId, onSuccess, onError) {
+    load(workspaceId, onSuccess, onError) {
       return guard.run(
-        () => loadWorktreeView(manager, workspaceId),
-        (data) => onSuccess({ workspaceId, ...data }),
+        () => reader.read(workspaceId),
+        onSuccess,
         (error) => onError(toWorktreeViewError(error)),
       );
     },
@@ -209,18 +300,11 @@ export function createWorktreeModalViewLoader(): WorktreeModalViewLoader {
 export async function loadWorktreeViews(
   manager: WorktreeManager,
   workspaceIds: readonly string[],
-  options: LoadWorktreeViewsOptions = {},
 ): Promise<readonly WorktreeWorkspaceView[]> {
-  const views = await Promise.all(
-    workspaceIds.map(async (workspaceId) => ({
-      workspaceId,
-      ...(await loadWorktreeView(manager, workspaceId)),
-    })),
-  );
-  if (options.invalidateContext !== false) {
-    await options.invalidateWorktreeContext?.();
-  }
-  return views;
+  return Promise.all(workspaceIds.map(async (workspaceId) => ({
+    workspaceId,
+    ...(await loadWorktreeView(manager, workspaceId)),
+  })));
 }
 
 /** Hide DSH-archived Sessions from the browser-local Worktree projection. */

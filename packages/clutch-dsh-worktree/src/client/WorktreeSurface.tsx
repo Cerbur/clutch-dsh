@@ -93,8 +93,8 @@ import {
   createWorktreeModalViewLoader,
   createWorktreeRefreshGuard,
   filterArchivedSessionIds,
-  loadWorktreeViews,
   mergeWorktreeView,
+  mergeWorktreeViews,
   reconcileBaseBranchSelection,
   resolveWorktreeMove,
   selectDefaultBaseBranch,
@@ -125,7 +125,11 @@ const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): WorktreePermissionNotice | undefine
 const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
 const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT =
   (): WorktreeFullAccessConfirmationInput | undefined => undefined;
-const EMPTY_FORK_RECOVERY_SNAPSHOT = { revision: 0, pending: [] } as const;
+const EMPTY_FORK_RECOVERY_SNAPSHOT = {
+  revision: 0,
+  pending: [],
+  affectedWorkspaceIds: [],
+} as const;
 const EMPTY_FORK_RECOVERY_STORE: WorktreeForkRecoveryStore = {
   getSnapshot: () => EMPTY_FORK_RECOVERY_SNAPSHOT,
   subscribe: () => () => {},
@@ -191,6 +195,7 @@ export function WorktreeSurface({
   expandState,
   sessionOrder,
   manager,
+  viewReader,
   permission,
   confirmFullAccess,
   fullAccessConfirmation,
@@ -227,6 +232,8 @@ export function WorktreeSurface({
   );
   const currentSessionId = sessions.current;
   const workspaceIds = useStableWorkspaceIds(workspaces.items);
+  const workspaceIdsRef = useRef(workspaceIds);
+  workspaceIdsRef.current = workspaceIds;
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
   const expandSnapshot = useSyncExternalStore(
     expandState.subscribe,
@@ -310,8 +317,11 @@ export function WorktreeSurface({
   const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
+  const targetRefreshGuards = useRef(
+    new Map<string, ReturnType<typeof createWorktreeRefreshGuard>>(),
+  );
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
-  const modalReadLoader = useRef(createWorktreeModalViewLoader());
+  const modalReadLoader = useRef(createWorktreeModalViewLoader(viewReader));
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
   const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);
@@ -324,43 +334,135 @@ export function WorktreeSurface({
     pendingSessionBinding !== undefined &&
     archivedSessionIds.includes(pendingSessionBinding.sessionId);
 
+  const guardFor = (workspaceId: string) => {
+    const current = targetRefreshGuards.current.get(workspaceId);
+    if (current !== undefined) return current;
+    const created = createWorktreeRefreshGuard();
+    targetRefreshGuards.current.set(workspaceId, created);
+    return created;
+  };
+
   const refresh = useCallback(
     async (options: RefreshOptions = {}): Promise<void> => {
       if (manager === undefined) {
         refreshGuard.current.invalidate();
+        for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
         setReadState(EMPTY_READ_STATE);
         return;
       }
+      const scope = options.scope ?? { kind: 'global' as const };
       const preserveCurrent = options.preserveCurrent === true;
-      if (!preserveCurrent) {
-        setReadState({ status: 'loading', views: [] });
+      const currentWorkspaceIds = workspaceIdsRef.current;
+
+      if (scope.kind === 'global') {
+        if (!preserveCurrent) {
+          setReadState({ status: 'loading', views: [] });
+        }
+        const selectedWorkspaceIds = [...currentWorkspaceIds];
+        for (const workspaceId of selectedWorkspaceIds) {
+          viewReader.invalidate(workspaceId);
+        }
+        const contextRefresh = options.invalidateContext === false
+          ? undefined
+          : invalidateWorktreeContext?.();
+        await refreshGuard.current.run(
+          async () => {
+            const [views] = await Promise.all([
+              viewReader.readMany(selectedWorkspaceIds),
+              contextRefresh ?? Promise.resolve(),
+            ]);
+            return views;
+          },
+          (views) => {
+            setReadState((current) => {
+              const merged = mergeWorktreeViews(current.views, workspaceIdsRef.current, views);
+              return {
+                status: 'ready',
+                views: modalReadViewRef.current === undefined
+                  ? merged
+                  : mergeWorktreeView(merged, modalReadViewRef.current),
+              };
+            });
+          },
+          (error) => {
+            if (preserveCurrent) throw error;
+            setReadState({
+              status: 'error',
+              views: modalReadViewRef.current === undefined ? [] : [modalReadViewRef.current],
+              error: toWorktreeViewError(error),
+            });
+          },
+        );
+        return;
       }
-      await refreshGuard.current.run(
-        () =>
-          loadWorktreeViews(manager, workspaceIds, {
-            invalidateContext: options.invalidateContext !== false,
-            invalidateWorktreeContext,
-          }),
-        (views) => {
-          setReadState({
-            status: 'ready',
-            views:
-              modalReadViewRef.current === undefined
-                ? views
-                : mergeWorktreeView(views, modalReadViewRef.current),
-          });
-        },
-        (error) => {
-          if (preserveCurrent) throw error;
-          setReadState({
-            status: 'error',
-            views: modalReadViewRef.current === undefined ? [] : [modalReadViewRef.current],
-            error: toWorktreeViewError(error),
-          });
-        },
+
+      const requestedWorkspaceIds = scope.kind === 'workspace'
+        ? [scope.workspaceId]
+        : scope.workspaceIds;
+      const selectedWorkspaceIds = [...new Set(requestedWorkspaceIds)].filter(
+        (workspaceId) => currentWorkspaceIds.includes(workspaceId),
       );
+      if (selectedWorkspaceIds.length === 0) return;
+
+      await Promise.allSettled(selectedWorkspaceIds.map(async (workspaceId) => {
+        const guard = guardFor(workspaceId);
+        viewReader.invalidate(workspaceId);
+        const contextRefresh = options.invalidateContext === false
+          ? undefined
+          : invalidateWorktreeContext?.(workspaceId);
+        const generation = guard.begin();
+        try {
+          const view = await viewReader.read(workspaceId);
+          if (!guard.isCurrent(generation)) return;
+          if (!workspaceIdsRef.current.includes(workspaceId)) return;
+          setReadState((current) => {
+            const remainingTargetError = current.targetError?.workspaceIds.filter(
+              (candidate) => candidate !== workspaceId,
+            ) ?? [];
+            const next = {
+              ...current,
+              status: 'ready' as const,
+              views: mergeWorktreeViews(current.views, workspaceIdsRef.current, [view]),
+              error: undefined,
+            };
+            if (remainingTargetError.length === 0) {
+              const withoutTargetError = { ...next };
+              delete withoutTargetError.targetError;
+              return withoutTargetError;
+            }
+            return {
+              ...next,
+              targetError: {
+                workspaceIds: remainingTargetError,
+                error: current.targetError!.error,
+              },
+            };
+          });
+        } catch (error) {
+          if (!guard.isCurrent(generation)) return;
+          if (!workspaceIdsRef.current.includes(workspaceId)) return;
+          setReadState((current) => {
+            const previousIds = current.targetError?.workspaceIds ?? [];
+            return {
+              ...current,
+              status: 'ready',
+              views: mergeWorktreeViews(current.views, workspaceIdsRef.current, []),
+              error: undefined,
+              targetError: {
+                workspaceIds: [...new Set([...previousIds, workspaceId])],
+                error: {
+                  ...toWorktreeViewError(error),
+                  retryable: true,
+                },
+              },
+            };
+          });
+        } finally {
+          await contextRefresh?.catch(() => undefined);
+        }
+      }));
     },
-    [invalidateWorktreeContext, manager, workspaceIds],
+    [invalidateWorktreeContext, manager, viewReader],
   );
 
   const loadModalWorktreeView = useCallback(
@@ -377,7 +479,6 @@ export function WorktreeSurface({
         return;
       }
       void modalReadLoader.current.load(
-        manager,
         workspaceId,
         (view) => {
           modalReadViewRef.current = view;
@@ -393,7 +494,7 @@ export function WorktreeSurface({
         },
       );
     },
-    [manager],
+    [manager, viewReader],
   );
 
   useEffect(() => {
@@ -401,6 +502,7 @@ export function WorktreeSurface({
       void refresh({ preserveCurrent: readStateRef.current.status === 'ready' });
     } else {
       refreshGuard.current.invalidate();
+      for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
       modalReadLoader.current.invalidate();
       modalReadViewRef.current = undefined;
       setWorktreeModalWorkspaceId(undefined);
@@ -410,17 +512,71 @@ export function WorktreeSurface({
     }
   }, [mode, refresh]);
 
+  const previousWorkspaceIdsRef = useRef<readonly string[]>(workspaceIds);
+  useEffect(() => {
+    const previousWorkspaceIds = previousWorkspaceIdsRef.current;
+    previousWorkspaceIdsRef.current = workspaceIds;
+    if (mode !== 'worktree') return;
+
+    const addedWorkspaceIds = workspaceIds.filter(
+      (workspaceId) => !previousWorkspaceIds.includes(workspaceId),
+    );
+    const removedWorkspaceIds = previousWorkspaceIds.filter(
+      (workspaceId) => !workspaceIds.includes(workspaceId),
+    );
+    for (const workspaceId of removedWorkspaceIds) {
+      targetRefreshGuards.current.delete(workspaceId);
+    }
+    setReadState((current) => {
+      const views = mergeWorktreeViews(current.views, workspaceIds, []);
+      const remainingTargetError = current.targetError?.workspaceIds.filter(
+        (workspaceId) => workspaceIds.includes(workspaceId),
+      ) ?? [];
+      const next = { ...current, views };
+      if (remainingTargetError.length === 0) {
+        const withoutTargetError = { ...next };
+        delete withoutTargetError.targetError;
+        return withoutTargetError;
+      }
+      return {
+        ...next,
+        targetError: {
+          workspaceIds: remainingTargetError,
+          error: current.targetError!.error,
+        },
+      };
+    });
+    for (const workspaceId of addedWorkspaceIds) {
+      void refresh({
+        scope: { kind: 'workspace', workspaceId },
+        preserveCurrent: true,
+      }).catch(() => {
+        // The target error remains visible and can be retried explicitly.
+      });
+    }
+  }, [mode, refresh, workspaceIds]);
+
   useEffect(() => {
     if (forkRecoveryRevisionRef.current === forkRecoverySnapshot.revision) return;
     forkRecoveryRevisionRef.current = forkRecoverySnapshot.revision;
     if (mode !== 'worktree' || manager === undefined) return;
+    if (forkRecoverySnapshot.affectedWorkspaceIds.length === 0) return;
     void refresh({
+      scope: {
+        kind: 'workspaces',
+        workspaceIds: forkRecoverySnapshot.affectedWorkspaceIds,
+      },
       preserveCurrent: readStateRef.current.status === 'ready',
-      invalidateContext: false,
     }).catch(() => {
       // Recovery state remains visible; the next explicit retry can refresh it again.
     });
-  }, [forkRecoverySnapshot.revision, manager, mode, refresh]);
+  }, [
+    forkRecoverySnapshot.affectedWorkspaceIds,
+    forkRecoverySnapshot.revision,
+    manager,
+    mode,
+    refresh,
+  ]);
 
   useEffect(() => {
     if (readState.status !== 'ready' || syncSessionWorkspaces === undefined) return;
@@ -623,12 +779,15 @@ export function WorktreeSurface({
     });
   }, [modalView, worktreeModalWorkspaceId]);
 
-  const runMutation = async (operation: () => Promise<void>): Promise<void> => {
+  const runMutation = async (
+    operation: () => Promise<void>,
+    refreshOptions?: RefreshOptions,
+  ): Promise<void> => {
     setActionPending(true);
     setActionError(undefined);
     try {
       await operation();
-      await refresh({ preserveCurrent: true });
+      if (refreshOptions !== undefined) await refresh(refreshOptions);
     } catch (error) {
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -858,7 +1017,11 @@ export function WorktreeSurface({
     }
     setActionError(undefined);
     void insertWorktreeBefore(workspaceId, activeDrag.worktreeId, move.beforeWorktreeId)
-      .then(() => refresh({ preserveCurrent: true, invalidateContext: false }))
+      .then(() => refresh({
+        scope: { kind: 'workspace', workspaceId },
+        preserveCurrent: true,
+        invalidateContext: false,
+      }))
       .catch((error) => {
         setActionError(toRetryableWorktreeOrderError(error));
       });
@@ -1050,7 +1213,10 @@ export function WorktreeSurface({
   ): Promise<void> => {
     closeWorktreeCreator(true);
     if (createSessionCallback === undefined) {
-      await refresh({ preserveCurrent: true });
+      await refresh({
+        scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
+        preserveCurrent: true,
+      });
       setActionError({
         code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE',
         message: '',
@@ -1066,7 +1232,6 @@ export function WorktreeSurface({
     };
     try {
       await createSessionCallback(sessionInput);
-      await invalidateWorktreeContext?.(registeredWorktree.workspaceId);
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError && error.retryable) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
@@ -1080,7 +1245,10 @@ export function WorktreeSurface({
       }
       throw error;
     }
-    await refresh({ preserveCurrent: true });
+    await refresh({
+      scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
+      preserveCurrent: true,
+    });
   };
 
   const submitWorktree = async (): Promise<void> => {
@@ -1145,8 +1313,10 @@ export function WorktreeSurface({
     setPendingSessionBinding(undefined);
     try {
       await createSessionCallback(input);
-      await invalidateWorktreeContext?.(input.workspaceId);
-      await refresh({ preserveCurrent: true });
+      await refresh({
+        scope: { kind: 'workspace', workspaceId: input.workspaceId },
+        preserveCurrent: true,
+      });
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError && error.retryable) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId });
@@ -1184,8 +1354,10 @@ export function WorktreeSurface({
         openSession,
       });
       setPendingSessionBinding(undefined);
-      await refresh({ preserveCurrent: true });
-      await invalidateWorktreeContext?.(pending.workspaceId);
+      await refresh({
+        scope: { kind: 'workspace', workspaceId: pending.workspaceId },
+        preserveCurrent: true,
+      });
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError && !error.retryable) {
         setPendingSessionBinding(undefined);
@@ -1360,12 +1532,35 @@ export function WorktreeSurface({
                   className={styles.retryButton}
                   onClick={() => {
                     setActionError(undefined);
-                    void refresh();
+                    void refresh({ scope: { kind: 'global' } });
                   }}
                 >
                   {t('action.retry')}
                 </button>
               )}
+            </div>
+          )}
+
+          {readState.targetError !== undefined && (
+            <div className={styles.error} role="alert" data-worktree-target-error>
+              <p className={styles.message} data-error="true">
+                {formatWorktreeViewError(readState.targetError.error, t)}
+              </p>
+              <button
+                type="button"
+                className={styles.retryButton}
+                onClick={() => {
+                  void refresh({
+                    scope: {
+                      kind: 'workspaces',
+                      workspaceIds: readState.targetError!.workspaceIds,
+                    },
+                    preserveCurrent: true,
+                  });
+                }}
+              >
+                {t('action.retry')}
+              </button>
             </div>
           )}
 
@@ -1381,7 +1576,7 @@ export function WorktreeSurface({
                 type="button"
                 className={styles.retryButton}
                 onClick={() => {
-                  void refresh();
+                  void refresh({ scope: { kind: 'global' } });
                 }}
               >
                 {t('action.retry')}
@@ -1954,8 +2149,10 @@ export function WorktreeSurface({
                 mutationToken,
               },
             }, permission, onPermissionNotice);
-            await invalidateWorktreeContext?.(target.workspaceId);
             setWorktreeRemoval(undefined);
+          }, {
+            scope: { kind: 'workspace', workspaceId: target.workspaceId },
+            preserveCurrent: true,
           });
         }}
       />

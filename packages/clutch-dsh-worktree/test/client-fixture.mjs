@@ -8,7 +8,13 @@ const packageDirectory = path.resolve('.');
  * table and a small slot/context fixture. The real Client loader owns the
  * same registration call; this fixture only supplies its platform modules.
  */
-export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, fork } = {}) {
+export async function loadClientEntry({
+  remote = {},
+  rpc,
+  sessionListSnapshot,
+  workspaceSnapshot: initialWorkspaceSnapshot,
+  fork,
+} = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
@@ -21,7 +27,7 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
   const localeRegistrations = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
 
-  let workspaceSnapshot = {
+  let workspaceSnapshot = initialWorkspaceSnapshot ?? {
     items: [
       { workspaceId: 'workspace-current', title: 'Current', sessionIds: ['session-current'] },
     ],
@@ -138,11 +144,21 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
     },
   };
 
-  const fakeSessions = {
-    list: {
-      getSnapshot: () => sessionListSnapshot ?? ({ current: 'session-current' }),
-      subscribe: () => () => {},
+  let currentSessionSnapshot = sessionListSnapshot ?? { current: 'session-current' };
+  const sessionSubscribers = new Set();
+  const sessionList = {
+    getSnapshot: () => currentSessionSnapshot,
+    set(next) {
+      currentSessionSnapshot = next;
+      for (const subscriber of sessionSubscribers) subscriber();
     },
+    subscribe(subscriber) {
+      sessionSubscribers.add(subscriber);
+      return () => sessionSubscribers.delete(subscriber);
+    },
+  };
+  const fakeSessions = {
+    list: sessionList,
     async create(input) {
       createdSessions.push(input);
       return 'session-created';
@@ -228,5 +244,11 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
     forkCalls,
     nativeFork,
     rpcCalls,
+    setWorkspaceSnapshot(next) {
+      workspaceList.set(next);
+    },
+    setSessionListSnapshot(next) {
+      sessionList.set(next);
+    },
   };
 }

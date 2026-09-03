@@ -18,6 +18,7 @@ import { createWorktreeContextProjection } from './worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './worktree-expand-state.js';
 import { createWorktreeSessionOrderStore } from './worktree-session-order.js';
 import { createWorktreeViewStore } from './view-mode-store.js';
+import { createWorktreeViewReader } from './worktree-view-read.js';
 import {
   createVirtualWorkspaceMembership,
   type WritableWorkspaceList,
@@ -31,6 +32,7 @@ import {
 } from './worktree-permission.js';
 import { installWorktreePermissionIcon } from './worktree-permission-icon.js';
 import type {
+  SessionBinding,
   WorktreePermissionResult,
 } from '../contract/index.js';
 import type {
@@ -39,6 +41,8 @@ import type {
 import {
   createWorktreeSessionForkCoordinator,
   type WorktreeForkInput,
+  type WorktreeForkBindingIndex,
+  type WorktreeForkBindingLookupResult,
   type WorktreeForkSessionListReader,
 } from './worktree-session-fork.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
@@ -84,8 +88,86 @@ interface WorkspaceListSnapshot {
   readonly archivedSessionIds?: readonly string[];
 }
 
+interface SessionLineageSnapshot {
+  readonly ids: readonly string[];
+  readonly byId: Readonly<Record<string, {
+    readonly blank?: boolean;
+    readonly parentId?: string;
+    readonly origin?: string;
+  } | undefined>>;
+}
+
 interface ForkableSessions {
   fork?: (input: WorktreeForkInput) => Promise<string>;
+}
+
+function forkRelatedSessionIds(
+  snapshot: SessionLineageSnapshot,
+): ReadonlySet<string> | undefined {
+  if (
+    typeof snapshot !== 'object' ||
+    snapshot === null ||
+    !Array.isArray(snapshot.ids) ||
+    typeof snapshot.byId !== 'object' ||
+    snapshot.byId === null ||
+    Array.isArray(snapshot.byId)
+  ) {
+    return undefined;
+  }
+  const related = new Set<string>();
+  for (const childSessionId of snapshot.ids) {
+    if (typeof childSessionId !== 'string') return undefined;
+    const summary = snapshot.byId[childSessionId];
+    if (
+      summary !== undefined &&
+      (typeof summary !== 'object' || summary === null || Array.isArray(summary))
+    ) {
+      return undefined;
+    }
+    const parentSessionId = summary?.parentId;
+    if (
+      parentSessionId === undefined ||
+      parentSessionId === childSessionId ||
+      summary?.blank === true ||
+      summary?.origin === 'subagent' ||
+      snapshot.byId[parentSessionId] === undefined
+    ) {
+      continue;
+    }
+    related.add(childSessionId);
+    related.add(parentSessionId);
+  }
+  return related;
+}
+
+function workspaceMembershipSignature(
+  snapshot: WorkspaceListSnapshot,
+  sessions: SessionLineageSnapshot,
+): string | undefined {
+  const relatedSessionIds = forkRelatedSessionIds(sessions);
+  if (relatedSessionIds === undefined) return undefined;
+  if (typeof snapshot !== 'object' || snapshot === null || !Array.isArray(snapshot.items)) {
+    return undefined;
+  }
+  const facts: Array<readonly [string, readonly string[]]> = [];
+  for (const workspace of snapshot.items) {
+    if (
+      typeof workspace !== 'object' ||
+      workspace === null ||
+      typeof workspace.workspaceId !== 'string' ||
+      !Array.isArray(workspace.sessionIds) ||
+      workspace.sessionIds.some((sessionId: string) => typeof sessionId !== 'string')
+    ) {
+      return undefined;
+    }
+    facts.push([
+      workspace.workspaceId,
+      workspace.sessionIds.filter((sessionId: string) => relatedSessionIds.has(sessionId)).sort(),
+    ]);
+  }
+  // This signature tracks membership, not presentation order.
+  facts.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  return JSON.stringify(facts);
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
@@ -107,6 +189,7 @@ export function apply(ctx: ClientContext): void {
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
+  const viewReader = createWorktreeViewReader(manager);
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
   const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
@@ -130,10 +213,11 @@ export function apply(ctx: ClientContext): void {
   const contextProjection = createWorktreeContextProjection({
     sessions: ctx.sessions.list,
     workspaces: ctx.workspaces.list,
-    manager,
+    viewReader,
     storeFactory: createSnapshotStore,
   });
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
+  ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
   ctx.effect(
     () => () => fullAccessConfirmation.dispose(),
     'clutch-dsh-worktree: Full Access confirmation cleanup',
@@ -161,32 +245,87 @@ export function apply(ctx: ClientContext): void {
 
   const forkableSessions = ctx.sessions as unknown as ForkableSessions;
   const nativeFork = forkableSessions.fork;
-  const findWorktreeSessionBinding = async (sessionId: string) => {
-    const workspaceIds = ctx.workspaces.list.getSnapshot().items.map(
-      (workspace) => workspace.workspaceId,
-    );
-    const results = await Promise.allSettled(
-      workspaceIds.map(async (workspaceId) => {
-        const bindings = await manager.listBindings({ workspaceId });
-        return bindings.find(
-          (binding) => binding.sessionId === sessionId && binding.status === 'active',
+  const workspaceBindingReads = new Map<
+    string,
+    Promise<readonly SessionBinding[]>
+  >();
+  const readWorkspaceBindings = (workspaceId: string): Promise<readonly SessionBinding[]> => {
+    const current = workspaceBindingReads.get(workspaceId);
+    if (current !== undefined) return current;
+    const promise = manager.listBindings({ workspaceId }).finally(() => {
+      if (workspaceBindingReads.get(workspaceId) === promise) {
+        workspaceBindingReads.delete(workspaceId);
+      }
+    });
+    workspaceBindingReads.set(workspaceId, promise);
+    return promise;
+  };
+  const findWorktreeSessionBindings = async (
+    sessionIds: readonly string[],
+  ): Promise<WorktreeForkBindingIndex> => {
+    const requested = [...new Set(sessionIds)];
+    const requestedSet = new Set(requested);
+    const workspaces = ctx.workspaces.list.getSnapshot().items;
+    const workspaceIds = [
+      ...new Set<string>(workspaces.map((workspace) => workspace.workspaceId)),
+    ];
+    const owners = new Map<string, string[]>();
+    for (const workspace of workspaces) {
+      for (const sessionId of workspace.sessionIds) {
+        if (!requestedSet.has(sessionId)) continue;
+        const workspaceOwners = owners.get(sessionId) ?? [];
+        if (!workspaceOwners.includes(workspace.workspaceId)) {
+          workspaceOwners.push(workspace.workspaceId);
+          owners.set(sessionId, workspaceOwners);
+        }
+      }
+    }
+    const unknownScope = requested.some((sessionId) => (owners.get(sessionId)?.length ?? 0) === 0);
+    const selectedWorkspaceIds = unknownScope
+      ? workspaceIds
+      : workspaceIds.filter((workspaceId) =>
+          requested.some((sessionId) => owners.get(sessionId)?.includes(workspaceId) === true),
         );
-      }),
+    const results = await Promise.allSettled(
+      selectedWorkspaceIds.map((workspaceId) => readWorkspaceBindings(workspaceId)),
     );
-    const found = results.find(
-      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof manager.listBindings>>[number] | undefined> =>
-        result.status === 'fulfilled' && result.value !== undefined,
+    const resultByWorkspaceId = new Map(
+      selectedWorkspaceIds.map((workspaceId, index) => [workspaceId, results[index]]),
     );
-    if (found !== undefined) return found.value;
-    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-    if (failed !== undefined) throw failed.reason;
-    return undefined;
+    const bySessionId = new Map<string, WorktreeForkBindingLookupResult>();
+    for (const sessionId of requested) {
+      const relevantWorkspaceIds = owners.get(sessionId) ?? selectedWorkspaceIds;
+      let found: SessionBinding | undefined;
+      let failed: unknown;
+      for (const workspaceId of relevantWorkspaceIds) {
+        const result = resultByWorkspaceId.get(workspaceId);
+        if (result === undefined) continue;
+        if (result.status === 'rejected') {
+          failed ??= result.reason;
+          continue;
+        }
+        const binding = result.value.find(
+          (candidate) => candidate.sessionId === sessionId && candidate.status === 'active',
+        );
+        if (binding !== undefined) {
+          found = binding;
+          break;
+        }
+      }
+      bySessionId.set(
+        sessionId,
+        found === undefined
+          ? failed === undefined ? { status: 'missing' } : { status: 'error', error: failed }
+          : { status: 'found', binding: found },
+      );
+    }
+    return { bySessionId };
   };
   const forkCoordinator = typeof nativeFork !== 'function'
     ? undefined
     : createWorktreeSessionForkCoordinator({
         fork: (input) => nativeFork.call(ctx.sessions, input),
-        findBinding: findWorktreeSessionBinding,
+        findBindings: findWorktreeSessionBindings,
         bindSession: (input) => manager.bindSession(input),
         sessions: ctx.sessions.list as unknown as WorktreeForkSessionListReader,
       });
@@ -195,8 +334,22 @@ export function apply(ctx: ClientContext): void {
     const reconcileForkChildren = (): void => {
       void forkCoordinator.reconcile();
     };
+    let lastWorkspaceMembershipSignature = workspaceMembershipSignature(
+      ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot,
+      ctx.sessions.list.getSnapshot() as unknown as SessionLineageSnapshot,
+    );
+    const reconcileForkChildrenForWorkspace = (): void => {
+      const nextSignature = workspaceMembershipSignature(
+        ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot,
+        ctx.sessions.list.getSnapshot() as unknown as SessionLineageSnapshot,
+      );
+      const changed =
+        nextSignature !== undefined && nextSignature !== lastWorkspaceMembershipSignature;
+      if (nextSignature !== undefined) lastWorkspaceMembershipSignature = nextSignature;
+      void forkCoordinator.reconcile({ force: changed });
+    };
     const unsubscribeSessionList = ctx.sessions.list.subscribe(reconcileForkChildren);
-    const unsubscribeWorkspaceList = ctx.workspaces.list.subscribe(reconcileForkChildren);
+    const unsubscribeWorkspaceList = ctx.workspaces.list.subscribe(reconcileForkChildrenForWorkspace);
     ctx.effect(
       () => () => {
         unsubscribeSessionList();
@@ -269,6 +422,7 @@ export function apply(ctx: ClientContext): void {
           sessionOrder,
           hooks: { worktreeContext: contextProjection.store },
           manager,
+          viewReader,
           permission: permissionManager,
           confirmFullAccess: permissionManager === undefined
             ? undefined

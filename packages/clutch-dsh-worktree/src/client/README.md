@@ -16,6 +16,38 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
+## Shared Worktree views and refresh scopes
+
+`worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
+per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
+It keeps one entry per Workspace and provides:
+
+- a complete Worktree/branch/binding view read, including valid non-ready Git readiness states;
+- completed-view caching and in-flight Promise sharing for the same Workspace and generation;
+- de-duplicated `readMany()` reads for an explicit ordered Workspace set; and
+- disposal that clears entries and makes late callbacks unable to repopulate the cache.
+
+Every `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
+the completed view, even when the entry is already stale. It does not cancel the existing Promise.
+The Promise may settle for cleanup, but its captured generation must still match before it can write
+the cache. This prevents an overlapping older read from replacing a newer invalidation with stale
+Worktree, branch, or binding facts. The reader owns this cache and lifecycle; Context and Surface do
+not maintain separate Manager read caches.
+
+The Surface makes refresh scope explicit. Initial entry and global retry invalidate and read the
+current Workspace set. Binding, Worktree, Session, and modal changes target the owning Workspace;
+multi-Workspace changes read only the affected set. Targeted results are merged into the current
+projection so unrelated ready Workspaces remain visible while a replacement read is pending or
+fails with a retryable target-scoped error. The modal loader adds its own callback-generation guard
+on top of the shared reader so an obsolete modal request cannot update modal state.
+
+The native Workspace listener used by Fork recovery has a separate structural signature. It tracks
+Workspace identity and membership only for Fork-related parent/child Sessions. Title, path, order,
+recency, and an ordinary Worktree Session's browser-local membership projection do not force a Fork
+binding scan; a membership change for a Fork-related Session does. This keeps normal Worktree
+Session creation from causing an unrelated global `listBindings` pass while preserving Fork
+binding recovery.
+
 ## External Worktree import
 
 The Workspace `+` action continues to open the existing Worktree dialog. Create is selected by

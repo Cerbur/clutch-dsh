@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
 import { loadClientEntry } from './client-fixture.mjs';
@@ -9,6 +10,14 @@ const packageDirectory = path.resolve('.');
 const packageManifest = JSON.parse(
   await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
 );
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 async function loadRuntimeClientExports() {
   const runtimePath = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-client-runtime/client'));
@@ -151,6 +160,642 @@ test('binds a native fork child through the existing browser-local membership ov
   assert.equal(fixture.fakeContext.sessions.fork, fixture.nativeFork);
 });
 
+test('coalesces fork binding reads across repeated Client notifications', async () => {
+  const bindingRequests = [];
+  let parentOneBindingAvailable = false;
+  const sessionSnapshot = {
+    phase: 'ready',
+    ids: ['parent-one', 'child-one', 'parent-two', 'child-two'],
+    byId: {
+      'parent-one': { blank: false },
+      'child-one': { blank: false, parentId: 'parent-one' },
+      'parent-two': { blank: false },
+      'child-two': { blank: false, parentId: 'parent-two' },
+    },
+  };
+  const workspaceSnapshot = {
+    items: [
+      {
+        workspaceId: 'workspace-one',
+        path: '/tmp/workspace-one',
+        title: 'One',
+        sessionIds: ['parent-one'],
+      },
+      {
+        workspaceId: 'workspace-two',
+        path: '/tmp/workspace-two',
+        title: 'Two',
+        sessionIds: ['parent-two'],
+      },
+    ],
+  };
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: sessionSnapshot,
+    workspaceSnapshot,
+    fork: async () => 'unused',
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(input.workspaceId);
+          if (input.workspaceId === 'workspace-one' && !parentOneBindingAvailable) {
+            return Promise.resolve({
+              ok: true,
+              value: { ok: true, value: [] },
+            });
+          }
+          const parentSessionId =
+            input.workspaceId === 'workspace-one' ? 'parent-one' : 'parent-two';
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: [
+                {
+                  workspaceId: input.workspaceId,
+                  worktreeId: `worktree-${input.workspaceId}`,
+                  sessionId: parentSessionId,
+                  status: 'active',
+                },
+              ],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: { ...input, status: 'active' } },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+  const flush = async () => {
+    await setImmediate();
+    await setImmediate();
+  };
+
+  await flush();
+  assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+
+  fixture.setSessionListSnapshot({
+    ...sessionSnapshot,
+    byId: {
+      ...sessionSnapshot.byId,
+      'parent-one': { blank: false, running: true, updatedAt: 42 },
+    },
+  });
+  await flush();
+  assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+
+  parentOneBindingAvailable = true;
+  fixture.setWorkspaceSnapshot({
+    items: workspaceSnapshot.items.map((workspace) => ({
+      ...workspace,
+      title: `${workspace.title} renamed`,
+    })),
+  });
+  await flush();
+  assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+
+  fixture.setWorkspaceSnapshot({
+    items: [
+      { ...workspaceSnapshot.items[0], sessionIds: ['parent-one', 'child-one'] },
+      workspaceSnapshot.items[1],
+    ],
+  });
+  await flush();
+  assert.deepEqual(bindingRequests, [
+    'workspace-one',
+    'workspace-two',
+    'workspace-one',
+  ]);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('keeps Worktree Session preflight in the requested Workspace', async () => {
+  const bindingRequests = [];
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: [],
+      byId: {},
+    },
+    workspaceSnapshot: {
+      items: [
+        { workspaceId: 'workspace-one', title: 'One', sessionIds: [] },
+        { workspaceId: 'workspace-two', title: 'Two', sessionIds: [] },
+      ],
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        const input = payload.args.input;
+        if (endpoint === 'worktreeManager/listWorktrees') {
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: [{
+                workspaceId: input.workspaceId,
+                worktreeId: 'worktree-target',
+                absolutePath: '/tmp/worktree-target',
+                status: 'active',
+                health: 'ready',
+              }],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(input.workspaceId);
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: [] },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: { ...input, status: 'active' } },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  await overlay.createSessionForWorktree({
+    workspaceId: 'workspace-two',
+    worktreeId: 'worktree-target',
+    cwd: '/tmp/worktree-target',
+  });
+
+  assert.deepEqual(bindingRequests, ['workspace-two']);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('does not globally rescan Fork bindings while creating an unconfirmed Worktree Session', async () => {
+  const previousDocument = globalThis.document;
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    writable: true,
+    value: {
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      createElement: () => ({
+        dataset: {},
+        setAttribute() {},
+        remove() {},
+        textContent: '',
+      }),
+      head: { append() {}, appendChild() {} },
+      documentElement: {},
+    },
+  });
+
+  let fixture;
+  try {
+    const bindingRequests = [];
+    const initialSessionSnapshot = {
+      phase: 'ready',
+      ids: ['parent-session', 'child-session'],
+      byId: {
+        'parent-session': { blank: false },
+        'child-session': { blank: false, parentId: 'parent-session' },
+      },
+    };
+    fixture = await loadClientEntry({
+      sessionListSnapshot: initialSessionSnapshot,
+      workspaceSnapshot: {
+        items: [
+          { workspaceId: 'workspace-one', title: 'One', sessionIds: [] },
+          { workspaceId: 'workspace-two', title: 'Two', sessionIds: [] },
+        ],
+      },
+      fork: async () => 'unused',
+      rpc: {
+        call(_channel, endpoint, payload) {
+          const input = payload.args.input;
+          if (endpoint === 'worktreeManager/listWorktrees') {
+            return Promise.resolve({
+              ok: true,
+              value: {
+                ok: true,
+                value: [{
+                  workspaceId: input.workspaceId,
+                  worktreeId: 'worktree-one',
+                  absolutePath: '/tmp/worktree-one',
+                  status: 'active',
+                  health: 'ready',
+                }],
+              },
+            });
+          }
+          if (endpoint === 'worktreeManager/listBindings') {
+            bindingRequests.push(input.workspaceId);
+            return Promise.resolve({
+              ok: true,
+              value: { ok: true, value: [] },
+            });
+          }
+          if (endpoint === 'worktreeManager/bindSession') {
+            return Promise.resolve({
+              ok: true,
+              value: { ok: true, value: { ...input, status: 'active' } },
+            });
+          }
+          if (endpoint === 'worktreeManager/ensureWorktreePermission') {
+            return Promise.resolve({
+              ok: true,
+              value: {
+                ok: true,
+                value: input.confirmed === true
+                  ? {
+                      status: 'full-applied',
+                      preset: 'worktree-full-access',
+                      sandboxMode: 'danger-full-access',
+                      approvalPolicy: 'ask',
+                      retryable: false,
+                    }
+                  : { status: 'confirmation-required', retryable: false },
+              },
+            });
+          }
+          return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+        },
+      },
+    });
+    const flush = async () => {
+      await setImmediate();
+      await setImmediate();
+    };
+
+    await flush();
+    const initialBindingRequestCount = bindingRequests.length;
+    assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+
+    const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+    const createPromise = overlay.createSessionForWorktree({
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      cwd: '/tmp/worktree-one',
+    });
+    await flush();
+    assert.deepEqual(overlay.fullAccessConfirmation.getSnapshot(), {
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionId: 'session-created',
+      cwd: '/tmp/worktree-one',
+    });
+
+    fixture.setSessionListSnapshot({
+      ...initialSessionSnapshot,
+      ids: [...initialSessionSnapshot.ids, 'session-created'],
+      byId: {
+        ...initialSessionSnapshot.byId,
+        'session-created': { blank: true },
+      },
+    });
+    await flush();
+    fixture.setSessionListSnapshot({
+      ...initialSessionSnapshot,
+      ids: [...initialSessionSnapshot.ids, 'session-created'],
+      byId: {
+        ...initialSessionSnapshot.byId,
+        'session-created': { blank: false },
+      },
+    });
+    await flush();
+
+    overlay.fullAccessConfirmation.resolve(true);
+    assert.equal(await createPromise, 'session-created');
+    assert.deepEqual(bindingRequests.slice(initialBindingRequestCount), ['workspace-one']);
+  } finally {
+    if (fixture !== undefined) {
+      for (const dispose of fixture.disposers.reverse()) dispose();
+    }
+    if (previousDocument === undefined) {
+      delete globalThis.document;
+    } else {
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        writable: true,
+        value: previousDocument,
+      });
+    }
+  }
+});
+
+test('does not treat browser-local Worktree membership as a Fork scope change', async () => {
+  const bindingRequests = [];
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-session', 'child-session'],
+      byId: {
+        'parent-session': { blank: false },
+        'child-session': { blank: false, parentId: 'parent-session' },
+      },
+    },
+    workspaceSnapshot: {
+      items: [
+        { workspaceId: 'workspace-one', title: 'One', sessionIds: [] },
+        { workspaceId: 'workspace-two', title: 'Two', sessionIds: [] },
+      ],
+    },
+    fork: async () => 'unused',
+    rpc: {
+      call(_channel, endpoint, payload) {
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(payload.args.input.workspaceId);
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+  const flush = async () => {
+    await setImmediate();
+    await setImmediate();
+  };
+
+  await flush();
+  const baseline = [...bindingRequests];
+  assert.deepEqual(baseline, ['workspace-one', 'workspace-two']);
+
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  overlay.syncSessionWorkspaces([
+    { workspaceId: 'workspace-one', sessionId: 'session-created' },
+  ]);
+  await flush();
+
+  assert.deepEqual(bindingRequests, baseline);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('does not rescan bindings when Workspace order changes', async () => {
+  const bindingRequests = [];
+  const workspaceSnapshot = {
+    items: [
+      { workspaceId: 'workspace-one', title: 'One', sessionIds: [] },
+      { workspaceId: 'workspace-two', title: 'Two', sessionIds: [] },
+    ],
+  };
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-session', 'child-session'],
+      byId: {
+        'parent-session': { blank: false },
+        'child-session': { blank: false, parentId: 'parent-session' },
+      },
+    },
+    workspaceSnapshot,
+    fork: async () => 'unused',
+    rpc: {
+      call(_channel, endpoint, payload) {
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(payload.args.input.workspaceId);
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: [] },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+  const flush = async () => {
+    await setImmediate();
+    await setImmediate();
+  };
+
+  await flush();
+  assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+
+  fixture.setWorkspaceSnapshot({
+    items: [...workspaceSnapshot.items].reverse(),
+  });
+  await flush();
+
+  assert.deepEqual(bindingRequests, ['workspace-one', 'workspace-two']);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('looks up a Fork parent only in its known owning Workspace', async () => {
+  const bindingRequests = [];
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-one'],
+      byId: { 'parent-one': { blank: false } },
+    },
+    workspaceSnapshot: {
+      items: [
+        {
+          workspaceId: 'workspace-one',
+          path: '/tmp/workspace-one',
+          title: 'One',
+          sessionIds: ['parent-one'],
+        },
+        {
+          workspaceId: 'workspace-two',
+          path: '/tmp/workspace-two',
+          title: 'Two',
+          sessionIds: [],
+        },
+      ],
+    },
+    fork: async () => 'child-one',
+    rpc: {
+      call(_channel, endpoint, payload) {
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(payload.args.input.workspaceId);
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: payload.args.input.workspaceId === 'workspace-one'
+                ? [{
+                    workspaceId: 'workspace-one',
+                    worktreeId: 'worktree-one',
+                    sessionId: 'parent-one',
+                    status: 'active',
+                  }]
+                : [],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({ ok: true, value: { ok: true, value: payload.args.input } });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  assert.equal(await fixture.fakeContext.sessions.fork({ sessionId: 'parent-one' }), 'child-one');
+  assert.deepEqual(bindingRequests, ['workspace-one']);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('uses a found Fork binding when an unrelated fallback Workspace read fails', async () => {
+  const bindingRequests = [];
+  const bindCalls = [];
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-known', 'child-known', 'parent-unknown', 'child-unknown'],
+      byId: {
+        'parent-known': { blank: false },
+        'child-known': { blank: false, parentId: 'parent-known' },
+        'parent-unknown': { blank: false },
+        'child-unknown': { blank: false, parentId: 'parent-unknown' },
+      },
+    },
+    workspaceSnapshot: {
+      items: [
+        {
+          workspaceId: 'workspace-known',
+          path: '/tmp/workspace-known',
+          title: 'Known',
+          sessionIds: ['parent-known'],
+        },
+        {
+          workspaceId: 'workspace-unrelated',
+          path: '/tmp/workspace-unrelated',
+          title: 'Unrelated',
+          sessionIds: [],
+        },
+      ],
+    },
+    fork: async () => 'unused',
+    rpc: {
+      call(_channel, endpoint, payload) {
+        if (endpoint === 'worktreeManager/listBindings') {
+          const workspaceId = payload.args.input.workspaceId;
+          bindingRequests.push(workspaceId);
+          if (workspaceId === 'workspace-unrelated') {
+            return Promise.reject(new Error('unrelated Workspace unavailable'));
+          }
+          return Promise.resolve({
+            ok: true,
+            value: {
+              ok: true,
+              value: [{
+                workspaceId: 'workspace-known',
+                worktreeId: 'worktree-known',
+                sessionId: 'parent-known',
+                status: 'active',
+              }],
+            },
+          });
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          bindCalls.push(payload.args.input);
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: payload.args.input },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  await setImmediate();
+  await setImmediate();
+
+  assert.deepEqual(bindingRequests, ['workspace-known', 'workspace-unrelated']);
+  assert.deepEqual(bindCalls, [{
+    workspaceId: 'workspace-known',
+    worktreeId: 'worktree-known',
+    sessionId: 'child-known',
+  }]);
+  const recovery = fixture.registrationsBySlot.get('shell.overlay').options.inject()
+    .forkRecovery.getSnapshot();
+  assert.deepEqual(recovery.pending.map((item) => item.childSessionId), ['child-unknown']);
+  assert.deepEqual(recovery.affectedWorkspaceIds, ['workspace-known']);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('shares an overlapping direct Fork lookup with notification reconciliation', async () => {
+  const bindingRequests = [];
+  const nativeForkResult = deferred();
+  const bindingResult = deferred();
+  let fixture;
+  fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['parent-one'],
+      byId: { 'parent-one': { blank: false } },
+    },
+    workspaceSnapshot: {
+      items: [{
+        workspaceId: 'workspace-one',
+        path: '/tmp/workspace-one',
+        title: 'One',
+        sessionIds: ['parent-one'],
+      }],
+    },
+    fork: async () => {
+      fixture.setSessionListSnapshot({
+        phase: 'ready',
+        ids: ['parent-one', 'child-one'],
+        byId: {
+          'parent-one': { blank: false },
+          'child-one': { blank: false, parentId: 'parent-one' },
+        },
+      });
+      return nativeForkResult.promise;
+    },
+    rpc: {
+      call(_channel, endpoint, payload) {
+        if (endpoint === 'worktreeManager/listBindings') {
+          bindingRequests.push(payload.args.input.workspaceId);
+          return bindingResult.promise;
+        }
+        if (endpoint === 'worktreeManager/bindSession') {
+          return Promise.resolve({
+            ok: true,
+            value: { ok: true, value: { ...payload.args.input, status: 'active' } },
+          });
+        }
+        return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
+      },
+    },
+  });
+
+  const forkPromise = fixture.fakeContext.sessions.fork({ sessionId: 'parent-one' });
+  nativeForkResult.resolve('child-one');
+  fixture.setWorkspaceSnapshot({
+    items: [{
+      workspaceId: 'workspace-one',
+      path: '/tmp/workspace-one',
+      title: 'One',
+      sessionIds: ['parent-one', 'child-one'],
+    }],
+  });
+  await setImmediate();
+  await setImmediate();
+  assert.deepEqual(bindingRequests, ['workspace-one']);
+  bindingResult.resolve({
+    ok: true,
+    value: {
+      ok: true,
+      value: [{
+        workspaceId: 'workspace-one',
+        worktreeId: 'worktree-one',
+        sessionId: 'parent-one',
+        status: 'active',
+      }],
+    },
+  });
+  assert.equal(await forkPromise, 'child-one');
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
 test('routes Worktree Session creation through the browser Session connector', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /createWorktreeSessionConnector/);
@@ -207,6 +852,62 @@ test('contributes context to the active Session title row and the Hero overlay',
   assert.equal(overlay.hooks.worktreeContext, store);
 
   for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('shares one Worktree view reader between Context and Surface for one Client fiber', async () => {
+  const pending = deferred();
+  const calls = [];
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: ['session-one'],
+      byId: { 'session-one': { blank: false } },
+      current: 'session-one',
+    },
+    workspaceSnapshot: {
+      items: [
+        {
+          workspaceId: 'workspace-one',
+          path: '/tmp/workspace-one',
+          title: 'One',
+          sessionIds: ['session-one'],
+        },
+        {
+          workspaceId: 'workspace-two',
+          path: '/tmp/workspace-two',
+          title: 'Two',
+          sessionIds: [],
+        },
+      ],
+    },
+    rpc: {
+      call(_channel, endpoint) {
+        calls.push(endpoint);
+        return pending.promise;
+      },
+    },
+  });
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  const reader = overlay.viewReader;
+  const surfaceRead = reader.read('workspace-one');
+
+  assert.equal(typeof reader.readMany, 'function');
+  assert.deepEqual(calls, [
+    'worktreeManager/listWorktrees',
+    'worktreeManager/listBranches',
+    'worktreeManager/listBindings',
+  ]);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+  pending.resolve({ ok: true, value: { ok: true, value: [] } });
+  await surfaceRead;
+  await assert.rejects(reader.read('workspace-one'), /reader disposed/);
+
+  const nextFixture = await loadClientEntry();
+  const nextReader = nextFixture.registrationsBySlot.get('shell.overlay').options.inject()
+    .viewReader;
+  assert.notEqual(nextReader, reader);
+  for (const dispose of nextFixture.disposers.reverse()) dispose();
 });
 
 test('declares the native Conversation package without depending on a Hero context seat', async () => {
