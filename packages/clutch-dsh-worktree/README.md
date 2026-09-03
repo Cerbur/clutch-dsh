@@ -325,6 +325,7 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 - Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
+- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Open the shared Main and Worktree options menu to copy the selected row's absolute path. Main
   and detached/removed Worktrees show only `Copy path`; active Worktrees also show `Remove
   Worktree` with a confirmation dialog.

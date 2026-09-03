@@ -28,6 +28,18 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(readme, /Main.*固定|Main.*fixed/i);
   assert.match(clientReadme, /persistent Worktree order|持久.*Worktree.*顺序/i);
   assert.match(clientReadme, /Main.*fixed|Main.*固定/i);
+  assert.match(
+    readme,
+    /Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list/i,
+  );
+  assert.match(
+    clientReadme,
+    /Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list/i,
+  );
+  assert.match(
+    readmeZh,
+    /新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头/,
+  );
   assert.match(readme, /browser-local.*expansion|expansion.*browser-local/i);
   assert.match(readme, /Session.*overflow.*transient|Session.*five-row.*refresh/i);
   assert.match(readmeZh, /浏览器本地.*展开|展开.*浏览器本地/);

@@ -565,7 +565,7 @@ export class WorktreeMutationTransaction {
             snapshot: {
               ...snapshot,
               repositoryFingerprint,
-              worktrees: [...snapshot.worktrees, record],
+              worktrees: [record, ...snapshot.worktrees],
             },
           };
         });
@@ -959,7 +959,7 @@ export class WorktreeMutationTransaction {
         snapshot: {
           ...withoutRepository,
           repositoryFingerprint: createRepositoryFingerprint(repository),
-          worktrees: existing ? snapshot.worktrees : [...snapshot.worktrees, record],
+          worktrees: existing ? snapshot.worktrees : [record, ...snapshot.worktrees],
           pendingOperation: undefined,
           ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
         },

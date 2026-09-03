@@ -99,7 +99,7 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
       }
       return {
         result: persistedRecord,
-        snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, persistedRecord] },
+        snapshot: { ...snapshot, worktrees: [persistedRecord, ...snapshot.worktrees] },
       };
     });
   }

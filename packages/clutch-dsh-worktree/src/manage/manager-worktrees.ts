@@ -315,7 +315,7 @@ export async function createWorktree(
       }
       const next: SidecarSnapshot = {
         ...snapshot,
-        worktrees: [...snapshot.worktrees, record],
+        worktrees: [record, ...snapshot.worktrees],
       };
       return { result: record, snapshot: next };
     });
@@ -416,7 +416,10 @@ export async function importWorktree(
         source: 'external',
         status: 'active',
       };
-      return { result: record, snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, record] } };
+      return {
+        result: record,
+        snapshot: { ...snapshot, worktrees: [record, ...snapshot.worktrees] },
+      };
     });
   } catch (error) {
     throw asSidecarError(error, input.workspaceId);

@@ -298,6 +298,7 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 - 在所属 Workspace 内拖动 Worktree。排序持久化在 plugin sidecar 的有序 `worktrees` 数组中；
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
+- 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
 - 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。Main 和 detached/removed Worktree
   只显示“复制路径”；active Worktree 还显示“移除 Worktree”并要求确认。
 - 导入的 Worktree 与 plugin 创建的 Worktree 显示相同的 active 选项菜单。两种来源都执行真实
