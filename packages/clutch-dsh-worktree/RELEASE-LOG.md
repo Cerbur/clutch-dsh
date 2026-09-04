@@ -4,6 +4,10 @@
 
 ### 中文
 
+#### 版本说明
+
+- 尽管本次废弃旧 DSH runtime 支持并提高最低兼容 graph 属于兼容性破坏，但 package 仍处于 0.1.x 预发布/初始阶段，因此有意以 patch 版本 `0.1.9` 承接该升级以保持预发布验证序列连续；这只是本阶段的明确例外，稳定版本仍遵循兼容性破坏使用 major 的规则。
+
 #### 新增
 
 - 适配 DSH `dsh-v0.1.2-rc.1` 的 Session/Workspace Controller、共享 Store 和 Client UI contract。
@@ -21,6 +25,10 @@
 - 删除对 `dsh-v0.1.1-rc.2` 及更早 Client runtime graph、可写 Workspace list 和 `recentWorkspaceId` 的兼容支持。
 
 ### English
+
+#### Versioning note
+
+- Although removing the legacy DSH runtime support and raising the minimum compatibility graph is a breaking change, the package is still in the 0.1.x prerelease/initial phase, so `0.1.9` intentionally carries the upgrade as a patch to keep the prerelease validation line continuous; this is an explicit phase-limited exception, and stable releases still use major for breaking compatibility.
 
 #### Added
 
