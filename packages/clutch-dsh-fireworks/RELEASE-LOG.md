@@ -6,7 +6,7 @@
 
 #### 优化
 
-- 将最低支持的 DSH 版本提升至 0.1.2-rc.2，并将 peer 依赖与 DSH 0.1.2 客户端架构对齐。
+- 将最低支持的 DSH 版本提升至 0.1.2-rc.1，并将 peer 依赖与 DSH 0.1.2 客户端架构对齐。
 - 适配 DSH 客户端拆包架构，迁移对已移除客户端运行时包的依赖，改为依赖渲染器与会话支持包。
 
 #### 修复
@@ -39,7 +39,7 @@
 
 #### Changed
 
-- Raise minimum supported DSH version to 0.1.2-rc.2 and align peer dependencies with DSH 0.1.2 client architecture.
+- Raise minimum supported DSH version to 0.1.2-rc.1 and align peer dependencies with DSH 0.1.2 client architecture.
 - Adapt to DSH client modular architecture by migrating off retired client runtime package to renderer and session packages.
 
 #### Fixed

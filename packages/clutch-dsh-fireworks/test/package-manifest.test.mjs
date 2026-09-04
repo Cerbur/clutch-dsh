@@ -31,13 +31,13 @@ test('declares an installable DSH plugin package', () => {
 test('accepts the DSH prerelease lines used by the package build', () => {
   assert.deepEqual(manifest.peerDependencies, {
     '@deepseek-ai/cordis': '4.0.1',
-    '@deepseek-ai/dsh-client-ui-layout': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-client-ui-session': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-client-ui-slots': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-session': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-session-projection': '>=0.1.2-rc.2',
-    '@deepseek-ai/dsh-tools': '>=0.1.2-rc.2',
+    '@deepseek-ai/dsh-client-ui-layout': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-session': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-slots': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-session': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-session-projection': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-tools': '>=0.1.2-rc.1',
   });
 });
 
