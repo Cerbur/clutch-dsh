@@ -1,9 +1,11 @@
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection';
+import type {} from '@deepseek-ai/dsh-tools';
 import { z } from 'zod';
 import {
   FIREWORKS_META_KIND,
   FIREWORKS_PROJECTION_KEY,
+  FIREWORKS_TOOL_NAME,
   MAX_FIREWORKS_MESSAGE_CHARS,
   type FireworksProjection,
 } from './contract/index.js';
@@ -49,14 +51,37 @@ export function applyFireworksProjection(
   state: FireworksProjection,
   event: SessionEvent,
 ): FireworksProjection {
-  if (event.type !== 'tool/result' || event.data.error !== undefined) return state;
-  const meta = parseFireworksMeta(event.data.meta);
-  if (meta === undefined) return state;
-  if (String(event.data.message.source.callId) !== meta.id) return state;
-  return {
-    id: meta.id,
-    ...(meta.message === undefined ? {} : { message: meta.message }),
-  };
+  if (event.type === 'tool/result' && event.data.error === undefined) {
+    const meta = parseFireworksMeta(event.data.meta);
+    if (meta !== undefined && String(event.data.message.source.callId) === meta.id) {
+      return {
+        id: meta.id,
+        ...(meta.message === undefined ? {} : { message: meta.message }),
+      };
+    }
+  }
+
+  if (
+    (event.type as string) === 'tool/code-dispatch' &&
+    !(event.data as { isError?: boolean })?.isError &&
+    (event.data as { name?: string })?.name === FIREWORKS_TOOL_NAME
+  ) {
+    const rawArgs = (event.data as { arguments?: unknown })?.arguments;
+    const record =
+      rawArgs !== null && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+        ? (rawArgs as Record<string, unknown>)
+        : undefined;
+    const message = normalizeFireworksMessage(record?.message);
+    const subCallId = (event.data as { subCallId?: unknown })?.subCallId;
+    if (typeof subCallId === 'string' && subCallId.length > 0) {
+      return {
+        id: subCallId,
+        ...(message === undefined ? {} : { message }),
+      };
+    }
+  }
+
+  return state;
 }
 
 type FireworksProjectionDefinition = Omit<

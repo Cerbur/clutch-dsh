@@ -82,6 +82,44 @@ test('reduces only a valid successful fireworks result', () => {
   );
 });
 
+test('reduces a valid successful fireworks code-dispatch in PTC mode', () => {
+  const initial = null;
+  const dispatchEvent = (override = {}) => ({
+    type: 'tool/code-dispatch',
+    seq: 10,
+    time: 100,
+    data: {
+      rootCallId: 'call-root',
+      parentCallId: 'call-parent',
+      subCallId: 'call-root:code:1',
+      name: FIREWORKS_TOOL_NAME,
+      arguments: { message: '  Celebration in PTC!  ' },
+      isError: false,
+      content: [{ type: 'text', text: 'Happy fireworks launched' }],
+      ...override,
+    },
+  });
+
+  const signal = applyFireworksProjection(initial, dispatchEvent());
+  assert.deepEqual(signal, { id: 'call-root:code:1', message: 'Celebration in PTC!' });
+
+  const signalNoMsg = applyFireworksProjection(initial, dispatchEvent({ arguments: {} }));
+  assert.deepEqual(signalNoMsg, { id: 'call-root:code:1' });
+
+  assert.equal(
+    applyFireworksProjection(signal, dispatchEvent({ isError: true })),
+    signal,
+  );
+  assert.equal(
+    applyFireworksProjection(signal, dispatchEvent({ name: 'bash' })),
+    signal,
+  );
+  assert.equal(
+    applyFireworksProjection(signal, dispatchEvent({ subCallId: '' })),
+    signal,
+  );
+});
+
 test('exposes the projection through the client-visible wire', () => {
   const definition = createFireworksProjectionDefinition();
 
