@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
-import type {} from './dsh-rc1-slot-contract.js';
+import type {} from './dsh-slot-contract.js';
 import type {
   PropsLocale,
   PropsRuntime,

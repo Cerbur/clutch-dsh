@@ -16,6 +16,7 @@
 - package.json.version 在实施末期从当前 0.1.8 递增到 0.1.9；不要提前修改版本，也不要在 README 中复制 package version。
 - DSH 的所有直接 peerDependencies 使用 >=0.1.2-rc.1，所有用于本地验证的 DSH devDependencies 固定为 0.1.2-rc.1。这表达“最低版本为 rc.1、未设置人为上限”，但不把未验证的未来 DSH 行为当成已验证事实。
 - 移除对 @deepseek-ai/dsh-client-runtime 的所有 import、manifest entry、测试 fixture 和文字说明；0.1.9 不再承诺兼容 0.1.1-rc.2 及更早的旧 runtime graph。
+- **版本递增例外：** 本次确实废弃旧 DSH runtime 支持并提高最低兼容 graph，按通用规则属于兼容性破坏；但 package 仍处于 0.1.x 预发布/初始阶段，因此有意保持 `0.1.9` 作为 patch 版本承接这次兼容性升级，以保持当前预发布验证序列连续。该决定是限定在这一阶段的明确例外，不改变稳定版本仍应使用 major 表达兼容性破坏的规范。
 - 不新增 @deepseek-ai/dsh-api-remotes 作为 Worktree 的直接依赖。Worktree 继续通过现有 ConnectionHandle.rpc 调用自己的 generated endpoint；Session/Workspace Controller 所需的 remotes 由 DSH profile 自己组合。
 - dsh.client.inject 只登记 rc.1 中 Worktree 直接消费的动态 Client package；@deepseek-ai/dsh-client-store 是 DSH shared baseline，不能重复登记为动态 inject。dsh.client.inject 不作为 Cordis service 的激活顺序依据。
 - 不修改 /Users/yuancheng/Documents/Code/deepseek-harness，不修改 Host/Manage/Provider 的业务数据边界，不向 DSH Project/Session 写入 Worktree 关系，不复制 transcript 或 session 内容。
@@ -72,7 +73,7 @@
 | packages/clutch-dsh-worktree/package.json | 替换 DSH dev graph、增加 rc.1 Controller/Store/UI peer、更新 dsh.client.inject、末期递增到 0.1.9 |
 | pnpm-lock.yaml | 由 workspace 根 pnpm install 根据 manifest 更新锁文件 |
 | packages/clutch-dsh-worktree/src/client/entry.ts | 新 Store/Controller/UI imports；直接使用 ctx.sessions.create 和 ctx.uiWorkspace；移除旧 Workspace writable cast |
-| packages/clutch-dsh-worktree/src/client/dsh-rc1-slot-contract.ts | 在 mixed workspace dependency graph 下收敛 rc.1 slot owner/props 的本地 type-only contract，不改变运行时 slot API |
+| packages/clutch-dsh-worktree/src/client/dsh-slot-contract.ts | 在 mixed workspace dependency graph 下收敛 slot owner/props 的本地 type-only contract，不改变运行时 slot API |
 | packages/clutch-dsh-worktree/src/client/virtual-workspace-membership.ts | 将 set-based mutation decorator 改为 getSnapshot/subscribe read projection decorator |
 | packages/clutch-dsh-worktree/src/client/view-mode.ts | 增加基于 Session updatedAt 和 Workspace createdAt 的 recent Workspace 派生，移除 recentWorkspaceId 依赖 |
 | packages/clutch-dsh-worktree/src/client/worktree-context-store.ts | 使用 rc.1 Store/Controller snapshot types，基于新的 recency helper 解析 identity |

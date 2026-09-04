@@ -297,6 +297,51 @@ test('read-only Workspace refresh notifies subscribers with the projected snapsh
   membership.dispose();
 });
 
+test('native no-op refresh does not notify projected subscribers', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const nativeSnapshot = {
+    items: [workspace('ws-one', ['native-one'])],
+    archivedSessionIds: [],
+  };
+  const nativeSubscribers = new Set();
+  const list = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe(subscriber) {
+      nativeSubscribers.add(subscriber);
+      return () => nativeSubscribers.delete(subscriber);
+    },
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+  let calls = 0;
+  list.subscribe(() => {
+    calls += 1;
+  });
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  calls = 0;
+
+  for (const subscriber of [...nativeSubscribers]) subscriber();
+
+  assert.equal(calls, 0);
+  membership.dispose();
+});
+
+test('virtual Workspace membership hides wrapper methods from enumeration', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const list = {
+    getSnapshot: () => ({ items: [] }),
+    subscribe: () => () => {},
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+
+  assert.deepEqual(Object.keys(list), []);
+  assert.deepEqual({ ...list }, {});
+  membership.dispose();
+});
+
 test('virtual Workspace membership keeps the projected snapshot identity stable between reads', async () => {
   const { createVirtualWorkspaceMembership } = await import(
     '../lib/client/virtual-workspace-membership.js',

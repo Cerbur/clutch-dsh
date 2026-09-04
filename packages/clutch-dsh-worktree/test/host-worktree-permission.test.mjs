@@ -16,6 +16,21 @@ function makeSession({ events = [], cwd = '/tmp/worktree' } = {}) {
   };
 }
 
+function makeRealDshSession({ events = [], cwd = '/tmp/worktree' } = {}) {
+  const log = [...events];
+  return {
+    id: 'session-real-dsh',
+    header: { cwd },
+    snapshotEvents() {
+      return Object.freeze([...log]);
+    },
+    append(type, data) {
+      log.push({ type, data });
+      return { type, data };
+    },
+  };
+}
+
 function makePresets({ names = [
   'workspace-write',
   'danger-full-access',
@@ -66,6 +81,36 @@ const request = {
   worktreeId: 'worktree-one',
   sessionId: 'session-one',
 };
+
+test('accepts real DSH Session structure with snapshotEvents and triggers confirmation', async () => {
+  const session = makeRealDshSession();
+  const presets = makePresets();
+  const { adapter } = createAdapter({ session, presets });
+
+  const result = await adapter.ensure(request);
+  assert.deepEqual(result, {
+    status: 'confirmation-required',
+    retryable: false,
+  });
+});
+
+test('works with DSH PermissionPresetService expecting session argument', async () => {
+  const session = makeRealDshSession();
+  const presets = makePresets();
+  presets.service.current = (arg) => {
+    if (typeof arg !== 'object' || arg === null || typeof arg.id !== 'string') {
+      throw new TypeError('Expected session instance');
+    }
+    return 'workspace-write';
+  };
+  const { adapter } = createAdapter({ session, presets });
+
+  const result = await adapter.ensure(request);
+  assert.equal(result.status, 'confirmation-required');
+
+  const confirmedResult = await adapter.ensure({ ...request, confirmed: true });
+  assert.equal(confirmedResult.status, 'full-applied');
+});
 
 test('requires confirmation before applying the named Worktree preset', async () => {
   const { adapter, session, presets } = createAdapter();

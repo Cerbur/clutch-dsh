@@ -835,6 +835,19 @@ test('routes native Workspace creation through uiWorkspace and workspaces comman
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
+test('initializes against the rc.1 read-only WorkspaceSource without requiring set', async () => {
+  let fixture;
+  await assert.doesNotReject(async () => {
+    fixture = await loadClientEntry();
+  });
+
+  assert.ok(fixture);
+  assert.equal('set' in fixture.fakeContext.workspaces.list, false);
+  assert.equal(typeof fixture.fakeContext.workspaces.list.getSnapshot, 'function');
+  assert.equal(typeof fixture.fakeContext.workspaces.list.subscribe, 'function');
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
 test('loads and disposes the Client entry through the DSH module handoff', async () => {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
@@ -1023,16 +1036,22 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   });
   ctx.provide('sessions', {
     list: {
-      getSnapshot: () => ({ current: undefined }),
+      getSnapshot: () => ({ current: undefined, byId: {} }),
       subscribe: () => () => {},
     },
     open() {},
   });
-  ctx.provide('workspaces', {
-    list: {
-      getSnapshot: () => ({ items: [] }),
-      subscribe: () => () => {},
+  let workspaceSnapshot = { items: [] };
+  const workspaceSubscribers = new Set();
+  const nativeWorkspaceList = {
+    getSnapshot: () => workspaceSnapshot,
+    subscribe(listener) {
+      workspaceSubscribers.add(listener);
+      return () => workspaceSubscribers.delete(listener);
     },
+  };
+  ctx.provide('workspaces', {
+    list: nativeWorkspaceList,
     create: async () => ({}),
     rename: async () => ({}),
     delete: async () => {},
@@ -1057,10 +1076,28 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     },
     () => null,
   );
+  const uiWorkspaceRootHook = {
+    hooks: { workspaces: ctx.workspaces.list },
+  };
+  const uiWorkspaceRootDisposer = ctx.slots.provideRoot(uiWorkspaceRootHook);
 
   try {
     const clientFiber = ctx.plugin({ inject, apply });
-    await clientFiber.await();
+    await assert.doesNotReject(() => clientFiber.await());
+    assert.strictEqual(ctx.workspaces.list, nativeWorkspaceList);
+    assert.strictEqual(uiWorkspaceRootHook.hooks.workspaces, ctx.workspaces.list);
+    assert.equal('set' in ctx.workspaces.list, false);
+    workspaceSnapshot = {
+      items: [{ workspaceId: 'ws_native', sessionIds: [] }],
+    };
+    for (const listener of [...workspaceSubscribers]) listener();
+    assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, workspaceSnapshot.items);
+    const overlay = ctx.slots.entries('shell.overlay')[0];
+    const injected = overlay.inject();
+    injected.syncSessionWorkspaces([{ workspaceId: 'ws_native', sessionId: 's_virtual' }]);
+    assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, [
+      { workspaceId: 'ws_native', sessionIds: ['s_virtual'] },
+    ]);
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 1);
@@ -1070,6 +1107,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 0);
     assert.equal(ctx.slots.entries('shell.overlay').length, 0);
   } finally {
+    uiWorkspaceRootDisposer();
     rootDisposer();
     await ctx.fiber.dispose();
   }

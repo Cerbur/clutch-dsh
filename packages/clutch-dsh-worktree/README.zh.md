@@ -71,26 +71,14 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 
 ### 兼容性与前置条件
 
-- 开发和源码验证应使用官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)
-  的干净 checkout，并跟随仓库当前默认分支。该仓库当前使用 `master` 而不是 `main`，且仍是
-  developer preview，package 和 API contract 可能变化；在向 profile 安装本 plugin 前，先完成
-  upstream 的安装和构建步骤。
-- 目标 profile（例如 `web` 或 `demo`）必须已经可以正常启动，且 plugin 必须安装到实际
-  启动 Web UI 的同一个 profile。
-- DSH Client 的最低兼容 graph 是 `dsh-v0.1.2-rc.1`。它必须提供 Session 和 Workspace
-  Controller、共享的 `@deepseek-ai/dsh-client-store`、原生 UI modules，以及
-  `@deepseek-ai/dsh-client-ui-conversation` 的 `conversation.session.header.actions` seat。
-  更早的 `dsh-v0.1.1-rc.2` graph 不在支持范围内：它使用已删除的 Client runtime 和可写的
-  Workspace list 形状，而本 plugin 已不再依赖这两者。
-- 更高版本的 DSH 只有在保持上述公开 Controller、Store、`WorkspaceSource`、Connection 和
-  Slot contract 时，才可能满足开放的 peer range；每个新的 upstream graph 仍需单独完成
-  build 和运行时验证。
-- Worktree 操作要求 Git 已安装且可在 PATH 中使用。Workspace 必须位于 Git repository 中，
-  且至少有一个初始 commit 和本地 branch。Git 可执行文件缺失时显示安装提示且不显示命令块；
-  缺少 repository、初始 commit 或本地 branch 时显示可复制的 setup 命令。插件不会执行 setup
-  或安装命令，也不会修改 Workspace 文件。
-- package 声明了可安装的 `dsh.bundle` 并提供 `cordis.patch.yml`；浏览器 UI 通过
-  `dsh.client` metadata 声明。
+兼容性事实表如下：
+
+| 组件 / Component | 最低版本 / Min Version | 说明 / Notes |
+| --- | --- | --- |
+| DSH Client | `>=0.1.2-rc.1` | 依赖 Session/Workspace Controller 及 Client Store |
+| DSH Host | `>=0.1.2-rc.1` | 依赖 Typert Gateway `/api` 协议与 subprocess capability |
+| Git | `>=2.20.0` | 要求支持 worktree 核心命令与 branch 发现 |
+| Node.js | `>=20.0.0` | 推荐使用 LTS 版本 |
 
 ## 安装
 
@@ -124,13 +112,14 @@ npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.o
 ### 准备当前 upstream DSH checkout
 
 进行源码开发或验证时，先准备 upstream checkout。当前 upstream 默认分支是 `master`；如果仓库
-未来切换默认分支，应跟随仓库的当前默认分支。
+未来切换默认分支，应跟随仓库的当前默认分支。最小 rc.1 兼容性验证路径切换到
+`dsh-v0.1.2-rc.1`：
 
 ```bash
 git clone https://github.com/deepseek-ai/deepseek-harness.git
 cd deepseek-harness
 git fetch origin
-git pull --ff-only origin master
+git checkout dsh-v0.1.2-rc.1
 pnpm install
 pnpm run build
 ```

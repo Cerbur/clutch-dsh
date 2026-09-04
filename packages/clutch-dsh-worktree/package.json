@@ -123,7 +123,6 @@
     "@deepseek-ai/dsh-client-ui-session": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-workspace": "0.1.2-rc.1",
     "@deepseek-ai/dsh-invariants": "0.1.2-rc.1",
     "@deepseek-ai/dsh-session": "0.1.2-rc.1",

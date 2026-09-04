@@ -16,7 +16,8 @@ interface PermissionEvent {
 
 interface PermissionSession {
   readonly id: string;
-  readonly events: readonly PermissionEvent[];
+  readonly events?: readonly PermissionEvent[];
+  snapshotEvents?(): readonly PermissionEvent[];
   append(type: string, data: unknown): unknown;
 }
 
@@ -27,7 +28,7 @@ interface PermissionPresetSpec {
 
 interface PermissionPresetService {
   readonly names: readonly string[];
-  current(events: readonly PermissionEvent[]): string;
+  current(sessionOrEvents: unknown): string;
   resolve(name: string): PermissionPresetSpec;
   set(session: PermissionSession, name: string): void;
 }
@@ -82,13 +83,33 @@ function hasFullThenRestriction(events: readonly PermissionEvent[]): boolean {
   return false;
 }
 
+function resolveCurrentPreset(
+  permissionPresets: PermissionPresetService | undefined,
+  session: PermissionSession,
+  events: readonly PermissionEvent[],
+): string | undefined {
+  if (permissionPresets === undefined || typeof permissionPresets.current !== 'function') {
+    return undefined;
+  }
+  try {
+    return permissionPresets.current(session);
+  } catch {
+    try {
+      return permissionPresets.current(events);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 function readCurrentState(
   session: PermissionSession,
   permissionPresets: PermissionPresetService | undefined,
   sandboxPolicy: SandboxPolicyService | undefined,
   pluginApplied: ReadonlySet<string>,
 ): WorktreePermissionCurrentState {
-  const preset = permissionPresets?.current(session.events);
+  const events = getSessionEvents(session);
+  const preset = resolveCurrentPreset(permissionPresets, session, events);
   let presetSpec: PermissionPresetSpec | undefined;
   if (preset !== undefined && preset !== 'custom') {
     try {
@@ -98,16 +119,16 @@ function readCurrentState(
     }
   }
   const sandboxMode =
-    (lastEventValue(session.events, 'sandbox/mode', 'mode') as WorktreePermissionSandboxMode | undefined) ??
+    (lastEventValue(events, 'sandbox/mode', 'mode') as WorktreePermissionSandboxMode | undefined) ??
     presetSpec?.sandbox ??
     sandboxPolicy?.defaultMode;
   const approvalPolicy =
-    (lastEventValue(session.events, 'approval/policy', 'policy') as WorktreePermissionApprovalPolicy | undefined) ??
+    (lastEventValue(events, 'approval/policy', 'policy') as WorktreePermissionApprovalPolicy | undefined) ??
     presetSpec?.approval;
   const pluginChangedThisRuntime = pluginApplied.has(session.id);
   const currentIsRestricted =
     pluginChangedThisRuntime && sandboxMode !== 'danger-full-access' ||
-    hasFullThenRestriction(session.events) ||
+    hasFullThenRestriction(events) ||
     (preset !== undefined &&
       preset !== WORKSPACE_WRITE_PRESET &&
       preset !== WORKTREE_FULL_ACCESS_PRESET &&
@@ -249,9 +270,17 @@ function isPermissionSession(value: unknown): value is PermissionSession {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
-    Array.isArray(value.events) &&
+    (typeof value.snapshotEvents === 'function' ||
+      Array.isArray(value.events)) &&
     typeof value.append === 'function'
   );
+}
+
+function getSessionEvents(session: PermissionSession): readonly PermissionEvent[] {
+  if (typeof session.snapshotEvents === 'function') {
+    return session.snapshotEvents();
+  }
+  return Array.isArray(session.events) ? session.events : [];
 }
 
 function isFullAccessState(current: WorktreePermissionCurrentState): boolean {

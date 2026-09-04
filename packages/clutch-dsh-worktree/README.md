@@ -80,28 +80,14 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 
 ### Compatibility and prerequisites
 
-- For development and source validation, use a clean checkout of the official [DeepSeek Harness
-  repository](https://github.com/deepseek-ai/deepseek-harness) on its current default branch. The
-  repository currently uses `master` rather than `main`; it is developer-preview software, so its
-  package and API contracts may change. Run the upstream install/build steps before installing
-  this plugin into that profile.
-- The target profile, such as `web` or `demo`, must already start successfully, and the plugin
-  must be installed into the same profile that launches the Web UI.
-- The minimum supported DSH Client graph is `dsh-v0.1.2-rc.1`. It must provide the Session and
-  Workspace Controllers, the shared `@deepseek-ai/dsh-client-store`, the native UI modules, and
-  the `conversation.session.header.actions` seat from `@deepseek-ai/dsh-client-ui-conversation`.
-  The preceding `dsh-v0.1.1-rc.2` graph is not supported: it has the removed Client runtime and
-  writable Workspace-list shape that this plugin no longer uses.
-- Higher DSH versions are eligible through the open-ended peer ranges only when they preserve
-  these public Controller, Store, `WorkspaceSource`, Connection, and Slot contracts; each newer
-  upstream graph still requires separate build and runtime validation.
-- Git must be installed and available on `PATH` for Worktree operations. A Workspace must be
-  inside a Git repository with an initial commit and at least one local branch. A missing Git
-  executable shows install guidance and no command block; a missing repository, initial commit,
-  or local branch shows copyable setup commands. The plugin does not run setup or installation
-  commands or modify Workspace files.
-- The package declares an installable `dsh.bundle` and provides `cordis.patch.yml`; its browser
-  UI is declared through the `dsh.client` metadata.
+The supported compatibility facts are:
+
+| Component | Min Version | Notes |
+| --- | --- | --- |
+| DSH Client | `>=0.1.2-rc.1` | Requires the Session/Workspace Controllers and Client Store |
+| DSH Host | `>=0.1.2-rc.1` | Requires the Typert Gateway `/api` protocol and subprocess capability |
+| Git | `>=2.20.0` | Requires worktree core commands and branch discovery |
+| Node.js | `>=20.0.0` | LTS is recommended |
 
 ## Installation
 
@@ -137,12 +123,13 @@ npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.o
 
 For source-based development or validation, prepare the upstream checkout first. The current
 upstream default branch is `master`; follow the repository's default branch if it changes later.
+For the minimum rc.1 compatibility validation path, check out `dsh-v0.1.2-rc.1`:
 
 ```bash
 git clone https://github.com/deepseek-ai/deepseek-harness.git
 cd deepseek-harness
 git fetch origin
-git pull --ff-only origin master
+git checkout dsh-v0.1.2-rc.1
 pnpm install
 pnpm run build
 ```
@@ -245,8 +232,8 @@ blank-session Hero. The displayed language follows DSH's current language settin
    chooses the next available numeric suffix for the name; existing names are skipped.
 3. The target Worktree path must be absolute, belong to the same Project, and differ from the
    Project root. Relative paths, a different Project, or the Project root are rejected.
-4. Git must be installed and available on `PATH`. A missing Git executable shows install guidance
-   and no command block; install Git, restart DSH, and retry. If the repository, initial commit,
+4. Git must be installed and available on `PATH`. A missing Git executable shows install guidance and no command block;
+   install Git, restart DSH, and retry. If the repository, initial commit,
    or local branch is missing, follow the copyable setup commands in the dialog. The plugin only
    renders this guidance; it does not run setup or installation commands or edit business files.
 

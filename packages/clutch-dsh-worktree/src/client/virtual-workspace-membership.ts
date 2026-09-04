@@ -93,7 +93,7 @@ export function createVirtualWorkspaceMembership<
 
   const notify = (): void => {
     if (disposed) return;
-    refreshSnapshot();
+    if (!refreshSnapshot()) return;
     for (const listener of [...listeners]) listener();
   };
 
@@ -111,13 +111,13 @@ export function createVirtualWorkspaceMembership<
 
   Object.defineProperty(list, 'getSnapshot', {
     configurable: true,
-    enumerable: true,
+    enumerable: false,
     writable: true,
     value: getSnapshot,
   });
   Object.defineProperty(list, 'subscribe', {
     configurable: true,
-    enumerable: true,
+    enumerable: false,
     writable: true,
     value: subscribe,
   });
