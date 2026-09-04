@@ -15,7 +15,14 @@ This is a plugin-only extension. It uses DSH's existing tool-result, session-pro
 
 - Registers the `happy_fireworks` agent tool.
 - Accepts no required arguments and an optional short `message` for the celebration banner.
-- Plays only after a successful direct top-level tool result; failures and cancellations stay quiet.
+- Optionally injects a system prompt guidance section (`tool:fireworks`, order 2950) via `ctx.inject(['systemPrompt'])` when the host provides the `systemPrompt` service, providing concluding-turn decision guidance; degrades gracefully when absent.
+- Documents explicit milestone triggers to encourage autonomous agent celebration:
+  1. Finishing the design or specification of a document or plan;
+  2. Completing the implementation and verification of a feature;
+  3. Resolving and verifying a complex bug;
+  4. Passing the entire test suite after a refactor or migration.
+- Enforces an explicit negative boundary against invoking the tool for trivial routine steps (such as reading a file, inspecting git status, or running an isolated check).
+- Plays only after a successful tool result or programmatic tool call dispatch (`tool/code-dispatch`); failures and cancellations stay quiet.
 - Renders a click-through full-screen overlay with 40 emoji visuals per burst, including at least
   10 🎉, 5 🌟, and 5 ✨; the remaining 20 visuals use a seeded roll from an expanded celebration
   palette.
@@ -59,7 +66,13 @@ committed, so use that local checkout flow instead of installing the package dir
 
 ## Usage
 
-An agent decides when a result is worth celebrating. A useful instruction for a manual test is:
+### Autonomous Milestone Celebration
+
+With the concrete tool description and the injected system prompt guidance section (`tool:fireworks`), agents are guided to autonomously invoke `happy_fireworks` upon reaching major milestones in concluding turns—such as completing an architecture design, delivering and verifying a feature, fixing a complex bug, or passing full verification after a refactor. Agents are explicitly instructed to avoid invoking it for trivial intermediate steps.
+
+### Manual / Prompt-Based Testing
+
+You can also explicitly instruct an agent in the prompt to trigger the celebration for testing:
 
 ```text
 After a meaningful milestone, call happy_fireworks with:
@@ -76,8 +89,8 @@ The same successful tool call in the DSH Web UI looks like this:
 ![Successful fireworks tool call in the DSH Web UI](assets/screenshots/screenshots-zh.png)
 
 The first signal already present when a session is opened is intentionally silent, so a refresh
-does not replay old celebrations. In the current DSH tool contract, nested Code Mode dispatches
-do not receive `presentationMeta`; the MVP therefore animates direct top-level calls.
+does not replay old celebrations. Celebrations trigger on both direct top-level tool results and
+programmatic tool calling (`run_code`) dispatches.
 
 To remove the plugin from a profile:
 

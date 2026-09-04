@@ -1,16 +1,19 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
-import { FIREWORKS_META_KIND, FIREWORKS_TOOL_NAME } from './contract/index.js';
+import {
+  FIREWORKS_MESSAGE_DESCRIPTION,
+  FIREWORKS_META_KIND,
+  FIREWORKS_TOOL_DESCRIPTION,
+  FIREWORKS_TOOL_NAME,
+} from './contract/index.js';
 import { normalizeFireworksMessage } from './fireworks-projection.js';
 
 export const happyFireworksTool = defineTool({
   name: FIREWORKS_TOOL_NAME,
-  description:
-    'Celebrate a major implementation milestone or another moment worth making the user happy. ' +
-    'Call this after a meaningful success. The optional message is a short phrase shown in the celebration banner.',
+  description: FIREWORKS_TOOL_DESCRIPTION,
   parameters: {
     message: {
       type: 'string',
-      description: 'Optional short congratulatory message for the user.',
+      description: FIREWORKS_MESSAGE_DESCRIPTION,
     },
   },
   output: {

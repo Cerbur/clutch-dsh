@@ -14,7 +14,14 @@
 
 - 注册 `happy_fireworks` Agent tool。
 - 没有必填参数，可选传入一段简短的 `message`，显示在庆祝横幅中。
-- 只有直接顶层 tool 成功返回后才播放，失败和取消不会触发。
+- 当宿主环境提供 `systemPrompt` 服务时，通过 `ctx.inject(['systemPrompt'])` 注册系统行为准则 section（`tool:fireworks`，order 2950），在模型收尾轮提供决策心智；宿主未提供时平滑降级。
+- 具象化四大明确触发里程碑，显式鼓励 Agent 主动调用：
+  1. 完成架构设计文档、规范或实施计划；
+  2. 完成功能特性研发与验证；
+  3. 修复并验证复杂 Bug；
+  4. 重构或迁移后全量测试套件验证通过。
+- 明确日常琐碎操作的负向边界（如单纯读取文件、检查 git 状态、执行单次检查等不触发）。
+- 只有直接顶层 tool 或代码执行分发（`tool/code-dispatch`）成功返回后才播放，失败和取消不会触发。
 - 使用 40 个 emoji 视觉元素组成可点击穿透的全屏礼花层，其中至少包含 10 个 🎉、5 个 🌟
   和 5 个 ✨；剩余 20 个从扩充后的庆祝 emoji 池中进行 seeded roll。
 - 历史回放和切换会话不会重复播放旧礼花。
@@ -56,7 +63,13 @@ DSH Web profile 及其原生 UI 必须已经可以正常启动。修改 package 
 
 ## 详细使用
 
-由 Agent 自主判断什么时刻值得庆祝。手动测试时可以使用以下指令：
+### 自主里程碑庆祝
+
+借助工具描述中的具象化触发契约以及注入的系统行为准则（System Prompt Section），Agent 会在任务收尾轮自主识别重大里程碑（例如架构设计完成、特性研发与验证通过、复杂 Bug 修复解决、重构后全量测试通过）并主动调用 `happy_fireworks` 与用户共同庆祝，同时避免在日常琐碎步骤中滥用。
+
+### 显式提示词与手动测试
+
+在调试或需要明确控制的场景下，也可以通过提示词显式要求 Agent 触发庆祝：
 
 ```text
 完成一个有意义的里程碑后，调用 happy_fireworks：
@@ -72,8 +85,7 @@ tool result 会出现在会话中，礼花层会覆盖当前选中的 session �
 ![DSH Web UI 中成功调用礼花工具](assets/screenshots/screenshots-zh.png)
 
 打开会话时如果 projection 中已经有旧信号，第一次观察会被静默记录，因此刷新页面不会
-重复播放历史礼花。当前 DSH tool contract 不会为嵌套 Code Mode dispatch 提供
-`presentationMeta`，所以 MVP 只对直接顶层调用播放动画。
+重复播放历史礼花。插件同时支持直接顶层 tool 调用以及程序代码调用（PTC / `run_code`）事件折叠。
 
 卸载 profile 中的 plugin：
 

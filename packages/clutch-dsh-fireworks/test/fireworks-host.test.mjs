@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  FIREWORKS_GUIDANCE_PROMPT,
+  FIREWORKS_GUIDANCE_SECTION_NAME,
+  FIREWORKS_GUIDANCE_SECTION_ORDER,
+  FIREWORKS_MESSAGE_DESCRIPTION,
   FIREWORKS_META_KIND,
   FIREWORKS_PROJECTION_KEY,
+  FIREWORKS_TOOL_DESCRIPTION,
   FIREWORKS_TOOL_NAME,
 } from '../lib/contract/index.js';
 import {
@@ -10,6 +15,16 @@ import {
   createFireworksProjectionDefinition,
 } from '../lib/fireworks-projection.js';
 import { apply, happyFireworksTool, inject, name } from '../lib/index.js';
+
+test('exports complete guidance and description contract constants', () => {
+  assert.equal(FIREWORKS_GUIDANCE_SECTION_NAME, 'tool:fireworks');
+  assert.equal(FIREWORKS_GUIDANCE_SECTION_ORDER, 2950);
+  assert.match(FIREWORKS_GUIDANCE_PROMPT, /major milestone/i);
+  assert.match(FIREWORKS_GUIDANCE_PROMPT, /happy_fireworks/);
+  assert.match(FIREWORKS_TOOL_DESCRIPTION, /explicitly expected and encouraged/i);
+  assert.match(FIREWORKS_TOOL_DESCRIPTION, /Do not call for trivial routine steps/i);
+  assert.match(FIREWORKS_MESSAGE_DESCRIPTION, /celebration banner/i);
+});
 
 const directExec = { callId: 'call-42' };
 
@@ -30,6 +45,11 @@ test('registers the happy_fireworks tool with no required input', async () => {
   assert.equal(name, 'clutch-dsh-fireworks');
   assert.deepEqual(inject, ['tools']);
   assert.equal(happyFireworksTool.name, FIREWORKS_TOOL_NAME);
+  assert.equal(happyFireworksTool.description, FIREWORKS_TOOL_DESCRIPTION);
+  assert.equal(
+    happyFireworksTool.parameters.properties.message.description,
+    FIREWORKS_MESSAGE_DESCRIPTION,
+  );
   assert.deepEqual(await happyFireworksTool.execute({ message: '  MVP shipped!  ' }, directExec), {
     id: 'call-42',
     message: 'MVP shipped!',
@@ -106,18 +126,9 @@ test('reduces a valid successful fireworks code-dispatch in PTC mode', () => {
   const signalNoMsg = applyFireworksProjection(initial, dispatchEvent({ arguments: {} }));
   assert.deepEqual(signalNoMsg, { id: 'call-root:code:1' });
 
-  assert.equal(
-    applyFireworksProjection(signal, dispatchEvent({ isError: true })),
-    signal,
-  );
-  assert.equal(
-    applyFireworksProjection(signal, dispatchEvent({ name: 'bash' })),
-    signal,
-  );
-  assert.equal(
-    applyFireworksProjection(signal, dispatchEvent({ subCallId: '' })),
-    signal,
-  );
+  assert.equal(applyFireworksProjection(signal, dispatchEvent({ isError: true })), signal);
+  assert.equal(applyFireworksProjection(signal, dispatchEvent({ name: 'bash' })), signal);
+  assert.equal(applyFireworksProjection(signal, dispatchEvent({ subCallId: '' })), signal);
 });
 
 test('exposes the projection through the client-visible wire', () => {
@@ -130,14 +141,21 @@ test('exposes the projection through the client-visible wire', () => {
   });
 });
 
-test('registers both the projection when available and the tool', () => {
+test('registers the projection, system prompt guidance section, and the tool', () => {
   const tools = [];
   const projections = [];
+  const promptSections = [];
   apply({
     tools: { register: (tool) => tools.push(tool) },
     inject: (deps, callback) => {
-      assert.deepEqual(deps, ['sessionProjections']);
-      callback({ sessionProjections: { register: (definition) => projections.push(definition) } });
+      if (deps.includes('sessionProjections')) {
+        callback({
+          sessionProjections: { register: (definition) => projections.push(definition) },
+        });
+      }
+      if (deps.includes('systemPrompt')) {
+        callback({ systemPrompt: { section: (section) => promptSections.push(section) } });
+      }
     },
   });
   assert.deepEqual(
@@ -147,5 +165,40 @@ test('registers both the projection when available and the tool', () => {
   assert.deepEqual(
     projections.map((definition) => definition.key),
     [FIREWORKS_PROJECTION_KEY],
+  );
+  assert.deepEqual(promptSections, [
+    {
+      name: FIREWORKS_GUIDANCE_SECTION_NAME,
+      order: FIREWORKS_GUIDANCE_SECTION_ORDER,
+      text: FIREWORKS_GUIDANCE_PROMPT,
+    },
+  ]);
+});
+
+test('operates safely when optional dependencies are absent', () => {
+  const tools = [];
+  apply({
+    tools: { register: (tool) => tools.push(tool) },
+    inject: () => {},
+  });
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    [FIREWORKS_TOOL_NAME],
+  );
+
+  const toolsWithEmptyPromptContext = [];
+  assert.doesNotThrow(() => {
+    apply({
+      tools: { register: (tool) => toolsWithEmptyPromptContext.push(tool) },
+      inject: (deps, callback) => {
+        if (deps.includes('systemPrompt')) {
+          callback({});
+        }
+      },
+    });
+  });
+  assert.deepEqual(
+    toolsWithEmptyPromptContext.map((tool) => tool.name),
+    [FIREWORKS_TOOL_NAME],
   );
 });
