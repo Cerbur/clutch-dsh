@@ -23,6 +23,7 @@
 #### 修复
 
 - 修复 Host 权限适配器在真实 DSH Session 实例下因事件属性不匹配直接判定为未验证的问题，使 Worktree Session 能够正常触发确认并应用 Full Access。
+- 修复在取消或关闭恢复期间因未捕获的中断 Promise 导致 unhandled rejection 掩盖真实加载错误的问题。
 
 #### 删除
 
@@ -49,6 +50,7 @@
 #### Fixed
 
 - Fix host permission adapter mismatch against genuine DSH Session instances, allowing Worktree Sessions to trigger confirmation and enter Full Access.
+- Prevent unhandled rejections during abort and shutdown recovery from masking fatal loader errors.
 
 #### Removed
 

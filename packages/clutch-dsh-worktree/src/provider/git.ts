@@ -238,6 +238,10 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     options: GitCommandOptions = {},
     readOnly = true,
   ): Promise<GitCommandResult> {
+    const signal = options.signal ?? this.defaultSignal;
+    if (signal?.aborted) {
+      return Promise.reject(new GitCommandError(args, cwd, '', '', null, { timedOut: false, aborted: true, outputTruncated: false }));
+    }
     return runGit(args, cwd, this.executable, this.executableArgs, {
       timeoutMs: this.timeoutMs,
       graceMs: this.graceMs,
