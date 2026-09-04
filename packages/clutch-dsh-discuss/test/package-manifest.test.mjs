@@ -22,10 +22,19 @@ test('manifest describes the atomic discuss plugin and publishes runtime resourc
     role: 'plugin',
     serviceDefinition: '@cerbur/clutch-dsh-discuss',
   });
-  assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '4.0.1');
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-commands'], '>=0.1.1-rc.2 <0.2.0-0');
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-llm'], '>=0.1.1-rc.2 <0.2.0-0');
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-skill'], '>=0.1.0-rc.8 <0.2.0-0');
+  assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '>=4.0.1 <5.0.0');
+  assert.equal(
+    manifest.peerDependencies['@deepseek-ai/dsh-commands'],
+    '>=0.1.1-rc.2 <0.2.0-0 || >=0.1.2-0 <0.2.0-0',
+  );
+  assert.equal(
+    manifest.peerDependencies['@deepseek-ai/dsh-llm'],
+    '>=0.1.1-rc.2 <0.2.0-0 || >=0.1.2-0 <0.2.0-0',
+  );
+  assert.equal(
+    manifest.peerDependencies['@deepseek-ai/dsh-skill'],
+    '>=0.1.0-rc.8 <0.2.0-0 || >=0.1.2-0 <0.2.0-0',
+  );
 });
 
 test('Cordis patch inserts the discuss plugin into the DSH bundle', async () => {

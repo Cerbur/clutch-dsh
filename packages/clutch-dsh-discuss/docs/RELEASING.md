@@ -19,12 +19,12 @@
 
 本包以当前 release lockfile 中的 DSH/Cordis API 为开发基线，并将这些能力声明为 peer dependencies：
 
-| Package                     | Constraint              |
-| --------------------------- | ----------------------- |
-| `@deepseek-ai/cordis`       | `4.0.1`                 |
-| `@deepseek-ai/dsh-commands` | `>=0.1.1-rc.2 <0.2.0-0` |
-| `@deepseek-ai/dsh-llm`      | `>=0.1.1-rc.2 <0.2.0-0` |
-| `@deepseek-ai/dsh-skill`    | `>=0.1.0-rc.8 <0.2.0-0` |
+| Package                     | Constraint                                      |
+| --------------------------- | ----------------------------------------------- |
+| `@deepseek-ai/cordis`       | `>=4.0.1 <5.0.0`                                |
+| `@deepseek-ai/dsh-commands` | `>=0.1.1-rc.2 <0.2.0-0 \|\| >=0.1.2-0 <0.2.0-0` |
+| `@deepseek-ai/dsh-llm`      | `>=0.1.1-rc.2 <0.2.0-0 \|\| >=0.1.2-0 <0.2.0-0` |
+| `@deepseek-ai/dsh-skill`    | `>=0.1.0-rc.8 <0.2.0-0 \|\| >=0.1.2-0 <0.2.0-0` |
 
 `@deepseek-ai/dsh-skill` 是 skill registry 的实际 Service Definition 包名；它提供 `ctx.skills`
 类型扩展和运行时注册服务。不要把上述 DSH package 复制为 runtime dependencies。

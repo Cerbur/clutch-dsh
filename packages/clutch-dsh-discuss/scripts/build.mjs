@@ -5,14 +5,25 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const tsc = path.join(
-  packageRoot,
-  'node_modules/.bin',
-  process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
-);
-const outputDirectory = path.resolve(packageRoot, process.env.CLUTCH_DSH_DISCUSS_OUT_DIR ?? 'lib');
+function resolveTsc() {
+  const binaryName = process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
+  const candidates = [
+    path.join(packageRoot, 'node_modules/.bin', binaryName),
+    path.join(packageRoot, '../../node_modules/.bin', binaryName),
+  ];
+  for (const candidate of candidates) {
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // continue search
+    }
+  }
+  return binaryName;
+}
 
-accessSync(tsc, constants.X_OK);
+const tsc = resolveTsc();
+const outputDirectory = path.resolve(packageRoot, process.env.CLUTCH_DSH_DISCUSS_OUT_DIR ?? 'lib');
 const result = spawnSync(
   tsc,
   ['-p', path.join(packageRoot, 'tsconfig.json'), '--outDir', outputDirectory],
