@@ -165,6 +165,10 @@ export function createWorktreeContextProjection(
       return;
     }
     const current = store.getSnapshot();
+    if (current.status === 'ready' && current.workspaceId !== identity.workspaceId) {
+      // Keep the last valid context visible until the new Workspace facts arrive.
+      return;
+    }
     if (current.status === 'ready' && current.workspaceId === identity.workspaceId) {
       store.set({
         status: 'ready',

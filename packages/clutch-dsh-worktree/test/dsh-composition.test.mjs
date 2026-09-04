@@ -225,7 +225,8 @@ test('loads the package and calls its Host Remote through the real DSH compositi
         return import(pathToFileURL(packageRequire.resolve(specifier)).href);
       },
     };
-    await host.plugin(TypertGatewayService);
+    const gatewayConfig = TypertGatewayService.Config({});
+    await host.plugin(TypertGatewayService, gatewayConfig);
     await host.loader.create({
       id: 'clutch-dsh-worktree-host',
       name: packageManifest.name,

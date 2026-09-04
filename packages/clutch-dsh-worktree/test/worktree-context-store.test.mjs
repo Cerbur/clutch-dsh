@@ -322,6 +322,67 @@ test('keeps the current context when a same-identity Session snapshot updates', 
   projection.dispose();
 });
 
+test('preserves ready context facts across native Workspace and Session updates', async () => {
+  const initialRead = deferred();
+  const replacementRead = deferred();
+  const sessions = snapshot({ current: 's1', byId: { s1: {} } });
+  const workspaces = snapshot({
+    items: [{ workspaceId: 'ws1', title: 'One', sessionIds: ['s1'] }],
+  });
+  const manager = managerWithViewReads([initialRead, replacementRead]);
+  const projection = createProjection({ sessions, workspaces, manager });
+
+  const initialRefresh = projection.refresh();
+  initialRead.resolve({
+    worktrees: [activeWorktree('feature/one', 'ws1', 'wt1')],
+    branches: [currentBranch('main')],
+    bindings: [activeBinding('s1', 'wt1', 'ws1')],
+  });
+  await initialRefresh;
+  const initialState = projection.store.getSnapshot();
+  const observed = [];
+  const unsubscribe = projection.store.subscribe(() => {
+    observed.push(projection.store.getSnapshot());
+  });
+
+  sessions.set({ current: 's1', byId: { s1: { displayTitle: 'updated' } } });
+  assert.equal(projection.store.getSnapshot().status, 'ready');
+  assert.deepEqual(projection.store.getSnapshot().value, initialState.value);
+
+  workspaces.set({
+    items: [{ workspaceId: 'ws2', title: 'Two', sessionIds: ['s1'] }],
+  });
+  assert.equal(projection.store.getSnapshot().status, 'ready');
+  assert.deepEqual(projection.store.getSnapshot().value, initialState.value);
+  assert.equal(projection.store.getSnapshot().workspaceId, initialState.workspaceId);
+
+  await new Promise((resolve) => globalThis.queueMicrotask(resolve));
+  replacementRead.resolve({
+    worktrees: [activeWorktree('feature/two', 'ws2', 'wt2')],
+    branches: [currentBranch('main')],
+    bindings: [activeBinding('s1', 'wt2', 'ws2')],
+  });
+  await new Promise((resolve) => globalThis.setImmediate(resolve));
+
+  assert.deepEqual(projection.store.getSnapshot(), {
+    status: 'ready',
+    sessionId: 's1',
+    workspaceId: 'ws2',
+    workspaceTitle: 'Two',
+    value: {
+      kind: 'worktree',
+      workspaceId: 'ws2',
+      worktreeId: 'wt2',
+      label: 'feature/two',
+      source: 'active-binding',
+    },
+  });
+  assert.equal(observed.some((state) => state.status === 'loading'), false);
+  assert.equal(observed.some((state) => state.value.kind === 'none' && state.value.reason === 'not-ready'), false);
+  unsubscribe();
+  projection.dispose();
+});
+
 test('resolves a changed Session immediately from cached Workspace facts', async () => {
   const first = deferred();
   const sessions = snapshot({ current: 's1', byId: { s1: {}, s2: {} } });
