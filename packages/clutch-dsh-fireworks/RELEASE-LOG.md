@@ -1,5 +1,19 @@
 # 发布记录
 
+## 0.1.2 — 2026-09-05
+
+### 中文
+
+#### 优化
+
+- 优化 `happy_fireworks` 工具描述及参数说明，并在 DSH 注入系统级提示词引导模型在里程碑阶段自主调用。
+- 将最低支持的 DSH 版本提升至 0.1.2-rc.1，并将 peer 依赖与 DSH 0.1.2 客户端架构对齐。
+- 适配 DSH 客户端拆包架构，迁移对已移除客户端运行时包的依赖，改为依赖渲染器与会话支持包。
+
+#### 修复
+
+- 修复在程序代码执行（PTC / `run_code`）子调用场景下投影未能折叠 `tool/code-dispatch` 事件导致 Web UI 无烟花动效的问题。
+
 ## 0.1.1 — 2026-08-30
 
 ### 中文
@@ -19,6 +33,20 @@
 - 将每次礼花扩展为 40 个视觉元素，并保证 🎉、🌟 和 ✨ 的最低数量，同时提供 seeded variety。
 
 # Release log
+
+## 0.1.2 — 2026-09-05
+
+### English
+
+#### Changed
+
+- Optimize `happy_fireworks` tool description and parameter schema, and inject system-level prompt guidance for milestone celebrations.
+- Raise minimum supported DSH version to 0.1.2-rc.1 and align peer dependencies with DSH 0.1.2 client architecture.
+- Adapt to DSH client modular architecture by migrating off retired client runtime package to renderer and session packages.
+
+#### Fixed
+
+- Fix session projection reduction for `tool/code-dispatch` events under programmatic tool execution (PTC / `run_code`) so celebrations trigger reliably.
 
 ## 0.1.1 — 2026-08-30
 

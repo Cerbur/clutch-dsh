@@ -9,7 +9,7 @@ const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'package.
 
 test('declares an installable DSH plugin package', () => {
   assert.equal(manifest.name, '@cerbur/clutch-dsh-fireworks');
-  assert.equal(manifest.version, '0.1.1');
+  assert.equal(manifest.version, '0.1.2');
   assert.deepEqual(manifest.clutchDsh, {
     plugin: '@cerbur/clutch-dsh-fireworks',
     role: 'plugin',
@@ -17,8 +17,9 @@ test('declares an installable DSH plugin package', () => {
   });
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.deepEqual(manifest.dsh.client.inject, [
-    '@deepseek-ai/dsh-client-runtime',
     '@deepseek-ai/dsh-client-ui-layout',
+    '@deepseek-ai/dsh-client-ui-renderer',
+    '@deepseek-ai/dsh-client-ui-session',
   ]);
   assert.equal(manifest.scripts.prepare, undefined);
   assert.equal(manifest.scripts.prepublishOnly, 'pnpm run build');
@@ -30,12 +31,13 @@ test('declares an installable DSH plugin package', () => {
 test('accepts the DSH prerelease lines used by the package build', () => {
   assert.deepEqual(manifest.peerDependencies, {
     '@deepseek-ai/cordis': '4.0.1',
-    '@deepseek-ai/dsh-client-runtime': '>=0.1.1-rc.2 <0.2.0-0',
-    '@deepseek-ai/dsh-client-ui-layout': '>=0.1.1-rc.2 <0.2.0-0',
-    '@deepseek-ai/dsh-client-ui-slots': '>=0.1.1-rc.2 <0.2.0-0',
-    '@deepseek-ai/dsh-session': '>=0.1.1-rc.2 <0.2.0-0',
-    '@deepseek-ai/dsh-session-projection': '>=0.1.1-rc.2 <0.2.0-0',
-    '@deepseek-ai/dsh-tools': '>=0.1.0-rc.8 <0.2.0-0',
+    '@deepseek-ai/dsh-client-ui-layout': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-session': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-slots': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-session': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-session-projection': '>=0.1.2-rc.1',
+    '@deepseek-ai/dsh-tools': '>=0.1.2-rc.1',
   });
 });
 
