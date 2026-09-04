@@ -20,6 +20,10 @@
 - 优化 binding reconciliation 与定向刷新，减少无关 Workspace 的重复读取。
 - 新建 Worktree 插入所属 Workspace 的 Worktree 列表头部并保留既有顺序。
 
+#### 修复
+
+- 修复 Host 权限适配器在真实 DSH Session 实例下因事件属性不匹配直接判定为未验证的问题，使 Worktree Session 能够正常触发确认并应用 Full Access。
+
 #### 删除
 
 - 删除对 `dsh-v0.1.1-rc.2` 及更早 Client runtime graph、可写 Workspace list 和 `recentWorkspaceId` 的兼容支持。
@@ -41,6 +45,10 @@
 - Delegate Main Session creation and Workspace directory picking to DSH's native UI Workspace service.
 - Optimize binding reconciliation and targeted refreshes to avoid unrelated Workspace reads.
 - Insert new Worktrees at the head of their Workspace list while preserving existing order.
+
+#### Fixed
+
+- Fix host permission adapter mismatch against genuine DSH Session instances, allowing Worktree Sessions to trigger confirmation and enter Full Access.
 
 #### Removed
 
