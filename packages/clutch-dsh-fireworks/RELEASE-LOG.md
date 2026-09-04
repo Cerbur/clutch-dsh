@@ -1,11 +1,12 @@
 # 发布记录
 
-## 0.1.2 — 2026-09-04
+## 0.1.2 — 2026-09-05
 
 ### 中文
 
 #### 优化
 
+- 优化 `happy_fireworks` 工具描述及参数说明，并在 DSH 注入系统级提示词引导模型在里程碑阶段自主调用。
 - 将最低支持的 DSH 版本提升至 0.1.2-rc.1，并将 peer 依赖与 DSH 0.1.2 客户端架构对齐。
 - 适配 DSH 客户端拆包架构，迁移对已移除客户端运行时包的依赖，改为依赖渲染器与会话支持包。
 
@@ -33,12 +34,13 @@
 
 # Release log
 
-## 0.1.2 — 2026-09-04
+## 0.1.2 — 2026-09-05
 
 ### English
 
 #### Changed
 
+- Optimize `happy_fireworks` tool description and parameter schema, and inject system-level prompt guidance for milestone celebrations.
 - Raise minimum supported DSH version to 0.1.2-rc.1 and align peer dependencies with DSH 0.1.2 client architecture.
 - Adapt to DSH client modular architecture by migrating off retired client runtime package to renderer and session packages.
 
