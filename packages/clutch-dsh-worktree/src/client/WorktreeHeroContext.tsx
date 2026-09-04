@@ -7,6 +7,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots';
 import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from './dsh-rc1-slot-contract.js';
 import type { WorktreeContextInjected } from './WorktreeContext.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
 import { WORKTREE_NS } from './locales.js';
@@ -181,6 +182,8 @@ export function WorktreeHeroContext({
         )}
         content={<div className={styles.contextHoverTitle}>{label}</div>}
         openDelayMs={500}
+        copyLabel={t('copy')}
+        copiedLabel={t('hover.copied')}
       />
     </span>
   );

@@ -20,10 +20,12 @@ function deferred() {
 }
 
 async function loadRuntimeClientExports() {
-  const runtimePath = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-client-runtime/client'));
-  const runtimeBundle = await readFile(runtimePath, 'utf8');
+  const rendererPath = fileURLToPath(
+    import.meta.resolve('@deepseek-ai/dsh-client-ui-renderer/client'),
+  );
+  const rendererBundle = await readFile(rendererPath, 'utf8');
   const handoffs = [];
-  new Function('window', runtimeBundle)({
+  new Function('window', rendererBundle)({
     __ModuleLoader__: {
       load(handoff) {
         handoffs.push(handoff);
@@ -31,15 +33,20 @@ async function loadRuntimeClientExports() {
     },
   });
   assert.equal(handoffs.length, 1);
-  const [cordis, slots] = await Promise.all([
+  const [cordis, react, jsxRuntime, slots] = await Promise.all([
     import('@deepseek-ai/cordis'),
+    import('react'),
+    import('react/jsx-runtime'),
     import('@deepseek-ai/dsh-client-ui-slots'),
   ]);
   return handoffs[0].factory((specifier) => {
     if (specifier === '@deepseek-ai/cordis') return cordis;
-    if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
+    if (specifier === 'react') return react;
+    if (specifier === 'react-dom') return {};
+    if (specifier === 'react-dom/client') return {};
+    if (specifier === 'react/jsx-runtime') return jsxRuntime;
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
-    throw new Error(`unexpected DSH runtime module request: ${specifier}`);
+    throw new Error(`unexpected DSH renderer module request: ${specifier}`);
   });
 }
 
@@ -166,6 +173,7 @@ test('coalesces fork binding reads across repeated Client notifications', async 
   const sessionSnapshot = {
     phase: 'ready',
     ids: ['parent-one', 'child-one', 'parent-two', 'child-two'],
+    current: 'unowned-session',
     byId: {
       'parent-one': { blank: false },
       'child-one': { blank: false, parentId: 'parent-one' },
@@ -282,6 +290,7 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
       phase: 'ready',
       ids: [],
       byId: {},
+      current: 'unowned-session',
     },
     workspaceSnapshot: {
       items: [
@@ -361,6 +370,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
     const initialSessionSnapshot = {
       phase: 'ready',
       ids: ['parent-session', 'child-session'],
+      current: 'unowned-session',
       byId: {
         'parent-session': { blank: false },
         'child-session': { blank: false, parentId: 'parent-session' },
@@ -494,6 +504,7 @@ test('does not treat browser-local Worktree membership as a Fork scope change', 
     sessionListSnapshot: {
       phase: 'ready',
       ids: ['parent-session', 'child-session'],
+      current: 'unowned-session',
       byId: {
         'parent-session': { blank: false },
         'child-session': { blank: false, parentId: 'parent-session' },
@@ -546,6 +557,7 @@ test('does not rescan bindings when Workspace order changes', async () => {
     sessionListSnapshot: {
       phase: 'ready',
       ids: ['parent-session', 'child-session'],
+      current: 'unowned-session',
       byId: {
         'parent-session': { blank: false },
         'child-session': { blank: false, parentId: 'parent-session' },
@@ -589,6 +601,7 @@ test('looks up a Fork parent only in its known owning Workspace', async () => {
     sessionListSnapshot: {
       phase: 'ready',
       ids: ['parent-one'],
+      current: 'unowned-session',
       byId: { 'parent-one': { blank: false } },
     },
     workspaceSnapshot: {
@@ -647,6 +660,7 @@ test('uses a found Fork binding when an unrelated fallback Workspace read fails'
     sessionListSnapshot: {
       phase: 'ready',
       ids: ['parent-known', 'child-known', 'parent-unknown', 'child-unknown'],
+      current: 'unowned-session',
       byId: {
         'parent-known': { blank: false },
         'child-known': { blank: false, parentId: 'parent-known' },
@@ -729,6 +743,7 @@ test('shares an overlapping direct Fork lookup with notification reconciliation'
     sessionListSnapshot: {
       phase: 'ready',
       ids: ['parent-one'],
+      current: 'unowned-session',
       byId: { 'parent-one': { blank: false } },
     },
     workspaceSnapshot: {
@@ -743,6 +758,7 @@ test('shares an overlapping direct Fork lookup with notification reconciliation'
       fixture.setSessionListSnapshot({
         phase: 'ready',
         ids: ['parent-one', 'child-one'],
+        current: 'unowned-session',
         byId: {
           'parent-one': { blank: false },
           'child-one': { blank: false, parentId: 'parent-one' },
@@ -802,6 +818,21 @@ test('routes Worktree Session creation through the browser Session connector', a
   assert.match(source, /worktreeSessionConnector\.create\(input\)/);
   assert.match(source, /worktreeSessionConnector\.dispose\(\)/);
   assert.doesNotMatch(source, /createSessionForWorktree\(\{/);
+});
+
+test('routes native Workspace creation through uiWorkspace and workspaces commands', async () => {
+  const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
+  assert.match(source, /ctx\.uiWorkspace\.pickDirectory\(\)/);
+  assert.match(source, /ctx\.uiWorkspace\.startSession\(/);
+  assert.doesNotMatch(source, /ctx\.workspaces\.pickDirectory/);
+  assert.doesNotMatch(source, /ctx\.workspaces\.startSession/);
+
+  const fixture = await loadClientEntry();
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  await overlay.createWorkspace();
+
+  assert.deepEqual(fixture.createdWorkspaces, [{ path: '/tmp/workspace-picked' }]);
+  for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
 test('loads and disposes the Client entry through the DSH module handoff', async () => {
@@ -919,8 +950,11 @@ test('declares the native Conversation package without depending on a Hero conte
     manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'),
     true,
   );
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'], '*');
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.1-rc.2');
+  assert.equal(
+    manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'],
+    '>=0.1.2-rc.1',
+  );
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.2-rc.1');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);
@@ -968,7 +1002,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   ]);
   const { SlotRegistry } = runtime;
   const { apply, inject } = handoffs[0].factory((specifier) => {
-    if (specifier === '@deepseek-ai/dsh-client-runtime/client') return runtime;
+    if (specifier === '@deepseek-ai/dsh-client-ui-renderer/client') return runtime;
     if (specifier === 'react') return react;
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
@@ -997,10 +1031,18 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({ items: [] }),
-      set() {},
       subscribe: () => () => {},
     },
+    create: async () => ({}),
+    rename: async () => ({}),
+    delete: async () => {},
+    insertBefore: async () => {},
+    insertSessionBefore: async () => ({}),
+    archiveSession: async () => {},
+  });
+  ctx.provide('uiWorkspace', {
     startSession() {},
+    pickDirectory: async () => null,
   });
   const slotsFiber = ctx.plugin(SlotRegistry);
   await slotsFiber.await();

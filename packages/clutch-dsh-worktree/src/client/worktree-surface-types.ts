@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
+import type {} from '@deepseek-ai/dsh-client-ui-session/client';
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
+import type {} from './dsh-rc1-slot-contract.js';
 import type {
   PropsLocale,
   PropsRuntime,
@@ -35,6 +42,7 @@ export interface WorkspaceLike {
   readonly path: string;
   readonly title: string;
   readonly sessionIds: readonly string[];
+  readonly createdAt: string;
 }
 
 export interface WorkspaceListLike {

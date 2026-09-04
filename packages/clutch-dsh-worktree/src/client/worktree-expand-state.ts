@@ -1,7 +1,7 @@
 import type {
-  createSnapshotStore as runtimeCreateSnapshotStore,
+  createSnapshotStore as dshCreateSnapshotStore,
   SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client';
+} from '@deepseek-ai/dsh-client-store';
 
 /** Browser-local storage identity; never sent to DSH or the plugin sidecar. */
 export const WORKTREE_EXPAND_STATE_STORAGE_KEY = 'clutch-dsh-worktree.expand-state';
@@ -27,10 +27,11 @@ export interface WorktreeExpandStateStore extends SnapshotStore<WorktreeExpandSt
 }
 
 /**
- * The public rc.8 SnapshotStore factory consumed by this browser-local state.
- * Task 3's client entry must pass the runtime `createSnapshotStore` here.
+ * The public rc.1 SnapshotStore factory consumed by this browser-local state.
+ * Client entry passes DSH's `createSnapshotStore` here so this state remains
+ * independent from the concrete DSH UI runtime.
  */
-export type SnapshotStoreFactory = typeof runtimeCreateSnapshotStore;
+export type SnapshotStoreFactory = typeof dshCreateSnapshotStore;
 
 function emptyState(): WorktreeExpandState {
   return {

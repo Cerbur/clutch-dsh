@@ -1,4 +1,4 @@
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type {
   InjectFace,
   PropsLocale,
@@ -7,6 +7,9 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots';
 import { HoverCard, IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from '@deepseek-ai/dsh-client-ui-session/client';
+import type {} from './dsh-rc1-slot-contract.js';
 import type { WorktreeSessionContext } from './worktree-context.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
 import { WORKTREE_NS } from './locales.js';
@@ -48,6 +51,8 @@ function WorktreeContextLabel({
       }
       content={<div className={styles.contextHoverTitle}>{value.label}</div>}
       openDelayMs={500}
+      copyLabel={t('copy')}
+      copiedLabel={t('hover.copied')}
     />
   );
 }

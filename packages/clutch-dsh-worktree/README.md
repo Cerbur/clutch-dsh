@@ -87,8 +87,14 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   this plugin into that profile.
 - The target profile, such as `web` or `demo`, must already start successfully, and the plugin
   must be installed into the same profile that launches the Web UI.
-- DSH Client must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
-  `conversation.session.header.actions` seat.
+- The minimum supported DSH Client graph is `dsh-v0.1.2-rc.1`. It must provide the Session and
+  Workspace Controllers, the shared `@deepseek-ai/dsh-client-store`, the native UI modules, and
+  the `conversation.session.header.actions` seat from `@deepseek-ai/dsh-client-ui-conversation`.
+  The preceding `dsh-v0.1.1-rc.2` graph is not supported: it has the removed Client runtime and
+  writable Workspace-list shape that this plugin no longer uses.
+- Higher DSH versions are eligible through the open-ended peer ranges only when they preserve
+  these public Controller, Store, `WorkspaceSource`, Connection, and Slot contracts; each newer
+  upstream graph still requires separate build and runtime validation.
 - Git must be installed and available on `PATH` for Worktree operations. A Workspace must be
   inside a Git repository with an initial commit and at least one local branch. A missing Git
   executable shows install guidance and no command block; a missing repository, initial commit,
@@ -265,9 +271,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 - Use Main's `+` to create a normal DSH Session in the Project-root view.
 - Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The
-  plugin calls the upstream runtime with `session.create({ cwd: worktreePath })`, then saves the
-  external binding and opens the Session. The browser-local `{ workspaceId, sessionId }` membership
-  projection is refreshed afterward, so the newly created Session does not briefly appear in Main.
+  plugin calls the DSH Session Controller with `ctx.sessions.create({ cwd: worktreePath })`, then
+  saves the external binding and opens the Session. The browser-local `{ workspaceId, sessionId }`
+  membership projection is refreshed afterward, so the newly created Session does not briefly
+  appear in Main.
 - The connector reuses an unarchived blank Session with the exact target cwd when possible. An
   already-bound Session opens directly; an unbound candidate is bound before projection and
   opening. Otherwise the new-Session flow is `create → bind → open → refresh`, and concurrent
@@ -431,7 +438,7 @@ it retains the marker and surfaces `WORKTREE_RECOVERY_REQUIRED` or
 also carry an opaque mutation token from the latest Worktree projection so a stale UI cannot act
 on a changed record.
 
-The Worktree session flow sends the independent Worktree cwd through the upstream DSH runtime and
+The Worktree session flow sends the independent Worktree cwd through the DSH Session Controller and
 keeps `{ workspaceId, sessionId }` as a browser-local membership projection rather than a
 persistent DSH attach. It does not modify DSH source, Session metadata, or native Workspace
 storage. The projection is replayed after native list refreshes and removed when the binding

@@ -2167,6 +2167,7 @@ export function WorktreeSurface({
             })}
         acknowledgeLabel={t('permission.fullAccessAcknowledge')}
         cancelLabel={t('dialog.cancel')}
+        closeLabel={t('dialog.close')}
         confirmLabel={t('permission.fullAccessEnable')}
         acknowledged={fullAccessAcknowledged}
         onAcknowledgedChange={setFullAccessAcknowledged}

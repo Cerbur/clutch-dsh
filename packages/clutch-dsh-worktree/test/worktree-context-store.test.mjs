@@ -178,8 +178,12 @@ test('projects the recent Workspace local branch for a Hero without a Session', 
   const projection = createProjection({
     sessions: snapshot({ current: undefined, byId: {} }),
     workspaces: snapshot({
-      recentWorkspaceId: 'ws1',
-      items: [{ workspaceId: 'ws1', title: 'CTool', sessionIds: [] }],
+      items: [{
+        workspaceId: 'ws1',
+        title: 'CTool',
+        sessionIds: [],
+        createdAt: '2026-01-02T00:00:00.000Z',
+      }],
     }),
     manager: managerWith({
       worktrees: [],

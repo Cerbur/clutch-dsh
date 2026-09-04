@@ -1,13 +1,21 @@
-import {
-  createSnapshotStore,
-  type ClientContext,
-  type SessionId,
-} from '@deepseek-ai/dsh-client-runtime/client';
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
+import type { Context } from '@deepseek-ai/cordis';
+import type { SessionId } from '@deepseek-ai/dsh-session/types';
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types';
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
+import type {
+  SessionListState,
+} from '@deepseek-ai/dsh-api-session-controller/client';
+import type {
+  WorkspaceSnapshot,
+} from '@deepseek-ai/dsh-api-workspace-controller/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
+import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
@@ -21,7 +29,6 @@ import { createWorktreeViewStore } from './view-mode-store.js';
 import { createWorktreeViewReader } from './worktree-view-read.js';
 import {
   createVirtualWorkspaceMembership,
-  type WritableWorkspaceList,
 } from './virtual-workspace-membership.js';
 import {
   createWorktreeSessionConnector,
@@ -38,6 +45,8 @@ import type {
 import type {
   WorktreePermissionNotice,
 } from './worktree-surface-types.js';
+import type { WorktreeSlotRegistry } from './dsh-rc1-slot-contract.js';
+import type {} from './dsh-rc1-slot-contract.js';
 import {
   createWorktreeSessionForkCoordinator,
   type WorktreeForkInput,
@@ -72,30 +81,8 @@ export type {
 } from './worktree-connection.js';
 export type { WorktreeViewActions, WorktreeViewMode, WorktreeViewState } from './view-mode.js';
 
-/** The current upstream runtime exposes create(), while the published Client type omits it. */
-interface WorktreeSessionCreator {
-  create(input: { cwd: string }): Promise<SessionId>;
-}
-
-interface WorkspaceListSnapshot {
-  readonly items: readonly {
-    readonly workspaceId: string;
-    readonly path: string;
-    readonly title: string;
-    readonly sessionIds: readonly string[];
-  }[];
-  readonly recentWorkspaceId?: string;
-  readonly archivedSessionIds?: readonly string[];
-}
-
-interface SessionLineageSnapshot {
-  readonly ids: readonly string[];
-  readonly byId: Readonly<Record<string, {
-    readonly blank?: boolean;
-    readonly parentId?: string;
-    readonly origin?: string;
-  } | undefined>>;
-}
+type WorkspaceListSnapshot = Pick<WorkspaceSnapshot, 'items'>;
+type SessionLineageSnapshot = Pick<SessionListState, 'ids' | 'byId'>;
 
 interface ForkableSessions {
   fork?: (input: WorktreeForkInput) => Promise<string>;
@@ -171,13 +158,19 @@ function workspaceMembershipSignature(
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
+  const locale = ctx.locale as unknown as {
+    register(
+      namespace: typeof WORKTREE_NS,
+      dictionaries: { readonly zh: typeof zh; readonly en: typeof en },
+    ): () => void;
+  };
   if (typeof document !== 'undefined') {
     ctx.effect(
       () => installWorktreePermissionIcon(document),
@@ -185,7 +178,7 @@ export function apply(ctx: ClientContext): void {
     );
   }
   ctx.effect(
-    () => ctx.locale.register(WORKTREE_NS, { zh, en }),
+    () => locale.register(WORKTREE_NS, { zh, en }),
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
@@ -206,10 +199,9 @@ export function apply(ctx: ClientContext): void {
       result.status === 'unverified';
     permissionNotice.set(visible ? { ...input, result } : undefined);
   };
-  const sessions = ctx.sessions as typeof ctx.sessions & WorktreeSessionCreator;
-  const virtualWorkspaceMembership = createVirtualWorkspaceMembership(
-    ctx.workspaces.list as unknown as WritableWorkspaceList<WorkspaceListSnapshot>,
-  );
+  const sessions = ctx.sessions;
+  const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  const virtualWorkspaceMembership = createVirtualWorkspaceMembership(ctx.workspaces.list);
   const contextProjection = createWorktreeContextProjection({
     sessions: ctx.sessions.list,
     workspaces: ctx.workspaces.list,
@@ -335,13 +327,13 @@ export function apply(ctx: ClientContext): void {
       void forkCoordinator.reconcile();
     };
     let lastWorkspaceMembershipSignature = workspaceMembershipSignature(
-      ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot,
-      ctx.sessions.list.getSnapshot() as unknown as SessionLineageSnapshot,
+      ctx.workspaces.list.getSnapshot(),
+      ctx.sessions.list.getSnapshot(),
     );
     const reconcileForkChildrenForWorkspace = (): void => {
       const nextSignature = workspaceMembershipSignature(
-        ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot,
-        ctx.sessions.list.getSnapshot() as unknown as SessionLineageSnapshot,
+        ctx.workspaces.list.getSnapshot(),
+        ctx.sessions.list.getSnapshot(),
       );
       const changed =
         nextSignature !== undefined && nextSignature !== lastWorkspaceMembershipSignature;
@@ -364,9 +356,7 @@ export function apply(ctx: ClientContext): void {
   const worktreeSessionConnector = createWorktreeSessionConnector({
     manager,
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
-    archivedSessionIds: () =>
-      (ctx.workspaces.list.getSnapshot() as unknown as WorkspaceListSnapshot).archivedSessionIds ??
-      [],
+    archivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds,
     createSession: async (input) => String(await sessions.create(input)),
     ensureSessionWorkspace,
     permission: permissionManager,
@@ -383,8 +373,8 @@ export function apply(ctx: ClientContext): void {
     'clutch-dsh-worktree: Worktree Session connector cleanup',
   );
 
-  ctx.slots.inject('conversation.session.header.actions', () =>
-    ctx.slots.register(
+  slots.inject('conversation.session.header.actions', () =>
+    slots.register(
       {
         name: 'conversation.session.header.actions',
         id: 'clutch-dsh-worktree-context-header',
@@ -396,8 +386,8 @@ export function apply(ctx: ClientContext): void {
     ),
   );
 
-  ctx.slots.inject('sidebar.footer.action', () =>
-    ctx.slots.register(
+  slots.inject('sidebar.footer.action', () =>
+    slots.register(
       {
         name: 'sidebar.footer.action',
         id: 'clutch-dsh-worktree-mode-action',
@@ -409,8 +399,8 @@ export function apply(ctx: ClientContext): void {
     ),
   );
 
-  ctx.slots.inject('shell.overlay', () =>
-    ctx.slots.register(
+  slots.inject('shell.overlay', () =>
+    slots.register(
       {
         name: 'shell.overlay',
         id: 'clutch-dsh-worktree-navigation',
@@ -434,16 +424,14 @@ export function apply(ctx: ClientContext): void {
           onPermissionNotice: reportPermissionNotice,
           permissionNotice,
           createWorkspace: async () => {
-            const workspacePath = await ctx.workspaces.pickDirectory();
+            const workspacePath = await ctx.uiWorkspace.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
           createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
           invalidateWorktreeContext: (workspaceId?: string) =>
             contextProjection.invalidate(workspaceId),
           createMainSession: (workspaceId: string) => {
-            ctx.workspaces.startSession(
-              workspaceId as Parameters<typeof ctx.workspaces.startSession>[0],
-            );
+            ctx.uiWorkspace.startSession(workspaceId as WorkspaceId);
           },
           renameWorkspace: async (workspaceId: string, title: string) => {
             await ctx.workspaces.rename(

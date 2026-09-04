@@ -77,8 +77,14 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   upstream 的安装和构建步骤。
 - 目标 profile（例如 `web` 或 `demo`）必须已经可以正常启动，且 plugin 必须安装到实际
   启动 Web UI 的同一个 profile。
-- DSH Client 必须提供原生 `@deepseek-ai/dsh-client-ui-conversation` package 及其
-  `conversation.session.header.actions` seat。
+- DSH Client 的最低兼容 graph 是 `dsh-v0.1.2-rc.1`。它必须提供 Session 和 Workspace
+  Controller、共享的 `@deepseek-ai/dsh-client-store`、原生 UI modules，以及
+  `@deepseek-ai/dsh-client-ui-conversation` 的 `conversation.session.header.actions` seat。
+  更早的 `dsh-v0.1.1-rc.2` graph 不在支持范围内：它使用已删除的 Client runtime 和可写的
+  Workspace list 形状，而本 plugin 已不再依赖这两者。
+- 更高版本的 DSH 只有在保持上述公开 Controller、Store、`WorkspaceSource`、Connection 和
+  Slot contract 时，才可能满足开放的 peer range；每个新的 upstream graph 仍需单独完成
+  build 和运行时验证。
 - Worktree 操作要求 Git 已安装且可在 PATH 中使用。Workspace 必须位于 Git repository 中，
   且至少有一个初始 commit 和本地 branch。Git 可执行文件缺失时显示安装提示且不显示命令块；
   缺少 repository、初始 commit 或本地 branch 时显示可复制的 setup 命令。插件不会执行 setup
@@ -247,10 +253,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ### 创建 Main 和 Worktree Session
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
-- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 upstream
-  runtime 调用 `session.create({ cwd: worktreePath })`，随后保存外部 binding 并打开该 Session。
-  当前浏览器内的 `{ workspaceId, sessionId }` membership projection 会在之后刷新，因此新建
-  Session 不会短暂出现在 Main 中。
+- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 DSH
+  Session Controller 调用 `ctx.sessions.create({ cwd: worktreePath })`，随后保存外部 binding
+  并打开该 Session。当前浏览器内的 `{ workspaceId, sessionId }` membership projection 会在
+  之后刷新，因此新建 Session 不会短暂出现在 Main 中。
 - 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
   会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
   新建路径执行 `create → bind → open → refresh`，同一个 Worktree 的并发点击会合并。
@@ -389,7 +395,7 @@ Host 启动时，插件会针对已知 DSH Workspace 执行一次尽力而为的
 状态。破坏性操作还可以携带最新 Worktree projection 生成的 opaque mutation token，避免
 过期 UI 对已变化的记录执行操作。
 
-Worktree Session 流程将独立的 Worktree cwd 交给 upstream DSH runtime，并将
+Worktree Session 流程将独立的 Worktree cwd 交给 DSH Session Controller，并将
 `{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
 attach。它不会修改 DSH 源码、Session metadata 或原生 Workspace 存储。native list 刷新后会
 重放 projection；binding 消失或 Client dispose 时会移除 projection。

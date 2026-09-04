@@ -22,28 +22,67 @@ export async function loadClientEntry({
   const openedSessions = [];
   const startedSessions = [];
   const createdSessions = [];
+  const createdWorkspaces = [];
   const forkCalls = [];
   const rpcCalls = [];
   const localeRegistrations = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
 
-  let workspaceSnapshot = initialWorkspaceSnapshot ?? {
+  const normalizeWorkspaceSnapshot = (snapshot) => ({
+    ...snapshot,
+    items: (Array.isArray(snapshot?.items) ? snapshot.items : []).map((workspace) => ({
+      ...workspace,
+      createdAt: workspace.createdAt ?? '2026-01-01T00:00:00.000Z',
+      updatedAt: workspace.updatedAt ?? '2026-01-01T00:00:00.000Z',
+    })),
+    archivedSessionIds: Array.isArray(snapshot?.archivedSessionIds)
+      ? snapshot.archivedSessionIds
+      : [],
+    state: snapshot?.state ?? 'idle',
+    phase: snapshot?.phase ?? 'ready',
+    error: snapshot?.error ?? null,
+  });
+
+  const normalizeSessionSnapshot = (snapshot) => ({
+    ...snapshot,
+    ids: Array.isArray(snapshot?.ids) ? snapshot.ids : [],
+    byId: snapshot?.byId !== undefined && snapshot.byId !== null
+      ? snapshot.byId
+      : {},
+    current: snapshot?.current,
+    phase: snapshot?.phase ?? 'ready',
+    subagentsByParent: snapshot?.subagentsByParent ?? {},
+    jobsBySession: snapshot?.jobsBySession ?? {},
+    currentAddress: snapshot?.currentAddress,
+  });
+
+  let workspaceSnapshot = normalizeWorkspaceSnapshot(initialWorkspaceSnapshot ?? {
     items: [
-      { workspaceId: 'workspace-current', title: 'Current', sessionIds: ['session-current'] },
+      {
+        workspaceId: 'workspace-current',
+        path: '/tmp/workspace-current',
+        title: 'Current',
+        sessionIds: ['session-current'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
     ],
-    recentWorkspaceId: 'workspace-current',
-  };
+    archivedSessionIds: [],
+    state: 'idle',
+    phase: 'ready',
+    error: null,
+  });
   const workspaceSubscribers = new Set();
   const workspaceList = {
     getSnapshot: () => workspaceSnapshot,
-    set(next) {
-      workspaceSnapshot = next;
-      for (const subscriber of workspaceSubscribers) subscriber();
-    },
     subscribe(subscriber) {
       workspaceSubscribers.add(subscriber);
       return () => workspaceSubscribers.delete(subscriber);
     },
+  };
+  const setNativeWorkspaceSnapshot = (next) => {
+    workspaceSnapshot = normalizeWorkspaceSnapshot(next);
+    for (const subscriber of workspaceSubscribers) subscriber();
   };
 
   const connectionRpc = rpc ?? {
@@ -144,7 +183,24 @@ export async function loadClientEntry({
     },
   };
 
-  let currentSessionSnapshot = sessionListSnapshot ?? { current: 'session-current' };
+  let currentSessionSnapshot = normalizeSessionSnapshot(sessionListSnapshot ?? {
+    ids: ['session-current'],
+    byId: {
+      'session-current': {
+        id: 'session-current',
+        displayTitle: 'Current',
+        running: false,
+        blank: false,
+        cwd: '/tmp/workspace-current',
+        updatedAt: 1,
+      },
+    },
+    current: 'session-current',
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  });
   const sessionSubscribers = new Set();
   const sessionList = {
     getSnapshot: () => currentSessionSnapshot,
@@ -183,6 +239,20 @@ export async function loadClientEntry({
     sessions: fakeSessions,
     workspaces: {
       list: workspaceList,
+      async create(input) {
+        createdWorkspaces.push(input);
+        return input.path;
+      },
+      async rename() {},
+      async delete() {},
+      async insertBefore() {},
+      async insertSessionBefore() {},
+      async archiveSession() {},
+    },
+    uiWorkspace: {
+      pickDirectory() {
+        return Promise.resolve('/tmp/workspace-picked');
+      },
       startSession(workspaceId) {
         startedSessions.push(workspaceId);
       },
@@ -220,7 +290,7 @@ export async function loadClientEntry({
   };
   new Function('window', clientBundle)(windowObject);
   const exports = registrations[0].factory((specifier) => {
-    if (specifier === '@deepseek-ai/dsh-client-runtime/client') {
+    if (specifier === '@deepseek-ai/dsh-client-store') {
       return { createSnapshotStore, defineStore };
     }
     if (specifier === 'react/jsx-runtime') {
@@ -241,14 +311,15 @@ export async function loadClientEntry({
     openedSessions,
     startedSessions,
     createdSessions,
+    createdWorkspaces,
     forkCalls,
     nativeFork,
     rpcCalls,
     setWorkspaceSnapshot(next) {
-      workspaceList.set(next);
+      setNativeWorkspaceSnapshot(next);
     },
     setSessionListSnapshot(next) {
-      sessionList.set(next);
+      sessionList.set(normalizeSessionSnapshot(next));
     },
   };
 }

@@ -1,12 +1,15 @@
 import type {
   ObservableSnapshot,
   SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client';
+} from '@deepseek-ai/dsh-client-store';
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
+import type { WorkspaceSnapshot as DshWorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
 
 import {
   resolveWorktreeSessionContext,
   type WorktreeSessionContext,
 } from './worktree-context.js';
+import { deriveRecentWorkspaceId, type SessionLike } from './view-mode.js';
 import {
   type WorktreeViewReader,
   toWorktreeViewError,
@@ -14,18 +17,12 @@ import {
   type WorktreeViewError,
 } from './worktree-view.js';
 
-interface SessionSnapshot {
-  readonly current?: string;
-}
+type SessionSnapshot = Pick<SessionListState, 'current' | 'byId'>;
 
-interface WorkspaceSnapshot {
-  readonly items: readonly {
-    readonly workspaceId: string;
-    readonly title: string;
-    readonly sessionIds: readonly string[];
-  }[];
-  readonly recentWorkspaceId?: string;
-}
+type WorkspaceSnapshot = Pick<
+  DshWorkspaceSnapshot,
+  'items' | 'archivedSessionIds' | 'state' | 'phase' | 'error'
+>;
 
 interface CurrentIdentity {
   readonly sessionId?: string;
@@ -82,11 +79,18 @@ function identityFrom(
   sessions: ObservableSnapshot<SessionSnapshot>,
   workspaces: ObservableSnapshot<WorkspaceSnapshot>,
 ): CurrentIdentity {
-  const sessionId = sessions.getSnapshot().current;
+  const sessionSnapshot = sessions.getSnapshot();
+  const workspaceSnapshot = workspaces.getSnapshot();
+  const sessionId = sessionSnapshot.current;
   if (sessionId === undefined) {
-    return { workspaceId: workspaces.getSnapshot().recentWorkspaceId };
+    return {
+      workspaceId: deriveRecentWorkspaceId(
+        { items: workspaceSnapshot.items },
+        sessionSnapshot.byId as Readonly<Record<string, SessionLike | undefined>>,
+      ),
+    };
   }
-  const workspace = workspaces.getSnapshot().items.find(
+  const workspace = workspaceSnapshot.items.find(
     (candidate) => candidate.sessionIds.includes(sessionId),
   );
   return { sessionId, workspaceId: workspace?.workspaceId };
