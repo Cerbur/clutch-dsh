@@ -9,7 +9,7 @@ import { HoverCard, IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primi
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
-import type {} from './dsh-rc1-slot-contract.js';
+import type {} from './dsh-slot-contract.js';
 import type { WorktreeSessionContext } from './worktree-context.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
 import { WORKTREE_NS } from './locales.js';

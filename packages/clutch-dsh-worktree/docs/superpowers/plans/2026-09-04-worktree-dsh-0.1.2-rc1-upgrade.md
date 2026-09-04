@@ -73,7 +73,7 @@
 | packages/clutch-dsh-worktree/package.json | 替换 DSH dev graph、增加 rc.1 Controller/Store/UI peer、更新 dsh.client.inject、末期递增到 0.1.9 |
 | pnpm-lock.yaml | 由 workspace 根 pnpm install 根据 manifest 更新锁文件 |
 | packages/clutch-dsh-worktree/src/client/entry.ts | 新 Store/Controller/UI imports；直接使用 ctx.sessions.create 和 ctx.uiWorkspace；移除旧 Workspace writable cast |
-| packages/clutch-dsh-worktree/src/client/dsh-rc1-slot-contract.ts | 在 mixed workspace dependency graph 下收敛 rc.1 slot owner/props 的本地 type-only contract，不改变运行时 slot API |
+| packages/clutch-dsh-worktree/src/client/dsh-slot-contract.ts | 在 mixed workspace dependency graph 下收敛 slot owner/props 的本地 type-only contract，不改变运行时 slot API |
 | packages/clutch-dsh-worktree/src/client/virtual-workspace-membership.ts | 将 set-based mutation decorator 改为 getSnapshot/subscribe read projection decorator |
 | packages/clutch-dsh-worktree/src/client/view-mode.ts | 增加基于 Session updatedAt 和 Workspace createdAt 的 recent Workspace 派生，移除 recentWorkspaceId 依赖 |
 | packages/clutch-dsh-worktree/src/client/worktree-context-store.ts | 使用 rc.1 Store/Controller snapshot types，基于新的 recency helper 解析 identity |

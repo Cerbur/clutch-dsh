@@ -7,7 +7,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots';
 import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
-import type {} from './dsh-rc1-slot-contract.js';
+import type {} from './dsh-slot-contract.js';
 import type { WorktreeContextInjected } from './WorktreeContext.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
 import { WORKTREE_NS } from './locales.js';

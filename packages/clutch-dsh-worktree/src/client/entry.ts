@@ -45,8 +45,8 @@ import type {
 import type {
   WorktreePermissionNotice,
 } from './worktree-surface-types.js';
-import type { WorktreeSlotRegistry } from './dsh-rc1-slot-contract.js';
-import type {} from './dsh-rc1-slot-contract.js';
+import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
+import type {} from './dsh-slot-contract.js';
 import {
   createWorktreeSessionForkCoordinator,
   type WorktreeForkInput,

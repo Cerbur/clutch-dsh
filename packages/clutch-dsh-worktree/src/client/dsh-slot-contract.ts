@@ -10,10 +10,10 @@ import type {
 import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client';
 
 /**
- * The rc.1 published UI packages can resolve their type-only SlotMap imports
+ * The published UI packages can resolve their type-only SlotMap imports
  * through a different pnpm peer instance when an older DSH plugin is present
  * in the workspace. Keep this small local convergence declaration tied to the
- * rc.1 package contracts used by Worktree.
+ * package contracts used by Worktree.
  */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -43,7 +43,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Narrow runtime face used at the rc.1 renderer compatibility boundary. */
+/** Narrow runtime face used at the renderer compatibility boundary. */
 export type WorktreeSlotRegistry = {
   readonly inject: (
     key: string,
