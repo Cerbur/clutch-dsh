@@ -1,32 +1,28 @@
 import type {
   ObservableSnapshot,
   SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client';
+} from '@deepseek-ai/dsh-client-store';
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
+import type { WorkspaceSnapshot as DshWorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
 
-import type { WorktreeManager } from '../contract/index.js';
 import {
   resolveWorktreeSessionContext,
   type WorktreeSessionContext,
 } from './worktree-context.js';
+import { deriveRecentWorkspaceId, type SessionLike } from './view-mode.js';
 import {
-  loadWorktreeView,
+  type WorktreeViewReader,
   toWorktreeViewError,
   type WorktreeViewData,
   type WorktreeViewError,
 } from './worktree-view.js';
 
-interface SessionSnapshot {
-  readonly current?: string;
-}
+type SessionSnapshot = Pick<SessionListState, 'current' | 'byId'>;
 
-interface WorkspaceSnapshot {
-  readonly items: readonly {
-    readonly workspaceId: string;
-    readonly title: string;
-    readonly sessionIds: readonly string[];
-  }[];
-  readonly recentWorkspaceId?: string;
-}
+type WorkspaceSnapshot = Pick<
+  DshWorkspaceSnapshot,
+  'items' | 'archivedSessionIds' | 'state' | 'phase' | 'error'
+>;
 
 interface CurrentIdentity {
   readonly sessionId?: string;
@@ -60,7 +56,7 @@ export type WorktreeContextStoreFactory = <State>(initial: State) => SnapshotSto
 export interface WorktreeContextProjectionInput {
   readonly sessions: ObservableSnapshot<SessionSnapshot>;
   readonly workspaces: ObservableSnapshot<WorkspaceSnapshot>;
-  readonly manager: WorktreeManager;
+  readonly viewReader: WorktreeViewReader;
   readonly storeFactory: WorktreeContextStoreFactory;
 }
 
@@ -83,11 +79,18 @@ function identityFrom(
   sessions: ObservableSnapshot<SessionSnapshot>,
   workspaces: ObservableSnapshot<WorkspaceSnapshot>,
 ): CurrentIdentity {
-  const sessionId = sessions.getSnapshot().current;
+  const sessionSnapshot = sessions.getSnapshot();
+  const workspaceSnapshot = workspaces.getSnapshot();
+  const sessionId = sessionSnapshot.current;
   if (sessionId === undefined) {
-    return { workspaceId: workspaces.getSnapshot().recentWorkspaceId };
+    return {
+      workspaceId: deriveRecentWorkspaceId(
+        { items: workspaceSnapshot.items },
+        sessionSnapshot.byId as Readonly<Record<string, SessionLike | undefined>>,
+      ),
+    };
   }
-  const workspace = workspaces.getSnapshot().items.find(
+  const workspace = workspaceSnapshot.items.find(
     (candidate) => candidate.sessionIds.includes(sessionId),
   );
   return { sessionId, workspaceId: workspace?.workspaceId };
@@ -111,7 +114,6 @@ export function createWorktreeContextProjection(
   let scheduleTicket = 0;
   let scheduledCompletion: ScheduledRefresh | undefined;
   let latestRefresh: Promise<void> = Promise.resolve();
-  const viewCache = new Map<string, WorktreeViewData>();
   let lastObservedIdentity: CurrentIdentity | undefined;
 
   const sameIdentity = (
@@ -162,14 +164,18 @@ export function createWorktreeContextProjection(
       });
       return;
     }
-    const cachedView = viewCache.get(identity.workspaceId);
-    if (cachedView !== undefined) {
+    const current = store.getSnapshot();
+    if (current.status === 'ready' && current.workspaceId !== identity.workspaceId) {
+      // Keep the last valid context visible until the new Workspace facts arrive.
+      return;
+    }
+    if (current.status === 'ready' && current.workspaceId === identity.workspaceId) {
       store.set({
         status: 'ready',
         ...(identity.sessionId === undefined ? {} : { sessionId: identity.sessionId }),
         workspaceId: identity.workspaceId,
         workspaceTitle: workspaceTitleFor(identity.workspaceId),
-        value: valueFrom(identity, cachedView),
+        value: current.value,
       });
       return;
     }
@@ -204,7 +210,7 @@ export function createWorktreeContextProjection(
       workspaceId: identity.workspaceId,
     };
     try {
-      const data = await loadWorktreeView(input.manager, request.workspaceId);
+      const data = await input.viewReader.read(request.workspaceId);
       if (!matchesCurrent(request, requestGeneration)) return;
       const workspace = input.workspaces.getSnapshot().items.find(
         (candidate) => candidate.workspaceId === request.workspaceId,
@@ -219,9 +225,6 @@ export function createWorktreeContextProjection(
           error: data.readiness.error,
         });
         return;
-      }
-      if (data.readiness.status === 'ready') {
-        viewCache.set(request.workspaceId, data);
       }
       store.set({
         status: 'ready',
@@ -316,6 +319,8 @@ export function createWorktreeContextProjection(
       if (disposed) return;
       const identity = identityFrom(input.sessions, input.workspaces);
       if (workspaceId !== undefined && workspaceId !== identity.workspaceId) return;
+      if (identity.workspaceId === undefined) return;
+      input.viewReader.invalidate(identity.workspaceId);
       await refresh();
       await waitForLatestRefresh(workspaceId ?? identity.workspaceId);
     },
@@ -326,7 +331,6 @@ export function createWorktreeContextProjection(
       cancelScheduledRefresh();
       unsubscribeSessions();
       unsubscribeWorkspaces();
-      viewCache.clear();
       store.set({ status: 'idle', value: notReady() });
     },
   };

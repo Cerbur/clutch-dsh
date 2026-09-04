@@ -16,6 +16,61 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
+## DSH `dsh-v0.1.2-rc.1` Client boundary
+
+The browser Consumer targets the public rc.1 Client graph. Browser-local stores import
+`createSnapshotStore` and `defineStore` from `@deepseek-ai/dsh-client-store`; the removed
+The legacy monolithic Client runtime entry is not probed or used as a fallback.
+
+The injected DSH services have deliberately separate read and command faces:
+
+- `ctx.sessions.list` is the read-only `ObservableSnapshot<SessionListState>`, while Session
+  creation, opening, and fork use `ctx.sessions.create()`, `ctx.sessions.open()`, and
+  `ctx.sessions.fork()`.
+- `ctx.workspaces.list` is the read-only `WorkspaceSource` with only `getSnapshot()` and
+  `subscribe()`. Workspace creation, rename, deletion, ordering, and archive commands use the
+  corresponding `ctx.workspaces` methods; the Consumer never performs writable-list mutation.
+- `ctx.uiWorkspace` owns cross-Controller navigation and directory UI: Main Session creation uses
+  `startSession()`, and the Workspace picker uses `pickDirectory()` before calling the native
+  Workspace Controller's `create()` command.
+
+The Client receives one identity-stable `ctx.workspaces.list` object from DSH. The browser-only
+Worktree membership projection wraps that same source's read methods, reprojects every native
+snapshot with the current sidecar bindings, and restores the original methods on disposal. It
+never writes DSH Workspace state or exposes the projection as a new Controller or transport.
+
+## Shared Worktree views and refresh scopes
+
+`worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
+per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
+It keeps one entry per Workspace and provides:
+
+- a complete Worktree/branch/binding view read, including valid non-ready Git readiness states;
+- completed-view caching and in-flight Promise sharing for the same Workspace and generation;
+- de-duplicated `readMany()` reads for an explicit ordered Workspace set; and
+- disposal that clears entries and makes late callbacks unable to repopulate the cache.
+
+Every `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
+the completed view, even when the entry is already stale. It does not cancel the existing Promise.
+The Promise may settle for cleanup, but its captured generation must still match before it can write
+the cache. This prevents an overlapping older read from replacing a newer invalidation with stale
+Worktree, branch, or binding facts. The reader owns this cache and lifecycle; Context and Surface do
+not maintain separate Manager read caches.
+
+The Surface makes refresh scope explicit. Initial entry and global retry invalidate and read the
+current Workspace set. Binding, Worktree, Session, and modal changes target the owning Workspace;
+multi-Workspace changes read only the affected set. Targeted results are merged into the current
+projection so unrelated ready Workspaces remain visible while a replacement read is pending or
+fails with a retryable target-scoped error. The modal loader adds its own callback-generation guard
+on top of the shared reader so an obsolete modal request cannot update modal state.
+
+The native Workspace listener used by Fork recovery has a separate structural signature. It tracks
+Workspace identity and membership only for Fork-related parent/child Sessions. Title, path, order,
+recency, and an ordinary Worktree Session's browser-local membership projection do not force a Fork
+binding scan; a membership change for a Fork-related Session does. This keeps normal Worktree
+Session creation from causing an unrelated global `listBindings` pass while preserving Fork
+binding recovery.
+
 ## External Worktree import
 
 The Workspace `+` action continues to open the existing Worktree dialog. Create is selected by
@@ -72,15 +127,15 @@ placement measurement stays attached to the actual chip element.
 
 ## Current upstream Session membership projection
 
-The Worktree `+` sends the Worktree `cwd` through the current upstream DSH runtime
+The Worktree `+` sends the Worktree `cwd` through the DSH Session Controller
 and keeps the Workspace membership projection browser-local. It therefore:
 
 1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
 2. binds the returned Session ID through the injected manager;
 3. opens the Session without eagerly projecting a newly created ID into native Workspace membership;
-4. refreshes the binding projection at the current upstream Workspace-list `set()` boundary so the
-   newly bound Session resolves in its Worktree view and native subscribers do not observe a raw
-   snapshot first; the projection is replayed after native list refreshes;
+4. refreshes the browser-only binding projection after binding, while the wrapped read-only source
+   reprojects each native snapshot before its subscribers observe it; the projection is replayed
+   after native list refreshes;
 5. removes the projection when the binding disappears or the Client fiber is disposed.
 
 This projection is not a persistent DSH attach and does not modify DSH source, Session
@@ -146,6 +201,7 @@ The Worktree surface is additive:
 - Session menus retain Rename/Fork/Archive and Copy session ID for ordinary Sessions. A provisional blank Session is visible only while it is the current DSH Session, uses the localized `New Session` label, and has no Session action menu; the binding remains browser/sidecar-owned even when the row is hidden. Session drag ordering is restricted to the current visual Main or Worktree group;
 - the Worktree dialog keeps Create as the default and exposes Import as a horizontal tab; Import candidates are branch-attached, non-root, unmanaged records supplied by the Host and selected through a standard dropdown, and imported records follow the same Session, binding, membership projection, opening, refresh, and recovery lifecycle as plugin-created records;
 - the browser-only Worktree Session connector coalesces concurrent creation requests per `workspaceId:worktreeId`, clears settled requests, and suppresses late projection/open callbacks after Client disposal;
+- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - each group initially shows five rows and uses Expand more/Collapse when needed;

@@ -1,5 +1,61 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.9 — 2026-09-04
+
+### 中文
+
+#### 版本说明
+
+- 尽管本次废弃旧 DSH runtime 支持并提高最低兼容 graph 属于兼容性破坏，但 package 仍处于 0.1.x 预发布/初始阶段，因此有意以 patch 版本 `0.1.9` 承接该升级以保持预发布验证序列连续；这只是本阶段的明确例外，稳定版本仍遵循兼容性破坏使用 major 的规则。
+
+#### 新增
+
+- 适配 DSH `dsh-v0.1.2-rc.1` 的 Session/Workspace Controller、共享 Store 和 Client UI contract。
+- 通过浏览器本地 Workspace membership projection 在原生 Workspace 刷新后保留 Worktree Session 归属。
+
+#### 优化
+
+- 使用 Session activity 和 Workspace creation metadata 派生最近 Workspace，并保持相同时间戳下的原生顺序。
+- 将 Main Session 创建和 Workspace 目录选择委托给 DSH 原生 UI Workspace service。
+- 优化 binding reconciliation 与定向刷新，减少无关 Workspace 的重复读取。
+- 新建 Worktree 插入所属 Workspace 的 Worktree 列表头部并保留既有顺序。
+
+#### 修复
+
+- 修复 Host 权限适配器在真实 DSH Session 实例下因事件属性不匹配直接判定为未验证的问题，使 Worktree Session 能够正常触发确认并应用 Full Access。
+- 修复在取消或关闭恢复期间因未捕获的中断 Promise 导致 unhandled rejection 掩盖真实加载错误的问题。
+
+#### 删除
+
+- 删除对 `dsh-v0.1.1-rc.2` 及更早 Client runtime graph、可写 Workspace list 和 `recentWorkspaceId` 的兼容支持。
+
+### English
+
+#### Versioning note
+
+- Although removing the legacy DSH runtime support and raising the minimum compatibility graph is a breaking change, the package is still in the 0.1.x prerelease/initial phase, so `0.1.9` intentionally carries the upgrade as a patch to keep the prerelease validation line continuous; this is an explicit phase-limited exception, and stable releases still use major for breaking compatibility.
+
+#### Added
+
+- Adapt to the DSH `dsh-v0.1.2-rc.1` Session/Workspace Controllers, shared Store, and Client UI contracts.
+- Preserve Worktree Session membership across native Workspace refreshes through a browser-local projection.
+
+#### Improved
+
+- Derive the recent Workspace from Session activity and Workspace creation metadata while retaining native order for tied timestamps.
+- Delegate Main Session creation and Workspace directory picking to DSH's native UI Workspace service.
+- Optimize binding reconciliation and targeted refreshes to avoid unrelated Workspace reads.
+- Insert new Worktrees at the head of their Workspace list while preserving existing order.
+
+#### Fixed
+
+- Fix host permission adapter mismatch against genuine DSH Session instances, allowing Worktree Sessions to trigger confirmation and enter Full Access.
+- Prevent unhandled rejections during abort and shutdown recovery from masking fatal loader errors.
+
+#### Removed
+
+- Remove compatibility with the `dsh-v0.1.1-rc.2` and earlier Client runtime graph, writable Workspace lists, and `recentWorkspaceId`.
+
 ## 0.1.8 — 2026-09-01
 
 ### 中文

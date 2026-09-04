@@ -232,6 +232,10 @@ view state 和 shell overlay。
 
 Client 不执行 Git，不读取 sidecar 文件，不导入 Provider、Manage 或 Host runtime，
 不要求 `ctx.remote.worktreeManager` 存在，也不遍历或挂载生成的 `./remote` artifact。
+在 rc.1 Client contract 中，`ctx.workspaces.list` 已由历史的可写 Store 调整为只读
+`WorkspaceSource`，只暴露 `getSnapshot()` 和 `subscribe()`。Worktree 不复制或替换该 source，
+而是在原对象上建立可撤销的只读 projection，使 native list 和 Worktree wrapper 保持同一引用；
+同时移除了旧 `dsh-client-runtime` 依赖。
 详细的 Connection、slot、overlay 和 disposal 规则见
 [`src/client/README.md`](src/client/README.md)。
 
@@ -245,6 +249,11 @@ sidecar directly.
 创建 DSH Session，binding 成功后只在浏览器内把 `{ workspaceId, sessionId }` 投影到 native
 Workspace list；native Workspace data、Host API、DSH 源码和 Session metadata 不被修改。native
 Workspace list 刷新后重放 projection，binding 消失或 Client dispose 时撤销 projection。
+
+rc.1 升级新增对 `uiWorkspace` 的导航和目录选取委托：Client 使用
+`ctx.uiWorkspace.startSession()` 与 `ctx.uiWorkspace.pickDirectory()`，而 native Workspace
+commands 仍通过 `ctx.workspaces` 调用。旧 `dsh-client-runtime` 已移除，不再作为 fallback 或
+兼容入口。
 
 Client surface 的当前约束：
 
@@ -260,6 +269,21 @@ Client surface 的当前约束：
 - Worktree health also exposes `recovery-needed` while a durable Git/sidecar operation or recovery
   issue is unresolved; this is a runtime projection and is not persisted;
 - Connection/Gateway/domain 失败必须显示 retryable error，不能伪装成空列表。
+
+Refresh scope is determined by the smallest affected identity.
+
+- A Worktree mutation or binding change updates only the affected Worktree
+  projection and refreshes at most its owning Workspace.
+- A Workspace-scoped change refreshes only the affected Workspace.
+- Context projection is invalidated only when the current Session/Workspace is affected.
+- Global refresh is reserved for initial Worktree entry, reconnect/baseline recovery,
+  explicit global retry, or a deliberately diagnosed unknown scope.
+- Targeted refreshes merge into the existing ready projection and never clear unrelated
+  Workspaces.
+- Stale-result guards are not request deduplication; equivalent in-flight targeted reads
+  must be shared.
+- The `listBindings` interface is Workspace-scoped; Worktree-level updates use a targeted
+  Workspace read plus a local Worktree merge.
 
 ## 实现与验证要求
 

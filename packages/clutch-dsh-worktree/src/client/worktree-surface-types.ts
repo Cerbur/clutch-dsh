@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
+import type {} from '@deepseek-ai/dsh-client-ui-session/client';
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
+import type {} from './dsh-slot-contract.js';
 import type {
   PropsLocale,
   PropsRuntime,
@@ -28,12 +35,14 @@ import type {
   WorktreeViewError,
   WorktreeWorkspaceView,
 } from './worktree-view.js';
+import type { WorktreeViewReader } from './worktree-view-read.js';
 
 export interface WorkspaceLike {
   readonly workspaceId: string;
   readonly path: string;
   readonly title: string;
   readonly sessionIds: readonly string[];
+  readonly createdAt: string;
 }
 
 export interface WorkspaceListLike {
@@ -54,6 +63,7 @@ export interface WorktreeSurfaceInjected {
   readonly expandState: WorktreeExpandStateStore;
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
+  readonly viewReader: WorktreeViewReader;
   readonly permission?: Pick<
     WorktreePermissionManager,
     'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
@@ -143,11 +153,23 @@ export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly views: readonly WorktreeWorkspaceView[];
   readonly error?: WorktreeViewError;
+  readonly targetError?: TargetedWorktreeReadError;
+}
+
+export type WorktreeRefreshScope =
+  | { readonly kind: 'global' }
+  | { readonly kind: 'workspace'; readonly workspaceId: string }
+  | { readonly kind: 'workspaces'; readonly workspaceIds: readonly string[] };
+
+export interface TargetedWorktreeReadError {
+  readonly workspaceIds: readonly string[];
+  readonly error: WorktreeViewError;
 }
 
 export interface RefreshOptions {
   readonly preserveCurrent?: boolean;
   readonly invalidateContext?: boolean;
+  readonly scope?: WorktreeRefreshScope;
 }
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {

@@ -191,6 +191,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     }
 
     for (const workspace of workspaces) {
+      if (this.closed || this.lifecycleController.signal.aborted) return;
       try {
         await recoverWorktrees(this.context, { workspaceId: workspace.workspaceId });
       } catch {

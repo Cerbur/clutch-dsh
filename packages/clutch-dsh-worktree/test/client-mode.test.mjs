@@ -6,6 +6,7 @@ import { openWorktreeSession } from '../lib/client/navigation.js';
 const {
   WORKTREE_VIEW_MODE_STORAGE_KEY,
   effectiveViewMode,
+  deriveRecentWorkspaceId,
   initialWorkspaceId,
   projectVirtualWorkspaceMembership,
   unboundSessionIds,
@@ -38,8 +39,18 @@ Object.defineProperty(globalThis, 'localStorage', {
   value: storage,
 });
 
-function workspace(workspaceId, sessionIds) {
-  return { workspaceId, path: `/workspace/${workspaceId}`, title: workspaceId, sessionIds };
+function workspace(
+  workspaceId,
+  sessionIds,
+  createdAt = '2026-01-01T00:00:00.000Z',
+) {
+  return {
+    workspaceId,
+    path: `/workspace/${workspaceId}`,
+    title: workspaceId,
+    sessionIds,
+    createdAt,
+  };
 }
 
 test('viewMode defaults to workspace-session and entering/exiting never changes current Session', () => {
@@ -62,10 +73,10 @@ test('viewMode defaults to workspace-session and entering/exiting never changes 
     );
     assert.deepEqual(opened, ['session-next']);
     assert.equal(store.getSnapshot().viewMode, 'worktree');
-    assert.deepEqual(fakeContext.sessions.list.getSnapshot(), { current: 'session-current' });
+    assert.equal(fakeContext.sessions.list.getSnapshot().current, 'session-current');
     store.actions.setViewMode('workspace-session');
     assert.equal(store.getSnapshot().viewMode, 'workspace-session');
-    assert.deepEqual(fakeContext.sessions.list.getSnapshot(), { current: 'session-current' });
+    assert.equal(fakeContext.sessions.list.getSnapshot().current, 'session-current');
   });
 });
 
@@ -212,61 +223,222 @@ test('virtual Worktree membership replays after native refresh and is removed on
   const { createVirtualWorkspaceMembership } = await import(
     '../lib/client/virtual-workspace-membership.js',
   );
-  let snapshot = {
+  let nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
   };
   const subscribers = new Set();
   const list = {
-    getSnapshot: () => snapshot,
-    set(next) {
-      snapshot = next;
-      for (const subscriber of subscribers) subscriber();
+    getSnapshot: () => nativeSnapshot,
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
     },
+  };
+  const publishNative = (next) => {
+    nativeSnapshot = next;
+    for (const subscriber of [...subscribers]) subscriber();
+  };
+  assert.equal('set' in list, false);
+  const membership = createVirtualWorkspaceMembership(list);
+
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, [
+    'native-one',
+    'worktree-session',
+  ]);
+
+  publishNative({ items: [workspace('ws-one', ['native-after-refresh'])] });
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, [
+    'native-after-refresh',
+    'worktree-session',
+  ]);
+
+  membership.dispose();
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['native-after-refresh']);
+  assert.equal('set' in list, false);
+});
+
+test('read-only Workspace refresh notifies subscribers with the projected snapshot', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  let nativeSnapshot = {
+    items: [workspace('ws-one', ['native-one'])],
+    archivedSessionIds: [],
+  };
+  const subscribers = new Set();
+  const list = {
+    getSnapshot: () => nativeSnapshot,
     subscribe(subscriber) {
       subscribers.add(subscriber);
       return () => subscribers.delete(subscriber);
     },
   };
   const membership = createVirtualWorkspaceMembership(list);
+  const seen = [];
+  list.subscribe(() => {
+    seen.push(list.getSnapshot());
+  });
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  seen.length = 0;
+
+  nativeSnapshot = {
+    items: [workspace('ws-one', ['native-after-refresh'])],
+    archivedSessionIds: ['archived-session'],
+  };
+  for (const subscriber of [...subscribers]) subscriber();
+
+  assert.equal(seen.length, 1);
+  assert.deepEqual(seen[0].items[0].sessionIds, [
+    'native-after-refresh',
+    'worktree-session',
+  ]);
+  assert.deepEqual(seen[0].archivedSessionIds, ['archived-session']);
+  membership.dispose();
+});
+
+test('native no-op refresh does not notify projected subscribers', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const nativeSnapshot = {
+    items: [workspace('ws-one', ['native-one'])],
+    archivedSessionIds: [],
+  };
+  const nativeSubscribers = new Set();
+  const list = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe(subscriber) {
+      nativeSubscribers.add(subscriber);
+      return () => nativeSubscribers.delete(subscriber);
+    },
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+  let calls = 0;
+  list.subscribe(() => {
+    calls += 1;
+  });
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
+  calls = 0;
+
+  for (const subscriber of [...nativeSubscribers]) subscriber();
+
+  assert.equal(calls, 0);
+  membership.dispose();
+});
+
+test('virtual Workspace membership hides wrapper methods from enumeration', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const list = {
+    getSnapshot: () => ({ items: [] }),
+    subscribe: () => () => {},
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+
+  assert.deepEqual(Object.keys(list), []);
+  assert.deepEqual({ ...list }, {});
+  membership.dispose();
+});
+
+test('virtual Workspace membership keeps the projected snapshot identity stable between reads', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const nativeSnapshot = {
+    items: [workspace('ws-one', [])],
+    archivedSessionIds: [],
+  };
+  const list = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe: () => () => {},
+  };
+  const membership = createVirtualWorkspaceMembership(list);
 
   membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
-  assert.deepEqual(snapshot.items[0].sessionIds, ['native-one', 'worktree-session']);
+  const first = list.getSnapshot();
+  const second = list.getSnapshot();
 
-  list.set({ items: [workspace('ws-one', ['native-after-refresh'])] });
-  assert.deepEqual(snapshot.items[0].sessionIds, ['native-after-refresh', 'worktree-session']);
+  assert.equal(second, first);
+  assert.equal(second.items[0], first.items[0]);
+  membership.dispose();
+});
+
+test('disposing read-only Workspace projection restores the native methods', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  let nativeSnapshot = { items: [workspace('ws-one', [])] };
+  const subscribers = new Set();
+  const list = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+  };
+  const nativeGetSnapshot = list.getSnapshot;
+  const nativeSubscribe = list.subscribe;
+  const membership = createVirtualWorkspaceMembership(list);
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'virtual' });
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['virtual']);
 
   membership.dispose();
-  assert.deepEqual(snapshot.items[0].sessionIds, ['native-after-refresh']);
+  membership.dispose();
+  assert.equal(list.getSnapshot, nativeGetSnapshot);
+  assert.equal(list.subscribe, nativeSubscribe);
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, []);
+  nativeSnapshot = { items: [workspace('ws-one', ['native-after-dispose'])] };
+  for (const subscriber of [...subscribers]) subscriber();
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['native-after-dispose']);
+});
+
+test('sync removes a virtual Session without changing native Workspace state', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const nativeSnapshot = { items: [workspace('ws-one', ['native-one'])] };
+  const subscribers = new Set();
+  const list = {
+    getSnapshot: () => nativeSnapshot,
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+  };
+  const membership = createVirtualWorkspaceMembership(list);
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'virtual' });
+  membership.sync([]);
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['native-one']);
+  assert.equal('set' in list, false);
+  membership.dispose();
 });
 
 test('native Workspace refresh publishes the projected membership atomically', async () => {
   const { createVirtualWorkspaceMembership } = await import(
     '../lib/client/virtual-workspace-membership.js',
   );
-  let snapshot = {
+  let nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
   };
   const subscribers = new Set();
   const list = {
-    getSnapshot: () => snapshot,
-    set(next) {
-      snapshot = next;
-      for (const subscriber of [...subscribers]) subscriber();
-    },
+    getSnapshot: () => nativeSnapshot,
     subscribe(subscriber) {
       subscribers.add(subscriber);
       return () => subscribers.delete(subscriber);
     },
   };
+  const membership = createVirtualWorkspaceMembership(list);
   const seen = [];
   list.subscribe(() => {
-    seen.push([...snapshot.items[0].sessionIds]);
+    seen.push([...list.getSnapshot().items[0].sessionIds]);
   });
-  const membership = createVirtualWorkspaceMembership(list);
-
   membership.ensure({ workspaceId: 'ws-one', sessionId: 'worktree-session' });
   seen.length = 0;
-  list.set({ items: [workspace('ws-one', ['native-after-refresh'])] });
+  nativeSnapshot = { items: [workspace('ws-one', ['native-after-refresh'])] };
+  for (const subscriber of [...subscribers]) subscriber();
 
   assert.deepEqual(seen, [['native-after-refresh', 'worktree-session']]);
   membership.dispose();
@@ -305,31 +477,118 @@ test('Main follows the selected Workspace membership before removing Worktree-bo
 test('virtual Workspace membership preserves native entries and can be removed', () => {
   const snapshot = {
     items: [workspace('ws-one', ['native-one']), workspace('ws-two', ['native-two'])],
-    recentWorkspaceId: 'ws-one',
   };
 
   const bindings = [{ workspaceId: 'ws-one', sessionId: 'worktree-session' }];
   const projected = projectVirtualWorkspaceMembership(snapshot, [], bindings);
   assert.deepEqual(projected.items[0].sessionIds, ['native-one', 'worktree-session']);
-  assert.equal(projected.recentWorkspaceId, 'ws-one');
 
   const restored = projectVirtualWorkspaceMembership(projected, bindings, []);
   assert.deepEqual(restored.items[0].sessionIds, ['native-one']);
   assert.deepEqual(restored.items[1].sessionIds, ['native-two']);
 });
 
-test('initial Workspace follows the current Session, then the recent DSH Workspace', () => {
+test('initial Workspace follows the current Session, then rc.1 Session recency', () => {
   const workspaces = {
-    items: [workspace('ws-current', ['session-current']), workspace('ws-recent', [])],
-    recentWorkspaceId: 'ws-recent',
+    items: [
+      workspace('ws-current', ['session-current']),
+      workspace('ws-recent', [], '2026-01-02T00:00:00.000Z'),
+    ],
   };
-  assert.equal(initialWorkspaceId(workspaces, { current: 'session-current' }), 'ws-current');
-  assert.equal(initialWorkspaceId(workspaces, { current: undefined }), 'ws-recent');
+  assert.equal(
+    initialWorkspaceId(workspaces, {
+      current: 'session-current',
+      byId: { 'session-current': { updatedAt: 100 } },
+    }),
+    'ws-current',
+  );
+  assert.equal(
+    initialWorkspaceId(workspaces, {
+      current: undefined,
+      byId: { 'session-current': { updatedAt: 100 } },
+    }),
+    'ws-recent',
+  );
   assert.equal(
     initialWorkspaceId(
-      { items: [workspace('ws-other', [])], recentWorkspaceId: undefined },
-      { current: 'missing-session' },
+      { items: [workspace('ws-other', [])] },
+      { current: 'missing-session', byId: {} },
     ),
     'ws-other',
+  );
+});
+
+test('rc.1 Workspace recency prefers the latest Session metadata', () => {
+  const workspaces = {
+    items: [
+      workspace('ws-one', ['s-one'], '2026-01-01T00:00:00.000Z'),
+      workspace('ws-two', ['s-two'], '2026-01-01T00:00:00.000Z'),
+    ],
+  };
+  assert.equal(
+    deriveRecentWorkspaceId(workspaces, {
+      's-one': { updatedAt: 10 },
+      's-two': { updatedAt: 20 },
+    }),
+    'ws-two',
+  );
+});
+
+test('rc.1 Workspace recency falls back to Workspace creation metadata', () => {
+  assert.equal(
+    deriveRecentWorkspaceId(
+      {
+        items: [
+          workspace('ws-old', [], '2026-01-01T00:00:00.000Z'),
+          workspace('ws-new', [], '2026-01-02T00:00:00.000Z'),
+        ],
+      },
+      {},
+    ),
+    'ws-new',
+  );
+});
+
+test('rc.1 Workspace recency keeps host order when timestamps tie or are absent', () => {
+  assert.equal(
+    deriveRecentWorkspaceId(
+      {
+        items: [
+          workspace('ws-first', ['s-first']),
+          workspace('ws-second', ['s-second']),
+        ],
+      },
+      {
+        's-first': { updatedAt: 30 },
+        's-second': { updatedAt: 30 },
+      },
+    ),
+    'ws-first',
+  );
+  assert.equal(
+    initialWorkspaceId(
+      {
+        items: [
+          workspace('ws-first', [], 'not-a-date'),
+          workspace('ws-second', [], 'also-not-a-date'),
+        ],
+      },
+      { current: undefined, byId: {} },
+    ),
+    'ws-first',
+  );
+});
+
+test('Workspace membership projection requires an extensible native source', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/virtual-workspace-membership.js',
+  );
+  const list = Object.preventExtensions({
+    getSnapshot: () => ({ items: [] }),
+    subscribe: () => () => {},
+  });
+  assert.throws(
+    () => createVirtualWorkspaceMembership(list),
+    /Workspace membership projection requires an extensible WorkspaceSource/,
   );
 });

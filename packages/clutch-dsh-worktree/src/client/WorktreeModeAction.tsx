@@ -1,5 +1,6 @@
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type {} from './dsh-slot-contract.js';
 import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { WORKTREE_NS } from './locales.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';

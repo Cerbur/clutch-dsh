@@ -62,8 +62,13 @@ export function unboundSessionIds(
  * `previousBindings` are removed first so the same function can also undo a
  * projection after a binding is deleted or the plugin is disposed.
  */
+interface WorkspaceMembershipLike {
+  readonly workspaceId: string;
+  readonly sessionIds: readonly string[];
+}
+
 export function projectVirtualWorkspaceMembership<
-  T extends { readonly items: readonly WorkspaceLike[] },
+  T extends { readonly items: readonly WorkspaceMembershipLike[] },
 >(
   snapshot: T,
   previousBindings: readonly VirtualWorkspaceBinding[],
@@ -99,23 +104,64 @@ export function projectVirtualWorkspaceMembership<
   return { ...snapshot, items } as T;
 }
 
-interface WorkspaceLike {
+export interface WorkspaceLike {
   readonly workspaceId: string;
   readonly sessionIds: readonly string[];
+  readonly createdAt: string;
 }
 
-interface WorkspaceListLike {
+export interface WorkspaceListLike {
   readonly items: readonly WorkspaceLike[];
-  readonly recentWorkspaceId?: string;
 }
 
-interface SessionListLike {
+export interface SessionLike {
+  readonly updatedAt?: number;
+}
+
+export interface SessionListLike {
   readonly current?: string;
+  readonly byId: Readonly<Record<string, SessionLike | undefined>>;
+}
+
+function validTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function createdAtTimestamp(createdAt: string): number | undefined {
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+/**
+ * Derive the most recent Workspace from rc.1 Session/Workspace metadata.
+ * Host order is retained when timestamps tie, so equal activity never causes
+ * the native Workspace order to oscillate.
+ */
+export function deriveRecentWorkspaceId(
+  workspaces: WorkspaceListLike,
+  sessionsById: Readonly<Record<string, SessionLike | undefined>>,
+): string | undefined {
+  let recentWorkspaceId: string | undefined;
+  let recentTimestamp = Number.NEGATIVE_INFINITY;
+  for (const workspace of workspaces.items) {
+    let workspaceTimestamp: number | undefined;
+    for (const sessionId of workspace.sessionIds) {
+      const updatedAt = sessionsById[sessionId]?.updatedAt;
+      if (validTimestamp(updatedAt)) {
+        workspaceTimestamp = Math.max(workspaceTimestamp ?? updatedAt, updatedAt);
+      }
+    }
+    workspaceTimestamp ??= createdAtTimestamp(workspace.createdAt);
+    if (workspaceTimestamp === undefined || workspaceTimestamp <= recentTimestamp) continue;
+    recentWorkspaceId = workspace.workspaceId;
+    recentTimestamp = workspaceTimestamp;
+  }
+  return recentWorkspaceId;
 }
 
 /**
  * Select the initial Worktree surface Workspace without navigating DSH:
- * current Session membership wins, then DSH recency, then the first available
+ * current Session membership wins, then derived DSH recency, then the first available
  * Workspace keeps the surface usable in an empty/reconnecting fixture.
  */
 export function initialWorkspaceId(
@@ -129,11 +175,7 @@ export function initialWorkspaceId(
     );
     if (currentWorkspace !== undefined) return currentWorkspace.workspaceId;
   }
-  if (
-    workspaces.recentWorkspaceId !== undefined &&
-    workspaces.items.some((workspace) => workspace.workspaceId === workspaces.recentWorkspaceId)
-  ) {
-    return workspaces.recentWorkspaceId;
-  }
+  const recentWorkspaceId = deriveRecentWorkspaceId(workspaces, sessions.byId);
+  if (recentWorkspaceId !== undefined) return recentWorkspaceId;
   return workspaces.items[0]?.workspaceId;
 }

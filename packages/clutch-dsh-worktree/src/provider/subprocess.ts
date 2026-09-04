@@ -197,6 +197,7 @@ function abortReason(signal: AbortSignal, fallback: string): unknown {
 }
 
 async function awaitWithAbort<Value>(promise: PromiseLike<Value>, signal: AbortSignal): Promise<Value> {
+  Promise.resolve(promise).catch(() => {});
   if (signal.aborted) throw abortReason(signal, 'Git subprocess was aborted');
 
   let onAbort: (() => void) | undefined;
@@ -323,6 +324,10 @@ async function runWithSubprocess(
 ): Promise<GitCommandResult> {
   const deadline = createDeadline(options.timeoutMs, options.signal);
   const environment = gitEnvironment(options.readOnly);
+  if (deadline.signal.aborted) {
+    deadline.dispose();
+    throw new GitCommandError(args, cwd, '', '', null, { timedOut: false, aborted: true, outputTruncated: false, processTreeDidNotExit: false });
+  }
   let handle: SubprocessHandle | undefined;
   let treeSettled = false;
 
@@ -417,6 +422,9 @@ async function runWithNode(
   executableArgs: readonly string[],
   options: GitRunnerOptions,
 ): Promise<GitCommandResult> {
+  if (options.signal?.aborted) {
+    throw new GitCommandError(args, cwd, '', '', null, { timedOut: false, aborted: true, outputTruncated: false });
+  }
   const environment = gitEnvironment(options.readOnly);
   try {
     const result = await execFile(executable, [...executableArgs, ...args], {

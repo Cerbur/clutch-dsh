@@ -3,10 +3,11 @@ import {
   type VirtualWorkspaceBinding,
 } from './view-mode.js';
 
-/** The writable face of DSH's in-memory Workspace list store. */
-export interface WritableWorkspaceList<T extends { readonly items: readonly unknown[] }> {
+/** The read-only snapshot face published by DSH's Workspace Controller. */
+export interface WorkspaceSnapshotSource<
+  T extends { readonly items: readonly unknown[] },
+> {
   getSnapshot(): T;
-  set(next: T): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -26,90 +27,124 @@ function normalizeBindings(bindings: readonly VirtualWorkspaceBinding[]): Virtua
   return [...bySession.values()];
 }
 
-function sameWorkspaceItems<T extends { readonly items: readonly unknown[] }>(
-  left: T,
-  right: T,
+function sameBindings(
+  left: readonly VirtualWorkspaceBinding[],
+  right: readonly VirtualWorkspaceBinding[],
 ): boolean {
-  if (left.items.length !== right.items.length) return false;
-  return left.items.every((item, index) => {
-    const other = right.items[index];
-    if (item === other) return true;
-    if (
-      typeof item !== 'object' ||
-      item === null ||
-      typeof other !== 'object' ||
-      other === null ||
-      !('workspaceId' in item) ||
-      !('workspaceId' in other) ||
-      !('sessionIds' in item) ||
-      !('sessionIds' in other)
-    ) {
-      return false;
-    }
-    const leftSessionIds = item.sessionIds;
-    const rightSessionIds = other.sessionIds;
-    return (
-      item.workspaceId === other.workspaceId &&
-      Array.isArray(leftSessionIds) &&
-      Array.isArray(rightSessionIds) &&
-      leftSessionIds.length === rightSessionIds.length &&
-      leftSessionIds.every((sessionId, sessionIndex) => sessionId === rightSessionIds[sessionIndex])
-    );
+  return left.length === right.length && left.every((binding, index) => {
+    const other = right[index];
+    return binding.workspaceId === other.workspaceId && binding.sessionId === other.sessionId;
   });
 }
 
+type WorkspaceSnapshotWithItems = {
+  readonly items: readonly {
+    readonly workspaceId: string;
+    readonly sessionIds: readonly string[];
+  }[];
+};
+
 /**
- * Maintains a re-playable in-memory overlay over DSH's Workspace list. Native
- * refreshes are observed and the current sidecar bindings are applied again;
- * no DSH Host mutation or persistence is involved.
+ * Decorate DSH's read-only WorkspaceSource with a browser-local membership
+ * projection. The source's native model is never written: the wrapper keeps
+ * the current sidecar bindings in memory, reprojects every native snapshot,
+ * and publishes only the projected view to subscribers.
  */
 export function createVirtualWorkspaceMembership<
-  T extends {
-    readonly items: readonly {
-      readonly workspaceId: string;
-      readonly sessionIds: readonly string[];
-    }[];
-  },
->(list: WritableWorkspaceList<T>): VirtualWorkspaceMembership {
+  T extends WorkspaceSnapshotWithItems,
+>(list: WorkspaceSnapshotSource<T>): VirtualWorkspaceMembership {
+  if (!Object.isExtensible(list)) {
+    throw new Error('Workspace membership projection requires an extensible WorkspaceSource');
+  }
+
+  const nativeGetSnapshot = list.getSnapshot.bind(list);
+  const nativeSubscribe = list.subscribe.bind(list);
+  const originalGetSnapshot = Object.getOwnPropertyDescriptor(list, 'getSnapshot');
+  const originalSubscribe = Object.getOwnPropertyDescriptor(list, 'subscribe');
+  const listeners = new Set<() => void>();
   let bindings: readonly VirtualWorkspaceBinding[] = [];
+  let nativeSnapshot = nativeGetSnapshot();
+  let projectedSnapshot = projectVirtualWorkspaceMembership(
+    nativeSnapshot,
+    [],
+    bindings,
+  );
   let disposed = false;
-  let applying = false;
-  const nativeSet = list.set;
 
-  const write = (next: T): void => {
-    applying = true;
-    try {
-      nativeSet(next);
-    } finally {
-      applying = false;
-    }
+  const project = (
+    nextNativeSnapshot: T,
+    previousBindings: readonly VirtualWorkspaceBinding[],
+    nextBindings: readonly VirtualWorkspaceBinding[],
+  ): T => projectVirtualWorkspaceMembership(
+    nextNativeSnapshot,
+    previousBindings,
+    nextBindings,
+  );
+
+  const refreshSnapshot = (): boolean => {
+    const nextNativeSnapshot = nativeGetSnapshot();
+    if (nextNativeSnapshot === nativeSnapshot) return false;
+    nativeSnapshot = nextNativeSnapshot;
+    const nextProjectedSnapshot = project(nextNativeSnapshot, bindings, bindings);
+    const changed = nextProjectedSnapshot !== projectedSnapshot;
+    projectedSnapshot = nextProjectedSnapshot;
+    return changed;
   };
 
-  // The current upstream DSH publishes Workspace baselines through `set()`. Decorate that
-  // browser-local write seam so native subscribers receive the projection in
-  // the same notification instead of observing a raw snapshot first.
-  list.set = (next: T): void => {
-    write(projectVirtualWorkspaceMembership(next, bindings, bindings));
+  const notify = (): void => {
+    if (disposed) return;
+    if (!refreshSnapshot()) return;
+    for (const listener of [...listeners]) listener();
   };
 
-  const apply = (nextBindings: readonly VirtualWorkspaceBinding[]): void => {
-    const current = list.getSnapshot();
-    const next = projectVirtualWorkspaceMembership(current, bindings, nextBindings);
-    if (sameWorkspaceItems(current, next)) return;
-    write(next);
+  const getSnapshot = (): T => {
+    if (disposed) return nativeGetSnapshot();
+    refreshSnapshot();
+    return projectedSnapshot as T;
   };
 
-  const replay = (): void => {
-    if (disposed || applying) return;
-    apply(bindings);
+  const subscribe = (listener: () => void): (() => void) => {
+    if (disposed) return () => undefined;
+    listeners.add(listener);
+    return () => listeners.delete(listener);
   };
-  const unsubscribe = list.subscribe(replay);
+
+  Object.defineProperty(list, 'getSnapshot', {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: getSnapshot,
+  });
+  Object.defineProperty(list, 'subscribe', {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: subscribe,
+  });
+  const unsubscribeNative = nativeSubscribe(notify);
 
   const sync = (nextBindings: readonly VirtualWorkspaceBinding[]): void => {
     if (disposed) return;
     const normalized = normalizeBindings(nextBindings);
-    apply(normalized);
+    if (sameBindings(bindings, normalized)) return;
+    const previousBindings = bindings;
     bindings = normalized;
+    nativeSnapshot = nativeGetSnapshot();
+    const previousProjectedSnapshot = projectedSnapshot;
+    projectedSnapshot = project(nativeSnapshot, previousBindings, bindings);
+    if (projectedSnapshot === previousProjectedSnapshot) return;
+    for (const listener of [...listeners]) listener();
+  };
+
+  const restoreMethod = (
+    name: 'getSnapshot' | 'subscribe',
+    descriptor: PropertyDescriptor | undefined,
+  ): void => {
+    if (descriptor === undefined) {
+      delete (list as unknown as Record<string, unknown>)[name];
+      return;
+    }
+    Object.defineProperty(list, name, descriptor);
   };
 
   return {
@@ -131,11 +166,14 @@ export function createVirtualWorkspaceMembership<
     },
     dispose() {
       if (disposed) return;
-      apply([]);
       bindings = [];
+      projectedSnapshot = nativeGetSnapshot();
       disposed = true;
-      unsubscribe();
-      list.set = nativeSet;
+      for (const listener of [...listeners]) listener();
+      unsubscribeNative();
+      listeners.clear();
+      restoreMethod('getSnapshot', originalGetSnapshot);
+      restoreMethod('subscribe', originalSubscribe);
     },
   };
 }

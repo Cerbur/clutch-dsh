@@ -77,18 +77,24 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   assert.equal(packageManifest.exports['./package.json'], './package.json');
   assert.deepEqual(packageManifest.dsh.client, {
     inject: [
+      '@deepseek-ai/dsh-api-session-controller',
+      '@deepseek-ai/dsh-api-workspace-controller',
       '@deepseek-ai/dsh-client-connection',
-      '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-locale',
       '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-layout',
+      '@deepseek-ai/dsh-client-ui-renderer',
+      '@deepseek-ai/dsh-client-ui-session',
       '@deepseek-ai/dsh-client-ui-sidebar',
+      '@deepseek-ai/dsh-client-ui-workspace',
     ],
     platform: 'web',
   });
 });
 
-test('accepts the current upstream DSH graph without pinning runtime peers', () => {
+test('declares the dsh-v0.1.2-rc.1 compatibility floor', () => {
+  const minimumDshVersion = '>=0.1.2-rc.1';
+  const validatedDshVersion = '0.1.2-rc.1';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -97,11 +103,13 @@ test('accepts the current upstream DSH graph without pinning runtime peers', () 
   assert.ok(dshPeerDependencies.length > 0);
   assert.ok(dshDevDependencies.length > 0);
   for (const [name, version] of dshPeerDependencies) {
-    assert.equal(version, '*', `${name} must accept the current upstream DSH checkout`);
+    assert.equal(version, minimumDshVersion, `${name} must expose the rc.1 compatibility floor`);
   }
   for (const [name, version] of dshDevDependencies) {
-    assert.equal(version, '0.1.1-rc.2', `${name} must match the current upstream DSH package snapshot`);
+    assert.equal(version, validatedDshVersion, `${name} must match the rc.1 validation graph`);
   }
+  assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
   assert.doesNotMatch(JSON.stringify(packageManifest), /0\.1\.0-rc\.8/);
   assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-api-remotes'], undefined);
@@ -110,11 +118,11 @@ test('accepts the current upstream DSH graph without pinning runtime peers', () 
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '*',
+    '>=0.1.2-rc.1',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.1.1-rc.2',
+    '0.1.2-rc.1',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);
@@ -217,7 +225,8 @@ test('loads the package and calls its Host Remote through the real DSH compositi
         return import(pathToFileURL(packageRequire.resolve(specifier)).href);
       },
     };
-    await host.plugin(TypertGatewayService);
+    const gatewayConfig = TypertGatewayService.Config({});
+    await host.plugin(TypertGatewayService, gatewayConfig);
     await host.loader.create({
       id: 'clutch-dsh-worktree-host',
       name: packageManifest.name,

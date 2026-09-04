@@ -8,7 +8,13 @@ const packageDirectory = path.resolve('.');
  * table and a small slot/context fixture. The real Client loader owns the
  * same registration call; this fixture only supplies its platform modules.
  */
-export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, fork } = {}) {
+export async function loadClientEntry({
+  remote = {},
+  rpc,
+  sessionListSnapshot,
+  workspaceSnapshot: initialWorkspaceSnapshot,
+  fork,
+} = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
@@ -16,28 +22,67 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
   const openedSessions = [];
   const startedSessions = [];
   const createdSessions = [];
+  const createdWorkspaces = [];
   const forkCalls = [];
   const rpcCalls = [];
   const localeRegistrations = [];
   const localStore = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')?.value;
 
-  let workspaceSnapshot = {
+  const normalizeWorkspaceSnapshot = (snapshot) => ({
+    ...snapshot,
+    items: (Array.isArray(snapshot?.items) ? snapshot.items : []).map((workspace) => ({
+      ...workspace,
+      createdAt: workspace.createdAt ?? '2026-01-01T00:00:00.000Z',
+      updatedAt: workspace.updatedAt ?? '2026-01-01T00:00:00.000Z',
+    })),
+    archivedSessionIds: Array.isArray(snapshot?.archivedSessionIds)
+      ? snapshot.archivedSessionIds
+      : [],
+    state: snapshot?.state ?? 'idle',
+    phase: snapshot?.phase ?? 'ready',
+    error: snapshot?.error ?? null,
+  });
+
+  const normalizeSessionSnapshot = (snapshot) => ({
+    ...snapshot,
+    ids: Array.isArray(snapshot?.ids) ? snapshot.ids : [],
+    byId: snapshot?.byId !== undefined && snapshot.byId !== null
+      ? snapshot.byId
+      : {},
+    current: snapshot?.current,
+    phase: snapshot?.phase ?? 'ready',
+    subagentsByParent: snapshot?.subagentsByParent ?? {},
+    jobsBySession: snapshot?.jobsBySession ?? {},
+    currentAddress: snapshot?.currentAddress,
+  });
+
+  let workspaceSnapshot = normalizeWorkspaceSnapshot(initialWorkspaceSnapshot ?? {
     items: [
-      { workspaceId: 'workspace-current', title: 'Current', sessionIds: ['session-current'] },
+      {
+        workspaceId: 'workspace-current',
+        path: '/tmp/workspace-current',
+        title: 'Current',
+        sessionIds: ['session-current'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
     ],
-    recentWorkspaceId: 'workspace-current',
-  };
+    archivedSessionIds: [],
+    state: 'idle',
+    phase: 'ready',
+    error: null,
+  });
   const workspaceSubscribers = new Set();
   const workspaceList = {
     getSnapshot: () => workspaceSnapshot,
-    set(next) {
-      workspaceSnapshot = next;
-      for (const subscriber of workspaceSubscribers) subscriber();
-    },
     subscribe(subscriber) {
       workspaceSubscribers.add(subscriber);
       return () => workspaceSubscribers.delete(subscriber);
     },
+  };
+  const setNativeWorkspaceSnapshot = (next) => {
+    workspaceSnapshot = normalizeWorkspaceSnapshot(next);
+    for (const subscriber of workspaceSubscribers) subscriber();
   };
 
   const connectionRpc = rpc ?? {
@@ -138,11 +183,38 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
     },
   };
 
-  const fakeSessions = {
-    list: {
-      getSnapshot: () => sessionListSnapshot ?? ({ current: 'session-current' }),
-      subscribe: () => () => {},
+  let currentSessionSnapshot = normalizeSessionSnapshot(sessionListSnapshot ?? {
+    ids: ['session-current'],
+    byId: {
+      'session-current': {
+        id: 'session-current',
+        displayTitle: 'Current',
+        running: false,
+        blank: false,
+        cwd: '/tmp/workspace-current',
+        updatedAt: 1,
+      },
     },
+    current: 'session-current',
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  });
+  const sessionSubscribers = new Set();
+  const sessionList = {
+    getSnapshot: () => currentSessionSnapshot,
+    set(next) {
+      currentSessionSnapshot = next;
+      for (const subscriber of sessionSubscribers) subscriber();
+    },
+    subscribe(subscriber) {
+      sessionSubscribers.add(subscriber);
+      return () => sessionSubscribers.delete(subscriber);
+    },
+  };
+  const fakeSessions = {
+    list: sessionList,
     async create(input) {
       createdSessions.push(input);
       return 'session-created';
@@ -167,6 +239,20 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
     sessions: fakeSessions,
     workspaces: {
       list: workspaceList,
+      async create(input) {
+        createdWorkspaces.push(input);
+        return input.path;
+      },
+      async rename() {},
+      async delete() {},
+      async insertBefore() {},
+      async insertSessionBefore() {},
+      async archiveSession() {},
+    },
+    uiWorkspace: {
+      pickDirectory() {
+        return Promise.resolve('/tmp/workspace-picked');
+      },
       startSession(workspaceId) {
         startedSessions.push(workspaceId);
       },
@@ -204,7 +290,7 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
   };
   new Function('window', clientBundle)(windowObject);
   const exports = registrations[0].factory((specifier) => {
-    if (specifier === '@deepseek-ai/dsh-client-runtime/client') {
+    if (specifier === '@deepseek-ai/dsh-client-store') {
       return { createSnapshotStore, defineStore };
     }
     if (specifier === 'react/jsx-runtime') {
@@ -225,8 +311,15 @@ export async function loadClientEntry({ remote = {}, rpc, sessionListSnapshot, f
     openedSessions,
     startedSessions,
     createdSessions,
+    createdWorkspaces,
     forkCalls,
     nativeFork,
     rpcCalls,
+    setWorkspaceSnapshot(next) {
+      setNativeWorkspaceSnapshot(next);
+    },
+    setSessionListSnapshot(next) {
+      sessionList.set(normalizeSessionSnapshot(next));
+    },
   };
 }

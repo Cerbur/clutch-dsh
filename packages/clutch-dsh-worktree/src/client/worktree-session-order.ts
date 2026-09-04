@@ -1,7 +1,7 @@
 import type {
-  createSnapshotStore as runtimeCreateSnapshotStore,
+  createSnapshotStore as dshCreateSnapshotStore,
   SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client';
+} from '@deepseek-ai/dsh-client-store';
 
 /** Browser-only persistence key; this state never crosses the DSH or sidecar boundary. */
 export const WORKTREE_SESSION_ORDER_STORAGE_KEY = 'clutch-dsh-worktree.session-order';
@@ -30,7 +30,7 @@ export interface WorktreeSessionOrderStore extends SnapshotStore<WorktreeSession
   readonly dispose: () => void;
 }
 
-export type SnapshotStoreFactory = typeof runtimeCreateSnapshotStore;
+export type SnapshotStoreFactory = typeof dshCreateSnapshotStore;
 
 function emptyState(): WorktreeSessionOrderState {
   return { accounts: {} };

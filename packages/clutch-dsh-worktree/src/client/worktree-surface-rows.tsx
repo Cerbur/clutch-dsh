@@ -471,6 +471,8 @@ export function WorktreeGroupRow({
       content={<div className={styles.worktreeHoverTitle}>{label}</div>}
       openDelayMs={500}
       disabled={menu?.open === true}
+      copyLabel={t('copy')}
+      copiedLabel={t('hover.copied')}
     />
   );
 }

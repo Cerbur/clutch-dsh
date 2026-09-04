@@ -783,6 +783,43 @@ test('repeated identical Worktree upsert is idempotent', async () => {
   });
 });
 
+test('prepends new Worktrees in sidecar order and preserves an existing record position', async () => {
+  await withGitFixture(async ({ dshHome, sidecar }) => {
+    const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
+    const first = makeRecord({
+      worktreeId: 'wt_first',
+      absolutePath: path.join(root, 'wt_first'),
+    });
+    const second = makeRecord({
+      worktreeId: 'wt_second',
+      absolutePath: path.join(root, 'wt_second'),
+    });
+
+    await sidecar.upsertWorktree(first);
+    await sidecar.upsertWorktree(second);
+    const multiRecordWrite = await readFile(
+      path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json'),
+      'utf8',
+    );
+    await sidecar.upsertWorktree(first);
+    assert.equal(
+      await readFile(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json'), 'utf8'),
+      multiRecordWrite,
+    );
+
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      ['wt_second', 'wt_first'],
+    );
+
+    const reloaded = new WorkspaceShardedSidecarRepository({ dshHome });
+    assert.deepEqual(
+      (await reloaded.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      ['wt_second', 'wt_first'],
+    );
+  });
+});
+
 test('reorders Worktrees with native insertBefore semantics and survives reload', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
@@ -792,7 +829,7 @@ test('reorders Worktrees with native insertBefore semantics and survives reload'
         absolutePath: path.join(root, worktreeId),
       }),
     );
-    for (const record of records) await sidecar.upsertWorktree(record);
+    for (const record of [...records].reverse()) await sidecar.upsertWorktree(record);
 
     assert.deepEqual(
       await sidecar.insertWorktreeBefore('ws_one', 'wt_one', 'wt_three'),
@@ -814,7 +851,7 @@ test('reorders Worktrees with native insertBefore semantics and survives reload'
 test('does not rewrite the sidecar for no-op or invalid Worktree moves', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
-    for (const worktreeId of ['wt_one', 'wt_two']) {
+    for (const worktreeId of ['wt_one', 'wt_two'].reverse()) {
       await sidecar.upsertWorktree(makeRecord({
         worktreeId,
         absolutePath: path.join(root, worktreeId),
@@ -1560,6 +1597,71 @@ test('imports an external Worktree without mutating Git or its directory and is 
   });
 });
 
+test('prepends Worktrees created and imported through the compatibility path', async () => {
+  await withGitFixture(async ({ dsh, dshHome, tempRoot, workspaceRoot, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/legacy-create-one']);
+    await runGit(workspaceRoot, ['branch', 'feature/legacy-create-two']);
+    const firstExternalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/legacy-import-one');
+    const secondExternalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/legacy-import-two');
+    const ids = [
+      'wt_legacy_create_one',
+      'wt_legacy_create_two',
+      'wt_legacy_import_one',
+      'wt_legacy_import_two',
+    ];
+    const legacySidecar = {
+      read: (...args) => sidecar.read(...args),
+      mutate: (...args) => sidecar.mutate(...args),
+      insertWorktreeBefore: (...args) => sidecar.insertWorktreeBefore(...args),
+    };
+    const provider = createWorktreeManager({
+      dsh,
+      dshHome,
+      sidecar: legacySidecar,
+      idFactory: () => ids.shift(),
+    });
+
+    const created = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/legacy-create-one',
+    });
+    const secondCreated = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/legacy-create-two',
+    });
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [secondCreated.worktreeId, created.worktreeId],
+    );
+    const imported = await provider.importWorktree({
+      workspaceId: 'ws_one',
+      absolutePath: firstExternalPath,
+    });
+    const secondImported = await provider.importWorktree({
+      workspaceId: 'ws_one',
+      absolutePath: secondExternalPath,
+    });
+
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [secondImported.worktreeId, imported.worktreeId, secondCreated.worktreeId, created.worktreeId],
+    );
+    assert.deepEqual(
+      await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: firstExternalPath }),
+      imported,
+    );
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [secondImported.worktreeId, imported.worktreeId, secondCreated.worktreeId, created.worktreeId],
+    );
+    const reloaded = new WorkspaceShardedSidecarRepository({ dshHome });
+    assert.deepEqual(
+      (await reloaded.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [secondImported.worktreeId, imported.worktreeId, secondCreated.worktreeId, created.worktreeId],
+    );
+  });
+});
+
 test('serializes external import behind the repository mutation lock', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, tempRoot, sidecar }) => {
     const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/import-lock');
@@ -2037,6 +2139,53 @@ test('moves Worktrees through Manage while preserving the sidecar order', async 
         beforeWorktreeId: 'wt_one',
       }),
       ['wt_two', 'wt_one'],
+    );
+  });
+});
+
+test('prepends transactional create and import records after preserving manual order', async () => {
+  await withGitFixture(async ({ dshHome, provider, sidecar, workspaceRoot, tempRoot }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/transaction-one']);
+    await runGit(workspaceRoot, ['branch', 'feature/transaction-two']);
+
+    const first = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/transaction-one',
+    });
+    const second = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/transaction-two',
+    });
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [second.worktreeId, first.worktreeId],
+    );
+
+    await provider.insertWorktreeBefore({
+      workspaceId: 'ws_one',
+      worktreeId: first.worktreeId,
+      beforeWorktreeId: second.worktreeId,
+    });
+
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/transaction-import');
+    const gitBeforeImport = (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout;
+    const imported = await provider.importWorktree({
+      workspaceId: 'ws_one',
+      absolutePath: externalPath,
+    });
+
+    assert.equal(
+      (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout,
+      gitBeforeImport,
+    );
+    assert.deepEqual(
+      (await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [imported.worktreeId, first.worktreeId, second.worktreeId],
+    );
+    const reloaded = new WorkspaceShardedSidecarRepository({ dshHome });
+    assert.deepEqual(
+      (await reloaded.read('ws_one')).worktrees.map((record) => record.worktreeId),
+      [imported.worktreeId, first.worktreeId, second.worktreeId],
     );
   });
 });

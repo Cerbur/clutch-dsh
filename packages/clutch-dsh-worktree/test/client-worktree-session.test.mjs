@@ -258,6 +258,7 @@ test('opens a bound blank Session without creating or rebinding it', async () =>
     }),
     'blank-one',
   );
+  assert.deepEqual(calls.slice(0, 2), ['listWorktrees', 'listBindings']);
   assert.equal(calls.includes('createSession'), false);
   assert.equal(calls.includes('bindSession'), false);
   assert.deepEqual(calls.slice(-2), [

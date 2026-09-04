@@ -479,3 +479,55 @@ test('places embedded executable arguments after the resolved executable', async
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
+
+test('does not trigger unhandled rejection when cancelled before or during executable resolution', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const unhandled = [];
+  const onUnhandled = (error) => { unhandled.push(error); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const runtime = {
+      async resolveExecutable(_command, _env, signal) {
+        await delay(10);
+        signal?.throwIfAborted();
+        return '/bin/git';
+      },
+      spawn() {
+        throw new Error('should not spawn');
+      },
+    };
+    const controller = new globalThis.AbortController();
+    const git = new LocalGitAdapter({ subprocess: runtime, signal: controller.signal });
+    const task = git.listBranches(workspaceRoot);
+    controller.abort(new Error('Worktree manager is closing'));
+    await assert.rejects(task);
+    await delay(30);
+    assert.equal(unhandled.length, 0);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('immediately rejects and does not run when signal is pre-aborted', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  let resolveCalled = false;
+  try {
+    const runtime = {
+      async resolveExecutable() {
+        resolveCalled = true;
+        return '/bin/git';
+      },
+      spawn() {
+        throw new Error('should not spawn');
+      },
+    };
+    const controller = new globalThis.AbortController();
+    controller.abort(new Error('pre-aborted'));
+    const git = new LocalGitAdapter({ subprocess: runtime, signal: controller.signal });
+    await assert.rejects(git.listBranches(workspaceRoot));
+    assert.equal(resolveCalled, false);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
