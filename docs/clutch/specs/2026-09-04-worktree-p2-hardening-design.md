@@ -50,12 +50,12 @@ The tests must treat absence of `list.set` as the supported rc.1 shape, not as a
 
 The compatibility table is authoritative for the public minimums:
 
-| Component | Minimum version | Notes |
-| --- | --- | --- |
-| DSH Client | `>=0.1.2-rc.1` | Requires Session/Workspace Controllers and Client Store |
-| DSH Host | `>=0.1.2-rc.1` | Requires Typert Gateway `/api` protocol and subprocess capability |
-| Git | `>=2.20.0` | Requires worktree core commands and branch discovery |
-| Node.js | `>=20.0.0` | LTS is recommended |
+| Component  | Minimum version | Notes                                                             |
+| ---------- | --------------- | ----------------------------------------------------------------- |
+| DSH Client | `>=0.1.2-rc.1`  | Requires Session/Workspace Controllers and Client Store           |
+| DSH Host   | `>=0.1.2-rc.1`  | Requires Typert Gateway `/api` protocol and subprocess capability |
+| Git        | `>=2.20.0`      | Requires worktree core commands and branch discovery              |
+| Node.js    | `>=20.0.0`      | LTS is recommended                                                |
 
 ## Validation
 

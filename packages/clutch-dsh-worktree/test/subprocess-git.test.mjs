@@ -496,7 +496,7 @@ test('does not trigger unhandled rejection when cancelled before or during execu
         throw new Error('should not spawn');
       },
     };
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     const git = new LocalGitAdapter({ subprocess: runtime, signal: controller.signal });
     const task = git.listBranches(workspaceRoot);
     controller.abort(new Error('Worktree manager is closing'));
@@ -522,7 +522,7 @@ test('immediately rejects and does not run when signal is pre-aborted', async ()
         throw new Error('should not spawn');
       },
     };
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     controller.abort(new Error('pre-aborted'));
     const git = new LocalGitAdapter({ subprocess: runtime, signal: controller.signal });
     await assert.rejects(git.listBranches(workspaceRoot));

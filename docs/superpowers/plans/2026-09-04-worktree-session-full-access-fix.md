@@ -29,9 +29,11 @@
 ### Task 1: Add failing regression test for real DSH Session structure
 
 **Files:**
+
 - Modify: `packages/clutch-dsh-worktree/test/host-worktree-permission.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `createDshWorktreePermissionAdapter`, `WORKTREE_FULL_ACCESS_PRESET`
 - Produces: Failing test verifying that a session exposing `snapshotEvents()` (without `events` property) is accepted and triggers confirmation.
 
@@ -75,9 +77,11 @@ test('accepts real DSH Session structure with snapshotEvents and triggers confir
 - [ ] **Step 2: Run test to verify it fails**
 
 Run:
+
 ```bash
 node --test packages/clutch-dsh-worktree/test/host-worktree-permission.test.mjs
 ```
+
 Expected: FAIL with `assert.deepEqual` difference — receives `status: 'unverified'` instead of `status: 'confirmation-required'`.
 
 ---
@@ -85,15 +89,18 @@ Expected: FAIL with `assert.deepEqual` difference — receives `status: 'unverif
 ### Task 2: Fix `PermissionSession` interface, type guard, and event extraction
 
 **Files:**
+
 - Modify: `packages/clutch-dsh-worktree/src/host/worktree-permission.ts:17-21, 85-110, 248-255`
 
 **Interfaces:**
+
 - Consumes: `PermissionSession`, `isPermissionSession`
 - Produces: Updated `isPermissionSession` accepting `snapshotEvents()`, `getSessionEvents(session)` helper.
 
 - [ ] **Step 1: Update `PermissionSession` and `isPermissionSession` in `worktree-permission.ts`**
 
 Update interface `PermissionSession`:
+
 ```ts
 interface PermissionSession {
   readonly id: string;
@@ -104,6 +111,7 @@ interface PermissionSession {
 ```
 
 Update `isPermissionSession` guard:
+
 ```ts
 function isPermissionSession(value: unknown): value is PermissionSession {
   return (
@@ -117,6 +125,7 @@ function isPermissionSession(value: unknown): value is PermissionSession {
 ```
 
 Add helper `getSessionEvents`:
+
 ```ts
 function getSessionEvents(session: PermissionSession): readonly PermissionEvent[] {
   if (typeof session.snapshotEvents === 'function') {
@@ -129,31 +138,34 @@ function getSessionEvents(session: PermissionSession): readonly PermissionEvent[
 - [ ] **Step 2: Update event usage in `readCurrentState`**
 
 In `readCurrentState`:
+
 ```ts
-  const events = getSessionEvents(session);
-  const sandboxMode =
-    (lastEventValue(events, 'sandbox/mode', 'mode') as WorktreePermissionSandboxMode | undefined) ??
-    presetSpec?.sandbox ??
-    sandboxPolicy?.defaultMode;
-  const approvalPolicy =
-    (lastEventValue(events, 'approval/policy', 'policy') as WorktreePermissionApprovalPolicy | undefined) ??
-    presetSpec?.approval;
-  const pluginChangedThisRuntime = pluginApplied.has(session.id);
-  const currentIsRestricted =
-    pluginChangedThisRuntime && sandboxMode !== 'danger-full-access' ||
-    hasFullThenRestriction(events) ||
-    (preset !== undefined &&
-      preset !== WORKSPACE_WRITE_PRESET &&
-      preset !== WORKTREE_FULL_ACCESS_PRESET &&
-      preset !== 'danger-full-access');
+const events = getSessionEvents(session);
+const sandboxMode =
+  (lastEventValue(events, 'sandbox/mode', 'mode') as WorktreePermissionSandboxMode | undefined) ??
+  presetSpec?.sandbox ??
+  sandboxPolicy?.defaultMode;
+const approvalPolicy =
+  (lastEventValue(events, 'approval/policy', 'policy') as
+    WorktreePermissionApprovalPolicy | undefined) ?? presetSpec?.approval;
+const pluginChangedThisRuntime = pluginApplied.has(session.id);
+const currentIsRestricted =
+  (pluginChangedThisRuntime && sandboxMode !== 'danger-full-access') ||
+  hasFullThenRestriction(events) ||
+  (preset !== undefined &&
+    preset !== WORKSPACE_WRITE_PRESET &&
+    preset !== WORKTREE_FULL_ACCESS_PRESET &&
+    preset !== 'danger-full-access');
 ```
 
 - [ ] **Step 3: Run test to check progress**
 
 Run:
+
 ```bash
 pnpm --filter @cerbur/clutch-dsh-worktree build && node --test packages/clutch-dsh-worktree/test/host-worktree-permission.test.mjs
 ```
+
 Verify whether the new test passes or advances to preset call evaluation.
 
 ---
@@ -161,10 +173,12 @@ Verify whether the new test passes or advances to preset call evaluation.
 ### Task 3: Fix `PermissionPresetService.current` invocation and support polymorphic callers
 
 **Files:**
+
 - Modify: `packages/clutch-dsh-worktree/src/host/worktree-permission.ts:28-33, 85-95`
 - Modify: `packages/clutch-dsh-worktree/test/host-worktree-permission.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `permissionPresets.current(session)` (DSH runtime) and `permissionPresets.current(events)` (mock fallback)
 - Produces: Safe preset detection that works on real DSH `PermissionPresetService` and legacy test mocks.
 
@@ -226,17 +240,20 @@ function resolveCurrentPreset(
 ```
 
 In `readCurrentState`:
+
 ```ts
-  const events = getSessionEvents(session);
-  const preset = resolveCurrentPreset(permissionPresets, session, events);
+const events = getSessionEvents(session);
+const preset = resolveCurrentPreset(permissionPresets, session, events);
 ```
 
 - [ ] **Step 3: Run unit tests to verify both tests pass**
 
 Run:
+
 ```bash
 pnpm --filter @cerbur/clutch-dsh-worktree build && node --test packages/clutch-dsh-worktree/test/host-worktree-permission.test.mjs
 ```
+
 Expected: PASS (all tests pass).
 
 ---
@@ -244,22 +261,27 @@ Expected: PASS (all tests pass).
 ### Task 4: Complete verification and full test suite run
 
 **Files:**
+
 - Modify: `packages/clutch-dsh-worktree/RELEASE-LOG.md` (document bug fix)
 
 - [ ] **Step 1: Run complete package check suite**
 
 Run from workspace root:
+
 ```bash
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
 Expected: All tests pass (0 failures), build succeeds.
 
 - [ ] **Step 2: Verify git status is clean and focused**
 
 Run:
+
 ```bash
 git status
 ```
+
 Expected: Only the intended files are created/modified.
