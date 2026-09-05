@@ -5,13 +5,16 @@ import test from 'node:test';
 
 const packageDirectory = path.resolve(import.meta.dirname, '..');
 
-test('package manifest exposes a public host-only DSH plugin', async () => {
+test('package manifest exposes a public DSH plugin with a settings browser entry', async () => {
   const packageJson = JSON.parse(
     await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
   );
 
   assert.equal(packageJson.name, '@cerbur/clutch-dsh-title');
   assert.equal(packageJson.type, 'module');
+  assert.equal(packageJson.exports['./client'].default, './lib/client.js');
+  assert.equal(packageJson.dsh.client.platform, 'web');
+  assert.ok(packageJson.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings'));
   assert.equal(packageJson.clutchDsh.role, 'plugin');
   assert.equal(packageJson.clutchDsh.serviceDefinition, '@cerbur/clutch-dsh-title');
   assert.equal(packageJson.publishConfig.access, 'public');
