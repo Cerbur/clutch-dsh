@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-labelledby="title description">
+  <title id="title">Default DSH session title</title>
+  <desc id="description">A session row showing a deterministic title and native refresh and rename actions.</desc>
+  <rect width="960" height="420" fill="#f7f8fa"/>
+  <rect x="36" y="32" width="888" height="356" rx="18" fill="#ffffff" stroke="#d9dde5"/>
+  <text x="72" y="78" fill="#687386" font-family="system-ui, -apple-system, sans-serif" font-size="17">DSH Session</text>
+  <rect x="64" y="102" width="832" height="100" rx="12" fill="#f0f4ff" stroke="#c7d5ff"/>
+  <circle cx="96" cy="152" r="18" fill="#4c6fff"/>
+  <path d="M88 152h16M96 144v16" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <text x="132" y="143" fill="#1c2430" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="650">0903|配置|优化 session title 生成规则</text>
+  <text x="132" y="174" fill="#687386" font-family="system-ui, -apple-system, sans-serif" font-size="15">daytime · type · desc · deterministic renderer</text>
+  <rect x="64" y="232" width="252" height="58" rx="10" fill="#ffffff" stroke="#d9dde5"/>
+  <path d="M91 261a17 17 0 1 1 4-12" fill="none" stroke="#4c6fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M96 242v10h-10" fill="none" stroke="#4c6fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="121" y="267" fill="#273142" font-family="system-ui, -apple-system, sans-serif" font-size="17">Refresh</text>
+  <rect x="336" y="232" width="252" height="58" rx="10" fill="#ffffff" stroke="#d9dde5"/>
+  <path d="M365 250h22M365 259h22M365 268h15" stroke="#4c6fff" stroke-width="3" stroke-linecap="round"/>
+  <text x="408" y="267" fill="#273142" font-family="system-ui, -apple-system, sans-serif" font-size="17">Rename · pin</text>
+  <text x="64" y="344" fill="#687386" font-family="system-ui, -apple-system, sans-serif" font-size="15">Fallback, persistence, fork, cancellation and stale-result handling stay native to DSH.</text>
+</svg>

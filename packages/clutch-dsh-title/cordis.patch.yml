@@ -1,0 +1,9 @@
+- id: session-title-llm
+  name: '@deepseek-ai/dsh-session-title-first-prompt-llm'
+  disabled: true
+
+- insert:
+    - id: clutch-dsh-title
+      name: '@cerbur/clutch-dsh-title'
+      config:
+        preset: default

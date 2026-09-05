@@ -1,0 +1,84 @@
+{
+  "name": "@cerbur/clutch-dsh-title",
+  "version": "0.1.0",
+  "description": "Configurable deterministic session titles for DeepSeek Harness.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cerbur/clutch-dsh.git",
+    "directory": "packages/clutch-dsh-title"
+  },
+  "homepage": "https://github.com/Cerbur/clutch-dsh/tree/main/packages/clutch-dsh-title",
+  "packageManager": "pnpm@10.32.1",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "session-title",
+    "template"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm run build",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "clutchDsh": {
+    "plugin": "@cerbur/clutch-dsh-title",
+    "role": "plugin",
+    "serviceDefinition": "@cerbur/clutch-dsh-title"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-llm": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-session": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-title": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-title-llm": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-timeout": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-util-values": ">=0.1.2-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis-plugin-include": "1.0.7",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.3",
+    "@deepseek-ai/dsh-llm": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-projection": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-title": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-title-first-prompt-llm": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-session-title-llm": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-timeout": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-util-values": "0.1.2-rc.1",
+    "@types/node": "^22.15.3",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.0"
+  }
+}
