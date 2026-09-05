@@ -1,4 +1,4 @@
-import type { SessionBinding } from '../contract/index.js';
+import type { SessionBinding, WorktreeActivity } from '../contract/index.js';
 import {
   sessionDisplayLabel,
   sessionMatchesQuery,
@@ -90,6 +90,7 @@ export type CurrentSessionLocation =
       readonly groupKey: string;
       readonly kind: 'worktree';
       readonly worktreeId: string;
+      readonly archived?: boolean;
     };
 
 export function resolveCurrentSessionLocation(
@@ -126,6 +127,7 @@ export function resolveCurrentSessionLocation(
     groupKey: 'worktree:' + worktree.worktreeId,
     kind: 'worktree',
     worktreeId: worktree.worktreeId,
+    ...(worktree.status === 'removed' ? { archived: true } : {}),
   };
 }
 
@@ -135,6 +137,7 @@ export function currentSessionRevealKeys(
   if (location === undefined) return [];
   return [
     'workspace:' + location.workspaceId,
+    ...(location.kind === 'worktree' && location.archived ? ['archived:' + location.workspaceId] : []),
     location.kind === 'main'
       ? 'main:' + location.workspaceId
       : 'worktree:' + location.worktreeId,
@@ -156,4 +159,14 @@ export function isSessionGroupAutoExpanded(
   currentSessionRevealActive: boolean,
 ): boolean {
   return currentSessionRevealActive && shouldRevealCurrentSessionGroup(sessionIds, currentSessionId);
+}
+
+export function worktreeActivityBlockReason(
+  activity: WorktreeActivity | undefined,
+  actionPending: boolean,
+): 'pending' | 'busy' | 'unknown' | undefined {
+  if (actionPending) return 'pending';
+  if (activity?.state === 'busy') return 'busy';
+  if (activity?.state !== 'idle') return 'unknown';
+  return undefined;
 }

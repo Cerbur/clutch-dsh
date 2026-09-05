@@ -121,7 +121,35 @@ export class SidecarPersistence {
     mutation: (snapshot: SidecarSnapshot) => SidecarMutation<T> | Promise<SidecarMutation<T>>,
   ): Promise<T> {
     return this.runExclusive(workspaceId, async (locked) => {
-      const current = await locked.read();
+      let current = await locked.read();
+      if (current.pendingOperation === undefined && current.recoveryIssues && current.recoveryIssues.length > 0) {
+        const remaining = current.recoveryIssues.filter((issue) => {
+          const record = current.worktrees.find((w) => w.worktreeId === issue.worktreeId);
+          const removable =
+            issue.operationId === undefined &&
+            issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
+            record?.status === 'removed' &&
+            record.diskCleanup !== 'completed' &&
+            issue.worktreeId === record.worktreeId;
+          return !removable;
+        });
+        if (remaining.length !== current.recoveryIssues.length) {
+          await locked.mutate((snapshot) => {
+            const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
+            void _repository;
+            void _oldRecovery;
+            return {
+              result: undefined,
+              changed: true,
+              snapshot: {
+                ...stableFields,
+                ...(remaining.length > 0 ? { recoveryIssues: remaining } : {}),
+              },
+            };
+          });
+          current = await locked.read();
+        }
+      }
       if (current.pendingOperation !== undefined || (current.recoveryIssues?.length ?? 0) > 0) {
         const operationId = current.pendingOperation?.id;
         throw providerError(

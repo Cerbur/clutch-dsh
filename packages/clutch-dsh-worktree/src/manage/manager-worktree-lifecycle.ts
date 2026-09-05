@@ -39,7 +39,7 @@ export async function assertWorktreeIdle(
         .map((binding) => binding.sessionId),
     ),
   ];
-  let activity: WorktreeActivity = { state: 'unknown' };
+  let activity: WorktreeActivity;
   try {
     activity =
       ids.length === 0

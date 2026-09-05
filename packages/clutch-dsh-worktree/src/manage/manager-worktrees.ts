@@ -43,19 +43,6 @@ function projectRuntimeRecord(
   };
 }
 
-function assertMutationToken(
-  snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
-  record: WorktreeRecord,
-  token: string | undefined,
-): void {
-  const expected = createWorktreeMutationToken(snapshot, record);
-  if (token === undefined || token !== expected) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Worktree state changed after it was loaded', {
-      workspaceId: record.workspaceId,
-      worktreeId: record.worktreeId,
-    });
-  }
-}
 
 /** Return the sidecar Worktree projection with runtime Git health attached. */
 export async function listWorktrees(
@@ -76,7 +63,7 @@ export async function listWorktrees(
     const ids = [
       ...new Set(
         snapshot.bindings
-          .filter((b) => b.worktreeId === record.worktreeId && b.status === 'active')
+          .filter((b) => b.worktreeId === record.worktreeId)
           .map((b) => b.sessionId),
       ),
     ];

@@ -71,8 +71,12 @@ export function resolveWorktreeSessionContext(
     if (record === undefined || record.workspaceId !== workspace.workspaceId) {
       return none(record === undefined ? 'stale' : 'workspace-mismatch');
     }
-    if (record.status !== 'active') return none('stale');
-    if (record.health === 'repair' || record.health === 'recovery-needed') return none('repair');
+    if (record.diskCleanup === 'completed' || record.health === 'cleaned') {
+      return none('detached');
+    }
+    if (record.health === 'repair' || record.health === 'recovery-needed') {
+      return none('repair');
+    }
     if (record.branch.length === 0) return none('not-ready');
 
     return {

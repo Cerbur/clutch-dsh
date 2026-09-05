@@ -156,8 +156,10 @@ The child is never written to DSH's durable `Workspace.sessionIds`. A loaded plu
 make the child visible in the browser's temporary Workspace projection, while DSH continues to own
 the global Session record and content. If sidecar lookup or binding fails after native creation, the
 child remains available; the Client exposes retry/open recovery and reconciles eligible non-subagent
-children from native `parentId` summaries during Client startup or later list refreshes. Client
-disposal stops late projection callbacks without deleting the DSH child.
+children from native `parentId` summaries during Client startup or later list refreshes. When a Worktree
+is forgotten, the coordinator advances generational counters to invalidate in-flight lookup or binding
+promises and prunes any pending recovery for that Worktree, ensuring late failures never revive recovery.
+Client disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
@@ -175,9 +177,20 @@ The Worktree surface reads DSH sessions.current as the only current-Session fact
 The matching Main, active Worktree, or detached Worktree row receives the current
 marker. When Worktree mode opens or sessions.current changes, the Client clears
 a search that would hide the row, temporarily expands the Workspace/Main/Worktree
-path, expands the five-row Session overflow only when the current row is outside
-the first five, and scrolls the row into the nearest visible area of the Worktree
+path (including the parent `Archived` group when the current Session belongs to an
+archived Worktree, with manual collapse suppression), expands the five-row Session overflow only when
+the current row is outside the first five, and scrolls the row into the nearest visible area of the Worktree
 overlay.
+
+### Worktree cleanup and forget flow
+
+Clean Up Disk (`cleanWorktree`) decouples Git directory removal from subsequent permission
+normalization using `runWorktreeCleanupFlow`. Once disk deletion succeeds, the dialog closes
+and the view updates to `cleaned`. Any failure during subsequent permission normalization
+or view refresh reports a retryable error without rolling back or repeating disk removal.
+Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cleans up
+browser-local fork recovery, membership projections, and permission notices for the affected
+Worktree and its bound Sessions.
 Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
 
 The current Session reveal and suppression are browser-local, in-memory

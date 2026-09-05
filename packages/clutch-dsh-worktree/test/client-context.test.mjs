@@ -118,3 +118,35 @@ test('resolves the selected local branch for a blank Hero without a Session', ()
     source: 'current-branch',
   });
 });
+test('archived ready binding retains Worktree context', () => {
+  const context = resolveWorktreeSessionContext(
+    baseInput({
+      worktrees: [
+        {
+          worktreeId: 'wt1',
+          workspaceId: 'ws1',
+          absolutePath: '/tmp/wt1',
+          branch: 'feature/context',
+          source: 'external',
+          status: 'removed',
+          health: 'ready',
+        },
+      ],
+      bindings: [
+        {
+          worktreeId: 'wt1',
+          workspaceId: 'ws1',
+          sessionId: 'session-1',
+          status: 'active',
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(context, {
+    kind: 'worktree',
+    workspaceId: 'ws1',
+    worktreeId: 'wt1',
+    label: 'feature/context',
+    source: 'active-binding',
+  });
+});

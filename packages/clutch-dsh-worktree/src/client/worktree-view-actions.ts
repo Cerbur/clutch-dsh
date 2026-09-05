@@ -1,7 +1,5 @@
 import type {
   WorktreeManager,
-  WorktreePermissionManager,
-  WorktreePermissionResult,
   WorktreeRecord,
 } from '../contract/index.js';
 import { WorktreeSessionBindingError } from './worktree-view-errors.js';
@@ -103,11 +101,6 @@ export function resolveWorktreeMove(
 export async function executeWorktreeAction(
   manager: WorktreeManager,
   action: WorktreeViewAction,
-  permission?: Pick<WorktreePermissionManager, 'normalizeDetachedWorktreePermissions'>,
-  onPermissionResult?: (
-    input: { readonly workspaceId: string; readonly worktreeId: string },
-    result: WorktreePermissionResult,
-  ) => void,
 ): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
     return manager.createWorktree(action.input);
@@ -121,16 +114,6 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'cleanWorktree') {
     await manager.cleanWorktree(action.input);
-    const result = await permission?.normalizeDetachedWorktreePermissions({
-      workspaceId: action.input.workspaceId,
-      worktreeId: action.input.worktreeId,
-    });
-    if (result !== undefined) {
-      onPermissionResult?.({
-        workspaceId: action.input.workspaceId,
-        worktreeId: action.input.worktreeId,
-      }, result);
-    }
     return;
   }
   if (action.type === 'forgetWorktree') {

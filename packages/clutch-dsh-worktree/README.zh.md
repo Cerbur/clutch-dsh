@@ -302,9 +302,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），核验关联 Session
      与子代理均处于空闲状态（busy 或 unknown 状态均直接拒绝，禁止伪造空闲），执行真正的非强制 `git worktree remove`，
      成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
-     归一化为 `workspace-write + ask`。
+     归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为 `cleaned`；
+     权限归一化失败或刷新异常提供独立恢复，不重复执行磁盘删除。
   2. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
-     磁盘文件与 DSH 原生 Session；执行前同样核验关联 Session 活动。
+     磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。执行前同样核验关联 Session 活动（busy 或 unknown 均阻断）。
 - 对于已清理磁盘的 Worktree（`health: cleaned`），选项菜单提供“移出管理”以从 sidecar 中彻底移除该记录。
 - 删除 Workspace 只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序

@@ -236,6 +236,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyArchivedObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -371,6 +372,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyArchivedObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -521,6 +523,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyArchivedObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -554,18 +557,6 @@ export class WorktreeMutationTransaction {
         const liveBefore = await this.git.listWorktrees(gitRoot);
         const exactBefore = await this.findExactWorktree(liveBefore, record.absolutePath, record.branch);
         if (!exactBefore) {
-          await this.markRecovery(locked, {
-            id: randomUUID(),
-            type: 'clean-worktree',
-            phase: 'recovery-needed',
-            workspaceId: input.workspaceId,
-            worktreeId: input.worktreeId,
-            targetPath: record.absolutePath,
-            branch: record.branch,
-            source: record.source,
-            repositoryFingerprint: createRepositoryFingerprint(repository.identity),
-            startedAt: new Date().toISOString(),
-          }, 'WORKTREE_IDENTITY_CHANGED');
           throw providerError('WORKTREE_IDENTITY_CHANGED', `Worktree is not registered in Git: ${record.absolutePath}`, {
             workspaceId: input.workspaceId,
             worktreeId: input.worktreeId,
@@ -683,6 +674,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyArchivedObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -752,6 +744,7 @@ export class WorktreeMutationTransaction {
 
   async recover(input: RecoverWorktreesInput): Promise<void> {
     return this.withShardLock(input.workspaceId, async (locked) => {
+      await this.cleanLegacyArchivedObservations(locked);
       await this.git.validateRepository(input.workspaceRoot);
       const repository = await this.resolveRepository(input.workspaceRoot);
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
@@ -882,6 +875,18 @@ export class WorktreeMutationTransaction {
             cause: String(inspectionError),
           });
         }
+        if (
+          pending.type === 'clean-worktree' &&
+          pending.phase === 'recovery-needed' &&
+          !exact &&
+          !pendingTargetExists
+        ) {
+          throw recoveryError('Clean operation lacks sufficient completion evidence', {
+            workspaceId: input.workspaceId,
+            operationId: pending.id,
+            worktreeId: pending.worktreeId,
+          });
+        }
         if (!exact && !pendingTargetExists) {
           await this.publishCleaned(locked, pending.id, pending.worktreeId, repository.identity);
           return;
@@ -920,6 +925,38 @@ export class WorktreeMutationTransaction {
     return { identity: { topLevel: canonicalTopLevel, commonDirectory } };
   }
 
+  private async cleanLegacyArchivedObservations(locked: LockedSidecarStore): Promise<void> {
+    const snapshot = await locked.read();
+    if (snapshot.pendingOperation !== undefined || !snapshot.recoveryIssues || snapshot.recoveryIssues.length === 0) {
+      return;
+    }
+    const remainingIssues = snapshot.recoveryIssues.filter((issue) => {
+      const record = snapshot.worktrees.find((w) => w.worktreeId === issue.worktreeId);
+      const removable =
+        issue.operationId === undefined &&
+        issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
+        record?.status === 'removed' &&
+        record.diskCleanup !== 'completed' &&
+        issue.worktreeId === record.worktreeId;
+      return !removable;
+    });
+    if (remainingIssues.length !== snapshot.recoveryIssues.length) {
+      await locked.mutate((current) => {
+        const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = current;
+        void _repository;
+        void _oldRecovery;
+        return {
+          result: undefined,
+          changed: true,
+          snapshot: {
+            ...stableFields,
+            ...(remainingIssues.length > 0 ? { recoveryIssues: remainingIssues } : {}),
+          },
+        };
+      });
+    }
+  }
+
   private assertMutationAdmitted(snapshot: SidecarSnapshot, workspaceId: string): void {
     if (snapshot.pendingOperation) {
       throw recoveryError(`Workspace has a pending Worktree operation: ${snapshot.pendingOperation.id}`, {
@@ -928,7 +965,19 @@ export class WorktreeMutationTransaction {
       });
     }
     if (snapshot.recoveryIssues && snapshot.recoveryIssues.length > 0) {
-      throw recoveryError(`Workspace has unresolved Worktree recovery issues: ${workspaceId}`, { workspaceId });
+      const remainingIssues = snapshot.recoveryIssues.filter((issue) => {
+        const record = snapshot.worktrees.find((w) => w.worktreeId === issue.worktreeId);
+        const removable =
+          issue.operationId === undefined &&
+          issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
+          record?.status === 'removed' &&
+          record.diskCleanup !== 'completed' &&
+          issue.worktreeId === record.worktreeId;
+        return !removable;
+      });
+      if (remainingIssues.length > 0) {
+        throw recoveryError(`Workspace has unresolved Worktree recovery issues: ${workspaceId}`, { workspaceId });
+      }
     }
   }
 
@@ -1101,6 +1150,7 @@ export class WorktreeMutationTransaction {
     worktrees: readonly GitWorktreeInfo[],
   ): Promise<WorktreeRecord | undefined> {
     for (const record of snapshot.worktrees) {
+      if (record.status !== 'active') continue;
       if (record.diskCleanup === 'completed') continue;
       if (!(await this.findExactWorktree(worktrees, record.absolutePath, record.branch))) return record;
     }
@@ -1129,12 +1179,13 @@ export class WorktreeMutationTransaction {
         });
       }
       const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId, record.worktreeId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
       void _repository;
+      void _oldRecovery;
       return {
         result: undefined,
         snapshot: {
-          ...withoutRepository,
+          ...stableFields,
           repositoryFingerprint: createRepositoryFingerprint(repository),
           worktrees: existing ? snapshot.worktrees : [record, ...snapshot.worktrees],
           pendingOperation: undefined,
@@ -1152,11 +1203,12 @@ export class WorktreeMutationTransaction {
   ): Promise<void> {
     await locked.mutate((snapshot) => {
       const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId, worktreeId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
       void _repository;
+      void _oldRecovery;
       const cleaned = completeWorktreeCleanup(
         {
-          ...withoutRepository,
+          ...stableFields,
           repositoryFingerprint: createRepositoryFingerprint(repository),
           pendingOperation: undefined,
           ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
@@ -1182,12 +1234,13 @@ export class WorktreeMutationTransaction {
   private async clearPending(locked: LockedSidecarStore, operationId: string): Promise<void> {
     await locked.mutate((snapshot) => {
       const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
       void _repository;
+      void _oldRecovery;
       return {
         result: undefined,
         snapshot: {
-          ...withoutRepository,
+          ...stableFields,
           pendingOperation: undefined,
           ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
         },

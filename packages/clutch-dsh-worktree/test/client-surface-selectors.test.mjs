@@ -135,3 +135,69 @@ test('requires the ready Worktree snapshot to cover the current Workspace ids', 
     true,
   );
 });
+
+test('archive menus block busy, unknown and pending activity', () => {
+  assert.equal(
+    selectors.worktreeActivityBlockReason({ state: 'busy', sessionIds: ['s1'] }, false),
+    'busy',
+  );
+  assert.equal(selectors.worktreeActivityBlockReason(undefined, false), 'unknown');
+  assert.equal(selectors.worktreeActivityBlockReason({ state: 'unknown' }, false), 'unknown');
+  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, true), 'pending');
+  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, false), undefined);
+});
+test('archived current Session reveals its archive ancestor', () => {
+  assert.deepEqual(
+    selectors.currentSessionRevealKeys({
+      sessionId: 's1',
+      workspaceId: 'ws1',
+      worktreeId: 'wt1',
+      groupKey: 'worktree:wt1',
+      kind: 'worktree',
+      archived: true,
+    }),
+    ['workspace:ws1', 'archived:ws1', 'worktree:wt1', 'session-group:worktree:wt1'],
+  );
+});
+
+test('resolveCurrentSessionLocation identifies archived worktree session', () => {
+  const loc = selectors.resolveCurrentSessionLocation(
+    's1',
+    [{ workspaceId: 'ws1', sessionIds: ['s1'] }],
+    [
+      {
+        workspaceId: 'ws1',
+        title: 'ws1',
+        rootPath: '/repo',
+        branches: [],
+        worktrees: [
+          {
+            worktreeId: 'wt1',
+            workspaceId: 'ws1',
+            absolutePath: '/repo/wt1',
+            branch: 'feature/archived',
+            source: 'external',
+            status: 'removed',
+            health: 'ready',
+          },
+        ],
+        bindings: [
+          {
+            workspaceId: 'ws1',
+            worktreeId: 'wt1',
+            sessionId: 's1',
+            status: 'active',
+          },
+        ],
+      },
+    ],
+  );
+  assert.deepEqual(loc, {
+    sessionId: 's1',
+    workspaceId: 'ws1',
+    groupKey: 'worktree:wt1',
+    kind: 'worktree',
+    worktreeId: 'wt1',
+    archived: true,
+  });
+});

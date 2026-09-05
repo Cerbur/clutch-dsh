@@ -331,9 +331,12 @@ blank-session Hero. The displayed language follows DSH's current language settin
      verifies that all linked Sessions and subagents are idle (busy or unknown states reject without
      fallback), runs real non-forced `git worktree remove`, and upon success records
      `diskCleanup: completed`, projects health as `cleaned`, transitions bindings to detached, and
-     normalizes Full Access permissions to `workspace-write + ask`.
+     normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
+     from permission normalization: once disk removal commits, the dialog closes and the record updates to
+     `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
   2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
-     its bindings, while preserving disk files and native DSH Sessions. Also verifies idle session activity.
+     its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
+     recovery state, and permission notices for that Worktree. Also verifies idle session activity (busy or unknown blocks).
 - For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
   `Remove from Management` to prune the sidecar record completely.
 - Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,

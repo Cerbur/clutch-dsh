@@ -59,6 +59,7 @@ import {
   isSessionGroupAutoExpanded,
   resolveCurrentSessionLocation,
   workspaceMatches,
+  worktreeActivityBlockReason,
 } from './worktree-surface-selectors.js';
 import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
 import {
@@ -89,6 +90,7 @@ import type {
   WorktreeForkRecovery,
   WorktreeForkRecoveryStore,
 } from './worktree-session-fork.js';
+import { runWorktreeCleanupFlow } from './worktree-cleanup-flow.js';
 import {
   executeWorktreeAction,
   createDefaultWorktreeName,
@@ -222,6 +224,7 @@ export function WorktreeSurface({
   ensureSessionWorkspace,
   syncSessionWorkspaces,
   openSession,
+  onWorktreeForgotten,
 }: WorktreeSurfaceProps) {
   const preferredMode = useStore((state) => state.viewMode);
   const mode = effectiveViewMode(preferredMode, available && manager !== undefined);
@@ -298,12 +301,6 @@ export function WorktreeSurface({
   const [worktreeCleanDisk, setWorktreeCleanDisk] = useState<WorktreeRecord>();
   const [worktreeForget, setWorktreeForget] = useState<WorktreeRecord>();
   const [expandedArchivedWorkspaces, setExpandedArchivedWorkspaces] = useState<Readonly<Record<string, boolean>>>({});
-  const toggleArchivedWorkspace = (workspaceId: string): void => {
-    setExpandedArchivedWorkspaces((current) => ({
-      ...current,
-      [workspaceId]: current[workspaceId] !== true,
-    }));
-  };
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranch, setNewBranch] = useState('');
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
@@ -1152,6 +1149,20 @@ export function WorktreeSurface({
     }
     expandState.actions.toggleWorktree(worktreeId);
     if (visuallyExpanded) clearSessionGroups(['worktree:' + worktreeId]);
+  };
+
+  const toggleArchivedWorkspace = (workspaceId: string): void => {
+    const archivedKey = 'archived:' + workspaceId;
+    const autoExpanded = isCurrentSessionReveal(archivedKey);
+    const persistedExpanded = expandedArchivedWorkspaces[workspaceId] === true;
+    const visuallyExpanded = persistedExpanded || autoExpanded;
+    if (visuallyExpanded && autoExpanded) {
+      suppressCurrentSessionReveal(archivedKey);
+    }
+    setExpandedArchivedWorkspaces((current) => ({
+      ...current,
+      [workspaceId]: !visuallyExpanded,
+    }));
   };
 
   const toggleSessionGroup = (groupKey: string, autoExpanded: boolean): void => {
@@ -2046,28 +2057,32 @@ export function WorktreeSurface({
                             );
                           })}
 
-                          {archivedWorktrees.length > 0 && (
-                            <div className={styles.archivedGroup} data-archived-group>
-                              <WorktreeGroupRow
-                                t={t}
-                                kind="archived-group"
-                                label={t('worktree.archivedGroup')}
-                                expanded={expandedArchivedWorkspaces[workspace.workspaceId] === true}
-                                hasOngoingSession={hasOngoingSession(
-                                  archivedWorktrees.flatMap((record) =>
-                                    bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-                                      sessions.ids.includes(sessionId),
+                          {archivedWorktrees.length > 0 && (() => {
+                            const archivedKey = 'archived:' + workspace.workspaceId;
+                            const isArchivedAutoExpanded = isCurrentSessionReveal(archivedKey);
+                            const isArchivedExpanded = (expandedArchivedWorkspaces[workspace.workspaceId] === true) || isArchivedAutoExpanded;
+                            return (
+                              <div className={styles.archivedGroup} data-archived-group>
+                                <WorktreeGroupRow
+                                  t={t}
+                                  kind="archived-group"
+                                  label={t('worktree.archivedGroup')}
+                                  expanded={isArchivedExpanded}
+                                  hasOngoingSession={hasOngoingSession(
+                                    archivedWorktrees.flatMap((record) =>
+                                      bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+                                        sessions.ids.includes(sessionId),
+                                      ),
                                     ),
-                                  ),
-                                  sessionPresentations,
-                                )}
-                                icon={<IconArchiveOutline20 size={16} />}
-                                workspaceTitle={workspace.title}
-                                onToggle={() => {
-                                  toggleArchivedWorkspace(workspace.workspaceId);
-                                }}
-                              />
-                              {expandedArchivedWorkspaces[workspace.workspaceId] === true && (
+                                    sessionPresentations,
+                                  )}
+                                  icon={<IconArchiveOutline20 size={16} />}
+                                  workspaceTitle={workspace.title}
+                                  onToggle={() => {
+                                    toggleArchivedWorkspace(workspace.workspaceId);
+                                  }}
+                                />
+                                {isArchivedExpanded && (
                                 <div className={styles.treeChildren}>
                                   {archivedWorktrees.map((record) => {
                                     const worktreeSessionIds = filterVisibleSessionIds(
@@ -2160,29 +2175,42 @@ export function WorktreeSurface({
                                           onToggle={() => {
                                             toggleWorktree(record.worktreeId);
                                           }}
-                                          menu={{
-                                            open: openWorktreeMenuId === record.worktreeId,
-                                            label: record.branch,
-                                            copyPath: record.absolutePath,
-                                            showCreate: false,
-                                            showRemove: false,
-                                            showCleanDisk: record.diskCleanup !== 'completed',
-                                            showForget: true,
-                                            disabled: actionPending,
-                                            onOpenChange: (open) => {
-                                              setOpenWorktreeMenuId(
-                                                open ? record.worktreeId : undefined,
-                                              );
-                                            },
-                                            onCleanDisk: () => {
-                                              setWorktreeCleanDisk(record);
-                                              setActionError(undefined);
-                                            },
-                                            onForget: () => {
-                                              setWorktreeForget(record);
-                                              setActionError(undefined);
-                                            },
-                                          }}
+                                          menu={(() => {
+                                            const activityBlocked = worktreeActivityBlockReason(record.activity, actionPending);
+                                            const blockedReasonText =
+                                              activityBlocked === 'busy'
+                                                ? t('error.worktreeSessionBusy')
+                                                : activityBlocked === 'unknown'
+                                                  ? t('error.worktreeActivityUnavailable')
+                                                  : undefined;
+                                            return {
+                                              open: openWorktreeMenuId === record.worktreeId,
+                                              label: record.branch,
+                                              copyPath: record.absolutePath,
+                                              showCreate: false,
+                                              showRemove: false,
+                                              showCleanDisk: record.diskCleanup !== 'completed',
+                                              showForget: true,
+                                              disabled: actionPending,
+                                              cleanDiskDisabled: activityBlocked !== undefined,
+                                              forgetDisabled: activityBlocked !== undefined,
+                                              cleanDiskDisabledReason: blockedReasonText,
+                                              forgetDisabledReason: blockedReasonText,
+                                              onOpenChange: (open) => {
+                                                setOpenWorktreeMenuId(
+                                                  open ? record.worktreeId : undefined,
+                                                );
+                                              },
+                                              onCleanDisk: () => {
+                                                setWorktreeCleanDisk(record);
+                                                setActionError(undefined);
+                                              },
+                                              onForget: () => {
+                                                setWorktreeForget(record);
+                                                setActionError(undefined);
+                                              },
+                                            };
+                                          })()}
                                         />
                                         {worktreeExpanded && (
                                           <WorktreeSessionGroup
@@ -2240,7 +2268,8 @@ export function WorktreeSurface({
                                 </div>
                               )}
                             </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       )}
                     </section>
@@ -2354,7 +2383,8 @@ export function WorktreeSurface({
                 worktreeId: target.worktreeId,
                 mutationToken,
               },
-            }, permission, onPermissionNotice);
+            });
+            suppressCurrentSessionReveal('archived:' + target.workspaceId);
             setWorktreeRemoval(undefined);
           }, {
             scope: { kind: 'workspace', workspaceId: target.workspaceId },
@@ -2386,19 +2416,91 @@ export function WorktreeSurface({
             });
             return;
           }
-          void runMutation(async () => {
-            await executeWorktreeAction(manager, {
-              type: 'cleanWorktree',
-              input: {
-                workspaceId: target.workspaceId,
-                worktreeId: target.worktreeId,
-                mutationToken,
-              },
-            }, permission, onPermissionNotice);
-            setWorktreeCleanDisk(undefined);
-          }, {
-            scope: { kind: 'workspace', workspaceId: target.workspaceId },
-            preserveCurrent: true,
+          const isCurrent = true;
+          setActionPending(true);
+          setActionError(undefined);
+          void runWorktreeCleanupFlow({
+            clean: async () => {
+              await executeWorktreeAction(manager, {
+                type: 'cleanWorktree',
+                input: {
+                  workspaceId: target.workspaceId,
+                  worktreeId: target.worktreeId,
+                  mutationToken,
+                },
+              });
+            },
+            onCommitted: () => {
+              setWorktreeCleanDisk(undefined);
+              setReadState((current) => {
+                if (current.status !== 'ready') return current;
+                return {
+                  ...current,
+                  views: current.views.map((v) => {
+                    if (v.workspaceId !== target.workspaceId) return v;
+                    return {
+                      ...v,
+                      worktrees: v.worktrees.map((w) => {
+                        if (w.worktreeId !== target.worktreeId) return w;
+                        return {
+                          ...w,
+                          status: 'removed',
+                          diskCleanup: 'completed',
+                          health: 'cleaned',
+                          mutationToken: undefined,
+                        };
+                      }),
+                      bindings: v.bindings.map((b) => {
+                        if (b.worktreeId !== target.worktreeId) return b;
+                        return {
+                          ...b,
+                          status: 'detached',
+                        };
+                      }),
+                    };
+                  }),
+                };
+              });
+            },
+            refresh: async () => {
+              await refresh({
+                scope: { kind: 'workspace', workspaceId: target.workspaceId },
+                preserveCurrent: true,
+              });
+            },
+            normalize: async () => {
+              if (permission?.normalizeDetachedWorktreePermissions === undefined) return;
+              try {
+                const result = await permission.normalizeDetachedWorktreePermissions({
+                  workspaceId: target.workspaceId,
+                  worktreeId: target.worktreeId,
+                });
+                if (result !== undefined && isCurrent) {
+                  onPermissionNotice?.({
+                    workspaceId: target.workspaceId,
+                    worktreeId: target.worktreeId,
+                  }, result);
+                }
+              } catch {
+                if (isCurrent) {
+                  onPermissionNotice?.({
+                    workspaceId: target.workspaceId,
+                    worktreeId: target.worktreeId,
+                  }, {
+                    status: 'unverified',
+                    retryable: true,
+                  });
+                }
+              }
+            },
+            isCurrent: () => isCurrent,
+            onFollowUpError: () => {
+              // Follow-up errors do not fail the clean mutation
+            },
+          }).catch((error) => {
+            setActionError(toWorktreeViewError(error));
+          }).finally(() => {
+            setActionPending(false);
           });
         }}
       />
@@ -2426,6 +2528,10 @@ export function WorktreeSurface({
             });
             return;
           }
+          const targetBindings = readState.status === 'ready'
+            ? readState.views.find((v) => v.workspaceId === target.workspaceId)?.bindings ?? []
+            : [];
+          const affectedSessionIds = bindingIdsFor(targetBindings, target.worktreeId);
           void runMutation(async () => {
             await executeWorktreeAction(manager, {
               type: 'forgetWorktree',
@@ -2434,8 +2540,30 @@ export function WorktreeSurface({
                 worktreeId: target.worktreeId,
                 mutationToken,
               },
-            }, permission, onPermissionNotice);
+            });
+            onWorktreeForgotten?.({
+              workspaceId: target.workspaceId,
+              worktreeId: target.worktreeId,
+              sessionIds: affectedSessionIds,
+            });
+            if (pendingSessionBinding?.worktreeId === target.worktreeId) {
+              setPendingSessionBinding(undefined);
+            }
             clearSessionGroups(['worktree:' + target.worktreeId]);
+            setReadState((current) => {
+              if (current.status !== 'ready') return current;
+              return {
+                ...current,
+                views: current.views.map((v) => {
+                  if (v.workspaceId !== target.workspaceId) return v;
+                  return {
+                    ...v,
+                    worktrees: v.worktrees.filter((w) => w.worktreeId !== target.worktreeId),
+                    bindings: v.bindings.filter((b) => b.worktreeId !== target.worktreeId),
+                  };
+                }),
+              };
+            });
             setWorktreeForget(undefined);
           }, {
             scope: { kind: 'workspace', workspaceId: target.workspaceId },

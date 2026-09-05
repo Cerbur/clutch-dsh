@@ -21,20 +21,22 @@
 - 活动状态、health、mutation token 和浏览器状态不得持久化到 sidecar。
 - 所有刷新保留 ready 内容，并限制在受影响的 Worktree 或所属 Workspace。
 
+文档编写期间，工作分支被外部操作更新为 `cdcc2532da749718ec03d1c2215706537a53b934`，已纳入这两份文档及 recovery health 按目标 Worktree 投影的补充修复。本次审查问题仍以 e6a2634 为来源；执行者必须先核对当前差异，保留已有修复，不能回退到旧提交。
+
 原实施计划中的已勾选项目不等于修复验收证据。本次需要新增行为回归测试并记录实际执行结果。
 
 ## 2. 审查问题与修复目标
 
-| ID | 优先级 | 现状与触发条件 | 必须达到的结果 |
-| --- | --- | --- | --- |
-| R1 | P1 | 默认 Host 读取未注册的 `ctx.get('activitySource')`；普通已绑定 Worktree 始终 unknown | 默认组合连接真实 DSH 活动事实，确认完整且空闲时能 clean/forget，有忙碌项或证据不完整时拒绝 |
-| R2 | P2 | Archived 父组仅依赖手动展开；当前 Session 的自动 reveal 没有该父组 | 导航或进入模式时能够展开当前 Session 的 Archived 祖先并定位，尊重手动折叠 |
-| R3 | P2 | context resolver 把所有 removed record 当作 stale | removed、未 cleaned、有效 active binding 的 Session 保留 Worktree 分支上下文 |
-| R4 | P2 | forget 后旧 fork/bind 异步结果再次发布 recovery 或 projection | 按 Worktree 身份清理浏览器状态，并淘汰该身份的过期异步结果 |
-| R5 | P2 | busy/unknown 只在确认框阻止操作；菜单仍可点击，cleaned 的 detached binding 未计入投影 | 菜单和确认框共用活动限制，包含目标全部 binding 的 Session |
-| R6 | P2 | Git 清理成功后 permission RPC 失败使 action 整体失败，跳过刷新 | 已提交的清理立即进入 cleaned UI；权限失败独立显示且只重试权限 |
-| R7 | P2 | 无 pending 的 archived 目录缺失在启动扫描中写成 recovery issue，forget 被锁死 | 普通缺失保持 runtime repair，重启不制造事务；无真实 blocker 时可纯索引 forget |
-| R8 | P2 | clean 身份预检失败先写 clean journal；随后 recover 把外部删除误认作 cleaned | 预检拒绝不写 journal；恢复不得根据模糊历史标记推断清理成功 |
+| ID  | 优先级 | 现状与触发条件                                                                        | 必须达到的结果                                                                             |
+| --- | ------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| R1  | P1     | 默认 Host 读取未注册的 `ctx.get('activitySource')`；普通已绑定 Worktree 始终 unknown  | 默认组合连接真实 DSH 活动事实，确认完整且空闲时能 clean/forget，有忙碌项或证据不完整时拒绝 |
+| R2  | P2     | Archived 父组仅依赖手动展开；当前 Session 的自动 reveal 没有该父组                    | 导航或进入模式时能够展开当前 Session 的 Archived 祖先并定位，尊重手动折叠                  |
+| R3  | P2     | context resolver 把所有 removed record 当作 stale                                     | removed、未 cleaned、有效 active binding 的 Session 保留 Worktree 分支上下文               |
+| R4  | P2     | forget 后旧 fork/bind 异步结果再次发布 recovery 或 projection                         | 按 Worktree 身份清理浏览器状态，并淘汰该身份的过期异步结果                                 |
+| R5  | P2     | busy/unknown 只在确认框阻止操作；菜单仍可点击，cleaned 的 detached binding 未计入投影 | 菜单和确认框共用活动限制，包含目标全部 binding 的 Session                                  |
+| R6  | P2     | Git 清理成功后 permission RPC 失败使 action 整体失败，跳过刷新                        | 已提交的清理立即进入 cleaned UI；权限失败独立显示且只重试权限                              |
+| R7  | P2     | 无 pending 的 archived 目录缺失在启动扫描中写成 recovery issue，forget 被锁死         | 普通缺失保持 runtime repair，重启不制造事务；无真实 blocker 时可纯索引 forget              |
+| R8  | P2     | clean 身份预检失败先写 clean journal；随后 recover 把外部删除误认作 cleaned           | 预检拒绝不写 journal；恢复不得根据模糊历史标记推断清理成功                                 |
 
 ### R1：真实活动来源与完整性
 
@@ -149,22 +151,22 @@ clean 的顺序固定为：校验 sidecar/token → 校验身份和安全路径 
 
 ## 3. 验收矩阵
 
-| 验收 ID | 操作与断言 | 覆盖 |
-| --- | --- | --- |
-| A1 | 实际 Host 默认装载，无自定义 activitySource：idle 的已绑定归档 Worktree 可清理/forget | R1 |
-| A2 | 根 Session running、idle 父的运行子任务、one-shot/非本地、热加载前已有任务、读取失败、dispose 分别验证；不完整不返回 idle | R1 |
-| A3 | cleaned + detached binding 的运行 Session：list projection、菜单、dialog、Host 全部阻止 forget | R1/R5 |
-| A4 | 导航到 Archived 第六个 Session，父链展开且行可见；手动折叠刷新不打开；点击归档不立即展开 | R2 |
-| A5 | active 与 removed+ready 的 active binding context 一致；cleaned/detached/repair/mismatch 分别保留错误语义 | R3 |
-| A6 | fork lookup/bind 在 forget 前开始，分别于成功后 resolve/reject；没有旧 recovery/projection，native child 保留 | R4 |
-| A7 | forget 失败不清状态；其他 Worktree 保留恢复项；同路径新 ID 可绑定且不受旧代次影响 | R4 |
-| A8 | clean 已成功，权限 RPC rejection 或业务失败：UI cleaned、删除菜单消失、targeted refresh 执行；重试只触发权限 | R6 |
-| A9 | A8 同时刷新失败：保留 cleaned ready UI；forget 后权限晚到结果不能复活通知 | R4/R6 |
-| A10 | 归档→外部移除目录→重启，仍 repair、无新 pending/issue；idle forget 成功且 DSH fixture 不变 | R7 |
-| A11 | 注入已知无事务旧 issue：按精确条件清理；混合真实 blocker 时保留阻断 | R7 |
-| A12 | exact registration 缺失时 clean 拒绝；sidecar 字节不变；recover 不产生 cleaned | R8 |
-| A13 | 旧模糊 clean recovery-needed marker 不自动完成；可信 journal 和旧 remove 分别保留正确恢复 | R8 |
-| A14 | 恢复成功后对应 issue 消失、其他 issue 保留；无其他 issue 时下一次合法 mutation 不再误阻断 | R7/R8 |
+| 验收 ID | 操作与断言                                                                                                                | 覆盖  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------- | ----- |
+| A1      | 实际 Host 默认装载，无自定义 activitySource：idle 的已绑定归档 Worktree 可清理/forget                                     | R1    |
+| A2      | 根 Session running、idle 父的运行子任务、one-shot/非本地、热加载前已有任务、读取失败、dispose 分别验证；不完整不返回 idle | R1    |
+| A3      | cleaned + detached binding 的运行 Session：list projection、菜单、dialog、Host 全部阻止 forget                            | R1/R5 |
+| A4      | 导航到 Archived 第六个 Session，父链展开且行可见；手动折叠刷新不打开；点击归档不立即展开                                  | R2    |
+| A5      | active 与 removed+ready 的 active binding context 一致；cleaned/detached/repair/mismatch 分别保留错误语义                 | R3    |
+| A6      | fork lookup/bind 在 forget 前开始，分别于成功后 resolve/reject；没有旧 recovery/projection，native child 保留             | R4    |
+| A7      | forget 失败不清状态；其他 Worktree 保留恢复项；同路径新 ID 可绑定且不受旧代次影响                                         | R4    |
+| A8      | clean 已成功，权限 RPC rejection 或业务失败：UI cleaned、删除菜单消失、targeted refresh 执行；重试只触发权限              | R6    |
+| A9      | A8 同时刷新失败：保留 cleaned ready UI；forget 后权限晚到结果不能复活通知                                                 | R4/R6 |
+| A10     | 归档→外部移除目录→重启，仍 repair、无新 pending/issue；idle forget 成功且 DSH fixture 不变                                | R7    |
+| A11     | 注入已知无事务旧 issue：按精确条件清理；混合真实 blocker 时保留阻断                                                       | R7    |
+| A12     | exact registration 缺失时 clean 拒绝；sidecar 字节不变；recover 不产生 cleaned                                            | R8    |
+| A13     | 旧模糊 clean recovery-needed marker 不自动完成；可信 journal 和旧 remove 分别保留正确恢复                                 | R8    |
+| A14     | 恢复成功后对应 issue 消失、其他 issue 保留；无其他 issue 时下一次合法 mutation 不再误阻断                                 | R7/R8 |
 
 真实 Git 测试只在测试创建的临时目录内执行删除。原生 Workspace/Session fixture 在各条写入路径前后 byte-for-byte 不变。任何浏览器刷新都不能通过清空 ready 内容显示 loading 空屏。
 
@@ -173,4 +175,3 @@ clean 的顺序固定为：校验 sidecar/token → 校验身份和安全路径 
 审查阶段在精确提交的临时副本中 build 成功，并运行 activity、lifecycle、manage、DSH reader、Host permission manager 共 103 个测试通过。这只说明既有覆盖没有发现上述问题，不代表修复完成。
 
 修复交接必须列出 A1–A14 的测试名、命令、通过/失败/未运行状态及真实 Host 的 DSH HEAD/profile。只有 mock 的活动测试不能通过 A1/A2。无法获得完整真实活动事实时，明确留下 R1 blocker，其余项按实际状态交付。不得把本次文档编写或原计划的勾选记录当成执行证据。
-

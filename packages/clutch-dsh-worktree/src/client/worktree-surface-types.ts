@@ -26,7 +26,9 @@ import type {
   WorktreeFullAccessConfirmationController,
 } from './worktree-permission.js';
 import type { WorktreeSessionOrderStore } from './worktree-session-order.js';
-import type { WorktreeForkRecoveryStore } from './worktree-session-fork.js';
+import type { ForgottenWorktree, WorktreeForkRecoveryStore } from './worktree-session-fork.js';
+
+export type { ForgottenWorktree };
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike, SessionPresentation } from './session-view.js';
 import type {
@@ -125,6 +127,7 @@ export interface WorktreeSurfaceInjected {
     bindings: readonly { workspaceId: string; sessionId: string }[],
   ) => void;
   readonly openSession: (sessionId: string) => void;
+  readonly onWorktreeForgotten?: (input: ForgottenWorktree) => void;
 }
 
 /** Props derived from the frame overlay slot, shared state, and injected face. */
@@ -248,6 +251,10 @@ export interface WorktreeGroupMenuProps {
   readonly showCleanDisk?: boolean;
   readonly showForget?: boolean;
   readonly disabled: boolean;
+  readonly cleanDiskDisabled?: boolean;
+  readonly forgetDisabled?: boolean;
+  readonly cleanDiskDisabledReason?: string;
+  readonly forgetDisabledReason?: string;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreateWorktree?: () => void;
   readonly onRemove?: () => void;

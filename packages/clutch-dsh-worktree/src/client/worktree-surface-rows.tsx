@@ -422,19 +422,23 @@ export function WorktreeGroupRow({
                 ...(menu.showCleanDisk
                   ? [{
                       id: 'clean-disk',
-                      label: t('worktree.cleanDisk'),
+                      label: menu.cleanDiskDisabledReason
+                        ? `${t('worktree.cleanDisk')} (${menu.cleanDiskDisabledReason})`
+                        : t('worktree.cleanDisk'),
                       icon: <IconTrashOutline16 />,
                       danger: true,
-                      disabled: menu.disabled || menu.onCleanDisk === undefined,
+                      disabled: menu.disabled || menu.cleanDiskDisabled || menu.onCleanDisk === undefined,
                     }]
                   : []),
                 ...(menu.showForget
                   ? [{
                       id: 'forget',
-                      label: t('worktree.forget'),
+                      label: menu.forgetDisabledReason
+                        ? `${t('worktree.forget')} (${menu.forgetDisabledReason})`
+                        : t('worktree.forget'),
                       icon: <IconTrashOutline16 />,
                       danger: true,
-                      disabled: menu.disabled || menu.onForget === undefined,
+                      disabled: menu.disabled || menu.forgetDisabled || menu.onForget === undefined,
                     }]
                   : []),
               ]}

@@ -870,8 +870,6 @@ test('normalizes detached Worktree Session permissions after removal', async () 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
     input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
-  }, permission, (input, result) => {
-    notices.push({ input, result });
   });
 
   // Archive does NOT degrade permissions
@@ -880,27 +878,17 @@ test('normalizes detached Worktree Session permissions after removal', async () 
   ]);
   assert.deepEqual(notices, []);
 
-  // Clean degrades permissions
+  // Clean via executeWorktreeAction does NOT degrade permissions directly (decoupled to runWorktreeCleanupFlow)
   await executeWorktreeAction(worktreeManager, {
     type: 'cleanWorktree',
     input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
-  }, permission, (input, result) => {
-    notices.push({ input, result });
   });
 
   assert.deepEqual(calls, [
     ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['cleanWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
-    ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
   ]);
-  assert.deepEqual(notices, [{
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
-    result: {
-      status: 'normalized-workspace-write',
-      sessionIds: ['session-one'],
-      retryable: false,
-    },
-  }]);
+  assert.deepEqual(notices, []);
 });
 
 test('adds a Create/Import dialog that retains the existing shared Session registration flow', async () => {
@@ -2016,4 +2004,14 @@ test('renders Archived group for removed worktrees and provides clean disk and f
   assert.match(source, /t\('error\.worktreeActivityUnavailable'\)/);
   assert.match(source, /t\('worktree\.cleaned'\)/);
 });
+test('reveals archived ancestor for archived worktree session and supports suppression', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
 
+  assert.match(source, /const archivedKey = 'archived:' \+ workspace\.workspaceId;/);
+  assert.match(source, /isCurrentSessionReveal\(archivedKey\)/);
+  assert.match(source, /suppressCurrentSessionReveal\(archivedKey\)/);
+  assert.match(source, /suppressCurrentSessionReveal\('archived:' \+ target\.workspaceId\)/);
+});

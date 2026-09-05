@@ -116,6 +116,7 @@ test('resolves a detached binding to the retained Worktree group', () => {
       groupKey: 'worktree:wt-detached',
       kind: 'worktree',
       worktreeId: 'wt-detached',
+      archived: true,
     },
   );
 });

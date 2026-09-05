@@ -4,6 +4,7 @@ import {
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { formatWorktreeViewError } from './worktree-error-copy.js';
+import { worktreeActivityBlockReason } from './worktree-surface-selectors.js';
 import { worktreeSetupCommands } from './worktree-view.js';
 import type {
   SessionRenameDialogProps,
@@ -476,9 +477,10 @@ export function WorktreeCleanDiskDialog({
   onSubmit,
 }: WorktreeCleanDiskDialogProps) {
   if (worktree === undefined) return null;
-  const isBusy = worktree.activity?.state === 'busy';
-  const isUnknown = worktree.activity?.state === 'unknown';
-  const isBlocked = isBusy || isUnknown;
+  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending);
+  const isBusy = activityBlock === 'busy';
+  const isUnknown = activityBlock === 'unknown';
+  const isBlocked = activityBlock !== undefined;
 
   return (
     <Modal
@@ -524,9 +526,10 @@ export function WorktreeForgetDialog({
   onSubmit,
 }: WorktreeForgetDialogProps) {
   if (worktree === undefined) return null;
-  const isBusy = worktree.activity?.state === 'busy';
-  const isUnknown = worktree.activity?.state === 'unknown';
-  const isBlocked = isBusy || isUnknown;
+  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending);
+  const isBusy = activityBlock === 'busy';
+  const isUnknown = activityBlock === 'unknown';
+  const isBlocked = activityBlock !== undefined;
 
   return (
     <Modal
