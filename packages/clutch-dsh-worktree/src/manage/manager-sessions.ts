@@ -28,8 +28,8 @@ export async function bindSession(
         worktreeId: input.worktreeId,
       });
     }
-    if (worktree.status === 'removed') {
-      throw providerError('WORKTREE_REMOVED', `Worktree has been removed: ${input.worktreeId}`, {
+    if (worktree.diskCleanup === 'completed') {
+      throw providerError('WORKTREE_REMOVED', `Worktree has been cleaned: ${input.worktreeId}`, {
         workspaceId: input.workspaceId,
         worktreeId: input.worktreeId,
       });
@@ -90,8 +90,8 @@ export async function resolveRuntimeCwd(
       sessionId: input.sessionId,
     });
   }
-  if (worktree.status !== 'active') {
-    throw providerError('WORKTREE_REMOVED', `Active binding points to a removed Worktree: ${worktree.worktreeId}`, {
+  if (worktree.diskCleanup === 'completed') {
+    throw providerError('WORKTREE_REMOVED', `Active binding points to a cleaned Worktree: ${worktree.worktreeId}`, {
       workspaceId: input.workspaceId,
       worktreeId: worktree.worktreeId,
       sessionId: input.sessionId,

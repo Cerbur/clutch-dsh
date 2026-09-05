@@ -24,6 +24,8 @@ test('publishes the browser-safe Worktree Manager method names', () => {
     'createWorktree',
     'importWorktree',
     'removeWorktree',
+    'cleanWorktree',
+    'forgetWorktree',
     'insertWorktreeBefore',
     'listBindings',
     'bindSession',

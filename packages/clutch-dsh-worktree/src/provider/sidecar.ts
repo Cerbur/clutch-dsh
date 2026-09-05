@@ -18,7 +18,8 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
     left.absolutePath === right.absolutePath &&
     left.branch === right.branch &&
     left.source === right.source &&
-    left.status === right.status
+    left.status === right.status &&
+    left.diskCleanup === right.diskCleanup
   );
 }
 
@@ -81,10 +82,15 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
 
   /** Idempotently insert a Worktree record by ID. */
   async upsertWorktree(record: WorktreeRecord): Promise<WorktreeRecord> {
-    const { health: _health, mutationToken: _mutationToken, ...withoutHealth } = record;
+    const { health: _health, mutationToken: _mutationToken, activity: _activity, ...withoutRuntime } = record;
     void _health;
     void _mutationToken;
-    const persistedRecord: WorktreeRecord = { ...withoutHealth, source: record.source ?? 'plugin' };
+    void _activity;
+    const persistedRecord: WorktreeRecord = {
+      ...withoutRuntime,
+      source: record.source ?? 'plugin',
+      ...(record.diskCleanup !== undefined ? { diskCleanup: record.diskCleanup } : {}),
+    };
     return this.mutate(record.workspaceId, (snapshot) => {
       const existing = snapshot.worktrees.find(
         (candidate) => candidate.worktreeId === persistedRecord.worktreeId,

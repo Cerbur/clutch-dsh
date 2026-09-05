@@ -419,12 +419,32 @@ export function WorktreeGroupRow({
                       disabled: menu.disabled || menu.onRemove === undefined,
                     }]
                   : []),
+                ...(menu.showCleanDisk
+                  ? [{
+                      id: 'clean-disk',
+                      label: t('worktree.cleanDisk'),
+                      icon: <IconTrashOutline16 />,
+                      danger: true,
+                      disabled: menu.disabled || menu.onCleanDisk === undefined,
+                    }]
+                  : []),
+                ...(menu.showForget
+                  ? [{
+                      id: 'forget',
+                      label: t('worktree.forget'),
+                      icon: <IconTrashOutline16 />,
+                      danger: true,
+                      disabled: menu.disabled || menu.onForget === undefined,
+                    }]
+                  : []),
               ]}
               onSelect={(id) => {
                 menu.onOpenChange(false);
                 if (id === 'create' && menu.showCreate) menu.onCreateWorktree?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);
                 if (id === 'remove' && menu.showRemove) menu.onRemove?.();
+                if (id === 'clean-disk' && menu.showCleanDisk) menu.onCleanDisk?.();
+                if (id === 'forget' && menu.showForget) menu.onForget?.();
               }}
               portal
               closeOnPointerLeave

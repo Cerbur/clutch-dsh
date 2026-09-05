@@ -66,6 +66,14 @@ export type WorktreeViewAction =
   | {
       readonly type: 'removeWorktree';
       readonly input: Parameters<WorktreeManager['removeWorktree']>[0];
+    }
+  | {
+      readonly type: 'cleanWorktree';
+      readonly input: Parameters<WorktreeManager['cleanWorktree']>[0];
+    }
+  | {
+      readonly type: 'forgetWorktree';
+      readonly input: Parameters<WorktreeManager['forgetWorktree']>[0];
     };
 
 /** Resolve a row-half drop target to native-style optional before-anchor semantics. */
@@ -109,6 +117,10 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
+    return;
+  }
+  if (action.type === 'cleanWorktree') {
+    await manager.cleanWorktree(action.input);
     const result = await permission?.normalizeDetachedWorktreePermissions({
       workspaceId: action.input.workspaceId,
       worktreeId: action.input.worktreeId,
@@ -119,6 +131,10 @@ export async function executeWorktreeAction(
         worktreeId: action.input.worktreeId,
       }, result);
     }
+    return;
+  }
+  if (action.type === 'forgetWorktree') {
+    await manager.forgetWorktree(action.input);
     return;
   }
 }

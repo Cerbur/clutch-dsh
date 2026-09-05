@@ -97,11 +97,11 @@ Worktree 与 Session 的顺序约束：
 5. 创建 Session 时先调用 DSH 原生 Session API，再写入外部 binding。
 6. binding 写入失败时不得删除或修改已创建的 DSH Session；界面必须保留 Session ID 供重试或直接打开。
 
-Plugin-created and external Worktrees share the real `git worktree remove` path. Git removal
-must succeed before the sidecar record is marked `removed` and bindings become `detached`.
-Removing an external Worktree is destructive and may delete its linked Worktree directory;
-the Client confirmation copy must say so. If Git succeeds but sidecar synchronization fails,
-the failure remains visible and retryable.
+Worktree 生命周期分为三个独立操作：
+1. 移除（内部归档）：`status = 'removed'`，保留磁盘目录与 binding；已有 Session 继续在 Worktree cwd 运行。
+2. 清理磁盘：需经二次确认且关联 Session/子代理均不处于运行或未知状态；执行真正的非强制 `git worktree remove`；成功后记录 `diskCleanup: 'completed'`，运行时投影 `health = 'cleaned'`，其 binding 转为 `detached`。
+3. 移出管理：删除该 Worktree 的 sidecar 记录与全部 binding，保留磁盘文件与 DSH 原生 Session；重新导入不会自动恢复旧 binding。
+Host 在执行清理与移出管理前必须核验关联 Session 活动，busy 或 unknown 均拒绝，禁止使用假 idle fallback。
 Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工作树中的业务文件。
 
 ## 模块职责与依赖方向
@@ -164,13 +164,15 @@ cannot weaken Git writes. `WorktreeManagerService.close()` is idempotent, aborts
 signal, and waits for admitted operations; Host registers that close operation with the Cordis
 fiber lifecycle.
 
-The sidecar schema is versioned from v1/v2 to v3. v1 records are read-normalized with
-`source: 'plugin'`; v2 records retain their explicit source, both legacy versions expose
-revision `0` in memory, and the first successful mutation atomically persists v3. A transitional
-v3 snapshot that still contains a raw provider repository identity is accepted, normalized to an
-opaque `repositoryFingerprint`, and cleaned on the next stable write. Unknown versions, invalid
-JSON, and invariant violations remain corruption errors and are never silently reset to an empty
-state. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never
+The sidecar schema is versioned from v1/v2/v3 to v4. v1 records are read-normalized with
+`source: 'plugin'`; v2 records retain their explicit source, legacy v1/v2 expose revision `0`
+in memory, and v3 preserves its revision string. Legacy removed records from schemaVersion < 4
+are normalized with `diskCleanup: 'completed'` and detached bindings. The first successful
+mutation atomically persists v4. A transitional snapshot that still contains a raw provider
+repository identity is accepted, normalized to an opaque `repositoryFingerprint`, and cleaned
+on the next stable write. Unknown versions, invalid JSON, and invariant violations remain
+corruption errors and are never silently reset to an empty state. Cleaned records cannot retain
+active bindings. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never
 become an empty candidate list. Provider errors include `WORKTREE_IMPORT_INVALID`,
 `WORKTREE_ALREADY_MANAGED`, `WORKTREE_MUTATION_BUSY`, `WORKTREE_STATE_CONFLICT`,
 `WORKTREE_RECOVERY_REQUIRED`, and `WORKTREE_IDENTITY_CHANGED`.

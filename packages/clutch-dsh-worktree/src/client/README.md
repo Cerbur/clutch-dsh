@@ -225,16 +225,27 @@ The Worktree surface is additive:
   DSH Workspace data for automatic promotion; manual drag updates the local order only after the
   native DSH ordering call succeeds.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
-- Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and exposes the same options menu for copying its DSH Workspace path; active Worktree rows expose the shared options menu with Copy path and removal confirmation, while detached/removed rows keep only Copy path and remain read-only;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and
   exposes the shared options menu with Copy path and, when a current local branch exists, Create new
-  Worktree; active Worktree rows expose Copy path, Create new Worktree, and removal confirmation;
-  detached/removed rows keep only Copy path and remain read-only. Create new Worktree opens the shared
-  Create dialog with the selected row's current branch as the base and the next available numbered name;
+  Worktree; active Worktree rows expose Copy path, Create new Worktree, and removal (archive) confirmation.
+  Create new Worktree opens the shared Create dialog with the selected row's current branch as the base and the
+  next available numbered name;
+- Removing an active Worktree is an internal archive operation: it sets `status: removed`, preserves disk
+  files, active bindings, and runtime cwd, and moves the Worktree into the default-collapsed `Archived` group
+  at the bottom of the Workspace;
+- The `Archived` group is rendered at the bottom of the Workspace whenever removed Worktrees exist and is
+  collapsed by default. Each Workspace tracks its own collapsed state;
+- For archived Worktrees, the options menu provides:
+  1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
+     verifies that all linked Sessions and subagents are idle (busy or unknown states reject immediately),
+     runs real non-forced `git worktree remove`, and upon success records `diskCleanup: completed`,
+     projects health as `cleaned`, transitions bindings to detached, and normalizes permissions;
+  2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
+     its bindings, while preserving disk files and native DSH Sessions;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, including a Workspace imported from a Git subdirectory after the Host resolves its Git root, and falls back to `Local` / `本地` when it does not;
 - For Worktree creation, Git must be installed and available on `PATH`, plus a repository with an initial commit and at least one local branch. A missing Git executable renders install guidance and no command block; repository, commit, or local-branch prerequisites render copyable setup commands. The Client does not run setup or installation commands or modify Workspace files;
 - Worktree branch names use the native DSH hover card to reveal the complete label when the tree row is visually truncated; the card is suppressed while the row menu is open. The same complete-value hover behavior is available for the Conversation Header and blank Hero context chips.
-- external removal uses the same real Git removal action as plugin-created Worktrees, and the dialog copy explicitly warns that removing an imported Worktree may delete its linked directory.
+- external Worktrees follow the exact same archive, disk cleanup, and forget lifecycle as plugin-created Worktrees. Disk cleanup warns that deleting the Worktree directory is permanent.
 
 Connection, Gateway and unexpected Worktree domain failures remain visible as retryable
 errors rather than being converted to an empty list. Recognized Git readiness failures are

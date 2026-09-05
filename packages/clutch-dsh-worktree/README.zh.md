@@ -23,7 +23,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
 - 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
 - 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
-- plugin 创建和导入的 Worktree 都通过真实的 `git worktree remove` 移除；移除导入的 Worktree 可能删除其关联目录，确认弹窗会明确提示。
+- 非破坏性归档 Worktree（`status: removed`），保留磁盘文件、活动 binding 与运行时 cwd。磁盘清理（`git worktree remove`）需经二次确认且核验关联 Session/子代理处于空闲态；亦支持移出插件管理并保留磁盘文件与 Session。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
 - 对 active Worktree Session，先经明确确认，再请求命名的 `worktree-full-access` 预设。它将
   DSH 的 `danger-full-access` 与 `ask` 组合：关闭关联 Git 元数据的文件系统限制，但保留
@@ -294,17 +294,19 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 在所属 Workspace 内拖动 Worktree。排序持久化在 plugin sidecar 的有序 `worktrees` 数组中；
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
-- 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。Main 和 detached/removed Worktree
-  只显示“复制路径”；active Worktree 还显示“移除 Worktree”并要求确认。
-- 导入的 Worktree 与 plugin 创建的 Worktree 显示相同的 active 选项菜单。两种来源都执行真实
-  `git worktree remove`；导入项的确认文案会警告关联 Worktree 目录可能被删除。Session 会
-  保留为 detached binding。
-- 移除 Worktree 不会删除其 Session。关系会保留为 detached，直到显式解绑。删除 Workspace
-  只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin
-  sidecar 会保留。
-- Worktree 成功移除后，如果公共 DSH 权限服务可用，仍处于完全访问的 detached Session 会
-  归一化为 `workspace-write + ask`。权限服务不可用时显示未验证且可重试的警告；不会向
-  detached Session 自动授予完全访问。
+- 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。active Worktree 提供“复制路径”与
+  “移除 Worktree”。移除 active Worktree 属于内部归档操作：将其标记为 `status: removed`，完整保留
+  磁盘目录、关联 binding 与运行时 cwd，并将该 Worktree 沉底移动到工作区底部的“已归档”（Archived）分组中。
+- 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；每个 Workspace 维护独立的折叠状态。
+- 对于未清理磁盘的已归档 Worktree，选项菜单提供：
+  1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），核验关联 Session
+     与子代理均处于空闲状态（busy 或 unknown 状态均直接拒绝，禁止伪造空闲），执行真正的非强制 `git worktree remove`，
+     成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
+     归一化为 `workspace-write + ask`。
+  2. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
+     磁盘文件与 DSH 原生 Session；执行前同样核验关联 Session 活动。
+- 对于已清理磁盘的 Worktree（`health: cleaned`），选项菜单提供“移出管理”以从 sidecar 中彻底移除该记录。
+- 删除 Workspace 只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
   限定在当前视觉 Main 或 Worktree 分组中。
 - Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时
@@ -320,9 +322,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 ### 理解状态与恢复提示
 
-- `ready` 表示 Worktree 可用。`repair` 表示 Worktree、Session、binding 或 cwd 缺失/无效。
-  `recovery-needed` 表示 Git/sidecar 操作或身份校验尚未解决，破坏性操作会被阻止。
-  `detached` 表示 Git Worktree 已被移除，但关系仍然保留。active binding 指向缺失
+- `ready` 表示 Worktree 可用。`cleaned` 表示磁盘清理已完成且保留 sidecar 归档条目。
+  `repair` 表示 Worktree、Session、binding 或 cwd 缺失/无效。`recovery-needed` 表示 Git/sidecar
+  操作或身份校验尚未解决，破坏性操作会被阻止。`detached` 表示 Git Worktree 已被移除，但关系仍然保留。active binding 指向缺失
   Worktree 时会显示明确的 repair 警告或错误，不会静默切换到其他 Worktree。
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar。Git 前置条件失败按
   Workspace 显示提示：Git 可执行文件缺失时显示安装提示且不显示命令块，缺少 repository、

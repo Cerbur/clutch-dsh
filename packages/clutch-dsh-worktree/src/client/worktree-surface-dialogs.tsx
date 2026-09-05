@@ -7,7 +7,9 @@ import { formatWorktreeViewError } from './worktree-error-copy.js';
 import { worktreeSetupCommands } from './worktree-view.js';
 import type {
   SessionRenameDialogProps,
+  WorktreeCleanDiskDialogProps,
   WorktreeCreateDialogProps,
+  WorktreeForgetDialogProps,
   WorktreeRemovalDialogProps,
   WorktreeSetupStatus,
   WorkspaceDeleteDialogProps,
@@ -459,6 +461,102 @@ export function WorktreeRemovalDialog({
             }}
           >
             {t('worktree.remove')}
+          </Button>
+        </>
+      )}
+    />
+  );
+}
+
+export function WorktreeCleanDiskDialog({
+  t,
+  worktree,
+  actionPending,
+  onClose,
+  onSubmit,
+}: WorktreeCleanDiskDialogProps) {
+  if (worktree === undefined) return null;
+  const isBusy = worktree.activity?.state === 'busy';
+  const isUnknown = worktree.activity?.state === 'unknown';
+  const isBlocked = isBusy || isUnknown;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeCleanDisk')}
+      title={t('worktree.cleanDiskTitle')}
+      description={
+        isBusy
+          ? t('error.worktreeSessionBusy')
+          : isUnknown
+            ? t('error.worktreeActivityUnavailable')
+            : t('worktree.cleanDiskDescription', { name: worktree.branch, path: worktree.absolutePath })
+      }
+      footer={(
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending || isBlocked}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.cleanDisk')}
+          </Button>
+        </>
+      )}
+    />
+  );
+}
+
+export function WorktreeForgetDialog({
+  t,
+  worktree,
+  actionPending,
+  onClose,
+  onSubmit,
+}: WorktreeForgetDialogProps) {
+  if (worktree === undefined) return null;
+  const isBusy = worktree.activity?.state === 'busy';
+  const isUnknown = worktree.activity?.state === 'unknown';
+  const isBlocked = isBusy || isUnknown;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeForget')}
+      title={t('worktree.forgetTitle')}
+      description={
+        isBusy
+          ? t('error.worktreeSessionBusy')
+          : isUnknown
+            ? t('error.worktreeActivityUnavailable')
+            : t('worktree.forgetDescription', { name: worktree.branch })
+      }
+      footer={(
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending || isBlocked}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.forget')}
           </Button>
         </>
       )}

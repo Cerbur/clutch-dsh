@@ -23,7 +23,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
 - Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
 - Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
-- Remove plugin-created and imported Worktrees through real `git worktree remove`; removing an imported Worktree can delete its linked directory and is called out in the confirmation dialog.
+- Archive Worktrees non-destructively (`status: removed`), preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation and verified idle Session/subagent activity; Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
 - Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
   open it directly.
 - For active Worktree Sessions, request the named `worktree-full-access` preset after an
@@ -320,19 +320,24 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
-- Open the shared Main and Worktree options menu to copy the selected row's absolute path. Main
-  and detached/removed Worktrees show only `Copy path`; active Worktrees also show `Remove
-  Worktree` with a confirmation dialog.
-- Imported Worktrees expose the same active options menu as plugin-created Worktrees. Removing
-  either source runs real `git worktree remove`; for an imported Worktree, the confirmation warns
-  that the linked Worktree directory may be deleted. Sessions are retained as detached bindings.
-- Removing a Worktree does not delete its Sessions. The relationship remains detached until it
-  is explicitly unbound. Deleting a Workspace removes only DSH's Workspace registration; its
-  directory, Sessions, Git Worktrees, and plugin sidecar remain.
-- After a successful removal, detached Sessions that still have Full Access are normalized to
-  `workspace-write + ask` when the public DSH permission service is available. An unavailable
-  service is reported as an unverified, retryable warning; it never grants Full Access to a
-  detached Session.
+- Open the shared Main and Worktree options menu to copy the selected row's absolute path. Active
+  Worktrees show `Copy path` and `Remove Worktree`. Removing an active Worktree is an internal
+  archive operation: it sets `status: removed`, preserves disk files, active bindings, and runtime cwd,
+  and moves the Worktree into the default-collapsed `Archived` group at the bottom of the Workspace.
+- The `Archived` group is rendered at the bottom of the Workspace when archived Worktrees exist and is
+  collapsed by default. Each Workspace tracks its own collapsed state independently.
+- For archived Worktrees whose disk has not been cleaned, the options menu provides:
+  1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
+     verifies that all linked Sessions and subagents are idle (busy or unknown states reject without
+     fallback), runs real non-forced `git worktree remove`, and upon success records
+     `diskCleanup: completed`, projects health as `cleaned`, transitions bindings to detached, and
+     normalizes Full Access permissions to `workspace-write + ask`.
+  2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
+     its bindings, while preserving disk files and native DSH Sessions. Also verifies idle session activity.
+- For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
+  `Remove from Management` to prune the sidecar record completely.
+- Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,
+  and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
   ordering is limited to the current visual Main or Worktree group.
 - The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
@@ -349,10 +354,11 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Understand status and recovery messages
 
-- `ready` means the Worktree is available. `repair` identifies a missing or invalid Worktree,
-  Session, binding, or cwd. `recovery-needed` means a Git/sidecar operation or identity check is
-  unresolved and destructive actions are blocked. `detached` means the Git Worktree was removed
-  while the relationship was retained. An active binding pointing to a missing Worktree produces
+- `ready` means the Worktree is available. `cleaned` indicates disk cleanup completed while the
+  sidecar archive entry is retained. `repair` identifies a missing or invalid Worktree, Session, binding,
+  or cwd. `recovery-needed` means a Git/sidecar operation or identity check is unresolved and
+  destructive actions are blocked. `detached` means the Git Worktree was removed while the relationship
+  was retained. An active binding pointing to a missing Worktree produces
   an explicit repair warning or error; it never silently falls back to another Worktree.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
   failures are shown per Workspace: a missing Git executable shows installation guidance without

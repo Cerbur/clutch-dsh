@@ -51,9 +51,17 @@ function assertWorktreeRecord(
   schemaVersion: number,
 ): asserts value is WorktreeRecord {
   const legacy = schemaVersion === LEGACY_SIDECAR_SCHEMA_VERSION;
+  const isV4 = schemaVersion === SIDECAR_SCHEMA_VERSION;
+  if (!isObject(value)) {
+    throw corrupt(pathname, 'invalid Worktree record');
+  }
+  const keys = legacy
+    ? LEGACY_WORKTREE_KEYS
+    : isV4
+      ? (value.diskCleanup !== undefined ? [...WORKTREE_KEYS, 'diskCleanup'] : WORKTREE_KEYS)
+      : WORKTREE_KEYS;
   if (
-    !isObject(value) ||
-    !hasExactKeys(value, legacy ? LEGACY_WORKTREE_KEYS : WORKTREE_KEYS) ||
+    !hasExactKeys(value, keys) ||
     typeof value.worktreeId !== 'string' ||
     typeof value.workspaceId !== 'string' ||
     typeof value.absolutePath !== 'string' ||
@@ -63,6 +71,14 @@ function assertWorktreeRecord(
     (!legacy && value.source !== 'plugin' && value.source !== 'external')
   ) {
     throw corrupt(pathname, 'invalid Worktree record');
+  }
+  if (isV4 && value.diskCleanup !== undefined) {
+    if (value.diskCleanup !== 'completed') {
+      throw corrupt(pathname, 'invalid diskCleanup value');
+    }
+    if (value.status !== 'removed') {
+      throw corrupt(pathname, 'active Worktree cannot have diskCleanup');
+    }
   }
 }
 
@@ -144,13 +160,13 @@ function assertPendingOperation(value: unknown, pathname: string): asserts value
     return;
   }
 
-  if (value.type === 'remove-worktree') {
+  if (value.type === 'remove-worktree' || value.type === 'clean-worktree') {
     if (
       !hasAllowedKeys(value, [...commonKeys, 'branch', 'source'], ['repository', 'repositoryFingerprint']) ||
       typeof value.branch !== 'string' ||
       (value.source !== 'plugin' && value.source !== 'external')
     ) {
-      throw corrupt(pathname, 'invalid remove pending operation');
+      throw corrupt(pathname, `invalid ${value.type} pending operation`);
     }
     return;
   }
@@ -188,9 +204,13 @@ function assertRecoveryIssue(value: unknown, pathname: string): asserts value is
 }
 
 function normalizeWorktreeRecord(record: WorktreeRecord, schemaVersion: number): WorktreeRecord {
-  return schemaVersion === LEGACY_SIDECAR_SCHEMA_VERSION
-    ? { ...record, source: 'plugin' }
-    : record;
+  return {
+    ...record,
+    source: record.source ?? 'plugin',
+    ...(schemaVersion < 4 && record.status === 'removed'
+      ? { diskCleanup: 'completed' as const }
+      : {}),
+  };
 }
 
 function assertGeneratedPluginPath(
@@ -223,16 +243,21 @@ export function validateSidecarSnapshot(
     ? hasExactKeys(value, LEGACY_SNAPSHOT_KEYS)
     : schemaVersion === 2
       ? hasExactKeys(value, ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'])
-      : schemaVersion === SIDECAR_SCHEMA_VERSION &&
+      : (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
         hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, V3_OPTIONAL_SNAPSHOT_KEYS);
   if (!validShape || !Array.isArray(value.worktrees) || !Array.isArray(value.bindings)) {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
-  if (schemaVersion !== LEGACY_SIDECAR_SCHEMA_VERSION && schemaVersion !== 2 && schemaVersion !== SIDECAR_SCHEMA_VERSION) {
+  if (
+    schemaVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
+    schemaVersion !== 2 &&
+    schemaVersion !== 3 &&
+    schemaVersion !== SIDECAR_SCHEMA_VERSION
+  ) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion });
   }
   if (
-    schemaVersion === SIDECAR_SCHEMA_VERSION &&
+    (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
     (typeof value.revision !== 'string' || !/^\d+$/.test(value.revision))
   ) {
     throw corrupt(pathname, 'invalid sidecar revision');
@@ -284,10 +309,22 @@ export function validateSidecarSnapshot(
     activeSessions.add(binding.sessionId);
   }
 
-  const worktreeStatus = new Map(worktrees.map((record) => [record.worktreeId, record.status]));
+  const rawWorktreeMap = new Map((value.worktrees as WorktreeRecord[]).map((r) => [r.worktreeId, r]));
   for (const binding of value.bindings) {
-    if (binding.status === 'active' && worktreeStatus.get(binding.worktreeId) !== 'active') {
-      throw corrupt(pathname, 'active binding does not point to an active Worktree');
+    if (binding.status === 'active') {
+      const target = rawWorktreeMap.get(binding.worktreeId);
+      if (!target) {
+        throw corrupt(pathname, 'active binding does not point to an active Worktree');
+      }
+      if (schemaVersion < 4) {
+        if (target.status !== 'active') {
+          throw corrupt(pathname, 'active binding does not point to an active Worktree');
+        }
+      } else {
+        if (target.diskCleanup === 'completed') {
+          throw corrupt(pathname, 'cleaned records cannot retain active bindings');
+        }
+      }
     }
   }
 
@@ -300,7 +337,7 @@ export function validateSidecarSnapshot(
   return {
     schemaVersion: SIDECAR_SCHEMA_VERSION,
     workspaceId,
-    revision: schemaVersion === SIDECAR_SCHEMA_VERSION ? value.revision as string : '0',
+    revision: schemaVersion >= 3 ? (value.revision as string) : '0',
     ...(repositoryFingerprint !== undefined ? { repositoryFingerprint } : {}),
     worktrees,
     bindings: value.bindings,

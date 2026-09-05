@@ -245,13 +245,17 @@ export interface WorktreeGroupMenuProps {
   readonly copyPath: string;
   readonly showCreate: boolean;
   readonly showRemove: boolean;
+  readonly showCleanDisk?: boolean;
+  readonly showForget?: boolean;
   readonly disabled: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreateWorktree?: () => void;
   readonly onRemove?: () => void;
+  readonly onCleanDisk?: () => void;
+  readonly onForget?: () => void;
 }
 
-export type WorktreeGroupKind = 'main' | 'worktree';
+export type WorktreeGroupKind = 'main' | 'worktree' | 'archived-group';
 
 export interface WorktreeGroupRowProps {
   readonly t: WorktreeTranslate;
@@ -390,6 +394,22 @@ export interface WorktreeCreateDialogProps {
 }
 
 export interface WorktreeRemovalDialogProps {
+  readonly t: WorktreeTranslate;
+  readonly worktree: WorktreeRecord | undefined;
+  readonly actionPending: boolean;
+  readonly onClose: () => void;
+  readonly onSubmit: () => void;
+}
+
+export interface WorktreeCleanDiskDialogProps {
+  readonly t: WorktreeTranslate;
+  readonly worktree: WorktreeRecord | undefined;
+  readonly actionPending: boolean;
+  readonly onClose: () => void;
+  readonly onSubmit: () => void;
+}
+
+export interface WorktreeForgetDialogProps {
   readonly t: WorktreeTranslate;
   readonly worktree: WorktreeRecord | undefined;
   readonly actionPending: boolean;

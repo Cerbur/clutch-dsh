@@ -71,6 +71,16 @@ export function createWorktreeRemoteProjection(
         // to null in the wire contract.
         return null;
       }),
+    cleanWorktree: (input) =>
+      project(async () => {
+        await manager.cleanWorktree(input);
+        return null;
+      }),
+    forgetWorktree: (input) =>
+      project(async () => {
+        await manager.forgetWorktree(input);
+        return null;
+      }),
     insertWorktreeBefore: (input) => project(() => manager.insertWorktreeBefore(input)),
     listBindings: (input) => project(() => manager.listBindings(input)),
     bindSession: (input) => project(() => manager.bindSession(input)),

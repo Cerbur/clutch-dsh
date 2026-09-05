@@ -849,6 +849,12 @@ test('normalizes detached Worktree Session permissions after removal', async () 
     async removeWorktree(input) {
       calls.push(['removeWorktree', input]);
     },
+    async cleanWorktree(input) {
+      calls.push(['cleanWorktree', input]);
+    },
+    async forgetWorktree(input) {
+      calls.push(['forgetWorktree', input]);
+    },
   });
   const permission = {
     async normalizeDetachedWorktreePermissions(input) {
@@ -868,8 +874,23 @@ test('normalizes detached Worktree Session permissions after removal', async () 
     notices.push({ input, result });
   });
 
+  // Archive does NOT degrade permissions
   assert.deepEqual(calls, [
     ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
+  ]);
+  assert.deepEqual(notices, []);
+
+  // Clean degrades permissions
+  await executeWorktreeAction(worktreeManager, {
+    type: 'cleanWorktree',
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
+  }, permission, (input, result) => {
+    notices.push({ input, result });
+  });
+
+  assert.deepEqual(calls, [
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
+    ['cleanWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
     ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
   ]);
   assert.deepEqual(notices, [{
@@ -1976,3 +1997,23 @@ test('clears transient groups on parent collapse and prunes only ready snapshots
   assert.match(source, /worktree:/);
   assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
 });
+
+test('renders Archived group for removed worktrees and provides clean disk and forget actions', async () => {
+  const source = (await readSurfaceSources()).combined;
+
+  assert.match(source, /data-archived-group/);
+  assert.match(source, /t\('worktree\.archivedGroup'\)/);
+  assert.match(source, /kind="archived-group"/);
+  assert.match(source, /showCleanDisk: record\.diskCleanup !== 'completed'/);
+  assert.match(source, /showForget: true/);
+  assert.match(source, /<WorktreeCleanDiskDialog/);
+  assert.match(source, /<WorktreeForgetDialog/);
+  assert.match(source, /t\('worktree\.cleanDiskTitle'\)/);
+  assert.match(source, /t\('worktree\.cleanDiskDescription'/);
+  assert.match(source, /t\('worktree\.forgetTitle'\)/);
+  assert.match(source, /t\('worktree\.forgetDescription'/);
+  assert.match(source, /t\('error\.worktreeSessionBusy'\)/);
+  assert.match(source, /t\('error\.worktreeActivityUnavailable'\)/);
+  assert.match(source, /t\('worktree\.cleaned'\)/);
+});
+
