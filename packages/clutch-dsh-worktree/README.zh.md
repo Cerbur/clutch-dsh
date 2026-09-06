@@ -305,6 +305,7 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
      成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
      归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为 `cleaned`；
      权限归一化失败或刷新异常提供独立恢复，不重复执行磁盘删除。
+     点击权限提示中的“重试”（Retry），仅重试该已清理 Worktree 的权限归一化。
      如果 Worktree 目录或其 `.git` 入口已在外部删除，确认清理只将插件记录标记为完成并将 binding 转为 detached，
      不再执行 Git 删除，也不清理残留 Git registration。剩余目录和文件完整保留，完成状态显示
      “Worktree 已移除”，不代表剩余文件已被删除。普通刷新仍显示 `repair`，直到用户显式确认清理。

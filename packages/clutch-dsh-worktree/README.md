@@ -338,6 +338,7 @@ blank-session Hero. The displayed language follows DSH's current language settin
      normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
      from permission normalization: once disk removal commits, the dialog closes and the record updates to
      `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
+     Use `Retry` in the permission notice to retry only permission normalization for the cleaned Worktree.
      If the Worktree directory or its `.git` entry was already deleted externally, confirming cleanup only marks
      the plugin record as completed and detaches its bindings. It does not run Git removal or prune
      stale Git registration. Any remaining directory and files are preserved. The completed status

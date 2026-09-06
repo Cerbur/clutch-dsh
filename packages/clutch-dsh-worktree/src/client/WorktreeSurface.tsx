@@ -328,8 +328,10 @@ export function WorktreeSurface({
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
   const cleanupGuard = useRef(createWorktreeRefreshGuard());
+  const permissionRetryPending = useRef(false);
   useEffect(() => {
     const guard = cleanupGuard.current;
+    permissionRetryPending.current = false;
     setActionPending(false);
     return () => guard.invalidate();
   }, [manager, mode]);
@@ -631,6 +633,43 @@ export function WorktreeSurface({
     );
   const cleanDiskTarget = latestLifecycleTarget(worktreeCleanDisk);
   const forgetTarget = latestLifecycleTarget(worktreeForget);
+  const permissionRetryTarget = mode === 'worktree' &&
+    permissionNoticeSnapshot?.result.retryable === true &&
+    permission?.normalizeDetachedWorktreePermissions !== undefined
+    ? viewByWorkspace.get(permissionNoticeSnapshot.workspaceId)?.worktrees.find(
+      (record) => record.worktreeId === permissionNoticeSnapshot.worktreeId &&
+        record.diskCleanup === 'completed',
+    )
+    : undefined;
+
+  const retryCleanupPermissions = async (): Promise<void> => {
+    if (!permissionRetryTarget || !permission || actionPending || permissionRetryPending.current) return;
+    const target = {
+      workspaceId: permissionRetryTarget.workspaceId,
+      worktreeId: permissionRetryTarget.worktreeId,
+    };
+    const notice = permissionNoticeSnapshot;
+    const generation = cleanupGuard.current.begin();
+    const isCurrent = () => cleanupGuard.current.isCurrent(generation) &&
+      permissionNotice?.getSnapshot() === notice &&
+      readStateRef.current.views.some((view) => view.workspaceId === target.workspaceId &&
+        view.worktrees.some((record) => record.worktreeId === target.worktreeId &&
+          record.diskCleanup === 'completed'));
+    if (!isCurrent()) return;
+    permissionRetryPending.current = true;
+    setActionPending(true);
+    try {
+      const result = await permission.normalizeDetachedWorktreePermissions(target);
+      if (isCurrent()) onPermissionNotice?.(target, result);
+    } catch {
+      if (isCurrent()) onPermissionNotice?.(target, { status: 'unverified', retryable: true });
+    } finally {
+      if (cleanupGuard.current.isCurrent(generation)) {
+        permissionRetryPending.current = false;
+        setActionPending(false);
+      }
+    }
+  };
 
   const sessionOrderInputs = useMemo<readonly SessionOrderInput[]>(() => {
     if (readState.status !== 'ready') return [];
@@ -1502,6 +1541,16 @@ export function WorktreeSurface({
               <p className={styles.message}>
                 {formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t)}
               </p>
+              {permissionRetryTarget !== undefined && (
+                <button
+                  type="button"
+                  className={styles.retryButton}
+                  disabled={actionPending}
+                  onClick={retryCleanupPermissions}
+                >
+                  {t('action.retry')}
+                </button>
+              )}
             </div>
           )}
           {forkRecoverySnapshot.pending.map((recovery) => {
@@ -2097,10 +2146,13 @@ export function WorktreeSurface({
                                   label={`${t('worktree.archivedGroup')} (${archivedWorktrees.length})`}
                                   expanded={isArchivedExpanded}
                                   hasOngoingSession={hasOngoingSession(
-                                    archivedWorktrees.flatMap((record) =>
-                                      bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-                                        sessions.ids.includes(sessionId),
+                                    filterArchivedSessionIds(
+                                      archivedWorktrees.flatMap((record) =>
+                                        bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+                                          sessions.ids.includes(sessionId),
+                                        ),
                                       ),
+                                      archivedSessionIds,
                                     ),
                                     sessionPresentations,
                                   )}

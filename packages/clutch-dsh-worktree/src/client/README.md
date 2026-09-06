@@ -188,6 +188,10 @@ Clean Up Disk (`cleanWorktree`) decouples Git directory removal from subsequent 
 normalization using `runWorktreeCleanupFlow`. Once disk deletion succeeds, the dialog closes
 and the view updates to `cleaned`. Any failure during subsequent permission normalization
 or view refresh reports a retryable error without rolling back or repeating disk removal.
+The permission notice exposes Retry for a retryable result on a cleaned Worktree. It calls
+only `normalizeDetachedWorktreePermissions`, coalesces repeated clicks, and discards late
+results after forget, mode changes, disposal, or replacement of the notice. The Archived
+group activity aggregate excludes native archived Sessions, matching its child groups.
 Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cleans up
 browser-local fork recovery, membership projections, and permission notices for the affected
 Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending

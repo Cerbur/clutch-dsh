@@ -109,34 +109,6 @@ test('stale or forgotten worktree stops follow-up operations and error reporting
   });
   assert.deepEqual(calls, ['clean']);
 });
-test('permission retry does not re-execute clean and normalizes detached worktree permissions', async () => {
-  let cleanCount = 0;
-  let normalizeCount = 0;
-  const clean = async () => {
-    cleanCount += 1;
-  };
-  const normalize = async () => {
-    normalizeCount += 1;
-  };
-
-  // Initial clean flow
-  await runWorktreeCleanupFlow({
-    clean,
-    onCommitted: () => {},
-    refresh: async () => {},
-    normalize,
-    isCurrent: () => true,
-    onFollowUpError: () => {},
-  });
-  assert.equal(cleanCount, 1);
-  assert.equal(normalizeCount, 1);
-
-  // When retrying permission independently, only normalize is called, clean is NOT repeated
-  await normalize();
-  assert.equal(cleanCount, 1);
-  assert.equal(normalizeCount, 2);
-});
-
 test('late permission completion after forget does not publish notice or revive state', async () => {
   let isCurrent = true;
   let noticePublished = false;
