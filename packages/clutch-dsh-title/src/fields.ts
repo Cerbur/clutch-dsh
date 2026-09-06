@@ -228,7 +228,11 @@ function assertDynamicFieldValue(
     throw new Error(`clutch-dsh-title: extracted field ${JSON.stringify(name)} must not be empty`);
   }
   if (field.kind === 'llm-enum') {
-    if (!field.values.includes(normalized)) {
+    if (
+      !field.values.some(
+        (choice) => (typeof choice === 'string' ? choice : choice.value) === normalized,
+      )
+    ) {
       throw new Error(
         `clutch-dsh-title: extracted enum field ${JSON.stringify(name)} is not declared`,
       );

@@ -3,6 +3,12 @@ import z from '@deepseek-ai/schemastery';
 import { TitleConfigSchema, resolveTitleConfig } from './config.js';
 import { createTitleProvider } from './provider.js';
 import type { TitleConfig } from './types.js';
+import {
+  generateSessionTitleWithLlm,
+  resolveSessionTitleLlmConfig,
+} from '@deepseek-ai/dsh-session-title-llm';
+import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title';
+import { registerTemplateSettings } from './settings.js';
 
 export const name = 'clutch-dsh-title';
 export const inject = ['sessionTitle', 'llm', 'sessions'];
@@ -11,7 +17,49 @@ export type Config = TitleConfig;
 export const Config: z<Config> = TitleConfigSchema;
 
 export function apply(ctx: Context, config: Config): void {
-  ctx.sessionTitle.register(createTitleProvider(ctx, resolveTitleConfig(config)));
+  const initial = resolveTitleConfig(config);
+  let read = () => ({ enabled: true, config: initial });
+  // Retain the host-only composition path when no settings provider is composed.
+  ctx.inject(['settings'], (settingsCtx) => {
+    const next = registerTemplateSettings(settingsCtx, config);
+    read = next;
+    settingsCtx.effect(() => () => {
+      read = () => ({ enabled: true, config: initial });
+    });
+  });
+  const native = resolveSessionTitleLlmConfig({
+    targetWords: 5,
+    targetCjkCharacters: 10,
+    maxInputBytes: initial.maxInputBytes,
+    maxOutputTokens: 64,
+    timeoutMs: initial.timeoutMs,
+    ...(initial.provider === undefined ? {} : { provider: initial.provider, model: initial.model }),
+  });
+  ctx.sessionTitle.register({
+    id: SessionTitleProviderId('clutch-dsh-title'),
+    automatic: 'first-prompt',
+    async generate(request) {
+      const state = read();
+      if (!state.enabled)
+        return generateSessionTitleWithLlm(
+          ctx,
+          native,
+          request,
+          request.messages.slice(0, 1),
+          SessionTitleProviderId('session-title-first-prompt-llm'),
+        );
+      const selected = {
+        ...state.config,
+        maxInputBytes: initial.maxInputBytes,
+        maxOutputTokens: initial.maxOutputTokens,
+        timeoutMs: initial.timeoutMs,
+        ...(initial.provider === undefined
+          ? {}
+          : { provider: initial.provider, model: initial.model }),
+      };
+      return createTitleProvider(ctx, selected).generate(request);
+    },
+  });
 }
 
 export { compileTemplate, renderTemplate } from './renderer.js';
@@ -29,6 +77,7 @@ export type {
   ExtractedLlmFields,
   LiteralFieldConfig,
   LlmEnumFieldConfig,
+  LlmEnumValueConfig,
   LlmTextFieldConfig,
   ResolvedTitleConfig,
   TemplateSegment,

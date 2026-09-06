@@ -29,7 +29,14 @@ const LiteralField: z<LiteralFieldConfig> = z.object({
 const LlmEnumField = z.object({
   kind: z.const('llm-enum').required(),
   instruction: z.string().required(),
-  values: z.array(String).required(),
+  values: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({ value: z.string().required(), description: z.string().required() }),
+      ]),
+    )
+    .required(),
 }) as unknown as z<LlmEnumFieldConfig>;
 
 const LlmTextField: z<LlmTextFieldConfig> = z.object({
@@ -147,14 +154,25 @@ function validateFieldDefinition(name: string, candidate: unknown): TitleFieldCo
       }
       const rawValues = candidate.values as unknown[];
       const values = rawValues.map((value, index) => {
-        assertNonEmptyString(`${name}.values[${index}]`, value);
-        const normalized = normalizeFieldValue(value);
+        const label = `${name}.values[${index}]`;
+        if (isRecord(value)) {
+          assertKnownKeys(value, new Set(['value', 'description']), label);
+          assertNonEmptyString(`${label}.description`, value.description);
+        }
+        const rawValue = isRecord(value) ? value.value : value;
+        assertNonEmptyString(label, rawValue);
+        const normalized = normalizeFieldValue(rawValue);
         if (normalized.length === 0) {
           throw new Error(`clutch-dsh-title: ${name}.values[${index}] must not be empty`);
         }
-        return normalized;
+        return isRecord(value)
+          ? { value: normalized, description: (value.description as string).trim() }
+          : normalized;
       });
-      if (new Set(values).size !== values.length) {
+      if (
+        new Set(values.map((value) => (typeof value === 'string' ? value : value.value))).size !==
+        values.length
+      ) {
         throw new Error(
           `clutch-dsh-title: field ${JSON.stringify(name)} values must not contain duplicates`,
         );
