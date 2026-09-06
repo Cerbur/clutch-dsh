@@ -1,10 +1,15 @@
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session/types';
 
+import type { WorktreeActivity } from '../contract/index.js';
 import type {
   DshReadAdapter,
   DshSessionSummary,
   DshWorkspaceSummary,
 } from '../provider/types.js';
+import {
+  createDshWorktreeActivityReader,
+  type WorktreeActivitySource,
+} from './worktree-activity.js';
 
 interface DshWorkspaceView {
   readonly id: string;
@@ -45,6 +50,12 @@ export interface DshHostReadContext {
   readonly sessionPersistence: {
     list(): Promise<readonly DshSessionHeaderView[]>;
   };
+  readonly activitySource?: WorktreeActivitySource;
+}
+
+export interface DshHostReadAdapterOptions {
+  readonly activitySource?: WorktreeActivitySource;
+  readonly isDisposed?: () => boolean;
 }
 
 /**
@@ -55,7 +66,28 @@ export interface DshHostReadContext {
  * of Workspace and Session facts.
  */
 export class DshHostReadAdapter implements DshReadAdapter {
-  constructor(private readonly ctx: DshHostReadContext) {}
+  private readonly activityReader: (sessionIds: readonly string[]) => Promise<WorktreeActivity>;
+
+  constructor(
+    private readonly ctx: DshHostReadContext,
+    options?: DshHostReadAdapterOptions,
+  ) {
+    let source = options?.activitySource;
+    if (source === undefined) {
+      try {
+        source = ctx.activitySource;
+      } catch {
+        source = undefined;
+      }
+    }
+    this.activityReader = createDshWorktreeActivityReader(source, {
+      isDisposed: options?.isDisposed,
+    });
+  }
+
+  async readWorktreeActivity(sessionIds: readonly string[]): Promise<WorktreeActivity> {
+    return this.activityReader(sessionIds);
+  }
 
   async getWorkspace(workspaceId: string): Promise<DshWorkspaceSummary | undefined> {
     const workspace = this.ctx.workspaceRegistry.get(workspaceId);

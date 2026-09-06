@@ -73,6 +73,8 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/createWorktree',
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/cleanWorktree',
+    'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',

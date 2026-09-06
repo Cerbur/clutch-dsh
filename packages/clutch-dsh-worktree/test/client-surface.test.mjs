@@ -849,6 +849,12 @@ test('normalizes detached Worktree Session permissions after removal', async () 
     async removeWorktree(input) {
       calls.push(['removeWorktree', input]);
     },
+    async cleanWorktree(input) {
+      calls.push(['cleanWorktree', input]);
+    },
+    async forgetWorktree(input) {
+      calls.push(['forgetWorktree', input]);
+    },
   });
   const permission = {
     async normalizeDetachedWorktreePermissions(input) {
@@ -864,22 +870,25 @@ test('normalizes detached Worktree Session permissions after removal', async () 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
     input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
-  }, permission, (input, result) => {
-    notices.push({ input, result });
+  });
+
+  // Archive does NOT degrade permissions
+  assert.deepEqual(calls, [
+    ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
+  ]);
+  assert.deepEqual(notices, []);
+
+  // Clean via executeWorktreeAction does NOT degrade permissions directly (decoupled to runWorktreeCleanupFlow)
+  await executeWorktreeAction(worktreeManager, {
+    type: 'cleanWorktree',
+    input: { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' },
   });
 
   assert.deepEqual(calls, [
     ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
-    ['normalizeDetachedWorktreePermissions', { workspaceId: 'ws1', worktreeId: 'wt1' }],
+    ['cleanWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }],
   ]);
-  assert.deepEqual(notices, [{
-    input: { workspaceId: 'ws1', worktreeId: 'wt1' },
-    result: {
-      status: 'normalized-workspace-write',
-      sessionIds: ['session-one'],
-      retryable: false,
-    },
-  }]);
+  assert.deepEqual(notices, []);
 });
 
 test('adds a Create/Import dialog that retains the existing shared Session registration flow', async () => {
@@ -1975,4 +1984,56 @@ test('clears transient groups on parent collapse and prunes only ready snapshots
   assert.match(source, /main:/);
   assert.match(source, /worktree:/);
   assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
+});
+
+test('repair worktrees expose archive while recovery-needed worktrees remain blocked', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const condition = source.match(/showRemove: (record\.status[^,\n]+)/)?.[1];
+  assert.ok(condition);
+  const showRemove = new Function('record', `return ${condition};`);
+  assert.equal(showRemove({ status: 'active', health: 'repair' }), true);
+  assert.equal(showRemove({ status: 'active', health: 'ready' }), true);
+  assert.equal(showRemove({ status: 'active', health: 'recovery-needed' }), false);
+  assert.equal(showRemove({ status: 'removed', health: 'repair' }), false);
+});
+
+test('Archived label includes the worktree count outside the expanded children', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const row = source.slice(source.indexOf('kind="archived-group"'));
+  const label = row.match(/label=\{(`[^`]+`)\}/)?.[1];
+  assert.ok(label, 'Archived row must show its count before children are expanded');
+  const renderLabel = new Function('t', 'archivedWorktrees', `return ${label};`);
+  assert.equal(renderLabel(() => '已归档', [{}, {}, {}]), '已归档 (3)');
+  assert.equal(renderLabel(() => 'Archived', [{}]), 'Archived (1)');
+});
+
+test('renders Archived group for removed worktrees and provides clean disk and forget actions', async () => {
+  const source = (await readSurfaceSources()).combined;
+
+  assert.match(source, /data-archived-group/);
+  assert.match(source, /t\('worktree\.archivedGroup'\)/);
+  assert.match(source, /kind="archived-group"/);
+  assert.match(source, /showCleanDisk: record\.diskCleanup !== 'completed'/);
+  assert.match(source, /showForget: true/);
+  assert.match(source, /<WorktreeCleanDiskDialog/);
+  assert.match(source, /<WorktreeForgetDialog/);
+  assert.match(source, /t\('worktree\.cleanDiskTitle'\)/);
+  assert.match(source, /t\('worktree\.cleanDiskDescription'/);
+  assert.match(source, /t\('worktree\.forgetTitle'\)/);
+  assert.match(source, /t\('worktree\.forgetDescription'/);
+  assert.match(source, /worktreeLifecycleBlockReason\(actionPending, worktree\.health\)/);
+  assert.match(source, /worktreeLifecycleBlockReason\(actionPending, record\.health\)/);
+  assert.doesNotMatch(source, /worktreeActivityBlockReason/);
+  assert.match(source, /t\('worktree\.cleaned'\)/);
+});
+test('reveals archived ancestor for archived worktree session and supports suppression', async () => {
+  const source = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /const archivedKey = 'archived:' \+ workspace\.workspaceId;/);
+  assert.match(source, /isCurrentSessionReveal\(archivedKey\)/);
+  assert.match(source, /suppressCurrentSessionReveal\(archivedKey\)/);
+  assert.match(source, /suppressCurrentSessionReveal\('archived:' \+ target\.workspaceId\)/);
 });

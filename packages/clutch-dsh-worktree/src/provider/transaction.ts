@@ -7,6 +7,7 @@ import { CrossProcessMutationLock } from './mutation-lock.js';
 import { createWorktreeMutationToken } from './mutation-token.js';
 import { createRepositoryFingerprint } from './repository-fingerprint.js';
 import type {
+  CleanWorktreePendingOperation,
   GitRepositoryInspection,
   GitWorktreeAdapter,
   GitWorktreeInfo,
@@ -17,6 +18,7 @@ import type {
   SidecarSnapshot,
   SidecarStore,
 } from './types.js';
+import { completeWorktreeCleanup } from './worktree-lifecycle.js';
 import { WorktreeProviderError, providerError } from './types.js';
 
 export interface CreateWorktreeTransactionInput {
@@ -30,6 +32,13 @@ export interface CreateWorktreeTransactionInput {
 }
 
 export interface RemoveWorktreeTransactionInput {
+  readonly workspaceId: string;
+  readonly workspaceRoot: string;
+  readonly worktreeId: string;
+  readonly mutationToken: string;
+}
+
+export interface CleanWorktreeTransactionInput {
   readonly workspaceId: string;
   readonly workspaceRoot: string;
   readonly worktreeId: string;
@@ -64,6 +73,16 @@ async function pathExists(pathname: string): Promise<boolean> {
     return true;
   } catch (error) {
     if (isMissing(error)) return false;
+    throw error;
+  }
+}
+
+async function pathEntryMissing(pathname: string): Promise<boolean> {
+  try {
+    await lstat(pathname);
+    return false;
+  } catch (error) {
+    if (isMissing(error)) return true;
     throw error;
   }
 }
@@ -179,6 +198,25 @@ function pendingRemove(
   };
 }
 
+function pendingClean(
+  input: CleanWorktreeTransactionInput,
+  record: WorktreeRecord,
+  repository: RepositoryIdentity,
+): CleanWorktreePendingOperation {
+  return {
+    id: randomUUID(),
+    type: 'clean-worktree',
+    phase: 'executing',
+    workspaceId: input.workspaceId,
+    worktreeId: input.worktreeId,
+    targetPath: record.absolutePath,
+    branch: record.branch,
+    source: record.source,
+    repositoryFingerprint: createRepositoryFingerprint(repository),
+    startedAt: new Date().toISOString(),
+  };
+}
+
 function activeBranchConflict(snapshot: SidecarSnapshot, branch: string, worktreeId?: string): WorktreeRecord | undefined {
   return snapshot.worktrees.find(
     (record) => record.status === 'active' && record.branch === branch && record.worktreeId !== worktreeId,
@@ -207,6 +245,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -342,6 +381,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -485,6 +525,166 @@ export class WorktreeMutationTransaction {
     });
   }
 
+  async clean(input: CleanWorktreeTransactionInput): Promise<void> {
+    return this.withShardLock(input.workspaceId, async (locked) => {
+      await this.git.validateRepository(input.workspaceRoot);
+      const repository = await this.resolveRepository(input.workspaceRoot);
+      return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
+        lock.assertHeld();
+        const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyObservations(locked);
+        const current = await locked.read();
+        this.assertMutationAdmitted(current, input.workspaceId);
+        this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
+        const record = current.worktrees.find((candidate) => candidate.worktreeId === input.worktreeId);
+        if (!record) {
+          throw providerError('WORKTREE_NOT_FOUND', `Worktree not found: ${input.worktreeId}`, {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+          });
+        }
+        if (record.status === 'active') {
+          throw providerError('WORKTREE_STATE_CONFLICT', 'Worktree must be archived before cleaning disk', {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+          });
+        }
+        this.assertMutationToken(current, record, input.mutationToken);
+        if (record.diskCleanup === 'completed') {
+          return;
+        }
+        if (await samePhysicalPath(record.absolutePath, gitRoot)) {
+          throw providerError('WORKTREE_STATE_CONFLICT', 'The main Worktree cannot be cleaned', {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+            targetPath: record.absolutePath,
+          });
+        }
+
+        const liveBefore = await this.git.listWorktrees(gitRoot);
+        const exactBefore = await this.findExactWorktree(liveBefore, record.absolutePath, record.branch);
+        await this.assertSafeRemovalPath(record, input.workspaceRoot);
+        if (await pathEntryMissing(path.join(record.absolutePath, '.git'))) {
+          const pathRegistration = await this.findWorktreeByPhysicalPath(liveBefore, record.absolutePath);
+          if (pathRegistration && !exactBefore) {
+            throw providerError('WORKTREE_IDENTITY_CHANGED', 'Missing Worktree path has a different Git registration', {
+              workspaceId: input.workspaceId,
+              worktreeId: input.worktreeId,
+              targetPath: record.absolutePath,
+            });
+          }
+          // An absent directory or .git entry is already removed as a Worktree.
+          // Preserve residual files and registration; only reconcile the sidecar.
+          lock.assertHeld();
+          await locked.mutate((snapshot) => {
+            const { repository: _repository, ...stableFields } = snapshot;
+            void _repository;
+            return {
+              result: undefined,
+              snapshot: completeWorktreeCleanup({
+                ...stableFields,
+                repositoryFingerprint: createRepositoryFingerprint(repository.identity),
+              }, record.worktreeId),
+            };
+          });
+          return;
+        }
+        if (!exactBefore) {
+          throw providerError('WORKTREE_IDENTITY_CHANGED', `Worktree is not registered in Git: ${record.absolutePath}`, {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+            targetPath: record.absolutePath,
+          });
+        }
+
+        const pending = pendingClean(input, record, repository.identity);
+        await locked.mutate((snapshot) => {
+          const { repository: _repository, ...withoutRepository } = snapshot;
+          void _repository;
+          return {
+            result: undefined,
+            snapshot: {
+              ...withoutRepository,
+              repositoryFingerprint: createRepositoryFingerprint(repository.identity),
+              pendingOperation: pending,
+            },
+          };
+        });
+
+        try {
+          await this.git.removeWorktree(input.workspaceRoot, record.absolutePath);
+        } catch (error) {
+          return this.reconcileCleanFailure({
+            locked,
+            input,
+            record,
+            pending,
+            repository: repository.identity,
+            gitRoot,
+            error,
+          });
+        }
+
+        lock.assertHeld();
+        let liveAfter: readonly GitWorktreeInfo[];
+        try {
+          liveAfter = await this.git.listWorktrees(gitRoot);
+        } catch (inspectionError) {
+          await this.markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
+          throw recoveryError(`Unable to verify Git after clean: ${record.absolutePath}`, {
+            workspaceId: input.workspaceId,
+            operationId: pending.id,
+            targetPath: record.absolutePath,
+            cause: String(inspectionError),
+          });
+        }
+        if (await this.findExactWorktree(liveAfter, record.absolutePath, record.branch)) {
+          await this.markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
+          throw recoveryError(`Git remove did not remove the registered Worktree: ${record.absolutePath}`, {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+            targetPath: record.absolutePath,
+          });
+        }
+        let targetExists: boolean;
+        try {
+          targetExists = await pathExists(record.absolutePath);
+        } catch (inspectionError) {
+          await this.markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
+          throw recoveryError(`Unable to verify the cleaned Worktree path: ${record.absolutePath}`, {
+            workspaceId: input.workspaceId,
+            operationId: pending.id,
+            targetPath: record.absolutePath,
+            cause: String(inspectionError),
+          });
+        }
+        if (targetExists) {
+          await this.markRecovery(locked, pending, 'WORKTREE_IDENTITY_CHANGED');
+          throw providerError('WORKTREE_IDENTITY_CHANGED', `Worktree path remains after Git removal: ${record.absolutePath}`, {
+            workspaceId: input.workspaceId,
+            worktreeId: input.worktreeId,
+            targetPath: record.absolutePath,
+          });
+        }
+        try {
+          await this.publishCleaned(locked, pending.id, input.worktreeId, repository.identity);
+        } catch (error) {
+          const sidecarError = error instanceof Error ? error : new Error(String(error));
+          throw providerError(
+            'SIDECAR_SYNC_REQUIRED',
+            `Git removed Worktree ${input.worktreeId}, but sidecar synchronization failed`,
+            {
+              workspaceId: input.workspaceId,
+              worktreeId: input.worktreeId,
+              workspaceRoot: input.workspaceRoot,
+              sidecarError: sidecarError.message,
+            },
+          );
+        }
+      });
+    });
+  }
+
   async import(input: ImportWorktreeTransactionInput): Promise<WorktreeRecord> {
     if (!path.isAbsolute(input.absolutePath)) {
       throw providerError('WORKTREE_IMPORT_INVALID', 'An absolute Worktree path is required', {
@@ -506,6 +706,7 @@ export class WorktreeMutationTransaction {
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
         lock.assertHeld();
         const gitRoot = repository.identity.topLevel;
+        await this.cleanLegacyObservations(locked);
         const current = await locked.read();
         this.assertMutationAdmitted(current, input.workspaceId);
         this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
@@ -575,6 +776,7 @@ export class WorktreeMutationTransaction {
 
   async recover(input: RecoverWorktreesInput): Promise<void> {
     return this.withShardLock(input.workspaceId, async (locked) => {
+      await this.cleanLegacyObservations(locked);
       await this.git.validateRepository(input.workspaceRoot);
       const repository = await this.resolveRepository(input.workspaceRoot);
       return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
@@ -595,22 +797,9 @@ export class WorktreeMutationTransaction {
           });
         }
 
-        if (!pending) {
-          const stale = await this.findStaleActiveRecord(current, live);
-          if (stale) {
-            await this.appendRecoveryIssue(locked, {
-              code: 'WORKTREE_RECOVERY_REQUIRED',
-              worktreeId: stale.worktreeId,
-              observedAt: new Date().toISOString(),
-            });
-            throw recoveryError(`Active Worktree is not registered in Git: ${stale.absolutePath}`, {
-              workspaceId: input.workspaceId,
-              worktreeId: stale.worktreeId,
-              targetPath: stale.absolutePath,
-            });
-          }
-          return;
-        }
+        // Without a journal there is no interrupted mutation to recover. Missing
+        // registrations remain runtime repair facts, including active records.
+        if (!pending) return;
         const pendingFingerprint = pending.repositoryFingerprint ??
           (pending.repository ? createRepositoryFingerprint(pending.repository) : undefined);
         if (pendingFingerprint !== createRepositoryFingerprint(repository.identity)) {
@@ -705,8 +894,20 @@ export class WorktreeMutationTransaction {
             cause: String(inspectionError),
           });
         }
+        if (
+          pending.type === 'clean-worktree' &&
+          pending.phase === 'recovery-needed' &&
+          !exact &&
+          !pendingTargetExists
+        ) {
+          throw recoveryError('Clean operation lacks sufficient completion evidence', {
+            workspaceId: input.workspaceId,
+            operationId: pending.id,
+            worktreeId: pending.worktreeId,
+          });
+        }
         if (!exact && !pendingTargetExists) {
-          await this.publishRemoved(locked, pending.id, pending.worktreeId, repository.identity);
+          await this.publishCleaned(locked, pending.id, pending.worktreeId, repository.identity);
           return;
         }
         if (exact) {
@@ -714,7 +915,7 @@ export class WorktreeMutationTransaction {
           return;
         }
         await this.markRecovery(locked, pending, 'WORKTREE_IDENTITY_CHANGED');
-        throw providerError('WORKTREE_IDENTITY_CHANGED', `Unable to reconcile pending remove: ${pending.targetPath}`, {
+        throw providerError('WORKTREE_IDENTITY_CHANGED', `Unable to reconcile pending ${pending.type}: ${pending.targetPath}`, {
           workspaceId: input.workspaceId,
           operationId: pending.id,
           targetPath: pending.targetPath,
@@ -743,6 +944,38 @@ export class WorktreeMutationTransaction {
     return { identity: { topLevel: canonicalTopLevel, commonDirectory } };
   }
 
+  private async cleanLegacyObservations(locked: LockedSidecarStore): Promise<void> {
+    const snapshot = await locked.read();
+    if (snapshot.pendingOperation !== undefined || !snapshot.recoveryIssues || snapshot.recoveryIssues.length === 0) {
+      return;
+    }
+    const remainingIssues = snapshot.recoveryIssues.filter((issue) => {
+      const record = snapshot.worktrees.find((w) => w.worktreeId === issue.worktreeId);
+      const removable =
+        issue.operationId === undefined &&
+        issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
+        record !== undefined &&
+        record.diskCleanup !== 'completed' &&
+        issue.worktreeId === record.worktreeId;
+      return !removable;
+    });
+    if (remainingIssues.length !== snapshot.recoveryIssues.length) {
+      await locked.mutate((current) => {
+        const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = current;
+        void _repository;
+        void _oldRecovery;
+        return {
+          result: undefined,
+          changed: true,
+          snapshot: {
+            ...stableFields,
+            ...(remainingIssues.length > 0 ? { recoveryIssues: remainingIssues } : {}),
+          },
+        };
+      });
+    }
+  }
+
   private assertMutationAdmitted(snapshot: SidecarSnapshot, workspaceId: string): void {
     if (snapshot.pendingOperation) {
       throw recoveryError(`Workspace has a pending Worktree operation: ${snapshot.pendingOperation.id}`, {
@@ -751,7 +984,19 @@ export class WorktreeMutationTransaction {
       });
     }
     if (snapshot.recoveryIssues && snapshot.recoveryIssues.length > 0) {
-      throw recoveryError(`Workspace has unresolved Worktree recovery issues: ${workspaceId}`, { workspaceId });
+      const remainingIssues = snapshot.recoveryIssues.filter((issue) => {
+        const record = snapshot.worktrees.find((w) => w.worktreeId === issue.worktreeId);
+        const removable =
+          issue.operationId === undefined &&
+          issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
+          record !== undefined &&
+          record.diskCleanup !== 'completed' &&
+          issue.worktreeId === record.worktreeId;
+        return !removable;
+      });
+      if (remainingIssues.length > 0) {
+        throw recoveryError(`Workspace has unresolved Worktree recovery issues: ${workspaceId}`, { workspaceId });
+      }
     }
   }
 
@@ -919,17 +1164,6 @@ export class WorktreeMutationTransaction {
     return exact !== undefined && exact.detached !== true;
   }
 
-  private async findStaleActiveRecord(
-    snapshot: SidecarSnapshot,
-    worktrees: readonly GitWorktreeInfo[],
-  ): Promise<WorktreeRecord | undefined> {
-    for (const record of snapshot.worktrees) {
-      if (record.status !== 'active') continue;
-      if (!(await this.findExactWorktree(worktrees, record.absolutePath, record.branch))) return record;
-    }
-    return undefined;
-  }
-
   private async publishCreated(
     locked: LockedSidecarStore,
     operationId: string,
@@ -952,17 +1186,45 @@ export class WorktreeMutationTransaction {
         });
       }
       const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId, record.worktreeId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
       void _repository;
+      void _oldRecovery;
       return {
         result: undefined,
         snapshot: {
-          ...withoutRepository,
+          ...stableFields,
           repositoryFingerprint: createRepositoryFingerprint(repository),
           worktrees: existing ? snapshot.worktrees : [record, ...snapshot.worktrees],
           pendingOperation: undefined,
           ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
         },
+      };
+    });
+  }
+
+  private async publishCleaned(
+    locked: LockedSidecarStore,
+    operationId: string,
+    worktreeId: string,
+    repository: RepositoryIdentity,
+  ): Promise<void> {
+    await locked.mutate((snapshot) => {
+      const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId, worktreeId);
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
+      void _repository;
+      void _oldRecovery;
+      const cleaned = completeWorktreeCleanup(
+        {
+          ...stableFields,
+          repositoryFingerprint: createRepositoryFingerprint(repository),
+          pendingOperation: undefined,
+          ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
+        },
+        worktreeId,
+      );
+      return {
+        result: undefined,
+        snapshot: cleaned,
       };
     });
   }
@@ -973,64 +1235,24 @@ export class WorktreeMutationTransaction {
     worktreeId: string,
     repository: RepositoryIdentity,
   ): Promise<void> {
-    await locked.mutate((snapshot) => {
-      const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId, worktreeId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
-      void _repository;
-      return {
-        result: undefined,
-        snapshot: {
-          ...withoutRepository,
-          repositoryFingerprint: createRepositoryFingerprint(repository),
-          worktrees: snapshot.worktrees.map((record) =>
-            record.worktreeId === worktreeId ? { ...record, status: 'removed' as const } : record,
-          ),
-          bindings: snapshot.bindings.map((binding) =>
-            binding.worktreeId === worktreeId && binding.status === 'active'
-              ? { ...binding, status: 'detached' as const }
-              : binding,
-          ),
-          pendingOperation: undefined,
-          ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
-        },
-      };
-    });
+    return this.publishCleaned(locked, operationId, worktreeId, repository);
   }
 
   private async clearPending(locked: LockedSidecarStore, operationId: string): Promise<void> {
     await locked.mutate((snapshot) => {
       const recoveryIssues = removeRecoveryIssue(snapshot.recoveryIssues, operationId);
-      const { repository: _repository, ...withoutRepository } = snapshot;
+      const { repository: _repository, recoveryIssues: _oldRecovery, ...stableFields } = snapshot;
       void _repository;
+      void _oldRecovery;
       return {
         result: undefined,
         snapshot: {
-          ...withoutRepository,
+          ...stableFields,
           pendingOperation: undefined,
           ...(recoveryIssues.length > 0 ? { recoveryIssues } : {}),
         },
       };
     });
-  }
-
-  private async appendRecoveryIssue(locked: LockedSidecarStore, issue: {
-    readonly code: 'WORKTREE_RECOVERY_REQUIRED' | 'WORKTREE_IDENTITY_CHANGED';
-    readonly worktreeId?: string;
-    readonly operationId?: string;
-    readonly observedAt: string;
-  }): Promise<void> {
-    await locked.mutate((snapshot) => ({
-      result: undefined,
-      snapshot: {
-        ...snapshot,
-        recoveryIssues: [
-          ...(snapshot.recoveryIssues ?? []).filter(
-            (candidate) => candidate.worktreeId !== issue.worktreeId && candidate.operationId !== issue.operationId,
-          ),
-          issue,
-        ],
-      },
-    }));
   }
 
   private async markRecovery(
@@ -1162,6 +1384,55 @@ export class WorktreeMutationTransaction {
     }
     await this.markRecovery(options.locked, options.pending, 'WORKTREE_IDENTITY_CHANGED');
     throw recoveryError(`Git remove failed with an unreconciled Worktree: ${options.record.absolutePath}`, {
+      workspaceId: options.input.workspaceId,
+      operationId: options.pending.id,
+      targetPath: options.record.absolutePath,
+    });
+  }
+
+  private async reconcileCleanFailure(options: {
+    readonly locked: LockedSidecarStore;
+    readonly input: CleanWorktreeTransactionInput;
+    readonly record: WorktreeRecord;
+    readonly pending: PendingOperation;
+    readonly repository: RepositoryIdentity;
+    readonly gitRoot: string;
+    readonly error: unknown;
+  }): Promise<void> {
+    let live: readonly GitWorktreeInfo[];
+    try {
+      live = await this.git.listWorktrees(options.gitRoot);
+    } catch (inspectionError) {
+      await this.markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
+      throw recoveryError(`Unable to inspect Git after clean failure: ${options.record.absolutePath}`, {
+        workspaceId: options.input.workspaceId,
+        operationId: options.pending.id,
+        targetPath: options.record.absolutePath,
+        cause: String(inspectionError),
+      });
+    }
+    if (await this.findExactWorktree(live, options.record.absolutePath, options.record.branch)) {
+      await this.clearPending(options.locked, options.pending.id);
+      throw normalizeGitError('clean worktree', options.input.workspaceRoot, options.record.absolutePath, options.error);
+    }
+    let targetExists: boolean;
+    try {
+      targetExists = await pathExists(options.record.absolutePath);
+    } catch (inspectionError) {
+      await this.markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
+      throw recoveryError(`Unable to inspect the Worktree path after clean failure: ${options.record.absolutePath}`, {
+        workspaceId: options.input.workspaceId,
+        operationId: options.pending.id,
+        targetPath: options.record.absolutePath,
+        cause: String(inspectionError),
+      });
+    }
+    if (!targetExists) {
+      await this.publishCleaned(options.locked, options.pending.id, options.input.worktreeId, options.repository);
+      return;
+    }
+    await this.markRecovery(options.locked, options.pending, 'WORKTREE_IDENTITY_CHANGED');
+    throw recoveryError(`Git clean failed with an unreconciled Worktree: ${options.record.absolutePath}`, {
       workspaceId: options.input.workspaceId,
       operationId: options.pending.id,
       targetPath: options.record.absolutePath,

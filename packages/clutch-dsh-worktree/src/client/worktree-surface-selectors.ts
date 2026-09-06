@@ -1,14 +1,29 @@
-import type { SessionBinding } from '../contract/index.js';
+import type { SessionBinding, WorktreeRecord } from '../contract/index.js';
 import {
   sessionDisplayLabel,
   sessionMatchesQuery,
   type SessionListLike,
+  type SessionPresentation,
 } from './session-view.js';
 import type { WorktreeWorkspaceView } from './worktree-view.js';
 import type {
   WorktreeTranslate,
   WorkspaceLike,
 } from './worktree-surface-types.js';
+
+/** Native activity changes invalidate only the archived Worktrees' owning reads. */
+export function worktreeActivityRefreshWorkspaceIds(
+  views: readonly WorktreeWorkspaceView[],
+  previous: Readonly<Record<string, Pick<SessionPresentation, 'ongoing'> | undefined>>,
+  next: Readonly<Record<string, Pick<SessionPresentation, 'ongoing'> | undefined>>,
+): readonly string[] {
+  return views.filter((view) => view.bindings.some((binding) =>
+    previous[binding.sessionId]?.ongoing !== next[binding.sessionId]?.ongoing &&
+    view.worktrees.some((record) =>
+      record.worktreeId === binding.worktreeId && record.status === 'removed',
+    ),
+  )).map((view) => view.workspaceId);
+}
 
 export function sessionLabel(
   sessionId: string,
@@ -90,6 +105,7 @@ export type CurrentSessionLocation =
       readonly groupKey: string;
       readonly kind: 'worktree';
       readonly worktreeId: string;
+      readonly archived?: boolean;
     };
 
 export function resolveCurrentSessionLocation(
@@ -126,6 +142,7 @@ export function resolveCurrentSessionLocation(
     groupKey: 'worktree:' + worktree.worktreeId,
     kind: 'worktree',
     worktreeId: worktree.worktreeId,
+    ...(worktree.status === 'removed' ? { archived: true } : {}),
   };
 }
 
@@ -135,6 +152,7 @@ export function currentSessionRevealKeys(
   if (location === undefined) return [];
   return [
     'workspace:' + location.workspaceId,
+    ...(location.kind === 'worktree' && location.archived ? ['archived:' + location.workspaceId] : []),
     location.kind === 'main'
       ? 'main:' + location.workspaceId
       : 'worktree:' + location.worktreeId,
@@ -156,4 +174,13 @@ export function isSessionGroupAutoExpanded(
   currentSessionRevealActive: boolean,
 ): boolean {
   return currentSessionRevealActive && shouldRevealCurrentSessionGroup(sessionIds, currentSessionId);
+}
+/** Lifecycle mutations rely on user confirmation, not Session activity coverage. */
+export function worktreeLifecycleBlockReason(
+  actionPending: boolean,
+  health?: WorktreeRecord['health'],
+): 'pending' | 'recovery' | undefined {
+  if (actionPending) return 'pending';
+  if (health === 'recovery-needed') return 'recovery';
+  return undefined;
 }

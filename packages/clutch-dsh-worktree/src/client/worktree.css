@@ -903,6 +903,10 @@
   font-size: 11px;
 }
 
+.archivedGroup {
+  margin-top: 4px;
+}
+
 .modalField {
   display: grid;
   gap: 5px;

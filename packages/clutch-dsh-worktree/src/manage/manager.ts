@@ -20,7 +20,9 @@ import {
 } from './manager-sessions.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
+  cleanWorktree,
   createWorktree,
+  forgetWorktree,
   importWorktree,
   insertWorktreeBefore,
   listBranches,
@@ -105,6 +107,22 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly mutationToken: string;
   }): Promise<void> {
     return this.afterRecovery(() => removeWorktree(this.context, input));
+  }
+
+  cleanWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => cleanWorktree(this.context, input));
+  }
+
+  forgetWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => forgetWorktree(this.context, input));
   }
 
   insertWorktreeBefore(input: {

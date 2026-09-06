@@ -125,7 +125,7 @@ test('normalizes every detached Session after a Worktree is removed', async () =
   const fixture = createFixture({
     manager: {
       async listWorktrees() {
-        return [{ ...worktree, status: 'removed', health: 'repair' }];
+        return [{ ...worktree, status: 'removed', diskCleanup: 'completed', health: 'cleaned' }];
       },
       async listBindings() {
         return [{ ...binding, status: 'detached' }, {
@@ -175,7 +175,7 @@ test('reports detached permission state as unverified when the optional adapter 
   const fixture = createFixture({
     manager: {
       async listWorktrees() {
-        return [{ ...worktree, status: 'removed', health: 'repair' }];
+        return [{ ...worktree, status: 'removed', diskCleanup: 'completed', health: 'cleaned' }];
       },
       async listBindings() {
         return [{ ...binding, status: 'detached' }];

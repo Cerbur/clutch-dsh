@@ -1,7 +1,5 @@
 import type {
   WorktreeManager,
-  WorktreePermissionManager,
-  WorktreePermissionResult,
   WorktreeRecord,
 } from '../contract/index.js';
 import { WorktreeSessionBindingError } from './worktree-view-errors.js';
@@ -66,6 +64,14 @@ export type WorktreeViewAction =
   | {
       readonly type: 'removeWorktree';
       readonly input: Parameters<WorktreeManager['removeWorktree']>[0];
+    }
+  | {
+      readonly type: 'cleanWorktree';
+      readonly input: Parameters<WorktreeManager['cleanWorktree']>[0];
+    }
+  | {
+      readonly type: 'forgetWorktree';
+      readonly input: Parameters<WorktreeManager['forgetWorktree']>[0];
     };
 
 /** Resolve a row-half drop target to native-style optional before-anchor semantics. */
@@ -95,11 +101,6 @@ export function resolveWorktreeMove(
 export async function executeWorktreeAction(
   manager: WorktreeManager,
   action: WorktreeViewAction,
-  permission?: Pick<WorktreePermissionManager, 'normalizeDetachedWorktreePermissions'>,
-  onPermissionResult?: (
-    input: { readonly workspaceId: string; readonly worktreeId: string },
-    result: WorktreePermissionResult,
-  ) => void,
 ): Promise<WorktreeRecord | void> {
   if (action.type === 'createWorktree') {
     return manager.createWorktree(action.input);
@@ -109,16 +110,14 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
-    const result = await permission?.normalizeDetachedWorktreePermissions({
-      workspaceId: action.input.workspaceId,
-      worktreeId: action.input.worktreeId,
-    });
-    if (result !== undefined) {
-      onPermissionResult?.({
-        workspaceId: action.input.workspaceId,
-        worktreeId: action.input.worktreeId,
-      }, result);
-    }
+    return;
+  }
+  if (action.type === 'cleanWorktree') {
+    await manager.cleanWorktree(action.input);
+    return;
+  }
+  if (action.type === 'forgetWorktree') {
+    await manager.forgetWorktree(action.input);
     return;
   }
 }

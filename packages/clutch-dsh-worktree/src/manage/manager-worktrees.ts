@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type {
   BranchRecord,
+  WorktreeActivity,
   WorktreeId,
   WorktreeImportCandidate,
   WorktreeRecord,
@@ -28,31 +29,20 @@ function projectRuntimeRecord(
   snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
   record: WorktreeRecord,
   health?: WorktreeRecord['health'],
+  activity?: WorktreeActivity,
 ): WorktreeRecord {
-  const { health: _health, mutationToken: _mutationToken, ...durableRecord } = record;
+  const { health: _health, mutationToken: _mutationToken, activity: _activity, ...durableRecord } = record;
   void _health;
   void _mutationToken;
-  if (record.status !== 'active') return durableRecord;
+  void _activity;
   return {
     ...durableRecord,
     mutationToken: createWorktreeMutationToken(snapshot, record),
     ...(health === undefined ? {} : { health }),
+    ...(activity === undefined ? {} : { activity }),
   };
 }
 
-function assertMutationToken(
-  snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
-  record: WorktreeRecord,
-  token: string | undefined,
-): void {
-  const expected = createWorktreeMutationToken(snapshot, record);
-  if (token === undefined || token !== expected) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Worktree state changed after it was loaded', {
-      workspaceId: record.workspaceId,
-      worktreeId: record.worktreeId,
-    });
-  }
-}
 
 /** Return the sidecar Worktree projection with runtime Git health attached. */
 export async function listWorktrees(
@@ -69,25 +59,58 @@ export async function listWorktrees(
       ...(snapshot.pendingOperation ? { operationId: snapshot.pendingOperation.id } : {}),
     });
   }
-  let gitWorktrees: readonly { readonly absolutePath: string }[];
+  const getActivity = async (record: WorktreeRecord): Promise<WorktreeActivity> => {
+    const ids = [
+      ...new Set(
+        snapshot.bindings
+          .filter((b) => b.worktreeId === record.worktreeId)
+          .map((b) => b.sessionId),
+      ),
+    ];
+    if (ids.length === 0) return { state: 'idle' };
+    if (!context.dsh.readWorktreeActivity) return { state: 'unknown' };
+    try {
+      return await context.dsh.readWorktreeActivity(ids);
+    } catch {
+      return { state: 'unknown' };
+    }
+  };
+
+  let gitWorktrees: readonly { readonly absolutePath: string }[] | undefined;
   try {
     const gitRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath)
       : workspace.rootPath;
     gitWorktrees = await context.git.listWorktrees(gitRoot);
   } catch {
-    return records.map((record) => projectRuntimeRecord(
-      snapshot,
-      record,
-      record.status === 'active'
-        ? recoveryNeeded ? 'recovery-needed' : 'repair'
-        : undefined,
-    ));
+    gitWorktrees = undefined;
   }
+
   const nextRecords: WorktreeRecord[] = [];
   for (const record of records) {
-    if (record.status !== 'active') {
-      nextRecords.push(projectRuntimeRecord(snapshot, record));
+    const activity = await getActivity(record);
+    const recordRecoveryNeeded =
+      (snapshot.pendingOperation !== undefined &&
+        (snapshot.pendingOperation.worktreeId === undefined ||
+          snapshot.pendingOperation.worktreeId === record.worktreeId)) ||
+      snapshot.recoveryIssues?.some(
+        (issue) => issue.worktreeId === undefined || issue.worktreeId === record.worktreeId,
+      ) === true;
+
+    if (record.diskCleanup === 'completed') {
+      nextRecords.push(projectRuntimeRecord(snapshot, record, recordRecoveryNeeded ? 'recovery-needed' : 'cleaned', activity));
+      continue;
+    }
+
+    if (gitWorktrees === undefined) {
+      nextRecords.push(
+        projectRuntimeRecord(
+          snapshot,
+          record,
+          recordRecoveryNeeded ? 'recovery-needed' : 'repair',
+          activity,
+        ),
+      );
       continue;
     }
     let ready = false;
@@ -100,13 +123,14 @@ export async function listWorktrees(
         break;
       }
     }
-    nextRecords.push({
-      ...projectRuntimeRecord(
+    nextRecords.push(
+      projectRuntimeRecord(
         snapshot,
         record,
-        recoveryNeeded ? 'recovery-needed' : ready ? 'ready' : 'repair',
+        recordRecoveryNeeded ? 'recovery-needed' : ready ? 'ready' : 'repair',
+        activity,
       ),
-    });
+    );
   }
   return nextRecords;
 }
@@ -460,92 +484,11 @@ function importConflictOrExisting(
   });
 }
 
-/** Remove Git state first, then mark the relation removed while preserving detached bindings. */
-export async function removeWorktree(
-  context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string; readonly mutationToken: string },
-): Promise<void> {
-  const workspace = await requireWorkspace(context, input.workspaceId);
-  if (context.sidecar.runExclusive) {
-    await context.transaction.remove({
-      workspaceId: input.workspaceId,
-      workspaceRoot: workspace.rootPath,
-      worktreeId: input.worktreeId,
-      mutationToken: input.mutationToken,
-    });
-    return;
-  }
-  let gitRemoved = false;
-
-  try {
-    await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
-      const record = snapshot.worktrees.find((worktree) => worktree.worktreeId === input.worktreeId);
-      if (!record) {
-        throw providerError('WORKTREE_NOT_FOUND', `Worktree not found: ${input.worktreeId}`, {
-          worktreeId: input.worktreeId,
-          workspaceId: input.workspaceId,
-        });
-      }
-      if (record.status === 'removed') {
-        throw providerError('WORKTREE_REMOVED', `Worktree has already been removed: ${input.worktreeId}`, {
-          worktreeId: input.worktreeId,
-        });
-      }
-      assertMutationToken(snapshot, record, input.mutationToken);
-
-      try {
-        await context.git.removeWorktree(workspace.rootPath, record.absolutePath);
-      } catch (error) {
-        let stillRegistered: boolean;
-        try {
-          stillRegistered = false;
-          for (const worktree of await context.git.listWorktrees(workspace.rootPath)) {
-            if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
-              stillRegistered = true;
-              break;
-            }
-          }
-        } catch {
-          throw asGitError('remove worktree', workspace.rootPath, record.absolutePath, error);
-        }
-        if (stillRegistered) {
-          throw asGitError('remove worktree', workspace.rootPath, record.absolutePath, error);
-        }
-      }
-      gitRemoved = true;
-
-      // Preserve Worktree and binding history while changing lifecycle only; DSH Sessions are never read or deleted here.
-      const next: SidecarSnapshot = {
-        ...snapshot,
-        worktrees: snapshot.worktrees.map((candidate) =>
-          candidate.worktreeId === record.worktreeId ? { ...candidate, status: 'removed' } : candidate,
-        ),
-        bindings: snapshot.bindings.map((binding) =>
-          binding.worktreeId === record.worktreeId && binding.status === 'active'
-            ? { ...binding, status: 'detached' }
-            : binding,
-        ),
-      };
-      return { result: undefined, snapshot: next };
-    });
-  } catch (error) {
-    if (gitRemoved) {
-      // Git removal cannot be rolled back here, so expose the divergence for a safe retry.
-      const sidecarError = asSidecarError(error, input.workspaceId);
-      throw providerError(
-        'SIDECAR_SYNC_REQUIRED',
-        `Git removed Worktree ${input.worktreeId}, but sidecar synchronization failed`,
-        {
-          workspaceId: input.workspaceId,
-          worktreeId: input.worktreeId,
-          workspaceRoot: workspace.rootPath,
-          sidecarError: sidecarError.message,
-        },
-      );
-    }
-    throw error;
-  }
-}
+export {
+  archiveWorktree as removeWorktree,
+  cleanWorktree,
+  forgetWorktree,
+} from './manager-worktree-lifecycle.js';
 
 /** Reconcile one Workspace's durable Git/sidecar operation marker. */
 export async function recoverWorktrees(

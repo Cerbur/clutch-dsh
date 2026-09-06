@@ -9,7 +9,7 @@ import type { SidecarSnapshot } from './types.js';
  */
 export function createWorktreeMutationToken(
   snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
-  record: Pick<WorktreeRecord, 'worktreeId' | 'workspaceId' | 'absolutePath' | 'branch' | 'source' | 'status'>,
+  record: Pick<WorktreeRecord, 'worktreeId' | 'workspaceId' | 'absolutePath' | 'branch' | 'source' | 'status' | 'diskCleanup'>,
 ): string {
   const payload = JSON.stringify([
     snapshot.schemaVersion,
@@ -21,6 +21,7 @@ export function createWorktreeMutationToken(
     record.branch,
     record.source,
     record.status,
+    record.diskCleanup ?? null,
   ]);
   return `v1-${createHash('sha256').update(payload).digest('base64url')}`;
 }

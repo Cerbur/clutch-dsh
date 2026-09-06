@@ -23,7 +23,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
 - Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
 - Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
-- Remove plugin-created and imported Worktrees through real `git worktree remove`; removing an imported Worktree can delete its linked directory and is called out in the confirmation dialog.
+- Archive Worktrees non-destructively (`status: removed`), preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation: users must confirm all Sessions, subagents, and other tasks using the directory have stopped. Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
 - Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
   open it directly.
 - For active Worktree Sessions, request the named `worktree-full-access` preset after an
@@ -320,19 +320,41 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
-- Open the shared Main and Worktree options menu to copy the selected row's absolute path. Main
-  and detached/removed Worktrees show only `Copy path`; active Worktrees also show `Remove
-  Worktree` with a confirmation dialog.
-- Imported Worktrees expose the same active options menu as plugin-created Worktrees. Removing
-  either source runs real `git worktree remove`; for an imported Worktree, the confirmation warns
-  that the linked Worktree directory may be deleted. Sessions are retained as detached bindings.
-- Removing a Worktree does not delete its Sessions. The relationship remains detached until it
-  is explicitly unbound. Deleting a Workspace removes only DSH's Workspace registration; its
-  directory, Sessions, Git Worktrees, and plugin sidecar remain.
-- After a successful removal, detached Sessions that still have Full Access are normalized to
-  `workspace-write + ask` when the public DSH permission service is available. An unavailable
-  service is reported as an unverified, retryable warning; it never grants Full Access to a
-  detached Session.
+- Open the shared Main and Worktree options menu to copy the selected row's absolute path. Active
+  Worktrees show `Copy path` and `Remove Worktree`. Removing an active Worktree is an internal
+  archive operation: it sets `status: removed`, preserves disk files, active bindings, and runtime cwd,
+  and moves the Worktree into the default-collapsed `Archived` group at the bottom of the Workspace.
+- The `Archived` group is rendered at the bottom of the Workspace when archived Worktrees exist and is
+  collapsed by default. Its label includes the total archived Worktree count, even when collapsed.
+  Each Workspace tracks its own collapsed state independently.
+- Active Worktrees with `health: repair` also offer `Remove Worktree` to archive the record without
+  touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
+- For archived Worktrees whose disk has not been cleaned, the options menu provides:
+  1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
+     tells you that the plugin does not check Session or subagent activity and requires you to confirm
+     that all tasks using the directory have stopped (otherwise deletion may cause task failures or data loss),
+     runs real non-forced `git worktree remove`, and upon success records
+     `diskCleanup: completed`, projects health as `cleaned`, transitions bindings to detached, and
+     normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
+     from permission normalization: once disk removal commits, the dialog closes and the record updates to
+     `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
+     Use `Retry` in the permission notice to retry only permission normalization for the cleaned Worktree.
+     If the Worktree directory or its `.git` entry was already deleted externally, confirming cleanup only marks
+     the plugin record as completed and detaches its bindings. It does not run Git removal or prune
+     stale Git registration. Any remaining directory and files are preserved. The completed status
+     reads `Worktree removed`, which does not imply residual files were deleted. Ordinary refreshes still show
+     missing directories as `repair` until cleanup is explicitly confirmed.
+  2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
+     its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
+     recovery state, and permission notices for that Worktree. No Session activity check is required.
+- For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
+  `Remove from Management` to prune the sidecar record completely.
+- Session activity is informational and does not block cleanup or removal from management.
+  The default Host may report `unknown`. Before confirming disk cleanup, stop all tasks using
+  the directory yourself; the plugin does not verify that they have stopped. Native activity
+  changes and reopening the archived menu refresh its owning Workspace while retaining ready content.
+- Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,
+  and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
   ordering is limited to the current visual Main or Worktree group.
 - The Main group shows the current local branch as `Local (branch)` and falls back to `Local` if
@@ -349,11 +371,16 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Understand status and recovery messages
 
-- `ready` means the Worktree is available. `repair` identifies a missing or invalid Worktree,
-  Session, binding, or cwd. `recovery-needed` means a Git/sidecar operation or identity check is
-  unresolved and destructive actions are blocked. `detached` means the Git Worktree was removed
-  while the relationship was retained. An active binding pointing to a missing Worktree produces
+- `ready` means the Worktree is available. `cleaned` indicates disk cleanup completed while the
+  sidecar archive entry is retained. `repair` identifies a missing or invalid Worktree, Session, binding,
+  or cwd. `recovery-needed` means a Git/sidecar operation or identity check is unresolved and
+  destructive actions are blocked. `detached` means the Git Worktree was removed while the relationship
+  was retained. An active binding pointing to a missing Worktree produces
   an explicit repair warning or error; it never silently falls back to another Worktree.
+- Without a pending Git transaction, missing active or archived Worktrees remain `repair` and
+  can be archived without blocking healthy Worktree Session bindings. Legacy non-transactional
+  `WORKTREE_RECOVERY_REQUIRED` observations for existing, uncleaned records are retired under
+  the sidecar lock; pending transactions, unknown records, and identity-change issues still block.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
   failures are shown per Workspace: a missing Git executable shows installation guidance without
   commands, while repository, initial commit, or local branch failures show copyable setup
@@ -395,9 +422,10 @@ store a copy of `projectRoot` or any Session content. If the sidecar is unavaila
 the native Project/Session view remains readable and the plugin becomes degraded/read-only; an
 empty index must never overwrite the native DSH lists.
 
-The sidecar accepts v1 and v2 snapshots for backwards-compatible reads. Legacy records are
-normalized in memory, and the first successful mutation atomically upgrades the shard to v3.
-New v3 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
+The sidecar accepts v1, v2, and v3 snapshots for backwards-compatible reads. Legacy records are
+normalized in memory, and the first successful mutation atomically upgrades the shard to v4.
+Legacy removed records become `diskCleanup: completed`; v3 revisions are preserved.
+New v4 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
 metadata for Git create/remove. A transitional v3 snapshot containing an older raw repository
 field is read and cleaned on its next stable write. Invalid JSON, unknown schema versions, and
 invariant violations are reported as corruption rather than reset to an empty index.

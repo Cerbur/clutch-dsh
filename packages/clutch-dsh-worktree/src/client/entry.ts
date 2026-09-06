@@ -53,6 +53,7 @@ import {
   type WorktreeForkBindingIndex,
   type WorktreeForkBindingLookupResult,
   type WorktreeForkSessionListReader,
+  type ForgottenWorktree,
 } from './worktree-session-fork.js';
 import type { VirtualWorkspaceBinding } from './view-mode.js';
 
@@ -502,6 +503,20 @@ export function apply(ctx: Context): void {
               },
           openSession: (sessionId: string) => {
             ctx.sessions.open(sessionId as SessionId);
+          },
+          onWorktreeForgotten: (input: ForgottenWorktree) => {
+            forkCoordinator?.forgetWorktree(input);
+            for (const sessionId of input.sessionIds) {
+              virtualWorkspaceMembership.removeSession(sessionId);
+            }
+            const currentNotice = permissionNotice.getSnapshot();
+            if (
+              currentNotice !== undefined &&
+              (currentNotice.worktreeId === input.worktreeId ||
+                (currentNotice.sessionId !== undefined && input.sessionIds.includes(currentNotice.sessionId)))
+            ) {
+              permissionNotice.set(undefined);
+            }
           },
         }),
       },

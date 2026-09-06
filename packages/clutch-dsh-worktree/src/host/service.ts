@@ -21,6 +21,7 @@ import {
   DshHostReadAdapter,
   type DshHostReadContext,
 } from './dsh-read-adapter.js';
+import type { WorktreeActivitySource } from './worktree-activity.js';
 import { createWorktreeRemoteProjection } from './remote.js';
 import {
   createDshWorktreePermissionAdapter,
@@ -65,7 +66,18 @@ export class WorktreeRemoteService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
-    const dsh = new DshHostReadAdapter(ctx as Context & DshHostReadContext);
+    let disposed = false;
+    ctx.effect(
+      () => () => {
+        disposed = true;
+      },
+      'clutch-dsh-worktree: activity reader disposal',
+    );
+    const activitySource = ctx.get('activitySource') as WorktreeActivitySource | undefined;
+    const dsh = new DshHostReadAdapter(ctx as Context & DshHostReadContext, {
+      activitySource,
+      isDisposed: () => disposed,
+    });
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
     const manager = createWorktreeManager({
       dsh,
@@ -156,6 +168,24 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly mutationToken: string;
   }): Promise<WorktreeRemoteResult<null>> {
     return this.remote.removeWorktree(input);
+  }
+
+  @Remote
+  cleanWorktree(input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<WorktreeRemoteResult<null>> {
+    return this.remote.cleanWorktree(input);
+  }
+
+  @Remote
+  forgetWorktree(input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<WorktreeRemoteResult<null>> {
+    return this.remote.forgetWorktree(input);
   }
 
   @Remote

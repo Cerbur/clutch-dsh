@@ -38,6 +38,8 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_RECOVERY_REQUIRED',
   'WORKTREE_IDENTITY_CHANGED',
   'WORKTREE_PERMISSION_BINDING_REQUIRED',
+  'WORKTREE_SESSION_BUSY',
+  'WORKTREE_ACTIVITY_UNAVAILABLE',
 ] as const);
 
 export type WorktreeErrorCode = (typeof WORKTREE_ERROR_CODES)[number];
@@ -57,7 +59,18 @@ export type WorktreeSource = 'plugin' | 'external';
 export * from './worktree-permission.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
-export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed';
+export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed' | 'cleaned';
+
+export type WorktreeActivity =
+  | { readonly state: 'idle' }
+  | { readonly state: 'busy'; readonly sessionIds: readonly string[] }
+  | { readonly state: 'unknown' };
+
+export interface WorktreeLifecycleInput {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly mutationToken: string;
+}
 
 /**
  * Session 与 Worktree 的关系状态；删除 Worktree 只会将关系转为 `detached`，不会删除 Session。
@@ -76,8 +89,12 @@ export interface WorktreeRecord {
   readonly branch: string;
   readonly source: WorktreeSource;
   readonly status: WorktreeStatus;
+  /** Cleanup flow completed, including missing-.git reconciliation that preserves residual files. */
+  readonly diskCleanup?: 'completed';
   /** Runtime-only; never written to the sidecar. */
   readonly health?: WorktreeHealth;
+  /** Runtime-only; never written to the sidecar. */
+  readonly activity?: WorktreeActivity;
   /** Opaque runtime-only snapshot token for destructive-action stale-state checks. */
   readonly mutationToken?: string;
 }
@@ -184,6 +201,12 @@ export interface WorktreeManager {
     mutationToken: string;
   }): Promise<void>;
 
+  /** Caller must obtain explicit disk-deletion confirmation; Session activity is not checked. */
+  cleanWorktree(input: WorktreeLifecycleInput): Promise<void>;
+
+  /** Removes plugin index entries only; preserves disk and native Sessions without activity checks. */
+  forgetWorktree(input: WorktreeLifecycleInput): Promise<void>;
+
   /**
    * Move one Worktree within the Workspace's durable order. With an anchor it
    * lands before that Worktree; without one it appends. Invalid and unchanged
@@ -223,6 +246,8 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'createWorktree',
   'importWorktree',
   'removeWorktree',
+  'cleanWorktree',
+  'forgetWorktree',
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
@@ -273,6 +298,10 @@ export interface WorktreeRemoteManager {
     worktreeId: WorktreeId;
     mutationToken: string;
   }): Promise<WorktreeRemoteResult<null>>;
+
+  cleanWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
+
+  forgetWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 
   insertWorktreeBefore(input: {
     workspaceId: WorkspaceId;

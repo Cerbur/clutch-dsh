@@ -26,7 +26,9 @@ import type {
   WorktreeFullAccessConfirmationController,
 } from './worktree-permission.js';
 import type { WorktreeSessionOrderStore } from './worktree-session-order.js';
-import type { WorktreeForkRecoveryStore } from './worktree-session-fork.js';
+import type { ForgottenWorktree, WorktreeForkRecoveryStore } from './worktree-session-fork.js';
+
+export type { ForgottenWorktree };
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import type { SessionListLike, SessionPresentation } from './session-view.js';
 import type {
@@ -125,6 +127,7 @@ export interface WorktreeSurfaceInjected {
     bindings: readonly { workspaceId: string; sessionId: string }[],
   ) => void;
   readonly openSession: (sessionId: string) => void;
+  readonly onWorktreeForgotten?: (input: ForgottenWorktree) => void;
 }
 
 /** Props derived from the frame overlay slot, shared state, and injected face. */
@@ -245,13 +248,21 @@ export interface WorktreeGroupMenuProps {
   readonly copyPath: string;
   readonly showCreate: boolean;
   readonly showRemove: boolean;
+  readonly showCleanDisk?: boolean;
+  readonly showForget?: boolean;
   readonly disabled: boolean;
+  readonly cleanDiskDisabled?: boolean;
+  readonly forgetDisabled?: boolean;
+  readonly cleanDiskDisabledReason?: string;
+  readonly forgetDisabledReason?: string;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreateWorktree?: () => void;
   readonly onRemove?: () => void;
+  readonly onCleanDisk?: () => void;
+  readonly onForget?: () => void;
 }
 
-export type WorktreeGroupKind = 'main' | 'worktree';
+export type WorktreeGroupKind = 'main' | 'worktree' | 'archived-group';
 
 export interface WorktreeGroupRowProps {
   readonly t: WorktreeTranslate;
@@ -390,6 +401,22 @@ export interface WorktreeCreateDialogProps {
 }
 
 export interface WorktreeRemovalDialogProps {
+  readonly t: WorktreeTranslate;
+  readonly worktree: WorktreeRecord | undefined;
+  readonly actionPending: boolean;
+  readonly onClose: () => void;
+  readonly onSubmit: () => void;
+}
+
+export interface WorktreeCleanDiskDialogProps {
+  readonly t: WorktreeTranslate;
+  readonly worktree: WorktreeRecord | undefined;
+  readonly actionPending: boolean;
+  readonly onClose: () => void;
+  readonly onSubmit: () => void;
+}
+
+export interface WorktreeForgetDialogProps {
   readonly t: WorktreeTranslate;
   readonly worktree: WorktreeRecord | undefined;
   readonly actionPending: boolean;

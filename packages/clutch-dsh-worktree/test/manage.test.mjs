@@ -108,6 +108,7 @@ function createDshReader({
   rootPath,
   sessions = [],
   listWorkspaces = false,
+  readWorktreeActivity = async () => ({ state: 'idle' }),
 }) {
   const sessionMap = new Map(sessions.map((session) => [session.sessionId, { ...session }]));
   const workspace = { workspaceId, projectId, rootPath };
@@ -126,6 +127,7 @@ function createDshReader({
     addSession(session) {
       sessionMap.set(session.sessionId, { ...session });
     },
+    readWorktreeActivity,
   };
   if (listWorkspaces) {
     reader.listWorkspaces = async () => [{ ...workspace }];
@@ -289,7 +291,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalized = await sidecar.read('ws_one');
-    assert.equal(normalized.schemaVersion, 3);
+    assert.equal(normalized.schemaVersion, 4);
     assert.equal(normalized.revision, '0');
     assert.equal(normalized.worktrees[0].source, 'plugin');
 
@@ -300,7 +302,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       source: 'plugin',
     });
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 3);
+    assert.equal(persisted.schemaVersion, 4);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal('pendingOperation' in persisted, false);
 
@@ -318,7 +320,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalizedV2 = await sidecar.read('ws_one');
-    assert.equal(normalizedV2.schemaVersion, 3);
+    assert.equal(normalizedV2.schemaVersion, 4);
     assert.equal(normalizedV2.revision, '0');
     assert.deepEqual(normalizedV2.worktrees, [v2Record]);
 
@@ -328,7 +330,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_legacy_v2_new'),
     });
     const persistedV2 = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persistedV2.schemaVersion, 3);
+    assert.equal(persistedV2.schemaVersion, 4);
     assert.equal(typeof persistedV2.revision, 'string');
     assert.equal('pendingOperation' in persistedV2, false);
   });
@@ -1508,15 +1510,22 @@ test('refuses to remove a Worktree after its registered path is replaced', async
     await rename(record.absolutePath, replacement);
     await symlink(replacement, record.absolutePath, 'dir');
 
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken,
+    });
+    const archivedToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
     await expectCode(
-      provider.removeWorktree({
+      provider.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
-        mutationToken,
+        mutationToken: archivedToken,
       }),
       'WORKTREE_IDENTITY_CHANGED',
     );
-    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'removed');
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, undefined);
     assert.equal(await exists(replacement), true);
     void dshHome;
   });
@@ -1545,15 +1554,21 @@ test('rejects a destructive action when the Workspace repository identity change
       return current === undefined ? undefined : { ...current, rootPath: otherRoot };
     };
 
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken,
+    });
+    const archivedToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
     await expectCode(
-      provider.removeWorktree({
+      provider.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
-        mutationToken,
+        mutationToken: archivedToken,
       }),
       'WORKTREE_IDENTITY_CHANGED',
     );
-    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'removed');
     assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId)), false);
   });
 });
@@ -1768,9 +1783,15 @@ test('removes an imported Worktree before detaching its active binding without t
       worktreeId: imported.worktreeId,
       mutationToken: await mutationTokenFor(provider, 'ws_one', imported.worktreeId),
     });
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: imported.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', imported.worktreeId),
+    });
     const snapshot = await sidecar.read('ws_one');
     assert.equal(await exists(externalPath), false);
     assert.equal(snapshot.worktrees[0].status, 'removed');
+    assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
     assert.equal(snapshot.bindings[0].status, 'detached');
     assert.deepEqual(await readFile(fixturePath), fixtureBefore);
   });
@@ -1816,7 +1837,7 @@ test('rejects import validation failures and managed physical paths', async () =
   });
 });
 
-test('normalizes v1 reads and writes source-aware schema v3 on mutation', async () => {
+test('normalizes v1 reads and writes source-aware schema v4 on mutation', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const worktreeRoot = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
     const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
@@ -1838,7 +1859,7 @@ test('normalizes v1 reads and writes source-aware schema v3 on mutation', async 
 
     await sidecar.mutate('ws_one', (snapshot) => ({ result: undefined, snapshot }));
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 3);
+    assert.equal(persisted.schemaVersion, 4);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal(persisted.worktrees[0].source, 'plugin');
   });
@@ -2039,19 +2060,24 @@ test('keeps stable sidecar relations unchanged when Git Worktree removal fails',
     };
     const failingProvider = createWorktreeManager({ dsh, dshHome, git: failingGit, sidecar });
 
+    await failingProvider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken,
+    });
+    const archivedToken = await mutationTokenFor(failingProvider, 'ws_one', record.worktreeId);
     await expectCode(
-      failingProvider.removeWorktree({
+      failingProvider.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
-        mutationToken,
+        mutationToken: archivedToken,
       }),
       'GIT_OPERATION_FAILED',
     );
     const after = await sidecar.read('ws_one');
-    assert.deepEqual(after.worktrees, before.worktrees);
-    assert.deepEqual(after.bindings, before.bindings);
+    assert.equal(after.worktrees[0].status, 'removed');
+    assert.equal(after.worktrees[0].diskCleanup, undefined);
     assert.equal(after.pendingOperation, undefined);
-    assert.notEqual(after.revision, before.revision);
     assert.equal(await exists(record.absolutePath), true);
   });
 });
@@ -2062,38 +2088,48 @@ test('reconciles a sidecar after Git removal succeeded but sidecar sync failed',
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/remove-sync' });
     const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
     let failWrite = true;
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken,
+    });
+    const archivedToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
     const flakySidecar = {
       read: (...args) => sidecar.read(...args),
-      async mutate(workspaceId, mutation) {
-        const current = await sidecar.read(workspaceId);
-        const result = await mutation(current);
-        if (failWrite) {
-          failWrite = false;
-          throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar sync failed', { reason: 'test' });
-        }
-        return sidecar.mutate(workspaceId, () => result);
+      runExclusive(workspaceId, operation) {
+        return sidecar.runExclusive(workspaceId, (locked) => {
+          return operation({
+            read: () => locked.read(),
+            async mutate(mutation) {
+              const current = await locked.read();
+              const result = await mutation(current);
+              if (failWrite && result.snapshot.pendingOperation === undefined) {
+                failWrite = false;
+                throw new WorktreeProviderError('SIDECAR_UNAVAILABLE', 'sidecar sync failed', { reason: 'test' });
+              }
+              return locked.mutate(() => result);
+            },
+          });
+        });
       },
+      mutate: (...args) => sidecar.mutate(...args),
     };
     const firstAttempt = createWorktreeManager({ dsh, dshHome, sidecar: flakySidecar });
 
     await expectCode(
-      firstAttempt.removeWorktree({
+      firstAttempt.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
-        mutationToken,
+        mutationToken: archivedToken,
       }),
       'SIDECAR_SYNC_REQUIRED',
     );
     assert.equal(await exists(record.absolutePath), false);
-    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, undefined);
 
     const retry = createWorktreeManager({ dsh, dshHome, sidecar });
-    await retry.removeWorktree({
-      workspaceId: 'ws_one',
-      worktreeId: record.worktreeId,
-      mutationToken: await mutationTokenFor(retry, 'ws_one', record.worktreeId),
-    });
-    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'removed');
+    await retry.recoverWorktrees({ workspaceId: 'ws_one' });
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, 'completed');
   });
 });
 
@@ -2109,9 +2145,15 @@ test('marks a removed Worktree and its bindings detached only after Git succeeds
       worktreeId: record.worktreeId,
       mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
     });
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
     const snapshot = await sidecar.read('ws_one');
     assert.equal(await exists(record.absolutePath), false);
     assert.equal(snapshot.worktrees[0].status, 'removed');
+    assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
     assert.deepEqual(snapshot.bindings[0], {
       workspaceId: 'ws_one',
       worktreeId: record.worktreeId,
@@ -2200,6 +2242,12 @@ test('derives main, active, and detached runtime cwd without writing to DSH', as
     await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'session_cwd' });
     assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_cwd' }), record.absolutePath);
     await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_cwd' }), record.absolutePath);
+    await provider.cleanWorktree({
       workspaceId: 'ws_one',
       worktreeId: record.worktreeId,
       mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
@@ -2313,7 +2361,7 @@ test('projects repair on Git health failure and keeps removed records uncolored'
 
     const result = await manager.listWorktrees({ workspaceId: 'ws_one' });
     assert.equal(result.find((record) => record.worktreeId === 'wt_failed_health').health, 'repair');
-    assert.equal('health' in result.find((record) => record.worktreeId === 'wt_removed_health'), false);
+    assert.equal(result.find((record) => record.worktreeId === 'wt_removed_health').health, 'repair');
     void workspaceRoot;
   });
 });
@@ -2329,5 +2377,753 @@ test('does not persist transient Worktree health', async () => {
     const raw = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
     const snapshot = JSON.parse(raw);
     assert.equal('health' in snapshot.worktrees[0], false);
+  });
+});
+test('archive preserves Git, binding and runtime cwd', async () => {
+  await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/archive',
+    });
+    dsh.addSession({ sessionId: 's1', cwd: record.absolutePath });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 's1',
+    });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    assert.equal(await exists(record.absolutePath), true);
+    assert.equal((await sidecar.read('ws_one')).bindings[0].status, 'active');
+    assert.equal(
+      await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 's1' }),
+      record.absolutePath,
+    );
+    const live = await new LocalGitAdapter().listWorktrees(workspaceRoot);
+    const canonicalRecordPath = await realpath(record.absolutePath);
+    assert.ok(live.some((item) => path.resolve(item.absolutePath) === canonicalRecordPath));
+  });
+});
+
+test('repair worktree can be archived without changing Git or its active binding', async () => {
+  await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/archive-repair',
+    });
+    dsh.addSession({ sessionId: 's_repair', cwd: record.absolutePath });
+    await provider.bindSession({
+      workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_repair',
+    });
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+    const before = await sidecar.read('ws_one');
+    const gitBefore = await runGit(workspaceRoot, ['worktree', 'list', '--porcelain']);
+    const [repair] = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(repair.health, 'repair');
+    await provider.removeWorktree({
+      workspaceId: 'ws_one', worktreeId: record.worktreeId,
+      mutationToken: repair.mutationToken,
+    });
+    const after = await sidecar.read('ws_one');
+    assert.equal(after.worktrees[0].status, 'removed');
+    assert.equal(after.worktrees[0].diskCleanup, undefined);
+    assert.deepEqual(after.bindings, before.bindings);
+    assert.equal(after.pendingOperation, undefined);
+    assert.equal(after.recoveryIssues, undefined);
+    assert.equal((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, gitBefore.stdout);
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'repair');
+  });
+});
+
+test('cleanWorktree removes disk and marks cleaned', async () => {
+  await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/clean-lifecycle',
+    });
+    dsh.addSession({ sessionId: 's1', cwd: record.absolutePath });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 's1',
+    });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+    assert.equal(snapshot.bindings[0].status, 'detached');
+    assert.equal(await exists(record.absolutePath), false);
+    const listed = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(listed[0].health, 'cleaned');
+  });
+});
+
+test('cleanWorktree rejects active worktree but permits archived cleanup with unknown activity', async () => {
+  await withGitFixture(async ({ provider, dsh, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/clean-rejects',
+    });
+    const token = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+
+    // Active cannot be cleaned directly
+    await expectCode(
+      provider.cleanWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        mutationToken: token,
+      }),
+      'WORKTREE_STATE_CONFLICT',
+    );
+
+    // Archive it first
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: token,
+    });
+
+    dsh.addSession({ sessionId: 's_busy', cwd: record.absolutePath });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 's_busy',
+    });
+
+    // The caller confirms cleanup; unknown activity is not a deletion gate.
+    dsh.readWorktreeActivity = async () => ({ state: 'unknown' });
+    const sessionsBefore = await dsh.listSessions();
+    await provider.cleanWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+      });
+    assert.equal(await exists(record.absolutePath), false);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+  });
+});
+
+test('cleaned worktree rejects bindSession and resolveRuntimeCwd with WORKTREE_REMOVED', async () => {
+  await withGitFixture(async ({ provider, dsh, sidecar }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/cleaned-bind',
+    });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    dsh.addSession({ sessionId: 's_new', cwd: record.absolutePath });
+    await expectCode(
+      provider.bindSession({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        sessionId: 's_new',
+      }),
+      'WORKTREE_REMOVED',
+    );
+
+    // Idempotent clean call on already cleaned record
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+  });
+});
+
+test('forgetWorktree removes sidecar record and all bindings while preserving disk and DSH session', async () => {
+  await withGitFixture(async ({ provider, dsh, sidecar }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/forget',
+    });
+    dsh.addSession({ sessionId: 's_forget', cwd: record.absolutePath });
+    await provider.bindSession({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      sessionId: 's_forget',
+    });
+
+    const activeToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    // Cannot forget active worktree
+    await expectCode(
+      provider.forgetWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        mutationToken: activeToken,
+      }),
+      'WORKTREE_STATE_CONFLICT',
+    );
+
+    // Archive worktree first
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: activeToken,
+    });
+
+    const archivedToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+
+    // Forget is index-only and must not depend on unavailable activity coverage.
+    const sessionsBefore = await dsh.listSessions();
+    const gitBefore = await runGit(record.absolutePath, ['status', '--porcelain=v1']);
+    dsh.readWorktreeActivity = async () => ({ state: 'unknown' });
+    await provider.forgetWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: archivedToken,
+    });
+
+    // Sidecar record and bindings are gone
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.worktrees.length, 0);
+    assert.equal(snapshot.bindings.length, 0);
+
+    // Disk and DSH session are preserved
+    assert.equal(await exists(record.absolutePath), true);
+    const session = await dsh.getSession('s_forget');
+    assert.ok(session !== undefined);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+    assert.equal((await runGit(record.absolutePath, ['status', '--porcelain=v1'])).stdout, gitBefore.stdout);
+
+    // Can be re-imported as external
+    const candidates = await provider.listImportCandidates({ workspaceId: 'ws_one' });
+    const canonicalRecordPath = await realpath(record.absolutePath);
+    assert.ok(candidates.some((c) => path.resolve(c.absolutePath) === canonicalRecordPath));
+
+    const reimported = await provider.importWorktree({
+      workspaceId: 'ws_one',
+      absolutePath: record.absolutePath,
+    });
+    assert.equal(reimported.source, 'external');
+    assert.notEqual(reimported.worktreeId, record.worktreeId);
+
+    // Re-import does NOT restore old bindings
+    const bindings = await provider.listBindings({ workspaceId: 'ws_one' });
+    assert.equal(bindings.length, 0);
+  });
+});
+
+test('does not mark a valid ready Worktree as recovery-needed when recovery issues belong to another Worktree', async () => {
+  await withGitFixture(async ({ provider, sidecar, workspaceRoot }) => {
+    const recordReady = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/ready',
+    });
+
+    // Manually append a recovery issue for an unrelated worktree
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      changed: true,
+      snapshot: {
+        ...snapshot,
+        recoveryIssues: [
+          {
+            code: 'WORKTREE_RECOVERY_REQUIRED',
+            worktreeId: 'wt_other_broken',
+            observedAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }));
+
+    const list = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    const found = list.find((w) => w.worktreeId === recordReady.worktreeId);
+    assert.ok(found !== undefined);
+    assert.equal(found.health, 'ready');
+  });
+});
+
+test('cleaned record reports busy activity but still permits index-only forget', async () => {
+  await withGitFixture(async ({ dsh, provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/cleaned-busy' });
+    dsh.addSession({ sessionId: 's_cleaned_busy', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_cleaned_busy' });
+
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    await provider.cleanWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    const tokenAfterClean = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    dsh.readWorktreeActivity = async () => ({ state: 'busy', sessionIds: ['s_cleaned_busy'] });
+
+    const list = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    const target = list.find((w) => w.worktreeId === record.worktreeId);
+    assert.ok(target !== undefined);
+    assert.equal(target.activity.state, 'busy');
+
+    const sessionsBefore = await dsh.listSessions();
+    await provider.forgetWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: tokenAfterClean,
+    });
+    assert.equal((await sidecar.read('ws_one')).worktrees.length, 0);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+  });
+});
+
+test('cleaned health preserves target and shard recovery priority without affecting unrelated records', async () => {
+  await withGitFixture(async ({ provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/cleaned-recovery' });
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    await provider.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    for (const [worktreeId, health] of [[record.worktreeId, 'recovery-needed'], [undefined, 'recovery-needed'], ['wt_unrelated', 'cleaned']]) {
+      await sidecar.runExclusive('ws_one', (locked) => locked.mutate((snapshot) => ({
+        result: undefined,
+        snapshot: {
+          ...snapshot,
+          recoveryIssues: [{ code: 'WORKTREE_IDENTITY_CHANGED', ...(worktreeId ? { worktreeId } : {}), observedAt: new Date().toISOString() }],
+        },
+      })));
+      assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, health);
+    }
+  });
+});
+
+test('confirmed clean does not use activity changes during Git preflight as a gate', async () => {
+  await withGitFixture(async ({ provider, sidecar, dsh, dshHome }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/preflight-busy' });
+    dsh.addSession({ sessionId: 's_preflight_busy', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_preflight_busy' });
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    let busy = false;
+    let removals = 0;
+    dsh.readWorktreeActivity = async () => ({ state: busy ? 'busy' : 'idle' });
+    class ActivityChangingGitAdapter extends LocalGitAdapter {
+      async listWorktrees(root) {
+        const result = await super.listWorktrees(root);
+        busy = true;
+        return result;
+      }
+      async removeWorktree(...args) {
+        removals += 1;
+        return super.removeWorktree(...args);
+      }
+    }
+    const cleaner = createWorktreeManager({ dsh, dshHome, sidecar, git: new ActivityChangingGitAdapter() });
+    try {
+      await cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken });
+      assert.equal(removals, 1);
+      assert.equal(await exists(record.absolutePath), false);
+      assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, 'completed');
+    } finally {
+      await cleaner.close();
+    }
+  });
+});
+
+test('archive clean completes an already removed directory without manufacturing a transaction', async () => {
+  await withGitFixture(async ({ provider, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/preflight-evidence',
+    });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+    const token = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+    const before = await sidecar.read('ws_one');
+    const shardPath = sidecar.getShardPath('ws_one');
+    const bytesBefore = await readFile(shardPath, 'utf8');
+
+    await provider.cleanWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        mutationToken: token,
+      });
+    const completed = await sidecar.read('ws_one');
+    assert.equal(completed.worktrees[0].diskCleanup, 'completed');
+    assert.equal(completed.pendingOperation, undefined);
+    assert.equal(BigInt(completed.revision), BigInt(before.revision) + 1n);
+    const bytesAfter = await readFile(shardPath, 'utf8');
+    assert.notEqual(bytesAfter, bytesBefore);
+  });
+});
+
+test('missing active worktree recovery preserves repair and admits healthy binding and archive', async () => {
+  await withGitFixture(async ({ dsh, provider, sidecar, workspaceRoot }) => {
+    const missing = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/missing-active' });
+    const healthy = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/healthy-active' });
+    await runGit(workspaceRoot, ['worktree', 'remove', missing.absolutePath]);
+    await provider.recoverWorktrees({ workspaceId: 'ws_one' });
+    assert.equal((await sidecar.read('ws_one')).recoveryIssues, undefined);
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' })).find((w) => w.worktreeId === missing.worktreeId).health, 'repair');
+    dsh.addSession({ sessionId: 's_healthy_recovery', workspaceId: 'ws_one', projectId: 'project_one', cwd: healthy.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: healthy.worktreeId, sessionId: 's_healthy_recovery' });
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: missing.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', missing.worktreeId) });
+    assert.equal((await sidecar.read('ws_one')).worktrees.find((w) => w.worktreeId === missing.worktreeId).status, 'removed');
+  });
+});
+
+test('legacy active observation is retired before healthy binding and stays retired on recovery', async () => {
+  await withGitFixture(async ({ dsh, provider, sidecar, workspaceRoot }) => {
+    const missing = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/legacy-active' });
+    const healthy = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/legacy-healthy' });
+    await runGit(workspaceRoot, ['worktree', 'remove', missing.absolutePath]);
+    const snapshot = await sidecar.read('ws_one');
+    await writeFile(sidecar.getShardPath('ws_one'), JSON.stringify({ ...snapshot, recoveryIssues: [{ code: 'WORKTREE_RECOVERY_REQUIRED', worktreeId: missing.worktreeId, observedAt: new Date().toISOString() }] }));
+    dsh.addSession({ sessionId: 's_legacy_healthy', workspaceId: 'ws_one', projectId: 'project_one', cwd: healthy.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: healthy.worktreeId, sessionId: 's_legacy_healthy' });
+    await provider.recoverWorktrees({ workspaceId: 'ws_one' });
+    assert.equal((await sidecar.read('ws_one')).recoveryIssues, undefined);
+  });
+});
+
+test('legacy observation cleanup preserves transactional, identity, unknown and cleaned blockers', async () => {
+  await withGitFixture(async ({ provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/observation-guards' });
+    const base = await sidecar.read('ws_one');
+    for (const variant of [
+      { issue: { operationId: 'op_unresolved' } },
+      { issue: { code: 'WORKTREE_IDENTITY_CHANGED' } },
+      { issue: { worktreeId: 'wt_unknown' } },
+      { issue: { worktreeId: undefined } },
+      { issue: {}, cleaned: true },
+    ]) {
+      const snapshot = {
+        ...base,
+        worktrees: variant.cleaned ? [{ ...record, status: 'removed', diskCleanup: 'completed' }] : base.worktrees,
+        recoveryIssues: [{ code: 'WORKTREE_RECOVERY_REQUIRED', worktreeId: record.worktreeId, observedAt: new Date().toISOString(), ...variant.issue }],
+      };
+      const bytes = JSON.stringify(snapshot);
+      await writeFile(sidecar.getShardPath('ws_one'), bytes);
+      await expectCode(sidecar.mutate('ws_one', (current) => ({ result: undefined, snapshot: current, changed: false })), 'WORKTREE_RECOVERY_REQUIRED');
+      assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), bytes);
+    }
+  });
+});
+
+test('startup retires legacy active observations before projecting missing worktree health', async () => {
+  await withGitFixture(async ({ dsh, dshHome, provider, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/startup-observation' });
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+    const snapshot = await sidecar.read('ws_one');
+    await writeFile(sidecar.getShardPath('ws_one'), JSON.stringify({ ...snapshot, recoveryIssues: [{ code: 'WORKTREE_RECOVERY_REQUIRED', worktreeId: record.worktreeId, observedAt: new Date().toISOString() }] }));
+    dsh.listWorkspaces = async () => [{ workspaceId: 'ws_one', rootPath: workspaceRoot, title: 'ws_one' }];
+    const restarted = createWorktreeManager({ dsh, dshHome, sidecar });
+    try {
+      const [projected] = await restarted.listWorktrees({ workspaceId: 'ws_one' });
+      assert.equal(projected.health, 'repair');
+      await restarted.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: projected.mutationToken });
+      const after = await sidecar.read('ws_one');
+      assert.equal(after.worktrees[0].status, 'removed');
+      assert.equal(after.recoveryIssues, undefined);
+      assert.equal(after.pendingOperation, undefined);
+      assert.equal(after.worktrees[0].diskCleanup, undefined);
+    } finally {
+      await restarted.close();
+    }
+  });
+});
+
+test('archived missing worktree on external remove remains repair without manufacturing recovery and can be forgotten', async () => {
+  await withGitFixture(async ({ dsh, dshHome, provider, sidecar, workspaceRoot }) => {
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'main',
+      newBranch: 'feature/archived-missing',
+    });
+    dsh.addSession({ sessionId: 's_archived_missing', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_archived_missing' });
+
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    // Externally remove git worktree
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+
+    // Restart manager with listWorkspaces enabled
+    dsh.listWorkspaces = async () => [{ workspaceId: 'ws_one', rootPath: workspaceRoot, title: 'ws_one' }];
+    const restarted = createWorktreeManager({ dsh, dshHome, sidecar });
+    await restarted.recoverWorktrees({ workspaceId: 'ws_one' });
+
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.pendingOperation, undefined);
+    assert.equal(snapshot.recoveryIssues, undefined);
+
+    const list = await restarted.listWorktrees({ workspaceId: 'ws_one' });
+    const target = list.find((w) => w.worktreeId === record.worktreeId);
+    assert.ok(target !== undefined);
+    assert.equal(target.health, 'repair');
+
+    // Can be forgotten when idle
+    dsh.readWorktreeActivity = async () => ({ state: 'idle' });
+    const token = await mutationTokenFor(restarted, 'ws_one', record.worktreeId);
+    await restarted.forgetWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: token,
+    });
+
+    const finalSnapshot = await sidecar.read('ws_one');
+    assert.equal(finalSnapshot.worktrees.length, 0);
+  });
+});
+test('recovery matrix: clean-worktree with recovery-needed phase and missing dir rejects recovery without completed status', async () => {
+  await withGitFixture(async ({ dsh, workspaceRoot, provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/ambig-clean' });
+    dsh.addSession({ sessionId: 's_ambig', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_ambig' });
+
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    const git = new LocalGitAdapter();
+    const identity = await git.resolveRepositoryIdentity(workspaceRoot);
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+
+    const current = await sidecar.read('ws_one');
+    const shardPath = sidecar.getShardPath('ws_one');
+    await writeFile(shardPath, `${JSON.stringify({
+      ...current,
+      repository: identity.identity,
+      pendingOperation: {
+        id: 'op_ambig_clean',
+        type: 'clean-worktree',
+        phase: 'recovery-needed',
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        targetPath: record.absolutePath,
+        branch: record.branch,
+        source: record.source,
+        repository: identity.identity,
+        startedAt: new Date().toISOString(),
+      },
+    })}\n`);
+
+    await expectCode(provider.recoverWorktrees({ workspaceId: 'ws_one' }), 'WORKTREE_RECOVERY_REQUIRED');
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.worktrees[0].diskCleanup, undefined);
+    assert.equal(snapshot.bindings[0].status, 'active');
+  });
+});
+
+test('recovery matrix: executing clean operation safely finalizes to completed and detached upon recovery', async () => {
+  await withGitFixture(async ({ dsh, workspaceRoot, provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/exec-clean' });
+    dsh.addSession({ sessionId: 's_exec', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_exec' });
+
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
+    });
+
+    const git = new LocalGitAdapter();
+    const identity = await git.resolveRepositoryIdentity(workspaceRoot);
+    await runGit(workspaceRoot, ['worktree', 'remove', record.absolutePath]);
+
+    const current = await sidecar.read('ws_one');
+    const shardPath = sidecar.getShardPath('ws_one');
+    await writeFile(shardPath, `${JSON.stringify({
+      ...current,
+      repository: identity.identity,
+      pendingOperation: {
+        id: 'op_exec_clean',
+        type: 'clean-worktree',
+        phase: 'executing',
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        targetPath: record.absolutePath,
+        branch: record.branch,
+        source: record.source,
+        repository: identity.identity,
+        startedAt: new Date().toISOString(),
+      },
+    })}\n`);
+
+    await provider.recoverWorktrees({ workspaceId: 'ws_one' });
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.pendingOperation, undefined);
+    assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+    assert.equal(snapshot.bindings[0].status, 'detached');
+  });
+});
+
+test('recovery matrix: legacy non-transactional archived observation is pruned while other issues remain', async () => {
+  await withGitFixture(async ({ workspaceRoot, provider, sidecar }) => {
+    const recArchived = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/archived-obs' });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: recArchived.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', recArchived.worktreeId),
+    });
+
+    const recOther = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/other-real' });
+
+    const current = await sidecar.read('ws_one');
+    const shardPath = sidecar.getShardPath('ws_one');
+    await writeFile(shardPath, `${JSON.stringify({
+      ...current,
+      recoveryIssues: [
+        {
+          code: 'WORKTREE_RECOVERY_REQUIRED',
+          worktreeId: recArchived.worktreeId,
+          observedAt: new Date().toISOString(),
+        },
+        {
+          code: 'WORKTREE_IDENTITY_CHANGED',
+          operationId: 'op_real_other',
+          worktreeId: recOther.worktreeId,
+          observedAt: new Date().toISOString(),
+        },
+      ],
+    })}\n`);
+
+    // Sidecar mutation admission prunes legacy archived observation but keeps real other issue
+    await expectCode(
+      provider.cleanWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: recArchived.worktreeId,
+        mutationToken: 'token',
+      }),
+      'WORKTREE_RECOVERY_REQUIRED',
+    );
+
+    const snapshot = await sidecar.read('ws_one');
+    assert.equal(snapshot.recoveryIssues.length, 1);
+    assert.equal(snapshot.recoveryIssues[0].operationId, 'op_real_other');
+  });
+});
+for (const operation of ['cleanWorktree', 'forgetWorktree']) {
+  test(`${operation} does not read Session activity during mutation`, async () => {
+    await withGitFixture(async ({ provider, dsh, sidecar }) => {
+      const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/no-activity-gate' });
+      dsh.addSession({ sessionId: 's_no_activity', cwd: record.absolutePath });
+      await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_no_activity' });
+      await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+      const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+      const sessionsBefore = await dsh.listSessions();
+      let activityReads = 0;
+      dsh.readWorktreeActivity = async () => {
+        activityReads += 1;
+        throw new Error('Activity unavailable');
+      };
+      await provider[operation]({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken });
+      assert.equal(activityReads, 0);
+      assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+      assert.equal(await exists(record.absolutePath), operation === 'forgetWorktree');
+      const snapshot = await sidecar.read('ws_one');
+      if (operation === 'forgetWorktree') {
+        assert.equal(snapshot.worktrees.length, 0);
+        assert.equal(snapshot.bindings.length, 0);
+      } else {
+        assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+        assert.equal(snapshot.bindings[0].status, 'detached');
+      }
+    });
+  });
+}
+for (const source of ['plugin', 'external']) {
+  for (const removedDirectory of [true, false]) {
+    test(`clean ${source} worktree with missing Git file: directory absent=${removedDirectory}`, async () => {
+      await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot, tempRoot, dshHome }) => {
+        const record = source === 'plugin'
+          ? await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/missing-clean' })
+          : await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: await addExternalWorktree(workspaceRoot, tempRoot) });
+        dsh.addSession({ sessionId: 's_missing_clean', cwd: record.absolutePath });
+        await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_missing_clean' });
+        await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+        const token = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+        if (removedDirectory) {
+          await rm(record.absolutePath, { recursive: true });
+        } else {
+          await rm(path.join(record.absolutePath, '.git'));
+          await writeFile(path.join(record.absolutePath, 'keep.txt'), 'uncommitted data');
+        }
+        const gitBefore = (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout;
+        const sessionsBefore = await dsh.listSessions();
+        let removals = 0;
+        class CountingGit extends LocalGitAdapter {
+          async removeWorktree(...args) {
+            removals += 1;
+            return super.removeWorktree(...args);
+          }
+        }
+        const cleaner = createWorktreeManager({ dsh, dshHome, sidecar, git: new CountingGit() });
+        try {
+          const clean = () => cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: token });
+          const originalBytes = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
+          await expectCode(cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: 'stale' }), 'WORKTREE_STATE_CONFLICT');
+          assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), originalBytes);
+          await clean();
+          assert.equal(removals, 0);
+          const snapshot = await sidecar.read('ws_one');
+          assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+          assert.equal(snapshot.bindings[0].status, 'detached');
+          assert.equal(snapshot.pendingOperation, undefined);
+          assert.equal(snapshot.recoveryIssues, undefined);
+          const completedBytes = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
+          await cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(cleaner, 'ws_one', record.worktreeId) });
+          assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), completedBytes);
+          if (!removedDirectory) {
+            assert.equal(await readFile(path.join(record.absolutePath, 'keep.txt'), 'utf8'), 'uncommitted data');
+            assert.equal(await exists(record.absolutePath), true);
+          }
+          assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+          assert.equal((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, gitBefore);
+        } finally {
+          await cleaner.close();
+        }
+      });
+    });
+  }
+}
+test('clean does not classify a dangling .git symlink as missing metadata', async () => {
+  await withGitFixture(async ({ provider, sidecar, tempRoot }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/dangling-git' });
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await rm(path.join(record.absolutePath, '.git'));
+    await symlink(path.join(tempRoot, 'absent-git-metadata'), path.join(record.absolutePath, '.git'));
+    await writeFile(path.join(record.absolutePath, 'keep.txt'), 'keep residual files');
+    await assert.rejects(provider.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken }));
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, undefined);
+    assert.equal(await readFile(path.join(record.absolutePath, 'keep.txt'), 'utf8'), 'keep residual files');
   });
 });

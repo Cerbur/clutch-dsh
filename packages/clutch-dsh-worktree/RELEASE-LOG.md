@@ -1,5 +1,27 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## Unreleased
+
+### 中文
+
+#### 新增
+
+- 将 Worktree 生命周期拆分为保留目录和绑定的归档、磁盘清理与移出插件管理，并增加默认折叠的归档分组。
+
+#### 修复
+
+- 修复归档 Session 的定位和上下文、forget 后的异步恢复、清理后的权限重试，以及缺失目录和注册信息引发的错误恢复状态。
+
+### English
+
+#### Added
+
+- Separate the Worktree lifecycle into archive with directory and binding retention, disk cleanup, and removal from management, with a collapsed archive group.
+
+#### Fixed
+
+- Correct archived Session navigation and context, asynchronous recovery after forget, permission retry after cleanup, and false recovery from missing directories or registrations.
+
 ## 0.1.9 — 2026-09-04
 
 ### 中文

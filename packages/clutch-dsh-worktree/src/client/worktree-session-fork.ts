@@ -68,11 +68,18 @@ export interface WorktreeForkCoordinatorOptions {
   readonly onBound?: (binding: SessionBinding) => void;
 }
 
+export interface ForgottenWorktree {
+  readonly workspaceId: string;
+  readonly worktreeId: string;
+  readonly sessionIds: readonly string[];
+}
+
 export interface WorktreeForkCoordinator {
   readonly recovery: WorktreeForkRecoveryStore;
   fork(input: WorktreeForkInput): Promise<string>;
   reconcile(options?: { readonly force?: boolean }): Promise<void>;
   retry(key: string): Promise<boolean>;
+  forgetWorktree(input: ForgottenWorktree): void;
   dispose(): void;
 }
 
@@ -182,6 +189,12 @@ export function createWorktreeSessionForkCoordinator(
   let reconciliationAgain = false;
   let reconciliationForce = false;
   let lastSessionLineageSignature: string | undefined;
+  const sourceGeneration = new Map<string, number>();
+  const worktreeGeneration = new Map<string, number>();
+  const keyOf = (workspaceId: string, worktreeId: string): string =>
+    JSON.stringify([workspaceId, worktreeId]);
+  const versionOf = (versions: Map<string, number>, key: string): number =>
+    versions.get(key) ?? 0;
 
   const publish = (affectedWorkspaceIds: readonly string[] = []): void => {
     revision += 1;
@@ -241,13 +254,17 @@ export function createWorktreeSessionForkCoordinator(
     providedLookup?: WorktreeForkBindingLookupResult,
   ): Promise<BindingAttempt> => {
     if (disposed || boundChildren.has(childSessionId)) return { bound: false };
+    const initialSourceGen = versionOf(sourceGeneration, sourceSessionId);
 
     const lookup = providedLookup ?? (await lookupBinding(sourceSessionId));
+    if (disposed) return { bound: false };
+    if (versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen) {
+      return { bound: false };
+    }
     if (lookup.status === 'error') {
       setRecovery(sourceSessionId, childSessionId, lookup.error);
       return { bound: false };
     }
-    if (disposed) return { bound: false };
     if (lookup.status === 'missing' || lookup.binding.status !== 'active') {
       const cleared = clearRecovery(sourceSessionId, childSessionId);
       if (cleared.cleared) {
@@ -256,6 +273,8 @@ export function createWorktreeSessionForkCoordinator(
       return { bound: false };
     }
     const target = lookup.binding;
+    const wtKey = keyOf(target.workspaceId, target.worktreeId);
+    const initialWtGen = versionOf(worktreeGeneration, wtKey);
 
     try {
       await options.bindSession({
@@ -264,6 +283,12 @@ export function createWorktreeSessionForkCoordinator(
         sessionId: childSessionId,
       });
       if (disposed) return { bound: false };
+      if (
+        versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen ||
+        versionOf(worktreeGeneration, wtKey) !== initialWtGen
+      ) {
+        return { bound: false };
+      }
       const childBinding: SessionBinding = {
         workspaceId: target.workspaceId,
         worktreeId: target.worktreeId,
@@ -276,6 +301,13 @@ export function createWorktreeSessionForkCoordinator(
       publish([target.workspaceId, ...(previousWorkspaceId === undefined ? [] : [previousWorkspaceId])]);
       return { bound: true };
     } catch (error) {
+      if (
+        disposed ||
+        versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen ||
+        versionOf(worktreeGeneration, wtKey) !== initialWtGen
+      ) {
+        return { bound: false };
+      }
       setRecovery(sourceSessionId, childSessionId, error, target);
       return { bound: false };
     }
@@ -311,6 +343,9 @@ export function createWorktreeSessionForkCoordinator(
     );
     if (candidates.length === 0) return;
     const sourceSessionIds = [...new Set(candidates.map(({ sourceSessionId }) => sourceSessionId))];
+    const lookupGenerations = new Map(
+      sourceSessionIds.map((id) => [id, versionOf(sourceGeneration, id)]),
+    );
     let index: WorktreeForkBindingIndex;
     try {
       index = await options.findBindings(sourceSessionIds);
@@ -323,7 +358,9 @@ export function createWorktreeSessionForkCoordinator(
     }
     if (disposed) return;
     await Promise.all(
-      candidates.map(({ childSessionId, sourceSessionId }) =>
+      candidates.filter(({ sourceSessionId }) =>
+        lookupGenerations.get(sourceSessionId) === versionOf(sourceGeneration, sourceSessionId),
+      ).map(({ childSessionId, sourceSessionId }) =>
         bindChild(
           sourceSessionId,
           childSessionId,
@@ -368,8 +405,11 @@ export function createWorktreeSessionForkCoordinator(
       },
     },
     async fork(input) {
+      const generation = versionOf(sourceGeneration, input.sessionId);
       const childSessionId = await options.fork(input);
-      if (!disposed) await bindChild(input.sessionId, childSessionId);
+      if (!disposed && generation === versionOf(sourceGeneration, input.sessionId)) {
+        await bindChild(input.sessionId, childSessionId);
+      }
       return childSessionId;
     },
     reconcile,
@@ -380,6 +420,30 @@ export function createWorktreeSessionForkCoordinator(
         ? undefined
         : { status: 'found' as const, binding: item.binding };
       return (await bindChild(item.sourceSessionId, item.childSessionId, providedLookup)).bound;
+    },
+    forgetWorktree(input: ForgottenWorktree): void {
+      if (disposed) return;
+      const wtKey = keyOf(input.workspaceId, input.worktreeId);
+      worktreeGeneration.set(wtKey, versionOf(worktreeGeneration, wtKey) + 1);
+      for (const sid of input.sessionIds) {
+        sourceGeneration.set(sid, versionOf(sourceGeneration, sid) + 1);
+      }
+      let changed = false;
+      const next = new Map(pending);
+      for (const [key, item] of pending.entries()) {
+        const matchWorktree =
+          item.binding?.workspaceId === input.workspaceId &&
+          item.binding?.worktreeId === input.worktreeId;
+        const matchSession = input.sessionIds.includes(item.sourceSessionId);
+        if (matchWorktree || matchSession) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+      if (changed) {
+        pending = next;
+        publish([input.workspaceId]);
+      }
     },
     dispose() {
       disposed = true;
