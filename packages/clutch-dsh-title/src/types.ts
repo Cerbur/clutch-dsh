@@ -12,10 +12,17 @@ export type LiteralFieldConfig = {
   readonly value: string;
 };
 
+export type LlmEnumValueConfig =
+  | string
+  | {
+      readonly value: string;
+      readonly description: string;
+    };
+
 export type LlmEnumFieldConfig = {
   readonly kind: 'llm-enum';
   readonly instruction: string;
-  readonly values: readonly string[];
+  readonly values: readonly LlmEnumValueConfig[];
 };
 
 export type LlmTextFieldConfig = {

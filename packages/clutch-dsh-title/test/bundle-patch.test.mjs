@@ -77,7 +77,7 @@ class LoaderAdapter extends LlmAdapter {
 
   async *stream(options) {
     this.requests.push(options);
-    yield { type: 'text-delta', index: 0, text: '{"type":"配置","desc":"Loader title"}' };
+    yield { type: 'text-delta', index: 0, text: '{"type":"功能","desc":"Loader title"}' };
     yield { type: 'finish', reason: { kind: 'stop' } };
   }
 }
@@ -180,7 +180,7 @@ test('loads the custom provider through the real DSH Loader composition path', a
   assert.equal(adapter.requests.length, 1);
   const title = ctx.sessionTitle.get(session);
   assert.deepEqual(title, {
-    title: '0904|配置|Loader title',
+    title: '0904|功能|Loader title',
     messageSeqs: [message.seq],
     source: {
       kind: 'provider',
