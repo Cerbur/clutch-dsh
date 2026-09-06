@@ -4,6 +4,33 @@ import { loadPackageModule } from './load-module.mjs';
 const { decodeTemplates, validateTemplate, templateMutation, DEFAULT_TEMPLATE } =
   await loadPackageModule('templates');
 
+test('described enum choices survive YAML saves and invalid external descriptions fall back', () => {
+  const source = [
+    'template: "${type}"',
+    'fields:',
+    '  type:',
+    '    kind: llm-enum',
+    '    instruction: 分类',
+    '    values:',
+    '      - value: 前端',
+    '        description: 修改页面或交互时使用',
+    '      - 后端',
+  ].join('\n');
+  assert.deepEqual(validateTemplate(source).fields.type.values, [
+    { value: '前端', description: '修改页面或交互时使用' },
+    '后端',
+  ]);
+  const state = decodeTemplates({ active: 'custom', templates: { custom: source } });
+  assert.equal(state.effective, 'custom');
+  assert.doesNotThrow(() => templateMutation(state, { kind: 'save', id: 'custom', source }));
+  const broken = source.replace('description: 修改页面或交互时使用', 'description: ""');
+  assert.throws(() => templateMutation(state, { kind: 'save', id: 'custom', source: broken }));
+  const invalid = decodeTemplates({ active: 'custom', templates: { custom: broken } });
+  assert.equal(invalid.effective, 'default');
+  assert.match(invalid.rows.find((row) => row.id === 'custom').error, /description/);
+  assert.throws(() => templateMutation(invalid, { kind: 'activate', id: 'custom' }));
+});
+
 test('default is immutable even when externally replaced', () => {
   const state = decodeTemplates({ active: 'default', templates: { default: 'template: hacked' } });
   assert.equal(state.effective, 'default');

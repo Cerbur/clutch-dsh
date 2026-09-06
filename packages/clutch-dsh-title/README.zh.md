@@ -6,7 +6,7 @@
 
 ![默认 deterministic title 流程](assets/screenshots/title-default.svg)
 
-默认 title 形态是 `0904|配置|优化 session title 生成规则`：按 timezone 计算的 session 创建日期、LLM 选择的任务类型，以及对首次 prompt 的简短描述。
+默认 title 形态是 `0904|功能|优化 session title 生成规则`：按 timezone 计算的 session 创建日期、LLM 选择的任务类型，以及对首次 prompt 的简短描述。
 
 ## 能力
 
@@ -53,6 +53,10 @@ package 包含 Host 和 browser 入口，通过 `cordis.patch.yml` 和 DSH clien
 
 ![会话标题模板管理](assets/screenshots/template-manager.png)
 
+模板以紧凑列表展示状态和操作，点击编辑或查看即可就地展开编辑器。
+面板跟随 DSH 浅色/深色主题，并适配窄屏。编辑器打开期间会锁定生成开关，
+避免切换开关导致自己的草稿版本过期。
+
 多行编辑器仅接受 `template` 和可选的 `fields`，不填写 `preset`。保存校验 YAML 语法、重复键、`${identifier}` 引用、字段类型、日期/时区格式和枚举/文本约束。名称为 1–64 个字母、数字、空格、下划线或连字符，以字母或数字开头。`default`、`constructor`、`prototype`、`__proto__` 为保留名称。模板文本最多 65536 个字符。字段按名称继承内置字段，覆盖时替换整个定义。
 
 唯一数据源是 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`，或 DSH settings provider 配置的文件）中的 `clutch-dsh-title` 命名空间，不使用 browser storage 或 `clutch.yaml`：
@@ -91,7 +95,19 @@ fields:
   type:
     kind: llm-enum
     instruction: 判断这个 session 的任务类型
-    values: [前端, 后端, 配置, 文档]
+    values:
+      - value: 设计
+        description: 明确需求、制定实现方案，或设计架构、接口和交互时使用
+      - value: 探索
+        description: 理解代码、调研技术、分析问题或验证可行性，主要目标是获得结论时使用
+      - value: 功能
+        description: 新增此前不存在的能力，或扩展现有功能的使用场景时使用
+      - value: 修复
+        description: 纠正缺陷、排查并解决故障，或恢复预期行为时使用
+      - value: 优化
+        description: 在保持现有功能含义的基础上，改善性能、体验、结构或可维护性时使用
+      - value: 发布
+        description: 准备版本、编写发布说明、打包、部署或执行上线流程时使用
 
   desc:
     kind: llm-text
@@ -101,6 +117,8 @@ fields:
 
 field definition 按 field name 合并，但每次覆盖会替换整个 field definition。例如可以使用任意 field name 和受控的 values：
 
+`llm-enum.values` 中每项可以是字符串，也可以是包含非空 `value` 和 `description` 的对象，两种写法可以混用。`description` 告诉模型何时选择该值，标题只输出 `value`。规范化后的值不能重复。非法项会阻止保存和激活；从磁盘读取的当前模板非法时回退到 `default`。
+
 ```yaml
 preset: default
 template: '${daytime}|${kind}|${desc}'
@@ -108,7 +126,13 @@ fields:
   kind:
     kind: llm-enum
     instruction: 判断任务是优化、功能还是修复
-    values: [优化, 功能, 修复]
+    values:
+      - value: 优化
+        description: 改进已有功能的性能、体验或结构时使用
+      - value: 功能
+        description: 新增此前不存在的能力时使用
+      - value: 修复
+        description: 纠正错误或恢复预期行为时使用
   desc:
     kind: llm-text
     instruction: 总结首次 prompt

@@ -33,7 +33,7 @@ const contexts = [];
 
 class RecordingAdapter extends LlmAdapter {
   requests = [];
-  response = '{"type":"配置","desc":"优化 session title 生成规则"}';
+  response = '{"type":"优化","desc":"优化 session title 生成规则"}';
   responseFor = undefined;
   waitFor = undefined;
 
@@ -121,7 +121,7 @@ test('settings select templates, external corruption falls back, and disabling u
   assert.equal(ctx.sessionTitle.get(session).title, 'Custom');
   ctx.settings.external({ active: 'custom', templates: { custom: 'template: "${missing}"' } });
   await ctx.sessionTitle.refresh(session);
-  assert.equal(ctx.sessionTitle.get(session).title, '0904|配置|优化 session title 生成规则');
+  assert.equal(ctx.sessionTitle.get(session).title, '0904|优化|优化 session title 生成规则');
   adapter.response = 'Native title';
   ctx.settings.external({ enabled: false, active: 'custom', templates: { custom: 'template: [' } });
   await ctx.sessionTitle.refresh(session);
@@ -137,7 +137,7 @@ test('invalid managed templates at startup leave provider and repair settings av
   await ctx.plugin(titlePlugin, {});
   const { session } = appendSession(ctx, 'invalid-startup', 'Fix title');
   await settle();
-  assert.equal(ctx.sessionTitle.get(session).title, '0904|配置|优化 session title 生成规则');
+  assert.equal(ctx.sessionTitle.get(session).title, '0904|优化|优化 session title 生成规则');
   assert.equal(
     ctx.settings.describe().find((item) => item.ns === 'clutch-dsh-title').user.templates.bad,
     42,
@@ -150,7 +150,7 @@ test('renders the default title from session.createdAt and the first message', a
   await settle();
 
   const title = ctx.sessionTitle.get(session);
-  assert.equal(title?.title, '0904|配置|优化 session title 生成规则');
+  assert.equal(title?.title, '0904|优化|优化 session title 生成规则');
   assert.deepEqual(title?.messageSeqs, [first.seq]);
   assert.deepEqual(title?.source, {
     kind: 'provider',
@@ -237,7 +237,7 @@ test('keeps createdAt stable across explicit refresh and does not migrate old ti
   const { session } = appendSession(ctx, 'refresh-stability', 'first prompt');
   await settle();
   const original = ctx.sessionTitle.get(session);
-  assert.equal(original?.title, '0904|配置|优化 session title 生成规则');
+  assert.equal(original?.title, '0904|优化|优化 session title 生成规则');
 
   await ctx.sessionTitle.refresh(session);
 
@@ -285,8 +285,8 @@ test('keeps concurrent generations isolated by native session snapshots', async 
   adapter.responseFor = (options) => {
     const prompt = options.messages[0].content[0].text;
     return prompt.includes('session A')
-      ? '{"type":"配置","desc":"A title"}'
-      : '{"type":"配置","desc":"B title"}';
+      ? '{"type":"优化","desc":"A title"}'
+      : '{"type":"优化","desc":"B title"}';
   };
   const { ctx } = await makeContext({ adapter });
   const a = appendSession(ctx, 'concurrent-a', 'session A');
@@ -301,13 +301,13 @@ test('keeps concurrent generations isolated by native session snapshots', async 
     ctx.sessionTitle.refresh(b.session),
   ]);
   assert.deepEqual(results.map((result) => result?.title).sort(), [
-    '0904|配置|A title',
-    '0904|配置|B title',
+    '0904|优化|A title',
+    '0904|优化|B title',
   ]);
   assert.equal(adapter.requests.length, 4);
   const bySession = new Map(adapter.requests.map((request) => [request.sessionId, request]));
   assert.match(bySession.get('concurrent-a').messages[0].content[0].text, /session A/);
   assert.match(bySession.get('concurrent-b').messages[0].content[0].text, /session B/);
-  assert.equal(ctx.sessionTitle.get(a.session)?.title, '0904|配置|A title');
-  assert.equal(ctx.sessionTitle.get(b.session)?.title, '0904|配置|B title');
+  assert.equal(ctx.sessionTitle.get(a.session)?.title, '0904|优化|A title');
+  assert.equal(ctx.sessionTitle.get(b.session)?.title, '0904|优化|B title');
 });

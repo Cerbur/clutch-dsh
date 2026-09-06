@@ -61,3 +61,31 @@ a race window; do not claim cross-process compare-and-swap. This upstream limit
 is documented in both READMEs. A malformed entire YAML document is likewise
 handled by DSH's last-readable-document policy. Template-level invalid data is
 retained for repair and never selected for generation.
+
+## UI refinement — 2026-09-06
+
+After the user verified the feature, they authorized direct UI refinement without
+another design approval. The panel now uses a compact preference switch, aligned
+template rows, status badges, and an editor expanded inside the selected row.
+Validation details are collapsible; the generation switch is disabled during
+editing to avoid invalidating the draft. Scoped CSS inherits DSH theme tokens and
+supports narrow screens and reduced motion. Both READMEs and the screenshot were
+updated.
+
+`pnpm run check` passed again, including all 56 title tests. Playwright verified
+light/dark layouts, 390px Chinese and English layouts without horizontal overflow,
+create/save validation, activation, switch behavior, draft retention on external
+updates, deletion, validation disclosure, and the readonly default. The existing
+DSH profile link still points to this worktree, whose browser bundle was rebuilt.
+This refinement has not been committed.
+
+## Enum usage descriptions — 2026-09-06
+
+User requested per-value guidance for llm-enum. Each values entry now accepts
+either the existing string shorthand or an object with value and description.
+Both forms can be mixed. The resolver validates non-empty strings, rejects unknown
+object keys and duplicate normalized values, and preserves descriptions for the
+extraction prompt. The model still returns only a candidate value as a string.
+The built-in default remains read-only in settings. Template saves and externally loaded settings share this
+validation, including fallback and activation blocking. Both READMEs and editor
+help explain the syntax.

@@ -127,6 +127,27 @@ test('builds one structured JSON request and records the native request event fi
   assert.ok(Object.isFrozen(result.values));
 });
 
+test('passes enum usage descriptions to the model but accepts only candidate values', async () => {
+  const config = makeConfig({
+    fields: {
+      type: {
+        kind: 'llm-enum',
+        instruction: '分类',
+        values: [{ value: '配置', description: '修改配置文件或环境变量时使用' }, '文档'],
+      },
+    },
+  });
+  const { result, requests } = await runExtraction({ config });
+  assert.equal(result.values.type, '配置');
+  assert.match(requests[0].system, /修改配置文件或环境变量时使用/);
+  assert.match(requests[0].system, /return only.*value/i);
+  for (const type of ['修改配置文件或环境变量时使用', { value: '配置' }, '后端']) {
+    await assert.rejects(
+      runExtraction({ config, chunks: textChunks(JSON.stringify({ type, desc: '测试' })) }),
+    );
+  }
+});
+
 test('uses an explicit provider/model pair when configured', async () => {
   const { result, requests } = await runExtraction({
     config: makeConfig({ provider: 'title-route', model: 'title-model' }),

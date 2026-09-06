@@ -38,7 +38,7 @@ function systemPrompt(config: ResolvedTitleConfig): string {
   for (const [name, field] of dynamicFields(config)) {
     if (field.kind === 'llm-enum') {
       lines.push(
-        `- ${name}: ${field.instruction}; allowed values: ${JSON.stringify(field.values)}`,
+        `- ${name}: ${field.instruction}; allowed choices: ${JSON.stringify(field.values)}. A string is a candidate value; an object provides a value and a description of when to use it. Use descriptions to choose; return only the selected value as a string, never its description or object.`,
       );
     } else {
       lines.push(

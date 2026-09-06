@@ -77,6 +77,7 @@ export type {
   ExtractedLlmFields,
   LiteralFieldConfig,
   LlmEnumFieldConfig,
+  LlmEnumValueConfig,
   LlmTextFieldConfig,
   ResolvedTitleConfig,
   TemplateSegment,

@@ -1,5 +1,16 @@
 export const en = {
   nav: 'Session Title',
+  intro: 'Choose how new conversations are named.',
+  templates: 'Templates',
+  custom: 'Custom template',
+  needsRepair: 'Needs attention',
+  validationDetails: 'View validation details',
+  nativeMode: 'DSH default',
+  readOnlyLabel: 'Read-only',
+  namePlaceholder: 'e.g. Daily development',
+  valid: 'Template is valid',
+  close: 'Close',
+  collapse: 'Collapse',
   enabled: 'Use title templates',
   native: 'When off, DSH generates titles using its native first-prompt logic.',
   add: 'New template',
@@ -20,7 +31,7 @@ export const en = {
   invalid: 'Invalid · cannot activate',
   saved: 'Saved',
   confirm: 'Delete this template?',
-  help: 'Define template and optional fields. Use ${field} placeholders. Save validates YAML, references, and field definitions.',
+  help: 'Use ${field} placeholders in template. For llm-enum, values accepts strings or { value, description } entries explaining when to choose each value. Saving validates YAML and fields.',
   stale:
     'Settings changed externally. Your draft is preserved. Copy it if needed, then cancel and reopen to edit the latest version.',
   history:
@@ -28,6 +39,17 @@ export const en = {
 } as const;
 export const zh: Record<keyof typeof en, string> = {
   nav: '会话标题',
+  intro: '为新会话选择合适的标题格式。',
+  templates: '模板',
+  custom: '自定义模板',
+  needsRepair: '待修复',
+  validationDetails: '查看校验详情',
+  nativeMode: 'DSH 默认逻辑',
+  readOnlyLabel: '只读',
+  namePlaceholder: '例如：日常开发',
+  valid: '模板格式正确',
+  close: '关闭',
+  collapse: '收起',
   enabled: '使用标题模板',
   native: '关闭后，DSH 使用原生首条消息逻辑生成标题。',
   add: '新增模板',
@@ -48,7 +70,7 @@ export const zh: Record<keyof typeof en, string> = {
   invalid: '非法 · 不可激活',
   saved: '已保存',
   confirm: '删除此模板？',
-  help: '填写 template 和可选的 fields，使用 ${field} 占位符。保存时校验 YAML、字段引用与字段定义。',
+  help: '在 template 中使用 ${field} 占位符。llm-enum 的 values 支持字符串或 { value, description }，用 description 说明何时选择该值。保存时校验 YAML 和字段。',
   stale: '设置已被外部修改，草稿已保留。需要时先复制草稿，再取消并重新打开，基于最新版本编辑。',
   history: '修改用于后续标题生成或显式刷新，不会重写已有标题。',
 };

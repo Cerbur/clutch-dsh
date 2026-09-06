@@ -6,7 +6,7 @@
 
 ![Default deterministic title flow](assets/screenshots/title-default.svg)
 
-The default title shape is `0904|配置|优化 session title 生成规则`: a timezone-aware session creation date, an LLM-selected task type, and a concise first-prompt description.
+The default title shape is `0904|功能|优化 session title 生成规则`: a timezone-aware session creation date, an LLM-selected task type, and a concise first-prompt description.
 
 ## Capabilities
 
@@ -53,6 +53,11 @@ Open **Settings → Session Title**. **New template** copies `default`; choose a
 
 ![Session Title template manager](assets/screenshots/template-manager.png)
 
+Templates appear in compact rows with their status and actions. Edit or view a
+template to expand its editor in place; the panel follows DSH's light/dark theme
+and adapts to narrow screens. The generation switch is locked while an editor is
+open, so changing it cannot make your own draft stale.
+
 The multiline editor accepts only `template` and optional `fields`; omit `preset`. Save validates YAML syntax, duplicate keys, `${identifier}` references, field kinds, date/timezone formats and enum/text constraints. Names contain 1–64 letters, numbers, spaces, underscores or hyphens, starting with a letter or number. `default`, `constructor`, `prototype` and `__proto__` are reserved. Template text is limited to 65536 characters. Field definitions inherit built-in fields by name; each override replaces a whole definition.
 
 The source of truth is the `clutch-dsh-title` namespace in `$DSH_HOME/settings.yaml` (normally `~/.dsh/settings.yaml`, or the DSH settings provider's configured file). No browser storage or `clutch.yaml` is used:
@@ -91,7 +96,19 @@ fields:
   type:
     kind: llm-enum
     instruction: 判断这个 session 的任务类型
-    values: [前端, 后端, 配置, 文档]
+    values:
+      - value: 设计
+        description: 明确需求、制定实现方案，或设计架构、接口和交互时使用
+      - value: 探索
+        description: 理解代码、调研技术、分析问题或验证可行性，主要目标是获得结论时使用
+      - value: 功能
+        description: 新增此前不存在的能力，或扩展现有功能的使用场景时使用
+      - value: 修复
+        description: 纠正缺陷、排查并解决故障，或恢复预期行为时使用
+      - value: 优化
+        description: 在保持现有功能含义的基础上，改善性能、体验、结构或可维护性时使用
+      - value: 发布
+        description: 准备版本、编写发布说明、打包、部署或执行上线流程时使用
 
   desc:
     kind: llm-text
@@ -101,6 +118,8 @@ fields:
 
 Field definitions are merged by field name, while an override replaces one complete field definition. For example, a project can use arbitrary field names and a controlled set of values:
 
+Each `llm-enum.values` entry accepts either a string or an object with non-empty `value` and `description`. Both forms can be mixed. Descriptions tell the model when to select a value; only the value appears in the title. Values must be unique after normalization. Invalid entries block saving and activation; an invalid active template loaded from disk falls back to `default`.
+
 ```yaml
 preset: default
 template: '${daytime}|${kind}|${desc}'
@@ -108,7 +127,13 @@ fields:
   kind:
     kind: llm-enum
     instruction: 判断任务是优化、功能还是修复
-    values: [优化, 功能, 修复]
+    values:
+      - value: 优化
+        description: 改进已有功能的性能、体验或结构时使用
+      - value: 功能
+        description: 新增此前不存在的能力时使用
+      - value: 修复
+        description: 纠正错误或恢复预期行为时使用
   desc:
     kind: llm-text
     instruction: 总结首次 prompt
