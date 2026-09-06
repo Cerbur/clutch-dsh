@@ -2470,7 +2470,7 @@ test('cleanWorktree removes disk and marks cleaned', async () => {
   });
 });
 
-test('cleanWorktree rejects active worktree and checks activity', async () => {
+test('cleanWorktree rejects active worktree but permits archived cleanup with unknown activity', async () => {
   await withGitFixture(async ({ provider, dsh, workspaceRoot }) => {
     const record = await provider.createWorktree({
       workspaceId: 'ws_one',
@@ -2503,29 +2503,16 @@ test('cleanWorktree rejects active worktree and checks activity', async () => {
       sessionId: 's_busy',
     });
 
-    // Busy rejects clean
-    dsh.readWorktreeActivity = async () => ({ state: 'busy' });
-    await expectCode(
-      provider.cleanWorktree({
-        workspaceId: 'ws_one',
-        worktreeId: record.worktreeId,
-        mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
-      }),
-      'WORKTREE_SESSION_BUSY',
-    );
-    assert.equal(await exists(record.absolutePath), true);
-
-    // Unknown rejects clean
+    // The caller confirms cleanup; unknown activity is not a deletion gate.
     dsh.readWorktreeActivity = async () => ({ state: 'unknown' });
-    await expectCode(
-      provider.cleanWorktree({
+    const sessionsBefore = await dsh.listSessions();
+    await provider.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
         mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId),
-      }),
-      'WORKTREE_ACTIVITY_UNAVAILABLE',
-    );
-    assert.equal(await exists(record.absolutePath), true);
+      });
+    assert.equal(await exists(record.absolutePath), false);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
   });
 });
 
@@ -2600,19 +2587,10 @@ test('forgetWorktree removes sidecar record and all bindings while preserving di
 
     const archivedToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
 
-    // Busy session rejects forget
-    dsh.readWorktreeActivity = async () => ({ state: 'busy' });
-    await expectCode(
-      provider.forgetWorktree({
-        workspaceId: 'ws_one',
-        worktreeId: record.worktreeId,
-        mutationToken: archivedToken,
-      }),
-      'WORKTREE_SESSION_BUSY',
-    );
-
-    // Idle session allows forget
-    dsh.readWorktreeActivity = async () => ({ state: 'idle' });
+    // Forget is index-only and must not depend on unavailable activity coverage.
+    const sessionsBefore = await dsh.listSessions();
+    const gitBefore = await runGit(record.absolutePath, ['status', '--porcelain=v1']);
+    dsh.readWorktreeActivity = async () => ({ state: 'unknown' });
     await provider.forgetWorktree({
       workspaceId: 'ws_one',
       worktreeId: record.worktreeId,
@@ -2628,6 +2606,8 @@ test('forgetWorktree removes sidecar record and all bindings while preserving di
     assert.equal(await exists(record.absolutePath), true);
     const session = await dsh.getSession('s_forget');
     assert.ok(session !== undefined);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+    assert.equal((await runGit(record.absolutePath, ['status', '--porcelain=v1'])).stdout, gitBefore.stdout);
 
     // Can be re-imported as external
     const candidates = await provider.listImportCandidates({ workspaceId: 'ws_one' });
@@ -2678,7 +2658,7 @@ test('does not mark a valid ready Worktree as recovery-needed when recovery issu
   });
 });
 
-test('cleaned record with detached binding and busy reader reports busy in listWorktrees and blocks forget', async () => {
+test('cleaned record reports busy activity but still permits index-only forget', async () => {
   await withGitFixture(async ({ dsh, provider, sidecar }) => {
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/cleaned-busy' });
     dsh.addSession({ sessionId: 's_cleaned_busy', workspaceId: 'ws_one', projectId: 'project_one', cwd: record.absolutePath });
@@ -2704,16 +2684,14 @@ test('cleaned record with detached binding and busy reader reports busy in listW
     assert.ok(target !== undefined);
     assert.equal(target.activity.state, 'busy');
 
-    const before = await sidecar.read('ws_one');
-    await expectCode(
-      provider.forgetWorktree({
-        workspaceId: 'ws_one',
-        worktreeId: record.worktreeId,
-        mutationToken: tokenAfterClean,
-      }),
-      'WORKTREE_SESSION_BUSY',
-    );
-    assert.deepEqual(await sidecar.read('ws_one'), before);
+    const sessionsBefore = await dsh.listSessions();
+    await provider.forgetWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: record.worktreeId,
+      mutationToken: tokenAfterClean,
+    });
+    assert.equal((await sidecar.read('ws_one')).worktrees.length, 0);
+    assert.deepEqual(await dsh.listSessions(), sessionsBefore);
   });
 });
 
@@ -2735,14 +2713,13 @@ test('cleaned health preserves target and shard recovery priority without affect
   });
 });
 
-test('clean rechecks activity after Git preflight before writing a journal or removing disk', async () => {
+test('confirmed clean does not use activity changes during Git preflight as a gate', async () => {
   await withGitFixture(async ({ provider, sidecar, dsh, dshHome }) => {
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/preflight-busy' });
     dsh.addSession({ sessionId: 's_preflight_busy', cwd: record.absolutePath });
     await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_preflight_busy' });
     await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
     const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
-    const before = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
     let busy = false;
     let removals = 0;
     dsh.readWorktreeActivity = async () => ({ state: busy ? 'busy' : 'idle' });
@@ -2759,10 +2736,10 @@ test('clean rechecks activity after Git preflight before writing a journal or re
     }
     const cleaner = createWorktreeManager({ dsh, dshHome, sidecar, git: new ActivityChangingGitAdapter() });
     try {
-      await expectCode(cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken }), 'WORKTREE_SESSION_BUSY');
-      assert.equal(removals, 0);
-      assert.equal(await exists(record.absolutePath), true);
-      assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), before);
+      await cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken });
+      assert.equal(removals, 1);
+      assert.equal(await exists(record.absolutePath), false);
+      assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, 'completed');
     } finally {
       await cleaner.close();
     }
@@ -3053,3 +3030,32 @@ test('recovery matrix: legacy non-transactional archived observation is pruned w
     assert.equal(snapshot.recoveryIssues[0].operationId, 'op_real_other');
   });
 });
+for (const operation of ['cleanWorktree', 'forgetWorktree']) {
+  test(`${operation} does not read Session activity during mutation`, async () => {
+    await withGitFixture(async ({ provider, dsh, sidecar }) => {
+      const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/no-activity-gate' });
+      dsh.addSession({ sessionId: 's_no_activity', cwd: record.absolutePath });
+      await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_no_activity' });
+      await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+      const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+      const sessionsBefore = await dsh.listSessions();
+      let activityReads = 0;
+      dsh.readWorktreeActivity = async () => {
+        activityReads += 1;
+        throw new Error('Activity unavailable');
+      };
+      await provider[operation]({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken });
+      assert.equal(activityReads, 0);
+      assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+      assert.equal(await exists(record.absolutePath), operation === 'forgetWorktree');
+      const snapshot = await sidecar.read('ws_one');
+      if (operation === 'forgetWorktree') {
+        assert.equal(snapshot.worktrees.length, 0);
+        assert.equal(snapshot.bindings.length, 0);
+      } else {
+        assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+        assert.equal(snapshot.bindings[0].status, 'detached');
+      }
+    });
+  });
+}

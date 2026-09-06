@@ -1,10 +1,9 @@
 import type {
-  WorktreeActivity,
   WorktreeLifecycleInput,
   WorktreeRecord,
 } from '../contract/index.js';
 import { createWorktreeMutationToken } from '../provider/mutation-token.js';
-import type { DshReadAdapter, SidecarSnapshot } from '../provider/types.js';
+import type { SidecarSnapshot } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import {
   archiveWorktreeSnapshot,
@@ -25,37 +24,6 @@ function assertMutationToken(
       worktreeId: record.worktreeId,
     });
   }
-}
-
-export async function assertWorktreeIdle(
-  dsh: DshReadAdapter,
-  snapshot: SidecarSnapshot,
-  record: WorktreeRecord,
-): Promise<void> {
-  const ids = [
-    ...new Set(
-      snapshot.bindings
-        .filter((binding) => binding.worktreeId === record.worktreeId)
-        .map((binding) => binding.sessionId),
-    ),
-  ];
-  let activity: WorktreeActivity;
-  try {
-    activity =
-      ids.length === 0
-        ? { state: 'idle' }
-        : ((await dsh.readWorktreeActivity?.(ids)) ?? { state: 'unknown' });
-  } catch {
-    activity = { state: 'unknown' };
-  }
-  if (activity.state === 'idle') return;
-  throw providerError(
-    activity.state === 'busy' ? 'WORKTREE_SESSION_BUSY' : 'WORKTREE_ACTIVITY_UNAVAILABLE',
-    activity.state === 'busy'
-      ? 'Linked Session activity is still running'
-      : 'Unable to verify linked Session activity',
-    { workspaceId: record.workspaceId, worktreeId: record.worktreeId },
-  );
 }
 
 /**
@@ -108,7 +76,6 @@ export async function cleanWorktree(
     workspaceRoot: workspace.rootPath,
     worktreeId: input.worktreeId,
     mutationToken: input.mutationToken,
-    assertIdle: (snapshot, record) => assertWorktreeIdle(context.dsh, snapshot, record),
   });
 }
 
@@ -121,7 +88,7 @@ export async function forgetWorktree(
 ): Promise<void> {
   await requireWorkspace(context, input.workspaceId);
   try {
-    await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
+    await context.sidecar.mutate(input.workspaceId, (snapshot) => {
       const record = snapshot.worktrees.find((w) => w.worktreeId === input.worktreeId);
       if (!record) {
         return { result: undefined, snapshot, changed: false };
@@ -137,7 +104,6 @@ export async function forgetWorktree(
         );
       }
       assertMutationToken(snapshot, record, input.mutationToken);
-      await assertWorktreeIdle(context.dsh, snapshot, record);
       const next = forgetWorktreeSnapshot(snapshot, input.worktreeId);
       return { result: undefined, snapshot: next, changed: true };
     });

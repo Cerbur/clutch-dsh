@@ -2021,8 +2021,9 @@ test('renders Archived group for removed worktrees and provides clean disk and f
   assert.match(source, /t\('worktree\.cleanDiskDescription'/);
   assert.match(source, /t\('worktree\.forgetTitle'\)/);
   assert.match(source, /t\('worktree\.forgetDescription'/);
-  assert.match(source, /t\('error\.worktreeSessionBusy'\)/);
-  assert.match(source, /t\('error\.worktreeActivityUnavailable'\)/);
+  assert.match(source, /worktreeLifecycleBlockReason\(actionPending, worktree\.health\)/);
+  assert.match(source, /worktreeLifecycleBlockReason\(actionPending, record\.health\)/);
+  assert.doesNotMatch(source, /worktreeActivityBlockReason/);
   assert.match(source, /t\('worktree\.cleaned'\)/);
 });
 test('reveals archived ancestor for archived worktree session and supports suppression', async () => {

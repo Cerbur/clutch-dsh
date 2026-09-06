@@ -23,7 +23,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
 - Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
 - Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
-- Archive Worktrees non-destructively (`status: removed`), preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation and verified idle Session/subagent activity; Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
+- Archive Worktrees non-destructively (`status: removed`), preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation: users must confirm all Sessions, subagents, and other tasks using the directory have stopped. Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
 - Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
   open it directly.
 - For active Worktree Sessions, request the named `worktree-full-access` preset after an
@@ -331,22 +331,22 @@ blank-session Hero. The displayed language follows DSH's current language settin
   touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
 - For archived Worktrees whose disk has not been cleaned, the options menu provides:
   1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
-     verifies that all linked Sessions and subagents are idle (busy or unknown states reject without
-     fallback), runs real non-forced `git worktree remove`, and upon success records
+     tells you that the plugin does not check Session or subagent activity and requires you to confirm
+     that all tasks using the directory have stopped (otherwise deletion may cause task failures or data loss),
+     runs real non-forced `git worktree remove`, and upon success records
      `diskCleanup: completed`, projects health as `cleaned`, transitions bindings to detached, and
      normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
      from permission normalization: once disk removal commits, the dialog closes and the record updates to
      `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
   2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
      its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
-     recovery state, and permission notices for that Worktree. Also verifies idle session activity (busy or unknown blocks).
+     recovery state, and permission notices for that Worktree. No Session activity check is required.
 - For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
   `Remove from Management` to prune the sidecar record completely.
-- The current default Host cannot prove complete Session/subagent activity coverage. Archived
-  Worktrees with bindings therefore report `unknown` and cannot be cleaned or forgotten
-  (`WORKTREE_ACTIVITY_UNAVAILABLE`); Worktrees without bindings are not subject to this limitation.
-  Native activity changes and reopening the archived menu refresh its owning Workspace while
-  retaining ready content. These reads never substitute browser activity for Host validation.
+- Session activity is informational and does not block cleanup or removal from management.
+  The default Host may report `unknown`. Before confirming disk cleanup, stop all tasks using
+  the directory yourself; the plugin does not verify that they have stopped. Native activity
+  changes and reopening the archived menu refresh its owning Workspace while retaining ready content.
 - Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,
   and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag

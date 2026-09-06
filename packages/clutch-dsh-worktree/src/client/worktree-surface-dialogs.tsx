@@ -4,7 +4,7 @@ import {
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { formatWorktreeViewError } from './worktree-error-copy.js';
-import { worktreeActivityBlockReason } from './worktree-surface-selectors.js';
+import { worktreeLifecycleBlockReason } from './worktree-surface-selectors.js';
 import { worktreeSetupCommands } from './worktree-view.js';
 import type {
   SessionRenameDialogProps,
@@ -477,9 +477,7 @@ export function WorktreeCleanDiskDialog({
   onSubmit,
 }: WorktreeCleanDiskDialogProps) {
   if (worktree === undefined) return null;
-  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending, worktree.health);
-  const isBusy = activityBlock === 'busy';
-  const isUnknown = activityBlock === 'unknown';
+  const activityBlock = worktreeLifecycleBlockReason(actionPending, worktree.health);
   const isBlocked = activityBlock !== undefined;
 
   return (
@@ -494,11 +492,7 @@ export function WorktreeCleanDiskDialog({
       description={
         activityBlock === 'recovery'
           ? t('worktree.recovery')
-          : isBusy
-          ? t('error.worktreeSessionBusy')
-          : isUnknown
-            ? t('error.worktreeActivityUnavailable')
-            : t('worktree.cleanDiskDescription', { name: worktree.branch, path: worktree.absolutePath })
+          : t('worktree.cleanDiskDescription', { name: worktree.branch, path: worktree.absolutePath })
       }
       footer={(
         <>
@@ -528,9 +522,7 @@ export function WorktreeForgetDialog({
   onSubmit,
 }: WorktreeForgetDialogProps) {
   if (worktree === undefined) return null;
-  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending, worktree.health);
-  const isBusy = activityBlock === 'busy';
-  const isUnknown = activityBlock === 'unknown';
+  const activityBlock = worktreeLifecycleBlockReason(actionPending, worktree.health);
   const isBlocked = activityBlock !== undefined;
 
   return (
@@ -545,11 +537,7 @@ export function WorktreeForgetDialog({
       description={
         activityBlock === 'recovery'
           ? t('worktree.recovery')
-          : isBusy
-          ? t('error.worktreeSessionBusy')
-          : isUnknown
-            ? t('error.worktreeActivityUnavailable')
-            : t('worktree.forgetDescription', { name: worktree.branch })
+          : t('worktree.forgetDescription', { name: worktree.branch })
       }
       footer={(
         <>

@@ -43,7 +43,6 @@ export interface CleanWorktreeTransactionInput {
   readonly workspaceRoot: string;
   readonly worktreeId: string;
   readonly mutationToken: string;
-  readonly assertIdle: (snapshot: SidecarSnapshot, record: WorktreeRecord) => Promise<void>;
 }
 
 export interface ImportWorktreeTransactionInput {
@@ -564,9 +563,6 @@ export class WorktreeMutationTransaction {
 
         await this.assertSafeRemovalPath(record, input.workspaceRoot);
         const pending = pendingClean(input, record, repository.identity);
-        // Read current activity after potentially slow Git/path preflight, immediately
-        // before journaling the destructive operation.
-        await input.assertIdle(current, record);
         await locked.mutate((snapshot) => {
           const { repository: _repository, ...withoutRepository } = snapshot;
           void _repository;

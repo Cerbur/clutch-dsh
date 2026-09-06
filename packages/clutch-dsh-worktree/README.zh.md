@@ -23,7 +23,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
 - 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
 - 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
-- 非破坏性归档 Worktree（`status: removed`），保留磁盘文件、活动 binding 与运行时 cwd。磁盘清理（`git worktree remove`）需经二次确认且核验关联 Session/子代理处于空闲态；亦支持移出插件管理并保留磁盘文件与 Session。
+- 非破坏性归档 Worktree（`status: removed`），保留磁盘文件、活动 binding 与运行时 cwd。磁盘清理（`git worktree remove`）需经二次确认，由用户自行确认使用该目录的 Session/子代理与其他任务已停止；亦支持移出插件管理并保留磁盘文件与 Session。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
 - 对 active Worktree Session，先经明确确认，再请求命名的 `worktree-full-access` 预设。它将
   DSH 的 `danger-full-access` 与 `ask` 组合：关闭关联 Git 元数据的文件系统限制，但保留
@@ -300,13 +300,13 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；标题显示已归档 Worktree 总数，收起时仍然显示。每个 Workspace 维护独立的折叠状态。
 - `health: repair` 的 active Worktree 也提供“移除 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能移除。
 - 对于未清理磁盘的已归档 Worktree，选项菜单提供：
-  1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），核验关联 Session
-     与子代理均处于空闲状态（busy 或 unknown 状态均直接拒绝，禁止伪造空闲），执行真正的非强制 `git worktree remove`，
+  1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，
+     请用户自行确认使用该目录的任务均已停止，否则删除可能导致任务失败或数据丢失；执行真正的非强制 `git worktree remove`，
      成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
      归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为 `cleaned`；
      权限归一化失败或刷新异常提供独立恢复，不重复执行磁盘删除。
   2. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
-     磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。执行前同样核验关联 Session 活动（busy 或 unknown 均阻断）。
+     磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。不需要校验 Session 活动。
 - 对于已清理磁盘的 Worktree（`health: cleaned`），选项菜单提供“移出管理”以从 sidecar 中彻底移除该记录。
 - 删除 Workspace 只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
 - DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
@@ -367,10 +367,9 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 Session 内容。如果 sidecar 不可用或损坏，原生 Project/Session 视角仍然可读，插件进入
 degraded/read-only 状态；不能用空索引覆盖 DSH 原生列表。
 
-当前默认 Host 无法证明 Session/子代理活动覆盖完整，因此带有 binding 的归档 Worktree
-会显示 `unknown`，不能清理磁盘或移出管理（`WORKTREE_ACTIVITY_UNAVAILABLE`）；没有 binding
-的 Worktree 不受此限制。原生活动变化或重新打开归档菜单会刷新所属 Workspace 并保留 ready
-内容；浏览器活动不会替代 Host 校验。
+Session 活动仅用于信息展示，不阻断磁盘清理或移出管理；默认 Host 仍可能显示 `unknown`。
+确认磁盘清理前，请自行停止所有使用该目录的任务，插件不会核验任务是否已停止。
+原生活动变化或重新打开归档菜单会刷新所属 Workspace 并保留 ready 内容。
 
 sidecar 兼容读取 v1、v2 和 v3 snapshot。旧记录会先在内存中归一化，第一次成功 mutation 会
 以原子方式将 shard 升级为 v4。旧 removed 记录归一化为 `diskCleanup: completed`，保留 v3 revision。

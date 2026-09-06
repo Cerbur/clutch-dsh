@@ -59,7 +59,7 @@ import {
   isSessionGroupAutoExpanded,
   resolveCurrentSessionLocation,
   workspaceMatches,
-  worktreeActivityBlockReason,
+  worktreeLifecycleBlockReason,
   worktreeActivityRefreshWorkspaceIds,
 } from './worktree-surface-selectors.js';
 import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
@@ -2206,15 +2206,11 @@ export function WorktreeSurface({
                                             toggleWorktree(record.worktreeId);
                                           }}
                                           menu={(() => {
-                                            const activityBlocked = worktreeActivityBlockReason(record.activity, actionPending, record.health);
+                                            const activityBlocked = worktreeLifecycleBlockReason(actionPending, record.health);
                                             const blockedReasonText =
                                               activityBlocked === 'recovery'
                                                 ? t('worktree.recovery')
-                                                : activityBlocked === 'busy'
-                                                ? t('error.worktreeSessionBusy')
-                                                : activityBlocked === 'unknown'
-                                                  ? t('error.worktreeActivityUnavailable')
-                                                  : undefined;
+                                                : undefined;
                                             return {
                                               open: openWorktreeMenuId === record.worktreeId,
                                               label: record.branch,

@@ -1,5 +1,10 @@
 # Full feature commit review
 
+Subsequent user-approved change: the activity blocker below is superseded by
+[user-confirmed cleanup](../specs/2026-09-06-worktree-user-confirmed-cleanup.md).
+Historical review results remain recorded below; complete Host activity coverage
+is no longer a prerequisite for cleanup or forget.
+
 Reviewed `wt-worktree-0.1.10/feat-fold-invalid-worktree` against release baseline
 `bcb73bc46faee934a323b583f3ff58099adbe6c7`: commits `cdcc253` and `4ec8647`,
 55 changed files. The target worktree was clean before this review. The user subsequently

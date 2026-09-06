@@ -175,3 +175,5 @@ clean 的顺序固定为：校验 sidecar/token → 校验身份和安全路径 
 审查阶段在精确提交的临时副本中 build 成功，并运行 activity、lifecycle、manage、DSH reader、Host permission manager 共 103 个测试通过。这只说明既有覆盖没有发现上述问题，不代表修复完成。
 
 修复交接必须列出 A1–A14 的测试名、命令、通过/失败/未运行状态及真实 Host 的 DSH HEAD/profile。只有 mock 的活动测试不能通过 A1/A2。无法获得完整真实活动事实时，明确留下 R1 blocker，其余项按实际状态交付。不得把本次文档编写或原计划的勾选记录当成执行证据。
+后续修订：活动门禁及 A1/A2 的 idle-only 验收要求已被
+[用户确认清理方案](2026-09-06-worktree-user-confirmed-cleanup.md)取代；不再要求完整活动源才能清理或移出管理。

@@ -1,4 +1,4 @@
-import type { SessionBinding, WorktreeActivity, WorktreeRecord } from '../contract/index.js';
+import type { SessionBinding, WorktreeRecord } from '../contract/index.js';
 import {
   sessionDisplayLabel,
   sessionMatchesQuery,
@@ -175,15 +175,12 @@ export function isSessionGroupAutoExpanded(
 ): boolean {
   return currentSessionRevealActive && shouldRevealCurrentSessionGroup(sessionIds, currentSessionId);
 }
-
-export function worktreeActivityBlockReason(
-  activity: WorktreeActivity | undefined,
+/** Lifecycle mutations rely on user confirmation, not Session activity coverage. */
+export function worktreeLifecycleBlockReason(
   actionPending: boolean,
   health?: WorktreeRecord['health'],
-): 'pending' | 'busy' | 'unknown' | 'recovery' | undefined {
+): 'pending' | 'recovery' | undefined {
   if (actionPending) return 'pending';
   if (health === 'recovery-needed') return 'recovery';
-  if (activity?.state === 'busy') return 'busy';
-  if (activity?.state !== 'idle') return 'unknown';
   return undefined;
 }

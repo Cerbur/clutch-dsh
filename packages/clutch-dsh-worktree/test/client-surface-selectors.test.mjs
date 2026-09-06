@@ -4,7 +4,7 @@ import test from 'node:test';
 import * as selectors from '../lib/client/worktree-surface-selectors.js';
 
 test('recovery blocks archived actions even when activity is idle', () => {
-  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, false, 'recovery-needed'), 'recovery');
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'recovery-needed'), 'recovery');
 });
 
 test('activity transitions refresh only archived owners including detached bindings', () => {
@@ -157,16 +157,7 @@ test('requires the ready Worktree snapshot to cover the current Workspace ids', 
   );
 });
 
-test('archive menus block busy, unknown and pending activity', () => {
-  assert.equal(
-    selectors.worktreeActivityBlockReason({ state: 'busy', sessionIds: ['s1'] }, false),
-    'busy',
-  );
-  assert.equal(selectors.worktreeActivityBlockReason(undefined, false), 'unknown');
-  assert.equal(selectors.worktreeActivityBlockReason({ state: 'unknown' }, false), 'unknown');
-  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, true), 'pending');
-  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, false), undefined);
-});
+
 test('archived current Session reveals its archive ancestor', () => {
   assert.deepEqual(
     selectors.currentSessionRevealKeys({
@@ -221,4 +212,11 @@ test('resolveCurrentSessionLocation identifies archived worktree session', () =>
     worktreeId: 'wt1',
     archived: true,
   });
+});
+test('lifecycle actions only block pending actions and recovery, independently of activity', () => {
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'ready'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'repair'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'cleaned'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(true, 'ready'), 'pending');
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'recovery-needed'), 'recovery');
 });

@@ -200,8 +200,10 @@ export interface WorktreeManager {
     mutationToken: string;
   }): Promise<void>;
 
+  /** Caller must obtain explicit disk-deletion confirmation; Session activity is not checked. */
   cleanWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
+  /** Removes plugin index entries only; preserves disk and native Sessions without activity checks. */
   forgetWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
   /**

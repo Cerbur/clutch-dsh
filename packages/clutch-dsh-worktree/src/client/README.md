@@ -190,7 +190,8 @@ and the view updates to `cleaned`. Any failure during subsequent permission norm
 or view refresh reports a retryable error without rolling back or repeating disk removal.
 Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cleans up
 browser-local fork recovery, membership projections, and permission notices for the affected
-Worktree and its bound Sessions.
+Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending
+mutations and recovery health disable these actions. Cleanup requires explicit user confirmation.
 Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
 
 The current Session reveal and suppression are browser-local, in-memory
@@ -259,7 +260,8 @@ The Worktree surface is additive:
   its witness before child creation, so late results cannot restore forgotten binding recovery;
 - For archived Worktrees, the options menu provides:
   1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
-     verifies that all linked Sessions and subagents are idle (busy or unknown states reject immediately),
+     states that the plugin does not check Session/subagent activity and requires the user to confirm
+     all tasks using the directory have stopped, warning about task failures or data loss,
      runs real non-forced `git worktree remove`, and upon success records `diskCleanup: completed`,
      projects health as `cleaned`, transitions bindings to detached, and normalizes permissions;
   2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
