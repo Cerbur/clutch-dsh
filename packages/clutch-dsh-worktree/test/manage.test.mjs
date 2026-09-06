@@ -2746,7 +2746,7 @@ test('confirmed clean does not use activity changes during Git preflight as a ga
   });
 });
 
-test('archive clean preflight does not manufacture a transaction', async () => {
+test('archive clean completes an already removed directory without manufacturing a transaction', async () => {
   await withGitFixture(async ({ provider, sidecar, workspaceRoot }) => {
     const record = await provider.createWorktree({
       workspaceId: 'ws_one',
@@ -2764,17 +2764,17 @@ test('archive clean preflight does not manufacture a transaction', async () => {
     const shardPath = sidecar.getShardPath('ws_one');
     const bytesBefore = await readFile(shardPath, 'utf8');
 
-    await assert.rejects(
-      provider.cleanWorktree({
+    await provider.cleanWorktree({
         workspaceId: 'ws_one',
         worktreeId: record.worktreeId,
         mutationToken: token,
-      }),
-      { code: 'WORKTREE_IDENTITY_CHANGED' },
-    );
-    assert.deepEqual(await sidecar.read('ws_one'), before);
+      });
+    const completed = await sidecar.read('ws_one');
+    assert.equal(completed.worktrees[0].diskCleanup, 'completed');
+    assert.equal(completed.pendingOperation, undefined);
+    assert.equal(BigInt(completed.revision), BigInt(before.revision) + 1n);
     const bytesAfter = await readFile(shardPath, 'utf8');
-    assert.equal(bytesAfter, bytesBefore);
+    assert.notEqual(bytesAfter, bytesBefore);
   });
 });
 
@@ -3059,3 +3059,71 @@ for (const operation of ['cleanWorktree', 'forgetWorktree']) {
     });
   });
 }
+for (const source of ['plugin', 'external']) {
+  for (const removedDirectory of [true, false]) {
+    test(`clean ${source} worktree with missing Git file: directory absent=${removedDirectory}`, async () => {
+      await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot, tempRoot, dshHome }) => {
+        const record = source === 'plugin'
+          ? await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/missing-clean' })
+          : await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: await addExternalWorktree(workspaceRoot, tempRoot) });
+        dsh.addSession({ sessionId: 's_missing_clean', cwd: record.absolutePath });
+        await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 's_missing_clean' });
+        await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+        const token = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+        if (removedDirectory) {
+          await rm(record.absolutePath, { recursive: true });
+        } else {
+          await rm(path.join(record.absolutePath, '.git'));
+          await writeFile(path.join(record.absolutePath, 'keep.txt'), 'uncommitted data');
+        }
+        const gitBefore = (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout;
+        const sessionsBefore = await dsh.listSessions();
+        let removals = 0;
+        class CountingGit extends LocalGitAdapter {
+          async removeWorktree(...args) {
+            removals += 1;
+            return super.removeWorktree(...args);
+          }
+        }
+        const cleaner = createWorktreeManager({ dsh, dshHome, sidecar, git: new CountingGit() });
+        try {
+          const clean = () => cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: token });
+          const originalBytes = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
+          await expectCode(cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: 'stale' }), 'WORKTREE_STATE_CONFLICT');
+          assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), originalBytes);
+          await clean();
+          assert.equal(removals, 0);
+          const snapshot = await sidecar.read('ws_one');
+          assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
+          assert.equal(snapshot.bindings[0].status, 'detached');
+          assert.equal(snapshot.pendingOperation, undefined);
+          assert.equal(snapshot.recoveryIssues, undefined);
+          const completedBytes = await readFile(sidecar.getShardPath('ws_one'), 'utf8');
+          await cleaner.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(cleaner, 'ws_one', record.worktreeId) });
+          assert.equal(await readFile(sidecar.getShardPath('ws_one'), 'utf8'), completedBytes);
+          if (!removedDirectory) {
+            assert.equal(await readFile(path.join(record.absolutePath, 'keep.txt'), 'utf8'), 'uncommitted data');
+            assert.equal(await exists(record.absolutePath), true);
+          }
+          assert.deepEqual(await dsh.listSessions(), sessionsBefore);
+          assert.equal((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, gitBefore);
+        } finally {
+          await cleaner.close();
+        }
+      });
+    });
+  }
+}
+test('clean does not classify a dangling .git symlink as missing metadata', async () => {
+  await withGitFixture(async ({ provider, sidecar, tempRoot }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/dangling-git' });
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await rm(path.join(record.absolutePath, '.git'));
+    await symlink(path.join(tempRoot, 'absent-git-metadata'), path.join(record.absolutePath, '.git'));
+    await writeFile(path.join(record.absolutePath, 'keep.txt'), 'keep residual files');
+    await assert.rejects(provider.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken }));
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].diskCleanup, undefined);
+    assert.equal(await readFile(path.join(record.absolutePath, 'keep.txt'), 'utf8'), 'keep residual files');
+  });
+});

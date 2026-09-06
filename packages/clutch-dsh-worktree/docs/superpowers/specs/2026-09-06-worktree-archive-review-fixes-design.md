@@ -14,7 +14,8 @@
 - 本次不递增 package version，不执行 commit、rebase、merge、push、pack 或 publish。
 - 不修改、归档或删除 DSH Session，不读取 transcript、prompt 或消息内容来推导活动状态。
 - `WorktreeStatus` 保持 `active | removed`；归档仅修改插件索引，保留目录和 binding。
-- `diskCleanup: 'completed'` 仅表示有可信清理事务依据的磁盘清理完成；目录缺失本身不能证明清理完成。
+- `diskCleanup: 'completed'` 的原始事务依据规则现增加显式确认例外：见
+  [已缺失目录的幂等清理](2026-09-06-worktree-missing-cleanup.md)。被动扫描仍不自动标记完成。
 - sidecar 保持 v4，保留 v1/v2/v3 的迁移语义；本次不引入新持久化字段。
 - 清理磁盘继续使用非 force 的 Git 删除；身份、路径、活动检查和 mutation token 校验不可削弱。
 - forget 只移除目标 Worktree 的插件数据；相同路径重新导入使用新 ID，不恢复旧 binding。

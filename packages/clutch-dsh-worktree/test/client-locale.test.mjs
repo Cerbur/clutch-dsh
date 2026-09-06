@@ -83,3 +83,9 @@ test('cleanup confirmation explains user-owned activity checks and deletion risk
     assert.match(dictionary['worktree.cleanDiskDescription'], /\{path\}/);
   }
 });
+test('completed cleanup copy accounts for absent Git metadata and preserved files', () => {
+  assert.equal(zh['worktree.cleaned'], 'Worktree 已移除');
+  assert.equal(en['worktree.cleaned'], 'Worktree removed');
+  assert.match(zh['worktree.cleanDiskDescription'], /目录或 \.git 已不存在.*剩余文件不会删除/);
+  assert.match(en['worktree.cleanDiskDescription'], /directory or \.git is already absent.*remaining files are not deleted/);
+});

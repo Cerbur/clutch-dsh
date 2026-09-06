@@ -89,6 +89,7 @@ export interface WorktreeRecord {
   readonly branch: string;
   readonly source: WorktreeSource;
   readonly status: WorktreeStatus;
+  /** Cleanup flow completed, including missing-.git reconciliation that preserves residual files. */
   readonly diskCleanup?: 'completed';
   /** Runtime-only; never written to the sidecar. */
   readonly health?: WorktreeHealth;

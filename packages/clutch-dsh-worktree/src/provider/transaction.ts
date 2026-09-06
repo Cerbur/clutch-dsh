@@ -77,6 +77,16 @@ async function pathExists(pathname: string): Promise<boolean> {
   }
 }
 
+async function pathEntryMissing(pathname: string): Promise<boolean> {
+  try {
+    await lstat(pathname);
+    return false;
+  } catch (error) {
+    if (isMissing(error)) return true;
+    throw error;
+  }
+}
+
 async function isDirectory(pathname: string): Promise<boolean> {
   try {
     return (await stat(pathname)).isDirectory();
@@ -553,6 +563,32 @@ export class WorktreeMutationTransaction {
 
         const liveBefore = await this.git.listWorktrees(gitRoot);
         const exactBefore = await this.findExactWorktree(liveBefore, record.absolutePath, record.branch);
+        await this.assertSafeRemovalPath(record, input.workspaceRoot);
+        if (await pathEntryMissing(path.join(record.absolutePath, '.git'))) {
+          const pathRegistration = await this.findWorktreeByPhysicalPath(liveBefore, record.absolutePath);
+          if (pathRegistration && !exactBefore) {
+            throw providerError('WORKTREE_IDENTITY_CHANGED', 'Missing Worktree path has a different Git registration', {
+              workspaceId: input.workspaceId,
+              worktreeId: input.worktreeId,
+              targetPath: record.absolutePath,
+            });
+          }
+          // An absent directory or .git entry is already removed as a Worktree.
+          // Preserve residual files and registration; only reconcile the sidecar.
+          lock.assertHeld();
+          await locked.mutate((snapshot) => {
+            const { repository: _repository, ...stableFields } = snapshot;
+            void _repository;
+            return {
+              result: undefined,
+              snapshot: completeWorktreeCleanup({
+                ...stableFields,
+                repositoryFingerprint: createRepositoryFingerprint(repository.identity),
+              }, record.worktreeId),
+            };
+          });
+          return;
+        }
         if (!exactBefore) {
           throw providerError('WORKTREE_IDENTITY_CHANGED', `Worktree is not registered in Git: ${record.absolutePath}`, {
             workspaceId: input.workspaceId,
@@ -561,7 +597,6 @@ export class WorktreeMutationTransaction {
           });
         }
 
-        await this.assertSafeRemovalPath(record, input.workspaceRoot);
         const pending = pendingClean(input, record, repository.identity);
         await locked.mutate((snapshot) => {
           const { repository: _repository, ...withoutRepository } = snapshot;

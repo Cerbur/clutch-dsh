@@ -338,6 +338,11 @@ blank-session Hero. The displayed language follows DSH's current language settin
      normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
      from permission normalization: once disk removal commits, the dialog closes and the record updates to
      `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
+     If the Worktree directory or its `.git` entry was already deleted externally, confirming cleanup only marks
+     the plugin record as completed and detaches its bindings. It does not run Git removal or prune
+     stale Git registration. Any remaining directory and files are preserved. The completed status
+     reads `Worktree removed`, which does not imply residual files were deleted. Ordinary refreshes still show
+     missing directories as `repair` until cleanup is explicitly confirmed.
   2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
      its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
      recovery state, and permission notices for that Worktree. No Session activity check is required.

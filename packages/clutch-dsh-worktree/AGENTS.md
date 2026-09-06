@@ -108,6 +108,14 @@ Worktree 生命周期分为三个独立操作：
 清理与移出管理均不以 Session 活动作为前置门禁，不伪造 idle。清理确认框必须明确告知插件不核验运行状态、由用户确认任务已停止，以及删除目录可能导致任务失败或数据丢失；移出管理只修改插件索引。两者继续保留归档状态、锁、mutation token 与 recovery 检查。
 Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工作树中的业务文件。
 
+显式 `cleanWorktree` 在锁内确认目标目录或其 `.git` 入口不存在时，只原子标记
+`diskCleanup: completed` 并将 active binding 转为 detached，不调用 Git mutation、
+不创建删除 journal，也不清理残留 Git registration。仍须通过归档状态、token、仓库身份、
+安全路径与 recovery 门禁；同路径存在冲突 registration 时拒绝。仅 `.git` 缺失时，
+剩余目录和文件完整保留；Client 明确说明此行为，完成状态文案为“Worktree 已移除”，
+不表示磁盘目录已删除。只接受 ENOENT 作为缺失证据，断链符号链接不视为入口缺失。
+被动读取与启动扫描仍只投影 repair，不自动完成清理。
+
 ## 模块职责与依赖方向
 
 ```text
