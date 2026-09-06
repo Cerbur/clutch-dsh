@@ -247,7 +247,10 @@ The Worktree surface is additive:
   files, active bindings, and runtime cwd, and moves the Worktree into the default-collapsed `Archived` group
   at the bottom of the Workspace;
 - The `Archived` group is rendered at the bottom of the Workspace whenever removed Worktrees exist and is
-  collapsed by default. Each Workspace tracks its own collapsed state;
+  collapsed by default. Its label always includes the total archived Worktree count, including when
+  collapsed. Each Workspace tracks its own collapsed state;
+- Active `repair` Worktrees allow removal into Archived, preserving disk and bindings. Creation
+  remains disabled for repair; `recovery-needed` still blocks both creation and removal;
 - Native activity transitions refresh only the owning archived Workspace, including detached bindings.
   Reopening its menu also rechecks Host activity; dialogs consume the latest ready record. Recovery
   health takes precedence over cleaned and disables lifecycle actions. These reads preserve ready content;

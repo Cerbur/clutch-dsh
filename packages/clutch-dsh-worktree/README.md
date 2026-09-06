@@ -325,7 +325,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
   archive operation: it sets `status: removed`, preserves disk files, active bindings, and runtime cwd,
   and moves the Worktree into the default-collapsed `Archived` group at the bottom of the Workspace.
 - The `Archived` group is rendered at the bottom of the Workspace when archived Worktrees exist and is
-  collapsed by default. Each Workspace tracks its own collapsed state independently.
+  collapsed by default. Its label includes the total archived Worktree count, even when collapsed.
+  Each Workspace tracks its own collapsed state independently.
+- Active Worktrees with `health: repair` also offer `Remove Worktree` to archive the record without
+  touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
 - For archived Worktrees whose disk has not been cleaned, the options menu provides:
   1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
      verifies that all linked Sessions and subagents are idle (busy or unknown states reject without
@@ -368,6 +371,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
   destructive actions are blocked. `detached` means the Git Worktree was removed while the relationship
   was retained. An active binding pointing to a missing Worktree produces
   an explicit repair warning or error; it never silently falls back to another Worktree.
+- Without a pending Git transaction, missing active or archived Worktrees remain `repair` and
+  can be archived without blocking healthy Worktree Session bindings. Legacy non-transactional
+  `WORKTREE_RECOVERY_REQUIRED` observations for existing, uncleaned records are retired under
+  the sidecar lock; pending transactions, unknown records, and identity-change issues still block.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
   failures are shown per Workspace: a missing Git executable shows installation guidance without
   commands, while repository, initial commit, or local branch failures show copyable setup

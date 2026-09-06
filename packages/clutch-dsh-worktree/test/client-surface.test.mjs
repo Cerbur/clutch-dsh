@@ -1986,6 +1986,27 @@ test('clears transient groups on parent collapse and prunes only ready snapshots
   assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
 });
 
+test('repair worktrees expose archive while recovery-needed worktrees remain blocked', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const condition = source.match(/showRemove: (record\.status[^,\n]+)/)?.[1];
+  assert.ok(condition);
+  const showRemove = new Function('record', `return ${condition};`);
+  assert.equal(showRemove({ status: 'active', health: 'repair' }), true);
+  assert.equal(showRemove({ status: 'active', health: 'ready' }), true);
+  assert.equal(showRemove({ status: 'active', health: 'recovery-needed' }), false);
+  assert.equal(showRemove({ status: 'removed', health: 'repair' }), false);
+});
+
+test('Archived label includes the worktree count outside the expanded children', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const row = source.slice(source.indexOf('kind="archived-group"'));
+  const label = row.match(/label=\{(`[^`]+`)\}/)?.[1];
+  assert.ok(label, 'Archived row must show its count before children are expanded');
+  const renderLabel = new Function('t', 'archivedWorktrees', `return ${label};`);
+  assert.equal(renderLabel(() => '已归档', [{}, {}, {}]), '已归档 (3)');
+  assert.equal(renderLabel(() => 'Archived', [{}]), 'Archived (1)');
+});
+
 test('renders Archived group for removed worktrees and provides clean disk and forget actions', async () => {
   const source = (await readSurfaceSources()).combined;
 

@@ -128,7 +128,7 @@ export class SidecarPersistence {
           const removable =
             issue.operationId === undefined &&
             issue.code === 'WORKTREE_RECOVERY_REQUIRED' &&
-            record?.status === 'removed' &&
+            record !== undefined &&
             record.diskCleanup !== 'completed' &&
             issue.worktreeId === record.worktreeId;
           return !removable;

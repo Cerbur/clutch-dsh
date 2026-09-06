@@ -31,6 +31,42 @@
 
 ---
 
+## 2026-09-06 补充：repair 归档与归档计数
+
+基于 `07f7123`，继续在 `wt-worktree-0.1.10/feat-fold-invalid-worktree` 修改：
+
+- active + repair 允许通过“移除 Worktree”进入归档，继续保留 binding 和磁盘事实；创建仍禁用，recovery-needed 仍阻止归档。
+- Archived 标题显示当前 Workspace 已归档 Worktree 总数，展开和折叠时均显示；不按 Session 数计数。
+- 用户明确选择“仅修改插件，保留活动不明时的限制”。R1 / A1 / A2 仍未解决，未修改 DSH、未伪造 idle。只读核对用户给出的 `wt_0c64c1b8-8cdc-4d76-a804-aa40c5485a33`：status 为 removed、未标记 diskCleanup，仍有 5 个 binding，受默认 Host unknown 限制。没有实际清理或移出该记录。
+- 本次是对原菜单健康状态限制的明确调整；纯索引归档契约不变。中英文 README 和 Client README 已同步。
+
+实际验证（均在指定 feature worktree）：
+
+- 新增两个 Surface 回归先失败再通过，覆盖 repair / ready / recovery-needed / removed 的移除菜单，以及中英文计数标题；此处为源码接线断言，未进行真实浏览器交互验收。
+- `pnpm --filter @cerbur/clutch-dsh-worktree test`：首次因沙箱禁止写入 lib 失败；获准提升该命令权限后通过，包含构建、Remote 类型 fixture 和 467 项测试。
+- 全量运行后补充真实 Git 回归，单独运行 `node --test --test-name-pattern='repair worktree can be archived' test/manage.test.mjs`：1 项通过。它覆盖先外部移除 Git Worktree，再以 repair 状态归档，确认 Git 注册不变、active binding 保留、不产生 pending/recovery 或 diskCleanup 标记。
+- `pnpm run check:workspace`、`pnpm run check:patches`、`pnpm --filter @cerbur/clutch-dsh-worktree typecheck`、`pnpm --filter @cerbur/clutch-dsh-worktree lint`：通过。patch 检查保留已有 `!!js` YAML tag warning。
+- `git diff --check`：通过。未递增版本，未提交、合并或发布。
+
+## 2026-09-06 补充：active 目录缺失与健康 Session 绑定阻塞
+
+本轮用户报告三个实例；在指定 feature worktree 保留原有七个文件的未提交修改后继续修复。
+
+- `wt_ecdf3cbc-7a1c-4e66-a05d-deb5d500f2a1`：目录存在、removed、两个 binding、无 pending 或 recovery issue。默认 Host 从未注册的 `activitySource` 取值，reader 返回 unknown；这是清理/forget 禁用的直接原因。重新核对 DSH HEAD 仍为 `a66e4702047846cdaa10c66c9d3df3951f5ea70d`，subagents.list() 仍只返回 provider 名称，jobs.list(caller) 仍按 owner 读取；本轮未解除活动安全约束，问题 1 未修复，已向用户询问是否允许补充 upstream 只读能力。
+- `wt_08747105-0a31-4029-b947-45c2830a5c09`：目录不存在、active、两个 binding。
+- `wt_cbf49b4e-cc8e-4428-9c14-89117f976363`：目录存在、active、一个 binding。后两个记录共享 Workspace，其唯一 recovery issue 指向另一个记录 `wt_712ad10b-dd8e-45ab-946f-6e94bfec3340`，没有 operationId 或 pendingOperation。
+- 根因是启动恢复将普通 active Git 注册缺失持久化为 recovery issue，随后 sidecar 的 Workspace 级 admission 阻止全部 mutation；原先只淘汰 archived 观察标记，遗漏 active 标记。
+- 修复将无 journal 的 active 缺失与 archived 缺失统一为 runtime repair，不再制造恢复事务；在原有锁内筛选中纳入现有未清理 active 记录，淘汰历史无事务观察标记。真正 pending、带 operationId、身份变化、未知记录与 cleaned 记录的 blocker 继续保留。此处明确扩展原 R7 仅覆盖 archived 的设计，AGENTS.md 与双语 README 已同步。
+- 新增四项真实 Git/sidecar 回归：缺失 active 恢复后可绑定健康 Session 并归档；旧 active 标记在 mutation 中淘汰且恢复不重建；五类真实/未知 blocker 不被淘汰且文件字节不变；启动恢复在 UI health/token 投影前淘汰旧标记。
+
+验证记录：
+
+- 两个核心新增测试在修改实现前均失败，分别复现 Active Worktree is not registered 和 Workspace has unresolved Worktree recovery issues；修复后通过。
+- `pnpm --filter @cerbur/clutch-dsh-worktree build` 与五项恢复定向测试通过。首次默认沙箱构建遇到 lib 写入 EPERM，提升执行权限后在原 feature worktree 完成构建和验证。
+- `pnpm --filter @cerbur/clutch-dsh-worktree test`：472/472 通过，包含 build 与 Remote 类型 fixture。
+- `pnpm run check:workspace`、`pnpm run check:patches`、`pnpm --filter @cerbur/clutch-dsh-worktree typecheck`、`pnpm --filter @cerbur/clutch-dsh-worktree lint` 与 `git diff --check` 通过；patch 保留已有 `!!js` warning。
+- 真实 sidecar 仅只读核对；没有改写 Session、删除真实目录或操作真实 binding。未进行真实 UI 点击验收，未重启 DSH；需要运行中的 Host 重新加载此 feature 源码构建后，启动恢复才会自动淘汰旧观察标记。未提交、递增版本、合并或发布。
+
 ## 2. 验收矩阵（A1–A14）
 
 | 验收 ID | 描述 | 覆盖目标 | 状态 | 测试 / 验证命令与结果 |

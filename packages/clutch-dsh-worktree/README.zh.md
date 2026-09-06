@@ -297,7 +297,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。active Worktree 提供“复制路径”与
   “移除 Worktree”。移除 active Worktree 属于内部归档操作：将其标记为 `status: removed`，完整保留
   磁盘目录、关联 binding 与运行时 cwd，并将该 Worktree 沉底移动到工作区底部的“已归档”（Archived）分组中。
-- 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；每个 Workspace 维护独立的折叠状态。
+- 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；标题显示已归档 Worktree 总数，收起时仍然显示。每个 Workspace 维护独立的折叠状态。
+- `health: repair` 的 active Worktree 也提供“移除 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能移除。
 - 对于未清理磁盘的已归档 Worktree，选项菜单提供：
   1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），核验关联 Session
      与子代理均处于空闲状态（busy 或 unknown 状态均直接拒绝，禁止伪造空闲），执行真正的非强制 `git worktree remove`，
@@ -322,6 +323,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   `WT` rail control。
 
 ### 理解状态与恢复提示
+
+- 没有未完成 Git 事务时，目录缺失的 active 或 archived Worktree 保持 `repair`，可归档，
+  不会阻断健康 Worktree 的 Session 绑定。指向现有且未清理记录的旧版无事务
+  `WORKTREE_RECOVERY_REQUIRED` 观察标记在 sidecar 锁内淘汰；未完成事务、未知记录和身份变化问题仍然阻断操作。
 
 - `ready` 表示 Worktree 可用。`cleaned` 表示磁盘清理已完成且保留 sidecar 归档条目。
   `repair` 表示 Worktree、Session、binding 或 cwd 缺失/无效。`recovery-needed` 表示 Git/sidecar

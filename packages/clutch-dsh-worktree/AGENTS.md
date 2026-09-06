@@ -88,6 +88,10 @@ degraded/read-only 状态，不能用空索引覆盖 DSH 原始列表。
 - 删除 Worktree 后关系保留为 detached；只有显式解绑才回到 main。
 - 关系写入必须幂等；同一 Session 绑定两个 active Worktree 必须返回明确 conflict error。
 
+无 pending operation 时，active 或 archived Worktree 的目录/注册缺失仅投影为 runtime repair，
+不创建持久化 recovery issue。旧版无 operationId、指向现有且未清理记录的
+WORKTREE_RECOVERY_REQUIRED 观察标记在锁内淘汰；真实事务、未知记录与身份变化标记继续阻断。
+
 Worktree 与 Session 的顺序约束：
 
 1. 创建 Worktree 前从 DSH read API 取得 Project 根目录。

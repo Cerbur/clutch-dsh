@@ -1966,7 +1966,7 @@ export function WorktreeSurface({
                                     label: record.branch,
                                     copyPath: record.absolutePath,
                                     showCreate: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed',
-                                    showRemove: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed',
+                                    showRemove: record.status === 'active' && record.health !== 'recovery-needed',
                                     disabled: actionPending,
                                     onOpenChange: (open) => {
                                       setOpenWorktreeMenuId(
@@ -2094,7 +2094,7 @@ export function WorktreeSurface({
                                 <WorktreeGroupRow
                                   t={t}
                                   kind="archived-group"
-                                  label={t('worktree.archivedGroup')}
+                                  label={`${t('worktree.archivedGroup')} (${archivedWorktrees.length})`}
                                   expanded={isArchivedExpanded}
                                   hasOngoingSession={hasOngoingSession(
                                     archivedWorktrees.flatMap((record) =>
