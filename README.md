@@ -56,6 +56,7 @@ pnpm run typecheck
 | [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="240" alt="clutch-dsh-worktree 截图">   | 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project 和 Session 数据。 |
 | [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="clutch-dsh-fireworks 截图"> | 通过 `happy_fireworks` Agent 工具为 DSH Web UI 增加庆祝礼花覆盖层。                                      |
 | [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="clutch-dsh-discuss MVP flow">    | 通过 `/discuss [topic]` 激活 DSH brainstorming skill 并产出 design doc。                                 |
+| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/template-manager.png" width="240" alt="clutch-dsh-title 截图">       | 通过原生 `ctx.sessionTitle` 为 DSH 提供确定性会话标题生成与设置中心模板管理器。                          |
 
 在已安装 DSH CLI 的环境中，可以安装需要的 plugin：
 
@@ -63,6 +64,7 @@ pnpm run typecheck
 dsh plugin --profile web add @cerbur/clutch-dsh-worktree
 dsh plugin --profile web add @cerbur/clutch-dsh-fireworks
 dsh plugin --profile web add @cerbur/clutch-dsh-discuss
+dsh plugin --profile web add @cerbur/clutch-dsh-title
 dsh web
 ```
 
@@ -70,4 +72,4 @@ dsh web
 [`packages/clutch-dsh-worktree/README.md`](packages/clutch-dsh-worktree/README.md) 和
 [`packages/clutch-dsh-fireworks/README.md`](packages/clutch-dsh-fireworks/README.md)；plugin
 发布的通用流程见根目录 [`docs/RELEASING.md`](docs/RELEASING.md)，各包参数与安装来源见各包
-自己的 `docs/RELEASING.md`，包括 [`clutch-dsh-discuss`](packages/clutch-dsh-discuss/docs/RELEASING.md)。
+自己的 `docs/RELEASING.md`，包括 [`clutch-dsh-discuss`](packages/clutch-dsh-discuss/docs/RELEASING.md) 和 [`clutch-dsh-title`](packages/clutch-dsh-title/docs/RELEASING.md)。
