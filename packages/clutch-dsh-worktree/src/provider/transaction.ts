@@ -552,8 +552,6 @@ export class WorktreeMutationTransaction {
           });
         }
 
-        await input.assertIdle(current, record);
-
         const liveBefore = await this.git.listWorktrees(gitRoot);
         const exactBefore = await this.findExactWorktree(liveBefore, record.absolutePath, record.branch);
         if (!exactBefore) {
@@ -566,6 +564,9 @@ export class WorktreeMutationTransaction {
 
         await this.assertSafeRemovalPath(record, input.workspaceRoot);
         const pending = pendingClean(input, record, repository.identity);
+        // Read current activity after potentially slow Git/path preflight, immediately
+        // before journaling the destructive operation.
+        await input.assertIdle(current, record);
         await locked.mutate((snapshot) => {
           const { repository: _repository, ...withoutRepository } = snapshot;
           void _repository;

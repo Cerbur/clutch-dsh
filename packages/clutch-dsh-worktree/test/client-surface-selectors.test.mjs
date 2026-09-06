@@ -3,6 +3,27 @@ import test from 'node:test';
 
 import * as selectors from '../lib/client/worktree-surface-selectors.js';
 
+test('recovery blocks archived actions even when activity is idle', () => {
+  assert.equal(selectors.worktreeActivityBlockReason({ state: 'idle' }, false, 'recovery-needed'), 'recovery');
+});
+
+test('activity transitions refresh only archived owners including detached bindings', () => {
+  const views = [
+    { workspaceId: 'one', worktrees: [{ worktreeId: 'old', status: 'removed' }],
+      bindings: [{ worktreeId: 'old', sessionId: 's', status: 'detached' }] },
+    { workspaceId: 'two', worktrees: [{ worktreeId: 'active', status: 'active' }],
+      bindings: [{ worktreeId: 'active', sessionId: 's', status: 'active' }] },
+    { workspaceId: 'three', worktrees: [{ worktreeId: 'other', status: 'removed' }],
+      bindings: [{ worktreeId: 'other', sessionId: 'unchanged', status: 'active' }] },
+  ];
+  assert.deepEqual(selectors.worktreeActivityRefreshWorkspaceIds(
+    views, { s: { ongoing: true } }, { s: { ongoing: false } },
+  ), ['one']);
+  assert.deepEqual(selectors.worktreeActivityRefreshWorkspaceIds(
+    views, { s: { ongoing: false } }, { s: { ongoing: false } },
+  ), []);
+});
+
 const {
   bindingIdsFor,
   clearSessionGroupExpansion,

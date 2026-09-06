@@ -343,6 +343,9 @@ export function createWorktreeSessionForkCoordinator(
     );
     if (candidates.length === 0) return;
     const sourceSessionIds = [...new Set(candidates.map(({ sourceSessionId }) => sourceSessionId))];
+    const lookupGenerations = new Map(
+      sourceSessionIds.map((id) => [id, versionOf(sourceGeneration, id)]),
+    );
     let index: WorktreeForkBindingIndex;
     try {
       index = await options.findBindings(sourceSessionIds);
@@ -355,7 +358,9 @@ export function createWorktreeSessionForkCoordinator(
     }
     if (disposed) return;
     await Promise.all(
-      candidates.map(({ childSessionId, sourceSessionId }) =>
+      candidates.filter(({ sourceSessionId }) =>
+        lookupGenerations.get(sourceSessionId) === versionOf(sourceGeneration, sourceSessionId),
+      ).map(({ childSessionId, sourceSessionId }) =>
         bindChild(
           sourceSessionId,
           childSessionId,
@@ -400,8 +405,11 @@ export function createWorktreeSessionForkCoordinator(
       },
     },
     async fork(input) {
+      const generation = versionOf(sourceGeneration, input.sessionId);
       const childSessionId = await options.fork(input);
-      if (!disposed) await bindChild(input.sessionId, childSessionId);
+      if (!disposed && generation === versionOf(sourceGeneration, input.sessionId)) {
+        await bindChild(input.sessionId, childSessionId);
+      }
       return childSessionId;
     },
     reconcile,

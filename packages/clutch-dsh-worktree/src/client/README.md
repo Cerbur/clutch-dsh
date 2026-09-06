@@ -248,6 +248,12 @@ The Worktree surface is additive:
   at the bottom of the Workspace;
 - The `Archived` group is rendered at the bottom of the Workspace whenever removed Worktrees exist and is
   collapsed by default. Each Workspace tracks its own collapsed state;
+- Native activity transitions refresh only the owning archived Workspace, including detached bindings.
+  Reopening its menu also rechecks Host activity; dialogs consume the latest ready record. Recovery
+  health takes precedence over cleaned and disables lifecycle actions. These reads preserve ready content;
+- Cleanup follow-ups use a generation invalidated by mode changes, manager replacement, disposal, or
+  forget. Batch fork reconciliation captures Session generations before lookup, and native fork captures
+  its witness before child creation, so late results cannot restore forgotten binding recovery;
 - For archived Worktrees, the options menu provides:
   1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
      verifies that all linked Sessions and subagents are idle (busy or unknown states reject immediately),

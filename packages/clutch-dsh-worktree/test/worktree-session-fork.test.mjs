@@ -39,6 +39,51 @@ function bindingLookup(sessionIds, resolveBinding) {
   };
 }
 
+for (const fail of [false, true]) {
+  test(`forget retires batch reconciliation lookup (${fail ? 'failure' : 'success'})`, async () => {
+    let settle;
+    const writes = [];
+    const coordinator = createWorktreeSessionForkCoordinator({
+      fork: async () => 'child-session',
+      sessions: { getSnapshot: () => sessionList() },
+      findBindings: () => new Promise((resolve, reject) => {
+        settle = () => fail ? reject(new Error('late lookup')) : resolve(
+          bindingLookup(['parent-session'], () => binding()),
+        );
+      }),
+      bindSession: async (input) => { writes.push(input); },
+    });
+    const pending = coordinator.reconcile();
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one', worktreeId: 'worktree-one', sessionIds: ['parent-session'],
+    });
+    settle();
+    await pending;
+    assert.deepEqual(writes, []);
+    assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+    coordinator.dispose();
+  });
+}
+
+test('forget retires inheritance while the native fork is pending but preserves its child', async () => {
+  let finishFork;
+  let lookups = 0;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: () => new Promise((resolve) => { finishFork = resolve; }),
+    findBindings: async () => { lookups += 1; throw new Error('lookup unavailable'); },
+    bindSession: async () => {},
+  });
+  const pending = coordinator.fork({ sessionId: 'parent-session' });
+  coordinator.forgetWorktree({
+    workspaceId: 'workspace-one', worktreeId: 'worktree-one', sessionIds: ['parent-session'],
+  });
+  finishFork('child-session');
+  assert.equal(await pending, 'child-session');
+  assert.equal(lookups, 0);
+  assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+  coordinator.dispose();
+});
+
 test('forks with native options and waits for Worktree membership refresh', async () => {
   const calls = [];
   const coordinator = createWorktreeSessionForkCoordinator({

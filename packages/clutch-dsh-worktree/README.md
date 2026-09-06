@@ -339,6 +339,11 @@ blank-session Hero. The displayed language follows DSH's current language settin
      recovery state, and permission notices for that Worktree. Also verifies idle session activity (busy or unknown blocks).
 - For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
   `Remove from Management` to prune the sidecar record completely.
+- The current default Host cannot prove complete Session/subagent activity coverage. Archived
+  Worktrees with bindings therefore report `unknown` and cannot be cleaned or forgotten
+  (`WORKTREE_ACTIVITY_UNAVAILABLE`); Worktrees without bindings are not subject to this limitation.
+  Native activity changes and reopening the archived menu refresh its owning Workspace while
+  retaining ready content. These reads never substitute browser activity for Host validation.
 - Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,
   and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
@@ -404,9 +409,10 @@ store a copy of `projectRoot` or any Session content. If the sidecar is unavaila
 the native Project/Session view remains readable and the plugin becomes degraded/read-only; an
 empty index must never overwrite the native DSH lists.
 
-The sidecar accepts v1 and v2 snapshots for backwards-compatible reads. Legacy records are
-normalized in memory, and the first successful mutation atomically upgrades the shard to v3.
-New v3 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
+The sidecar accepts v1, v2, and v3 snapshots for backwards-compatible reads. Legacy records are
+normalized in memory, and the first successful mutation atomically upgrades the shard to v4.
+Legacy removed records become `diskCleanup: completed`; v3 revisions are preserved.
+New v4 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
 metadata for Git create/remove. A transitional v3 snapshot containing an older raw repository
 field is read and cleaned on its next stable write. Invalid JSON, unknown schema versions, and
 invariant violations are reported as corruption rather than reset to an empty index.

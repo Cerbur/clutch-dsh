@@ -89,10 +89,6 @@ export async function listWorktrees(
   const nextRecords: WorktreeRecord[] = [];
   for (const record of records) {
     const activity = await getActivity(record);
-    if (record.diskCleanup === 'completed') {
-      nextRecords.push(projectRuntimeRecord(snapshot, record, 'cleaned', activity));
-      continue;
-    }
     const recordRecoveryNeeded =
       (snapshot.pendingOperation !== undefined &&
         (snapshot.pendingOperation.worktreeId === undefined ||
@@ -100,6 +96,11 @@ export async function listWorktrees(
       snapshot.recoveryIssues?.some(
         (issue) => issue.worktreeId === undefined || issue.worktreeId === record.worktreeId,
       ) === true;
+
+    if (record.diskCleanup === 'completed') {
+      nextRecords.push(projectRuntimeRecord(snapshot, record, recordRecoveryNeeded ? 'recovery-needed' : 'cleaned', activity));
+      continue;
+    }
 
     if (gitWorktrees === undefined) {
       nextRecords.push(

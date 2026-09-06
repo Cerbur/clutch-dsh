@@ -362,8 +362,14 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 Session 内容。如果 sidecar 不可用或损坏，原生 Project/Session 视角仍然可读，插件进入
 degraded/read-only 状态；不能用空索引覆盖 DSH 原生列表。
 
-sidecar 兼容读取 v1 和 v2 snapshot。旧记录会先在内存中归一化，第一次成功 mutation 会
-以原子方式将 shard 升级为 v3。新的 v3 snapshot 使用 revision、不可逆向还原的 repository
+当前默认 Host 无法证明 Session/子代理活动覆盖完整，因此带有 binding 的归档 Worktree
+会显示 `unknown`，不能清理磁盘或移出管理（`WORKTREE_ACTIVITY_UNAVAILABLE`）；没有 binding
+的 Worktree 不受此限制。原生活动变化或重新打开归档菜单会刷新所属 Workspace 并保留 ready
+内容；浏览器活动不会替代 Host 校验。
+
+sidecar 兼容读取 v1、v2 和 v3 snapshot。旧记录会先在内存中归一化，第一次成功 mutation 会
+以原子方式将 shard 升级为 v4。旧 removed 记录归一化为 `diskCleanup: completed`，保留 v3 revision。
+新的 v4 snapshot 使用 revision、不可逆向还原的 repository
 fingerprint，以及为 Git create/remove 保存的 durable pending-operation metadata。早期 v3
 实现可能写入的 raw repository 字段也可以读取，并会在下一次稳定写入时清理。无效 JSON、
 未知 schema version 和关系不变量错误都会报告为 corruption，不会静默重置为空索引。

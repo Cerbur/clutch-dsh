@@ -1,14 +1,29 @@
-import type { SessionBinding, WorktreeActivity } from '../contract/index.js';
+import type { SessionBinding, WorktreeActivity, WorktreeRecord } from '../contract/index.js';
 import {
   sessionDisplayLabel,
   sessionMatchesQuery,
   type SessionListLike,
+  type SessionPresentation,
 } from './session-view.js';
 import type { WorktreeWorkspaceView } from './worktree-view.js';
 import type {
   WorktreeTranslate,
   WorkspaceLike,
 } from './worktree-surface-types.js';
+
+/** Native activity changes invalidate only the archived Worktrees' owning reads. */
+export function worktreeActivityRefreshWorkspaceIds(
+  views: readonly WorktreeWorkspaceView[],
+  previous: Readonly<Record<string, Pick<SessionPresentation, 'ongoing'> | undefined>>,
+  next: Readonly<Record<string, Pick<SessionPresentation, 'ongoing'> | undefined>>,
+): readonly string[] {
+  return views.filter((view) => view.bindings.some((binding) =>
+    previous[binding.sessionId]?.ongoing !== next[binding.sessionId]?.ongoing &&
+    view.worktrees.some((record) =>
+      record.worktreeId === binding.worktreeId && record.status === 'removed',
+    ),
+  )).map((view) => view.workspaceId);
+}
 
 export function sessionLabel(
   sessionId: string,
@@ -164,8 +179,10 @@ export function isSessionGroupAutoExpanded(
 export function worktreeActivityBlockReason(
   activity: WorktreeActivity | undefined,
   actionPending: boolean,
-): 'pending' | 'busy' | 'unknown' | undefined {
+  health?: WorktreeRecord['health'],
+): 'pending' | 'busy' | 'unknown' | 'recovery' | undefined {
   if (actionPending) return 'pending';
+  if (health === 'recovery-needed') return 'recovery';
   if (activity?.state === 'busy') return 'busy';
   if (activity?.state !== 'idle') return 'unknown';
   return undefined;

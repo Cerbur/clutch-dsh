@@ -60,6 +60,7 @@ import {
   resolveCurrentSessionLocation,
   workspaceMatches,
   worktreeActivityBlockReason,
+  worktreeActivityRefreshWorkspaceIds,
 } from './worktree-surface-selectors.js';
 import { scrollCurrentSessionIntoView } from './worktree-session-position.js';
 import {
@@ -326,6 +327,12 @@ export function WorktreeSurface({
   const [worktreeDrag, setWorktreeDrag] = useState<WorktreeDragState>();
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
+  const cleanupGuard = useRef(createWorktreeRefreshGuard());
+  useEffect(() => {
+    const guard = cleanupGuard.current;
+    setActionPending(false);
+    return () => guard.invalidate();
+  }, [manager, mode]);
   const targetRefreshGuards = useRef(
     new Map<string, ReturnType<typeof createWorktreeRefreshGuard>>(),
   );
@@ -603,6 +610,27 @@ export function WorktreeSurface({
     () => new Map(readState.views.map((view) => [view.workspaceId, view])),
     [readState.views],
   );
+
+  const previousActivityRef = useRef(sessionPresentations);
+  useEffect(() => {
+    const previous = previousActivityRef.current;
+    previousActivityRef.current = sessionPresentations;
+    if (mode !== 'worktree') return;
+    const affected = worktreeActivityRefreshWorkspaceIds(
+      readStateRef.current.views, previous, sessionPresentations,
+    );
+    if (affected.length > 0) void refresh({
+      scope: { kind: 'workspaces', workspaceIds: affected }, preserveCurrent: true,
+    });
+  }, [mode, refresh, sessionPresentations]);
+
+  const latestLifecycleTarget = (target: WorktreeRecord | undefined) => target === undefined
+    ? undefined
+    : viewByWorkspace.get(target.workspaceId)?.worktrees.find(
+      (record) => record.worktreeId === target.worktreeId,
+    );
+  const cleanDiskTarget = latestLifecycleTarget(worktreeCleanDisk);
+  const forgetTarget = latestLifecycleTarget(worktreeForget);
 
   const sessionOrderInputs = useMemo<readonly SessionOrderInput[]>(() => {
     if (readState.status !== 'ready') return [];
@@ -2136,16 +2164,18 @@ export function WorktreeSurface({
                                       expandedSessionGroups[worktreeGroupKey] === true ||
                                       sessionGroupAutoExpanded;
                                     const state =
-                                      record.diskCleanup === 'completed'
-                                        ? undefined
-                                        : record.health === 'repair' || record.health === 'recovery-needed'
-                                          ? 'error'
-                                          : 'warning';
+                                      record.health === 'recovery-needed'
+                                        ? 'error'
+                                        : record.diskCleanup === 'completed'
+                                          ? undefined
+                                          : record.health === 'repair'
+                                            ? 'error'
+                                            : 'warning';
                                     const stateLabel =
-                                      record.diskCleanup === 'completed'
-                                        ? t('worktree.cleaned')
-                                        : record.health === 'recovery-needed'
-                                          ? t('worktree.recovery')
+                                      record.health === 'recovery-needed'
+                                        ? t('worktree.recovery')
+                                        : record.diskCleanup === 'completed'
+                                          ? t('worktree.cleaned')
                                           : record.health === 'repair'
                                             ? t('worktree.repair')
                                             : t('worktree.detached');
@@ -2176,9 +2206,11 @@ export function WorktreeSurface({
                                             toggleWorktree(record.worktreeId);
                                           }}
                                           menu={(() => {
-                                            const activityBlocked = worktreeActivityBlockReason(record.activity, actionPending);
+                                            const activityBlocked = worktreeActivityBlockReason(record.activity, actionPending, record.health);
                                             const blockedReasonText =
-                                              activityBlocked === 'busy'
+                                              activityBlocked === 'recovery'
+                                                ? t('worktree.recovery')
+                                                : activityBlocked === 'busy'
                                                 ? t('error.worktreeSessionBusy')
                                                 : activityBlocked === 'unknown'
                                                   ? t('error.worktreeActivityUnavailable')
@@ -2200,6 +2232,10 @@ export function WorktreeSurface({
                                                 setOpenWorktreeMenuId(
                                                   open ? record.worktreeId : undefined,
                                                 );
+                                                if (open) void refresh({
+                                                  scope: { kind: 'workspace', workspaceId: record.workspaceId },
+                                                  preserveCurrent: true,
+                                                });
                                               },
                                               onCleanDisk: () => {
                                                 setWorktreeCleanDisk(record);
@@ -2395,14 +2431,14 @@ export function WorktreeSurface({
 
       <WorktreeCleanDiskDialog
         t={t}
-        worktree={worktreeCleanDisk}
+        worktree={cleanDiskTarget}
         actionPending={actionPending}
         onClose={() => {
           setWorktreeCleanDisk(undefined);
         }}
         onSubmit={() => {
-          if (manager === undefined || worktreeCleanDisk === undefined) return;
-          const target = worktreeCleanDisk;
+          if (manager === undefined || cleanDiskTarget === undefined) return;
+          const target = cleanDiskTarget;
           const mutationToken = target.mutationToken;
           if (mutationToken === undefined) {
             setActionError({
@@ -2416,7 +2452,10 @@ export function WorktreeSurface({
             });
             return;
           }
-          const isCurrent = true;
+          const generation = cleanupGuard.current.begin();
+          const isCurrent = () => cleanupGuard.current.isCurrent(generation) &&
+            readStateRef.current.views.some((view) => view.workspaceId === target.workspaceId &&
+              view.worktrees.some((record) => record.worktreeId === target.worktreeId));
           setActionPending(true);
           setActionError(undefined);
           void runWorktreeCleanupFlow({
@@ -2475,14 +2514,14 @@ export function WorktreeSurface({
                   workspaceId: target.workspaceId,
                   worktreeId: target.worktreeId,
                 });
-                if (result !== undefined && isCurrent) {
+                if (result !== undefined && isCurrent()) {
                   onPermissionNotice?.({
                     workspaceId: target.workspaceId,
                     worktreeId: target.worktreeId,
                   }, result);
                 }
               } catch {
-                if (isCurrent) {
+                if (isCurrent()) {
                   onPermissionNotice?.({
                     workspaceId: target.workspaceId,
                     worktreeId: target.worktreeId,
@@ -2493,28 +2532,28 @@ export function WorktreeSurface({
                 }
               }
             },
-            isCurrent: () => isCurrent,
+            isCurrent,
             onFollowUpError: () => {
               // Follow-up errors do not fail the clean mutation
             },
           }).catch((error) => {
-            setActionError(toWorktreeViewError(error));
+            if (isCurrent()) setActionError(toWorktreeViewError(error));
           }).finally(() => {
-            setActionPending(false);
+            if (isCurrent()) setActionPending(false);
           });
         }}
       />
 
       <WorktreeForgetDialog
         t={t}
-        worktree={worktreeForget}
+        worktree={forgetTarget}
         actionPending={actionPending}
         onClose={() => {
           setWorktreeForget(undefined);
         }}
         onSubmit={() => {
-          if (manager === undefined || worktreeForget === undefined) return;
-          const target = worktreeForget;
+          if (manager === undefined || forgetTarget === undefined) return;
+          const target = forgetTarget;
           const mutationToken = target.mutationToken;
           if (mutationToken === undefined) {
             setActionError({
@@ -2541,6 +2580,7 @@ export function WorktreeSurface({
                 mutationToken,
               },
             });
+            cleanupGuard.current.invalidate();
             onWorktreeForgotten?.({
               workspaceId: target.workspaceId,
               worktreeId: target.worktreeId,

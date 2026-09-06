@@ -477,7 +477,7 @@ export function WorktreeCleanDiskDialog({
   onSubmit,
 }: WorktreeCleanDiskDialogProps) {
   if (worktree === undefined) return null;
-  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending);
+  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending, worktree.health);
   const isBusy = activityBlock === 'busy';
   const isUnknown = activityBlock === 'unknown';
   const isBlocked = activityBlock !== undefined;
@@ -492,7 +492,9 @@ export function WorktreeCleanDiskDialog({
       closeLabel={t('dialog.closeWorktreeCleanDisk')}
       title={t('worktree.cleanDiskTitle')}
       description={
-        isBusy
+        activityBlock === 'recovery'
+          ? t('worktree.recovery')
+          : isBusy
           ? t('error.worktreeSessionBusy')
           : isUnknown
             ? t('error.worktreeActivityUnavailable')
@@ -526,7 +528,7 @@ export function WorktreeForgetDialog({
   onSubmit,
 }: WorktreeForgetDialogProps) {
   if (worktree === undefined) return null;
-  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending);
+  const activityBlock = worktreeActivityBlockReason(worktree.activity, actionPending, worktree.health);
   const isBusy = activityBlock === 'busy';
   const isUnknown = activityBlock === 'unknown';
   const isBlocked = activityBlock !== undefined;
@@ -541,7 +543,9 @@ export function WorktreeForgetDialog({
       closeLabel={t('dialog.closeWorktreeForget')}
       title={t('worktree.forgetTitle')}
       description={
-        isBusy
+        activityBlock === 'recovery'
+          ? t('worktree.recovery')
+          : isBusy
           ? t('error.worktreeSessionBusy')
           : isUnknown
             ? t('error.worktreeActivityUnavailable')
