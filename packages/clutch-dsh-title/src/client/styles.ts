@@ -224,6 +224,16 @@ export const templateStyles = `
   font-size: 11px;
   margin-top: 2px !important;
 }
+.clutch-title-preview {
+  color: var(--ctm-muted);
+  font-size: 11px;
+  margin-top: 5px !important;
+  overflow-wrap: anywhere;
+}
+.clutch-title-preview code {
+  color: var(--ctm-text);
+  white-space: pre-wrap;
+}
 .clutch-title-delete:not(:disabled):hover {
   color: var(--ctm-error);
   background: color-mix(in srgb, var(--ctm-error) 7%, transparent);

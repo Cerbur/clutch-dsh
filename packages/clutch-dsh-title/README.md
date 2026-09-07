@@ -11,6 +11,7 @@ The default title shape is `0904|功能|优化 session title 生成规则`: a ti
 ## Capabilities
 
 - An immutable built-in `default` template and named user templates with open field names.
+- Fresh settings include an editable `emoji` template; duplicate any template and preview its title format in each row.
 - **Settings → Session Title** supports creating, editing, deleting and activating templates, or disabling customization to use DSH's native first-prompt title generator.
 - Live `$DSH_HOME/settings.yaml` storage; invalid templates remain visible and an invalid/missing active template falls back to `default`.
 - Closed field kinds: `datetime`, `literal`, `llm-enum`, and `llm-text`.
@@ -48,6 +49,12 @@ The package includes Host and browser entries mounted through `cordis.patch.yml`
 ## Usage
 
 ### Template manager
+
+Fresh settings offer a custom `emoji` template with `MMDD | 🎨 | description` formatting, the six task-type values 🎨 / 🔍 / 🚀 / 🔧 / ♻️ / 📦, and `desc.maxCharacters: 1024`. `default` remains selected. The preset is inherited until you save template changes to `$DSH_HOME/settings.yaml`; an existing stored templates map or legacy Cordis template is preserved. You can edit or delete `emoji`, and deletion persists.
+
+Choose **Duplicate** on any row, including `default`, to open a new draft containing that row's YAML. Enter a unique name and save; saving does not activate the copy. Invalid templates can be copied for repair, but must pass validation before saving.
+
+Each row shows an **Example** title, updated while editing. It uses the current date in the configured timezone, literal values, the first enum candidate and illustrative text limited by `maxCharacters`. No model request is made; real semantic values and DSH's final byte limit may produce a different title. Invalid YAML shows an unavailable message.
 
 Open **Settings → Session Title**. **New template** copies `default`; choose a unique name, edit YAML, then **Save** and **Activate**. Saving does not activate a new template. `default` is viewable and selectable but cannot be edited or deleted. Deleting the selected template selects `default`. Turning **Use title templates** off preserves your templates and selection, and calls DSH's native first-prompt LLM generator.
 

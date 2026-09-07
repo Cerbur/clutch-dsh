@@ -4,12 +4,17 @@ import { createRoot } from 'react-dom/client';
 import { TemplateSection } from '../src/client/TemplateSection.js';
 import { TemplateStore } from '../src/client/store.js';
 import { en, zh } from '../src/client/locales.js';
+import { EMOJI_TEMPLATE } from '../src/templates.js';
 
 let revision = 0;
 let raw: { enabled: boolean; active: string; templates: Record<string, string> } = {
   enabled: true,
   active: 'personal',
-  templates: { personal: 'template: "${daytime}|${desc}"', broken: 'template: "${missing}"' },
+  templates: {
+    emoji: EMOJI_TEMPLATE,
+    personal: 'template: "${daytime}|${desc}"',
+    broken: 'template: "${missing}"',
+  },
 };
 const store = new TemplateStore({
   read: async () => ({ raw: structuredClone(raw), revision, writable: true }),
