@@ -5,6 +5,13 @@
 - 状态：设计基线已确认，MVP 已实现
 - 兼容 DSH：`>=0.1.2-rc.1`
 
+2026-09-07 修订：字段选择和长输入策略以
+[长首条消息与模板字段计划](../plans/2026-09-07-long-text-template.md) 为准。
+仅解析 compiled template 实际引用并去重的字段；确定性模板不调用模型、
+不写 LLM request event。所有配置定义仍完整校验。超长首条消息在完整
+JSON-framed input 的 UTF-8 预算内保留首尾并明确标记裁剪，预算极小时才
+按输入预算失败；请求日志记录实际 payload，原始消息和 DSH 生命周期不变。
+
 ## 1. 背景与目标
 
 `@cerbur/clutch-dsh-title` 是 `clutch-dsh` 的一个独立 plugin。它通过
