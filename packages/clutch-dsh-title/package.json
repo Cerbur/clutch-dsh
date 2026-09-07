@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-title",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Configurable deterministic session titles for DeepSeek Harness.",
   "license": "MIT",
   "repository": {
