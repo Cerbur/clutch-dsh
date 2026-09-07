@@ -17,6 +17,21 @@ export function archiveWorktreeSnapshot(
 }
 
 /**
+ * Unarchive a Worktree record in place: change status back to 'active'.
+ */
+export function unarchiveWorktreeSnapshot(
+  snapshot: SidecarSnapshot,
+  worktreeId: string,
+): SidecarSnapshot {
+  return {
+    ...snapshot,
+    worktrees: snapshot.worktrees.map((record) =>
+      record.worktreeId === worktreeId ? { ...record, status: 'active' as const } : record,
+    ),
+  };
+}
+
+/**
  * Mark a Worktree record as cleaned and detach any remaining active bindings.
  */
 export function completeWorktreeCleanup(

@@ -2047,7 +2047,6 @@ test('keeps stable sidecar relations unchanged when Git Worktree removal fails',
     await runGit(workspaceRoot, ['branch', 'feature/remove-failure']);
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/remove-failure' });
     const mutationToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
-    const before = await sidecar.read('ws_one');
     const baseGit = new LocalGitAdapter();
     const failingGit = {
       listBranches: (...args) => baseGit.listBranches(...args),
@@ -2439,7 +2438,7 @@ test('repair worktree can be archived without changing Git or its active binding
 });
 
 test('cleanWorktree removes disk and marks cleaned', async () => {
-  await withGitFixture(async ({ provider, dsh, sidecar, workspaceRoot }) => {
+  await withGitFixture(async ({ provider, dsh, sidecar }) => {
     const record = await provider.createWorktree({
       workspaceId: 'ws_one',
       branch: 'main',
@@ -2471,7 +2470,7 @@ test('cleanWorktree removes disk and marks cleaned', async () => {
 });
 
 test('cleanWorktree rejects active worktree but permits archived cleanup with unknown activity', async () => {
-  await withGitFixture(async ({ provider, dsh, workspaceRoot }) => {
+  await withGitFixture(async ({ provider, dsh }) => {
     const record = await provider.createWorktree({
       workspaceId: 'ws_one',
       branch: 'main',
@@ -2517,7 +2516,7 @@ test('cleanWorktree rejects active worktree but permits archived cleanup with un
 });
 
 test('cleaned worktree rejects bindSession and resolveRuntimeCwd with WORKTREE_REMOVED', async () => {
-  await withGitFixture(async ({ provider, dsh, sidecar }) => {
+  await withGitFixture(async ({ provider, dsh }) => {
     const record = await provider.createWorktree({
       workspaceId: 'ws_one',
       branch: 'main',
@@ -2628,7 +2627,7 @@ test('forgetWorktree removes sidecar record and all bindings while preserving di
 });
 
 test('does not mark a valid ready Worktree as recovery-needed when recovery issues belong to another Worktree', async () => {
-  await withGitFixture(async ({ provider, sidecar, workspaceRoot }) => {
+  await withGitFixture(async ({ provider, sidecar }) => {
     const recordReady = await provider.createWorktree({
       workspaceId: 'ws_one',
       branch: 'main',
@@ -2986,7 +2985,7 @@ test('recovery matrix: executing clean operation safely finalizes to completed a
 });
 
 test('recovery matrix: legacy non-transactional archived observation is pruned while other issues remain', async () => {
-  await withGitFixture(async ({ workspaceRoot, provider, sidecar }) => {
+  await withGitFixture(async ({ provider, sidecar }) => {
     const recArchived = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/archived-obs' });
     await provider.removeWorktree({
       workspaceId: 'ws_one',
@@ -3127,3 +3126,43 @@ test('clean does not classify a dangling .git symlink as missing metadata', asyn
     assert.equal(await readFile(path.join(record.absolutePath, 'keep.txt'), 'utf8'), 'keep residual files');
   });
 });
+
+test('unarchive restores an archived worktree to active status', async () => {
+  await withGitFixture(async ({ provider, sidecar }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/unarchive-test' });
+    const archiveToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: archiveToken });
+
+    const archivedSnapshot = await sidecar.read('ws_one');
+    assert.equal(archivedSnapshot.worktrees[0].status, 'removed');
+
+    const unarchiveToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await provider.unarchiveWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: unarchiveToken });
+
+    const restoredSnapshot = await sidecar.read('ws_one');
+    assert.equal(restoredSnapshot.worktrees[0].status, 'active');
+    assert.equal(restoredSnapshot.worktrees[0].diskCleanup, undefined);
+
+    const worktrees = await provider.listWorktrees({ workspaceId: 'ws_one' });
+    assert.equal(worktrees[0].status, 'active');
+    assert.equal(worktrees[0].health, 'ready');
+  });
+});
+
+test('unarchive rejects cleaned worktrees and conflict states', async () => {
+  await withGitFixture(async ({ provider }) => {
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/unarchive-conflict' });
+    const archiveToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: archiveToken });
+
+    const cleanToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await provider.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: cleanToken });
+
+    const staleToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await assert.rejects(
+      provider.unarchiveWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: staleToken }),
+      { code: 'WORKTREE_STATE_CONFLICT' }
+    );
+  });
+});
+

@@ -95,6 +95,10 @@ test('localizes active worktree archive menu and clear search copy in both langu
   assert.equal(en['worktree.archive'], 'Archive Worktree');
   assert.equal(zh['worktree.remove'], '归档 Worktree');
   assert.equal(en['worktree.remove'], 'Archive Worktree');
+  assert.equal(zh['worktree.unarchive'], '取消归档');
+  assert.equal(en['worktree.unarchive'], 'Unarchive Worktree');
+  assert.equal(zh['workspace.collapseAll'], '全部折叠');
+  assert.equal(en['workspace.collapseAll'], 'Collapse All');
   assert.equal(zh['search.clear'], '清除搜索');
   assert.equal(en['search.clear'], 'Clear search');
 });

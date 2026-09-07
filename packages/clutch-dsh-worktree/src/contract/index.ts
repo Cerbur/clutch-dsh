@@ -208,6 +208,12 @@ export interface WorktreeManager {
     mutationToken: string;
   }): Promise<void>;
 
+  /**
+   * 将处于 removed（已归档）状态且未被清理的 Worktree 恢复为 active。
+   * Restores an archived Worktree that has not been cleaned from disk back to active.
+   */
+  unarchiveWorktree(input: WorktreeLifecycleInput): Promise<void>;
+
   /** Caller must obtain explicit disk-deletion confirmation; Session activity is not checked. */
   cleanWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
@@ -256,6 +262,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'createWorktree',
   'importWorktree',
   'removeWorktree',
+  'unarchiveWorktree',
   'cleanWorktree',
   'adoptWorktreeBranch',
   'recoverWorktrees',
@@ -310,6 +317,8 @@ export interface WorktreeRemoteManager {
     worktreeId: WorktreeId;
     mutationToken: string;
   }): Promise<WorktreeRemoteResult<null>>;
+
+  unarchiveWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 
   cleanWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 

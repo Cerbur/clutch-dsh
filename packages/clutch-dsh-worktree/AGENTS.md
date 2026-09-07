@@ -101,10 +101,11 @@ Worktree 与 Session 的顺序约束：
 5. 创建 Session 时先调用 DSH 原生 Session API，再写入外部 binding。
 6. binding 写入失败时不得删除或修改已创建的 DSH Session；界面必须保留 Session ID 供重试或直接打开。
 
-Worktree 生命周期分为三个独立操作：
+Worktree 生命周期分为四个独立操作：
 1. 移除（内部归档）：`status = 'removed'`，保留磁盘目录与 binding；已有 Session 继续在 Worktree cwd 运行。
-2. 清理磁盘：需经二次确认，由用户自行确认所有使用该目录的 Session/子代理与其他任务已停止；执行真正的非强制 `git worktree remove`；成功后记录 `diskCleanup: 'completed'`，运行时投影 `health = 'cleaned'`，其 binding 转为 `detached`。清理提交与权限后续操作解耦，权限/刷新失败不回滚或重试磁盘清理。
-3. 移出管理：删除该 Worktree 的 sidecar 记录与全部 binding，定向淘汰未决 fork 恢复与权限 notice，保留磁盘文件与 DSH 原生 Session；重新导入不会自动恢复旧 binding。
+2. 取消归档（恢复活跃）：仅当 Worktree 处于 `status = 'removed'`、尚未执行磁盘清理（`diskCleanup !== 'completed'`）、物理 Git worktree 仍完整登记且分支/路径未与现有活跃 Worktree 冲突时，可直接取消归档恢复为 `status = 'active'`。
+3. 清理磁盘：需经二次确认，由用户自行确认所有使用该目录的 Session/子代理与其他任务已停止；执行真正的非强制 `git worktree remove`；成功后记录 `diskCleanup: 'completed'`，运行时投影 `health = 'cleaned'`，其 binding 转为 `detached`。清理提交与权限后续操作解耦，权限/刷新失败不回滚或重试磁盘清理。
+4. 移出管理：删除该 Worktree 的 sidecar 记录与全部 binding，定向淘汰未决 fork 恢复与权限 notice，保留磁盘文件与 DSH 原生 Session；重新导入不会自动恢复旧 binding。
 清理与移出管理均不以 Session 活动作为前置门禁，不伪造 idle。清理确认框必须明确告知插件不核验运行状态、由用户确认任务已停止，以及删除目录可能导致任务失败或数据丢失；移出管理只修改插件索引。两者继续保留归档状态、锁、mutation token 与 recovery 检查。
 Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工作树中的业务文件。
 

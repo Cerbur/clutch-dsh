@@ -55,6 +55,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 - 继续使用 DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单。Worktree 可以在所属
   Workspace 内排序；顺序保存在插件 sidecar 中，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。
+- 在 Worktree Header 提供「全部折叠」按钮，支持一键折叠所有 Workspace 与 Worktree。
 - 在 Worktree view 高亮 DSH 当前 Session；进入 Worktree 模式或切换当前会话时，临时展开其 Workspace/Main/Worktree 路径；只有当前行不在前五行时才展开 Session 五行溢出，随后清空隐藏它的搜索并滚动定位；这一浏览器本地行为不改变已保存的展开选择。
 - 在已有 Conversation 的标题行以及新会话空白 Hero 中，以只读方式显示当前 local branch 或
   Worktree branch 上下文。
@@ -300,7 +301,8 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；标题显示已归档 Worktree 总数，收起时仍然显示。每个 Workspace 维护独立的折叠状态。
 - `health: repair` 的 active Worktree 也提供“归档 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能归档。
 - 对于未清理磁盘的已归档 Worktree，选项菜单提供：
-  1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，
+  1. “取消归档”（Unarchive Worktree）：对于仅元数据标记归档且磁盘未清理的 Worktree，可直接在菜单中点击取消归档，无需二次确认弹窗，立即恢复为活跃状态。
+  2. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，
      请用户自行确认使用该目录的任务均已停止，否则删除可能导致任务失败或数据丢失；执行真正的非强制 `git worktree remove`，
      成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
      归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为 `cleaned`；
@@ -309,7 +311,7 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
      如果 Worktree 目录或其 `.git` 入口已在外部删除，确认清理只将插件记录标记为完成并将 binding 转为 detached，
      不再执行 Git 删除，也不清理残留 Git registration。剩余目录和文件完整保留，完成状态显示
      “Worktree 已移除”，不代表剩余文件已被删除。普通刷新仍显示 `repair`，直到用户显式确认清理。
-  2. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
+  3. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
      磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。不需要校验 Session 活动。
 - 对于已清理磁盘的 Worktree（`health: cleaned`），选项菜单提供“移出管理”以从 sidecar 中彻底移除该记录。
 - 删除 Workspace 只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。

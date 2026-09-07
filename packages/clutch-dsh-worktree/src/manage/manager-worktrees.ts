@@ -495,6 +495,7 @@ function importConflictOrExisting(
 
 export {
   archiveWorktree as removeWorktree,
+  unarchiveWorktree,
   cleanWorktree,
   forgetWorktree,
 } from './manager-worktree-lifecycle.js';

@@ -194,6 +194,14 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   return previousRef.current;
 }
 
+function IconCollapseAll16({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+      <path d="M9 11h6v1H9v-1zm6-3H9v1h6V8zm-6-3h6v1H9V5zM4.15 2.15l-.71.7L5.59 5H1v1h4.59L3.44 8.15l.71.7L7.5 5.5 4.15 2.15zm0 6l-.71.7L5.59 11H1v1h4.59l-2.15 2.15.71.7L7.5 11.5 4.15 8.15z" />
+    </svg>
+  );
+}
+
 /**
  * Peer Worktree navigation surface. It keeps the original DSH Workspace mode
  * intact and renders a browser-local Workspace → Worktree → Session projection.
@@ -1657,6 +1665,23 @@ export function WorktreeSurface({
             </div>
           </div>
           <div className={cx(styles.headerActions, searchExpanded && styles.headerActionsHidden)}>
+            <Tooltip label={t('workspace.collapseAll')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('workspace.collapseAll')}
+                onClick={() => {
+                  expandState.actions.collapseAll(
+                    workspaceIds,
+                    readState.views.flatMap((view) => view.worktrees.map((record) => record.worktreeId)),
+                  );
+                  setExpandedArchivedWorkspaces({});
+                  setExpandedSessionGroups({});
+                }}
+              >
+                <IconCollapseAll16 />
+              </button>
+            </Tooltip>
             <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
               <button
                 type="button"
@@ -2424,11 +2449,17 @@ export function WorktreeSurface({
                                               copyPath: record.absolutePath,
                                               showCreate: false,
                                               showRemove: false,
+                                              showUnarchive: record.diskCleanup !== 'completed',
                                               showCleanDisk: record.diskCleanup !== 'completed',
                                               showForget: true,
                                               disabled: actionPending,
+                                              unarchiveDisabled: activityBlocked !== undefined || record.health === 'repair',
                                               cleanDiskDisabled: activityBlocked !== undefined || record.health === 'branch-drift',
                                               forgetDisabled: activityBlocked !== undefined,
+                                              unarchiveDisabledReason:
+                                                record.health === 'repair'
+                                                  ? t('worktree.unarchiveDisabledRepair')
+                                                  : blockedReasonText,
                                               cleanDiskDisabledReason: record.health === 'branch-drift' ? t('worktree.adoptBeforeClean') : blockedReasonText,
                                               forgetDisabledReason: blockedReasonText,
                                               onOpenChange: (open) => {
@@ -2440,6 +2471,34 @@ export function WorktreeSurface({
                                                   preserveCurrent: true,
                                                   reuseInFlight: true,
                                                   invalidateContext: false,
+                                                });
+                                              },
+                                              onUnarchive: () => {
+                                                if (!manager) return;
+                                                if (!record.mutationToken) {
+                                                  setActionError({
+                                                    code: 'WORKTREE_STATE_CONFLICT',
+                                                    message: '',
+                                                    retryable: true,
+                                                    details: {
+                                                      workspaceId: record.workspaceId,
+                                                      worktreeId: record.worktreeId,
+                                                    },
+                                                  });
+                                                  return;
+                                                }
+                                                void runMutation(async () => {
+                                                  await executeWorktreeAction(manager, {
+                                                    type: 'unarchiveWorktree',
+                                                    input: {
+                                                      workspaceId: record.workspaceId,
+                                                      worktreeId: record.worktreeId,
+                                                      mutationToken: record.mutationToken!,
+                                                    },
+                                                  });
+                                                }, {
+                                                  scope: { kind: 'workspace', workspaceId: record.workspaceId },
+                                                  preserveCurrent: true,
                                                 });
                                               },
                                               onCleanDisk: () => {

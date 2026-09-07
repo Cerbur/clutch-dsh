@@ -164,6 +164,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/normalizeDetachedWorktreePermissions',
       'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
+      'worktreeManager/unarchiveWorktree',
     ],
   );
   const descriptors = new Set(
@@ -351,6 +352,7 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/createWorktree',
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/unarchiveWorktree',
     'worktreeManager/cleanWorktree',
     'worktreeManager/adoptWorktreeBranch',
     'worktreeManager/recoverWorktrees',

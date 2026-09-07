@@ -11,6 +11,7 @@ export const zh = {
   'workspace.delete': '删除',
   'workspace.expand': '展开 {name}',
   'workspace.collapse': '收起 {name}',
+  'workspace.collapseAll': '全部折叠',
   'workspace.options': '工作区选项：{name}',
   'workspace.addWorktree': '向 {name} 添加 Worktree',
   'workspace.add': '添加工作区',
@@ -51,6 +52,8 @@ export const zh = {
   'worktree.createNew': '创建新的 Worktree',
   'worktree.archive': '归档 Worktree',
   'worktree.archiveDescription': '归档“{name}”？Session 会保留在 DSH 中，并作为已分离关系继续可用。',
+  'worktree.unarchive': '取消归档',
+  'worktree.unarchiveDisabledRepair': '目录或 Git 登记异常，无法取消归档',
   'worktree.archiveExternalDescription':
     '归档“{name}”？这会删除关联的外部 Worktree 目录。Session 会保留在 DSH 中，并作为已分离关系继续可用。',
   'worktree.remove': '归档 Worktree',
@@ -183,6 +186,7 @@ export const en = {
   'workspace.delete': 'Delete',
   'workspace.expand': 'Expand {name}',
   'workspace.collapse': 'Collapse {name}',
+  'workspace.collapseAll': 'Collapse All',
   'workspace.options': 'Workspace options for {name}',
   'workspace.addWorktree': 'Add Worktree to {name}',
   'workspace.add': 'Add Workspace',
@@ -224,6 +228,8 @@ export const en = {
   'worktree.archive': 'Archive Worktree',
   'worktree.archiveDescription':
     'Archive {name}? Sessions stay in DSH and remain available as detached bindings.',
+  'worktree.unarchive': 'Unarchive Worktree',
+  'worktree.unarchiveDisabledRepair': 'Cannot unarchive because directory or Git registration is abnormal',
   'worktree.archiveExternalDescription':
     'Archive {name}? This deletes the linked external Worktree directory. Sessions stay in DSH and remain available as detached bindings.',
   'worktree.remove': 'Archive Worktree',

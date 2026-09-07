@@ -856,16 +856,6 @@ test('normalizes detached Worktree Session permissions after removal', async () 
       calls.push(['forgetWorktree', input]);
     },
   });
-  const permission = {
-    async normalizeDetachedWorktreePermissions(input) {
-      calls.push(['normalizeDetachedWorktreePermissions', input]);
-      return {
-        status: 'normalized-workspace-write',
-        sessionIds: ['session-one'],
-        retryable: false,
-      };
-    },
-  };
 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
@@ -1027,6 +1017,8 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /t\('action\.retryBinding'\)/);
   assert.match(source, /t\('action\.openCreatedSession'\)/);
   assert.match(source, /t\('worktree\.archive'\)/);
+  assert.match(source, /t\('worktree\.unarchive'\)/);
+  assert.match(source, /t\('workspace\.collapseAll'\)/);
   assert.match(source, /t\('worktree\.detached'\)/);
   assert.match(source, /searchExpanded/);
   assert.match(source, /searchSlot/);

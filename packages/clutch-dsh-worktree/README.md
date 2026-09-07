@@ -62,6 +62,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   be reordered within their owning Workspace; order is stored in the plugin sidecar and Main is
   fixed first.
 - Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
+- Provide a Collapse All button in the Worktree Header to collapse all Workspaces and Worktrees at once.
 - Highlight the DSH current Session in Worktree view; entering Worktree mode or switching the current Session temporarily reveals its Workspace/Main/Worktree path, expands Session overflow only when the row is outside the first five, clears a hiding search, and scrolls the row into view; this browser-local behavior does not change persisted expansion choices.
 - Keep the current local branch or Worktree branch visible as read-only context in the existing
   Conversation title row and in the blank-session Hero.
@@ -330,7 +331,8 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - Active Worktrees with `health: repair` also offer `Archive Worktree` to archive the record without
   touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
 - For archived Worktrees whose disk has not been cleaned, the options menu provides:
-  1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
+  1. `Unarchive Worktree`: Restores a metadata-archived Worktree whose disk directory is intact back to active status, without secondary confirmation.
+  2. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
      tells you that the plugin does not check Session or subagent activity and requires you to confirm
      that all tasks using the directory have stopped (otherwise deletion may cause task failures or data loss),
      runs real non-forced `git worktree remove`, and upon success records
@@ -344,7 +346,7 @@ blank-session Hero. The displayed language follows DSH's current language settin
      stale Git registration. Any remaining directory and files are preserved. The completed status
      reads `Worktree removed`, which does not imply residual files were deleted. Ordinary refreshes still show
      missing directories as `repair` until cleanup is explicitly confirmed.
-  2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
+  3. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
      its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
      recovery state, and permission notices for that Worktree. No Session activity check is required.
 - For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
