@@ -5,6 +5,7 @@ import type { TemplateAction } from '../templates.js';
 import type { TemplateStore } from './store.js';
 import type { Translate } from './locales.js';
 import { templateStyles } from './styles.js';
+import { previewTemplate } from '../preview.js';
 
 export interface TemplateSectionProps {
   controller: TemplateStore;
@@ -27,6 +28,7 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [previewTimestamp] = useState(() => Date.now());
   const helpId = useId();
   const validationId = useId();
   useEffect(() => {
@@ -233,6 +235,11 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
         {state.templates.rows.map((row) => {
           const expanded = draft !== null && !draft.create && draft.id === row.id;
           const effective = state.templates.enabled && row.id === state.templates.effective;
+          const preview = previewTemplate(
+            expanded ? draft.source : row.source,
+            t('sampleText'),
+            previewTimestamp,
+          );
           return (
             <article
               key={row.id}
@@ -262,8 +269,29 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
                   <p className="clutch-title-row-caption">
                     {t(row.id === 'default' ? 'builtin' : row.error ? 'invalid' : 'custom')}
                   </p>
+                  <p className="clutch-title-preview" title={t('sampleHelp')}>
+                    <span>{t('sample')}: </span>
+                    {preview === null ? t('sampleInvalid') : <code>{preview}</code>}
+                  </p>
                 </div>
                 <div className="clutch-title-actions clutch-title-row-actions">
+                  <Button
+                    size="sm"
+                    disabled={locked || draft !== null}
+                    onClick={() => {
+                      setDraft({
+                        id: '',
+                        source: row.source,
+                        revision: state.revision,
+                        create: true,
+                      });
+                      setFailure('');
+                      setNotice('');
+                      setDeleting(null);
+                    }}
+                  >
+                    {t('duplicate')}
+                  </Button>
                   <Button
                     size="sm"
                     disabled={state.busy || (draft !== null && !expanded)}
