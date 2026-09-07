@@ -48,7 +48,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
-  active Worktree 额外显示“移除 Worktree”并要求确认。
+  active Worktree 额外显示“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree
   不显示该动作。
@@ -295,10 +295,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
   Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
 - 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。active Worktree 提供“复制路径”与
-  “移除 Worktree”。移除 active Worktree 属于内部归档操作：将其标记为 `status: removed`，完整保留
+  “归档 Worktree”。归档 active Worktree 属于内部归档操作：将其标记为 `status: removed`，完整保留
   磁盘目录、关联 binding 与运行时 cwd，并将该 Worktree 沉底移动到工作区底部的“已归档”（Archived）分组中。
 - 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；标题显示已归档 Worktree 总数，收起时仍然显示。每个 Workspace 维护独立的折叠状态。
-- `health: repair` 的 active Worktree 也提供“移除 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能移除。
+- `health: repair` 的 active Worktree 也提供“归档 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能归档。
 - 对于未清理磁盘的已归档 Worktree，选项菜单提供：
   1. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，
      请用户自行确认使用该目录的任务均已停止，否则删除可能导致任务失败或数据丢失；执行真正的非强制 `git worktree remove`，

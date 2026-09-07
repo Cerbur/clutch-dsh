@@ -413,8 +413,8 @@ export function WorktreeGroupRow({
                 ...(menu.showRemove
                   ? [{
                       id: 'remove',
-                      label: t('worktree.remove'),
-                      icon: <IconTrashOutline16 />,
+                      label: t('worktree.archive'),
+                      icon: <IconArchiveOutline20 size={16} />,
                       danger: true,
                       disabled: menu.disabled || menu.onRemove === undefined,
                     }]

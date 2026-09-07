@@ -10,10 +10,12 @@ import {
 import {
   IconArchiveOutline20,
   IconBranchOutline16,
+  IconCloseFill14,
   IconCloseOutline16,
   IconProjectAddOutline16,
   IconSearchOutline16,
   RiskConfirmation,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
@@ -142,6 +144,10 @@ const EMPTY_FORK_RECOVERY_STORE: WorktreeForkRecoveryStore = {
   subscribe: () => () => {},
 };
 type ExpandedSessionGroups = Record<string, boolean>;
+
+function cx(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
 
 interface WorktreeCreateDefaults {
   readonly baseBranch?: string;
@@ -282,9 +288,32 @@ export function WorktreeSurface({
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchRoot = useRef<HTMLDivElement | null>(null);
+  const searchInput = useRef<HTMLInputElement | null>(null);
   const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
+
+  useEffect(() => {
+    if (!searchExpanded) return;
+    const onClick = (event: MouseEvent): void => {
+      if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return;
+      searchInput.current?.blur();
+      if (searchQuery.trim() !== '') return;
+      setSearchExpanded(false);
+    };
+    document.addEventListener('click', onClick);
+    return () => {
+      document.removeEventListener('click', onClick);
+    };
+  }, [searchExpanded, searchQuery]);
+
+  useEffect(() => {
+    if (searchExpanded) {
+      searchInput.current?.focus({ preventScroll: true });
+    }
+  }, [searchExpanded]);
   const locateGenerationRef = useRef(0);
   const positionedLocateGenerationRef = useRef<number>();
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
@@ -774,9 +803,13 @@ export function WorktreeSurface({
     positionedLocateGenerationRef.current = undefined;
     if (mode !== 'worktree') {
       setCurrentSessionReveal(undefined);
+      setSearchExpanded(false);
       return;
     }
-    if (searchQueryRef.current.trim().length > 0) setSearchQuery('');
+    if (searchQueryRef.current.trim().length > 0) {
+      setSearchQuery('');
+      setSearchExpanded(false);
+    }
     setCurrentSessionReveal(
       currentSessionId === undefined
         ? undefined
@@ -1556,43 +1589,100 @@ export function WorktreeSurface({
     >
       <div className={styles.wideContent}>
         <header className={styles.header}>
-          <span className={styles.title}>{t('worktree.title')}</span>
-          <button
-            type="button"
-            className={styles.closeButton}
-            aria-label={t('mode.exit')}
-            onClick={() => {
-              actions.setViewMode('workspace-session');
-            }}
-          >
-            <IconCloseOutline16 />
-          </button>
-        </header>
-
-        <div className={styles.searchRow}>
-          <span className={styles.searchIcon} aria-hidden="true">
-            <IconSearchOutline16 />
+          <span className={cx(styles.title, searchExpanded && styles.titleHidden)}>
+            {t('worktree.title')}
           </span>
-          <input
-            className={styles.searchInput}
-            aria-label={t('workspace.search')}
-            placeholder={t('workspace.search')}
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.currentTarget.value);
-            }}
-          />
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label={t('workspace.add')}
-            onClick={() => {
-              if (createWorkspace !== undefined) void runMutation(createWorkspace);
-            }}
-          >
-            <IconProjectAddOutline16 />
-          </button>
-        </div>
+          <div className={cx(styles.searchSlot, searchExpanded && styles.searchSlotExpanded)}>
+            <div
+              ref={searchRoot}
+              className={cx(styles.search, searchExpanded && styles.searchExpanded)}
+              onClick={() => {
+                if (!searchExpanded) {
+                  setSearchExpanded(true);
+                  searchInput.current?.focus();
+                }
+              }}
+            >
+              <Tooltip
+                label={t('workspace.search')}
+                side="bottom"
+                delayMs={500}
+                disabled={searchExpanded}
+              >
+                <button
+                  type="button"
+                  className={styles.searchButton}
+                  aria-label={t('workspace.search')}
+                  aria-expanded={searchExpanded}
+                  onClick={() => {
+                    setSearchExpanded(true);
+                    searchInput.current?.focus();
+                  }}
+                >
+                  <IconSearchOutline16 size={searchExpanded ? 12 : 14} />
+                </button>
+              </Tooltip>
+              <input
+                ref={searchInput}
+                className={styles.searchInput}
+                type="text"
+                aria-label={t('workspace.search')}
+                placeholder={t('workspace.search')}
+                value={searchQuery}
+                tabIndex={searchExpanded ? 0 : -1}
+                onChange={(event) => {
+                  setSearchQuery(event.currentTarget.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchQuery('');
+                    setSearchExpanded(false);
+                  }
+                }}
+              />
+              {searchExpanded && (
+                <button
+                  type="button"
+                  className={styles.clearButton}
+                  aria-label={t('search.clear')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSearchQuery('');
+                    setSearchExpanded(false);
+                  }}
+                >
+                  <IconCloseFill14 />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className={cx(styles.headerActions, searchExpanded && styles.headerActionsHidden)}>
+            <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('workspace.add')}
+                onClick={() => {
+                  if (createWorkspace !== undefined) void runMutation(createWorkspace);
+                }}
+              >
+                <IconProjectAddOutline16 />
+              </button>
+            </Tooltip>
+            <Tooltip label={t('mode.exit')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.closeButton}
+                aria-label={t('mode.exit')}
+                onClick={() => {
+                  actions.setViewMode('workspace-session');
+                }}
+              >
+                <IconCloseOutline16 />
+              </button>
+            </Tooltip>
+          </div>
+        </header>
 
         <div className={styles.content} tabIndex={0}>
           {permissionNoticeSnapshot !== undefined && (

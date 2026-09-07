@@ -9,6 +9,10 @@
 - 将 Worktree 生命周期拆分为保留目录和绑定的归档、磁盘清理与移出插件管理，并增加默认折叠的归档分组。
 - 支持 Worktree 分支漂移的只读投影与显式采用（adopt），并在创建同级 Worktree 时基于当前实际分支。
 
+#### 优化
+
+- 将活跃 Worktree 菜单操作文案与图标调整为「归档 Worktree」，并将 Worktree Header 搜索优化为与 DSH 原生一致的单图标折叠展开输入框。
+
 #### 修复
 
 - 修复归档 Session 的定位和上下文、forget 后的异步恢复、清理后的权限重试，以及缺失目录和注册信息引发的错误恢复状态。
@@ -19,6 +23,10 @@
 
 - Separate the Worktree lifecycle into archive with directory and binding retention, disk cleanup, and removal from management, with a collapsed archive group.
 - Project runtime branch drift, support explicit branch adoption, and base sibling Worktree creation on the observed branch.
+
+#### Improved
+
+- Update active Worktree menu action copy and icon to "Archive Worktree", and optimize Worktree header search into a DSH-native collapsible search input.
 
 #### Fixed
 

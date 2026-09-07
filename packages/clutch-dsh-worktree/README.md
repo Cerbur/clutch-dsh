@@ -53,7 +53,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
-  Main and detached rows show only `Copy path`; active Worktree rows also show `Remove Worktree`
+  Main and detached rows show only `Copy path`; active Worktree rows also show `Archive Worktree`
   with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
@@ -321,13 +321,13 @@ blank-session Hero. The displayed language follows DSH's current language settin
   the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Open the shared Main and Worktree options menu to copy the selected row's absolute path. Active
-  Worktrees show `Copy path` and `Remove Worktree`. Removing an active Worktree is an internal
+  Worktrees show `Copy path` and `Archive Worktree`. Archiving an active Worktree is an internal
   archive operation: it sets `status: removed`, preserves disk files, active bindings, and runtime cwd,
   and moves the Worktree into the default-collapsed `Archived` group at the bottom of the Workspace.
 - The `Archived` group is rendered at the bottom of the Workspace when archived Worktrees exist and is
   collapsed by default. Its label includes the total archived Worktree count, even when collapsed.
   Each Workspace tracks its own collapsed state independently.
-- Active Worktrees with `health: repair` also offer `Remove Worktree` to archive the record without
+- Active Worktrees with `health: repair` also offer `Archive Worktree` to archive the record without
   touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
 - For archived Worktrees whose disk has not been cleaned, the options menu provides:
   1. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
