@@ -250,18 +250,22 @@ export interface WorktreeGroupMenuProps {
   readonly copyPath: string;
   readonly showCreate: boolean;
   readonly showRemove: boolean;
+  readonly showUnarchive?: boolean;
   readonly showCleanDisk?: boolean;
   readonly onAdoptBranch?: () => void;
   readonly onRecover?: () => void;
   readonly showForget?: boolean;
   readonly disabled: boolean;
+  readonly unarchiveDisabled?: boolean;
   readonly cleanDiskDisabled?: boolean;
   readonly forgetDisabled?: boolean;
+  readonly unarchiveDisabledReason?: string;
   readonly cleanDiskDisabledReason?: string;
   readonly forgetDisabledReason?: string;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreateWorktree?: () => void;
   readonly onRemove?: () => void;
+  readonly onUnarchive?: () => void;
   readonly onCleanDisk?: () => void;
   readonly onForget?: () => void;
 }

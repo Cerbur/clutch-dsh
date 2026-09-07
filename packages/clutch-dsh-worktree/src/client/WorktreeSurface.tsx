@@ -10,10 +10,12 @@ import {
 import {
   IconArchiveOutline20,
   IconBranchOutline16,
+  IconCloseFill14,
   IconCloseOutline16,
   IconProjectAddOutline16,
   IconSearchOutline16,
   RiskConfirmation,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../contract/index.js';
 import { openWorktreeSession } from './navigation.js';
@@ -143,6 +145,10 @@ const EMPTY_FORK_RECOVERY_STORE: WorktreeForkRecoveryStore = {
 };
 type ExpandedSessionGroups = Record<string, boolean>;
 
+function cx(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
+
 interface WorktreeCreateDefaults {
   readonly baseBranch?: string;
   readonly newBranch?: string;
@@ -186,6 +192,14 @@ function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly s
   const stable = stableWorkspaceIds(previousRef.current, next);
   if (stable !== previousRef.current) previousRef.current = stable;
   return previousRef.current;
+}
+
+function IconCollapseAll16({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+      <path d="M9 11h6v1H9v-1zm6-3H9v1h6V8zm-6-3h6v1H9V5zM4.15 2.15l-.71.7L5.59 5H1v1h4.59L3.44 8.15l.71.7L7.5 5.5 4.15 2.15zm0 6l-.71.7L5.59 11H1v1h4.59l-2.15 2.15.71.7L7.5 11.5 4.15 8.15z" />
+    </svg>
+  );
 }
 
 /**
@@ -282,9 +296,32 @@ export function WorktreeSurface({
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchRoot = useRef<HTMLDivElement | null>(null);
+  const searchInput = useRef<HTMLInputElement | null>(null);
   const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
+
+  useEffect(() => {
+    if (!searchExpanded) return;
+    const onClick = (event: MouseEvent): void => {
+      if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return;
+      searchInput.current?.blur();
+      if (searchQuery.trim() !== '') return;
+      setSearchExpanded(false);
+    };
+    document.addEventListener('click', onClick);
+    return () => {
+      document.removeEventListener('click', onClick);
+    };
+  }, [searchExpanded, searchQuery]);
+
+  useEffect(() => {
+    if (searchExpanded) {
+      searchInput.current?.focus({ preventScroll: true });
+    }
+  }, [searchExpanded]);
   const locateGenerationRef = useRef(0);
   const positionedLocateGenerationRef = useRef<number>();
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
@@ -774,9 +811,13 @@ export function WorktreeSurface({
     positionedLocateGenerationRef.current = undefined;
     if (mode !== 'worktree') {
       setCurrentSessionReveal(undefined);
+      setSearchExpanded(false);
       return;
     }
-    if (searchQueryRef.current.trim().length > 0) setSearchQuery('');
+    if (searchQueryRef.current.trim().length > 0) {
+      setSearchQuery('');
+      setSearchExpanded(false);
+    }
     setCurrentSessionReveal(
       currentSessionId === undefined
         ? undefined
@@ -1556,43 +1597,117 @@ export function WorktreeSurface({
     >
       <div className={styles.wideContent}>
         <header className={styles.header}>
-          <span className={styles.title}>{t('worktree.title')}</span>
-          <button
-            type="button"
-            className={styles.closeButton}
-            aria-label={t('mode.exit')}
-            onClick={() => {
-              actions.setViewMode('workspace-session');
-            }}
-          >
-            <IconCloseOutline16 />
-          </button>
-        </header>
-
-        <div className={styles.searchRow}>
-          <span className={styles.searchIcon} aria-hidden="true">
-            <IconSearchOutline16 />
+          <span className={cx(styles.title, searchExpanded && styles.titleHidden)}>
+            {t('worktree.title')}
           </span>
-          <input
-            className={styles.searchInput}
-            aria-label={t('workspace.search')}
-            placeholder={t('workspace.search')}
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.currentTarget.value);
-            }}
-          />
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label={t('workspace.add')}
-            onClick={() => {
-              if (createWorkspace !== undefined) void runMutation(createWorkspace);
-            }}
-          >
-            <IconProjectAddOutline16 />
-          </button>
-        </div>
+          <div className={cx(styles.searchSlot, searchExpanded && styles.searchSlotExpanded)}>
+            <div
+              ref={searchRoot}
+              className={cx(styles.search, searchExpanded && styles.searchExpanded)}
+              onClick={() => {
+                if (!searchExpanded) {
+                  setSearchExpanded(true);
+                  searchInput.current?.focus();
+                }
+              }}
+            >
+              <Tooltip
+                label={t('workspace.search')}
+                side="bottom"
+                delayMs={500}
+                disabled={searchExpanded}
+              >
+                <button
+                  type="button"
+                  className={styles.searchButton}
+                  aria-label={t('workspace.search')}
+                  aria-expanded={searchExpanded}
+                  onClick={() => {
+                    setSearchExpanded(true);
+                    searchInput.current?.focus();
+                  }}
+                >
+                  <IconSearchOutline16 size={searchExpanded ? 12 : 14} />
+                </button>
+              </Tooltip>
+              <input
+                ref={searchInput}
+                className={styles.searchInput}
+                type="text"
+                aria-label={t('workspace.search')}
+                placeholder={t('workspace.search')}
+                value={searchQuery}
+                tabIndex={searchExpanded ? 0 : -1}
+                onChange={(event) => {
+                  setSearchQuery(event.currentTarget.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchQuery('');
+                    setSearchExpanded(false);
+                  }
+                }}
+              />
+              {searchExpanded && (
+                <button
+                  type="button"
+                  className={styles.clearButton}
+                  aria-label={t('search.clear')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSearchQuery('');
+                    setSearchExpanded(false);
+                  }}
+                >
+                  <IconCloseFill14 />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className={cx(styles.headerActions, searchExpanded && styles.headerActionsHidden)}>
+            <Tooltip label={t('workspace.collapseAll')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('workspace.collapseAll')}
+                onClick={() => {
+                  expandState.actions.collapseAll(
+                    workspaceIds,
+                    readState.views.flatMap((view) => view.worktrees.map((record) => record.worktreeId)),
+                  );
+                  setExpandedArchivedWorkspaces({});
+                  setExpandedSessionGroups({});
+                }}
+              >
+                <IconCollapseAll16 />
+              </button>
+            </Tooltip>
+            <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('workspace.add')}
+                onClick={() => {
+                  if (createWorkspace !== undefined) void runMutation(createWorkspace);
+                }}
+              >
+                <IconProjectAddOutline16 />
+              </button>
+            </Tooltip>
+            <Tooltip label={t('mode.exit')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.closeButton}
+                aria-label={t('mode.exit')}
+                onClick={() => {
+                  actions.setViewMode('workspace-session');
+                }}
+              >
+                <IconCloseOutline16 />
+              </button>
+            </Tooltip>
+          </div>
+        </header>
 
         <div className={styles.content} tabIndex={0}>
           {permissionNoticeSnapshot !== undefined && (
@@ -2334,11 +2449,17 @@ export function WorktreeSurface({
                                               copyPath: record.absolutePath,
                                               showCreate: false,
                                               showRemove: false,
+                                              showUnarchive: record.diskCleanup !== 'completed',
                                               showCleanDisk: record.diskCleanup !== 'completed',
                                               showForget: true,
                                               disabled: actionPending,
+                                              unarchiveDisabled: activityBlocked !== undefined || record.health === 'repair',
                                               cleanDiskDisabled: activityBlocked !== undefined || record.health === 'branch-drift',
                                               forgetDisabled: activityBlocked !== undefined,
+                                              unarchiveDisabledReason:
+                                                record.health === 'repair'
+                                                  ? t('worktree.unarchiveDisabledRepair')
+                                                  : blockedReasonText,
                                               cleanDiskDisabledReason: record.health === 'branch-drift' ? t('worktree.adoptBeforeClean') : blockedReasonText,
                                               forgetDisabledReason: blockedReasonText,
                                               onOpenChange: (open) => {
@@ -2350,6 +2471,34 @@ export function WorktreeSurface({
                                                   preserveCurrent: true,
                                                   reuseInFlight: true,
                                                   invalidateContext: false,
+                                                });
+                                              },
+                                              onUnarchive: () => {
+                                                if (!manager) return;
+                                                if (!record.mutationToken) {
+                                                  setActionError({
+                                                    code: 'WORKTREE_STATE_CONFLICT',
+                                                    message: '',
+                                                    retryable: true,
+                                                    details: {
+                                                      workspaceId: record.workspaceId,
+                                                      worktreeId: record.worktreeId,
+                                                    },
+                                                  });
+                                                  return;
+                                                }
+                                                void runMutation(async () => {
+                                                  await executeWorktreeAction(manager, {
+                                                    type: 'unarchiveWorktree',
+                                                    input: {
+                                                      workspaceId: record.workspaceId,
+                                                      worktreeId: record.worktreeId,
+                                                      mutationToken: record.mutationToken!,
+                                                    },
+                                                  });
+                                                }, {
+                                                  scope: { kind: 'workspace', workspaceId: record.workspaceId },
+                                                  preserveCurrent: true,
                                                 });
                                               },
                                               onCleanDisk: () => {

@@ -468,11 +468,11 @@ export function WorktreeRemovalDialog({
         if (actionPending) return;
         onClose();
       }}
-      closeLabel={t('dialog.closeWorktreeRemove')}
-      title={t('worktree.remove')}
+      closeLabel={t('dialog.closeWorktreeArchive')}
+      title={t('worktree.archive')}
       description={worktree.source === 'external'
-        ? t('worktree.removeExternalDescription', { name: worktree.branch })
-        : t('worktree.removeDescription', { name: worktree.branch })}
+        ? t('worktree.archiveExternalDescription', { name: worktree.branch })
+        : t('worktree.archiveDescription', { name: worktree.branch })}
       footer={(
         <>
           <Button variant="outline" disabled={actionPending} onClick={onClose}>
@@ -485,7 +485,7 @@ export function WorktreeRemovalDialog({
               void onSubmit();
             }}
           >
-            {t('worktree.remove')}
+            {t('worktree.archive')}
           </Button>
         </>
       )}

@@ -66,6 +66,10 @@ export type WorktreeViewAction =
       readonly input: Parameters<WorktreeManager['removeWorktree']>[0];
     }
   | {
+      readonly type: 'unarchiveWorktree';
+      readonly input: Parameters<WorktreeManager['unarchiveWorktree']>[0];
+    }
+  | {
       readonly type: 'cleanWorktree';
       readonly input: Parameters<WorktreeManager['cleanWorktree']>[0];
     }
@@ -110,6 +114,10 @@ export async function executeWorktreeAction(
   }
   if (action.type === 'removeWorktree') {
     await manager.removeWorktree(action.input);
+    return;
+  }
+  if (action.type === 'unarchiveWorktree') {
+    await manager.unarchiveWorktree(action.input);
     return;
   }
   if (action.type === 'cleanWorktree') {

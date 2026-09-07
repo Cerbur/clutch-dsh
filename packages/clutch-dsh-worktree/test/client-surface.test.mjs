@@ -856,16 +856,6 @@ test('normalizes detached Worktree Session permissions after removal', async () 
       calls.push(['forgetWorktree', input]);
     },
   });
-  const permission = {
-    async normalizeDetachedWorktreePermissions(input) {
-      calls.push(['normalizeDetachedWorktreePermissions', input]);
-      return {
-        status: 'normalized-workspace-write',
-        sessionIds: ['session-one'],
-        retryable: false,
-      };
-    },
-  };
 
   await executeWorktreeAction(worktreeManager, {
     type: 'removeWorktree',
@@ -1026,8 +1016,14 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /createSessionForWorktree/);
   assert.match(source, /t\('action\.retryBinding'\)/);
   assert.match(source, /t\('action\.openCreatedSession'\)/);
-  assert.match(source, /t\('worktree\.remove'\)/);
+  assert.match(source, /t\('worktree\.archive'\)/);
+  assert.match(source, /t\('worktree\.unarchive'\)/);
+  assert.match(source, /t\('workspace\.collapseAll'\)/);
   assert.match(source, /t\('worktree\.detached'\)/);
+  assert.match(source, /searchExpanded/);
+  assert.match(source, /searchSlot/);
+  assert.match(source, /searchButton/);
+  assert.match(source, /clearButton/);
 });
 
 test('bounds the surface to live native sidebar anchors', async () => {
@@ -1087,7 +1083,7 @@ test('uses native DSH menus for Session and Workspace row actions', async () => 
   assert.match(source, /t\('session\.rename'\)/);
   assert.match(source, /t\('session\.fork'\)/);
   assert.match(source, /t\('session\.archive'\)/);
-  assert.match(source, /t\('worktree\.remove'\)/);
+  assert.match(source, /t\('worktree\.archive'\)/);
   assert.match(source, /portal/);
   assert.match(source, /closeOnPointerLeave/);
   assert.match(source, /data-session-menu/);
@@ -1356,8 +1352,8 @@ test('uses the DSH Modal primitives for Worktree create and removal dialogs', as
 
   assert.match(source, /<WorktreeCreateDialog/);
   assert.match(source, /<WorktreeRemovalDialog/);
-  assert.match(source, /t\('dialog\.closeWorktreeRemove'\)/);
-  assert.match(source, /t\('worktree\.removeDescription'/);
+  assert.match(source, /t\('dialog\.closeWorktreeArchive'\)/);
+  assert.match(source, /t\('worktree\.archiveDescription'/);
   assert.doesNotMatch(source, /styles\.modalBackdrop/);
 });
 
@@ -1594,7 +1590,7 @@ test('shares one parameterized group row while gating removal UI by row configur
   assert.match(source, /worktreeRemoval/);
   assert.match(source, /openWorktreeMenuId/);
   assert.match(source, /data-worktree-menu/);
-  assert.match(source, /t\('worktree\.remove'\)/);
+  assert.match(source, /t\('worktree\.archive'\)/);
   const mainCallStart = source.lastIndexOf('<WorktreeGroupRow', source.indexOf('kind="main"'));
   const mainCallEnd = source.indexOf('\n                          />', mainCallStart);
   const mainCallSource = source.slice(mainCallStart, mainCallEnd);

@@ -30,6 +30,7 @@ import {
   listImportCandidates,
   listWorktrees,
   removeWorktree,
+  unarchiveWorktree,
   recoverWorktrees,
 } from './manager-worktrees.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
@@ -116,6 +117,14 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly mutationToken: string;
   }): Promise<void> {
     return this.afterRecovery(() => removeWorktree(this.context, input));
+  }
+
+  unarchiveWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => unarchiveWorktree(this.context, input));
   }
 
   cleanWorktree(input: {

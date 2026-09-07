@@ -75,6 +75,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/createWorktree',
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/unarchiveWorktree',
     'worktreeManager/cleanWorktree',
     'worktreeManager/adoptWorktreeBranch',
     'worktreeManager/recoverWorktrees',

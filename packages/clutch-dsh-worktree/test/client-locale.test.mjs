@@ -89,3 +89,16 @@ test('completed cleanup copy accounts for absent Git metadata and preserved file
   assert.match(zh['worktree.cleanDiskDescription'], /目录或 \.git 已不存在.*剩余文件不会删除/);
   assert.match(en['worktree.cleanDiskDescription'], /directory or \.git is already absent.*remaining files are not deleted/);
 });
+
+test('localizes active worktree archive menu and clear search copy in both languages', () => {
+  assert.equal(zh['worktree.archive'], '归档 Worktree');
+  assert.equal(en['worktree.archive'], 'Archive Worktree');
+  assert.equal(zh['worktree.remove'], '归档 Worktree');
+  assert.equal(en['worktree.remove'], 'Archive Worktree');
+  assert.equal(zh['worktree.unarchive'], '取消归档');
+  assert.equal(en['worktree.unarchive'], 'Unarchive Worktree');
+  assert.equal(zh['workspace.collapseAll'], '全部折叠');
+  assert.equal(en['workspace.collapseAll'], 'Collapse All');
+  assert.equal(zh['search.clear'], '清除搜索');
+  assert.equal(en['search.clear'], 'Clear search');
+});

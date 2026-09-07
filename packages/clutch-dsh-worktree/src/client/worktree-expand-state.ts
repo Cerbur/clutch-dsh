@@ -18,6 +18,7 @@ export interface WorktreeExpandStateActions {
   toggleWorkspace: (workspaceId: string) => void;
   toggleMain: (workspaceId: string) => void;
   toggleWorktree: (worktreeId: string) => void;
+  collapseAll: (workspaceIds: readonly string[], worktreeIds?: readonly string[]) => void;
   retain: (workspaceIds: readonly string[], worktreeIds: readonly string[]) => void;
 }
 
@@ -112,6 +113,17 @@ export function createWorktreeExpandStateStore(
     },
     toggleWorktree: (worktreeId) => {
       store.update((draft) => { toggle(draft.collapsedWorktreeIds, worktreeId); });
+    },
+    collapseAll: (workspaceIds, worktreeIds = []) => {
+      store.update((draft) => {
+        for (const id of workspaceIds) {
+          draft.collapsedWorkspaceIds[id] = true;
+          draft.collapsedMainWorkspaceIds[id] = true;
+        }
+        for (const id of worktreeIds) {
+          draft.collapsedWorktreeIds[id] = true;
+        }
+      });
     },
     retain: (workspaceIds, worktreeIds) => {
       store.update((draft) => {

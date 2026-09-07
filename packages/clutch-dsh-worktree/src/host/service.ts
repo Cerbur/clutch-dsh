@@ -171,6 +171,15 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  unarchiveWorktree(input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<WorktreeRemoteResult<null>> {
+    return this.remote.unarchiveWorktree(input);
+  }
+
+  @Remote
   adoptWorktreeBranch(input: {
     workspaceId: string;
     worktreeId: string;

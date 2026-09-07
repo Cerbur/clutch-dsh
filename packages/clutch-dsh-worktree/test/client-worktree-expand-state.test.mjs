@@ -184,3 +184,16 @@ test('retains only IDs present in the ready Workspace and Worktree snapshots', (
     collapsedWorktreeIds: { 'wt-kept': true },
   });
 });
+
+test('collapseAll collapses all specified workspaces and worktrees', () => {
+  storage.clear();
+  const store = createWorktreeExpandStateStore(createSnapshotStore);
+
+  store.actions.collapseAll(['ws1', 'ws2'], ['wt1', 'wt2', 'wt3']);
+
+  assert.deepEqual(store.getSnapshot(), {
+    collapsedWorkspaceIds: { ws1: true, ws2: true },
+    collapsedMainWorkspaceIds: { ws1: true, ws2: true },
+    collapsedWorktreeIds: { wt1: true, wt2: true, wt3: true },
+  });
+});

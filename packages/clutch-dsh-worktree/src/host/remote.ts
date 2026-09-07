@@ -71,6 +71,11 @@ export function createWorktreeRemoteProjection(
         // to null in the wire contract.
         return null;
       }),
+    unarchiveWorktree: (input) =>
+      project(async () => {
+        await manager.unarchiveWorktree(input);
+        return null;
+      }),
     adoptWorktreeBranch: (input) => project(async () => { await manager.adoptWorktreeBranch(input); return null; }),
     recoverWorktrees: (input) => project(async () => { await manager.recoverWorktrees(input); return null; }),
     cleanWorktree: (input) =>

@@ -12,6 +12,7 @@ import {
   IconFolderClose16,
   IconFolderOpen16,
   IconPlusOutline16,
+  IconRefreshOutline16,
   IconTrashOutline16,
   Menu,
   StateDot,
@@ -413,14 +414,24 @@ export function WorktreeGroupRow({
                 ...(menu.showRemove
                   ? [{
                       id: 'remove',
-                      label: t('worktree.remove'),
-                      icon: <IconTrashOutline16 />,
+                      label: t('worktree.archive'),
+                      icon: <IconArchiveOutline20 size={16} />,
                       danger: true,
                       disabled: menu.disabled || menu.onRemove === undefined,
                     }]
                   : []),
                 ...(menu.onAdoptBranch ? [{ id: 'adopt-branch', label: t('worktree.adoptBranch'), disabled: menu.disabled }] : []),
                 ...(menu.onRecover ? [{ id: 'recover', label: t('worktree.retryRecovery'), disabled: menu.disabled }] : []),
+                ...(menu.showUnarchive
+                  ? [{
+                      id: 'unarchive',
+                      label: menu.unarchiveDisabledReason
+                        ? `${t('worktree.unarchive')} (${menu.unarchiveDisabledReason})`
+                        : t('worktree.unarchive'),
+                      icon: <IconRefreshOutline16 />,
+                      disabled: menu.disabled || menu.unarchiveDisabled || menu.onUnarchive === undefined,
+                    }]
+                  : []),
                 ...(menu.showCleanDisk
                   ? [{
                       id: 'clean-disk',
@@ -451,6 +462,7 @@ export function WorktreeGroupRow({
                 if (id === 'recover') menu.onRecover?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);
                 if (id === 'remove' && menu.showRemove) menu.onRemove?.();
+                if (id === 'unarchive' && menu.showUnarchive) menu.onUnarchive?.();
                 if (id === 'clean-disk' && menu.showCleanDisk) menu.onCleanDisk?.();
                 if (id === 'forget' && menu.showForget) menu.onForget?.();
               }}

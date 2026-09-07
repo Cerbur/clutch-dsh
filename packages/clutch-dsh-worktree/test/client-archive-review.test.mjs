@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
 import test from 'node:test';
 import React from 'react';
 import ts from 'typescript';
