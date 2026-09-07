@@ -15,7 +15,8 @@
 - **设置 → 会话标题** 支持新增、编辑、删除、激活模板，或关闭自定义以使用 DSH 原生首条消息标题生成。
 - 数据实时存储于 `$DSH_HOME/settings.yaml`；非法模板保留展示，当前模板非法或缺失时降级到 `default`。
 - field kind 固定为 `datetime`、`literal`、`llm-enum` 和 `llm-text`。
-- 所有 `llm-*` 字段合并为一次 structured JSON LLM request；`datetime` 和 `literal` 字段不依赖模型输出。
+- 模板实际引用的 `llm-*` 字段去重后合并为一次 structured JSON LLM request；仅含 `datetime`、`literal` 或纯文本的模板不调用模型。
+- 长首条消息在输入字节预算内保留首尾，并明确标记中段省略。
 - template DSL 只支持 `${identifier}`；函数、路径、条件、表达式和代码执行都会被拒绝。
 - 管理的模板非法时使用 `default`；extraction 失败、取消、超时、空输出、tool call 和非 stop finish 使用 DSH 原生 fallback。
 - `maxTitleBytes`、persistence、rename pin、refresh、fork inheritance、取消和 stale-result protection 仍由 DSH 负责。
@@ -146,7 +147,19 @@ fields:
     maxCharacters: 32
 ```
 
-所有 LLM field 会放进一次 JSON-framed request。模型只返回字段；renderer 负责插入 deterministic 值和 literal separator。renderer 不执行 template 内容，field validation 会在渲染前 trim、清理控制字符，并校验 enum membership 或 Unicode character limit。
+只解析 compiled template 实际引用的字段。同一字段重复引用时只提取一次，所有被引用的 LLM 字段合并为一次 JSON-framed request。例如 `${daytime}|${desc}|${desc}` 只请求 `desc`，不要求模型返回继承的 `type`。`${daytime}` 或仅含 literal 的模板不调用模型，也不写入 `session/title-llm-request` event。所有字段定义（包括未使用和继承的字段）仍执行配置合法性校验。
+
+模型只返回字段；renderer 负责插入 deterministic 值和 literal separator。renderer 不执行 template 内容，field validation 会在渲染前 trim、清理控制字符，并校验 enum membership 或 Unicode character limit。
+
+### 长首条消息与输入预算
+
+Cordis `maxInputBytes` 默认为 `4096`，约束实际发送给模型的完整 JSON-framed user input，包括 framing 指令、`seq`、JSON 转义和裁剪元数据；不包括独立的 system 指令和模型传输封装。短输入的原有 framing 和文本保持不变。
+
+输入超限时，plugin 去掉外部空白，保留首条 eligible prompt 的首尾。预留 framing 和标记开销后，按 JSON 转义后的 UTF-8 bytes 将剩余预算尽量均分给首尾，并将余量用于另一端。序列化的消息条目带有 `truncated: true`，省略的中段替换为 `\n[...middle omitted...]\n`。裁剪保留完整 Unicode 码点（包括代理对），但可能拆开组合 emoji 或其他字素簇。最后再次校验完整输入不超过字节上限。
+
+首尾保留兼顾开头背景和末尾要求；中段细节会丢失，标题准确性可能下降。不进行模型摘要、不增加模型调用，也不读取后续对话。首尾各需保留至少一个非空白的原文码点；预算不足以容纳这种有效标记输入时，抛出 `maxInputBytes` 错误并使用原生 fallback。
+
+`session/title-llm-request` event 记录实际发送给模型的完整裁剪后 payload；`messageSeqs` 保留原始来源序号。原始 session 消息不会被修改。DSH 原生自动调度仍会等待 request header，确定性模板也遵循该规则；显式 refresh 可在没有模型路由时渲染这种模板。
 
 如果 extraction 失败，provider 会抛错，由 `ctx.sessionTitle` 使用 DSH 原生 fallback。native `rename()` 仍会 pin 用户 title，后续自动生成不能覆盖；native `refresh()` 仍是显式重新推导操作。title 和 `session/title-llm-request` event 使用 DSH persistence，并由 native fork 继承。配置变化不会重写历史 title event，也不会触发批量 rename。
 

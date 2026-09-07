@@ -5,7 +5,7 @@ import type {
   SessionTitleProviderRequest,
 } from '@deepseek-ai/dsh-session-title';
 import { extractLlmFields } from './extractor.js';
-import { resolveDeterministicFields } from './fields.js';
+import { resolveDeterministicFields, selectReferencedFields } from './fields.js';
 import { renderTemplate } from './renderer.js';
 import type { ResolvedTitleConfig, TitleFieldConfig } from './types.js';
 import { deepFreeze } from '@deepseek-ai/dsh-util-values';
@@ -62,6 +62,7 @@ export function createTitleProvider(
   config: ResolvedTitleConfig,
 ): SessionTitleProvider {
   const titleProvider = SessionTitleProviderId('clutch-dsh-title');
+  const fields = selectReferencedFields(config);
   return {
     id: titleProvider,
     automatic: 'first-prompt',
@@ -70,11 +71,8 @@ export function createTitleProvider(
       if (first === undefined) {
         throw new Error('clutch-dsh-title requires one human message');
       }
-      const deterministic = resolveDeterministicFields(
-        config.fields,
-        request.session.header.createdAt,
-      );
-      const extracted = hasLlmFields(config.fields)
+      const deterministic = resolveDeterministicFields(fields, request.session.header.createdAt);
+      const extracted = hasLlmFields(fields)
         ? await extractLlmFields(ctx, config, request, [first], titleProvider)
         : undefined;
       const values = mergeFieldValues(deterministic, extracted?.values);

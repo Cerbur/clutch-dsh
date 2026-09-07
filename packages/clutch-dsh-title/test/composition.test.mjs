@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { afterEach, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -161,6 +162,90 @@ test('renders the default title from session.createdAt and the first message', a
   assert.equal(session.header.createdAt, CREATED_AT);
 });
 
+test('deterministic templates ignore inherited LLM fields without calls or request events', async () => {
+  for (const [template, expected] of [
+    ['${daytime}|${label}', '0904|固定'],
+    ['Literal title', 'Literal title'],
+  ]) {
+    const { ctx, adapter } = await makeContext({
+      config: {
+        template,
+        fields: { label: { kind: 'literal', value: '固定' } },
+      },
+    });
+    const { session } = appendSession(ctx, `deterministic-${template}`, 'first prompt');
+    await settle();
+    assert.equal(ctx.sessionTitle.get(session).title, expected);
+    assert.equal(ctx.sessionTitle.get(session).source.kind, 'provider');
+    assert.equal(adapter.requests.length, 0);
+    assert.equal(
+      session.snapshotEvents().filter((e) => e.type === 'session/title-llm-request').length,
+      0,
+    );
+    const withoutRoute = appendSession(ctx, `no-route-${template}`, 'first prompt', {
+      route: false,
+    });
+    await ctx.sessionTitle.refresh(withoutRoute.session);
+    assert.equal(ctx.sessionTitle.get(withoutRoute.session).title, expected);
+    assert.equal(adapter.requests.length, 0);
+    assert.equal(
+      withoutRoute.session.snapshotEvents().filter((e) => e.type === 'session/title-llm-request')
+        .length,
+      0,
+    );
+  }
+});
+
+test('unused deterministic fields are not resolved but invalid unused definitions still fail validation', async () => {
+  const { resolveTitleConfig } = await import('../lib/config.js');
+  const { createTitleProvider } = await import('../lib/provider.js');
+  const config = resolveTitleConfig({ template: 'Fixed' });
+  const provider = createTitleProvider({}, config);
+  const result = await provider.generate({
+    session: { header: { createdAt: Number.NaN } },
+    messages: [{ seq: 7, text: 'first prompt' }],
+    signal: new globalThis.AbortController().signal,
+  });
+  assert.equal(result.title, 'Fixed');
+  for (const field of [
+    { kind: 'datetime', source: 'session.createdAt', format: 'MMDD', timezone: 'Mars/Olympus' },
+    { kind: 'llm-text', instruction: '', maxCharacters: 32 },
+    { kind: 'llm-enum', instruction: 'classify', values: [] },
+    { kind: 'literal', value: '' },
+  ]) {
+    assert.throws(() => resolveTitleConfig({ template: 'Fixed', fields: { unused: field } }));
+  }
+});
+
+test('partial and repeated references render from one extraction without default type output', async () => {
+  const adapter = new RecordingAdapter();
+  adapter.response = '{"desc":"目标"}';
+  const { ctx } = await makeContext({ adapter, config: { template: '${desc}|${desc}' } });
+  const { session } = appendSession(ctx, 'partial-reference', 'first prompt');
+  await settle();
+  assert.equal(ctx.sessionTitle.get(session).title, '目标|目标');
+  assert.equal(adapter.requests.length, 1);
+});
+
+test('long first prompt produces a provider title, preserves messages and keeps native tiny-budget fallback', async () => {
+  for (const maxInputBytes of [4096, 1]) {
+    const { ctx, adapter } = await makeContext({ config: { maxInputBytes } });
+    const prompt = '任务开头' + '中文😀"\\\n'.repeat(3000) + '最终要求';
+    const { session, first } = appendSession(ctx, `long-${maxInputBytes}`, prompt);
+    await settle();
+    assert.equal(
+      ctx.sessionTitle.get(session).source.kind,
+      maxInputBytes === 1 ? 'fallback' : 'provider',
+    );
+    assert.equal(adapter.requests.length, maxInputBytes === 1 ? 0 : 1);
+    assert.equal(
+      session.snapshotEvents().find((e) => e.seq === first.seq).data.content[0].text,
+      prompt,
+    );
+    assert.deepEqual(ctx.sessionTitle.get(session).messageSeqs, [first.seq]);
+  }
+});
+
 test('automatic and explicit refresh use only the first eligible message', async () => {
   const { ctx, adapter } = await makeContext();
   const { session, first } = appendSession(ctx, 'first-only', 'first prompt');
@@ -230,6 +315,34 @@ test('keeps native rename pin semantics and uses refresh as the explicit re-deri
   assert.equal(adapter.requests.length, 2);
   assert.notEqual(ctx.sessionTitle.get(session)?.title, 'Pinned by hand');
   assert.equal(ctx.sessionTitle.get(session)?.source.kind, 'provider');
+});
+
+test('rename supersedes an in-flight clipped request and blocks its stale result', async () => {
+  const { ctx, adapter } = await makeContext();
+  const { session } = appendSession(ctx, 'clipped-stale', '开始' + '中文😀'.repeat(3000) + '结束');
+  await settle();
+  let release;
+  let started;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const dispatched = new Promise((resolve) => {
+    started = resolve;
+  });
+  adapter.waitFor = async () => {
+    started();
+    await pending;
+  };
+  const refreshing = ctx.sessionTitle.refresh(session);
+  const rejected = assert.rejects(refreshing, /abort|supersed|rename/i);
+  await dispatched;
+  ctx.sessionTitle.rename(session, 'Pinned during extraction');
+  release();
+  await rejected;
+  assert.equal(ctx.sessionTitle.get(session).title, 'Pinned during extraction');
+  assert.equal(ctx.sessionTitle.get(session).source.kind, 'user');
+  assert.equal(adapter.requests.length, 2);
+  assert.ok(Buffer.byteLength(adapter.requests[1].messages[0].content[0].text) <= 4096);
 });
 
 test('keeps createdAt stable across explicit refresh and does not migrate old title events', async () => {

@@ -6,6 +6,11 @@
 
 **Architecture:** 一个 atomic、host-only 的 Cordis function plugin 注册唯一的 first-prompt provider。配置解析器先将 default preset 与用户覆盖合并并编译模板；provider 从 DSH request 中选取首次 human message，确定性解析 datetime/literal 字段，再用一次 ctx.llm.stream 提取全部 llm-* 字段，严格校验后渲染 title。bundle patch 通过禁用当前 DSH 默认 provider，再插入本 provider，避免引入第二套 title service 或绕过原生 event/persistence。
 
+2026-09-07 修订：[长首条消息与模板字段计划](2026-09-07-long-text-template.md)
+替代本历史计划中的全部配置字段提取和输入超限直接失败规则。运行时只解析
+模板引用并去重的字段，长输入采用带标记的首尾裁剪；完整配置校验和原生
+fallback / cancellation / request event 契约保留。
+
 **Tech Stack:** TypeScript ES2022/NodeNext、pnpm workspace、@deepseek-ai/cordis 4.0.1、@deepseek-ai/dsh-session-title >=0.1.2-rc.1、@deepseek-ai/dsh-session-title-llm 的 request-event/timeout seam、@deepseek-ai/dsh-llm BlockAssembler 与 ctx.llm.stream、@deepseek-ai/schemastery 3.18.1、Node built-in test runner、YAML patch validation、Prettier、ESLint、tsc。
 
 ## Global Constraints

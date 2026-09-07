@@ -1,5 +1,16 @@
 import { deepFreeze } from '@deepseek-ai/dsh-util-values';
-import type { TitleFieldConfig } from './types.js';
+import type { ResolvedTitleConfig, TitleFieldConfig } from './types.js';
+
+/** Select once per name, in template order, after full configuration validation. */
+export function selectReferencedFields(
+  config: ResolvedTitleConfig,
+): Readonly<Record<string, TitleFieldConfig>> {
+  const fields: Record<string, TitleFieldConfig> = {};
+  for (const segment of config.compiledTemplate.segments) {
+    if (segment.kind === 'field') fields[segment.name] = config.fields[segment.name];
+  }
+  return deepFreeze(fields);
+}
 
 const DATE_TOKENS = ['YYYY', 'DDD', 'MM', 'DD', 'HH', 'mm'] as const;
 
