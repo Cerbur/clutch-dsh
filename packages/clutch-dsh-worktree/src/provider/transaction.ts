@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { WorktreeRecord } from '../contract/index.js';
+import type { AdoptWorktreeBranchInput, WorktreeRecord } from '../contract/index.js';
 import { CrossProcessMutationLock } from './mutation-lock.js';
 import { createWorktreeMutationToken } from './mutation-token.js';
 import { createRepositoryFingerprint } from './repository-fingerprint.js';
@@ -217,12 +217,6 @@ function pendingClean(
   };
 }
 
-function activeBranchConflict(snapshot: SidecarSnapshot, branch: string, worktreeId?: string): WorktreeRecord | undefined {
-  return snapshot.worktrees.find(
-    (record) => record.status === 'active' && record.branch === branch && record.worktreeId !== worktreeId,
-  );
-}
-
 export class WorktreeMutationTransaction {
   private readonly dshHome: string;
   private readonly git: GitWorktreeAdapter;
@@ -310,7 +304,7 @@ export class WorktreeMutationTransaction {
             worktreeId: input.worktreeId,
           });
         }
-        const sidecarConflict = activeBranchConflict(current, input.targetBranch);
+        const sidecarConflict = await this.findActiveBranchConflict(current, input.targetBranch, gitRoot);
         if (sidecarConflict) {
           throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${input.targetBranch}`, {
             branch: input.targetBranch,
@@ -774,6 +768,49 @@ export class WorktreeMutationTransaction {
     }) as Promise<WorktreeRecord>;
   }
 
+  /** Accept a confirmed live branch without touching Git or Session data. */
+  async adoptBranch(input: AdoptWorktreeBranchInput & { readonly workspaceRoot: string }): Promise<void> {
+    return this.withShardLock(input.workspaceId, async (locked) => {
+      await this.git.validateRepository(input.workspaceRoot);
+      const repository = await this.resolveRepository(input.workspaceRoot);
+      return this.repositoryLock.run(`repository:${createRepositoryFingerprint(repository.identity)}`, async (lock) => {
+        lock.assertHeld();
+        const current = await locked.read();
+        this.assertMutationAdmitted(current, input.workspaceId);
+        this.assertRepositoryCompatible(current, repository.identity, input.workspaceId);
+        const record = current.worktrees.find((candidate) => candidate.worktreeId === input.worktreeId);
+        if (!record) throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found', { worktreeId: input.worktreeId });
+        this.assertMutationToken(current, record, input.mutationToken);
+        if (record.diskCleanup === 'completed' || typeof input.expectedBranch !== 'string' || !input.expectedBranch) {
+          throw providerError('WORKTREE_STATE_CONFLICT', 'A live branch on an uncleaned Worktree is required', { worktreeId: input.worktreeId });
+        }
+        await this.assertSafeRemovalPath(record, input.workspaceRoot);
+        const targetRepository = await this.resolveRepository(record.absolutePath);
+        if (!await samePhysicalPath(targetRepository.identity.commonDirectory, repository.identity.commonDirectory) ||
+            !await samePhysicalPath(targetRepository.identity.topLevel, record.absolutePath) ||
+            await samePhysicalPath(record.absolutePath, repository.identity.topLevel) ||
+            await pathEntryMissing(path.join(record.absolutePath, '.git'))) {
+          throw providerError('WORKTREE_IDENTITY_CHANGED', 'Worktree repository or linked path changed', { worktreeId: input.worktreeId });
+        }
+        const live = await this.git.listWorktrees(repository.identity.topLevel);
+        const actual = await this.findWorktreeByPhysicalPath(live, record.absolutePath);
+        if (!actual || actual.detached || !actual.branch || actual.branch !== input.expectedBranch) {
+          throw providerError('WORKTREE_STATE_CONFLICT', 'Git branch changed; refresh before confirming again', { worktreeId: input.worktreeId });
+        }
+        lock.assertHeld();
+        await locked.mutate((snapshot) => ({
+          result: undefined,
+          changed: record.branch !== actual.branch,
+          snapshot: {
+            ...snapshot,
+            worktrees: snapshot.worktrees.map((candidate) => candidate.worktreeId === record.worktreeId
+              ? { ...candidate, branch: actual.branch! } : candidate),
+          },
+        }));
+      });
+    });
+  }
+
   async recover(input: RecoverWorktreesInput): Promise<void> {
     return this.withShardLock(input.workspaceId, async (locked) => {
       await this.cleanLegacyObservations(locked);
@@ -1125,6 +1162,21 @@ export class WorktreeMutationTransaction {
     }
   }
 
+  private async findActiveBranchConflict(
+    snapshot: SidecarSnapshot, branch: string, gitRoot: string, worktreeId?: string,
+  ): Promise<WorktreeRecord | undefined> {
+    const candidates = snapshot.worktrees.filter((record) =>
+      record.status === 'active' && record.branch === branch && record.worktreeId !== worktreeId);
+    if (candidates.length === 0) return undefined;
+    const live = await this.git.listWorktrees(gitRoot);
+    for (const candidate of candidates) {
+      const actual = await this.findWorktreeByPhysicalPath(live, candidate.absolutePath);
+      // Only positive evidence of a different live branch releases a stale claim.
+      if (!actual || (!actual.detached && (!actual.branch || actual.branch === branch))) return candidate;
+    }
+    return undefined;
+  }
+
   private async findExactWorktree(
     worktrees: readonly GitWorktreeInfo[],
     targetPath: string,
@@ -1170,7 +1222,7 @@ export class WorktreeMutationTransaction {
     record: WorktreeRecord,
     repository: RepositoryIdentity,
   ): Promise<void> {
-    await locked.mutate((snapshot) => {
+    await locked.mutate(async (snapshot) => {
       const existing = snapshot.worktrees.find((candidate) => candidate.worktreeId === record.worktreeId);
       if (existing && JSON.stringify(existing) !== JSON.stringify(record)) {
         throw recoveryError(`Pending create conflicts with existing Worktree record: ${record.worktreeId}`, {
@@ -1178,7 +1230,7 @@ export class WorktreeMutationTransaction {
           operationId,
         });
       }
-      const conflict = activeBranchConflict(snapshot, record.branch, record.worktreeId);
+      const conflict = await this.findActiveBranchConflict(snapshot, record.branch, repository.topLevel, record.worktreeId);
       if (conflict) {
         throw recoveryError(`Pending create conflicts with active branch: ${record.branch}`, {
           worktreeId: record.worktreeId,

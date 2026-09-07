@@ -102,6 +102,8 @@ test('exposes the approved Manager and Remote methods', () => {
     'importWorktree',
     'removeWorktree',
     'cleanWorktree',
+    'adoptWorktreeBranch',
+    'recoverWorktrees',
     'forgetWorktree',
     'insertWorktreeBefore',
     'listBindings',

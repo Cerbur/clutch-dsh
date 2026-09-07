@@ -26,7 +26,7 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
 
 export interface WorktreeViewReader {
   /** Mark one Workspace stale for the next generation. */
-  invalidate(workspaceId: string): void;
+  invalidate(workspaceId: string, options?: { readonly reuseInFlight?: boolean }): void;
 
   /** Return one complete Workspace view, sharing its current generation. */
   read(workspaceId: string): Promise<WorktreeWorkspaceView>;
@@ -223,9 +223,11 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 
   return {
-    invalidate(workspaceId): void {
+    invalidate(workspaceId, options): void {
       if (disposed) return;
       const entry = entryFor(workspaceId);
+      // Read-only menu opens may share a current read. Mutations must retire it.
+      if (options?.reuseInFlight && entry.inFlight?.generation === entry.generation) return;
       entry.generation += 1;
       entry.stale = true;
       entry.view = undefined;

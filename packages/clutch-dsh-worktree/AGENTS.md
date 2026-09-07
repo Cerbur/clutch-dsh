@@ -116,6 +116,17 @@ Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工�
 不表示磁盘目录已删除。只接受 ENOENT 作为缺失证据，断链符号链接不视为入口缺失。
 被动读取与启动扫描仍只投影 repair，不自动完成清理。
 
+## 分支漂移与显式同步
+
+WorktreeRecord.branch 是最近一次明确接受的分支，不是不可变的仓库身份。读取投影
+currentBranch（detached HEAD 为 null）和 branch-drift，不持久化这些 runtime 字段。
+无 pending 的普通 checkout 不制造 recovery issue；已有 Session binding 与 cwd 不变。
+adoptWorktreeBranch 在 shard/repository 锁内校验 token、用户确认的 expectedBranch、
+实际 linked path 和仓库身份，仅原子更新 branch。禁止采用 detached HEAD、cleaned、
+缺失或身份已变化的目录；真实 recovery blocker 不得清除。创建冲突检查只在 Git
+正面证明旧记录已切换分支时释放旧 branch claim。清理仍要求 exact accepted branch。
+recoverWorktrees 是独立的 Remote 重试入口，不自动接受漂移分支或放宽恢复门禁。
+
 ## 模块职责与依赖方向
 
 ```text

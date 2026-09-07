@@ -171,6 +171,8 @@ export interface TargetedWorktreeReadError {
 
 export interface RefreshOptions {
   readonly preserveCurrent?: boolean;
+  /** Only read-only triggers may reuse reads started before this refresh. */
+  readonly reuseInFlight?: boolean;
   readonly invalidateContext?: boolean;
   readonly scope?: WorktreeRefreshScope;
 }
@@ -249,6 +251,8 @@ export interface WorktreeGroupMenuProps {
   readonly showCreate: boolean;
   readonly showRemove: boolean;
   readonly showCleanDisk?: boolean;
+  readonly onAdoptBranch?: () => void;
+  readonly onRecover?: () => void;
   readonly showForget?: boolean;
   readonly disabled: boolean;
   readonly cleanDiskDisabled?: boolean;
@@ -406,6 +410,11 @@ export interface WorktreeRemovalDialogProps {
   readonly actionPending: boolean;
   readonly onClose: () => void;
   readonly onSubmit: () => void;
+}
+
+export interface WorktreeAdoptBranchDialogProps extends WorktreeRemovalDialogProps {
+  readonly error?: WorktreeViewError;
+  readonly onRetry: () => void;
 }
 
 export interface WorktreeCleanDiskDialogProps {

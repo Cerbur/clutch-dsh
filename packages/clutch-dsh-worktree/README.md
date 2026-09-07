@@ -369,6 +369,32 @@ blank-session Hero. The displayed language follows DSH's current language settin
 - When the Sidebar is collapsed, the footer keeps its icon-only native action geometry; the plugin
   does not render a separate `WT` rail control.
 
+### Reconcile a branch changed in Git
+
+After an external `git checkout`, the next Worktree read shows `old branch → current branch`
+and a branch-change warning. Reads occur on refresh and when opening a Worktree menu; the
+plugin does not watch Git continuously. Detached HEAD is shown explicitly. Session bindings
+and runtime cwd remain unchanged, and normal branch changes do not lock the Workspace.
+
+Choose `Adopt current branch` from the active or archived Worktree menu and confirm the
+displayed transition. This updates only the plugin's recorded branch. A changed branch or
+stale snapshot during confirmation is rejected; refresh and confirm again. Detached HEAD
+must first be switched to a branch in Git. Disk cleanup requires adopting the current branch
+first. Creating a Worktree on the old branch is allowed when Git proves the existing record
+has switched away; genuinely checked-out branches remain unavailable.
+
+Confirmation failures appear inside the dialog. Choose `Retry` to reload the observed branch
+and snapshot token, then confirm the updated transition; the old confirmation stays disabled
+until refresh succeeds. If the Worktree is no longer branch-drifted or has entered detached HEAD,
+the dialog closes. Creating a sibling Worktree uses the observed current branch, even before
+adoption; detached HEAD does not offer this action.
+
+For `recovery-needed`, the Worktree menu offers `Retry recovery` for its Workspace.
+This retries safe journal recovery; it does not adopt branches, delete unknown paths, or
+clear unresolved identity issues. Successful adoption and recovery refresh only the owning
+Workspace while preserving existing ready content. Legacy non-transactional branch observations
+are retired automatically; there is no need to edit sidecar JSON for ordinary checkout drift.
+
 ### Understand status and recovery messages
 
 - `ready` means the Worktree is available. `cleaned` indicates disk cleanup completed while the

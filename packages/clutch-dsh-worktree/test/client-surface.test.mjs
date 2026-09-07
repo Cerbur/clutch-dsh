@@ -1658,10 +1658,8 @@ test('offers Local and Worktree creation through shared menu parameters', async 
   assert.match(types, /readonly showCreate: boolean;/);
   assert.match(types, /readonly onCreateWorktree\?: \(\) => void;/);
   assert.match(coordinator, /createNumberedWorktreeName/);
-  assert.match(
-    coordinator,
-    /onCreateWorktree: record\.status === 'active'[\s\S]*openWorktreeCreator\(workspace, \{[\s\S]*baseBranch: record\.branch[\s\S]*newBranch: createNumberedWorktreeName\(\s*record\.branch/,
-  );
+  // Live-branch defaults and detached availability are exercised by the production
+  // menu handlers in client-branch-drift.test.mjs.
 
   const mainCallStart = coordinator.lastIndexOf('<WorktreeGroupRow', coordinator.indexOf('kind="main"'));
   const mainCallEnd = coordinator.indexOf('\n                          />', mainCallStart);

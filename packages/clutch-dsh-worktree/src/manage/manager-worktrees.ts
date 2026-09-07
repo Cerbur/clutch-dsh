@@ -31,10 +31,11 @@ function projectRuntimeRecord(
   health?: WorktreeRecord['health'],
   activity?: WorktreeActivity,
 ): WorktreeRecord {
-  const { health: _health, mutationToken: _mutationToken, activity: _activity, ...durableRecord } = record;
+  const { health: _health, mutationToken: _mutationToken, activity: _activity, currentBranch: _currentBranch, ...durableRecord } = record;
   void _health;
   void _mutationToken;
   void _activity;
+  void _currentBranch;
   return {
     ...durableRecord,
     mutationToken: createWorktreeMutationToken(snapshot, record),
@@ -76,7 +77,7 @@ export async function listWorktrees(
     }
   };
 
-  let gitWorktrees: readonly { readonly absolutePath: string }[] | undefined;
+  let gitWorktrees: readonly { readonly absolutePath: string; readonly branch?: string; readonly detached?: boolean }[] | undefined;
   try {
     const gitRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath)
@@ -114,23 +115,26 @@ export async function listWorktrees(
       continue;
     }
     let ready = false;
+    let currentBranch: string | null | undefined;
     for (const gitWorktree of gitWorktrees) {
       if (
         path.resolve(gitWorktree.absolutePath) === path.resolve(record.absolutePath) ||
         (await samePhysicalPath(gitWorktree.absolutePath, record.absolutePath))
       ) {
         ready = true;
+        currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
         break;
       }
     }
-    nextRecords.push(
-      projectRuntimeRecord(
+    nextRecords.push({
+      ...projectRuntimeRecord(
         snapshot,
         record,
-        recordRecoveryNeeded ? 'recovery-needed' : ready ? 'ready' : 'repair',
+        recordRecoveryNeeded ? 'recovery-needed' : ready ? currentBranch === undefined || currentBranch === record.branch ? 'ready' : 'branch-drift' : 'repair',
         activity,
       ),
-    );
+      ...(currentBranch === undefined ? {} : { currentBranch }),
+    });
   }
   return nextRecords;
 }
@@ -319,7 +323,7 @@ export async function createWorktree(
   };
 
   try {
-    return await context.sidecar.mutate(input.workspaceId, (snapshot) => {
+    return await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
       // Recheck ID and branch inside the serialized mutation so concurrent writes cannot create duplicate active records.
       const idConflict = snapshot.worktrees.find((worktree) => worktree.worktreeId === worktreeId);
       if (idConflict) {
@@ -328,14 +332,19 @@ export async function createWorktree(
           existingStatus: idConflict.status,
         });
       }
-      const branchConflict = snapshot.worktrees.find(
+      const branchClaims = snapshot.worktrees.filter(
         (worktree) => worktree.status === 'active' && worktree.branch === targetBranch,
       );
-      if (branchConflict) {
-        throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
-          branch: targetBranch,
-          worktreeId: branchConflict.worktreeId,
-        });
+      if (branchClaims.length > 0) {
+        const live = await context.git.listWorktrees(workspace.rootPath);
+        for (const claim of branchClaims) {
+          const actual = await findGitWorktreeByPhysicalPath(live, claim.absolutePath);
+          if (!actual || (!actual.detached && (!actual.branch || actual.branch === targetBranch))) {
+            throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
+              branch: targetBranch, worktreeId: claim.worktreeId,
+            });
+          }
+        }
       }
       const next: SidecarSnapshot = {
         ...snapshot,
