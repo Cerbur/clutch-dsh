@@ -8,6 +8,8 @@ import {
 } from '../lib/client/worktree-connection.js';
 
 const METHODS = [
+  ['adoptWorktreeBranch', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token', expectedBranch: 'merge/foo' }, null],
+  ['recoverWorktrees', { workspaceId: 'ws1' }, null],
   ['listWorktrees', { workspaceId: 'ws1' }, []],
   ['listImportCandidates', { workspaceId: 'ws1' }, []],
   ['listBranches', { workspaceId: 'ws1' }, []],
@@ -74,6 +76,8 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
     'worktreeManager/cleanWorktree',
+    'worktreeManager/adoptWorktreeBranch',
+    'worktreeManager/recoverWorktrees',
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',

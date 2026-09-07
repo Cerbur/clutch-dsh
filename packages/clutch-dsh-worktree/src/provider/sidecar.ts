@@ -82,10 +82,11 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
 
   /** Idempotently insert a Worktree record by ID. */
   async upsertWorktree(record: WorktreeRecord): Promise<WorktreeRecord> {
-    const { health: _health, mutationToken: _mutationToken, activity: _activity, ...withoutRuntime } = record;
+    const { health: _health, mutationToken: _mutationToken, activity: _activity, currentBranch: _currentBranch, ...withoutRuntime } = record;
     void _health;
     void _mutationToken;
     void _activity;
+    void _currentBranch;
     const persistedRecord: WorktreeRecord = {
       ...withoutRuntime,
       source: record.source ?? 'plugin',

@@ -59,6 +59,34 @@ function deferred() {
   return { promise, resolve };
 }
 
+test('read-only refreshes share in-flight reads while mutation invalidation starts fresh', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const gate = deferred();
+  const manager = createManager(calls);
+  const listWorktrees = manager.listWorktrees;
+  manager.listWorktrees = async (input) => {
+    const result = await listWorktrees(input);
+    await gate.promise;
+    return result;
+  };
+  const reader = createWorktreeViewReader(manager);
+  reader.invalidate('ws1', { reuseInFlight: true });
+  const first = reader.read('ws1');
+  reader.invalidate('ws1', { reuseInFlight: true });
+  const second = reader.read('ws1');
+  assert.equal(first, second);
+  assert.equal(calls.listWorktrees.length, 1);
+  reader.invalidate('ws1');
+  const afterMutation = reader.read('ws1');
+  assert.notEqual(afterMutation, first);
+  assert.equal(calls.listWorktrees.length, 2);
+  gate.resolve();
+  await Promise.all([first, second, afterMutation]);
+  reader.invalidate('ws1', { reuseInFlight: true });
+  await reader.read('ws1');
+  assert.equal(calls.listWorktrees.length, 3, 'settled menu reads must be refreshed');
+});
+
 test('shares one complete read for concurrent consumers of one Workspace', async () => {
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const reader = createWorktreeViewReader(createManager(calls));

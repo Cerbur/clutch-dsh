@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type {
+  AdoptWorktreeBranchInput,
   BranchRecord,
   SessionBinding,
   WorktreeId,
@@ -32,6 +33,7 @@ import {
   recoverWorktrees,
 } from './manager-worktrees.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
+import { requireWorkspace } from './manager-support.js';
 
 /**
  * Worktree/Session 用例编排器：DSH 只提供权威只读事实，Git 承担 worktree 副作用，sidecar 只保存外部关系。
@@ -70,6 +72,13 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       idFactory: options.idFactory ?? (() => `wt_${randomUUID()}`),
     };
     this.recoveryReady = this.startupRecovery();
+  }
+
+  adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<void> {
+    return this.afterRecovery(async () => {
+      const workspace = await requireWorkspace(this.context, input.workspaceId);
+      await this.context.transaction.adoptBranch({ ...input, workspaceRoot: workspace.rootPath });
+    });
   }
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {

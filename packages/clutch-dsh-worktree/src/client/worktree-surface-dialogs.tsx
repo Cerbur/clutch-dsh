@@ -7,6 +7,7 @@ import { formatWorktreeViewError } from './worktree-error-copy.js';
 import { worktreeLifecycleBlockReason } from './worktree-surface-selectors.js';
 import { worktreeSetupCommands } from './worktree-view.js';
 import type {
+  WorktreeAdoptBranchDialogProps,
   SessionRenameDialogProps,
   WorktreeCleanDiskDialogProps,
   WorktreeCreateDialogProps,
@@ -17,6 +18,29 @@ import type {
   WorkspaceRenameDialogProps,
 } from './worktree-surface-types.js';
 import styles from './worktree.css';
+
+export function WorktreeAdoptBranchDialog({
+  t, worktree, actionPending, error, onClose, onSubmit, onRetry,
+}: WorktreeAdoptBranchDialogProps) {
+  if (worktree === undefined || typeof worktree.currentBranch !== 'string') return null;
+  return (
+    <Modal open onClose={() => { if (!actionPending) onClose(); }}
+      closeLabel={t('dialog.cancel')} title={t('worktree.adoptBranch')}
+      description={t('worktree.adoptDescription', { previous: worktree.branch, current: worktree.currentBranch })}
+      footer={<>
+        <Button variant="outline" disabled={actionPending} onClick={onClose}>{t('dialog.cancel')}</Button>
+        <Button variant="primary" disabled={actionPending || error !== undefined} onClick={() => { void onSubmit(); }}>{t('worktree.adoptBranch')}</Button>
+      </>}
+    >
+      {error !== undefined && (
+        <div role="alert">
+          <p className={styles.message}>{formatWorktreeViewError(error, t)}</p>
+          <Button variant="outline" disabled={actionPending} onClick={onRetry}>{t('action.retry')}</Button>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 function worktreeSetupMessage(
   status: WorktreeSetupStatus,

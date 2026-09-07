@@ -42,6 +42,7 @@ import {
 } from './worktree-session-order.js';
 import { retryWorktreeSessionBinding } from './worktree-session.js';
 import {
+  WorktreeAdoptBranchDialog,
   WorktreeCleanDiskDialog,
   WorktreeCreateDialog,
   WorktreeForgetDialog,
@@ -298,6 +299,7 @@ export function WorktreeSurface({
   const [openWorkspaceMenuId, setOpenWorkspaceMenuId] = useState<string>();
   const [openMainMenuId, setOpenMainMenuId] = useState<string>();
   const [openWorktreeMenuId, setOpenWorktreeMenuId] = useState<string>();
+  const [worktreeBranchAdoption, setWorktreeBranchAdoption] = useState<WorktreeRecord>();
   const [worktreeRemoval, setWorktreeRemoval] = useState<WorktreeRecord>();
   const [worktreeCleanDisk, setWorktreeCleanDisk] = useState<WorktreeRecord>();
   const [worktreeForget, setWorktreeForget] = useState<WorktreeRecord>();
@@ -328,6 +330,12 @@ export function WorktreeSurface({
   const worktreeDropCommitted = useRef(false);
   const refreshGuard = useRef(createWorktreeRefreshGuard());
   const cleanupGuard = useRef(createWorktreeRefreshGuard());
+  const branchAdoptionGuard = useRef(createWorktreeRefreshGuard());
+  useEffect(() => {
+    const guard = branchAdoptionGuard.current;
+    setWorktreeBranchAdoption(undefined);
+    return () => guard.invalidate();
+  }, [manager, mode]);
   const permissionRetryPending = useRef(false);
   useEffect(() => {
     const guard = cleanupGuard.current;
@@ -424,7 +432,7 @@ export function WorktreeSurface({
 
       await Promise.allSettled(selectedWorkspaceIds.map(async (workspaceId) => {
         const guard = guardFor(workspaceId);
-        viewReader.invalidate(workspaceId);
+        viewReader.invalidate(workspaceId, { reuseInFlight: options.reuseInFlight });
         const contextRefresh = options.invalidateContext === false
           ? undefined
           : invalidateWorktreeContext?.(workspaceId);
@@ -870,6 +878,57 @@ export function WorktreeSurface({
       setActionPending(false);
     }
   };
+
+  const recoveryAction = (error: WorktreeViewError | undefined) => {
+    const workspaceId = error?.details?.workspaceId;
+    if (!manager || error?.code !== 'WORKTREE_RECOVERY_REQUIRED' || typeof workspaceId !== 'string') return null;
+    return <button type="button" className={styles.retryButton} disabled={actionPending}
+      onClick={() => { void runMutation(() => manager.recoverWorktrees({ workspaceId }), {
+        scope: { kind: 'workspace', workspaceId }, preserveCurrent: true,
+      }); }}>{t('worktree.retryRecovery')}</button>;
+  };
+
+  const branchActions = (record: WorktreeRecord) => ({
+    onAdoptBranch: record.health === 'branch-drift' && typeof record.currentBranch === 'string'
+      ? () => { setWorktreeBranchAdoption(record); setActionError(undefined); } : undefined,
+    onRecover: record.health === 'recovery-needed' ? () => {
+      if (!manager) return;
+      void runMutation(() => manager.recoverWorktrees({ workspaceId: record.workspaceId }), {
+        scope: { kind: 'workspace', workspaceId: record.workspaceId }, preserveCurrent: true,
+      });
+    } : undefined,
+  });
+
+  const refreshBranchAdoption = async (): Promise<void> => {
+    const target = worktreeBranchAdoption;
+    if (!manager || !target) return;
+    const generation = branchAdoptionGuard.current.begin();
+    const isCurrent = () => branchAdoptionGuard.current.isCurrent(generation);
+    setActionPending(true);
+    try {
+      await refresh({ scope: { kind: 'workspace', workspaceId: target.workspaceId }, preserveCurrent: true });
+      if (!isCurrent()) return;
+      const view = await viewReader.read(target.workspaceId);
+      if (!isCurrent()) return;
+      if (!workspaceIdsRef.current.includes(target.workspaceId)) {
+        setWorktreeBranchAdoption(undefined);
+        setActionError(undefined);
+        return;
+      }
+      const latest = view.worktrees.find((record) => record.worktreeId === target.worktreeId);
+      setReadState((current) => ({ ...current, views: mergeWorktreeView(current.views, view) }));
+      setWorktreeBranchAdoption(latest?.health === 'branch-drift' && typeof latest.currentBranch === 'string' ? latest : undefined);
+      setActionError(undefined);
+    } catch (error) {
+      if (isCurrent()) setActionError(toWorktreeViewError(error));
+    } finally {
+      if (isCurrent()) setActionPending(false);
+    }
+  };
+
+  const branchLabel = (record: WorktreeRecord): string => record.health === 'branch-drift'
+    ? `${record.branch} → ${record.currentBranch ?? t('worktree.detachedHead')}`
+    : record.branch;
 
   const loadImportCandidates = useCallback(
     async (workspaceId: string): Promise<void> => {
@@ -1597,6 +1656,7 @@ export function WorktreeSurface({
               <p className={styles.message} data-error="true">
                 {formatWorktreeViewError(actionError, t)}
               </p>
+              {recoveryAction(actionError)}
               {pendingSessionBinding !== undefined && (
                 <div className={styles.recoveryActions}>
                   <button
@@ -1646,6 +1706,7 @@ export function WorktreeSurface({
               <p className={styles.message} data-error="true">
                 {formatWorktreeViewError(readState.targetError.error, t)}
               </p>
+              {recoveryAction(readState.targetError.error)}
               <button
                 type="button"
                 className={styles.retryButton}
@@ -1672,6 +1733,7 @@ export function WorktreeSurface({
               <p className={styles.message} data-error="true">
                 {formatWorktreeViewError(readState.error, t)}
               </p>
+              {recoveryAction(readState.error)}
               <button
                 type="button"
                 className={styles.retryButton}
@@ -1966,13 +2028,13 @@ export function WorktreeSurface({
                             const state =
                               record.health === 'repair' || record.health === 'recovery-needed'
                                 ? 'error'
-                                : 'done';
+                                : record.health === 'branch-drift' ? 'warning' : 'done';
                             const stateLabel =
                               record.health === 'recovery-needed'
                                 ? t('worktree.recovery')
                                 : record.health === 'repair'
                                   ? t('worktree.repair')
-                                  : t('worktree.ready');
+                                  : record.health === 'branch-drift' ? t('worktree.branchDrift') : t('worktree.ready');
                             const worktreeExpanded =
                               isWorktreeExpanded(expandSnapshot, record.worktreeId) ||
                               isCurrentSessionReveal('worktree:' + record.worktreeId);
@@ -1985,7 +2047,7 @@ export function WorktreeSurface({
                                 <WorktreeGroupRow
                                   t={t}
                                   kind="worktree"
-                                  label={record.branch}
+                                  label={branchLabel(record)}
                                   worktreeId={record.worktreeId}
                                   expanded={worktreeExpanded}
                                   hasOngoingSession={hasOngoingSession(
@@ -2011,23 +2073,25 @@ export function WorktreeSurface({
                                       : undefined
                                   }
                                   menu={{
+                                    ...branchActions(record),
                                     open: openWorktreeMenuId === record.worktreeId,
                                     label: record.branch,
                                     copyPath: record.absolutePath,
-                                    showCreate: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed',
+                                    showCreate: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed' && record.currentBranch !== null,
                                     showRemove: record.status === 'active' && record.health !== 'recovery-needed',
                                     disabled: actionPending,
                                     onOpenChange: (open) => {
                                       setOpenWorktreeMenuId(
                                         open ? record.worktreeId : undefined,
                                       );
+                                      if (open) void refresh({ scope: { kind: 'workspace', workspaceId: record.workspaceId }, preserveCurrent: true, reuseInFlight: true, invalidateContext: false });
                                     },
-                                    onCreateWorktree: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed'
+                                    onCreateWorktree: record.status === 'active' && record.health !== 'repair' && record.health !== 'recovery-needed' && record.currentBranch !== null
                                       ? () => {
                                           openWorktreeCreator(workspace, {
-                                            baseBranch: record.branch,
+                                            baseBranch: record.currentBranch ?? record.branch,
                                             newBranch: createNumberedWorktreeName(
-                                              record.branch,
+                                              record.currentBranch ?? record.branch,
                                               workspaceWorktreeNames,
                                             ),
                                           });
@@ -2230,7 +2294,7 @@ export function WorktreeSurface({
                                           ? t('worktree.cleaned')
                                           : record.health === 'repair'
                                             ? t('worktree.repair')
-                                            : t('worktree.detached');
+                                            : record.health === 'branch-drift' ? t('worktree.branchDrift') : t('worktree.detached');
                                     const worktreeExpanded =
                                       isWorktreeExpanded(expandSnapshot, record.worktreeId) ||
                                       isCurrentSessionReveal('worktree:' + record.worktreeId);
@@ -2243,7 +2307,7 @@ export function WorktreeSurface({
                                         <WorktreeGroupRow
                                           t={t}
                                           kind="worktree"
-                                          label={record.branch}
+                                          label={branchLabel(record)}
                                           worktreeId={record.worktreeId}
                                           expanded={worktreeExpanded}
                                           hasOngoingSession={hasOngoingSession(
@@ -2264,6 +2328,7 @@ export function WorktreeSurface({
                                                 ? t('worktree.recovery')
                                                 : undefined;
                                             return {
+                                              ...branchActions(record),
                                               open: openWorktreeMenuId === record.worktreeId,
                                               label: record.branch,
                                               copyPath: record.absolutePath,
@@ -2272,9 +2337,9 @@ export function WorktreeSurface({
                                               showCleanDisk: record.diskCleanup !== 'completed',
                                               showForget: true,
                                               disabled: actionPending,
-                                              cleanDiskDisabled: activityBlocked !== undefined,
+                                              cleanDiskDisabled: activityBlocked !== undefined || record.health === 'branch-drift',
                                               forgetDisabled: activityBlocked !== undefined,
-                                              cleanDiskDisabledReason: blockedReasonText,
+                                              cleanDiskDisabledReason: record.health === 'branch-drift' ? t('worktree.adoptBeforeClean') : blockedReasonText,
                                               forgetDisabledReason: blockedReasonText,
                                               onOpenChange: (open) => {
                                                 setOpenWorktreeMenuId(
@@ -2283,6 +2348,8 @@ export function WorktreeSurface({
                                                 if (open) void refresh({
                                                   scope: { kind: 'workspace', workspaceId: record.workspaceId },
                                                   preserveCurrent: true,
+                                                  reuseInFlight: true,
+                                                  invalidateContext: false,
                                                 });
                                               },
                                               onCleanDisk: () => {
@@ -2436,6 +2503,28 @@ export function WorktreeSurface({
         onSubmit={submitWorktree}
       />
 
+      <WorktreeAdoptBranchDialog
+        t={t} worktree={worktreeBranchAdoption} actionPending={actionPending}
+        error={actionError}
+        onRetry={() => { void refreshBranchAdoption(); }}
+        onClose={() => {
+          branchAdoptionGuard.current.invalidate();
+          setWorktreeBranchAdoption(undefined);
+        }}
+        onSubmit={() => {
+          const target = worktreeBranchAdoption;
+          if (!manager || !target?.mutationToken || typeof target.currentBranch !== 'string') return;
+          const expectedBranch = target.currentBranch;
+          const mutationToken = target.mutationToken;
+          void runMutation(async () => {
+            await manager.adoptWorktreeBranch({
+              workspaceId: target.workspaceId, worktreeId: target.worktreeId,
+              mutationToken, expectedBranch,
+            });
+            setWorktreeBranchAdoption(undefined);
+          }, { scope: { kind: 'workspace', workspaceId: target.workspaceId }, preserveCurrent: true });
+        }}
+      />
       <WorktreeRemovalDialog
         t={t}
         worktree={worktreeRemoval}

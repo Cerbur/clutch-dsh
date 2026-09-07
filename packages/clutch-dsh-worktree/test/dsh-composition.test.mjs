@@ -149,6 +149,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       (descriptor) => `${descriptor.namespace}/${descriptor.method}`,
     ),
     [
+      'worktreeManager/adoptWorktreeBranch',
       'worktreeManager/bindSession',
       'worktreeManager/cleanWorktree',
       'worktreeManager/createWorktree',
@@ -161,6 +162,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/listImportCandidates',
       'worktreeManager/listWorktrees',
       'worktreeManager/normalizeDetachedWorktreePermissions',
+      'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
     ],
   );
@@ -350,6 +352,8 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
     'worktreeManager/cleanWorktree',
+    'worktreeManager/adoptWorktreeBranch',
+    'worktreeManager/recoverWorktrees',
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',

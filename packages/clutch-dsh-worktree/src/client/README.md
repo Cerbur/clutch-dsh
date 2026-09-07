@@ -184,6 +184,24 @@ overlay.
 
 ### Worktree cleanup and forget flow
 
+Branch reconciliation uses `currentBranch` and `branch-drift` runtime projections.
+Active and archived rows display the accepted-to-live transition (including detached HEAD).
+Their menus refresh only the owning Workspace with preserveCurrent. `adoptWorktreeBranch`
+requires a confirmation containing the observed branch and the captured mutation token;
+it preserves bindings and native Session data. `recoverWorktrees` retries journal recovery
+separately. Successful actions refresh the owning Workspace without clearing ready content;
+failures retain the existing projection and remain visible. Clean is disabled for drift until
+a branch is adopted, while forget and archive retain their existing lifecycle semantics.
+
+Sibling creation uses the observed `currentBranch`, falling back to the accepted branch only
+when the runtime field is unavailable; detached HEAD does not expose that action. Adoption
+errors stay inside the confirmation dialog and disable submission until Retry reloads the
+branch and token for explicit reconfirmation. Retry retains unrelated ready views, and late
+retry results are ignored after the dialog closes or the Client mode/manager changes.
+Read-only menu refreshes share an equivalent in-flight Workspace read and do not invalidate
+Conversation context. Mutation refreshes still invalidate the read generation and context so
+they cannot reuse a pre-mutation response.
+
 Clean Up Disk (`cleanWorktree`) decouples Git directory removal from subsequent permission
 normalization using `runWorktreeCleanupFlow`. Once disk deletion succeeds, the dialog closes
 and the view updates to `cleaned`. Any failure during subsequent permission normalization

@@ -419,6 +419,8 @@ export function WorktreeGroupRow({
                       disabled: menu.disabled || menu.onRemove === undefined,
                     }]
                   : []),
+                ...(menu.onAdoptBranch ? [{ id: 'adopt-branch', label: t('worktree.adoptBranch'), disabled: menu.disabled }] : []),
+                ...(menu.onRecover ? [{ id: 'recover', label: t('worktree.retryRecovery'), disabled: menu.disabled }] : []),
                 ...(menu.showCleanDisk
                   ? [{
                       id: 'clean-disk',
@@ -445,6 +447,8 @@ export function WorktreeGroupRow({
               onSelect={(id) => {
                 menu.onOpenChange(false);
                 if (id === 'create' && menu.showCreate) menu.onCreateWorktree?.();
+                if (id === 'adopt-branch') menu.onAdoptBranch?.();
+                if (id === 'recover') menu.onRecover?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);
                 if (id === 'remove' && menu.showRemove) menu.onRemove?.();
                 if (id === 'clean-disk' && menu.showCleanDisk) menu.onCleanDisk?.();

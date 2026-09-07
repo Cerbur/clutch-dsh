@@ -17,12 +17,16 @@ const expectedManagerKeys = [
   'importWorktree',
   'removeWorktree',
   'cleanWorktree',
+  'adoptWorktreeBranch',
+  'recoverWorktrees',
   'forgetWorktree',
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
 ] as const;
 const expectedRemoteKeys = [
+  'adoptWorktreeBranch',
+  'recoverWorktrees',
   'listWorktrees',
   'listImportCandidates',
   'listBranches',

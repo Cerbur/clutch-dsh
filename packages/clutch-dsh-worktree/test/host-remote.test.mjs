@@ -35,6 +35,8 @@ function createManager(overrides = {}) {
       };
     },
     async removeWorktree() {},
+    async adoptWorktreeBranch() {},
+    async recoverWorktrees() {},
     async insertWorktreeBefore() {
       return ['wt_example'];
     },

@@ -59,12 +59,17 @@ export type WorktreeSource = 'plugin' | 'external';
 export * from './worktree-permission.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
-export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed' | 'cleaned';
+export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed' | 'cleaned' | 'branch-drift';
 
 export type WorktreeActivity =
   | { readonly state: 'idle' }
   | { readonly state: 'busy'; readonly sessionIds: readonly string[] }
   | { readonly state: 'unknown' };
+
+export interface AdoptWorktreeBranchInput extends WorktreeLifecycleInput {
+  /** The live branch the user explicitly confirmed; checked again under lock. */
+  readonly expectedBranch: string;
+}
 
 export interface WorktreeLifecycleInput {
   readonly workspaceId: string;
@@ -93,6 +98,8 @@ export interface WorktreeRecord {
   readonly diskCleanup?: 'completed';
   /** Runtime-only; never written to the sidecar. */
   readonly health?: WorktreeHealth;
+  /** Runtime-only Git branch; null means detached HEAD, undefined means unavailable. */
+  readonly currentBranch?: string | null;
   /** Runtime-only; never written to the sidecar. */
   readonly activity?: WorktreeActivity;
   /** Opaque runtime-only snapshot token for destructive-action stale-state checks. */
@@ -204,6 +211,9 @@ export interface WorktreeManager {
   /** Caller must obtain explicit disk-deletion confirmation; Session activity is not checked. */
   cleanWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
+  adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<void>;
+  recoverWorktrees(input: { workspaceId: WorkspaceId }): Promise<void>;
+
   /** Removes plugin index entries only; preserves disk and native Sessions without activity checks. */
   forgetWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
@@ -247,6 +257,8 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'importWorktree',
   'removeWorktree',
   'cleanWorktree',
+  'adoptWorktreeBranch',
+  'recoverWorktrees',
   'forgetWorktree',
   'insertWorktreeBefore',
   'listBindings',
@@ -300,6 +312,9 @@ export interface WorktreeRemoteManager {
   }): Promise<WorktreeRemoteResult<null>>;
 
   cleanWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
+
+  adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<WorktreeRemoteResult<null>>;
+  recoverWorktrees(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<null>>;
 
   forgetWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 

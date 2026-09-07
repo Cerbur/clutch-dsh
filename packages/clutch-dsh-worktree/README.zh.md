@@ -326,6 +326,27 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 - Sidebar 折叠后，footer 保留原生的 icon-only action 尺寸和排版；插件不会再绘制独立的
   `WT` rail control。
 
+### 同步在 Git 中切换的分支
+
+外部执行 `git checkout` 后，下次 Worktree 读取显示“旧分支 → 当前分支”与分支变化提示。
+刷新或打开 Worktree 菜单时会读取，插件不持续监听 Git。分离 HEAD 会明确标注。
+Session binding 和运行时 cwd 保持不变，普通分支切换不会锁住整个 Workspace。
+
+在活动或归档 Worktree 菜单中选择“采用当前分支”（`Adopt current branch`）并确认，
+只更新插件记录的分支。确认期间 Git 分支或快照已变化时会拒绝操作，请刷新后重新确认。
+分离 HEAD 必须先在 Git 中切换到分支；清理磁盘前必须先采用当前分支。
+Git 明确证明原记录已切走时，允许用空闲的旧分支创建 Worktree；真正被 checkout 的分支仍不可用。
+
+确认失败会在弹窗内显示错误。点击“重试”（`Retry`）重新读取当前分支和快照 token，
+再确认更新后的分支变化；刷新成功前不能再次提交旧确认。如果 Worktree 已不再处于
+分支漂移状态或进入分离 HEAD，弹窗会关闭。从该行创建新 Worktree 使用读到的当前分支，
+无需先采用分支；分离 HEAD 不提供此操作。
+
+`recovery-needed` 行的菜单提供“重试恢复”（`Retry recovery`），作用于所属 Workspace。
+该操作只重试安全 journal 恢复，不自动采用分支、不删除未知路径、不清除未解决的身份问题。
+采用分支和恢复成功后只刷新所属 Workspace，并保留现有 ready 内容。
+旧版非事务分支观察标记会自动淘汰，普通 checkout 漂移不需要手工编辑 sidecar JSON。
+
 ### 理解状态与恢复提示
 
 - 没有未完成 Git 事务时，目录缺失的 active 或 archived Worktree 保持 `repair`，可归档，
