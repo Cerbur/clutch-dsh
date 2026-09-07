@@ -9,6 +9,20 @@ export const DEFAULT_TEMPLATE = stringify({
   template: DEFAULT_PRESET.template,
   fields: DEFAULT_PRESET.fields,
 });
+export const EMOJI_TEMPLATE = stringify({
+  template: '${daytime} | ${type} | ${desc}',
+  fields: {
+    ...DEFAULT_PRESET.fields,
+    type: {
+      ...DEFAULT_PRESET.fields.type,
+      values: DEFAULT_PRESET.fields.type.values.map((choice, index) => ({
+        ...choice,
+        value: ['🎨', '🔍', '🚀', '🔧', '♻️', '📦'][index]!,
+      })),
+    },
+    desc: { ...DEFAULT_PRESET.fields.desc, maxCharacters: 1024 },
+  },
+});
 const MAX_TEMPLATE_LENGTH = 65536;
 
 export interface TemplateRow {

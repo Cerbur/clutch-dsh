@@ -1,5 +1,29 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.2 — 2026-09-08
+
+### 中文
+
+#### 新增
+
+- 新增设置中心模板实时样例展示与预设模板复制能力。
+
+#### 优化
+
+- 优化长首条消息输入截断与边界保护，同时保留消息头部与尾部上下文。
+- 优化字段提取逻辑，仅向 LLM 提取当前激活模板实际引用的字段。
+
+### English
+
+#### Added
+
+- Add live template title examples and template duplication in Settings.
+
+#### Improved
+
+- Bound long first prompt inputs with head-and-tail preservation within byte limits.
+- Extract only fields referenced by the active template during LLM structured extraction.
+
 ## 0.1.1 — 2026-09-06
 
 ### 中文

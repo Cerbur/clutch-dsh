@@ -9,6 +9,59 @@ import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file';
 import { parse, stringify } from 'yaml';
 import { registerTemplateSettings } from '../lib/settings.js';
 import { templateMutation } from '../lib/templates.js';
+import { TitleConfigSchema } from '../lib/config.js';
+
+test('fresh settings provide editable emoji and persist its deletion across registration', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'title-emoji-'));
+  const path = join(directory, 'settings.yaml');
+  const ctx = new Context();
+  try {
+    await ctx.plugin(FileSettingsProvider, { path, watch: false });
+    const config = TitleConfigSchema({ preset: 'default' });
+    assert.deepEqual(config.fields, {});
+    const read = registerTemplateSettings(ctx, config);
+    assert.equal(read().active, 'default');
+    const emoji = read().rows.find((row) => row.id === 'emoji');
+    assert.ok(emoji && !emoji.error);
+    await ctx.settings.mutate(
+      'clutch-dsh-title',
+      templateMutation(read(), {
+        kind: 'create',
+        id: 'copy',
+        source: emoji.source,
+      }),
+    );
+    assert.equal(read().active, 'default');
+    assert.equal(read().rows.find((row) => row.id === 'copy').source, emoji.source);
+    await ctx.settings.mutate(
+      'clutch-dsh-title',
+      templateMutation(read(), { kind: 'delete', id: 'emoji' }),
+    );
+    assert.equal(
+      read().rows.some((row) => row.id === 'emoji'),
+      false,
+    );
+    assert.equal(
+      parse(await readFile(path, 'utf8'))['clutch-dsh-title'].templates.emoji,
+      undefined,
+    );
+    const reloaded = new Context();
+    try {
+      await reloaded.plugin(FileSettingsProvider, { path, watch: false });
+      const reread = registerTemplateSettings(reloaded, config);
+      assert.equal(
+        reread().rows.some((row) => row.id === 'emoji'),
+        false,
+      );
+      assert.equal(reread().rows.find((row) => row.id === 'copy').source, emoji.source);
+    } finally {
+      await reloaded.fiber.dispose();
+    }
+  } finally {
+    await ctx.fiber.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('first template write preserves inherited legacy and deletion persists an empty map', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'title-legacy-'));

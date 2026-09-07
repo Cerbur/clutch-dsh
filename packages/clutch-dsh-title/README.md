@@ -11,10 +11,12 @@ The default title shape is `0904|功能|优化 session title 生成规则`: a ti
 ## Capabilities
 
 - An immutable built-in `default` template and named user templates with open field names.
+- Fresh settings include an editable `emoji` template; duplicate any template and preview its title format in each row.
 - **Settings → Session Title** supports creating, editing, deleting and activating templates, or disabling customization to use DSH's native first-prompt title generator.
 - Live `$DSH_HOME/settings.yaml` storage; invalid templates remain visible and an invalid/missing active template falls back to `default`.
 - Closed field kinds: `datetime`, `literal`, `llm-enum`, and `llm-text`.
-- One structured JSON LLM request for all `llm-*` fields; `datetime` and `literal` fields never depend on model output.
+- One structured JSON LLM request for the distinct `llm-*` fields referenced by the template; templates containing only `datetime`, `literal` or plain text make no model call.
+- Long first prompts retain their beginning and end within the input byte budget, with an explicit omission marker.
 - A deliberately small template DSL supporting `${identifier}` only; functions, paths, conditions, expressions, and code evaluation are rejected.
 - Invalid managed templates use `default`; extraction failure, cancellation, timeout, empty output, tool calls, and non-stop finishes use DSH's native fallback path.
 - DSH remains the owner of `maxTitleBytes`, persistence, rename pinning, refresh, fork inheritance, cancellation, and stale-result protection.
@@ -48,6 +50,12 @@ The package includes Host and browser entries mounted through `cordis.patch.yml`
 ## Usage
 
 ### Template manager
+
+Fresh settings offer a custom `emoji` template with `MMDD | 🎨 | description` formatting, the six task-type values 🎨 / 🔍 / 🚀 / 🔧 / ♻️ / 📦, and `desc.maxCharacters: 1024`. `default` remains selected. The preset is inherited until you save template changes to `$DSH_HOME/settings.yaml`; an existing stored templates map or legacy Cordis template is preserved. You can edit or delete `emoji`, and deletion persists.
+
+Choose **Duplicate** on any row, including `default`, to open a new draft containing that row's YAML. Enter a unique name and save; saving does not activate the copy. Invalid templates can be copied for repair, but must pass validation before saving.
+
+Each row shows an **Example** title, updated while editing. It uses the current date in the configured timezone, literal values, the first enum candidate and illustrative text limited by `maxCharacters`. No model request is made; real semantic values and DSH's final byte limit may produce a different title. Invalid YAML shows an unavailable message.
 
 Open **Settings → Session Title**. **New template** copies `default`; choose a unique name, edit YAML, then **Save** and **Activate**. Saving does not activate a new template. `default` is viewable and selectable but cannot be edited or deleted. Deleting the selected template selects `default`. Turning **Use title templates** off preserves your templates and selection, and calls DSH's native first-prompt LLM generator.
 
@@ -140,7 +148,19 @@ fields:
     maxCharacters: 32
 ```
 
-All LLM fields are sent in one JSON-framed request. The model returns fields only; the renderer inserts deterministic values and literal separators. The renderer does not execute template content, and field validation trims, removes control characters, and enforces enum membership or Unicode-character limits before rendering.
+Only fields referenced by the compiled template are resolved. Repeated references are extracted once, and all referenced LLM fields are sent in one JSON-framed request. For example, `${daytime}|${desc}|${desc}` requests only `desc`, and does not require the inherited `type` output. `${daytime}` or a literal-only template makes no model call and writes no `session/title-llm-request` event. All field definitions, including unused and inherited definitions, still undergo configuration validation.
+
+The model returns fields only; the renderer inserts deterministic values and literal separators. The renderer does not execute template content, and field validation trims, removes control characters, and enforces enum membership or Unicode-character limits before rendering.
+
+### Long first prompts and input budget
+
+Cordis `maxInputBytes` defaults to `4096`. It limits the complete JSON-framed user input actually sent to the model, including framing instructions, `seq`, JSON escaping and clipping metadata. It excludes the separate system instructions and model transport envelope. Short inputs retain their original framing and text.
+
+When that input exceeds the budget, the plugin trims outer whitespace and retains the beginning and end of the first eligible prompt. After reserving framing and marker overhead, it divides escaped UTF-8 bytes approximately equally between the two ends, reusing spare capacity at the other end. The serialized entry has `truncated: true`, and the omitted middle is replaced by `\n[...middle omitted...]\n`. Cuts preserve Unicode code points (including surrogate pairs), but may split a combined emoji or other grapheme cluster. The final complete input is checked against the byte limit again.
+
+Keeping both ends preserves introductory context and closing requirements; middle details are lost and title accuracy may decrease. No model summary, additional model call or later conversation is used. Each end must retain at least one non-whitespace source code point; a budget too small for this valid marked input fails with a `maxInputBytes` error and uses native fallback.
+
+The `session/title-llm-request` event records the exact clipped payload sent to the model; `messageSeqs` retains the original source sequence. Original session messages are never modified. DSH's native automatic scheduling still waits for its request header, including for deterministic templates; explicit refresh can render such templates without a model route.
 
 If extraction fails, the provider throws and `ctx.sessionTitle` applies DSH's native fallback. Native `rename()` still pins a user title; later automatic work cannot overwrite it, while native `refresh()` remains the explicit re-derivation operation. Titles and `session/title-llm-request` events use DSH persistence and are inherited by native forks. Configuration changes do not rewrite historical title events or trigger a batch rename.
 
