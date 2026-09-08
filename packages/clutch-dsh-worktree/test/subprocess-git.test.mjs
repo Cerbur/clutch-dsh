@@ -9,6 +9,23 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { LocalGitAdapter } from '../lib/index.js';
 
+test('preserves porcelain status flags with and without reasons', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
+  try {
+    for (const suffix of ['', ' diagnostic reason']) {
+      const git = new LocalGitAdapter({ subprocess: createFakeRuntime({
+        stdout: `worktree /example/wt\nbranch refs/heads/topic\nlocked${suffix}\nprunable${suffix}\n\nworktree /example/bare\nbare\n\n`,
+      }) });
+      const rows = await git.listWorktrees(workspaceRoot);
+      assert.equal(rows[0].locked, true);
+      assert.equal(rows[0].prunable, true);
+      assert.equal(rows[1].bare, true);
+    }
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 function collectedReader(text, lossy = false) {
   return {
     readFrom(fromByte) {

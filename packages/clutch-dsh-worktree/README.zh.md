@@ -230,7 +230,10 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 1. 选择 Workspace，点击旁边的 `+`，再选择 `导入` Tab。弹窗通过现有 DSH `/api` Connection
    加载该 repository 的 Git Worktree 候选项。
 2. 第一版只列出绑定 branch、不是 repository root、且未出现在 plugin sidecar 中的 Worktree。
-   detached HEAD 会被省略；候选项通过普通下拉框选择，每个选项先显示 branch，再显示绝对路径
+   detached HEAD、bare、prunable、目录缺失和 `.git` 缺失的条目会被省略。
+   已管理 Worktree 的 health 与导入资格共用运行时状态映射，提交导入时重新校验；
+   locked Worktree 在其他条件满足时仍可导入。
+   候选项通过普通下拉框选择，每个选项先显示 branch，再显示绝对路径
    作为诊断信息。
 3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
    工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的

@@ -130,6 +130,9 @@ export interface DshReadAdapter {
  * detached HEAD may have no local branch.
  */
 export interface GitWorktreeInfo {
+  readonly prunable?: boolean;
+  readonly locked?: boolean;
+  readonly bare?: boolean;
   readonly absolutePath: string;
   readonly branch?: string;
   readonly headCommit?: string;

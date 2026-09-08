@@ -243,7 +243,10 @@ blank-session Hero. The displayed language follows DSH's current language settin
 1. Select a Workspace, press its `+`, and choose the `Import` tab. The dialog loads Git-linked
    Worktrees for that repository through the existing DSH `/api` Connection.
 2. The first version lists only branch-attached, non-root Worktrees that are not already present
-   in the plugin sidecar. Detached HEAD entries are intentionally omitted. Candidates are presented
+   in the plugin sidecar. Detached HEAD, bare, prunable, missing-directory and missing-`.git`
+   entries are omitted. Managed health and import eligibility share one runtime status mapping;
+   importing rechecks that status. Locked Worktrees remain eligible when otherwise ready.
+   Candidates are presented
    in a standard dropdown; each option shows its branch first and absolute path as secondary
    diagnostic text.
 3. Choose an option and select `Import Worktree`. Registration writes only the plugin sidecar;

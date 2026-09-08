@@ -23,6 +23,36 @@ import {
 
 const execFile = promisify(execFileCallback);
 
+test('shared status filters stale imports and repairs managed stale registrations', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, provider, sidecar }) => {
+    const target = path.join(tempRoot, 'status-external');
+    await runGit(workspaceRoot, ['worktree', 'add', '-b', 'status-external', target]);
+    await runGit(workspaceRoot, ['worktree', 'lock', '--reason', 'keep checkout', target]);
+    assert.equal((await provider.listImportCandidates({ workspaceId: 'ws_one' })).length, 1);
+    const record = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: target });
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'ready');
+    await runGit(workspaceRoot, ['worktree', 'unlock', target]);
+    await rm(path.join(target, '.git'));
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'repair');
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].status, 'active');
+    assert.equal(record.source, 'external');
+
+    const stale = path.join(tempRoot, 'status-stale');
+    await runGit(workspaceRoot, ['worktree', 'add', '-b', 'status-stale', stale]);
+    assert.equal((await provider.listImportCandidates({ workspaceId: 'ws_one' })).length, 1);
+    await rm(stale, { recursive: true });
+    // Preserve an ordinary residual directory: Git reports a prunable registration.
+    await mkdir(stale);
+    assert.equal((await provider.listImportCandidates({ workspaceId: 'ws_one' })).length, 0);
+    await assert.rejects(
+      provider.importWorktree({ workspaceId: 'ws_one', absolutePath: stale }),
+      { code: 'WORKTREE_IMPORT_INVALID' },
+    );
+    assert.equal((await sidecar.read('ws_one')).worktrees.length, 1);
+    assert.match((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, /prunable/);
+  });
+});
+
 async function runGit(cwd, args) {
   return execFile('git', args, { cwd, encoding: 'utf8' });
 }
@@ -1163,6 +1193,7 @@ test('uses the resolved repository root when projecting Worktree health for a su
       worktreeId: 'wt_subdir_health',
       absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_subdir_health'),
     });
+    await runGit(workspaceRoot, ['worktree', 'add', '-b', record.branch, record.absolutePath]);
     await sidecar.upsertWorktree(record);
     const calls = [];
     const git = {
@@ -1172,7 +1203,7 @@ test('uses the resolved repository root when projecting Worktree health for a su
       },
       async listWorktrees(root) {
         calls.push(['listWorktrees', root]);
-        return root === workspaceRoot ? [{ absolutePath: record.absolutePath }] : [];
+        return root === workspaceRoot ? [{ absolutePath: record.absolutePath, branch: record.branch }] : [];
       },
     };
     const provider = createWorktreeManager({

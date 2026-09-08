@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { readWorktreeStatus } from '../provider/git/worktree-status.js';
+import type { GitWorktreeInfo } from '../provider/types.js';
 
 import type {
   BranchRecord,
@@ -77,7 +79,7 @@ export async function listWorktrees(
     }
   };
 
-  let gitWorktrees: readonly { readonly absolutePath: string; readonly branch?: string; readonly detached?: boolean }[] | undefined;
+  let gitWorktrees: readonly GitWorktreeInfo[] | undefined;
   try {
     const gitRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath)
@@ -121,7 +123,8 @@ export async function listWorktrees(
         path.resolve(gitWorktree.absolutePath) === path.resolve(record.absolutePath) ||
         (await samePhysicalPath(gitWorktree.absolutePath, record.absolutePath))
       ) {
-        ready = true;
+        const status = await readWorktreeStatus(gitWorktree);
+        ready = status === 'ready' || status === 'detached';
         currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
         break;
       }
@@ -156,6 +159,7 @@ export async function listImportCandidates(
   const candidates: WorktreeImportCandidate[] = [];
   for (const worktree of gitWorktrees) {
     if (!worktree.branch || await samePhysicalPath(worktree.absolutePath, gitRoot)) continue;
+    if (await readWorktreeStatus(worktree) !== 'ready') continue;
     let managed = false;
     for (const record of snapshot.worktrees) {
       if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
@@ -405,7 +409,7 @@ export async function importWorktree(
   await context.git.validateRepository(workspace.rootPath);
   const gitWorktrees = await context.git.listWorktrees(workspace.rootPath);
   const gitWorktree = await findGitWorktreeByPhysicalPath(gitWorktrees, requestedPath);
-  if (!gitWorktree || !gitWorktree.branch || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
+  if (!gitWorktree || !gitWorktree.branch || await readWorktreeStatus(gitWorktree) !== 'ready' || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
     throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${requestedPath}`, {
       workspaceId: input.workspaceId,
       absolutePath: requestedPath,
@@ -428,6 +432,7 @@ export async function importWorktree(
       if (
         !liveWorktree ||
         !liveWorktree.branch ||
+        await readWorktreeStatus(liveWorktree) !== 'ready' ||
         await samePhysicalPath(liveWorktree.absolutePath, workspace.rootPath)
       ) {
         throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${normalizedPath}`, {
