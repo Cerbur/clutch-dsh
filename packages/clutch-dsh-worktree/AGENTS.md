@@ -227,6 +227,13 @@ Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路
 
 ### `src/manage/`
 
+新建 Worktree 默认 ID/目录名使用 `wt_` + 12 位加密随机十六进制字符。
+Manage 仅对 Provider 在 Git/journal mutation 前报告的名称碰撞重试；先尝试八个随机
+候选，再递增数字后缀，循环遵循 Manager 的取消信号。已有路径与 ID 不迁移。
+Provider 在 shard/repository 锁之前取得共享 DSH Home 内的候选路径锁，覆盖不同
+Workspace/repository 的同名创建；占用检查包含 lstat（含断链符号链接）、sidecar
+记录和残留 Git registration。Git mutation 后的未知状态仍进入原有 recovery 流程。
+
 组合 contract 与 provider，负责 Worktree/Session use-case orchestration、binding
 冲突与幂等、main/active/detached cwd 解析、创建/删除恢复顺序和 degraded-state
 决策。

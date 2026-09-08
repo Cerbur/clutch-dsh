@@ -1336,7 +1336,8 @@ test('does not repeat Git preflight before the transactional create path', async
       resolveRepositoryRoot: 0,
       listBranches: 0,
       listBranchesWithWorktreePaths: 1,
-      listWorktrees: 1,
+      // One preflight includes prunable registrations; one verifies the created Worktree.
+      listWorktrees: 2,
       createWorktree: 1,
     });
   });
@@ -1364,7 +1365,7 @@ test('keeps injected Git adapters without a root resolver compatible', async () 
   });
 });
 
-test('rejects a generated Worktree path that already exists or is inside the Workspace', async () => {
+test('retries an occupied generated name with a suffix but rejects paths inside the Workspace', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, dsh }) => {
     await runGit(workspaceRoot, ['branch', 'feature/existing']);
     await runGit(workspaceRoot, ['branch', 'feature/inside']);
@@ -1376,10 +1377,9 @@ test('rejects a generated Worktree path that already exists or is inside the Wor
       dshHome,
       idFactory: () => existingId,
     });
-    await expectCode(
-      existingProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/existing' }),
-      'GIT_OPERATION_FAILED',
-    );
+    const created = await existingProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/existing' });
+    assert.equal(created.worktreeId, 'wt_existing_1');
+    assert.deepEqual(await readdir(existingPath), []);
 
     const insideProvider = createWorktreeManager({
       dsh: createDshReader({ rootPath: workspaceRoot }),
@@ -1411,7 +1411,7 @@ test('rejects a symlinked DSH Home before creating a Worktree', async () => {
   });
 });
 
-test('rejects a reused Worktree ID even when the old record is removed', async () => {
+test('retries a reused Worktree ID even when the old record is removed', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, provider, sidecar }) => {
     await runGit(workspaceRoot, ['branch', 'feature/reused-id']);
     const worktreeId = 'wt_reused';
@@ -1430,12 +1430,10 @@ test('rejects a reused Worktree ID even when the old record is removed', async (
       idFactory: () => worktreeId,
     });
 
-    await expectCode(
-      reusedProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/reused-id' }),
-      'SIDECAR_CORRUPT',
-    );
+    const created = await reusedProvider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/reused-id' });
+    assert.equal(created.worktreeId, 'wt_reused_1');
     assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId)), false);
-    assert.deepEqual((await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId), [worktreeId]);
+    assert.deepEqual((await sidecar.read('ws_one')).worktrees.map((record) => record.worktreeId), [created.worktreeId, worktreeId]);
     void provider;
   });
 });
@@ -1450,6 +1448,7 @@ test('creates a generated Worktree and persists only approved relation metadata'
     const expectedPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId);
 
     assert.equal(record.absolutePath, expectedPath);
+    assert.match(record.worktreeId, /^wt_[a-f0-9]{12}$/);
     assert.equal(record.source, 'plugin');
     assert.equal(path.isAbsolute(record.absolutePath), true);
     assert.equal(await exists(record.absolutePath), true);

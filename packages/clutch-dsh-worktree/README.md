@@ -226,6 +226,13 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Create a Worktree
 
+New directories use `$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-characters>`
+(15 characters in the folder name, with 48 bits of cryptographic randomness).
+Occupied directory names, Git registrations, and sidecar identities are automatically retried.
+After eight random candidates collide, numeric suffixes such as `_1` and `_2` are tried until
+available or cancelled. Existing Worktree paths and IDs stay unchanged; branch conflicts and
+other Git failures retain their normal error handling.
+
 1. Select a Workspace, press its `+`, choose a baseline local branch, and enter a Worktree name.
    The default branch name is `dsh/<8-character-random-string>`.
 2. To create a sibling from an existing Worktree, open that active Worktree's options menu and

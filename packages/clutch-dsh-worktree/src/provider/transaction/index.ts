@@ -34,7 +34,12 @@ export class WorktreeMutationTransaction {
   }
 
   async create(input: CreateWorktreeTransactionInput): Promise<WorktreeRecord> {
-    return createWorktreeTransaction(this.dependencies, input);
+    // The directory namespace is shared by all repositories under this DSH Home.
+    // Hold the candidate lock through Git verification and sidecar publication.
+    return this.dependencies.repositoryLock.run(
+      `generated-worktree:${path.basename(input.targetPath).toLowerCase()}`,
+      async () => createWorktreeTransaction(this.dependencies, input),
+    );
   }
 
   async remove(input: RemoveWorktreeTransactionInput): Promise<void> {

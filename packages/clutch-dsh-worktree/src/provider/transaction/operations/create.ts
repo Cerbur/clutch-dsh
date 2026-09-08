@@ -2,7 +2,7 @@ import type { WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
 import type { CreateWorktreeTransactionInput } from '../types.js';
-import { pathExists } from '../support/paths.js';
+import { assertGeneratedNameAvailable } from '../../generated-name.js';
 import { recoveryError, recordForCreate, pendingCreate } from '../support/journal.js';
 import { reconcileCreateFailure } from '../recovery/failure-recovery.js';
 import { withShardLock } from '../support/locking.js';
@@ -39,6 +39,7 @@ export async function createWorktreeTransaction(
         assertRepositoryCompatible(current, repository.identity, input.workspaceId);
         assertGeneratedTarget(dependencies, input);
 
+        let existingGitWorktrees: readonly GitWorktreeInfo[] | undefined;
         if (dependencies.git.listBranchesWithWorktreePaths) {
           const branches = await dependencies.git.listBranchesWithWorktreePaths(gitRoot);
           const baseBranch = branches.find((branch) => branch.name === input.baseBranch);
@@ -104,8 +105,8 @@ export async function createWorktreeTransaction(
               },
             );
           }
-          const gitWorktrees = await dependencies.git.listWorktrees(gitRoot);
-          if (gitWorktrees.some((worktree) => worktree.branch === input.targetBranch)) {
+          existingGitWorktrees = await dependencies.git.listWorktrees(gitRoot);
+          if (existingGitWorktrees.some((worktree) => worktree.branch === input.targetBranch)) {
             throw providerError(
               'WORKTREE_BRANCH_CONFLICT',
               `Branch is already checked out: ${input.targetBranch}`,
@@ -117,26 +118,12 @@ export async function createWorktreeTransaction(
             );
           }
         }
-        if (await pathExists(input.targetPath)) {
-          throw providerError(
-            'GIT_OPERATION_FAILED',
-            `Generated Worktree path already exists: ${input.targetPath}`,
-            {
-              workspaceRoot: input.workspaceRoot,
-              targetPath: input.targetPath,
-              worktreeId: input.worktreeId,
-            },
-          );
-        }
-        if (current.worktrees.some((record) => record.worktreeId === input.worktreeId)) {
-          throw providerError(
-            'SIDECAR_CORRUPT',
-            `Generated Worktree ID is already recorded: ${input.worktreeId}`,
-            {
-              worktreeId: input.worktreeId,
-            },
-          );
-        }
+        await assertGeneratedNameAvailable(
+          input.worktreeId,
+          input.targetPath,
+          current,
+          existingGitWorktrees ?? await dependencies.git.listWorktrees(gitRoot),
+        );
         const sidecarConflict = await findActiveBranchConflict(
           dependencies,
           current,

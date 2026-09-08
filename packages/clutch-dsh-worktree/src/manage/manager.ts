@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
 import type {
@@ -70,7 +70,8 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       git,
       sidecar,
       transaction: new WorktreeMutationTransaction({ dshHome, git, sidecar }),
-      idFactory: options.idFactory ?? (() => `wt_${randomUUID()}`),
+      idFactory: options.idFactory ?? (() => `wt_${randomBytes(6).toString('hex')}`),
+      signal: this.lifecycleController.signal,
     };
     this.recoveryReady = this.startupRecovery();
   }
