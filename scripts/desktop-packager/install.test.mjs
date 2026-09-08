@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const scripts = dirname(fileURLToPath(import.meta.url));
+const sourceSha = '0123456789abcdef0123456789abcdef01234567';
 function fixture(t, { failure = '', missing = false, local = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-installer-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -48,6 +49,9 @@ printf '%s\\n' "$url" >> "$TEST_ROOT/requests"
 printf '%s\\n' "$(dirname "$output")" >> "$TEST_ROOT/temporary"
 [ "$TEST_FAILURE" != download ] || exit 22
 case "$url" in
+  https://api.github.com/repos/deepseek-ai/deepseek-harness/commits/*)
+    if [ "$TEST_FAILURE" = metadata ]; then echo '{"sha":"master"}' > "$output";
+    else echo '{"sha":"${sourceSha}"}' > "$output"; fi;;
   */Cerbur/clutch-dsh/*) cp "$TEST_ROOT/packager.tgz" "$output";;
   */deepseek-ai/deepseek-harness/*) cp "$TEST_ROOT/source.tgz" "$output";;
   *) exit 99;;
@@ -58,10 +62,14 @@ esac`,
     `printf '%s\\n' "$PWD" >> "$TEST_ROOT/build-roots"
 test -d apps/desktop
 test ! -d .git
+if [ "$TEST_LOCAL" = false ]; then
+  test "\${DSH_CLIENT_COMMIT_HASH:-}" = '${sourceSha}' || { echo 'missing archive commit metadata' >&2; exit 89; }
+fi
 if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
 [ "$TEST_FAILURE" != build ] || exit 42`,
   );
-  for (const name of ['node', 'codesign', 'ditto', 'plutil']) tool(name, 'exit 0');
+  tool('node', 'if [ "$1" = --eval ]; then exec "$TEST_NODE" "$@"; fi');
+  for (const name of ['codesign', 'ditto', 'plutil']) tool(name, 'exit 0');
   tool('git', "echo 'git must not be called' >&2; exit 91");
   const args = local ? ['-s', '--', join(root, 'source')] : ['-s'];
   const result = spawnSync('/bin/bash', args, {
@@ -72,6 +80,9 @@ if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
       PATH: `${bin}:${process.env.PATH}`,
       TEST_ROOT: root,
       TEST_FAILURE: failure,
+      TEST_LOCAL: String(local),
+      TEST_NODE: process.execPath,
+      DSH_CLIENT_COMMIT_HASH: 'ffffffffffffffffffffffffffffffffffffffff',
       DSH_REPO_ROOT: '',
       DSH_PACKAGER_REF: 'pinned-packager',
       DSH_SOURCE_REF: 'pinned-source',
@@ -91,9 +102,14 @@ test('piped installer builds downloaded source archives without git or stdin', (
   assert.match(readFileSync(join(root, 'requests'), 'utf8'), /clutch-dsh\/tar.gz\/pinned-packager/);
   assert.match(
     readFileSync(join(root, 'requests'), 'utf8'),
-    /deepseek-harness\/tar.gz\/pinned-source/,
+    new RegExp(`deepseek-harness/tar.gz/${sourceSha}`),
   );
   assert.ok(existsSync(join(root, 'build-roots')));
+});
+test('rejects invalid commit metadata before installing dependencies', (t) => {
+  const { result, root } = fixture(t, { failure: 'metadata' });
+  assert.notEqual(result.status, 0);
+  assert.equal(existsSync(join(root, 'build-roots')), false);
 });
 test('forwards an existing source path without downloading dsh', (t) => {
   const { result, root } = fixture(t, { local: true });

@@ -19,21 +19,29 @@ import { pathToFileURL } from 'node:url';
 import { patchEditMenu } from './patch-edit-menu.mjs';
 
 const [mode, input] = process.argv.slice(2);
-if (!input || !['seed', 'assemble'].includes(mode))
-  throw new Error('Usage: local-app.mjs seed|assemble <dsh-repo>');
+if (!input || !['electron', 'seed', 'assemble'].includes(mode))
+  throw new Error('Usage: local-app.mjs electron|seed|assemble <dsh-repo>');
 const repo = resolve(input);
 const desktop = join(repo, 'apps/desktop');
 const require = createRequire(join(desktop, 'package.json'));
 const ts = require('typescript');
 const target = join(desktop, '.desktop-build/targets/mac-arm64');
 
-function run(command, args) {
-  const result = spawnSync(command, args, { cwd: repo, stdio: 'inherit' });
+function run(command, args, environment = process.env) {
+  const result = spawnSync(command, args, { cwd: repo, stdio: 'inherit', env: environment });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed: ${result.status ?? result.signal}`);
 }
 
-if (mode === 'seed') {
+if (mode === 'electron') {
+  const electronRoot = dirname(require.resolve('electron/package.json'));
+  const environment = { ...process.env };
+  delete environment.ELECTRON_SKIP_BINARY_DOWNLOAD;
+  run(process.execPath, [join(electronRoot, 'install.js')], environment);
+  if (!existsSync(join(electronRoot, 'dist/Electron.app'))) {
+    throw new Error('local app: Electron installer did not produce dist/Electron.app');
+  }
+} else if (mode === 'seed') {
   // The local seed retains upstream offline installation and integrity checks.
   // Only release-certificate signing is omitted in this temporary compiled copy.
   const original = join(desktop, 'scripts/prepare-seed.ts');

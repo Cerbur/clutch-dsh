@@ -25,6 +25,10 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
 
 入口下载 clutch-dsh 的 GitHub 压缩包取得配套脚本，再下载 deepseek-harness 源码压缩包进行本机构建，不创建 Git 工作区。两份临时源码退出时自动清理。这仍是源码构建，需要上述 Node、pnpm、Python 和编译工具，并非预编译 App 下载。
 
+下载 dsh 源码前，脚本通过 GitHub API 将 `DSH_SOURCE_REF` 解析为完整 commit SHA，按该 SHA 下载压缩包，并用 dsh 已支持的 `DSH_CLIENT_COMMIT_HASH` 传入构建。压缩包不需要 `.git`，构建展示的提交号对应实际下载内容；不会继承其他工作区的提交号。API 请求失败（含限流）或响应缺少有效 SHA 时，脚本在安装依赖前停止。
+
+依赖安装后会显式执行已锁定版本的 Electron 官方安装脚本，确保全新目录也有 `Electron.app`；该步骤忽略 `ELECTRON_SKIP_BINARY_DOWNLOAD`，保留 Electron 官方下载器的缓存及镜像配置，缺少产物时明确失败。
+
 可指定安装位置和源码版本。环境变量放在管道右侧的 `bash` 前：
 
 ```bash
@@ -82,6 +86,8 @@ codesign --verify --deep --strict '/tmp/dsh-desktop-qa/DeepSeek Harness.app'
 测试包含真实编译产物、补丁幂等性、嵌套菜单与不支持结构拒绝。签名检查不能替代 UI 验证：启动最终 App，确认主界面、`⌘,` 插件窗口和输入框快捷键，回报实际执行的检查。
 
 `node --test scripts/desktop-packager/install.test.mjs` 用本地压缩包与命令替身验证管道入口、源码压缩包、本地路径、失败退出码和临时目录清理，不执行真实构建或安装。
+
+`node --test scripts/desktop-packager/local-app.test.mjs` 验证 Electron 下载未被跳过、安装失败传播和安装后缺少二进制时的报错。完整构建验证应不传本地源码路径，并用 `DSH_INSTALL_DIR` 指向临时目录。
 
 仅在已完成同版本 runtime、package-set、seed 和 shell 构建时，可单独重复组装验证（完整重建仍使用上面的 shell 入口）：
 
