@@ -103,7 +103,18 @@ test('rejects changed upstream shapes; builds shell without modifying DSH source
   assert.equal(readFileSync(managerSource, 'utf8'), original);
   assert.equal(readFileSync(mainPath, 'utf8'), mainSource);
   assert.match(readFileSync(join(output, 'main.js'), 'utf8'), /clutch-extension:|clutch-extension/);
-  assert.match(readFileSync(join(output, 'preload.cjs'), 'utf8'), /clutchExtension/);
+  assert.match(
+    readFileSync(join(output, 'clutch-extension-preload.cjs'), 'utf8'),
+    /clutchExtension/,
+  );
+  assert.ok(!existsSync(join(output, 'preload.cjs')));
+  assert.ok(!preloadSource.includes('dshDesktop'));
+  const overlay = patchMain(mainSource, '/helper.mjs');
+  assert.ok(overlay.indexOf('label: process.platform') < overlay.indexOf("label: 'Extension'"));
+  assert.match(overlay, /accelerator: 'CmdOrCtrl\+,'/);
+  assert.match(overlay, /click: openPluginWindow/);
+  assert.match(overlay, /shell\/plugin-manager.html/);
+  assert.match(overlay, /shell\/clutch-extension\/plugin-manager.html/);
   assert.ok(!existsSync(join(output, 'preload-app.cjs')));
   assert.ok(!preloadSource.includes('updates'));
   const patched = patchEditMenu(
@@ -112,7 +123,7 @@ test('rejects changed upstream shapes; builds shell without modifying DSH source
   );
   assert.equal(patchEditMenu(patched, require('typescript')), patched);
   writeFileSync(join(output, 'main.js'), patched);
-  for (const file of ['main.js', 'preload.cjs']) {
+  for (const file of ['main.js', 'clutch-extension-preload.cjs']) {
     const checked = spawnSync(process.execPath, ['--check', join(output, file)], {
       encoding: 'utf8',
     });
@@ -120,14 +131,19 @@ test('rejects changed upstream shapes; builds shell without modifying DSH source
   }
 });
 test('accepts only owned top-level shell IPC and rejects core changes', () => {
-  const frame = { url: 'dsh-app://shell/plugin-manager.html' };
+  const frame = { url: 'dsh-app://shell/clutch-extension/plugin-manager.html' };
   const event = { senderFrame: frame, sender: { mainFrame: frame } };
   runtime.assertSender(event);
-  for (const url of ['dsh-app://app/', 'https://example.com/', 'file:///tmp/test']) {
+  for (const url of [
+    'dsh-app://shell/plugin-manager.html',
+    'dsh-app://app/',
+    'https://example.com/',
+    'file:///tmp/test',
+  ]) {
     frame.url = url;
     assert.throws(() => runtime.assertSender(event), /untrusted/);
   }
-  frame.url = 'dsh-app://shell/plugin-manager.html';
+  frame.url = 'dsh-app://shell/clutch-extension/plugin-manager.html';
   assert.throws(() => runtime.assertSender({ ...event, sender: { mainFrame: {} } }), /main frame/);
   assert.throws(() => runtime.assertMutable('@deepseek-ai/dsh', ['@deepseek-ai/dsh']), /protected/);
   assert.throws(() => runtime.assertMutable('--help', []), /invalid/);
@@ -152,6 +168,30 @@ test('serializes mutations and allows retry after a failed operation', async () 
   await rejection;
   await second;
   assert.deepEqual(events, ['install', 'restart']);
+});
+test('extension bridge rejects native window calls before mutations or restarts', async () => {
+  const handlers = new Map();
+  const calls = [];
+  runtime.registerBridge({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    dialog: {},
+    manager: {},
+    coreNames: () => [],
+    locale: () => ({ id: 'en' }),
+    mutate: (_event, mutation) => calls.push(mutation),
+    restart: () => calls.push('restart'),
+  });
+  const frame = { url: 'dsh-app://shell/plugin-manager.html' };
+  const event = { senderFrame: frame, sender: { mainFrame: frame } };
+  for (const handler of handlers.values()) {
+    assert.throws(() => handler(event), /untrusted/);
+  }
+  assert.deepEqual(calls, []);
+  frame.url = 'dsh-app://shell/clutch-extension/plugin-manager.html';
+  assert.deepEqual(await handlers.get('clutch-extension:locale')(event), { id: 'en' });
+  await handlers.get('clutch-extension:install')(event, '@friend/plugin');
+  await handlers.get('clutch-extension:restart')(event);
+  assert.deepEqual(calls, [{ type: 'plugin-add', spec: '@friend/plugin' }, 'restart']);
 });
 test('snapshots a built directory without lifecycle scripts and survives source deletion', async () => {
   const marker = join(root, 'lifecycle-ran');

@@ -6,7 +6,7 @@ dsh_desktop_install() (
   if [ "${1:-}" = --help ]; then
     echo 'Usage: bash install.sh [deepseek-harness-directory]'
     echo 'DSH_PACKAGER_REF: clutch-dsh branch/tag/commit (default main)'
-    echo 'DSH_SOURCE_REF: deepseek-harness branch/tag/commit (default master)'
+    echo 'DSH_SOURCE_REF: deepseek-harness branch/tag/commit (default 016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb)'
     echo 'DSH_INSTALL_DIR: installation parent (default /Applications)'
     echo 'DSH_PACK_CONCURRENCY: package packing workers (default 4; 1 for serial)'
     exit 0
@@ -34,7 +34,7 @@ dsh_desktop_install() (
       https://github.com/Cerbur/clutch-dsh.git "$installer_tmp/packager"
   fi
   local entry="$installer_tmp/packager/scripts/desktop-packager/package-desktop.sh"
-  for file in package-desktop.sh local-app.mjs patch-edit-menu.mjs extension-overlay.mjs extension-runtime.mjs renderer/plugin-manager.html renderer/plugin-manager.js renderer/plugin-manager.css; do
+  for file in package-desktop.sh local-app.mjs trash-app.mjs patch-edit-menu.mjs extension-overlay.mjs extension-runtime.mjs renderer/plugin-manager.html renderer/plugin-manager.js renderer/plugin-manager.css; do
     if [ ! -s "$(dirname "$entry")/$file" ]; then
       echo "Incomplete packager checkout: missing $file" >&2; exit 1
     fi

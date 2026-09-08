@@ -8,10 +8,12 @@ The initial plugin proposal was replaced by the user's request for a pure Electr
 implementation. Everything stays in `scripts/desktop-packager/`; no package is
 added and no DSH tracked source is edited.
 
-- Replace the generated application's existing management renderer at
-  `dsh-app://shell/plugin-manager.html`; retain the menu and Cmd+, entry.
+- Preserve the native management renderer, preload, menu and Cmd+, entry.
+  Add a top-level Extension menu and a separate window at
+  `dsh-app://shell/clutch-extension/plugin-manager.html`, with its own preload.
+  This supersedes the original renderer replacement to avoid native UI conflicts.
 - Compile checked temporary overlays of Desktop main and project-manager.
-- Expose a narrow IPC bridge only to the owned shell main frame.
+- Expose a narrow IPC bridge only to the owned extension page's main frame.
 - Reuse native profile transactions, private pnpm, health checks and rollback.
 - Read the removal inventory from the active profile, without a redundant
   dependency reinstall. Preserve local specs during migration and protect core names.
@@ -29,6 +31,18 @@ families, with four workers by default. `DSH_PACK_CONCURRENCY=1` restores serial
 packing; reject invalid values before fetching DSH source or building. Report
 each family's elapsed time. Keep build, payload and offline seed checks and
 regenerate every archive so local source edits cannot reuse stale packages.
+Build native modules from the selected checkout's `native/landlock-run` or
+`native/system` layout and pack its `packages/entry`. Keep upstream's
+`packed/landlock` output path, clearing it before packing.
+
+Pin unattended GitHub builds to DSH commit
+`016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb` by default. It keeps DSH and Desktop
+at `0.1.3-alpha.2` with Electron 44, Node 24.17.0 and pnpm 11.7.0, and passes the
+real Electron smoke flow. Continue accepting `DSH_SOURCE_REF` for explicit upgrades.
+
+Stage an existing installed app on the installation volume while switching the new
+candidate. Restore it if the switch fails; after success, move it to the current
+user's Trash with a collision-safe name so repeated upgrades remain unattended.
 Compare serial and parallel archive entries, file bytes, manifest values and
 publish order on the same built checkout. Ignore only dependency-map key order
 in `package.json`, which pnpm can change while resolving workspace versions;

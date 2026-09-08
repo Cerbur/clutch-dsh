@@ -35,7 +35,7 @@ export function patchManager(source) {
 }
 export function patchMain(source, helperPath) {
   source =
-    'import { serialOperations, assertSender, prepareMutation, registerBridge } from ' +
+    'import { serialOperations, prepareMutation, registerBridge } from ' +
     JSON.stringify(helperPath) +
     '\n' +
     source;
@@ -52,11 +52,6 @@ export function patchMain(source, helperPath) {
   );
   source = replaceOnce(
     source,
-    "assertDesktopSender(event, ['shell'])\n    if (development !== undefined) {",
-    'assertSender(event)\n    if (development !== undefined) {',
-  );
-  source = replaceOnce(
-    source,
     'await manager.mutate(mutation, hooks)',
     'await clutchOperations.run(async () => {\n      const prepared = await prepareMutation(mutation, manager, clutchCoreNames(), packageNameFromSpec)\n      await manager.mutate(prepared, hooks)\n    })',
   );
@@ -64,7 +59,7 @@ export function patchMain(source, helperPath) {
     source,
     'ipcMain.handle(DESKTOP_IPC.localeGet,',
     `registerBridge({
-    ipcMain, dialog, manager, mutate, coreNames: clutchCoreNames,
+    ipcMain, dialog, manager, mutate, coreNames: clutchCoreNames, locale: () => locale,
     restart: () => clutchOperations.run(async () => {
       if (development !== undefined) throw new Error('extension: packaged Desktop required')
       await hooks.beforeActivate()
@@ -74,12 +69,40 @@ export function patchMain(source, helperPath) {
   })
   ipcMain.handle(DESKTOP_IPC.localeGet,`,
   );
+  source = replaceOnce(
+    source,
+    '  Menu.setApplicationMenu(Menu.buildFromTemplate([{',
+    `  let clutchWindow: BrowserWindow | undefined
+  const openClutchWindow = (): void => {
+    if (clutchWindow !== undefined && !clutchWindow.isDestroyed()) {
+      clutchWindow.show()
+      clutchWindow.focus()
+      return
+    }
+    clutchWindow = createWindow(fileURLToPath(new URL('./clutch-extension-preload.cjs', import.meta.url)))
+    clutchWindow.setSize(900, 620)
+    clutchWindow.setTitle('Extension')
+    clutchWindow.once('ready-to-show', () => { clutchWindow?.show() })
+    clutchWindow.once('closed', () => { clutchWindow = undefined })
+    void clutchWindow.loadURL(\`\${SCHEME}://shell/clutch-extension/plugin-manager.html\`)
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{`,
+  );
+  source = replaceOnce(
+    source,
+    '  }]))',
+    `  }, {
+    label: 'Extension',
+    submenu: [{ label: 'Manage Extensions…', enabled: development === undefined, click: openClutchWindow }],
+  }]))`,
+  );
   return source;
 }
 export const preloadSource = `(() => {
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('clutchExtension', {
   version: 1,
+  locale: () => ipcRenderer.invoke('clutch-extension:locale'),
   list: () => ipcRenderer.invoke('clutch-extension:list'),
   install: spec => ipcRenderer.invoke('clutch-extension:install', spec),
   remove: name => ipcRenderer.invoke('clutch-extension:remove', name),
@@ -133,11 +156,8 @@ export async function buildDesktopOverlay(repo, output) {
       deps: { neverBundle: ['electron', 'electron-updater', 'semver'] },
       alias: { tar: require.resolve('tar') },
     });
-    // Only the Electron-owned management window gets the additional bridge.
-    writeFileSync(
-      join(output, 'preload.cjs'),
-      readFileSync(join(desktop, 'lib/preload.cjs'), 'utf8') + '\n' + preloadSource,
-    );
+    // Preserve the native preload; only the separate extension window gets this bridge.
+    writeFileSync(join(output, 'clutch-extension-preload.cjs'), preloadSource);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

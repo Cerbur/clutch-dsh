@@ -57,7 +57,7 @@ const zh = {
   unavailable: 'Desktop 管理桥接不可用，请通过 desktop-packager 重新构建应用。',
 };
 async function main() {
-  const locale = await window.dshDesktop.locale();
+  const locale = await window.clutchExtension.locale();
   const messages = locale.id.startsWith('zh') ? zh : en;
   const api = window.clutchExtension;
   const $ = (id) => document.getElementById(id);

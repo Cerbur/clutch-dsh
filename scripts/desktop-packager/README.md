@@ -12,7 +12,7 @@ English notes: [README.en.md](README.en.md)。
 - macOS arm64，以及 Xcode Command Line Tools（`git`、`codesign`、`ditto`、`plutil`、Clang 和 make）。
 - Python 3，供离线 seed 验证时的 node-gyp 原生模块编译使用；首次可能下载 Node 头文件。
 - 满足所选 deepseek-harness 仓库 `engines.node` 的 Node.js；当前要求 `^22.19 || >=24`。
-- 使用所选仓库 `packageManager` 指定的 pnpm 版本，当前为 `11.7.0`。
+- 使用所选仓库 `packageManager` 指定的 pnpm 版本，默认锁定版本为 `11.7.0`。
 - 网络可访问 GitHub、Node.js 下载站和 npm registry；首次构建会下载运行时与依赖，需要数 GB 磁盘空间。
 - 对安装目录有写权限；默认 `/Applications`，可用 `DSH_INSTALL_DIR` 指定其他父目录。执行前退出旧 App。
 
@@ -21,8 +21,9 @@ English notes: [README.en.md](README.en.md)。
 插件管理增强同样使用临时副本：`extension-overlay.mjs` 校验并修改 Desktop
 `main.ts` 和 `project-manager.ts` 的副本，重新编译到新 App，再装入本目录的
 `renderer/` 页面。增强会随每次打包默认加入；上游关键结构不匹配时停止构建，
-不静默降级。桥接仅暴露给 Electron 自有的顶层 `dsh-app://shell` 管理窗口，
-主 Web 页面和远程网页不能调用。
+不静默降级。桥接只装入独立的 `clutch-extension-preload.cjs`，并将 IPC 来源限定到顶层
+`dsh-app://shell/clutch-extension/plugin-manager.html`；原生插件窗口、主 Web 页面
+和远程网页不能调用增强 IPC。原生页面和 preload 保留。
 
 ## 人类使用
 
@@ -40,10 +41,18 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
 
 输出按五个阶段组织：获取源码 → 安装依赖 → 编译打包 → 准备运行时和离线 seed → 签名安装。每个阶段保留工具日志，失败即停止；缺少工具时直接显示工具名称。
 
+默认 DSH 来源锁定为完整提交 `016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb`：
+DSH 与 Desktop 均为 `0.1.3-alpha.2`，Electron 44、Node 24.17.0、pnpm 11.7.0。
+该组合已通过完整构建及 Electron 插件安装、卸载、runtime 重启验证。
+`DSH_SOURCE_REF` 仍可选择其他分支、tag 或完整 commit；选择其他版本时由调用者承担兼容性验证。
+
 DSH 和 vendor 包族使用上游 `release:pack --concurrency`，默认 4 个 worker
 并行打包，并分别显示耗时。`DSH_PACK_CONCURRENCY` 可指定正整数，设为 `1` 恢复
 串行；参数在获取 DSH 源码和构建前校验。此设置只影响包族打包，不改变编译、
 归档内容校验和离线 seed 验证。当前仍完整生成 tarball，不复用旧打包产物。
+
+原生模块按所选 DSH 结构从 `native/landlock-run` 或 `native/system` 构建，并打包其 `packages/entry`。
+输出仍遵循上游的 `packed/landlock` 路径；每次打包前清理此专用产物目录，避免旧版本混入。
 
 ```bash
 DSH_PACK_CONCURRENCY=4 ./scripts/desktop-packager/package-desktop.sh /path/to/deepseek-harness
@@ -77,14 +86,16 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
 ./scripts/desktop-packager/package-desktop.sh
 ```
 
-`DSH_SOURCE_REF` 选择 dsh 源码分支、tag 或完整 40 位 commit SHA，默认 `master`，仅在未传本地路径时使用。`DSH_DESKTOP_APP_ID` 默认 `com.clutch.dsh`。脚本在全新目录组装完整依赖、runtime 和 seed，菜单补丁成功后才签名并安装。已有 App 保存为 `DeepSeek Harness.app.previous`；若该备份已存在则停止安装，先自行移走备份再重试。失败时不会用半成品覆盖已安装 App。
+`DSH_SOURCE_REF` 选择 dsh 源码分支、tag 或完整 40 位 commit SHA，默认使用上面的已验证提交，仅在未传本地路径时使用。`DSH_DESKTOP_APP_ID` 默认 `com.clutch.dsh`。脚本在全新目录组装完整依赖、runtime 和 seed，菜单补丁成功后才签名并安装。覆盖安装时先在安装卷暂存旧 App；新 App 切换成功后将旧 App 移到当前用户的废纸篓，失败则恢复旧 App。可以反复运行脚本升级，不会留下阻塞后续安装的 `.previous`。
 
-完成后从安装目录双击 App，按 `⌘,` 打开「桌面插件」，在 npm 包输入框试用复制、粘贴、剪切、全选和撤销。实际模型对话仍需配置可用模型及凭据。
+完成后从安装目录双击 App，通过 `Extension → Manage Extensions…` 打开增强窗口，在 npm 包输入框试用复制、粘贴、剪切、全选和撤销。`⌘,` 保留给原生插件窗口。实际模型对话仍需配置可用模型及凭据。
 
 ### Electron 插件管理
 
-从 Desktop 菜单或 `⌘,` 打开独立的「桌面插件」窗口。它不占用 Web 的
-「设置 → 插件」标签页，也不是一个需要另行安装的 DSH plugin。
+从顶层 `Extension → Manage Extensions…` 打开独立窗口。原生插件菜单、窗口和
+`⌘,` 保留；增强页面放在独立的 `renderer/clutch-extension/` 目录。
+它不占用 Web 的「设置 → 插件」标签页，也不是一个需要另行安装的 DSH plugin。
+两个入口管理同一个 Desktop profile，插件修改与增强的手动重启共用操作队列。
 
 ![桌面插件管理窗口（预览数据）](assets/plugin-manager.png)
 
@@ -146,7 +157,7 @@ DSH_REPO_ROOT=/path/to/deepseek-harness node --test scripts/desktop-packager/pat
 codesign --verify --deep --strict '/tmp/dsh-desktop-qa/DeepSeek Harness.app'
 ```
 
-测试包含真实编译产物、补丁幂等性、嵌套菜单与不支持结构拒绝。签名检查不能替代 UI 验证：启动最终 App，确认主界面、`⌘,` 插件窗口和输入框快捷键，回报实际执行的检查。
+测试包含真实编译产物、补丁幂等性、嵌套菜单与不支持结构拒绝。签名检查不能替代 UI 验证：启动最终 App，确认主界面、`⌘,` 原生插件窗口、`Extension` 增强窗口和输入框快捷键，回报实际执行的检查。
 
 `node --test scripts/desktop-packager/install.test.mjs` 用命令替身验证管道入口、浅克隆、固定 commit、本地路径、失败退出码和临时目录清理，不执行真实构建或安装。
 

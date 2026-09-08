@@ -36,7 +36,9 @@ try {
     patchEditMenu(readFileSync(join(lib, 'main.js'), 'utf8'), require('typescript')),
   );
   cpSync(join(desktop, 'lib/preload-app.cjs'), join(lib, 'preload-app.cjs'));
-  cpSync(join(here, 'renderer'), join(shell, 'renderer'), { recursive: true });
+  cpSync(join(desktop, 'lib/preload.cjs'), join(lib, 'preload.cjs'));
+  cpSync(join(desktop, 'renderer'), join(shell, 'renderer'), { recursive: true });
+  cpSync(join(here, 'renderer'), join(shell, 'renderer/clutch-extension'), { recursive: true });
   cpSync(join(here, 'electron-smoke-main.mjs'), join(shell, 'smoke.mjs'));
   writeFileSync(
     join(shell, 'package.json'),

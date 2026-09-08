@@ -2,10 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_DSH_SOURCE_REF="016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb"
 if [ "${1:-}" = "--help" ]; then
   echo "Usage: $0 [deepseek-harness-directory]"
   echo "Without a path or DSH_REPO_ROOT, shallow-clone GitHub source into a temporary directory."
-  echo "DSH_SOURCE_REF selects a source branch, tag, or commit (default master)."
+  echo "DSH_SOURCE_REF selects a source branch, tag, or commit (default $DEFAULT_DSH_SOURCE_REF)."
   echo "DSH_INSTALL_DIR selects the install parent (default /Applications)."
   echo "DSH_PACK_CONCURRENCY selects package packing workers (default 4; 1 for serial)."
   exit 0
@@ -36,7 +37,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 if [ -z "$REPO_ROOT" ]; then
   SOURCE_TMP="$(mktemp -d /tmp/dsh-source-XXXXXX)"
-  SOURCE_REF="${DSH_SOURCE_REF:-master}"
+  SOURCE_REF="${DSH_SOURCE_REF:-$DEFAULT_DSH_SOURCE_REF}"
   REPO_ROOT="$SOURCE_TMP/repo"
   echo "[1/5] Fetching source: $SOURCE_REF"
   if [[ "$SOURCE_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
@@ -58,6 +59,14 @@ test -d "$REPO_ROOT/apps/desktop"
 export DSH_DESKTOP_TARGET_PLATFORM=darwin
 export DSH_DESKTOP_TARGET_ARCH=arm64
 TARGET_DIR="$REPO_ROOT/apps/desktop/.desktop-build/targets/mac-arm64"
+if [ -d "$REPO_ROOT/native/system/packages/entry" ]; then
+  NATIVE_SYSTEM_DIR="native/system"
+elif [ -d "$REPO_ROOT/native/landlock-run/packages/entry" ]; then
+  NATIVE_SYSTEM_DIR="native/landlock-run"
+else
+  echo "Unsupported DSH native system layout" >&2
+  exit 1
+fi
 cd "$REPO_ROOT"
 pack_family() {
   local started=$SECONDS
@@ -73,9 +82,10 @@ pnpm run build:official
 pack_family dsh
 pnpm --dir apps/desktop-host pack --pack-destination "$TARGET_DIR/packed/dsh"
 pack_family vendor
+rm -rf -- "$TARGET_DIR/packed/landlock"
 mkdir -p "$TARGET_DIR/packed/landlock"
-pnpm --dir native/landlock-run run build:ts
-pnpm --dir native/landlock-run/packages/entry pack --pack-destination "$TARGET_DIR/packed/landlock"
+pnpm --dir "$NATIVE_SYSTEM_DIR" run build:ts
+pnpm --dir "$NATIVE_SYSTEM_DIR/packages/entry" pack --pack-destination "$TARGET_DIR/packed/landlock"
 echo '[4/5] Preparing runtime, offline seed and desktop shell'
 pnpm --filter @deepseek-ai/dsh-desktop run prepare:runtime
 pnpm --filter @deepseek-ai/dsh-desktop run prepare:packages

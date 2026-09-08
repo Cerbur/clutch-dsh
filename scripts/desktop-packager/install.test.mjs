@@ -17,9 +17,18 @@ import { test } from 'node:test';
 
 const scripts = dirname(fileURLToPath(import.meta.url));
 const sourceSha = '0123456789abcdef0123456789abcdef01234567';
+const defaultDshSourceRef = '016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb';
 function fixture(
   t,
-  { failure = '', missing = false, local = false, sha = false, concurrency = '' } = {},
+  {
+    failure = '',
+    missing = false,
+    local = false,
+    sha = false,
+    concurrency = '',
+    useDefaultSource = false,
+    nativeLayout = 'system',
+  } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-installer-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -31,7 +40,7 @@ function fixture(
   mkdirSync(packager, { recursive: true });
   cpSync(join(scripts, 'package-desktop.sh'), join(packager, 'package-desktop.sh'));
   writeFileSync(join(packager, 'local-app.mjs'), '// fixture');
-  for (const file of ['extension-overlay.mjs', 'extension-runtime.mjs']) {
+  for (const file of ['extension-overlay.mjs', 'extension-runtime.mjs', 'trash-app.mjs']) {
     writeFileSync(join(packager, file), '// fixture');
   }
   mkdirSync(join(packager, 'renderer'));
@@ -41,6 +50,10 @@ function fixture(
   if (!missing) writeFileSync(join(packager, 'patch-edit-menu.mjs'), '// fixture');
   const source = join(root, 'source/apps/desktop');
   mkdirSync(source, { recursive: true });
+  mkdirSync(join(root, `source/native/${nativeLayout}/packages/entry`), { recursive: true });
+  const packedNative = join(source, '.desktop-build/targets/mac-arm64/packed/landlock');
+  mkdirSync(packedNative, { recursive: true });
+  writeFileSync(join(packedNative, 'old-version.tgz'), 'stale');
   tool('uname', 'if [ "$1" = -s ]; then echo Darwin; else echo arm64; fi');
   tool(
     'git',
@@ -85,22 +98,24 @@ fi
   for (const name of ['codesign', 'ditto', 'plutil']) tool(name, 'exit 0');
   tool('curl', "echo 'archive downloads must not be called' >&2; exit 91");
   const args = local ? ['-s', '--', join(root, 'source')] : ['-s'];
+  const env = {
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH}`,
+    TEST_ROOT: root,
+    TEST_FAILURE: failure,
+    TEST_LOCAL: String(local),
+    TEST_NODE: process.execPath,
+    DSH_CLIENT_COMMIT_HASH: 'ffffffffffffffffffffffffffffffffffffffff',
+    DSH_REPO_ROOT: '',
+    DSH_PACKAGER_REF: sha ? sourceSha : 'pinned-packager',
+    DSH_PACK_CONCURRENCY: concurrency,
+  };
+  if (!useDefaultSource) env.DSH_SOURCE_REF = sha ? sourceSha : 'pinned-source';
+  else delete env.DSH_SOURCE_REF;
   const result = spawnSync('/bin/bash', args, {
     input: readFileSync(join(scripts, 'install.sh'), 'utf8'),
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${bin}:${process.env.PATH}`,
-      TEST_ROOT: root,
-      TEST_FAILURE: failure,
-      TEST_LOCAL: String(local),
-      TEST_NODE: process.execPath,
-      DSH_CLIENT_COMMIT_HASH: 'ffffffffffffffffffffffffffffffffffffffff',
-      DSH_REPO_ROOT: '',
-      DSH_PACKAGER_REF: sha ? sourceSha : 'pinned-packager',
-      DSH_SOURCE_REF: sha ? sourceSha : 'pinned-source',
-      DSH_PACK_CONCURRENCY: concurrency,
-    },
+    env,
   });
   if (existsSync(join(root, 'temporary'))) {
     for (const path of readFileSync(join(root, 'temporary'), 'utf8').trim().split('\n')) {
@@ -136,6 +151,13 @@ test('full commit SHAs use shallow fetch and detached checkout', (t) => {
   assert.equal((requests.match(/checkout --quiet --detach FETCH_HEAD/g) || []).length, 2);
   assert.doesNotMatch(requests, /clone /);
 });
+test('defaults DSH source to the verified Desktop commit', (t) => {
+  const { result, root } = fixture(t, { useDefaultSource: true });
+  assert.equal(result.status, 0, result.stderr);
+  const requests = readFileSync(join(root, 'requests'), 'utf8');
+  assert.match(requests, new RegExp(`fetch --depth 1 .* ${defaultDshSourceRef}`));
+  assert.match(requests, /checkout --quiet --detach FETCH_HEAD/);
+});
 test('forwards an existing source path without downloading dsh', (t) => {
   const { result, root } = fixture(t, { local: true, concurrency: '1' });
   assert.equal(result.status, 0, result.stderr);
@@ -149,6 +171,27 @@ test('forwards an existing source path without downloading dsh', (t) => {
 });
 test('preserves download failure exit code', (t) => {
   assert.equal(fixture(t, { failure: 'download' }).result.status, 22);
+});
+test('packs old and new native layouts and clears stale native archives', (t) => {
+  for (const nativeLayout of ['system', 'landlock-run']) {
+    const { result, root } = fixture(t, { local: true, nativeLayout });
+    assert.equal(result.status, 0, result.stderr);
+    const requests = readFileSync(join(root, 'pnpm-requests'), 'utf8');
+    assert.match(requests, new RegExp(`--dir native/${nativeLayout} run build:ts`));
+    assert.match(
+      requests,
+      new RegExp(`--dir native/${nativeLayout}/packages/entry pack --pack-destination`),
+    );
+    assert.equal(
+      existsSync(
+        join(
+          root,
+          'source/apps/desktop/.desktop-build/targets/mac-arm64/packed/landlock/old-version.tgz',
+        ),
+      ),
+      false,
+    );
+  }
 });
 test('preserves build failure exit code and cleans both checkouts', (t) => {
   assert.equal(fixture(t, { failure: 'build' }).result.status, 42);

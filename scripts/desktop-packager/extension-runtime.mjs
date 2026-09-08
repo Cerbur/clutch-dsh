@@ -35,7 +35,11 @@ export function assertSender(event) {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) throw new Error('extension: main frame required');
   const url = new URL(frame.url);
-  if (url.protocol !== 'dsh-app:' || url.hostname !== 'shell')
+  if (
+    url.protocol !== 'dsh-app:' ||
+    url.hostname !== 'shell' ||
+    url.pathname !== '/clutch-extension/plugin-manager.html'
+  )
     throw new Error('extension: untrusted renderer');
 }
 export function assertMutable(name, coreNames) {
@@ -206,12 +210,13 @@ export async function prepareMutation(mutation, manager, coreNames, packageNameF
   assertMutable(mutation.name, coreNames);
   return mutation;
 }
-export function registerBridge({ ipcMain, dialog, manager, mutate, restart, coreNames }) {
+export function registerBridge({ ipcMain, dialog, manager, mutate, restart, coreNames, locale }) {
   const handle = (channel, action) =>
     ipcMain.handle('clutch-extension:' + channel, (event, ...args) => {
       assertSender(event);
       return action(event, ...args);
     });
+  handle('locale', () => locale());
   handle('list', () => {
     const manifest = json(join(manager.paths.profile, 'package.json'));
     return manager

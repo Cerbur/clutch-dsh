@@ -10,6 +10,7 @@ window.__fixture = { calls: [], rows: [
 ]};
 window.dshDesktop = {locale: async () => ({id: new URL(location.href).searchParams.get('lang') || 'zh'})};
 window.clutchExtension = {
+  locale: window.dshDesktop.locale,
   version: 1, list: async () => window.__fixture.rows,
   install: async spec => {
     window.__fixture.calls.push(['install', spec]);

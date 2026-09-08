@@ -87,14 +87,34 @@ void app.whenReady().then(async () => {
       .find((item) => item.accelerator === 'CmdOrCtrl+,');
     assert.ok(item?.enabled);
     item.click();
+    const nativeWindow = await until(
+      () =>
+        BrowserWindow.getAllWindows().find(
+          (window) => window.webContents.getURL() === 'dsh-app://shell/plugin-manager.html',
+        ),
+      'native plugin window',
+    );
+    await until(() => !nativeWindow.webContents.isLoading(), 'native plugin load');
+    assert.equal(
+      await nativeWindow.webContents.executeJavaScript('typeof window.clutchExtension'),
+      'undefined',
+    );
+    const extension = Menu.getApplicationMenu().items.find((item) => item.label === 'Extension');
+    assert.ok(extension?.submenu.items[0].enabled);
+    extension.submenu.items[0].click();
     const management = await until(
       () =>
-        BrowserWindow.getAllWindows().find((window) =>
-          window.webContents.getURL().startsWith('dsh-app://shell/'),
+        BrowserWindow.getAllWindows().find(
+          (window) =>
+            window.webContents.getURL() === 'dsh-app://shell/clutch-extension/plugin-manager.html',
         ),
       'management window',
     );
     await until(() => !management.webContents.isLoading(), 'management load');
+    assert.equal(
+      await management.webContents.executeJavaScript('typeof window.dshDesktop'),
+      'undefined',
+    );
     assert.deepEqual(errors, []);
     assert.deepEqual(
       await management.webContents.executeJavaScript('window.clutchExtension.list()'),

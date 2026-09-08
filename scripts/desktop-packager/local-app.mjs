@@ -18,6 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { patchEditMenu } from './patch-edit-menu.mjs';
 import { buildDesktopOverlay } from './extension-overlay.mjs';
+import { moveAppToTrash } from './trash-app.mjs';
 
 const [mode, input] = process.argv.slice(2);
 if (!input || !['electron', 'seed', 'assemble'].includes(mode))
@@ -87,9 +88,9 @@ if (mode === 'electron') {
       if (/\.(?:js|cjs)$/.test(file)) cpSync(join(desktop, 'lib', file), join(shell, 'lib', file));
     }
     cpSync(join(desktop, 'renderer'), join(shell, 'renderer'), { recursive: true });
-    for (const file of ['plugin-manager.html', 'plugin-manager.js', 'plugin-manager.css']) {
-      cpSync(new URL('./renderer/' + file, import.meta.url), join(shell, 'renderer', file));
-    }
+    cpSync(new URL('./renderer/', import.meta.url), join(shell, 'renderer/clutch-extension'), {
+      recursive: true,
+    });
     await buildDesktopOverlay(repo, join(shell, 'lib'));
     for (const resource of ['runtime', 'seed']) {
       cpSync(join(target, resource), join(resources, resource), { recursive: true });
@@ -139,12 +140,10 @@ if (mode === 'electron') {
     const parent = resolve(process.env.DSH_INSTALL_DIR || '/Applications');
     mkdirSync(parent, { recursive: true });
     const installed = join(parent, 'DeepSeek Harness.app');
-    const backup = `${installed}.previous`;
-    if (existsSync(backup))
-      throw new Error(`Previous backup exists; move it before installing: ${backup}`);
     const incoming = mkdtempSync(join(parent, '.dsh-install-'));
     try {
       const candidate = join(incoming, 'DeepSeek Harness.app');
+      const backup = join(incoming, 'Previous DeepSeek Harness.app');
       run('/usr/bin/ditto', [app, candidate]);
       run('/usr/bin/codesign', ['--verify', '--deep', '--strict', candidate]);
       if (existsSync(installed)) renameSync(installed, backup);
@@ -154,10 +153,30 @@ if (mode === 'electron') {
         if (existsSync(backup)) renameSync(backup, installed);
         throw error;
       }
+      let trashed;
+      if (existsSync(backup)) {
+        try {
+          trashed = moveAppToTrash(backup);
+        } catch (trashError) {
+          try {
+            renameSync(installed, candidate);
+            renameSync(backup, installed);
+          } catch (rollbackError) {
+            throw new AggregateError(
+              [trashError, rollbackError],
+              'local app: Trash move failed and the previous application could not be restored',
+              { cause: rollbackError },
+            );
+          }
+          throw trashError;
+        }
+      }
+      console.log(
+        `Installed: ${installed}${trashed === undefined ? '' : `\nPrevious app moved to Trash: ${trashed}`}`,
+      );
     } finally {
       rmSync(incoming, { recursive: true, force: true });
     }
-    console.log(`Installed: ${installed}\nExisting app, if any, preserved at: ${backup}`);
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }

@@ -20,8 +20,15 @@ dependencies. Quit the existing app before installing.
 ```
 
 Without a source path, the script shallow-clones upstream. `DSH_SOURCE_REF`
-selects its ref; `DSH_INSTALL_DIR` changes the installation parent. Existing apps
-are preserved with a `.previous` suffix; an existing backup blocks replacement.
+selects its ref; by default it pins verified commit
+`016af7c67bd6eb9ca4af214dd82e6a5b8fddcfdb`, where DSH and Desktop are
+`0.1.3-alpha.2`, with Electron 44, Node 24.17.0 and pnpm 11.7.0. This combination
+passed a full build and Electron plugin install, removal and runtime-restart test.
+Other refs require their own compatibility verification. `DSH_INSTALL_DIR` changes the installation parent. During replacement,
+the installed app is staged on the installation volume for rollback. After the new
+app is installed successfully, the old app moves to the current user's Trash. A
+failed switch restores the old app, and repeated upgrades do not leave a blocking
+`.previous` backup.
 
 The dsh and vendor families use upstream `release:pack --concurrency` with four
 packing workers by default, and report each family's elapsed time. Set
@@ -29,6 +36,11 @@ packing workers by default, and report each family's elapsed time. Set
 runs before fetching DSH source or building. This setting affects only family
 packing; compilation, payload checks and offline seed verification still run.
 Tarballs are regenerated in full; previous packed outputs are not reused.
+
+Native modules build from the selected DSH checkout's `native/landlock-run` or
+`native/system` layout, packing its `packages/entry`.
+The output remains upstream's `packed/landlock`; this dedicated artifact directory
+is cleared before packing to prevent older versions from being included.
 
 ```bash
 DSH_PACK_CONCURRENCY=4 ./scripts/desktop-packager/package-desktop.sh /path/to/deepseek-harness
@@ -45,8 +57,14 @@ build. This is not a notarized distribution or a supported auto-update channel.
 
 ## Plugin management
 
-Open Desktop's plugin menu or press Cmd+,. This is a separate Electron window,
-not a Web Settings tab or an installable DSH plugin.
+Open `Extension → Manage Extensions…`. The native plugin menu, window and Cmd+,
+remain available. Extension assets live in `renderer/clutch-extension/`, with a
+separate `clutch-extension-preload.cjs`; native assets and preload are preserved.
+Extension IPC accepts only the owned top-level
+`dsh-app://shell/clutch-extension/plugin-manager.html` page. Native plugin windows,
+the main Web page and remote pages cannot call it. Both managers use the same
+Desktop profile and share a queue for package changes and extension runtime restarts.
+This is a separate Electron window, not a Web Settings tab or an installable DSH plugin.
 
 ![Management window with preview data](assets/plugin-manager.png)
 
