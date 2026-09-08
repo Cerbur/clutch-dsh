@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
 import { readWorktreeStatus } from '../provider/git/worktree-status.js';
 import type { GitWorktreeInfo } from '../provider/types.js';
 
@@ -20,7 +21,6 @@ import {
   describeError,
   generatedId,
   isDirectory,
-  pathExists,
   requireWorkspace,
   samePhysicalPath,
   validateGeneratedPath,
@@ -222,6 +222,25 @@ export async function createWorktree(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
 ): Promise<WorktreeRecord> {
+  let baseId = '';
+  for (let attempt = 0n; ; attempt++) {
+    context.signal.throwIfAborted();
+    // Reroll first, then make progress even if an injected random source repeats forever.
+    if (attempt < 8n) baseId = generatedId(context.idFactory);
+    const worktreeId = attempt < 8n ? baseId : `${baseId}_${attempt - 7n}`;
+    try {
+      return await createWorktreeAttempt(context, input, worktreeId);
+    } catch (error) {
+      if (!(error instanceof GeneratedWorktreeNameCollision)) throw error;
+    }
+  }
+}
+
+async function createWorktreeAttempt(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  worktreeId: string,
+): Promise<WorktreeRecord> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   const transactional = context.sidecar.runExclusive !== undefined;
   if (!transactional) await context.git.validateRepository(workspace.rootPath);
@@ -280,20 +299,12 @@ export async function createWorktree(
     }
   }
 
-  const worktreeId = generatedId(context.idFactory);
   const targetPath = path.resolve(context.dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId);
 
   // 创建前同时检查词法和物理目录边界，阻止配置、ID 或 symlink 将目标引回 Workspace 或带出插件根目录。
   // Check lexical and physical directory boundaries before creation so configuration, IDs, or symlinks cannot redirect the target into the Workspace or outside the plugin root.
   validateGeneratedPath(context, workspace.rootPath, targetPath, worktreeId);
   await validatePhysicalGeneratedPath(context, workspace.rootPath, targetPath);
-  if (await pathExists(targetPath)) {
-    throw providerError('GIT_OPERATION_FAILED', `Generated Worktree path already exists: ${targetPath}`, {
-      workspaceRoot: workspace.rootPath,
-      targetPath,
-      worktreeId,
-    });
-  }
 
   // The default Workspace-sharded sidecar exposes the transaction seam. Legacy
   // injected stores keep the previous path below for compatibility with older
@@ -309,6 +320,13 @@ export async function createWorktree(
       targetBranch,
     });
   }
+
+  await assertGeneratedNameAvailable(
+    worktreeId,
+    targetPath,
+    await context.sidecar.read(input.workspaceId),
+    await context.git.listWorktrees(workspace.rootPath),
+  );
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {

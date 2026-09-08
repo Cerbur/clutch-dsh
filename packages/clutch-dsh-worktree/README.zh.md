@@ -213,6 +213,12 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 ### 创建 Worktree
 
+新目录使用 `$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-characters>`
+（文件夹名为 15 个字符，包含 48 位加密随机数）。
+目录名、Git 登记或 sidecar 身份已被占用时自动换名重试；八个随机候选均冲突后，
+依次尝试 `_1`、`_2` 等数字后缀，直到找到可用名称或取消。
+已有 Worktree 的路径和 ID 保持不变；分支冲突与其他 Git 失败沿用原有错误处理。
+
 1. 选择 Workspace，点击它旁边的 `+`，选择基线 local branch，并填写 Worktree name。默认
    branch 名称为 `dsh/<8-character-random-string>`。
 2. 如果要从已有 Worktree 创建同级 Worktree，打开该 active Worktree 的选项菜单并选择

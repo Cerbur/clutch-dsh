@@ -10,4 +10,5 @@ export interface WorktreeManagerContext {
   readonly sidecar: SidecarStore;
   readonly transaction: WorktreeMutationTransaction;
   readonly idFactory: () => string;
+  readonly signal: AbortSignal;
 }
