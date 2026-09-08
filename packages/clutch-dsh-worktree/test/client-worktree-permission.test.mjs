@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   createWorktreeFullAccessConfirmationController,
   worktreeFullAccessConfirmationMessage,
-} from '../lib/client/worktree-permission.js';
+} from '../lib/client/permission/worktree-permission.js';
 
 const input = {
   workspaceId: 'workspace-one',

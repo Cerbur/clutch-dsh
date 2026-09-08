@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { computeOverlayBounds } from '../lib/client/overlay-bounds.js';
+import { computeOverlayBounds } from '../lib/client/overlay/overlay-bounds.js';
 import {
   findNewSessionAnchor,
   resolveNativeSidebarRoot,
   syncObservedElement,
-} from '../lib/client/sidebar-overlay-geometry.js';
+} from '../lib/client/overlay/sidebar-overlay-geometry.js';
 
 test('unwraps the display-contents sidebar slot before measuring the native root', () => {
   const nativeRoot = {

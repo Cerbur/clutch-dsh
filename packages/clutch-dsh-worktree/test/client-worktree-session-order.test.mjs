@@ -6,7 +6,7 @@ import {
   nextSessionOrderAccount,
   normalizeWorktreeSessionOrderState,
   reorderSessionIds,
-} from '../lib/client/worktree-session-order.js';
+} from '../lib/client/session/worktree-session-order.js';
 
 function timestamps(entries) {
   return Object.fromEntries(entries);

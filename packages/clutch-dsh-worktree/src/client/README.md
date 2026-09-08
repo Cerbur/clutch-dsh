@@ -163,6 +163,39 @@ Client disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
+### Internal Surface modules
+
+`WorktreeSurface.tsx` composes the overlay from the package-internal `surface/`
+modules. Source subscriptions, scoped reads, expansion/current-Session reveal,
+Session ordering, registration, native actions, drag actions and Worktree lifecycle
+actions have separate owners. Each owner retains its operation's state and async
+guards; the facade wires grouped inputs to the header, tree and dialog components.
+Presentation components continue to use the same native controls and DOM markers.
+
+The directory layout follows those responsibilities:
+
+```text
+client/
+├── context/     # Conversation and Hero context projection
+├── session/     # Session creation, fork, ordering and membership
+├── permission/  # Permission confirmation and native icon integration
+├── view/        # View mode, scoped reads, actions and error presentation
+├── overlay/     # Overlay composition and geometry
+└── surface/
+    ├── state/       # Subscriptions, refresh and presentation state
+    ├── actions/     # Native, Session and Worktree operation handlers
+    └── components/  # Header, tree rows and dialogs
+```
+
+Surface types, selectors and shared helpers remain at the Surface root. Internal
+consumers import the canonical location directly; obsolete forwarding modules are
+removed. Published package entrypoints and their exported symbols are unchanged.
+
+The Provider's `transaction/` implementation is independent of this directory.
+Surface modules consume the existing browser contract and Connection adapter only.
+The recursive module tests resolve relative imports and reject cross-layer imports
+and runtime cycles inside the new implementation directories.
+
 ### Browser-local expansion state
 
 The Client persists Workspace, Main, and Worktree expansion exceptions under

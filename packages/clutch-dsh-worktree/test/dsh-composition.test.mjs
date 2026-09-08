@@ -12,7 +12,7 @@ import {
 import {
   loadWorktreeView,
   worktreeSetupCommands,
-} from '../lib/client/worktree-view.js';
+} from '../lib/client/view/worktree-view.js';
 import { createWorktreeRemoteProjection } from '../lib/host/remote.js';
 import { createWorktreeManager, LocalGitAdapter } from '../lib/index.js';
 

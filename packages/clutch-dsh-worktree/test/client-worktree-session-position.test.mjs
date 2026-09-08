@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { scrollCurrentSessionIntoView } from '../lib/client/worktree-session-position.js';
+import { scrollCurrentSessionIntoView } from '../lib/client/session/worktree-session-position.js';
 
 function fakeRow(sessionId, calls) {
   return {

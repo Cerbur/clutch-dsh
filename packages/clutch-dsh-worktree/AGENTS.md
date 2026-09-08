@@ -150,6 +150,12 @@ also exposes the read-only `WorktreeImportCandidate` projection plus `listImport
 
 ### `src/provider/`
 
+`git/` 拥有 Git adapter、subprocess 与仓库指纹，`sidecar/` 拥有 schema、repository、
+持久化与跨进程锁。`transaction/index.ts` 保留事务入口与原有导出；事务目录按
+`operations/`、`recovery/`、`support/` 分别收拢操作、恢复和校验/日志/发布支撑。
+拆分不得缩短 shard/repository lock 的持有区间，
+不得改变 pending marker → Git → 验证 → stable snapshot 的顺序，也不得向 Client 暴露内部模块。
+
 拥有底层 Git adapter、sidecar repository、DSH Project/Session read adapter ports、
 输入验证、Provider-owned errors、atomic persistence 和 mutation primitives。
 
@@ -251,6 +257,17 @@ infrastructure only and does not add a Remote method.
 不进入 browser Remote。
 
 ### `src/client/`
+
+`WorktreeSurface.tsx` 是 surface 组合入口；`surface/` 收拢专属状态、副作用、操作与
+展示组件。读取去重、刷新代际、dispose 与 late-result guard 必须随各自操作一起保留；
+只读刷新不能升级为全局刷新。此目录是源码模块边界，不是独立发布或安装的 package。
+
+Client 目录按功能组织：`context/` 是 Conversation/Hero 上下文，`session/` 是会话连接、
+fork、排序与 membership，`permission/` 是权限确认与图标，`view/` 是模式、读取与视图
+动作，`overlay/` 是挂载与几何测量。`surface/` 内按 `state/`、`actions/`、`components/`
+收拢状态、副作用、操作与展示；共享类型和 selector 留在 surface 根目录。
+根目录只保留入口、组合、Connection、locale 和样式等公共接缝。内部文件移动直接更新
+消费者，不新增仅用于维持旧内部路径的转发文件；公开 package exports 与导出符号保持兼容。
 
 是 browser-safe Consumer。它只通过现有 DSH Client Connection 和 contract/facade
 调用 Host 能力，负责 Worktree mode、view model、action/error surface、browser-local

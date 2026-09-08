@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   createWorktreeViewReader,
   mergeWorktreeViews,
-} from '../lib/client/worktree-view-read.js';
+} from '../lib/client/view/worktree-view-read.js';
 
 function activeWorktree(branch, workspaceId, worktreeId) {
   return {

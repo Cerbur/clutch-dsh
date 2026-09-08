@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadClientEntry } from './client-fixture.mjs';
-import { openWorktreeSession } from '../lib/client/navigation.js';
+import { openWorktreeSession } from '../lib/client/view/navigation.js';
 
 const {
   WORKTREE_VIEW_MODE_STORAGE_KEY,
@@ -11,7 +11,7 @@ const {
   projectVirtualWorkspaceMembership,
   unboundSessionIds,
   workspaceSessionIds,
-} = await import('../lib/client/view-mode.js');
+} = await import('../lib/client/view/view-mode.js');
 
 class MemoryStorage {
   #values = new Map();
@@ -221,7 +221,7 @@ test('Worktree plus reuses a bound blank Session through the Client entry', asyn
 
 test('virtual Worktree membership replays after native refresh and is removed on dispose', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   let nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
@@ -260,7 +260,7 @@ test('virtual Worktree membership replays after native refresh and is removed on
 
 test('read-only Workspace refresh notifies subscribers with the projected snapshot', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   let nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
@@ -299,7 +299,7 @@ test('read-only Workspace refresh notifies subscribers with the projected snapsh
 
 test('native no-op refresh does not notify projected subscribers', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   const nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
@@ -329,7 +329,7 @@ test('native no-op refresh does not notify projected subscribers', async () => {
 
 test('virtual Workspace membership hides wrapper methods from enumeration', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   const list = {
     getSnapshot: () => ({ items: [] }),
@@ -344,7 +344,7 @@ test('virtual Workspace membership hides wrapper methods from enumeration', asyn
 
 test('virtual Workspace membership keeps the projected snapshot identity stable between reads', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   const nativeSnapshot = {
     items: [workspace('ws-one', [])],
@@ -367,7 +367,7 @@ test('virtual Workspace membership keeps the projected snapshot identity stable 
 
 test('disposing read-only Workspace projection restores the native methods', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   let nativeSnapshot = { items: [workspace('ws-one', [])] };
   const subscribers = new Set();
@@ -396,7 +396,7 @@ test('disposing read-only Workspace projection restores the native methods', asy
 
 test('sync removes a virtual Session without changing native Workspace state', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   const nativeSnapshot = { items: [workspace('ws-one', ['native-one'])] };
   const subscribers = new Set();
@@ -417,7 +417,7 @@ test('sync removes a virtual Session without changing native Workspace state', a
 
 test('native Workspace refresh publishes the projected membership atomically', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   let nativeSnapshot = {
     items: [workspace('ws-one', ['native-one'])],
@@ -581,7 +581,7 @@ test('rc.1 Workspace recency keeps host order when timestamps tie or are absent'
 
 test('Workspace membership projection requires an extensible native source', async () => {
   const { createVirtualWorkspaceMembership } = await import(
-    '../lib/client/virtual-workspace-membership.js',
+    '../lib/client/session/virtual-workspace-membership.js',
   );
   const list = Object.preventExtensions({
     getSnapshot: () => ({ items: [] }),

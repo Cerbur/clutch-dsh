@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createWorktreeContextProjection } from '../lib/client/worktree-context-store.js';
-import { createWorktreeViewReader } from '../lib/client/worktree-view-read.js';
+import { createWorktreeContextProjection } from '../lib/client/context/worktree-context-store.js';
+import { createWorktreeViewReader } from '../lib/client/view/worktree-view-read.js';
 
 function snapshot(initial) {
   let value = initial;

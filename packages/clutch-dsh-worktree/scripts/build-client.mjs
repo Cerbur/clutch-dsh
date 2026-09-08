@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
 import { build } from 'tsdown';
+import { resolveClientCssPath } from './client-css-path.mjs';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const packageManifest = JSON.parse(
@@ -51,13 +51,7 @@ await build({
       name: 'clutch-dsh-worktree-css',
       resolveId(source, importer) {
         if (!source.endsWith('.css')) return null;
-        const emitted =
-          importer === undefined
-            ? path.resolve(packageDirectory, source)
-            : path.resolve(path.dirname(importer), source);
-        const candidate = existsSync(emitted)
-          ? emitted
-          : path.resolve(packageDirectory, 'src/client', source.replace(/^\.\//, ''));
+        const candidate = resolveClientCssPath(packageDirectory, source, importer);
         return `${CSS_PREFIX}${candidate}${CSS_SUFFIX}`;
       },
       async load(id) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runWorktreeCleanupFlow } from '../lib/client/worktree-cleanup-flow.js';
+import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
 
 test('committed cleanup refreshes even when permission normalization rejects', async () => {
   const calls = [];

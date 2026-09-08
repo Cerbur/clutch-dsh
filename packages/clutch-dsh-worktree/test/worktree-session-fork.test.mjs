@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createWorktreeSessionForkCoordinator } from '../lib/client/worktree-session-fork.js';
+import { createWorktreeSessionForkCoordinator } from '../lib/client/session/worktree-session-fork.js';
 
 function binding(overrides = {}) {
   return {

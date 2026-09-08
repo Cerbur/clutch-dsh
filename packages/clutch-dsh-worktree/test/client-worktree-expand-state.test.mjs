@@ -7,7 +7,7 @@ import {
   isMainExpanded,
   isWorktreeExpanded,
   isWorkspaceExpanded,
-} from '../lib/client/worktree-expand-state.js';
+} from '../lib/client/view/worktree-expand-state.js';
 
 class MemoryStorage {
   #values = new Map();

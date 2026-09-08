@@ -187,8 +187,11 @@ function makeBinding({ workspaceId = 'ws_one', worktreeId = 'wt_seed', sessionId
 
 function createPendingSubprocessRuntime() {
   const handles = [];
+  let notifyStarted;
+  const started = new Promise((resolve) => { notifyStarted = resolve; });
   return {
     handles,
+    started,
     async resolveExecutable() {
       return '/execution-world/bin/git';
     },
@@ -220,12 +223,13 @@ function createPendingSubprocessRuntime() {
       };
       spec.signal?.addEventListener('abort', finish, { once: true });
       handles.push(handle);
+      notifyStarted();
       return handle;
     },
   };
 }
 
-test('manager close aborts and waits for an in-flight default Git operation', async () => {
+test('manager close aborts and waits for an in-flight default Git operation', { timeout: 5_000 }, async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-manager-lifecycle-'));
   const dshHome = path.join(tempRoot, 'dsh-home');
   const workspaceRoot = path.join(tempRoot, 'workspace');
@@ -240,7 +244,7 @@ test('manager close aborts and waits for an in-flight default Git operation', as
 
   try {
     const operation = manager.listBranches({ workspaceId: 'ws_one' });
-    await delay(10);
+    await runtime.started;
     const close = manager.close();
 
     await assert.rejects(operation);
@@ -3165,4 +3169,3 @@ test('unarchive rejects cleaned worktrees and conflict states', async () => {
     );
   });
 });
-

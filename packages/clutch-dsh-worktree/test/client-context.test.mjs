@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveWorktreeSessionContext } from '../lib/client/worktree-context.js';
+import { resolveWorktreeSessionContext } from '../lib/client/context/worktree-context.js';
 
 const workspace = { workspaceId: 'ws1', sessionIds: ['session-1'] };
 

@@ -10,9 +10,9 @@ import type {
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
-import { LocalGitAdapter } from '../provider/git.js';
-import { WorkspaceShardedSidecarRepository } from '../provider/sidecar.js';
-import { WorktreeMutationTransaction } from '../provider/transaction.js';
+import { LocalGitAdapter } from '../provider/git/adapter.js';
+import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
+import { WorktreeMutationTransaction } from '../provider/transaction/index.js';
 import { providerError } from '../provider/types.js';
 import {
   bindSession,

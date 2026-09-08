@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import * as selectors from '../lib/client/worktree-surface-selectors.js';
+import * as selectors from '../lib/client/surface/selectors.js';
 
 test('recovery blocks archived actions even when activity is idle', () => {
   assert.equal(selectors.worktreeLifecycleBlockReason(false, 'recovery-needed'), 'recovery');

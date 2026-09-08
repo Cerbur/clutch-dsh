@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validateSidecarSnapshot } from '../lib/provider/sidecar-schema.js';
+import { validateSidecarSnapshot } from '../lib/provider/sidecar/sidecar-schema.js';
 import { createWorktreeMutationToken } from '../lib/provider/mutation-token.js';
 
 const record = {

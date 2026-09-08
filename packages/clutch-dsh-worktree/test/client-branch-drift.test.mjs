@@ -1,15 +1,24 @@
+import { readSurfaceSource } from './client-surface-source.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 import React from 'react';
 import ts from 'typescript';
-import { createWorktreeRefreshGuard, createWorktreeViewReader, mergeWorktreeView } from '../lib/client/worktree-view-read.js';
+import {
+  createWorktreeRefreshGuard,
+  createWorktreeViewReader,
+  mergeWorktreeView,
+} from '../lib/client/view/worktree-view-read.js';
 
-const source = await readFile(
-  new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
-  'utf8',
-);
+const source = await readSurfaceSource([
+  'components/ActiveWorktree.tsx',
+  'components/ArchivedWorktree.tsx',
+  'actions/useLifecycleActions.tsx',
+  'actions/useSurfaceMutation.tsx',
+  'components/LifecycleDialogs.tsx',
+  'actions/lifecycle-commands.ts',
+]);
 const ast = ts.createSourceFile(
   'surface.tsx',
   source,
@@ -39,21 +48,35 @@ const record = {
 };
 
 test('sibling creation follows the live branch and excludes detached HEAD', () => {
-  const property = find((n) => ts.isPropertyAssignment(n) &&
-    n.name.getText(ast) === 'onCreateWorktree' &&
-    n.initializer.getText(ast).includes('record.status'));
-  for (const [currentBranch, expected] of [['merge/foo', 'merge/foo'], [undefined, 'feature/foo'], [null, undefined]]) {
+  const property = find(
+    (n) =>
+      ts.isPropertyAssignment(n) &&
+      n.name.getText(ast) === 'onCreateWorktree' &&
+      n.initializer.getText(ast).includes('record.status'),
+  );
+  for (const [currentBranch, expected] of [
+    ['merge/foo', 'merge/foo'],
+    [undefined, 'feature/foo'],
+    [null, undefined],
+  ]) {
     let options;
     const context = {
       record: { ...record, status: 'active', currentBranch },
       workspace: { workspaceId: 'ws1' },
       workspaceWorktreeNames: [],
       createNumberedWorktreeName: (branch) => `${branch}-2`,
-      openWorktreeCreator: (_workspace, value) => { options = value; },
+      openWorktreeCreator: (_workspace, value) => {
+        options = value;
+      },
     };
     const action = evaluate(`return (${property.initializer.getText(ast)});`, context);
-    const showCreate = property.parent.properties.find((node) => node.name?.getText(ast) === 'showCreate');
-    assert.equal(evaluate(`return (${showCreate.initializer.getText(ast)});`, context), currentBranch !== null);
+    const showCreate = property.parent.properties.find(
+      (node) => node.name?.getText(ast) === 'showCreate',
+    );
+    assert.equal(
+      evaluate(`return (${showCreate.initializer.getText(ast)});`, context),
+      currentBranch !== null,
+    );
     action?.();
     assert.equal(options?.baseBranch, expected);
     assert.equal(action !== undefined, currentBranch !== null);
@@ -64,23 +87,43 @@ test('sibling creation follows the live branch and excludes detached HEAD', () =
 test('active and archived menu opens share the owning Workspace read', async () => {
   const properties = [];
   function collect(node) {
-    if (ts.isPropertyAssignment(node) && node.name.getText(ast) === 'onOpenChange' &&
-      node.initializer.getText(ast).includes('setOpenWorktreeMenuId')) properties.push(node);
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(ast) === 'onOpenChange' &&
+      node.initializer.getText(ast).includes('setOpenWorktreeMenuId')
+    )
+      properties.push(node);
     ts.forEachChild(node, collect);
   }
   collect(ast);
   const calls = { worktrees: 0, branches: 0, bindings: 0 };
   let release;
-  const gate = new Promise((resolve) => { release = resolve; });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
   const reader = createWorktreeViewReader({
-    listWorktrees: async () => { calls.worktrees++; await gate; return []; },
-    listBranches: async () => { calls.branches++; await gate; return []; },
-    listBindings: async () => { calls.bindings++; await gate; return []; },
+    listWorktrees: async () => {
+      calls.worktrees++;
+      await gate;
+      return [];
+    },
+    listBranches: async () => {
+      calls.branches++;
+      await gate;
+      return [];
+    },
+    listBindings: async () => {
+      calls.bindings++;
+      await gate;
+      return [];
+    },
   });
   const pending = [];
   for (const property of properties) {
     const onOpenChange = evaluate(`return (${property.initializer.getText(ast)});`, {
-      record, setOpenWorktreeMenuId() {}, refresh: (options) => {
+      record,
+      setOpenWorktreeMenuId() {},
+      refresh: (options) => {
         assert.deepEqual(options.scope, { kind: 'workspace', workspaceId: 'ws1' });
         assert.equal(options.preserveCurrent, true);
         assert.equal(options.invalidateContext, false);
@@ -101,16 +144,42 @@ test('active and archived menu opens share the owning Workspace read', async () 
 });
 
 test('adoption failures are visible inside the dialog with a refresh action', async () => {
-  const text = await readFile(new URL('../src/client/worktree-surface-dialogs.tsx', import.meta.url), 'utf8');
-  const file = ts.createSourceFile('dialogs.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const fn = find((n) => ts.isFunctionDeclaration(n) && n.name?.text === 'WorktreeAdoptBranchDialog', file);
-  const render = evaluate(`${fn.getText(file).replace('export ', '')}; return WorktreeAdoptBranchDialog;`, {
-    React, Modal: 'modal', Button: 'button', styles: {}, formatWorktreeViewError: (error) => error.message,
-  });
+  const text = await readFile(
+    new URL('../src/client/surface/components/dialogs.tsx', import.meta.url),
+    'utf8',
+  );
+  const file = ts.createSourceFile(
+    'components/dialogs.tsx',
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const fn = find(
+    (n) => ts.isFunctionDeclaration(n) && n.name?.text === 'WorktreeAdoptBranchDialog',
+    file,
+  );
+  const render = evaluate(
+    `${fn.getText(file).replace('export ', '')}; return WorktreeAdoptBranchDialog;`,
+    {
+      React,
+      Modal: 'modal',
+      Button: 'button',
+      styles: {},
+      formatWorktreeViewError: (error) => error.message,
+    },
+  );
   let refreshed = false;
-  const element = render({ t: (key) => key, worktree: record, actionPending: false,
+  const element = render({
+    t: (key) => key,
+    worktree: record,
+    actionPending: false,
     error: { code: 'WORKTREE_STATE_CONFLICT', message: 'Branch changed' },
-    onClose() {}, onSubmit() {}, onRetry: () => { refreshed = true; },
+    onClose() {},
+    onSubmit() {},
+    onRetry: () => {
+      refreshed = true;
+    },
   });
   const nodes = [];
   function walk(value) {
@@ -123,43 +192,77 @@ test('adoption failures are visible inside the dialog with a refresh action', as
   assert.ok(alert, 'error must be rendered in the modal');
   const retry = nodes.find((node) => node.props.onClick && node.props.children === 'action.retry');
   assert.ok(retry, 'failed confirmation must offer refresh before reconfirmation');
-  assert.equal(React.Children.toArray(element.props.footer.props.children).at(-1).props.disabled, true);
+  assert.equal(
+    React.Children.toArray(element.props.footer.props.children).at(-1).props.disabled,
+    true,
+  );
   retry.props.onClick();
   assert.equal(refreshed, true);
 });
 
-for (const outcome of ['changed', 'detached', 'missing', 'offline', 'disposed', 'workspace-removed']) {
+for (const outcome of [
+  'changed',
+  'detached',
+  'missing',
+  'offline',
+  'disposed',
+  'workspace-removed',
+]) {
   test(`adoption retry handles ${outcome} without discarding unrelated ready content`, async () => {
     const guard = createWorktreeRefreshGuard();
     const otherView = { workspaceId: 'ws2', worktrees: [] };
-    const latest = { ...record, currentBranch: 'merge/bar', mutationToken: 'fresh',
+    const latest = {
+      ...record,
+      currentBranch: 'merge/bar',
+      mutationToken: 'fresh',
       ...(outcome === 'detached' ? { currentBranch: null } : {}),
     };
     const view = { workspaceId: 'ws1', worktrees: outcome === 'missing' ? [] : [latest] };
-    let state = { status: 'ready', views: [{ workspaceId: 'ws1', worktrees: [record] }, otherView] };
+    let state = {
+      status: 'ready',
+      views: [{ workspaceId: 'ws1', worktrees: [record] }, otherView],
+    };
     const before = state;
     let target = record;
     let error = { message: 'Stale confirmation' };
     let pending;
-    const retry = evaluate(`${declaration('refreshBranchAdoption')} return refreshBranchAdoption;`, {
-      worktreeBranchAdoption: target, manager: {},
-      branchAdoptionGuard: { current: guard },
-      workspaceIdsRef: { current: outcome === 'workspace-removed' ? ['ws2'] : ['ws1', 'ws2'] },
-      setActionPending: (value) => { pending = value; },
-      refresh: async (options) => {
-        assert.deepEqual(options, { scope: { kind: 'workspace', workspaceId: 'ws1' }, preserveCurrent: true });
-        if (outcome === 'disposed') guard.invalidate();
+    const retry = evaluate(
+      `${declaration('refreshBranchAdoption')} return refreshBranchAdoption;`,
+      {
+        worktreeBranchAdoption: target,
+        manager: {},
+        branchAdoptionGuard: { current: guard },
+        workspaceIdsRef: { current: outcome === 'workspace-removed' ? ['ws2'] : ['ws1', 'ws2'] },
+        setActionPending: (value) => {
+          pending = value;
+        },
+        refresh: async (options) => {
+          assert.deepEqual(options, {
+            scope: { kind: 'workspace', workspaceId: 'ws1' },
+            preserveCurrent: true,
+          });
+          if (outcome === 'disposed') guard.invalidate();
+        },
+        viewReader: {
+          read: async (workspaceId) => {
+            assert.equal(workspaceId, 'ws1');
+            if (outcome === 'offline') throw new Error('offline');
+            return view;
+          },
+        },
+        setReadState: (update) => {
+          state = update(state);
+        },
+        mergeWorktreeView,
+        setWorktreeBranchAdoption: (value) => {
+          target = value;
+        },
+        setActionError: (value) => {
+          error = value;
+        },
+        toWorktreeViewError: (value) => value,
       },
-      viewReader: { read: async (workspaceId) => {
-        assert.equal(workspaceId, 'ws1');
-        if (outcome === 'offline') throw new Error('offline');
-        return view;
-      } },
-      setReadState: (update) => { state = update(state); },
-      mergeWorktreeView,
-      setWorktreeBranchAdoption: (value) => { target = value; },
-      setActionError: (value) => { error = value; }, toWorktreeViewError: (value) => value,
-    });
+    );
     await retry();
     assert.equal(state.status, 'ready');
     assert.equal(state.views[1], otherView);
@@ -227,33 +330,36 @@ test('production adoption handler carries confirmed branch/token and preserves r
   const calls = [];
   let error;
   let target = record;
-  const element = evaluate(`${declaration('runMutation')} return (${node.getText(ast)});`, {
-    React,
-    WorktreeAdoptBranchDialog: 'dialog',
-    t: (key) => key,
-    worktreeBranchAdoption: target,
-    actionPending: false,
-    actionError: undefined,
-    setActionPending: (value) => {
-      calls.push(['pending', value]);
-    },
-    setActionError: (value) => {
-      error = value;
-    },
-    toWorktreeViewError: (value) => value,
-    manager: {
-      adoptWorktreeBranch: async (input) => {
-        calls.push(['adopt', input]);
+  const element = evaluate(
+    `${declaration('runMutation')} ${declaration('confirmBranchAdoption')} return (${node.getText(ast)});`,
+    {
+      React,
+      WorktreeAdoptBranchDialog: 'dialog',
+      t: (key) => key,
+      worktreeBranchAdoption: target,
+      actionPending: false,
+      actionError: undefined,
+      setActionPending: (value) => {
+        calls.push(['pending', value]);
+      },
+      setActionError: (value) => {
+        error = value;
+      },
+      toWorktreeViewError: (value) => value,
+      manager: {
+        adoptWorktreeBranch: async (input) => {
+          calls.push(['adopt', input]);
+        },
+      },
+      setWorktreeBranchAdoption: (value) => {
+        target = value;
+      },
+      refresh: async (options) => {
+        calls.push(['refresh', options]);
+        throw new Error('offline');
       },
     },
-    setWorktreeBranchAdoption: (value) => {
-      target = value;
-    },
-    refresh: async (options) => {
-      calls.push(['refresh', options]);
-      throw new Error('offline');
-    },
-  });
+  );
   element.props.onSubmit();
   // The handler intentionally starts a void promise; flush its asynchronous steps.
   for (let i = 0; i < 8; i++) await Promise.resolve();
@@ -274,11 +380,11 @@ test('production adoption handler carries confirmed branch/token and preserves r
 
 test('production adoption dialog names the accepted and current branches before confirmation', async () => {
   const text = await readFile(
-    new URL('../src/client/worktree-surface-dialogs.tsx', import.meta.url),
+    new URL('../src/client/surface/components/dialogs.tsx', import.meta.url),
     'utf8',
   );
   const file = ts.createSourceFile(
-    'dialogs.tsx',
+    'components/dialogs.tsx',
     text,
     ts.ScriptTarget.Latest,
     true,

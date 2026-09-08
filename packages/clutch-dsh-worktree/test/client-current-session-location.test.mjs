@@ -5,8 +5,8 @@ import {
   currentSessionRevealKeys,
   resolveCurrentSessionLocation,
   shouldRevealCurrentSessionGroup,
-} from '../lib/client/worktree-surface-selectors.js';
-import * as surfaceSelectors from '../lib/client/worktree-surface-selectors.js';
+} from '../lib/client/surface/selectors.js';
+import * as surfaceSelectors from '../lib/client/surface/selectors.js';
 
 const workspaces = [
   {

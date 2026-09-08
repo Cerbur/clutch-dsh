@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 test('creates a DSH Session at the Worktree cwd and binds it automatically', async () => {
-  const { createSessionForWorktree } = await import('../lib/client/worktree-view.js');
+  const { createSessionForWorktree } = await import('../lib/client/view/worktree-view.js');
   const calls = [];
   const opened = [];
   const prepared = [];
@@ -43,7 +43,7 @@ test('creates a DSH Session at the Worktree cwd and binds it automatically', asy
 
 test('keeps the DSH-created Session addressable when binding needs repair', async () => {
   const { createSessionForWorktree, WorktreeSessionBindingError } = await import(
-    '../lib/client/worktree-view.js',
+    '../lib/client/view/worktree-view.js',
   );
   const created = [];
   const opened = [];

@@ -50,7 +50,7 @@ export type {
   WorktreePermissionSandboxMode,
   WorktreePermissionStatus,
 } from './contract/index.js';
-export { LocalGitAdapter } from './provider/git.js';
+export { LocalGitAdapter } from './provider/git/adapter.js';
 export {
   CrossProcessMutationLock,
   WorktreeMutationTransaction,
@@ -60,7 +60,7 @@ export {
 export {
   WorkspaceShardedSidecarRepository,
   validateSidecarSnapshot,
-} from './provider/sidecar.js';
+} from './provider/sidecar/repository.js';
 export {
   SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,

@@ -10,7 +10,7 @@ import {
   sessionStatus,
   sessionDisplayLabel,
   sessionMatchesQuery,
-} from '../lib/client/session-view.js';
+} from '../lib/client/session/session-view.js';
 import { en, zh } from '../lib/client/locales.js';
 
 function sessions(overrides = {}) {
