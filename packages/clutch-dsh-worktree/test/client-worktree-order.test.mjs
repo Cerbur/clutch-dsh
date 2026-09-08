@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   resolveWorktreeMove,
   toRetryableWorktreeOrderError,
-} from '../lib/client/worktree-view.js';
+} from '../lib/client/view/worktree-view.js';
 
 test('resolves a before-half drop to the target anchor', () => {
   assert.deepEqual(

@@ -7,7 +7,7 @@ import {
   isMainExpanded,
   isWorktreeExpanded,
   isWorkspaceExpanded,
-} from '../lib/client/worktree-expand-state.js';
+} from '../lib/client/view/worktree-expand-state.js';
 
 class MemoryStorage {
   #values = new Map();
@@ -182,5 +182,18 @@ test('retains only IDs present in the ready Workspace and Worktree snapshots', (
     collapsedWorkspaceIds: { 'ws-kept': true },
     collapsedMainWorkspaceIds: { 'ws-kept': true },
     collapsedWorktreeIds: { 'wt-kept': true },
+  });
+});
+
+test('collapseAll collapses all specified workspaces and worktrees', () => {
+  storage.clear();
+  const store = createWorktreeExpandStateStore(createSnapshotStore);
+
+  store.actions.collapseAll(['ws1', 'ws2'], ['wt1', 'wt2', 'wt3']);
+
+  assert.deepEqual(store.getSnapshot(), {
+    collapsedWorkspaceIds: { ws1: true, ws2: true },
+    collapsedMainWorkspaceIds: { ws1: true, ws2: true },
+    collapsedWorktreeIds: { wt1: true, wt2: true, wt3: true },
   });
 });

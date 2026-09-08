@@ -1,7 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import * as selectors from '../lib/client/worktree-surface-selectors.js';
+import * as selectors from '../lib/client/surface/selectors.js';
+
+test('recovery blocks archived actions even when activity is idle', () => {
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'recovery-needed'), 'recovery');
+});
+
+test('activity transitions refresh only archived owners including detached bindings', () => {
+  const views = [
+    { workspaceId: 'one', worktrees: [{ worktreeId: 'old', status: 'removed' }],
+      bindings: [{ worktreeId: 'old', sessionId: 's', status: 'detached' }] },
+    { workspaceId: 'two', worktrees: [{ worktreeId: 'active', status: 'active' }],
+      bindings: [{ worktreeId: 'active', sessionId: 's', status: 'active' }] },
+    { workspaceId: 'three', worktrees: [{ worktreeId: 'other', status: 'removed' }],
+      bindings: [{ worktreeId: 'other', sessionId: 'unchanged', status: 'active' }] },
+  ];
+  assert.deepEqual(selectors.worktreeActivityRefreshWorkspaceIds(
+    views, { s: { ongoing: true } }, { s: { ongoing: false } },
+  ), ['one']);
+  assert.deepEqual(selectors.worktreeActivityRefreshWorkspaceIds(
+    views, { s: { ongoing: false } }, { s: { ongoing: false } },
+  ), []);
+});
 
 const {
   bindingIdsFor,
@@ -134,4 +155,68 @@ test('requires the ready Worktree snapshot to cover the current Workspace ids', 
     ),
     true,
   );
+});
+
+
+test('archived current Session reveals its archive ancestor', () => {
+  assert.deepEqual(
+    selectors.currentSessionRevealKeys({
+      sessionId: 's1',
+      workspaceId: 'ws1',
+      worktreeId: 'wt1',
+      groupKey: 'worktree:wt1',
+      kind: 'worktree',
+      archived: true,
+    }),
+    ['workspace:ws1', 'archived:ws1', 'worktree:wt1', 'session-group:worktree:wt1'],
+  );
+});
+
+test('resolveCurrentSessionLocation identifies archived worktree session', () => {
+  const loc = selectors.resolveCurrentSessionLocation(
+    's1',
+    [{ workspaceId: 'ws1', sessionIds: ['s1'] }],
+    [
+      {
+        workspaceId: 'ws1',
+        title: 'ws1',
+        rootPath: '/repo',
+        branches: [],
+        worktrees: [
+          {
+            worktreeId: 'wt1',
+            workspaceId: 'ws1',
+            absolutePath: '/repo/wt1',
+            branch: 'feature/archived',
+            source: 'external',
+            status: 'removed',
+            health: 'ready',
+          },
+        ],
+        bindings: [
+          {
+            workspaceId: 'ws1',
+            worktreeId: 'wt1',
+            sessionId: 's1',
+            status: 'active',
+          },
+        ],
+      },
+    ],
+  );
+  assert.deepEqual(loc, {
+    sessionId: 's1',
+    workspaceId: 'ws1',
+    groupKey: 'worktree:wt1',
+    kind: 'worktree',
+    worktreeId: 'wt1',
+    archived: true,
+  });
+});
+test('lifecycle actions only block pending actions and recovery, independently of activity', () => {
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'ready'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'repair'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'cleaned'), undefined);
+  assert.equal(selectors.worktreeLifecycleBlockReason(true, 'ready'), 'pending');
+  assert.equal(selectors.worktreeLifecycleBlockReason(false, 'recovery-needed'), 'recovery');
 });

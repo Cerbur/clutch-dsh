@@ -7,7 +7,7 @@ import {
   resolveWorktreeSessionAction,
   retryWorktreeSessionBinding,
   WorktreeSessionPermissionError,
-} from '../lib/client/worktree-session.js';
+} from '../lib/client/session/worktree-session.js';
 
 function target(overrides = {}) {
   return {

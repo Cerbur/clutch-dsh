@@ -72,3 +72,33 @@ test('localizes the external Worktree import and removal warning', () => {
     assert.ok(en[key].length > 0, `en.${key} must be present`);
   }
 });
+test('cleanup confirmation explains user-owned activity checks and deletion risks in both languages', () => {
+  assert.match(zh['worktree.cleanDiskDescription'], /插件不会检查 Session 或子代理/);
+  assert.match(zh['worktree.cleanDiskDescription'], /请自行确认.*任务均已停止/);
+  assert.match(zh['worktree.cleanDiskDescription'], /任务失败或数据丢失/);
+  assert.match(en['worktree.cleanDiskDescription'], /plugin does not check.*Sessions or subagents/);
+  assert.match(en['worktree.cleanDiskDescription'], /Confirm that all tasks.*have stopped/);
+  assert.match(en['worktree.cleanDiskDescription'], /task failures or data loss/);
+  for (const dictionary of [en, zh]) {
+    assert.match(dictionary['worktree.cleanDiskDescription'], /\{path\}/);
+  }
+});
+test('completed cleanup copy accounts for absent Git metadata and preserved files', () => {
+  assert.equal(zh['worktree.cleaned'], 'Worktree 已移除');
+  assert.equal(en['worktree.cleaned'], 'Worktree removed');
+  assert.match(zh['worktree.cleanDiskDescription'], /目录或 \.git 已不存在.*剩余文件不会删除/);
+  assert.match(en['worktree.cleanDiskDescription'], /directory or \.git is already absent.*remaining files are not deleted/);
+});
+
+test('localizes active worktree archive menu and clear search copy in both languages', () => {
+  assert.equal(zh['worktree.archive'], '归档 Worktree');
+  assert.equal(en['worktree.archive'], 'Archive Worktree');
+  assert.equal(zh['worktree.remove'], '归档 Worktree');
+  assert.equal(en['worktree.remove'], 'Archive Worktree');
+  assert.equal(zh['worktree.unarchive'], '取消归档');
+  assert.equal(en['worktree.unarchive'], 'Unarchive Worktree');
+  assert.equal(zh['workspace.collapseAll'], '全部折叠');
+  assert.equal(en['workspace.collapseAll'], 'Collapse All');
+  assert.equal(zh['search.clear'], '清除搜索');
+  assert.equal(en['search.clear'], 'Clear search');
+});

@@ -23,6 +23,11 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   createWorktree: 'worktreeManager/createWorktree',
   importWorktree: 'worktreeManager/importWorktree',
   removeWorktree: 'worktreeManager/removeWorktree',
+  unarchiveWorktree: 'worktreeManager/unarchiveWorktree',
+  cleanWorktree: 'worktreeManager/cleanWorktree',
+  adoptWorktreeBranch: 'worktreeManager/adoptWorktreeBranch',
+  recoverWorktrees: 'worktreeManager/recoverWorktrees',
+  forgetWorktree: 'worktreeManager/forgetWorktree',
   insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
@@ -180,6 +185,17 @@ export function createWorktreeConnectionAdapter(
     importWorktree: (input) => invoke('importWorktree', input),
     async removeWorktree(input): Promise<void> {
       await invoke<null>('removeWorktree', input);
+    },
+    async unarchiveWorktree(input): Promise<void> {
+      await invoke<null>('unarchiveWorktree', input);
+    },
+    async adoptWorktreeBranch(input): Promise<void> { await invoke<null>('adoptWorktreeBranch', input); },
+    async recoverWorktrees(input): Promise<void> { await invoke<null>('recoverWorktrees', input); },
+    async cleanWorktree(input): Promise<void> {
+      await invoke<null>('cleanWorktree', input);
+    },
+    async forgetWorktree(input): Promise<void> {
+      await invoke<null>('forgetWorktree', input);
     },
     async insertWorktreeBefore(input): Promise<readonly string[]> {
       return invoke<readonly string[]>('insertWorktreeBefore', input);

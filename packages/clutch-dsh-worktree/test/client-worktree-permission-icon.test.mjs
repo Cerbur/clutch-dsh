@@ -5,7 +5,7 @@ import {
   WORKTREE_PERMISSION_ICON_ATTRIBUTE,
   decorateWorktreePermissionIcons,
   installWorktreePermissionIcon,
-} from '../lib/client/worktree-permission-icon.js';
+} from '../lib/client/permission/worktree-permission-icon.js';
 
 class FakeElement {
   constructor(tagName = 'div', { text = '', role, ariaLabel } = {}) {

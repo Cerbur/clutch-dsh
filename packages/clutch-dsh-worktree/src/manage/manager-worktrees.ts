@@ -1,7 +1,11 @@
 import path from 'node:path';
+import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
+import { readWorktreeStatus } from '../provider/git/worktree-status.js';
+import type { GitWorktreeInfo } from '../provider/types.js';
 
 import type {
   BranchRecord,
+  WorktreeActivity,
   WorktreeId,
   WorktreeImportCandidate,
   WorktreeRecord,
@@ -17,7 +21,6 @@ import {
   describeError,
   generatedId,
   isDirectory,
-  pathExists,
   requireWorkspace,
   samePhysicalPath,
   validateGeneratedPath,
@@ -28,31 +31,21 @@ function projectRuntimeRecord(
   snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
   record: WorktreeRecord,
   health?: WorktreeRecord['health'],
+  activity?: WorktreeActivity,
 ): WorktreeRecord {
-  const { health: _health, mutationToken: _mutationToken, ...durableRecord } = record;
+  const { health: _health, mutationToken: _mutationToken, activity: _activity, currentBranch: _currentBranch, ...durableRecord } = record;
   void _health;
   void _mutationToken;
-  if (record.status !== 'active') return durableRecord;
+  void _activity;
+  void _currentBranch;
   return {
     ...durableRecord,
     mutationToken: createWorktreeMutationToken(snapshot, record),
     ...(health === undefined ? {} : { health }),
+    ...(activity === undefined ? {} : { activity }),
   };
 }
 
-function assertMutationToken(
-  snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
-  record: WorktreeRecord,
-  token: string | undefined,
-): void {
-  const expected = createWorktreeMutationToken(snapshot, record);
-  if (token === undefined || token !== expected) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Worktree state changed after it was loaded', {
-      workspaceId: record.workspaceId,
-      worktreeId: record.worktreeId,
-    });
-  }
-}
 
 /** Return the sidecar Worktree projection with runtime Git health attached. */
 export async function listWorktrees(
@@ -69,34 +62,70 @@ export async function listWorktrees(
       ...(snapshot.pendingOperation ? { operationId: snapshot.pendingOperation.id } : {}),
     });
   }
-  let gitWorktrees: readonly { readonly absolutePath: string }[];
+  const getActivity = async (record: WorktreeRecord): Promise<WorktreeActivity> => {
+    const ids = [
+      ...new Set(
+        snapshot.bindings
+          .filter((b) => b.worktreeId === record.worktreeId)
+          .map((b) => b.sessionId),
+      ),
+    ];
+    if (ids.length === 0) return { state: 'idle' };
+    if (!context.dsh.readWorktreeActivity) return { state: 'unknown' };
+    try {
+      return await context.dsh.readWorktreeActivity(ids);
+    } catch {
+      return { state: 'unknown' };
+    }
+  };
+
+  let gitWorktrees: readonly GitWorktreeInfo[] | undefined;
   try {
     const gitRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath)
       : workspace.rootPath;
     gitWorktrees = await context.git.listWorktrees(gitRoot);
   } catch {
-    return records.map((record) => projectRuntimeRecord(
-      snapshot,
-      record,
-      record.status === 'active'
-        ? recoveryNeeded ? 'recovery-needed' : 'repair'
-        : undefined,
-    ));
+    gitWorktrees = undefined;
   }
+
   const nextRecords: WorktreeRecord[] = [];
   for (const record of records) {
-    if (record.status !== 'active') {
-      nextRecords.push(projectRuntimeRecord(snapshot, record));
+    const activity = await getActivity(record);
+    const recordRecoveryNeeded =
+      (snapshot.pendingOperation !== undefined &&
+        (snapshot.pendingOperation.worktreeId === undefined ||
+          snapshot.pendingOperation.worktreeId === record.worktreeId)) ||
+      snapshot.recoveryIssues?.some(
+        (issue) => issue.worktreeId === undefined || issue.worktreeId === record.worktreeId,
+      ) === true;
+
+    if (record.diskCleanup === 'completed') {
+      nextRecords.push(projectRuntimeRecord(snapshot, record, recordRecoveryNeeded ? 'recovery-needed' : 'cleaned', activity));
+      continue;
+    }
+
+    if (gitWorktrees === undefined) {
+      nextRecords.push(
+        projectRuntimeRecord(
+          snapshot,
+          record,
+          recordRecoveryNeeded ? 'recovery-needed' : 'repair',
+          activity,
+        ),
+      );
       continue;
     }
     let ready = false;
+    let currentBranch: string | null | undefined;
     for (const gitWorktree of gitWorktrees) {
       if (
         path.resolve(gitWorktree.absolutePath) === path.resolve(record.absolutePath) ||
         (await samePhysicalPath(gitWorktree.absolutePath, record.absolutePath))
       ) {
-        ready = true;
+        const status = await readWorktreeStatus(gitWorktree);
+        ready = status === 'ready' || status === 'detached';
+        currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
         break;
       }
     }
@@ -104,8 +133,10 @@ export async function listWorktrees(
       ...projectRuntimeRecord(
         snapshot,
         record,
-        recoveryNeeded ? 'recovery-needed' : ready ? 'ready' : 'repair',
+        recordRecoveryNeeded ? 'recovery-needed' : ready ? currentBranch === undefined || currentBranch === record.branch ? 'ready' : 'branch-drift' : 'repair',
+        activity,
       ),
+      ...(currentBranch === undefined ? {} : { currentBranch }),
     });
   }
   return nextRecords;
@@ -128,6 +159,7 @@ export async function listImportCandidates(
   const candidates: WorktreeImportCandidate[] = [];
   for (const worktree of gitWorktrees) {
     if (!worktree.branch || await samePhysicalPath(worktree.absolutePath, gitRoot)) continue;
+    if (await readWorktreeStatus(worktree) !== 'ready') continue;
     let managed = false;
     for (const record of snapshot.worktrees) {
       if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
@@ -190,6 +222,25 @@ export async function createWorktree(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
 ): Promise<WorktreeRecord> {
+  let baseId = '';
+  for (let attempt = 0n; ; attempt++) {
+    context.signal.throwIfAborted();
+    // Reroll first, then make progress even if an injected random source repeats forever.
+    if (attempt < 8n) baseId = generatedId(context.idFactory);
+    const worktreeId = attempt < 8n ? baseId : `${baseId}_${attempt - 7n}`;
+    try {
+      return await createWorktreeAttempt(context, input, worktreeId);
+    } catch (error) {
+      if (!(error instanceof GeneratedWorktreeNameCollision)) throw error;
+    }
+  }
+}
+
+async function createWorktreeAttempt(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  worktreeId: string,
+): Promise<WorktreeRecord> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   const transactional = context.sidecar.runExclusive !== undefined;
   if (!transactional) await context.git.validateRepository(workspace.rootPath);
@@ -248,20 +299,12 @@ export async function createWorktree(
     }
   }
 
-  const worktreeId = generatedId(context.idFactory);
   const targetPath = path.resolve(context.dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId);
 
   // 创建前同时检查词法和物理目录边界，阻止配置、ID 或 symlink 将目标引回 Workspace 或带出插件根目录。
   // Check lexical and physical directory boundaries before creation so configuration, IDs, or symlinks cannot redirect the target into the Workspace or outside the plugin root.
   validateGeneratedPath(context, workspace.rootPath, targetPath, worktreeId);
   await validatePhysicalGeneratedPath(context, workspace.rootPath, targetPath);
-  if (await pathExists(targetPath)) {
-    throw providerError('GIT_OPERATION_FAILED', `Generated Worktree path already exists: ${targetPath}`, {
-      workspaceRoot: workspace.rootPath,
-      targetPath,
-      worktreeId,
-    });
-  }
 
   // The default Workspace-sharded sidecar exposes the transaction seam. Legacy
   // injected stores keep the previous path below for compatibility with older
@@ -277,6 +320,13 @@ export async function createWorktree(
       targetBranch,
     });
   }
+
+  await assertGeneratedNameAvailable(
+    worktreeId,
+    targetPath,
+    await context.sidecar.read(input.workspaceId),
+    await context.git.listWorktrees(workspace.rootPath),
+  );
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {
@@ -295,7 +345,7 @@ export async function createWorktree(
   };
 
   try {
-    return await context.sidecar.mutate(input.workspaceId, (snapshot) => {
+    return await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
       // Recheck ID and branch inside the serialized mutation so concurrent writes cannot create duplicate active records.
       const idConflict = snapshot.worktrees.find((worktree) => worktree.worktreeId === worktreeId);
       if (idConflict) {
@@ -304,14 +354,19 @@ export async function createWorktree(
           existingStatus: idConflict.status,
         });
       }
-      const branchConflict = snapshot.worktrees.find(
+      const branchClaims = snapshot.worktrees.filter(
         (worktree) => worktree.status === 'active' && worktree.branch === targetBranch,
       );
-      if (branchConflict) {
-        throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
-          branch: targetBranch,
-          worktreeId: branchConflict.worktreeId,
-        });
+      if (branchClaims.length > 0) {
+        const live = await context.git.listWorktrees(workspace.rootPath);
+        for (const claim of branchClaims) {
+          const actual = await findGitWorktreeByPhysicalPath(live, claim.absolutePath);
+          if (!actual || (!actual.detached && (!actual.branch || actual.branch === targetBranch))) {
+            throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
+              branch: targetBranch, worktreeId: claim.worktreeId,
+            });
+          }
+        }
       }
       const next: SidecarSnapshot = {
         ...snapshot,
@@ -372,7 +427,7 @@ export async function importWorktree(
   await context.git.validateRepository(workspace.rootPath);
   const gitWorktrees = await context.git.listWorktrees(workspace.rootPath);
   const gitWorktree = await findGitWorktreeByPhysicalPath(gitWorktrees, requestedPath);
-  if (!gitWorktree || !gitWorktree.branch || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
+  if (!gitWorktree || !gitWorktree.branch || await readWorktreeStatus(gitWorktree) !== 'ready' || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
     throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${requestedPath}`, {
       workspaceId: input.workspaceId,
       absolutePath: requestedPath,
@@ -395,6 +450,7 @@ export async function importWorktree(
       if (
         !liveWorktree ||
         !liveWorktree.branch ||
+        await readWorktreeStatus(liveWorktree) !== 'ready' ||
         await samePhysicalPath(liveWorktree.absolutePath, workspace.rootPath)
       ) {
         throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${normalizedPath}`, {
@@ -460,92 +516,12 @@ function importConflictOrExisting(
   });
 }
 
-/** Remove Git state first, then mark the relation removed while preserving detached bindings. */
-export async function removeWorktree(
-  context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string; readonly mutationToken: string },
-): Promise<void> {
-  const workspace = await requireWorkspace(context, input.workspaceId);
-  if (context.sidecar.runExclusive) {
-    await context.transaction.remove({
-      workspaceId: input.workspaceId,
-      workspaceRoot: workspace.rootPath,
-      worktreeId: input.worktreeId,
-      mutationToken: input.mutationToken,
-    });
-    return;
-  }
-  let gitRemoved = false;
-
-  try {
-    await context.sidecar.mutate(input.workspaceId, async (snapshot) => {
-      const record = snapshot.worktrees.find((worktree) => worktree.worktreeId === input.worktreeId);
-      if (!record) {
-        throw providerError('WORKTREE_NOT_FOUND', `Worktree not found: ${input.worktreeId}`, {
-          worktreeId: input.worktreeId,
-          workspaceId: input.workspaceId,
-        });
-      }
-      if (record.status === 'removed') {
-        throw providerError('WORKTREE_REMOVED', `Worktree has already been removed: ${input.worktreeId}`, {
-          worktreeId: input.worktreeId,
-        });
-      }
-      assertMutationToken(snapshot, record, input.mutationToken);
-
-      try {
-        await context.git.removeWorktree(workspace.rootPath, record.absolutePath);
-      } catch (error) {
-        let stillRegistered: boolean;
-        try {
-          stillRegistered = false;
-          for (const worktree of await context.git.listWorktrees(workspace.rootPath)) {
-            if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
-              stillRegistered = true;
-              break;
-            }
-          }
-        } catch {
-          throw asGitError('remove worktree', workspace.rootPath, record.absolutePath, error);
-        }
-        if (stillRegistered) {
-          throw asGitError('remove worktree', workspace.rootPath, record.absolutePath, error);
-        }
-      }
-      gitRemoved = true;
-
-      // Preserve Worktree and binding history while changing lifecycle only; DSH Sessions are never read or deleted here.
-      const next: SidecarSnapshot = {
-        ...snapshot,
-        worktrees: snapshot.worktrees.map((candidate) =>
-          candidate.worktreeId === record.worktreeId ? { ...candidate, status: 'removed' } : candidate,
-        ),
-        bindings: snapshot.bindings.map((binding) =>
-          binding.worktreeId === record.worktreeId && binding.status === 'active'
-            ? { ...binding, status: 'detached' }
-            : binding,
-        ),
-      };
-      return { result: undefined, snapshot: next };
-    });
-  } catch (error) {
-    if (gitRemoved) {
-      // Git removal cannot be rolled back here, so expose the divergence for a safe retry.
-      const sidecarError = asSidecarError(error, input.workspaceId);
-      throw providerError(
-        'SIDECAR_SYNC_REQUIRED',
-        `Git removed Worktree ${input.worktreeId}, but sidecar synchronization failed`,
-        {
-          workspaceId: input.workspaceId,
-          worktreeId: input.worktreeId,
-          workspaceRoot: workspace.rootPath,
-          sidecarError: sidecarError.message,
-        },
-      );
-    }
-    throw error;
-  }
-}
+export {
+  archiveWorktree as removeWorktree,
+  unarchiveWorktree,
+  cleanWorktree,
+  forgetWorktree,
+} from './manager-worktree-lifecycle.js';
 
 /** Reconcile one Workspace's durable Git/sidecar operation marker. */
 export async function recoverWorktrees(

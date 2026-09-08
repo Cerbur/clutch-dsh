@@ -1,3 +1,4 @@
+import { readSurfaceSource } from './client-surface-source.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -5,10 +6,10 @@ import { URL } from 'node:url';
 
 async function sources() {
   const [rows, css, surface, types] = await Promise.all([
-    readFile(new URL('../src/client/worktree-surface-rows.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/surface/components/rows.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8'),
-    readFile(new URL('../src/client/WorktreeSurface.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/client/worktree-surface-types.ts', import.meta.url), 'utf8'),
+    readSurfaceSource(),
+    readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8'),
   ]);
   return { rows, css, surface, types };
 }
@@ -53,9 +54,6 @@ test('does not define a second StateDot animation in the Worktree CSS', async ()
 test('keeps Session titles roomy and offsets trailing time from Worktree actions', async () => {
   const { css } = await sources();
 
-  assert.match(
-    css,
-    /\.sessionTrailing\s*\{[\s\S]*?flex:\s*0 0 52px;[\s\S]*?width:\s*52px;/,
-  );
+  assert.match(css, /\.sessionTrailing\s*\{[\s\S]*?flex:\s*0 0 52px;[\s\S]*?width:\s*52px;/);
   assert.match(css, /\.sessionTime\s*\{[\s\S]*?margin-right:\s*4px;/);
 });

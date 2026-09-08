@@ -88,6 +88,10 @@ degraded/read-only 状态，不能用空索引覆盖 DSH 原始列表。
 - 删除 Worktree 后关系保留为 detached；只有显式解绑才回到 main。
 - 关系写入必须幂等；同一 Session 绑定两个 active Worktree 必须返回明确 conflict error。
 
+无 pending operation 时，active 或 archived Worktree 的目录/注册缺失仅投影为 runtime repair，
+不创建持久化 recovery issue。旧版无 operationId、指向现有且未清理记录的
+WORKTREE_RECOVERY_REQUIRED 观察标记在锁内淘汰；真实事务、未知记录与身份变化标记继续阻断。
+
 Worktree 与 Session 的顺序约束：
 
 1. 创建 Worktree 前从 DSH read API 取得 Project 根目录。
@@ -97,12 +101,38 @@ Worktree 与 Session 的顺序约束：
 5. 创建 Session 时先调用 DSH 原生 Session API，再写入外部 binding。
 6. binding 写入失败时不得删除或修改已创建的 DSH Session；界面必须保留 Session ID 供重试或直接打开。
 
-Plugin-created and external Worktrees share the real `git worktree remove` path. Git removal
-must succeed before the sidecar record is marked `removed` and bindings become `detached`.
-Removing an external Worktree is destructive and may delete its linked Worktree directory;
-the Client confirmation copy must say so. If Git succeeds but sidecar synchronization fails,
-the failure remains visible and retryable.
+Worktree 生命周期分为四个独立操作：
+1. 移除（内部归档）：`status = 'removed'`，保留磁盘目录与 binding；已有 Session 继续在 Worktree cwd 运行。
+2. 取消归档（恢复活跃）：仅当 Worktree 处于 `status = 'removed'`、尚未执行磁盘清理（`diskCleanup !== 'completed'`）、物理 Git worktree 仍完整登记且分支/路径未与现有活跃 Worktree 冲突时，可直接取消归档恢复为 `status = 'active'`。
+3. 清理磁盘：需经二次确认，由用户自行确认所有使用该目录的 Session/子代理与其他任务已停止；执行真正的非强制 `git worktree remove`；成功后记录 `diskCleanup: 'completed'`，运行时投影 `health = 'cleaned'`，其 binding 转为 `detached`。清理提交与权限后续操作解耦，权限/刷新失败不回滚或重试磁盘清理。
+4. 移出管理：删除该 Worktree 的 sidecar 记录与全部 binding，定向淘汰未决 fork 恢复与权限 notice，保留磁盘文件与 DSH 原生 Session；重新导入不会自动恢复旧 binding。
+清理与移出管理均不以 Session 活动作为前置门禁，不伪造 idle。清理确认框必须明确告知插件不核验运行状态、由用户确认任务已停止，以及删除目录可能导致任务失败或数据丢失；移出管理只修改插件索引。两者继续保留归档状态、锁、mutation token 与 recovery 检查。
 Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工作树中的业务文件。
+
+显式 `cleanWorktree` 在锁内确认目标目录或其 `.git` 入口不存在时，只原子标记
+`diskCleanup: completed` 并将 active binding 转为 detached，不调用 Git mutation、
+不创建删除 journal，也不清理残留 Git registration。仍须通过归档状态、token、仓库身份、
+安全路径与 recovery 门禁；同路径存在冲突 registration 时拒绝。仅 `.git` 缺失时，
+剩余目录和文件完整保留；Client 明确说明此行为，完成状态文案为“Worktree 已移除”，
+不表示磁盘目录已删除。只接受 ENOENT 作为缺失证据，断链符号链接不视为入口缺失。
+被动读取与启动扫描仍只投影 repair，不自动完成清理。
+
+## 分支漂移与显式同步
+
+Provider 的 readWorktreeStatus 统一映射已管理与未导入 Worktree 的运行时状态：
+ready、missing、prunable、bare、detached、unavailable。状态不持久化；
+导入候选和导入提交只接受 ready，locked 本身不影响可用性。
+已管理记录将 missing/prunable/bare/unavailable 映射为 repair，detached 保留
+branch-drift 语义；recovery-needed 与 cleaned 仍优先于 Git 观察。
+
+WorktreeRecord.branch 是最近一次明确接受的分支，不是不可变的仓库身份。读取投影
+currentBranch（detached HEAD 为 null）和 branch-drift，不持久化这些 runtime 字段。
+无 pending 的普通 checkout 不制造 recovery issue；已有 Session binding 与 cwd 不变。
+adoptWorktreeBranch 在 shard/repository 锁内校验 token、用户确认的 expectedBranch、
+实际 linked path 和仓库身份，仅原子更新 branch。禁止采用 detached HEAD、cleaned、
+缺失或身份已变化的目录；真实 recovery blocker 不得清除。创建冲突检查只在 Git
+正面证明旧记录已切换分支时释放旧 branch claim。清理仍要求 exact accepted branch。
+recoverWorktrees 是独立的 Remote 重试入口，不自动接受漂移分支或放宽恢复门禁。
 
 ## 模块职责与依赖方向
 
@@ -125,6 +155,12 @@ also exposes the read-only `WorktreeImportCandidate` projection plus `listImport
 不得依赖 Git、sidecar、Node-only API、React、DSH mutation API 或具体 transport。
 
 ### `src/provider/`
+
+`git/` 拥有 Git adapter、subprocess 与仓库指纹，`sidecar/` 拥有 schema、repository、
+持久化与跨进程锁。`transaction/index.ts` 保留事务入口与原有导出；事务目录按
+`operations/`、`recovery/`、`support/` 分别收拢操作、恢复和校验/日志/发布支撑。
+拆分不得缩短 shard/repository lock 的持有区间，
+不得改变 pending marker → Git → 验证 → stable snapshot 的顺序，也不得向 Client 暴露内部模块。
 
 拥有底层 Git adapter、sidecar repository、DSH Project/Session read adapter ports、
 输入验证、Provider-owned errors、atomic persistence 和 mutation primitives。
@@ -164,13 +200,15 @@ cannot weaken Git writes. `WorktreeManagerService.close()` is idempotent, aborts
 signal, and waits for admitted operations; Host registers that close operation with the Cordis
 fiber lifecycle.
 
-The sidecar schema is versioned from v1/v2 to v3. v1 records are read-normalized with
-`source: 'plugin'`; v2 records retain their explicit source, both legacy versions expose
-revision `0` in memory, and the first successful mutation atomically persists v3. A transitional
-v3 snapshot that still contains a raw provider repository identity is accepted, normalized to an
-opaque `repositoryFingerprint`, and cleaned on the next stable write. Unknown versions, invalid
-JSON, and invariant violations remain corruption errors and are never silently reset to an empty
-state. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never
+The sidecar schema is versioned from v1/v2/v3 to v4. v1 records are read-normalized with
+`source: 'plugin'`; v2 records retain their explicit source, legacy v1/v2 expose revision `0`
+in memory, and v3 preserves its revision string. Legacy removed records from schemaVersion < 4
+are normalized with `diskCleanup: 'completed'` and detached bindings. The first successful
+mutation atomically persists v4. A transitional snapshot that still contains a raw provider
+repository identity is accepted, normalized to an opaque `repositoryFingerprint`, and cleaned
+on the next stable write. Unknown versions, invalid JSON, and invariant violations remain
+corruption errors and are never silently reset to an empty state. Cleaned records cannot retain
+active bindings. Candidate reads and imports revalidate Git and sidecar state, and sidecar failures never
 become an empty candidate list. Provider errors include `WORKTREE_IMPORT_INVALID`,
 `WORKTREE_ALREADY_MANAGED`, `WORKTREE_MUTATION_BUSY`, `WORKTREE_STATE_CONFLICT`,
 `WORKTREE_RECOVERY_REQUIRED`, and `WORKTREE_IDENTITY_CHANGED`.
@@ -188,6 +226,13 @@ Provider 不得反向导入 Manage、Host 或 Client，不得负责 Web UI、路
 迁移或 Project/Session 内容写入。
 
 ### `src/manage/`
+
+新建 Worktree 默认 ID/目录名使用 `wt_` + 12 位加密随机十六进制字符。
+Manage 仅对 Provider 在 Git/journal mutation 前报告的名称碰撞重试；先尝试八个随机
+候选，再递增数字后缀，循环遵循 Manager 的取消信号。已有路径与 ID 不迁移。
+Provider 在 shard/repository 锁之前取得共享 DSH Home 内的候选路径锁，覆盖不同
+Workspace/repository 的同名创建；占用检查包含 lstat（含断链符号链接）、sidecar
+记录和残留 Git registration。Git mutation 后的未知状态仍进入原有 recovery 流程。
 
 组合 contract 与 provider，负责 Worktree/Session use-case orchestration、binding
 冲突与幂等、main/active/detached cwd 解析、创建/删除恢复顺序和 degraded-state
@@ -225,6 +270,17 @@ infrastructure only and does not add a Remote method.
 不进入 browser Remote。
 
 ### `src/client/`
+
+`WorktreeSurface.tsx` 是 surface 组合入口；`surface/` 收拢专属状态、副作用、操作与
+展示组件。读取去重、刷新代际、dispose 与 late-result guard 必须随各自操作一起保留；
+只读刷新不能升级为全局刷新。此目录是源码模块边界，不是独立发布或安装的 package。
+
+Client 目录按功能组织：`context/` 是 Conversation/Hero 上下文，`session/` 是会话连接、
+fork、排序与 membership，`permission/` 是权限确认与图标，`view/` 是模式、读取与视图
+动作，`overlay/` 是挂载与几何测量。`surface/` 内按 `state/`、`actions/`、`components/`
+收拢状态、副作用、操作与展示；共享类型和 selector 留在 surface 根目录。
+根目录只保留入口、组合、Connection、locale 和样式等公共接缝。内部文件移动直接更新
+消费者，不新增仅用于维持旧内部路径的转发文件；公开 package exports 与导出符号保持兼容。
 
 是 browser-safe Consumer。它只通过现有 DSH Client Connection 和 contract/facade
 调用 Host 能力，负责 Worktree mode、view model、action/error surface、browser-local

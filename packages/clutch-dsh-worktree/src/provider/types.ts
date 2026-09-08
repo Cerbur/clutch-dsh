@@ -1,5 +1,6 @@
 import type {
   SessionBinding,
+  WorktreeActivity,
   WorktreeErrorCode,
   WorktreeErrorDetails,
   WorktreeId,
@@ -14,7 +15,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess';
  * corruption rather than guessed or silently migrated.
  */
 export const LEGACY_SIDECAR_SCHEMA_VERSION = 1 as const;
-export const SIDECAR_SCHEMA_VERSION = 3 as const;
+export const SIDECAR_SCHEMA_VERSION = 4 as const;
 
 export interface RepositoryIdentity {
   readonly topLevel: string;
@@ -58,9 +59,25 @@ export interface RemoveWorktreePendingOperation {
   readonly startedAt: string;
 }
 
+export interface CleanWorktreePendingOperation {
+  readonly id: string;
+  readonly type: 'clean-worktree';
+  readonly phase: PendingOperationPhase;
+  readonly workspaceId: WorkspaceId;
+  readonly worktreeId: WorktreeId;
+  readonly targetPath: string;
+  readonly branch: string;
+  readonly source: 'plugin' | 'external';
+  readonly repositoryFingerprint: string;
+  /** Legacy journal field accepted on read and removed on the next stable write. */
+  readonly repository?: RepositoryIdentity;
+  readonly startedAt: string;
+}
+
 export type PendingOperation =
   | CreateWorktreePendingOperation
-  | RemoveWorktreePendingOperation;
+  | RemoveWorktreePendingOperation
+  | CleanWorktreePendingOperation;
 
 export interface RecoveryIssue {
   readonly code: 'WORKTREE_RECOVERY_REQUIRED' | 'WORKTREE_IDENTITY_CHANGED';
@@ -103,6 +120,8 @@ export interface DshReadAdapter {
   listWorkspaces?(): Promise<readonly DshWorkspaceSummary[]>;
   getSession(sessionId: string): Promise<DshSessionSummary | undefined>;
   listSessions(): Promise<readonly DshSessionSummary[]>;
+  /** Optional read-only Session/subagent activity check. */
+  readWorktreeActivity?(sessionIds: readonly string[]): Promise<WorktreeActivity>;
 }
 
 /**
@@ -111,6 +130,9 @@ export interface DshReadAdapter {
  * detached HEAD may have no local branch.
  */
 export interface GitWorktreeInfo {
+  readonly prunable?: boolean;
+  readonly locked?: boolean;
+  readonly bare?: boolean;
   readonly absolutePath: string;
   readonly branch?: string;
   readonly headCommit?: string;

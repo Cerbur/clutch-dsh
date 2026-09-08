@@ -16,13 +16,13 @@ export type {
 export {
   createWorktreeFullAccessConfirmationController,
   worktreeFullAccessConfirmationMessage,
-} from './worktree-permission.js';
+} from './permission/worktree-permission.js';
 export type {
   WorktreeFullAccessConfirmationController,
   WorktreeFullAccessConfirmationInput,
-} from './worktree-permission.js';
+} from './permission/worktree-permission.js';
 export {
   WORKTREE_PERMISSION_ICON_ATTRIBUTE,
   decorateWorktreePermissionIcons,
   installWorktreePermissionIcon,
-} from './worktree-permission-icon.js';
+} from './permission/worktree-permission-icon.js';

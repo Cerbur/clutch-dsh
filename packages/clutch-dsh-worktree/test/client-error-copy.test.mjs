@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { formatWorktreeViewError } from '../lib/client/worktree-error-copy.js';
+import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 
 function t(key, params = {}) {
   const values = Object.entries(params)

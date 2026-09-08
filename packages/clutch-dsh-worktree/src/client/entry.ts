@@ -19,32 +19,32 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
-import { WorktreeHeaderContext } from './WorktreeContext.js';
-import { WorktreeModeAction } from './WorktreeModeAction.js';
-import { WorktreeOverlay } from './WorktreeOverlay.js';
-import { createWorktreeContextProjection } from './worktree-context-store.js';
-import { createWorktreeExpandStateStore } from './worktree-expand-state.js';
-import { createWorktreeSessionOrderStore } from './worktree-session-order.js';
-import { createWorktreeViewStore } from './view-mode-store.js';
-import { createWorktreeViewReader } from './worktree-view-read.js';
+import { WorktreeHeaderContext } from './context/WorktreeContext.js';
+import { WorktreeModeAction } from './view/WorktreeModeAction.js';
+import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
+import { createWorktreeContextProjection } from './context/worktree-context-store.js';
+import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
+import { createWorktreeSessionOrderStore } from './session/worktree-session-order.js';
+import { createWorktreeViewStore } from './view/view-mode-store.js';
+import { createWorktreeViewReader } from './view/worktree-view-read.js';
 import {
   createVirtualWorkspaceMembership,
-} from './virtual-workspace-membership.js';
+} from './session/virtual-workspace-membership.js';
 import {
   createWorktreeSessionConnector,
   type WorktreeSessionSnapshotReader,
-} from './worktree-session.js';
+} from './session/worktree-session.js';
 import {
   createWorktreeFullAccessConfirmationController,
-} from './worktree-permission.js';
-import { installWorktreePermissionIcon } from './worktree-permission-icon.js';
+} from './permission/worktree-permission.js';
+import { installWorktreePermissionIcon } from './permission/worktree-permission-icon.js';
 import type {
   SessionBinding,
   WorktreePermissionResult,
 } from '../contract/index.js';
 import type {
   WorktreePermissionNotice,
-} from './worktree-surface-types.js';
+} from './surface/types.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
 import {
@@ -53,8 +53,9 @@ import {
   type WorktreeForkBindingIndex,
   type WorktreeForkBindingLookupResult,
   type WorktreeForkSessionListReader,
-} from './worktree-session-fork.js';
-import type { VirtualWorkspaceBinding } from './view-mode.js';
+  type ForgottenWorktree,
+} from './session/worktree-session-fork.js';
+import type { VirtualWorkspaceBinding } from './view/view-mode.js';
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -79,7 +80,7 @@ export type {
   WorktreeConnectionErrorOptions,
   WorktreeConnectionRpc,
 } from './worktree-connection.js';
-export type { WorktreeViewActions, WorktreeViewMode, WorktreeViewState } from './view-mode.js';
+export type { WorktreeViewActions, WorktreeViewMode, WorktreeViewState } from './view/view-mode.js';
 
 type WorkspaceListSnapshot = Pick<WorkspaceSnapshot, 'items'>;
 type SessionLineageSnapshot = Pick<SessionListState, 'ids' | 'byId'>;
@@ -502,6 +503,20 @@ export function apply(ctx: Context): void {
               },
           openSession: (sessionId: string) => {
             ctx.sessions.open(sessionId as SessionId);
+          },
+          onWorktreeForgotten: (input: ForgottenWorktree) => {
+            forkCoordinator?.forgetWorktree(input);
+            for (const sessionId of input.sessionIds) {
+              virtualWorkspaceMembership.removeSession(sessionId);
+            }
+            const currentNotice = permissionNotice.getSnapshot();
+            if (
+              currentNotice !== undefined &&
+              (currentNotice.worktreeId === input.worktreeId ||
+                (currentNotice.sessionId !== undefined && input.sessionIds.includes(currentNotice.sessionId)))
+            ) {
+              permissionNotice.set(undefined);
+            }
           },
         }),
       },

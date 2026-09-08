@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
 import type {
+  AdoptWorktreeBranchInput,
   BranchRecord,
   SessionBinding,
   WorktreeId,
@@ -9,9 +10,9 @@ import type {
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
-import { LocalGitAdapter } from '../provider/git.js';
-import { WorkspaceShardedSidecarRepository } from '../provider/sidecar.js';
-import { WorktreeMutationTransaction } from '../provider/transaction.js';
+import { LocalGitAdapter } from '../provider/git/adapter.js';
+import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
+import { WorktreeMutationTransaction } from '../provider/transaction/index.js';
 import { providerError } from '../provider/types.js';
 import {
   bindSession,
@@ -20,16 +21,20 @@ import {
 } from './manager-sessions.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
+  cleanWorktree,
   createWorktree,
+  forgetWorktree,
   importWorktree,
   insertWorktreeBefore,
   listBranches,
   listImportCandidates,
   listWorktrees,
   removeWorktree,
+  unarchiveWorktree,
   recoverWorktrees,
 } from './manager-worktrees.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
+import { requireWorkspace } from './manager-support.js';
 
 /**
  * Worktree/Session 用例编排器：DSH 只提供权威只读事实，Git 承担 worktree 副作用，sidecar 只保存外部关系。
@@ -65,9 +70,17 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       git,
       sidecar,
       transaction: new WorktreeMutationTransaction({ dshHome, git, sidecar }),
-      idFactory: options.idFactory ?? (() => `wt_${randomUUID()}`),
+      idFactory: options.idFactory ?? (() => `wt_${randomBytes(6).toString('hex')}`),
+      signal: this.lifecycleController.signal,
     };
     this.recoveryReady = this.startupRecovery();
+  }
+
+  adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<void> {
+    return this.afterRecovery(async () => {
+      const workspace = await requireWorkspace(this.context, input.workspaceId);
+      await this.context.transaction.adoptBranch({ ...input, workspaceRoot: workspace.rootPath });
+    });
   }
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
@@ -105,6 +118,30 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly mutationToken: string;
   }): Promise<void> {
     return this.afterRecovery(() => removeWorktree(this.context, input));
+  }
+
+  unarchiveWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => unarchiveWorktree(this.context, input));
+  }
+
+  cleanWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => cleanWorktree(this.context, input));
+  }
+
+  forgetWorktree(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly mutationToken: string;
+  }): Promise<void> {
+    return this.afterRecovery(() => forgetWorktree(this.context, input));
   }
 
   insertWorktreeBefore(input: {

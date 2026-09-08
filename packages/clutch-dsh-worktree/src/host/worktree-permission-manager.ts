@@ -74,7 +74,7 @@ export function createWorktreePermissionManager(
         );
       }
       if (
-        worktree.status !== 'active' ||
+        (worktree.status !== 'active' && worktree.diskCleanup === 'completed') ||
         worktree.health === 'repair' ||
         worktree.health === 'recovery-needed'
       ) {
@@ -156,7 +156,7 @@ export function createWorktreePermissionManager(
           { workspaceId: input.workspaceId, worktreeId: input.worktreeId },
         );
       }
-      if (worktree.status !== 'removed') {
+      if (worktree.status !== 'removed' || worktree.diskCleanup !== 'completed') {
         throw providerError(
           'WORKTREE_REMOVED',
           `Worktree "${input.worktreeId}" is not detached`,

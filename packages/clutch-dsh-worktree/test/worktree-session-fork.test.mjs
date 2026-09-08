@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createWorktreeSessionForkCoordinator } from '../lib/client/worktree-session-fork.js';
+import { createWorktreeSessionForkCoordinator } from '../lib/client/session/worktree-session-fork.js';
 
 function binding(overrides = {}) {
   return {
@@ -38,6 +38,51 @@ function bindingLookup(sessionIds, resolveBinding) {
     ),
   };
 }
+
+for (const fail of [false, true]) {
+  test(`forget retires batch reconciliation lookup (${fail ? 'failure' : 'success'})`, async () => {
+    let settle;
+    const writes = [];
+    const coordinator = createWorktreeSessionForkCoordinator({
+      fork: async () => 'child-session',
+      sessions: { getSnapshot: () => sessionList() },
+      findBindings: () => new Promise((resolve, reject) => {
+        settle = () => fail ? reject(new Error('late lookup')) : resolve(
+          bindingLookup(['parent-session'], () => binding()),
+        );
+      }),
+      bindSession: async (input) => { writes.push(input); },
+    });
+    const pending = coordinator.reconcile();
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one', worktreeId: 'worktree-one', sessionIds: ['parent-session'],
+    });
+    settle();
+    await pending;
+    assert.deepEqual(writes, []);
+    assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+    coordinator.dispose();
+  });
+}
+
+test('forget retires inheritance while the native fork is pending but preserves its child', async () => {
+  let finishFork;
+  let lookups = 0;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: () => new Promise((resolve) => { finishFork = resolve; }),
+    findBindings: async () => { lookups += 1; throw new Error('lookup unavailable'); },
+    bindSession: async () => {},
+  });
+  const pending = coordinator.fork({ sessionId: 'parent-session' });
+  coordinator.forgetWorktree({
+    workspaceId: 'workspace-one', worktreeId: 'worktree-one', sessionIds: ['parent-session'],
+  });
+  finishFork('child-session');
+  assert.equal(await pending, 'child-session');
+  assert.equal(lookups, 0);
+  assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+  coordinator.dispose();
+});
 
 test('forks with native options and waits for Worktree membership refresh', async () => {
   const calls = [];
@@ -447,4 +492,140 @@ test('does not run plugin work after disposal if native fork resolves late', asy
 
   assert.equal(await forkPromise, 'child-session');
   assert.deepEqual(calls, []);
+});
+
+test('forget prevents a late binding failure from reviving fork recovery', async () => {
+  let rejectBind;
+  let signalStarted;
+  const started = new Promise((resolve) => {
+    signalStarted = resolve;
+  });
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'child-session',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: () => {
+      signalStarted();
+      return new Promise((_resolve, reject) => {
+        rejectBind = reject;
+      });
+    },
+  });
+  try {
+    const pendingFork = coordinator.fork({ sessionId: 'parent-session' });
+    await started;
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionIds: ['parent-session'],
+    });
+    rejectBind(Object.assign(new Error('forgotten'), { code: 'WORKTREE_NOT_FOUND' }));
+    assert.equal(await pendingFork, 'child-session');
+    assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+  } finally {
+    coordinator.dispose();
+  }
+});
+test('forget prevents late lookup from creating binding or recovery', async () => {
+  let resolveLookup;
+  let signalStarted;
+  const started = new Promise((resolve) => {
+    signalStarted = resolve;
+  });
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'child-session',
+    findBindings: () => {
+      signalStarted();
+      return new Promise((resolve) => {
+        resolveLookup = resolve;
+      });
+    },
+    bindSession: async () => undefined,
+  });
+  try {
+    const pendingFork = coordinator.fork({ sessionId: 'parent-session' });
+    await started;
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionIds: ['parent-session'],
+    });
+    resolveLookup(bindingLookup(['parent-session'], () => binding()));
+    assert.equal(await pendingFork, 'child-session');
+    assert.deepEqual(coordinator.recovery.getSnapshot().pending, []);
+  } finally {
+    coordinator.dispose();
+  }
+});
+
+test('forget prevents late bind success from triggering onBound', async () => {
+  let resolveBind;
+  let signalStarted;
+  const started = new Promise((resolve) => {
+    signalStarted = resolve;
+  });
+  let boundCount = 0;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'child-session',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: () => {
+      signalStarted();
+      return new Promise((resolve) => {
+        resolveBind = resolve;
+      });
+    },
+    onBound: () => {
+      boundCount += 1;
+    },
+  });
+  try {
+    const pendingFork = coordinator.fork({ sessionId: 'parent-session' });
+    await started;
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionIds: ['parent-session'],
+    });
+    resolveBind(undefined);
+    assert.equal(await pendingFork, 'child-session');
+    assert.equal(boundCount, 0);
+  } finally {
+    coordinator.dispose();
+  }
+});
+
+test('unrelated recovery and subsequent fork with new worktree ID succeed after forget', async () => {
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'child-session-2',
+    findBindings: async (ids) => bindingLookup(ids, (id) =>
+      id === 'parent-unrelated'
+        ? binding({ workspaceId: 'ws-two', worktreeId: 'wt-two', sessionId: 'parent-unrelated' })
+        : binding({ workspaceId: 'ws-one', worktreeId: 'wt-new', sessionId: id }),
+    ),
+    bindSession: async (input) => {
+      if (input.workspaceId === 'ws-two') {
+        throw new Error('unrelated error');
+      }
+    },
+  });
+  try {
+    // Seed an unrelated recovery
+    await coordinator.fork({ sessionId: 'parent-unrelated' }).catch(() => {});
+    assert.equal(coordinator.recovery.getSnapshot().pending.length, 1);
+
+    // Forget target worktree
+    coordinator.forgetWorktree({
+      workspaceId: 'workspace-one',
+      worktreeId: 'worktree-one',
+      sessionIds: ['parent-session'],
+    });
+
+    // Unrelated recovery is retained
+    assert.equal(coordinator.recovery.getSnapshot().pending.length, 1);
+
+    // A subsequent fork of a session bound to a NEW worktree ID on same workspace works
+    const childId = await coordinator.fork({ sessionId: 'parent-session-2' });
+    assert.equal(childId, 'child-session-2');
+  } finally {
+    coordinator.dispose();
+  }
 });

@@ -30,6 +30,8 @@ test('exports the approved stable error codes', () => {
     'WORKTREE_RECOVERY_REQUIRED',
     'WORKTREE_IDENTITY_CHANGED',
     'WORKTREE_PERMISSION_BINDING_REQUIRED',
+    'WORKTREE_SESSION_BUSY',
+    'WORKTREE_ACTIVITY_UNAVAILABLE',
   ]);
 });
 
@@ -99,6 +101,11 @@ test('exposes the approved Manager and Remote methods', () => {
     'createWorktree',
     'importWorktree',
     'removeWorktree',
+    'unarchiveWorktree',
+    'cleanWorktree',
+    'adoptWorktreeBranch',
+    'recoverWorktrees',
+    'forgetWorktree',
     'insertWorktreeBefore',
     'listBindings',
     'bindSession',

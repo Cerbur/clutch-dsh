@@ -6,11 +6,11 @@
  * the shared error vocabulary are exported here; Worktree/Session lifecycle
  * orchestration and policy conflicts remain the responsibility of Manage.
  */
-export { LocalGitAdapter } from './git.js';
+export { LocalGitAdapter } from './git/adapter.js';
 export {
   WorkspaceShardedSidecarRepository,
   validateSidecarSnapshot,
-} from './sidecar.js';
+} from './sidecar/repository.js';
 export {
   SIDECAR_SCHEMA_VERSION,
   LEGACY_SIDECAR_SCHEMA_VERSION,
@@ -18,10 +18,10 @@ export {
   isWorktreeProviderError,
   providerError,
 } from './types.js';
-export { CrossProcessMutationLock } from './mutation-lock.js';
+export { CrossProcessMutationLock } from './sidecar/mutation-lock.js';
 export { createWorktreeMutationToken } from './mutation-token.js';
-export { createRepositoryFingerprint } from './repository-fingerprint.js';
-export { WorktreeMutationTransaction } from './transaction.js';
+export { createRepositoryFingerprint } from './git/repository-fingerprint.js';
+export { WorktreeMutationTransaction } from './transaction/index.js';
 export type {
   DshReadAdapter,
   DshSessionSummary,

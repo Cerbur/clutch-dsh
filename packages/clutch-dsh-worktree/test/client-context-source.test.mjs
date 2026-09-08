@@ -4,13 +4,13 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 test('keeps the Session header hover card and adds a Hero title overlay', async () => {
-  const source = await readFile(new URL('../src/client/WorktreeContext.tsx', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/client/context/WorktreeContext.tsx', import.meta.url), 'utf8');
   const heroSource = await readFile(
-    new URL('../src/client/WorktreeHeroContext.tsx', import.meta.url),
+    new URL('../src/client/context/WorktreeHeroContext.tsx', import.meta.url),
     'utf8',
   );
   const entry = await readFile(new URL('../src/client/entry.ts', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../src/client/worktree-context.css', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/client/context/worktree-context.css', import.meta.url), 'utf8');
 
   assert.match(source, /WorktreeHeaderContext/);
   assert.match(source, /conversation\.session\.header\.actions/);

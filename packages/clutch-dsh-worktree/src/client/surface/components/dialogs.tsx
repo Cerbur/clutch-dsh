@@ -1,0 +1,602 @@
+import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
+import { worktreeSetupCommands } from '../../view/worktree-view.js';
+import styles from '../../worktree.css';
+import { worktreeLifecycleBlockReason } from '../selectors.js';
+import type {
+  SessionRenameDialogProps,
+  WorkspaceDeleteDialogProps,
+  WorkspaceRenameDialogProps,
+  WorktreeAdoptBranchDialogProps,
+  WorktreeCleanDiskDialogProps,
+  WorktreeCreateDialogProps,
+  WorktreeForgetDialogProps,
+  WorktreeRemovalDialogProps,
+  WorktreeSetupStatus,
+} from '../types.js';
+
+export function WorktreeAdoptBranchDialog({
+  t,
+  worktree,
+  actionPending,
+  error,
+  onClose,
+  onSubmit,
+  onRetry,
+}: WorktreeAdoptBranchDialogProps) {
+  if (worktree === undefined || typeof worktree.currentBranch !== 'string') return null;
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (!actionPending) onClose();
+      }}
+      closeLabel={t('dialog.cancel')}
+      title={t('worktree.adoptBranch')}
+      description={t('worktree.adoptDescription', {
+        previous: worktree.branch,
+        current: worktree.currentBranch,
+      })}
+      footer={
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending || error !== undefined}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('worktree.adoptBranch')}
+          </Button>
+        </>
+      }
+    >
+      {error !== undefined && (
+        <div role="alert">
+          <p className={styles.message}>{formatWorktreeViewError(error, t)}</p>
+          <Button variant="outline" disabled={actionPending} onClick={onRetry}>
+            {t('action.retry')}
+          </Button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function worktreeSetupMessage(
+  status: WorktreeSetupStatus,
+  t: WorktreeCreateDialogProps['t'],
+): string {
+  switch (status) {
+    case 'gitNotInstalled':
+      return t('worktree.setup.gitNotInstalled');
+    case 'noRepository':
+      return t('worktree.setup.noRepository');
+    case 'noInitialCommit':
+      return t('worktree.setup.noInitialCommit');
+    case 'noLocalBranch':
+      return t('worktree.setup.noLocalBranch');
+  }
+}
+
+export function WorktreeSessionRenameDialog({
+  t,
+  target,
+  draft,
+  pending,
+  error,
+  onClose,
+  onDraftChange,
+  onSubmit,
+}: SessionRenameDialogProps) {
+  return (
+    <Modal
+      open={target !== undefined}
+      onClose={onClose}
+      closeLabel={t('dialog.close')}
+      title={t('session.rename')}
+      footer={
+        <>
+          <Button variant="outline" disabled={pending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={pending || draft.trim().length === 0}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.rename')}
+          </Button>
+        </>
+      }
+    >
+      <Input
+        className={styles.renameInput}
+        value={draft}
+        aria-label={t('session.name')}
+        autoFocus
+        disabled={pending}
+        onFocus={(event) => {
+          event.currentTarget.select();
+        }}
+        onChange={(event) => {
+          onDraftChange(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            void onSubmit();
+          }
+        }}
+      />
+      {error !== undefined && (
+        <p className={styles.renameError} role="alert">
+          {formatWorktreeViewError(error, t)}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+export function WorktreeWorkspaceRenameDialog({
+  t,
+  target,
+  draft,
+  pending,
+  duplicate,
+  error,
+  onClose,
+  onDraftChange,
+  onSubmit,
+}: WorkspaceRenameDialogProps) {
+  if (target === undefined) return null;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      closeLabel={t('dialog.closeWorkspaceRename')}
+      title={t('workspace.renameTitle')}
+      footer={
+        <>
+          <Button variant="outline" disabled={pending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={
+              pending ||
+              draft.trim().length === 0 ||
+              draft.trim() === target.currentTitle ||
+              duplicate
+            }
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.rename')}
+          </Button>
+        </>
+      }
+    >
+      <Input
+        className={styles.renameInput}
+        value={draft}
+        aria-label={t('workspace.name')}
+        autoFocus
+        disabled={pending}
+        onFocus={(event) => {
+          event.currentTarget.select();
+        }}
+        onChange={(event) => {
+          onDraftChange(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            void onSubmit();
+          }
+        }}
+      />
+      {duplicate && (
+        <p className={styles.renameError} role="alert">
+          {t('workspace.duplicate')}
+        </p>
+      )}
+      {error !== undefined && (
+        <p className={styles.renameError} role="alert">
+          {formatWorktreeViewError(error, t)}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+export function WorktreeWorkspaceDeleteDialog({
+  t,
+  target,
+  pending,
+  error,
+  onClose,
+  onSubmit,
+}: WorkspaceDeleteDialogProps) {
+  if (target === undefined) return null;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      closeLabel={t('dialog.closeWorkspaceDelete')}
+      title={t('workspace.deleteTitle')}
+      description={t('workspace.deleteDescription', { name: target.title })}
+      footer={
+        <>
+          <Button variant="outline" disabled={pending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.delete')}
+          </Button>
+        </>
+      }
+    >
+      {error !== undefined && (
+        <p className={styles.renameError} role="alert">
+          {formatWorktreeViewError(error, t)}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+export function WorktreeCreateDialog({
+  t,
+  workspace,
+  view,
+  readError,
+  setupStatus,
+  canCreate,
+  mode,
+  importCandidates,
+  selectedImportPath,
+  selectedBranch,
+  newBranch,
+  actionPending,
+  onClose,
+  onRetry,
+  onModeChange,
+  onRetryImportCandidates,
+  onSelectedImportPathChange,
+  onSelectedBranchChange,
+  onNewBranchChange,
+  onSubmit,
+}: WorktreeCreateDialogProps) {
+  if (workspace === undefined) return null;
+  const setupCommands = setupStatus === undefined ? [] : worktreeSetupCommands(setupStatus);
+  const importing = mode === 'import';
+  const importBlocked =
+    actionPending || importCandidates.status === 'loading' || selectedImportPath === undefined;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeCreate')}
+      title={t('worktree.createTitle')}
+      description={
+        importing
+          ? t('worktree.importDescription', { name: workspace.title })
+          : t('worktree.createDescription', { name: workspace.title })
+      }
+      footer={
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={
+              importing
+                ? importBlocked
+                : actionPending ||
+                  !canCreate ||
+                  selectedBranch.length === 0 ||
+                  newBranch.trim().length === 0
+            }
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {importing ? t('worktree.import') : t('worktree.create')}
+          </Button>
+        </>
+      }
+    >
+      <div className={styles.worktreeModalTabs} role="tablist" aria-label={t('worktree.title')}>
+        <button
+          className={styles.worktreeModalTab}
+          type="button"
+          role="tab"
+          aria-selected={mode === 'create'}
+          disabled={actionPending}
+          onClick={() => {
+            onModeChange('create');
+          }}
+        >
+          {t('worktree.tabCreate')}
+        </button>
+        <button
+          className={styles.worktreeModalTab}
+          type="button"
+          role="tab"
+          aria-selected={mode === 'import'}
+          disabled={actionPending}
+          onClick={() => {
+            onModeChange('import');
+          }}
+        >
+          {t('worktree.tabImport')}
+        </button>
+      </div>
+      {importing ? (
+        <div className={styles.worktreeImportCandidates} role="tabpanel">
+          {importCandidates.status === 'loading' && importCandidates.candidates.length === 0 && (
+            <p className={styles.message}>{t('worktree.importLoading')}</p>
+          )}
+          {importCandidates.status === 'error' && (
+            <div className={styles.worktreeImportError} role="alert">
+              <p className={styles.message}>{formatWorktreeViewError(importCandidates.error, t)}</p>
+              <Button variant="outline" disabled={actionPending} onClick={onRetryImportCandidates}>
+                {t('action.retry')}
+              </Button>
+            </div>
+          )}
+          {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
+            <p className={styles.message}>{t('worktree.importEmpty')}</p>
+          )}
+          {importCandidates.candidates.length > 0 && (
+            <label className={styles.modalField}>
+              {t('worktree.tabImport')}
+              <select
+                className={styles.worktreeImportSelect}
+                data-worktree-import-select
+                aria-label={t('worktree.tabImport')}
+                value={selectedImportPath ?? ''}
+                disabled={actionPending}
+                onChange={(event) => {
+                  onSelectedImportPathChange(event.currentTarget.value);
+                }}
+              >
+                <option value="" disabled>
+                  {t('worktree.importPlaceholder')}
+                </option>
+                {importCandidates.candidates.map((candidate) => (
+                  <option key={candidate.absolutePath} value={candidate.absolutePath}>
+                    {candidate.branch} — {candidate.absolutePath}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      ) : readError !== undefined ? (
+        <div className={styles.gitReadiness} data-worktree-readiness="error" role="alert">
+          <p className={styles.message} data-error="true">
+            {formatWorktreeViewError(readError, t)}
+          </p>
+          {readError.retryable && onRetry !== undefined && (
+            <button
+              type="button"
+              className={styles.retryButton}
+              disabled={actionPending}
+              onClick={onRetry}
+            >
+              {t('action.retry')}
+            </button>
+          )}
+        </div>
+      ) : canCreate ? (
+        <>
+          <label className={styles.modalField}>
+            {t('worktree.baseBranch')}
+            <select
+              className={styles.actionSelect}
+              aria-label={t('worktree.baseBranch')}
+              value={selectedBranch}
+              disabled={actionPending}
+              onChange={(event) => {
+                onSelectedBranchChange(event.currentTarget.value);
+              }}
+            >
+              {view?.branches.map((branch) => (
+                <option key={branch.name} value={branch.name}>
+                  {branch.name}
+                  {branch.isCurrent ? t('branch.current') : ''}
+                  {branch.checkedOut ? t('branch.checkedOut') : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.modalField}>
+            {t('worktree.name')}
+            <Input
+              className={styles.renameInput}
+              aria-label={t('worktree.name')}
+              value={newBranch}
+              placeholder="dsh/12345678"
+              disabled={actionPending}
+              onChange={(event) => {
+                onNewBranchChange(event.currentTarget.value);
+              }}
+            />
+          </label>
+        </>
+      ) : (
+        <div
+          className={styles.gitReadiness}
+          data-worktree-readiness={setupStatus ?? 'loading'}
+          role="alert"
+        >
+          <p className={styles.message}>
+            {setupStatus === undefined ? t('status.loading') : worktreeSetupMessage(setupStatus, t)}
+          </p>
+          {setupCommands.length > 0 && (
+            <pre className={styles.commandBlock} aria-label={t('worktree.setup.commands')}>
+              {setupCommands.join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+export function WorktreeRemovalDialog({
+  t,
+  worktree,
+  actionPending,
+  onClose,
+  onSubmit,
+}: WorktreeRemovalDialogProps) {
+  if (worktree === undefined) return null;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeArchive')}
+      title={t('worktree.archive')}
+      description={
+        worktree.source === 'external'
+          ? t('worktree.archiveExternalDescription', { name: worktree.branch })
+          : t('worktree.archiveDescription', { name: worktree.branch })
+      }
+      footer={
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('worktree.archive')}
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
+export function WorktreeCleanDiskDialog({
+  t,
+  worktree,
+  actionPending,
+  onClose,
+  onSubmit,
+}: WorktreeCleanDiskDialogProps) {
+  if (worktree === undefined) return null;
+  const activityBlock = worktreeLifecycleBlockReason(actionPending, worktree.health);
+  const isBlocked = activityBlock !== undefined;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeCleanDisk')}
+      title={t('worktree.cleanDiskTitle')}
+      description={
+        activityBlock === 'recovery'
+          ? t('worktree.recovery')
+          : t('worktree.cleanDiskDescription', {
+              name: worktree.branch,
+              path: worktree.absolutePath,
+            })
+      }
+      footer={
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending || isBlocked}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.cleanDisk')}
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
+export function WorktreeForgetDialog({
+  t,
+  worktree,
+  actionPending,
+  onClose,
+  onSubmit,
+}: WorktreeForgetDialogProps) {
+  if (worktree === undefined) return null;
+  const activityBlock = worktreeLifecycleBlockReason(actionPending, worktree.health);
+  const isBlocked = activityBlock !== undefined;
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (actionPending) return;
+        onClose();
+      }}
+      closeLabel={t('dialog.closeWorktreeForget')}
+      title={t('worktree.forgetTitle')}
+      description={
+        activityBlock === 'recovery'
+          ? t('worktree.recovery')
+          : t('worktree.forgetDescription', { name: worktree.branch })
+      }
+      footer={
+        <>
+          <Button variant="outline" disabled={actionPending} onClick={onClose}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionPending || isBlocked}
+            onClick={() => {
+              void onSubmit();
+            }}
+          >
+            {t('dialog.forget')}
+          </Button>
+        </>
+      }
+    />
+  );
+}

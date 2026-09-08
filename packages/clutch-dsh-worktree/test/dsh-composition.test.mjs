@@ -12,7 +12,7 @@ import {
 import {
   loadWorktreeView,
   worktreeSetupCommands,
-} from '../lib/client/worktree-view.js';
+} from '../lib/client/view/worktree-view.js';
 import { createWorktreeRemoteProjection } from '../lib/host/remote.js';
 import { createWorktreeManager, LocalGitAdapter } from '../lib/index.js';
 
@@ -149,9 +149,12 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       (descriptor) => `${descriptor.namespace}/${descriptor.method}`,
     ),
     [
+      'worktreeManager/adoptWorktreeBranch',
       'worktreeManager/bindSession',
+      'worktreeManager/cleanWorktree',
       'worktreeManager/createWorktree',
       'worktreeManager/ensureWorktreePermission',
+      'worktreeManager/forgetWorktree',
       'worktreeManager/importWorktree',
       'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
@@ -159,7 +162,9 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/listImportCandidates',
       'worktreeManager/listWorktrees',
       'worktreeManager/normalizeDetachedWorktreePermissions',
+      'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
+      'worktreeManager/unarchiveWorktree',
     ],
   );
   const descriptors = new Set(
@@ -347,6 +352,11 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/createWorktree',
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',
+    'worktreeManager/unarchiveWorktree',
+    'worktreeManager/cleanWorktree',
+    'worktreeManager/adoptWorktreeBranch',
+    'worktreeManager/recoverWorktrees',
+    'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',

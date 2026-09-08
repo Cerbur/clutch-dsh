@@ -5,8 +5,8 @@ import {
   currentSessionRevealKeys,
   resolveCurrentSessionLocation,
   shouldRevealCurrentSessionGroup,
-} from '../lib/client/worktree-surface-selectors.js';
-import * as surfaceSelectors from '../lib/client/worktree-surface-selectors.js';
+} from '../lib/client/surface/selectors.js';
+import * as surfaceSelectors from '../lib/client/surface/selectors.js';
 
 const workspaces = [
   {
@@ -116,6 +116,7 @@ test('resolves a detached binding to the retained Worktree group', () => {
       groupKey: 'worktree:wt-detached',
       kind: 'worktree',
       worktreeId: 'wt-detached',
+      archived: true,
     },
   );
 });
