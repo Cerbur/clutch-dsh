@@ -163,6 +163,16 @@ Client disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
+Surface operation, permission, fork-binding, and read errors are announced by the public
+DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
+are announced once while present; resolved entries leave the queue and a later recurrence
+can announce again. Toast disposal is owned by React unmount. Full diagnostics and recovery
+buttons remain in one collapsed native details element; no Session recovery is tied to the
+toast timer. Dialog validation and scoped Git setup guidance remain local.
+The shared Worktree HoverCard adds status-specific repair guidance and the path for unhealthy
+active rows, and is suppressed during menus and dragging. These changes do not mutate Git,
+sidecar state, Session bindings, or permissions.
+
 ### Internal Surface modules
 
 `WorktreeSurface.tsx` composes the overlay from the package-internal `surface/`

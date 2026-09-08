@@ -1237,7 +1237,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
   const readErrorStart = source.indexOf(
     "{readState.status === 'error' && readState.error !== undefined ?",
   );
-  const readErrorEnd = source.indexOf(") : readState.status === 'ready' ?", readErrorStart);
+  const readErrorEnd = source.indexOf("{readState.status === 'ready' ?", readErrorStart);
   assert.notEqual(readErrorStart, -1);
   assert.notEqual(readErrorEnd, -1);
   assert.match(source.slice(readErrorStart, readErrorEnd), /kind: 'global'/);
@@ -1589,9 +1589,11 @@ test('polishes Main and Worktree row hover presentation', async () => {
   assert.match(source, /<HoverCard[\s\S]*openDelayMs=\{500\}/);
   assert.match(
     source,
-    /content=\{<div className=\{styles\.worktreeHoverTitle\}>\{label\}<\/div>\}/,
+    /content=\{[\s\S]*<div className=\{styles\.worktreeHoverTitle\}>\{label\}<\/div>/,
   );
-  assert.match(source, /disabled=\{menu\?\.open === true\}/);
+  assert.match(source, /disabled=\{menu\?\.open === true \|\| drag\?\.active === true\}/);
+  assert.match(source, /repairGuidance !== undefined/);
+  assert.match(source, /<p className=\{styles\.worktreeHoverTitle\}>\{repairGuidance\}<\/p>/);
 
   assert.match(
     styles,

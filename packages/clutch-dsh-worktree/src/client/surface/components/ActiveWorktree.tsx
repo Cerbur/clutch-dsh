@@ -188,6 +188,15 @@ export function ActiveWorktree({
         workspaceTitle={workspace.title}
         state={state}
         stateLabel={stateLabel}
+        repairGuidance={
+          record.health === 'repair'
+            ? t('worktree.repairGuidance')
+            : record.health === 'recovery-needed'
+              ? t('worktree.recoveryGuidance')
+              : record.health === 'branch-drift'
+                ? t(record.currentBranch === null ? 'worktree.detachedGuidance' : 'worktree.branchDriftGuidance')
+                : undefined
+        }
         onToggle={() => {
           toggleWorktree(record.worktreeId);
         }}

@@ -299,6 +299,7 @@ export function WorktreeGroupRow({
   workspaceTitle,
   state,
   stateLabel,
+  repairGuidance,
   onToggle,
   onCreateSession,
   menu,
@@ -528,9 +529,20 @@ export function WorktreeGroupRow({
   return (
     <HoverCard
       anchor={row}
-      content={<div className={styles.worktreeHoverTitle}>{label}</div>}
+      content={
+        <div className={styles.worktreeHoverDetails}>
+          <div className={styles.worktreeHoverTitle}>{label}</div>
+          {repairGuidance !== undefined && (
+            <>
+              <p className={styles.worktreeHoverTitle}>{stateLabel}</p>
+              <p className={styles.worktreeHoverTitle}>{menu?.copyPath}</p>
+              <p className={styles.worktreeHoverTitle}>{repairGuidance}</p>
+            </>
+          )}
+        </div>
+      }
       openDelayMs={500}
-      disabled={menu?.open === true}
+      disabled={menu?.open === true || drag?.active === true}
       copyLabel={t('copy')}
       copiedLabel={t('hover.copied')}
     />

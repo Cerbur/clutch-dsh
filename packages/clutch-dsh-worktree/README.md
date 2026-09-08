@@ -402,6 +402,16 @@ are retired automatically; there is no need to edit sidecar JSON for ordinary ch
 
 ### Understand status and recovery messages
 
+- Operation, permission, binding, and refresh failures use DSH's native toast, one at a time.
+  Unchanged errors are not repeated on every render. Full messages and existing Retry/Open
+  actions remain in the expandable Notification details and recovery entry after the toast fades.
+  Form validation and Workspace Git setup guidance remain next to their inputs.
+- Hover or focus an active Worktree row to see its status, path, and repair guidance for missing
+  directories/Git registration, branch drift/detached HEAD, or incomplete recovery. Opening its
+  menu or dragging suppresses the hover card. Archive confirmation explicitly preserves the
+  directory, Session bindings, and cwd for both plugin-created and external Worktrees;
+  Clean Disk remains a separate action.
+
 - `ready` means the Worktree is available. `cleaned` indicates disk cleanup completed while the
   sidecar archive entry is retained. `repair` identifies a missing or invalid Worktree, Session, binding,
   or cwd. `recovery-needed` means a Git/sidecar operation or identity check is unresolved and

@@ -354,6 +354,13 @@ Git 明确证明原记录已切走时，允许用空闲的旧分支创建 Worktr
 
 ### 理解状态与恢复提示
 
+- 操作、权限、绑定和刷新失败统一使用 DSH 原生 toast，逐条显示；相同错误不会随每次渲染重复提示。
+  toast 消失后，完整信息及原有重试/打开操作仍保留在可展开的“提示详情与恢复操作”入口。
+  表单校验和 Workspace Git 初始化指引保留在对应输入附近。
+- 悬停或聚焦 active Worktree 行可查看状态、路径以及目录/Git 登记缺失、分支漂移/分离 HEAD、
+  恢复未完成的处理指引。打开菜单或拖动时不显示 hover 卡片。归档确认明确说明插件创建及外部
+  Worktree 都保留目录、Session 绑定和 cwd；“清理磁盘”仍是独立操作。
+
 - 没有未完成 Git 事务时，目录缺失的 active 或 archived Worktree 保持 `repair`，可归档，
   不会阻断健康 Worktree 的 Session 绑定。指向现有且未清理记录的旧版无事务
   `WORKTREE_RECOVERY_REQUIRED` 观察标记在 sidecar 锁内淘汰；未完成事务、未知记录和身份变化问题仍然阻断操作。
