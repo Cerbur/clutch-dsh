@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:"
+    />
+    <title>Desktop Plugins</title>
+    <link rel="stylesheet" href="plugin-manager.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <span class="eyebrow">DESKTOP / PLUGINS</span>
+          <h1 id="title"></h1>
+        </div>
+        <button id="refresh" class="quiet" type="button"></button>
+      </header>
+      <p id="description"></p>
+      <aside id="personal"></aside>
+      <form id="install-form">
+        <label id="package-label" for="package-spec"></label>
+        <div class="install-row">
+          <input id="package-spec" autocomplete="off" required /><button
+            id="install"
+            type="submit"
+          ></button>
+        </div>
+        <div class="tools">
+          <button id="directory" class="quiet" type="button"></button
+          ><button id="archive" class="quiet" type="button"></button>
+        </div>
+        <p id="local-hint" class="hint"></p>
+      </form>
+      <section class="runtime">
+        <div>
+          <h2 id="runtime-title"></h2>
+          <p id="runtime-hint"></p>
+        </div>
+        <button id="restart" class="quiet" type="button"></button>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+      <section aria-labelledby="installed-heading">
+        <h2 id="installed-heading"></h2>
+        <ul id="plugins"></ul>
+        <p id="empty"></p>
+      </section>
+      <div id="confirm" class="confirm" hidden>
+        <p id="confirm-text"></p>
+        <div class="tools">
+          <button id="cancel" class="quiet" type="button"></button
+          ><button id="confirm-remove" type="button"></button>
+        </div>
+      </div>
+    </main>
+    <script src="plugin-manager.js"></script>
+  </body>
+</html>

@@ -28,6 +28,13 @@ function fixture(t, { failure = '', missing = false, local = false, sha = false 
   mkdirSync(packager, { recursive: true });
   cpSync(join(scripts, 'package-desktop.sh'), join(packager, 'package-desktop.sh'));
   writeFileSync(join(packager, 'local-app.mjs'), '// fixture');
+  for (const file of ['extension-overlay.mjs', 'extension-runtime.mjs']) {
+    writeFileSync(join(packager, file), '// fixture');
+  }
+  mkdirSync(join(packager, 'renderer'));
+  for (const file of ['plugin-manager.html', 'plugin-manager.js', 'plugin-manager.css']) {
+    writeFileSync(join(packager, 'renderer', file), '// fixture');
+  }
   if (!missing) writeFileSync(join(packager, 'patch-edit-menu.mjs'), '// fixture');
   const source = join(root, 'source/apps/desktop');
   mkdirSync(source, { recursive: true });

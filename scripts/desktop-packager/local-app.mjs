@@ -15,8 +15,9 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, URL } from 'node:url';
 import { patchEditMenu } from './patch-edit-menu.mjs';
+import { buildDesktopOverlay } from './extension-overlay.mjs';
 
 const [mode, input] = process.argv.slice(2);
 if (!input || !['electron', 'seed', 'assemble'].includes(mode))
@@ -86,6 +87,10 @@ if (mode === 'electron') {
       if (/\.(?:js|cjs)$/.test(file)) cpSync(join(desktop, 'lib', file), join(shell, 'lib', file));
     }
     cpSync(join(desktop, 'renderer'), join(shell, 'renderer'), { recursive: true });
+    for (const file of ['plugin-manager.html', 'plugin-manager.js', 'plugin-manager.css']) {
+      cpSync(new URL('./renderer/' + file, import.meta.url), join(shell, 'renderer', file));
+    }
+    await buildDesktopOverlay(repo, join(shell, 'lib'));
     for (const resource of ['runtime', 'seed']) {
       cpSync(join(target, resource), join(resources, resource), { recursive: true });
     }
