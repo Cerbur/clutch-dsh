@@ -279,6 +279,7 @@ export interface WorktreeGroupRowProps {
   readonly workspaceTitle: string;
   readonly state?: 'done' | 'warning' | 'error';
   readonly stateLabel?: string;
+  readonly repairGuidance?: string;
   readonly onToggle: () => void;
   readonly onCreateSession?: () => void;
   readonly menu?: WorktreeGroupMenuProps;
