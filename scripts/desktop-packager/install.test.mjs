@@ -17,7 +17,10 @@ import { test } from 'node:test';
 
 const scripts = dirname(fileURLToPath(import.meta.url));
 const sourceSha = '0123456789abcdef0123456789abcdef01234567';
-function fixture(t, { failure = '', missing = false, local = false, sha = false } = {}) {
+function fixture(
+  t,
+  { failure = '', missing = false, local = false, sha = false, concurrency = '' } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-installer-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, 'bin');
@@ -66,12 +69,16 @@ esac`,
   tool(
     'pnpm',
     `printf '%s\\n' "$PWD" >> "$TEST_ROOT/build-roots"
+printf '%s\\n' "$*" >> "$TEST_ROOT/pnpm-requests"
 test -d apps/desktop
 if [ "$TEST_LOCAL" = false ]; then
   test -d .git
   test "\${DSH_CLIENT_COMMIT_HASH:-}" = '${sourceSha}' || { echo 'missing checkout commit metadata' >&2; exit 89; }
 fi
 if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
+if [ "$TEST_FAILURE" = pack ] && [ "$1" = run ] && [ "$2" = release:pack ]; then
+  echo 'fixture pack failure' >&2; exit 43
+fi
 [ "$TEST_FAILURE" != build ] || exit 42`,
   );
   tool('node', 'if [ "$1" = --eval ]; then exec "$TEST_NODE" "$@"; fi');
@@ -92,6 +99,7 @@ if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
       DSH_REPO_ROOT: '',
       DSH_PACKAGER_REF: sha ? sourceSha : 'pinned-packager',
       DSH_SOURCE_REF: sha ? sourceSha : 'pinned-source',
+      DSH_PACK_CONCURRENCY: concurrency,
     },
   });
   if (existsSync(join(root, 'temporary'))) {
@@ -114,6 +122,11 @@ test('piped installer shallow-clones selected refs and builds without stdin', (t
     /clone --depth 1 --single-branch --branch pinned-source https:\/\/github.com\/deepseek-ai\/deepseek-harness.git/,
   );
   assert.ok(existsSync(join(root, 'build-roots')));
+  const packRequests = readFileSync(join(root, 'pnpm-requests'), 'utf8')
+    .split('\n')
+    .filter((line) => line.startsWith('run release:pack'));
+  assert.equal(packRequests.length, 2);
+  for (const request of packRequests) assert.match(request, / --concurrency 4$/);
 });
 test('full commit SHAs use shallow fetch and detached checkout', (t) => {
   const { result, root } = fixture(t, { sha: true });
@@ -124,16 +137,37 @@ test('full commit SHAs use shallow fetch and detached checkout', (t) => {
   assert.doesNotMatch(requests, /clone /);
 });
 test('forwards an existing source path without downloading dsh', (t) => {
-  const { result, root } = fixture(t, { local: true });
+  const { result, root } = fixture(t, { local: true, concurrency: '1' });
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(readFileSync(join(root, 'requests'), 'utf8'), /deepseek-harness/);
   assert.ok(existsSync(join(root, 'source')));
+  const packRequests = readFileSync(join(root, 'pnpm-requests'), 'utf8')
+    .split('\n')
+    .filter((line) => line.startsWith('run release:pack'));
+  assert.equal(packRequests.length, 2);
+  for (const request of packRequests) assert.match(request, / --concurrency 1$/);
 });
 test('preserves download failure exit code', (t) => {
   assert.equal(fixture(t, { failure: 'download' }).result.status, 22);
 });
 test('preserves build failure exit code and cleans both checkouts', (t) => {
   assert.equal(fixture(t, { failure: 'build' }).result.status, 42);
+});
+test('rejects invalid packing concurrency before fetching dsh or building', (t) => {
+  for (const concurrency of ['0', '-1', '1.5', 'four', '9007199254740992']) {
+    const { result, root } = fixture(t, { concurrency });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /DSH_PACK_CONCURRENCY must be a positive safe integer/);
+    assert.doesNotMatch(readFileSync(join(root, 'requests'), 'utf8'), /deepseek-harness/);
+    assert.equal(existsSync(join(root, 'build-roots')), false);
+  }
+});
+test('packing failure stops before seed preparation and preserves the exit code', (t) => {
+  const { result, root } = fixture(t, { failure: 'pack' });
+  assert.equal(result.status, 43);
+  assert.match(result.stderr, /fixture pack failure/);
+  assert.doesNotMatch(readFileSync(join(root, 'pnpm-requests'), 'utf8'), /prepare:|desktop-host/);
+  assert.doesNotMatch(result.stdout, /Packed dsh packages in/);
 });
 test('rejects an incomplete packager before any build', (t) => {
   const { result, root } = fixture(t, { missing: true });

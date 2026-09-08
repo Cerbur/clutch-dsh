@@ -40,6 +40,18 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
 
 输出按五个阶段组织：获取源码 → 安装依赖 → 编译打包 → 准备运行时和离线 seed → 签名安装。每个阶段保留工具日志，失败即停止；缺少工具时直接显示工具名称。
 
+DSH 和 vendor 包族使用上游 `release:pack --concurrency`，默认 4 个 worker
+并行打包，并分别显示耗时。`DSH_PACK_CONCURRENCY` 可指定正整数，设为 `1` 恢复
+串行；参数在获取 DSH 源码和构建前校验。此设置只影响包族打包，不改变编译、
+归档内容校验和离线 seed 验证。当前仍完整生成 tarball，不复用旧打包产物。
+
+```bash
+DSH_PACK_CONCURRENCY=4 ./scripts/desktop-packager/package-desktop.sh /path/to/deepseek-harness
+```
+
+使用上面的 `curl | bash` 入口时，将 `DSH_PACK_CONCURRENCY=4` 放在管道右侧的
+`bash` 前。上游打包脚本需支持 `--concurrency`。
+
 依赖安装后会显式执行已锁定版本的 Electron 官方安装脚本，确保全新目录也有 `Electron.app`；该步骤忽略 `ELECTRON_SKIP_BINARY_DOWNLOAD`，保留 Electron 官方下载器的缓存及镜像配置，缺少产物时明确失败。
 
 可指定安装位置和源码版本。环境变量放在管道右侧的 `bash` 前：

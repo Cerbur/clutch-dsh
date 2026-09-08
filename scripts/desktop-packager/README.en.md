@@ -23,6 +23,21 @@ Without a source path, the script shallow-clones upstream. `DSH_SOURCE_REF`
 selects its ref; `DSH_INSTALL_DIR` changes the installation parent. Existing apps
 are preserved with a `.previous` suffix; an existing backup blocks replacement.
 
+The dsh and vendor families use upstream `release:pack --concurrency` with four
+packing workers by default, and report each family's elapsed time. Set
+`DSH_PACK_CONCURRENCY` to a positive integer, or `1` for serial packing. Validation
+runs before fetching DSH source or building. This setting affects only family
+packing; compilation, payload checks and offline seed verification still run.
+Tarballs are regenerated in full; previous packed outputs are not reused.
+
+```bash
+DSH_PACK_CONCURRENCY=4 ./scripts/desktop-packager/package-desktop.sh /path/to/deepseek-harness
+```
+
+For the `curl | bash` installer, put `DSH_PACK_CONCURRENCY=4` before `bash` on the
+right side of the pipe. The selected upstream pack script must support
+`--concurrency`.
+
 The manager is included automatically. The packager compiles checked temporary
 Desktop main/project-manager overlays and copies this directory's renderer into
 the generated app before ad-hoc signing. Upstream structural changes fail the

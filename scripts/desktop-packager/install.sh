@@ -8,6 +8,7 @@ dsh_desktop_install() (
     echo 'DSH_PACKAGER_REF: clutch-dsh branch/tag/commit (default main)'
     echo 'DSH_SOURCE_REF: deepseek-harness branch/tag/commit (default master)'
     echo 'DSH_INSTALL_DIR: installation parent (default /Applications)'
+    echo 'DSH_PACK_CONCURRENCY: package packing workers (default 4; 1 for serial)'
     exit 0
   fi
   if [ "$#" -gt 1 ]; then echo 'Expected at most one repository path' >&2; exit 1; fi

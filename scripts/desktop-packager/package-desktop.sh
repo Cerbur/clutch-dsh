@@ -7,6 +7,7 @@ if [ "${1:-}" = "--help" ]; then
   echo "Without a path or DSH_REPO_ROOT, shallow-clone GitHub source into a temporary directory."
   echo "DSH_SOURCE_REF selects a source branch, tag, or commit (default master)."
   echo "DSH_INSTALL_DIR selects the install parent (default /Applications)."
+  echo "DSH_PACK_CONCURRENCY selects package packing workers (default 4; 1 for serial)."
   exit 0
 fi
 if [ "$#" -gt 1 ]; then echo "Expected at most one repository path" >&2; exit 1; fi
@@ -16,6 +17,15 @@ fi
 for tool in git node pnpm codesign ditto plutil; do
   command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
+PACK_CONCURRENCY="$(node --eval '
+  const value = process.env.DSH_PACK_CONCURRENCY || "4";
+  const workers = Number(value);
+  if (!Number.isSafeInteger(workers) || workers < 1 || String(workers) !== value) {
+    console.error("DSH_PACK_CONCURRENCY must be a positive safe integer (default 4).");
+    process.exit(1);
+  }
+  process.stdout.write(value);
+')"
 REPO_ROOT="${1:-${DSH_REPO_ROOT:-}}"
 SOURCE_TMP=""
 cleanup() {
@@ -49,14 +59,20 @@ export DSH_DESKTOP_TARGET_PLATFORM=darwin
 export DSH_DESKTOP_TARGET_ARCH=arm64
 TARGET_DIR="$REPO_ROOT/apps/desktop/.desktop-build/targets/mac-arm64"
 cd "$REPO_ROOT"
+pack_family() {
+  local started=$SECONDS
+  echo "Packing $1 packages ($PACK_CONCURRENCY workers)..."
+  pnpm run release:pack --family "$1" --out "$TARGET_DIR/packed/$1" --concurrency "$PACK_CONCURRENCY"
+  echo "Packed $1 packages in $((SECONDS - started))s."
+}
 echo '[2/5] Installing dependencies and Electron'
 pnpm install --frozen-lockfile
 node "$SCRIPT_DIR/local-app.mjs" electron "$REPO_ROOT"
 echo '[3/5] Building and packing packages'
 pnpm run build:official
-pnpm run release:pack --family dsh --out "$TARGET_DIR/packed/dsh"
+pack_family dsh
 pnpm --dir apps/desktop-host pack --pack-destination "$TARGET_DIR/packed/dsh"
-pnpm run release:pack --family vendor --out "$TARGET_DIR/packed/vendor"
+pack_family vendor
 mkdir -p "$TARGET_DIR/packed/landlock"
 pnpm --dir native/landlock-run run build:ts
 pnpm --dir native/landlock-run/packages/entry pack --pack-destination "$TARGET_DIR/packed/landlock"

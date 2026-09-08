@@ -22,6 +22,18 @@ added and no DSH tracked source is edited.
   alive, while the primary renderer reloads after successful activation.
 - No changes to native application auto-update coordination in this experiment.
 
+## Package build performance
+
+Use the upstream release packer's bounded worker pool for both dsh and vendor
+families, with four workers by default. `DSH_PACK_CONCURRENCY=1` restores serial
+packing; reject invalid values before fetching DSH source or building. Report
+each family's elapsed time. Keep build, payload and offline seed checks and
+regenerate every archive so local source edits cannot reuse stale packages.
+Compare serial and parallel archive entries, file bytes, manifest values and
+publish order on the same built checkout. Ignore only dependency-map key order
+in `package.json`, which pnpm can change while resolving workspace versions;
+all other manifest ordering and archive metadata must match.
+
 ## Verification
 
 Use real pnpm with small synthetic core packages in isolated temporary profiles.
