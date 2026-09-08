@@ -2,19 +2,41 @@
 set -euo pipefail
 
 # One-key package DeepSeek Harness Desktop (macOS arm64) and install to /Applications
-# Bundles Node runtime, offline seed store, and native plugin manager (Cmd+,)
+# Supports standalone Node runtime, offline seed store, and native desktop plugin manager (Cmd+,)
 
-REPO_ROOT="${DSH_REPO_ROOT:-/Users/yuancheng/Documents/Code/deepseek-harness}"
+# 1. Resolve repository root
+REPO_ROOT="${1:-${DSH_REPO_ROOT:-}}"
+CLONED_TMP=""
+
+cleanup() {
+  if [ -n "$CLONED_TMP" ] && [ -d "$CLONED_TMP" ]; then
+    echo "==> Cleaning up temporary cloned repository: $CLONED_TMP"
+    rm -rf "$CLONED_TMP"
+  fi
+}
+trap cleanup EXIT INT TERM
+
+if [ -z "$REPO_ROOT" ]; then
+  CLONED_TMP="$(mktemp -d /tmp/dsh-repo-XXXXXX)"
+  REPO_URL="${DSH_GIT_URL:-https://github.com/deepseek-ai/deepseek-harness.git}"
+  echo "==> No repository path provided. Cloning $REPO_URL (--depth 1) to $CLONED_TMP..."
+  git clone --depth 1 "$REPO_URL" "$CLONED_TMP"
+  REPO_ROOT="$CLONED_TMP"
+  echo "==> Installing dependencies in freshly cloned repository..."
+  (cd "$REPO_ROOT" && pnpm install --frozen-lockfile=false)
+else
+  echo "==> Using specified deepseek-harness repository: $REPO_ROOT"
+fi
+
+if [ ! -d "$REPO_ROOT/apps/desktop" ]; then
+  echo "Error: Directory $REPO_ROOT/apps/desktop not found." >&2
+  exit 1
+fi
+
 TARGET="mac-arm64"
 TARGET_DIR="$REPO_ROOT/apps/desktop/.desktop-build/targets/$TARGET"
 APP_OUTPUT="$TARGET_DIR/artifacts/$TARGET/DeepSeek Harness.app"
 INSTALL_DEST="/Applications/DeepSeek Harness.app"
-
-echo "==> Checking deepseek-harness repository: $REPO_ROOT"
-if [ ! -d "$REPO_ROOT/apps/desktop" ]; then
-  echo "Error: directory $REPO_ROOT/apps/desktop not found. Set DSH_REPO_ROOT to the correct path." >&2
-  exit 1
-fi
 
 cd "$REPO_ROOT"
 
@@ -85,5 +107,5 @@ ditto "$APP_OUTPUT" "$INSTALL_DEST"
 codesign --verify --deep --strict "$INSTALL_DEST"
 
 echo "==> Package and installation completed successfully!"
-echo "Open with Finder or terminal; press Cmd+, in app to use desktop plugin manager."
-
+echo "Location: $INSTALL_DEST"
+echo "Shortcut: Press Cmd+, in app to open the native Desktop Plugins Manager."
