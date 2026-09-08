@@ -33,7 +33,7 @@ dsh_desktop_install() (
       https://github.com/Cerbur/clutch-dsh.git "$installer_tmp/packager"
   fi
   local entry="$installer_tmp/packager/scripts/desktop-packager/package-desktop.sh"
-  for file in package-desktop.sh local-app.mjs patch-edit-menu.mjs; do
+  for file in package-desktop.sh local-app.mjs patch-edit-menu.mjs extension-overlay.mjs extension-runtime.mjs renderer/plugin-manager.html renderer/plugin-manager.js renderer/plugin-manager.css; do
     if [ ! -s "$(dirname "$entry")/$file" ]; then
       echo "Incomplete packager checkout: missing $file" >&2; exit 1
     fi
