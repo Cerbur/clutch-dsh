@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readWorktreeStatus } from '../../git/worktree-status.js';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { ImportWorktreeTransactionInput } from '../types.js';
@@ -61,6 +62,7 @@ export async function importWorktreeTransaction(
           if (
             !liveWorktree ||
             !liveWorktree.branch ||
+            (await readWorktreeStatus(liveWorktree)) !== 'ready' ||
             (await samePhysicalPath(liveWorktree.absolutePath, gitRoot))
           ) {
             throw providerError(

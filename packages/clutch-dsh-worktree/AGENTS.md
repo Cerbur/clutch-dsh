@@ -119,6 +119,12 @@ Git worktree 操作只允许管理 worktree 和 Git metadata，不得修改工�
 
 ## 分支漂移与显式同步
 
+Provider 的 readWorktreeStatus 统一映射已管理与未导入 Worktree 的运行时状态：
+ready、missing、prunable、bare、detached、unavailable。状态不持久化；
+导入候选和导入提交只接受 ready，locked 本身不影响可用性。
+已管理记录将 missing/prunable/bare/unavailable 映射为 repair，detached 保留
+branch-drift 语义；recovery-needed 与 cleaned 仍优先于 Git 观察。
+
 WorktreeRecord.branch 是最近一次明确接受的分支，不是不可变的仓库身份。读取投影
 currentBranch（detached HEAD 为 null）和 branch-drift，不持久化这些 runtime 字段。
 无 pending 的普通 checkout 不制造 recovery issue；已有 Session binding 与 cwd 不变。

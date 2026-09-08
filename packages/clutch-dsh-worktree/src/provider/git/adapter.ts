@@ -131,7 +131,7 @@ function operationError(
  */
 function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = [];
-  let current: { absolutePath?: string; branch?: string; headCommit?: string; detached?: boolean } = {};
+  let current: { absolutePath?: string; branch?: string; headCommit?: string; detached?: boolean; prunable?: boolean; locked?: boolean; bare?: boolean } = {};
 
   const flush = () => {
     if (current.absolutePath) {
@@ -140,6 +140,9 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
         ...(current.branch ? { branch: current.branch } : {}),
         ...(current.headCommit ? { headCommit: current.headCommit } : {}),
         detached: current.detached ?? !current.branch,
+        ...(current.prunable ? { prunable: true } : {}),
+        ...(current.locked ? { locked: true } : {}),
+        ...(current.bare ? { bare: true } : {}),
       });
     }
     current = {};
@@ -167,6 +170,9 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
     if (line === 'detached') {
       current.detached = true;
     }
+    if (line === 'prunable' || line.startsWith('prunable ')) current.prunable = true;
+    if (line === 'locked' || line.startsWith('locked ')) current.locked = true;
+    if (line === 'bare') current.bare = true;
   }
   flush();
   return worktrees;
