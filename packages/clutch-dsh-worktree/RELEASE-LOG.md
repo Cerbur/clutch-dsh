@@ -1,6 +1,6 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
-## Unreleased
+## 0.1.10 — 2026-09-08
 
 ### 中文
 
@@ -10,10 +10,13 @@
 - 支持对仅元数据标记归档且磁盘未清理的 Worktree 进行取消归档（Unarchive），直接恢复至活跃状态。
 - 在 Worktree Header 搜索与添加工作区之间新增「全部折叠」按钮，支持一键折叠所有工作区与 Worktree 节点。
 - 支持 Worktree 分支漂移的只读投影与显式采用（adopt），并在创建同级 Worktree 时基于当前实际分支。
+- 支持在统一 Provider 运行时状态映射下过滤外部 Worktree 导入候选，排除缺失、可修剪与 detached 状态。
+- 将新建 Worktree 目录名简化为短随机字符（`wt_` + 12 位十六进制），并增加名称碰撞预检与自动重试退避。
 
 #### 优化
 
 - 将活跃 Worktree 菜单操作文案与图标调整为「归档 Worktree」，并将 Worktree Header 搜索优化为与 DSH 原生一致的单图标折叠展开输入框。
+- 优化活跃 Worktree 状态的原生 HoverCard 指引、通知队列与双语提示文案。
 
 #### 修复
 
@@ -27,10 +30,13 @@
 - Support unarchiving metadata-archived worktrees whose disk directories are intact, restoring them directly back to active status.
 - Add a "Collapse All" button between the search slot and add workspace button in the Worktree Header to collapse all workspaces and worktrees in one click.
 - Project runtime branch drift, support explicit branch adoption, and base sibling Worktree creation on the observed branch.
+- Filter external Worktree import candidates using a shared Provider runtime status mapping that excludes missing, prunable, or detached entries.
+- Shorten newly generated Worktree directory names to a 12-character random hex suffix with preflight collision retries.
 
 #### Improved
 
 - Update active Worktree menu action copy and icon to "Archive Worktree", and optimize Worktree header search into a DSH-native collapsible search input.
+- Optimize active Worktree native HoverCard guidance, notification queue toasts, and bilingual tips.
 
 #### Fixed
 
