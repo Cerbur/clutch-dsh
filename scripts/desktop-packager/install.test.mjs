@@ -17,7 +17,7 @@ import { test } from 'node:test';
 
 const scripts = dirname(fileURLToPath(import.meta.url));
 const sourceSha = '0123456789abcdef0123456789abcdef01234567';
-function fixture(t, { failure = '', missing = false, local = false } = {}) {
+function fixture(t, { failure = '', missing = false, local = false, sha = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-installer-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, 'bin');
@@ -31,46 +31,45 @@ function fixture(t, { failure = '', missing = false, local = false } = {}) {
   if (!missing) writeFileSync(join(packager, 'patch-edit-menu.mjs'), '// fixture');
   const source = join(root, 'source/apps/desktop');
   mkdirSync(source, { recursive: true });
-  const archive = (name, directory) => {
-    const result = spawnSync('/usr/bin/tar', ['-czf', join(root, name), '-C', root, directory]);
-    assert.equal(result.status, 0, result.stderr?.toString());
-  };
-  archive('packager.tgz', 'clutch');
-  archive('source.tgz', 'source');
   tool('uname', 'if [ "$1" = -s ]; then echo Darwin; else echo arm64; fi');
   tool(
-    'curl',
-    `url=""; output=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in https:*) url="$1";; --output) shift; output="$1";; esac
-  shift
-done
-printf '%s\\n' "$url" >> "$TEST_ROOT/requests"
-printf '%s\\n' "$(dirname "$output")" >> "$TEST_ROOT/temporary"
+    'git',
+    `printf '%s\\n' "$*" >> "$TEST_ROOT/requests"
 [ "$TEST_FAILURE" != download ] || exit 22
-case "$url" in
-  https://api.github.com/repos/deepseek-ai/deepseek-harness/commits/*)
-    if [ "$TEST_FAILURE" = metadata ]; then echo '{"sha":"master"}' > "$output";
-    else echo '{"sha":"${sourceSha}"}' > "$output"; fi;;
-  */Cerbur/clutch-dsh/*) cp "$TEST_ROOT/packager.tgz" "$output";;
-  */deepseek-ai/deepseek-harness/*) cp "$TEST_ROOT/source.tgz" "$output";;
-  *) exit 99;;
+if [ "$1" = -C ]; then
+  destination="$2"; shift 2
+else
+  destination="\${!#}"
+fi
+case "$1" in
+  clone|init)
+    printf '%s\\n' "$(dirname "$destination")" >> "$TEST_ROOT/temporary"
+    case "$destination" in
+      */packager) cp -R "$TEST_ROOT/clutch" "$destination";;
+      */repo) cp -R "$TEST_ROOT/source" "$destination";;
+      *) exit 99;;
+    esac
+    mkdir "$destination/.git";;
+  fetch) [[ "$*" = *'--depth 1'* ]] || exit 98;;
+  checkout) test "$*" = 'checkout --quiet --detach FETCH_HEAD';;
+  rev-parse) echo '${sourceSha}';;
+  *) exit 97;;
 esac`,
   );
   tool(
     'pnpm',
     `printf '%s\\n' "$PWD" >> "$TEST_ROOT/build-roots"
 test -d apps/desktop
-test ! -d .git
 if [ "$TEST_LOCAL" = false ]; then
-  test "\${DSH_CLIENT_COMMIT_HASH:-}" = '${sourceSha}' || { echo 'missing archive commit metadata' >&2; exit 89; }
+  test -d .git
+  test "\${DSH_CLIENT_COMMIT_HASH:-}" = '${sourceSha}' || { echo 'missing checkout commit metadata' >&2; exit 89; }
 fi
 if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
 [ "$TEST_FAILURE" != build ] || exit 42`,
   );
   tool('node', 'if [ "$1" = --eval ]; then exec "$TEST_NODE" "$@"; fi');
   for (const name of ['codesign', 'ditto', 'plutil']) tool(name, 'exit 0');
-  tool('git', "echo 'git must not be called' >&2; exit 91");
+  tool('curl', "echo 'archive downloads must not be called' >&2; exit 91");
   const args = local ? ['-s', '--', join(root, 'source')] : ['-s'];
   const result = spawnSync('/bin/bash', args, {
     input: readFileSync(join(scripts, 'install.sh'), 'utf8'),
@@ -84,8 +83,8 @@ if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
       TEST_NODE: process.execPath,
       DSH_CLIENT_COMMIT_HASH: 'ffffffffffffffffffffffffffffffffffffffff',
       DSH_REPO_ROOT: '',
-      DSH_PACKAGER_REF: 'pinned-packager',
-      DSH_SOURCE_REF: 'pinned-source',
+      DSH_PACKAGER_REF: sha ? sourceSha : 'pinned-packager',
+      DSH_SOURCE_REF: sha ? sourceSha : 'pinned-source',
     },
   });
   if (existsSync(join(root, 'temporary'))) {
@@ -96,20 +95,26 @@ if read -r line; then echo 'unexpected stdin' >&2; exit 90; fi
   return { result, root };
 }
 
-test('piped installer builds downloaded source archives without git or stdin', (t) => {
+test('piped installer shallow-clones selected refs and builds without stdin', (t) => {
   const { result, root } = fixture(t);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(readFileSync(join(root, 'requests'), 'utf8'), /clutch-dsh\/tar.gz\/pinned-packager/);
   assert.match(
     readFileSync(join(root, 'requests'), 'utf8'),
-    new RegExp(`deepseek-harness/tar.gz/${sourceSha}`),
+    /clone --depth 1 --single-branch --branch pinned-packager https:\/\/github.com\/Cerbur\/clutch-dsh.git/,
+  );
+  assert.match(
+    readFileSync(join(root, 'requests'), 'utf8'),
+    /clone --depth 1 --single-branch --branch pinned-source https:\/\/github.com\/deepseek-ai\/deepseek-harness.git/,
   );
   assert.ok(existsSync(join(root, 'build-roots')));
 });
-test('rejects invalid commit metadata before installing dependencies', (t) => {
-  const { result, root } = fixture(t, { failure: 'metadata' });
-  assert.notEqual(result.status, 0);
-  assert.equal(existsSync(join(root, 'build-roots')), false);
+test('full commit SHAs use shallow fetch and detached checkout', (t) => {
+  const { result, root } = fixture(t, { sha: true });
+  assert.equal(result.status, 0, result.stderr);
+  const requests = readFileSync(join(root, 'requests'), 'utf8');
+  assert.equal((requests.match(/fetch --depth 1/g) || []).length, 2);
+  assert.equal((requests.match(/checkout --quiet --detach FETCH_HEAD/g) || []).length, 2);
+  assert.doesNotMatch(requests, /clone /);
 });
 test('forwards an existing source path without downloading dsh', (t) => {
   const { result, root } = fixture(t, { local: true });
@@ -120,12 +125,12 @@ test('forwards an existing source path without downloading dsh', (t) => {
 test('preserves download failure exit code', (t) => {
   assert.equal(fixture(t, { failure: 'download' }).result.status, 22);
 });
-test('preserves build failure exit code and cleans both archives', (t) => {
+test('preserves build failure exit code and cleans both checkouts', (t) => {
   assert.equal(fixture(t, { failure: 'build' }).result.status, 42);
 });
 test('rejects an incomplete packager before any build', (t) => {
   const { result, root } = fixture(t, { missing: true });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Incomplete packager archive/);
+  assert.match(result.stderr, /Incomplete packager checkout/);
   assert.equal(existsSync(join(root, 'build-roots')), false);
 });

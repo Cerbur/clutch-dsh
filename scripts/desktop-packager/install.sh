@@ -14,21 +14,28 @@ dsh_desktop_install() (
   if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
     echo 'This local packager requires an Apple Silicon Mac' >&2; exit 1
   fi
-  for tool in curl tar node pnpm codesign ditto plutil; do command -v "$tool" >/dev/null; done
+  for tool in git node pnpm codesign ditto plutil; do
+    command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
+  done
   local installer_tmp
   installer_tmp="$(mktemp -d /tmp/dsh-installer-XXXXXX)"
   trap 'rm -rf -- "$installer_tmp"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
-  curl --fail --show-error --silent --location --retry 3 \
-    "https://codeload.github.com/Cerbur/clutch-dsh/tar.gz/${DSH_PACKAGER_REF:-main}" \
-    --output "$installer_tmp/packager.tar.gz"
-  mkdir "$installer_tmp/packager"
-  tar -xzf "$installer_tmp/packager.tar.gz" -C "$installer_tmp/packager" --strip-components=1
+  echo 'Preparing desktop packager…'
+  local ref="${DSH_PACKAGER_REF:-main}"
+  if [[ "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    git init --quiet "$installer_tmp/packager"
+    git -C "$installer_tmp/packager" fetch --depth 1 https://github.com/Cerbur/clutch-dsh.git "$ref"
+    git -C "$installer_tmp/packager" checkout --quiet --detach FETCH_HEAD
+  else
+    git clone --depth 1 --single-branch --branch "$ref" \
+      https://github.com/Cerbur/clutch-dsh.git "$installer_tmp/packager"
+  fi
   local entry="$installer_tmp/packager/scripts/desktop-packager/package-desktop.sh"
   for file in package-desktop.sh local-app.mjs patch-edit-menu.mjs; do
     if [ ! -s "$(dirname "$entry")/$file" ]; then
-      echo "Incomplete packager archive: missing $file" >&2; exit 1
+      echo "Incomplete packager checkout: missing $file" >&2; exit 1
     fi
   done
   # Build tools must not consume a curl | bash input stream.

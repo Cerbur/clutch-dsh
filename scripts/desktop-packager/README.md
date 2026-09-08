@@ -23,9 +23,11 @@
 curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desktop-packager/install.sh | bash
 ```
 
-入口下载 clutch-dsh 的 GitHub 压缩包取得配套脚本，再下载 deepseek-harness 源码压缩包进行本机构建，不创建 Git 工作区。两份临时源码退出时自动清理。这仍是源码构建，需要上述 Node、pnpm、Python 和编译工具，并非预编译 App 下载。
+入口浅克隆 clutch-dsh 取得配套脚本，再浅克隆 deepseek-harness 进行本机构建。分支和 tag 使用 `git clone --depth 1 --single-branch`；完整 40 位 commit SHA 使用 `git fetch --depth 1` 后 detached checkout。两份临时源码退出时自动清理。这仍是源码构建，需要上述环境，并非预编译 App 下载。
 
-下载 dsh 源码前，脚本通过 GitHub API 将 `DSH_SOURCE_REF` 解析为完整 commit SHA，按该 SHA 下载压缩包，并用 dsh 已支持的 `DSH_CLIENT_COMMIT_HASH` 传入构建。压缩包不需要 `.git`，构建展示的提交号对应实际下载内容；不会继承其他工作区的提交号。API 请求失败（含限流）或响应缺少有效 SHA 时，脚本在安装依赖前停止。
+不再请求 GitHub API 或下载源码压缩包。构建的 `DSH_CLIENT_COMMIT_HASH` 直接取自实际 checkout 的 HEAD，不继承其他工作区的提交号。浅克隆减少历史数据与下载步骤，实际耗时仍取决于网络和本机编译速度。
+
+输出按五个阶段组织：获取源码 → 安装依赖 → 编译打包 → 准备运行时和离线 seed → 签名安装。每个阶段保留工具日志，失败即停止；缺少工具时直接显示工具名称。
 
 依赖安装后会显式执行已锁定版本的 Electron 官方安装脚本，确保全新目录也有 `Electron.app`；该步骤忽略 `ELECTRON_SKIP_BINARY_DOWNLOAD`，保留 Electron 官方下载器的缓存及镜像配置，缺少产物时明确失败。
 
@@ -36,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
   | DSH_INSTALL_DIR="$HOME/Applications" DSH_SOURCE_REF=master bash
 ```
 
-`DSH_PACKAGER_REF` 选择 clutch-dsh 的分支、tag 或 commit，默认 `main`；锁定版本时，把入口 URL 中的 `main` 和该变量都设成同一个 commit SHA。需要准确捕获入口下载失败和安装退出码时，使用下面的 Agent 方式。GitHub 命令要求相应版本的脚本已推送到远端。
+`DSH_PACKAGER_REF` 选择 clutch-dsh 的分支、tag 或完整 40 位 commit SHA，默认 `main`；锁定版本时，把入口 URL 中的 `main` 和该变量都设成同一个 commit SHA。需要准确捕获入口下载失败和安装退出码时，使用下面的 Agent 方式。GitHub 命令要求相应版本的脚本已推送到远端。
 
 ### 本地脚本入口
 
@@ -46,13 +48,13 @@ curl -fsSL https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/scripts/desk
 ./scripts/desktop-packager/package-desktop.sh /path/to/deepseek-harness
 ```
 
-也可用 `DSH_REPO_ROOT` 传入；命令行路径优先。没有路径时，脚本下载 GitHub 官方源码压缩包到 `/tmp`，执行 frozen-lockfile 安装和构建，退出时清理自己的临时源码：
+也可用 `DSH_REPO_ROOT` 传入；命令行路径优先。没有路径时，脚本浅克隆 GitHub 官方源码到 `/tmp`，执行 frozen-lockfile 安装和构建，退出时清理自己的临时源码：
 
 ```bash
 ./scripts/desktop-packager/package-desktop.sh
 ```
 
-`DSH_SOURCE_REF` 选择 dsh 源码分支、tag 或 commit，默认 `master`，仅在未传本地路径时使用，替代旧的 `DSH_GIT_URL`。`DSH_DESKTOP_APP_ID` 默认 `com.clutch.dsh`。脚本在全新目录组装完整依赖、runtime 和 seed，菜单补丁成功后才签名并安装。已有 App 保存为 `DeepSeek Harness.app.previous`；若该备份已存在则停止安装，先自行移走备份再重试。失败时不会用半成品覆盖已安装 App。
+`DSH_SOURCE_REF` 选择 dsh 源码分支、tag 或完整 40 位 commit SHA，默认 `master`，仅在未传本地路径时使用。`DSH_DESKTOP_APP_ID` 默认 `com.clutch.dsh`。脚本在全新目录组装完整依赖、runtime 和 seed，菜单补丁成功后才签名并安装。已有 App 保存为 `DeepSeek Harness.app.previous`；若该备份已存在则停止安装，先自行移走备份再重试。失败时不会用半成品覆盖已安装 App。
 
 完成后从安装目录双击 App，按 `⌘,` 打开「桌面插件」，在 npm 包输入框试用复制、粘贴、剪切、全选和撤销。实际模型对话仍需配置可用模型及凭据。
 
@@ -85,7 +87,7 @@ codesign --verify --deep --strict '/tmp/dsh-desktop-qa/DeepSeek Harness.app'
 
 测试包含真实编译产物、补丁幂等性、嵌套菜单与不支持结构拒绝。签名检查不能替代 UI 验证：启动最终 App，确认主界面、`⌘,` 插件窗口和输入框快捷键，回报实际执行的检查。
 
-`node --test scripts/desktop-packager/install.test.mjs` 用本地压缩包与命令替身验证管道入口、源码压缩包、本地路径、失败退出码和临时目录清理，不执行真实构建或安装。
+`node --test scripts/desktop-packager/install.test.mjs` 用命令替身验证管道入口、浅克隆、固定 commit、本地路径、失败退出码和临时目录清理，不执行真实构建或安装。
 
 `node --test scripts/desktop-packager/local-app.test.mjs` 验证 Electron 下载未被跳过、安装失败传播和安装后缺少二进制时的报错。完整构建验证应不传本地源码路径，并用 `DSH_INSTALL_DIR` 指向临时目录。
 
