@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { URL } from 'node:url';
 import ts from 'typescript';
 
 // Execute production source without rebuilding the browser's live lib/ directory.
