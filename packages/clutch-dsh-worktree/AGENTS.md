@@ -322,6 +322,11 @@ commands 仍通过 `ctx.workspaces` 调用。旧 `dsh-client-runtime` 已移除�
 Client surface 的当前约束：
 
 - Worktree mode 只从 Sidebar footer action 进入，不添加独立 Workspace/Worktree Tab；
+- 已管理的 active/archived Worktree 菜单提供 Dashboard。Dashboard 使用现有 `shell.overlay`
+  临时覆盖 Sidebar 右侧页面，保留原生 Session 组件；关闭、Session 导航、模式退出、布局
+  anchor 丢失或 dispose 时恢复原生列的可见性与键盘访问。选中身份只保存在浏览器内存，
+  名称/cwd 来自现有 ready projection，不新增 Host/Remote/sidecar 能力。MVP 中未接入的
+  卡片与操作明确标记占位，不伪造 Git 或 Session 数据。实现边界见 `src/client/README.md`。
 - Workspace `+` 继续打开同一个弹窗，默认显示 `Create`；`Import` 只展示同一 Workspace 中未被 sidecar 管理、非 repository root、branch-attached 的 Git Worktrees，第一版不展示 detached HEAD；
 - Import registers the selected directory in place and then creates a Session through the same binding, membership projection, open, refresh-preservation, and recovery flow as Create; external removal warns that the linked directory may be deleted；
 - overlay 的可见区间由 native New Session 与 Sidebar footer anchors 动态派生，缺少 anchor 时保持零覆盖；

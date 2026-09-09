@@ -60,6 +60,7 @@ export interface WorktreePermissionNotice {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly openDashboard?: (record: WorktreeRecord) => void;
   readonly expandState: WorktreeExpandStateStore;
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
@@ -241,6 +242,7 @@ export interface WorktreeWorkspaceRowProps {
 }
 
 export interface WorktreeGroupMenuProps {
+  readonly onDashboard?: () => void;
   readonly open: boolean;
   readonly label: string;
   readonly copyPath: string;

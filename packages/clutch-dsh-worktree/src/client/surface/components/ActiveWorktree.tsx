@@ -35,7 +35,7 @@ type Input = {
   ordering: Pick<WorkspaceTreeInput['ordering'], 'orderedSessionIdsByAccount'>;
   props: Pick<
     WorkspaceTreeInput['props'],
-    't' | 'renameSession' | 'forkSession' | 'archiveSession'
+    't' | 'renameSession' | 'forkSession' | 'archiveSession' | 'openDashboard'
   >;
   lifecycle: Pick<WorkspaceTreeInput['lifecycle'], 'branchLabel' | 'branchActions'>;
   session: Pick<WorkspaceTreeInput['session'], 'createSession' | 'openWorkspaceSession'>;
@@ -214,6 +214,8 @@ export function ActiveWorktree({
             : undefined
         }
         menu={{
+          onDashboard:
+            props.openDashboard === undefined ? undefined : () => props.openDashboard?.(record),
           ...branchActions(record),
           open: openWorktreeMenuId === record.worktreeId,
           label: record.branch,

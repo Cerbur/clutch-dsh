@@ -33,6 +33,7 @@ type Input = {
   props: Pick<
     WorktreeSurfaceProps,
     | 't'
+    | 'openDashboard'
     | 'retryForkSession'
     | 'openSession'
     | 'createMainSession'

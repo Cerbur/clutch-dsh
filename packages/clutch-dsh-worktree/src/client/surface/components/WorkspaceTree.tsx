@@ -31,6 +31,7 @@ export type WorkspaceTreeInput = {
   props: Pick<
     WorktreeSurfaceProps,
     | 't'
+    | 'openDashboard'
     | 'createMainSession'
     | 'openSession'
     | 'renameSession'

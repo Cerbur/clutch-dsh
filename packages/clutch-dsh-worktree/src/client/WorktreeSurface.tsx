@@ -19,12 +19,52 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
+import { useCallback, useEffect, useState } from 'react';
+import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
+import {
+  resolveDashboardRecord,
+  type DashboardSelection,
+} from './dashboard/dashboard-selection.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Composes independent surface state/action domains into the sidebar overlay. */
-export function WorktreeSurface(props: WorktreeSurfaceProps) {
-  const source = useSurfaceSources({ props });
+export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
+  const [dashboard, setDashboard] = useState<DashboardSelection>();
+  const closeDashboard = useCallback(() => setDashboard(undefined), []);
+  const source = useSurfaceSources({ props: inputProps });
+  const props: WorktreeSurfaceProps = {
+    ...inputProps,
+    openDashboard: (record) =>
+      setDashboard({
+        workspaceId: record.workspaceId,
+        worktreeId: record.worktreeId,
+        sessionId: source.currentSessionId,
+      }),
+    openSession: (sessionId) => {
+      closeDashboard();
+      inputProps.openSession(sessionId);
+    },
+    createMainSession:
+      inputProps.createMainSession === undefined
+        ? undefined
+        : (workspaceId) => {
+            closeDashboard();
+            inputProps.createMainSession?.(workspaceId);
+          },
+  };
   const registrationState = useRegistrationState({ props });
   const read = useSurfaceRefresh({ source, props, registrationState });
+  const dashboardRecord = resolveDashboardRecord(
+    dashboard,
+    source.mode,
+    source.currentSessionId,
+    source.workspaceIds,
+    dashboard === undefined
+      ? undefined
+      : read.viewByWorkspace.get(dashboard.workspaceId)?.worktrees,
+  );
+  useEffect(() => {
+    if (dashboard !== undefined && dashboardRecord === undefined) closeDashboard();
+  }, [dashboard, dashboardRecord, closeDashboard]);
   const mutation = useSurfaceMutation({ read });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
@@ -46,66 +86,81 @@ export function WorktreeSurface(props: WorktreeSurfaceProps) {
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
   return (
-    <aside
-      ref={ref}
-      className={styles.surface}
-      data-worktree-surface
-      data-collapsed={collapsed || undefined}
-      aria-label={t('mode.navigation')}
-      style={{
-        width: `${width}px`,
-        ...(bounds.ready
-          ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
-          : { height: '0px', visibility: 'hidden' }),
-      }}
-    >
-      <div className={styles.wideContent}>
-        <SurfaceHeader
-          expansion={expansion}
-          props={props}
-          source={source}
-          read={read}
-          mutation={mutation}
-        />
+    <>
+      <aside
+        ref={ref}
+        className={styles.surface}
+        data-worktree-surface
+        data-collapsed={collapsed || undefined}
+        aria-label={t('mode.navigation')}
+        style={{
+          width: `${width}px`,
+          ...(bounds.ready
+            ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
+            : { height: '0px', visibility: 'hidden' }),
+        }}
+      >
+        <div className={styles.wideContent}>
+          <SurfaceHeader
+            expansion={expansion}
+            props={props}
+            source={source}
+            read={read}
+            mutation={mutation}
+          />
 
-        <SurfaceContent
-          source={source}
+          <SurfaceContent
+            source={source}
+            props={props}
+            lifecycle={lifecycle}
+            mutation={mutation}
+            session={session}
+            read={read}
+            expansion={expansion}
+            ordering={ordering}
+            drag={drag}
+            menus={menus}
+            registration={registration}
+            native={native}
+            lifecycleState={lifecycleState}
+          />
+        </div>
+
+        <NativeDialogs props={props} native={native} />
+
+        <RegistrationDialog
           props={props}
-          lifecycle={lifecycle}
-          mutation={mutation}
-          session={session}
-          read={read}
-          expansion={expansion}
-          ordering={ordering}
-          drag={drag}
-          menus={menus}
           registration={registration}
-          native={native}
-          lifecycleState={lifecycleState}
+          registrationState={registrationState}
+          mutation={mutation}
+          read={read}
         />
-      </div>
 
-      <NativeDialogs props={props} native={native} />
+        <LifecycleDialogs
+          props={props}
+          lifecycleState={lifecycleState}
+          mutation={mutation}
+          lifecycle={lifecycle}
+          expansion={expansion}
+          read={read}
+          session={session}
+        />
 
-      <RegistrationDialog
-        props={props}
-        registration={registration}
-        registrationState={registrationState}
-        mutation={mutation}
-        read={read}
-      />
-
-      <LifecycleDialogs
-        props={props}
-        lifecycleState={lifecycleState}
-        mutation={mutation}
-        lifecycle={lifecycle}
-        expansion={expansion}
-        read={read}
-        session={session}
-      />
-
-      <AccessConfirmation source={source} props={props} />
-    </aside>
+        <AccessConfirmation source={source} props={props} />
+      </aside>
+      {dashboardRecord !== undefined && (
+        <WorktreeDashboard
+          key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
+          record={dashboardRecord}
+          workspaceTitle={
+            source.workspaces.items.find(
+              (workspace) => workspace.workspaceId === dashboardRecord.workspaceId,
+            )?.title ?? ''
+          }
+          t={t}
+          onClose={closeDashboard}
+        />
+      )}
+    </>
   );
 }

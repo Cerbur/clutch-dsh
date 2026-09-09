@@ -93,6 +93,31 @@ both candidate reads and import mutations and releases the membership projection
 
 ## Conversation context
 
+### Worktree dashboard
+
+`dashboard/` owns the transient dashboard selection, page, and presentation lifecycle.
+`WorktreeSurface` opens it from active and archived Worktree menus and resolves the
+selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
+No additional read or global refresh is triggered by opening the dashboard. Read-only
+menu refreshes retain ready facts; updated and forgotten records project normally.
+
+The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
+It does not register over the occupied `conversation` slot. The AppFrame column order
+(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow
+the live Sidebar width, and missing/replaced anchors produce zero coverage and restore
+the native columns. Native center/rightbar visibility, inert, and aria-hidden attributes
+are restored on close or disposal. Session identity changes, explicit Sidebar Session
+opens (including the same Session), mode exit, and removal of the selected identity
+close the dashboard. No native Session or Workspace state is changed.
+
+The accepted branch supplies the Worktree name, and `absolutePath` supplies the displayed
+and copied cwd. Clipboard success requires `writeClipboard` to return true; failures are
+visible, concurrent clicks coalesce, and late results after path changes/unmount are ignored.
+Tabs implement roving keyboard focus. All unconnected data and actions are labeled rather
+than populated with fabricated status. No instructions are persisted or injected.
+
+The page is an MVP presentation and introduces no Host, Provider, Remote, or sidecar contract.
+
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.

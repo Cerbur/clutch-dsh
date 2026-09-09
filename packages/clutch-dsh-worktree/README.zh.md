@@ -19,6 +19,9 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 
 ## 能力
 
+- 从 active 或 archived Worktree 的菜单打开 Dashboard，查看真实名称和 cwd、复制完整路径，
+  并切换概览、Git 与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确标记为“即将推出”。
+
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
 - 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
@@ -47,8 +50,8 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
   这一时序避免 child 短暂出现在 Main/Local。sidecar 失败时 child 会保留，并显示可重试的
   binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
-- 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；Main 和 detached 行只显示“复制路径”，
-  active Worktree 额外显示“归档 Worktree”并要求确认。
+- 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外提供 Dashboard，
+  active Worktree 提供“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree
   不显示该动作。
@@ -215,6 +218,22 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 上图展示了侧边栏入口以及新会话空白 Hero 中显示的视觉上下文。界面语言跟随 DSH 当前的
 语言设置。
+
+### 打开 Worktree Dashboard
+
+在 Worktree 模式中，打开已管理 Worktree 的选项菜单并选择 **Dashboard**。Dashboard 会临时
+替换 Sidebar 旁的区域（含 Session 页面），原生会话组件保持挂载。点击**返回会话**、按
+**Escape**、从 Sidebar 打开 Session 或退出 Worktree 模式，即可恢复原生页面。打开 Dashboard
+不会创建或修改 Session；Local/Main 不提供此入口。
+
+标题沿用 Worktree 行的已接受分支名称。cwd 展示记录中的完整绝对路径，复制按钮明确反馈成功
+或失败。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
+Git 文件没有变更。归档或已清理记录仍展示记录中的路径，该路径不一定仍存在于磁盘。
+
+五个 tab 可真实切换浏览器本地面板，支持左右方向键、Home 和 End。Dashboard 内的 Git 详情、
+会话管理、派生 Worktree、设置、共享指令、创建和快捷操作均为 MVP 占位，不执行命令、不保存
+指令，也不伪造 Git 或 Session 数据。已有创建和生命周期操作仍从 Sidebar 使用。界面跟随
+DSH 主题，在窄屏下将卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。
 
 ### 创建 Worktree
 

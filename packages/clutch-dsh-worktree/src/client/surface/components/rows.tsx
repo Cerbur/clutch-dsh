@@ -395,6 +395,9 @@ export function WorktreeGroupRow({
                 menu.onOpenChange(false);
               }}
               items={[
+                ...(menu.onDashboard === undefined
+                  ? []
+                  : [{ id: 'dashboard', label: t('dashboard.title') }]),
                 ...(menu.showCreate
                   ? [
                       {
@@ -479,6 +482,7 @@ export function WorktreeGroupRow({
               onSelect={(id) => {
                 menu.onOpenChange(false);
                 if (id === 'create' && menu.showCreate) menu.onCreateWorktree?.();
+                if (id === 'dashboard') menu.onDashboard?.();
                 if (id === 'adopt-branch') menu.onAdoptBranch?.();
                 if (id === 'recover') menu.onRecover?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);
