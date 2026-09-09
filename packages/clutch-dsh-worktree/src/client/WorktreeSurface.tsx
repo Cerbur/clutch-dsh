@@ -25,6 +25,8 @@ import {
   resolveDashboardRecord,
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
+import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
+import { createNumberedWorktreeName } from './view/worktree-view.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Composes independent surface state/action domains into the sidebar overlay. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
@@ -82,6 +84,19 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     session,
   });
   const lifecycle = useLifecycleActions({ read, lifecycleState, source, props, mutation });
+  const dashboardWorkspace = source.workspaces.items.find(
+    (workspace) => workspace.workspaceId === dashboardRecord?.workspaceId,
+  );
+  const dashboardView =
+    dashboardRecord === undefined
+      ? undefined
+      : read.viewByWorkspace.get(dashboardRecord.workspaceId);
+  const dashboardCanCreate =
+    dashboardRecord?.status === 'active' &&
+    dashboardRecord.diskCleanup !== 'completed' &&
+    dashboardRecord.health !== 'cleaned' &&
+    dashboardRecord.health !== 'repair' &&
+    dashboardRecord.health !== 'recovery-needed';
   if (source.mode !== 'worktree') return null;
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
@@ -152,10 +167,58 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
           record={dashboardRecord}
-          workspaceTitle={
-            source.workspaces.items.find(
-              (workspace) => workspace.workspaceId === dashboardRecord.workspaceId,
-            )?.title ?? ''
+          workspaceTitle={dashboardWorkspace?.title ?? ''}
+          sessions={source.sessions}
+          sessionIds={dashboardSessionIds(
+            dashboardRecord,
+            source.sessions,
+            dashboardView?.bindings ?? [],
+            source.archivedSessionIds,
+            ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+          )}
+          actionPending={mutation.actionPending}
+          onOpenSession={(sessionId) =>
+            session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
+          }
+          onCreateSession={
+            dashboardCanCreate && props.createSessionForWorktree !== undefined
+              ? () => {
+                  if (mutation.actionPending) return;
+                  closeDashboard();
+                  void session.createSession({
+                    workspaceId: dashboardRecord.workspaceId,
+                    worktreeId: dashboardRecord.worktreeId,
+                    cwd: dashboardRecord.absolutePath,
+                  });
+                }
+              : undefined
+          }
+          onCreateWorktree={
+            dashboardCanCreate &&
+            dashboardRecord.currentBranch !== null &&
+            dashboardWorkspace !== undefined &&
+            dashboardView !== undefined
+              ? () => {
+                  if (mutation.actionPending) return;
+                  const branch = dashboardRecord.currentBranch ?? dashboardRecord.branch;
+                  registration.openWorktreeCreator(dashboardWorkspace, {
+                    baseBranch: branch,
+                    newBranch: createNumberedWorktreeName(branch, [
+                      ...dashboardView.branches.map((candidate) => candidate.name),
+                      ...dashboardView.worktrees.map((candidate) => candidate.branch),
+                    ]),
+                  });
+                }
+              : undefined
+          }
+          onArchiveWorktree={
+            dashboardRecord.status === 'active' && dashboardRecord.health !== 'recovery-needed'
+              ? () => {
+                  if (mutation.actionPending) return;
+                  lifecycleState.setWorktreeRemoval(dashboardRecord);
+                  mutation.setActionError(undefined);
+                }
+              : undefined
           }
           t={t}
           onClose={closeDashboard}

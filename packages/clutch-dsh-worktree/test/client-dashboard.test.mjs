@@ -8,6 +8,9 @@ import {
   mountDashboardOverlay,
 } from '../lib/client/dashboard/dashboard-overlay.js';
 import { en, zh } from '../lib/client/locales.js';
+import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
+import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
+import { sessionDisplayLabel } from '../lib/client/session/session-view.js';
 
 const record = {
   workspaceId: 'repo',
@@ -99,11 +102,22 @@ function renderHarness(writeClipboard) {
         'react/jsx-runtime': { jsx, jsxs: jsx },
         '@deepseek-ai/dsh-client-ui-primitives': { writeClipboard },
         './dashboard-overlay.js': {},
+        './vscode-url.js': { vscodeFolderUrl },
+        '../session/session-view.js': { sessionDisplayLabel },
         './dashboard.css': { default: {} },
       })[name] ?? {},
     exports,
   );
-  let props = { record, workspaceTitle: 'Payments', t: (key) => en[key], onClose() {} };
+  let props = {
+    record,
+    workspaceTitle: 'Payments',
+    t: (key) => en[key],
+    onClose() {},
+    sessions: { ids: [], byId: {} },
+    sessionIds: [],
+    actionPending: false,
+    onOpenSession() {},
+  };
   return {
     render(next = {}) {
       props = { ...props, ...next };
@@ -149,6 +163,105 @@ test('dashboard renders real identity and explicit placeholders in both language
     assert.equal(byRole(node, 'tab').length, 5);
     assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 9);
   }
+  harness.dispose();
+});
+
+test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {
+  const sessions = {
+    ids: ['one', 'two', 'archived', 'blank', 'current', 'other'],
+    current: 'current',
+    byId: { blank: { blank: true }, current: { blank: true } },
+  };
+  const binding = (sessionId, extra = {}) => ({
+    workspaceId: 'repo',
+    worktreeId: 'wt',
+    sessionId,
+    status: 'active',
+    ...extra,
+  });
+  const bindings = [
+    ...['one', 'two', 'archived', 'blank', 'current', 'missing'].map((id) => binding(id)),
+    binding('other', { workspaceId: 'different' }),
+  ];
+  assert.deepEqual(
+    dashboardSessionIds(record, sessions, bindings, ['archived'], ['two', 'one', 'missing']),
+    ['two', 'one', 'current'],
+  );
+  assert.deepEqual(
+    dashboardSessionIds(
+      record,
+      sessions,
+      bindings.filter((b) => b.sessionId !== 'one'),
+      ['archived'],
+    ),
+    ['two', 'current'],
+  );
+  assert.deepEqual(dashboardSessionIds(record, sessions, [], []), []);
+  assert.deepEqual(
+    dashboardSessionIds(record, sessions, [binding('two', { status: 'detached' })], []),
+    ['two'],
+  );
+});
+
+test('VS Code folder URLs preserve paths and escape URL delimiters', () => {
+  for (const path of ['/tmp/repo with spaces/支付', '/tmp/a#b?c%20', '/tmp/back\\slash']) {
+    const url = new URL(vscodeFolderUrl(path));
+    assert.equal(url.protocol, 'vscode:');
+    assert.equal(url.hostname, 'file');
+    assert.equal(decodeURIComponent(url.pathname), path);
+    assert.equal(url.search, '');
+    assert.equal(url.hash, '');
+  }
+  assert.equal(vscodeFolderUrl('C:\\Projects\\a b'), 'vscode://file/C:/Projects/a%20b');
+});
+
+test('dashboard actions delegate, pending disables mutations, and Sessions displays all live rows', () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  const ids = Array.from({ length: 7 }, (_, i) => 'session-' + i);
+  const sessions = {
+    ids,
+    current: ids[0],
+    byId: Object.fromEntries(ids.map((id) => [id, { displayTitle: id + ' title' }])),
+  };
+  let node = harness.render({
+    sessions,
+    sessionIds: ids,
+    onCreateSession: () => calls.push('session'),
+    onCreateWorktree: () => calls.push('worktree'),
+    onArchiveWorktree: () => calls.push('archive'),
+    onOpenSession: (id) => calls.push(id),
+  });
+  const rows = (node) => findAll(node, (item) => item.props?.['data-dashboard-session']);
+  assert.equal(rows(node).length, 5);
+  assert.equal(rows(node)[0].props['aria-current'], 'page');
+  rows(node)[0].props.onClick();
+  for (const action of ['create-session', 'create-worktree', 'archive-worktree']) {
+    const button = findAll(node, (item) => item.props?.['data-dashboard-action'] === action)[0];
+    assert.equal(button.props.disabled, false);
+    button.props.onClick();
+  }
+  assert.deepEqual(calls, [ids[0], 'session', 'worktree', 'archive']);
+  assert.equal(
+    findAll(node, (item) => item.type === 'a')[0].props.href,
+    vscodeFolderUrl(record.absolutePath),
+  );
+  node = harness.render({ actionPending: true });
+  assert.ok(
+    findAll(node, (item) => item.props?.['data-dashboard-action']).every(
+      (item) => item.props.disabled,
+    ),
+  );
+  byRole(node, 'tab')[2].props.onClick();
+  assert.equal(rows(harness.render()).length, 7);
+  node = harness.render({
+    sessionIds: [ids[6]],
+    sessions: { ...sessions, byId: { [ids[6]]: { displayTitle: 'Updated' } } },
+  });
+  assert.equal(rows(node).length, 1);
+  assert.ok(
+    findAll(node, (item) => item.type === 'span' && item.props.children === 'Updated').length,
+  );
   harness.dispose();
 });
 
@@ -227,6 +340,147 @@ test('tabs switch panels, keyboard selection wraps, and Escape closes the dashbo
     globalThis.document = oldDocument;
     harness.dispose();
   }
+});
+
+test('Surface connects dashboard actions to existing Session and dialog domains with eligibility gates', async () => {
+  const surfaceSource = await readFile(
+    new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
+    'utf8',
+  );
+  const compiled = ts.transpileModule(surfaceSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const { createNumberedWorktreeName } = await import('../lib/client/view/worktree-view.js');
+  const calls = [];
+  let selected = selection;
+  let target = record;
+  const workspace = { workspaceId: 'repo', title: 'Repo' };
+  const sourceState = {
+    mode: 'worktree',
+    currentSessionId: 'current',
+    workspaceIds: ['repo'],
+    workspaces: { items: [workspace] },
+    sessions: { ids: ['current'], current: 'current', byId: {} },
+    archivedSessionIds: [],
+    bounds: { ready: false },
+  };
+  const mutation = {
+    actionPending: false,
+    setActionError: (value) => calls.push(['error', value]),
+  };
+  const jsx = (type, props) => ({ type, props });
+  const exports = {};
+  new Function('require', 'exports', compiled)((name) => {
+    if (name === 'react')
+      return {
+        useState: () => [
+          selected,
+          (next) => {
+            selected = next;
+          },
+        ],
+        useCallback: (fn) => fn,
+        useEffect() {},
+      };
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name.endsWith('dashboard-selection.js')) return { resolveDashboardRecord };
+    if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
+    if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
+    if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };
+    if (name.endsWith('.css')) return { default: {} };
+    const hook = name.match(/\/(use\w+)\.js$/)?.[1];
+    if (hook)
+      return {
+        [hook]: (input) => {
+          if (hook === 'useSurfaceSources') return sourceState;
+          if (hook === 'useSurfaceRefresh')
+            return {
+              viewByWorkspace: new Map([
+                [
+                  'repo',
+                  {
+                    worktrees: [target],
+                    branches: [{ name: record.branch }],
+                    bindings: [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }],
+                  },
+                ],
+              ]),
+            };
+          if (hook === 'useSurfaceMutation') return mutation;
+          if (hook === 'useLifecycleState')
+            return { setWorktreeRemoval: (value) => calls.push(['archive', value]) };
+          if (hook === 'useSessionOrdering') return { orderedSessionIdsByAccount: new Map() };
+          if (hook === 'useSessionActions')
+            return {
+              createSession: (value) => calls.push(['createSession', value]),
+              openWorkspaceSession: (workspaceId, sessionId) => {
+                calls.push(['open', workspaceId, sessionId]);
+                input.props.openSession(sessionId);
+              },
+            };
+          if (hook === 'useWorktreeRegistration')
+            return { openWorktreeCreator: (...args) => calls.push(['creator', ...args]) };
+          return {};
+        },
+      };
+    return {};
+  }, exports);
+  const render = () => {
+    selected = selection;
+    return findAll(
+      exports.WorktreeSurface({
+        t: (key) => en[key],
+        createSessionForWorktree() {},
+        openSession: (id) => calls.push(['nativeOpen', id]),
+      }),
+      (item) => item.type === 'Dashboard',
+    )[0].props;
+  };
+  let props = render();
+  assert.deepEqual(props.sessionIds, ['current']);
+  props.onCreateWorktree();
+  assert.deepEqual(calls.shift(), [
+    'creator',
+    workspace,
+    { baseBranch: record.branch, newBranch: record.branch + '-2' },
+  ]);
+  assert.equal(selected, selection);
+  props.onArchiveWorktree();
+  assert.deepEqual(calls.shift(), ['archive', record]);
+  assert.deepEqual(calls.shift(), ['error', undefined]);
+  props.onCreateSession();
+  assert.equal(selected, undefined);
+  assert.deepEqual(calls.shift(), [
+    'createSession',
+    { workspaceId: 'repo', worktreeId: 'wt', cwd: record.absolutePath },
+  ]);
+  render().onOpenSession('current');
+  assert.equal(selected, undefined);
+  assert.deepEqual(calls.splice(0), [
+    ['open', 'repo', 'current'],
+    ['nativeOpen', 'current'],
+  ]);
+  for (const changes of [
+    { status: 'removed' },
+    { health: 'repair' },
+    { health: 'recovery-needed' },
+  ]) {
+    target = { ...record, ...changes };
+    props = render();
+    assert.equal(props.onCreateSession, undefined);
+    assert.equal(props.onCreateWorktree, undefined);
+  }
+  assert.equal(props.onArchiveWorktree, undefined);
+  target = { ...record, currentBranch: null, health: 'branch-drift' };
+  assert.equal(render().onCreateWorktree, undefined);
+  assert.equal(typeof render().onCreateSession, 'function');
+  target = record;
+  mutation.actionPending = true;
+  props = render();
+  props.onCreateSession();
+  props.onCreateWorktree();
+  props.onArchiveWorktree();
+  assert.deepEqual(calls, []);
 });
 
 class FakeElement {
@@ -345,4 +599,3 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     Object.assign(globalThis, saved);
   }
 });
-

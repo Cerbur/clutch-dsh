@@ -230,10 +230,17 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 或失败。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
 Git 文件没有变更。归档或已清理记录仍展示记录中的路径，该路径不一定仍存在于磁盘。
 
-五个 tab 可真实切换浏览器本地面板，支持左右方向键、Home 和 End。Dashboard 内的 Git 详情、
-会话管理、派生 Worktree、设置、共享指令、创建和快捷操作均为 MVP 占位，不执行命令、不保存
-指令，也不伪造 Git 或 Session 数据。已有创建和生命周期操作仍从 Sidebar 使用。界面跟随
-DSH 主题，在窄屏下将卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。
+五个 tab 支持左右方向键、Home 和 End。概览显示当前 Worktree 的前五个会话，会话 tab
+显示完整列表；两者直接消费内存中的 sessions 和 bindings，沿用 Sidebar 排序与可见性规则，
+不受 Sidebar 搜索影响。点击会话返回原生页面。新建会话离开 Dashboard，直接复用现有
+create/bind/open 流程，保留空白会话复用与失败恢复。
+新建 Worktree 呼出已有创建弹窗，预选当前分支和编号名称；归档 Worktree 呼出已有的非破坏性
+确认框。操作沿用 Sidebar 的健康状态、归档状态和进行中操作门禁。
+在 VS Code 中打开使用编码后的 `vscode://file/...` 链接打开记录中的 cwd；浏览器所在机器
+须安装 VS Code 且能访问该路径，浏览器可能要求确认打开应用。链接不核验目录是否存在或
+应用是否成功启动。
+Git 详情、派生 Worktree、设置、共享指令及其他标记的快捷操作仍为占位。界面跟随 DSH
+主题，窄屏下卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。
 
 ### 创建 Worktree
 

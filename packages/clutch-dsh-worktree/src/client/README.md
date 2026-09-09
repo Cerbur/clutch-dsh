@@ -118,6 +118,16 @@ than populated with fabricated status. No instructions are persisted or injected
 
 The page is an MVP presentation and introduces no Host, Provider, Remote, or sidecar contract.
 
+Dashboard actions reuse `session.createSession`, `session.openWorkspaceSession`,
+`registration.openWorktreeCreator`, and `lifecycleState.setWorktreeRemoval` in the
+surface composition. New Session closes the dashboard before entering the existing
+permission/binding/recovery flow; Worktree dialogs retain the dashboard underneath.
+The Session list joins the retained Sessions and Workspace bindings, excludes archived
+and non-current blank Sessions, and follows the existing group order without a new read.
+Overview limits presentation to five rows; Sessions shows every visible member.
+The VS Code anchor encodes the recorded path into `vscode://file/...` and delegates
+launching to the browser's protocol handler; it makes no success or existence claim.
+
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.

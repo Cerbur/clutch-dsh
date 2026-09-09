@@ -246,12 +246,20 @@ and source use the existing Worktree projection. Ready means the Worktree is ava
 it does **not** assert that Git files are clean. An archived or cleaned record still shows
 its recorded path, which need not exist on disk.
 
-The five tabs switch real browser-local panels and support Left/Right, Home, and End keys.
-Git details, Session management, derived Worktrees, settings, shared instructions, creation,
-and quick actions inside this dashboard are MVP placeholders. They do not execute commands,
-save instructions, or fabricate Git/session data. Continue using the Sidebar for existing
-creation and lifecycle operations. The layout follows DSH's theme and stacks cards on narrow
-screens. Dashboard selection is transient and is not restored after a reload.
+The five tabs support Left/Right, Home, and End keys. Overview shows up to five current
+Worktree Sessions; Sessions shows the full list. Both consume the existing in-memory Sessions
+and bindings with Sidebar ordering and visibility rules, independent of Sidebar search.
+Click a Session to return to its native page. New Session uses the existing create/bind/open
+flow, including blank-Session reuse and failure recovery, and leaves the dashboard.
+New Worktree opens the existing Create dialog with the current branch and numbered-name
+defaults. Archive Worktree opens the existing non-destructive confirmation. These actions
+follow the Sidebar's health, archive, and pending-operation gates.
+Open in VS Code uses an encoded `vscode://file/...` link for the recorded cwd. VS Code must be
+installed on the browser's machine and able to access that path; the browser may request
+permission to open the app. This link does not verify directory existence or launch success.
+Git details, derived Worktrees, settings, shared instructions, and other marked quick actions
+remain placeholders. The layout follows DSH's theme and stacks cards on narrow screens.
+Dashboard selection is transient and is not restored after a reload.
 
 ### Create a Worktree
 

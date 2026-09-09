@@ -7,6 +7,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
+import { sessionDisplayLabel, type SessionListLike } from '../session/session-view.js';
+import { vscodeFolderUrl } from './vscode-url.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
@@ -19,6 +21,13 @@ export interface WorktreeDashboardProps {
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
+  readonly sessions: SessionListLike;
+  readonly sessionIds: readonly string[];
+  readonly actionPending: boolean;
+  readonly onOpenSession: (sessionId: string) => void;
+  readonly onCreateSession?: () => void;
+  readonly onCreateWorktree?: () => void;
+  readonly onArchiveWorktree?: () => void;
 }
 
 function DashboardIcon({ kind }: { kind: DashboardTab | 'instructions' | 'actions' }) {
@@ -80,7 +89,19 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
 }
 
 /** A real Worktree projection with explicitly unconnected MVP cards. */
-export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: WorktreeDashboardProps) {
+export function WorktreeDashboard({
+  record,
+  workspaceTitle,
+  t,
+  onClose,
+  sessions,
+  sessionIds,
+  actionPending,
+  onOpenSession,
+  onCreateSession,
+  onCreateWorktree,
+  onArchiveWorktree,
+}: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
@@ -163,6 +184,29 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
       <span aria-hidden="true">→</span>
     </button>
   );
+  const sessionList = (ids: readonly string[]) =>
+    ids.length === 0 ? (
+      <div className={styles.dashboardEmpty}>
+        <p>{t('dashboard.noSessions')}</p>
+      </div>
+    ) : (
+      <ul className={styles.dashboardSessions}>
+        {ids.map((sessionId) => (
+          <li key={sessionId}>
+            <button
+              type="button"
+              data-dashboard-session={sessionId}
+              aria-current={sessions.current === sessionId ? 'page' : undefined}
+              onClick={() => onOpenSession(sessionId)}
+            >
+              <DashboardIcon kind="sessions" />
+              <span>{sessionDisplayLabel(sessionId, sessions, t('session.new'))}</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
   return (
     <section
       ref={surface}
@@ -235,7 +279,9 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
-            <PlaceholderButton t={t}>{t('dashboard.openEditor')}</PlaceholderButton>
+            <a className={styles.dashboardButton} href={vscodeFolderUrl(record.absolutePath)}>
+              {t('dashboard.openEditor')}
+            </a>
             <dl className={styles.dashboardFacts}>
               <div>
                 <dt>{t('dashboard.created')}</dt>
@@ -305,20 +351,28 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
                   </h2>
                   <p>{t('dashboard.startDescription')}</p>
                   <div className={styles.dashboardStartActions}>
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      disabled={actionPending || !onCreateWorktree}
+                      onClick={onCreateWorktree}
+                      data-dashboard-action="create-worktree"
+                    >
                       <DashboardIcon kind="git" />
                       <span>
                         <strong>{t('dashboard.newWorktree')}</strong>
                         <small>{t('dashboard.newWorktreeDescription')}</small>
-                        <em>{t('dashboard.soon')}</em>
                       </span>
                     </button>
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      disabled={actionPending || !onCreateSession}
+                      onClick={onCreateSession}
+                      data-dashboard-action="create-session"
+                    >
                       <DashboardIcon kind="sessions" />
                       <span>
                         <strong>{t('dashboard.newSession')}</strong>
                         <small>{t('dashboard.newSessionDescription')}</small>
-                        <em>{t('dashboard.soon')}</em>
                       </span>
                     </button>
                   </div>
@@ -339,11 +393,9 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
                 <Card
                   title={tabLabel('sessions')}
                   icon={<DashboardIcon kind="sessions" />}
-                  action={placeholder}
+                  action={<span>{sessionIds.length}</span>}
                 >
-                  <div className={styles.dashboardEmpty}>
-                    <p>{t('dashboard.sessionsHint')}</p>
-                  </div>
+                  {sessionList(sessionIds.slice(0, 5))}
                   {tabLink('sessions', t('dashboard.viewSessions'))}
                 </Card>
               </div>
@@ -384,23 +436,45 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
                   </div>
                   {tabLink('children', t('dashboard.viewChildren'))}
                 </Card>
-                <Card
-                  title={t('dashboard.quickActions')}
-                  icon={<DashboardIcon kind="actions" />}
-                  action={placeholder}
-                >
+                <Card title={t('dashboard.quickActions')} icon={<DashboardIcon kind="actions" />}>
                   <div className={styles.dashboardQuickActions}>
-                    {(['terminal', 'diff', 'pullRequest', 'tests', 'sync', 'archive'] as const).map(
+                    {(['terminal', 'diff', 'pullRequest', 'tests', 'sync'] as const).map(
                       (action) => (
                         <PlaceholderButton key={action} t={t}>
                           {t(`dashboard.action.${action}`)}
                         </PlaceholderButton>
                       ),
                     )}
+                    <button
+                      type="button"
+                      className={styles.dashboardButton}
+                      disabled={actionPending || !onArchiveWorktree}
+                      onClick={onArchiveWorktree}
+                      data-dashboard-action="archive-worktree"
+                    >
+                      {t('dashboard.action.archive')}
+                    </button>
                   </div>
                 </Card>
               </div>
             </div>
+          ) : tab === 'sessions' ? (
+            <Card
+              title={tabLabel('sessions')}
+              icon={<DashboardIcon kind="sessions" />}
+              action={
+                <button
+                  type="button"
+                  className={styles.dashboardButton}
+                  disabled={actionPending || !onCreateSession}
+                  onClick={onCreateSession}
+                >
+                  {t('dashboard.newSession')}
+                </button>
+              }
+            >
+              {sessionList(sessionIds)}
+            </Card>
           ) : (
             <section className={styles.dashboardTabPlaceholder}>
               <DashboardIcon kind={tab} />
@@ -415,4 +489,3 @@ export function WorktreeDashboard({ record, workspaceTitle, t, onClose }: Worktr
     </section>
   );
 }
-

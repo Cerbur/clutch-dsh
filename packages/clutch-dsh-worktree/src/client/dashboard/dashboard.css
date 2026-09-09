@@ -31,6 +31,7 @@
   font-size: 12px;
 }
 .dashboardSurface button:focus-visible,
+.dashboardSurface a:focus-visible,
 .dashboardPanel:focus-visible {
   outline: 2px solid #497cd4;
   outline-offset: 3px;
@@ -42,6 +43,39 @@
   max-width: 1240px;
   margin: 0 auto;
   padding: 24px 30px 28px;
+}
+.dashboardSessions {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.dashboardSessions button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dashboardSessions button > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dashboardSessions button:hover,
+.dashboardSessions button[aria-current] {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+}
+.dashboardSurface a {
+  text-decoration: none;
+}
+.dashboardStartActions button:not(:disabled) {
+  cursor: pointer;
 }
 .dashboardTopline {
   display: flex;
@@ -169,7 +203,8 @@
   align-items: stretch;
   gap: 8px;
 }
-.dashboardHeaderAside > button {
+.dashboardHeaderAside > button,
+.dashboardHeaderAside > a {
   align-self: flex-end;
 }
 .dashboardButton {
@@ -485,4 +520,3 @@
     align-items: flex-start;
   }
 }
-
