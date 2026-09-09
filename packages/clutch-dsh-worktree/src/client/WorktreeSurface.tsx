@@ -19,19 +19,39 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
 import {
+  createMainWorktreeRecord,
+  isMainWorktreeId,
   resolveDashboardRecord,
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
 import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
+import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Composes independent surface state/action domains into the sidebar overlay. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
-  const [dashboard, setDashboard] = useState<DashboardSelection>();
-  const closeDashboard = useCallback(() => setDashboard(undefined), []);
+  const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
+  const externalDashboard = inputProps.dashboardStore
+    ? useSyncExternalStore(
+        inputProps.dashboardStore.subscribe,
+        inputProps.dashboardStore.getSnapshot,
+        () => undefined,
+      )
+    : undefined;
+  const dashboard = inputProps.dashboardStore !== undefined ? externalDashboard : internalDashboard;
+  const setDashboard = useCallback(
+    (selection: DashboardSelection | undefined) => {
+      if (inputProps.dashboardStore !== undefined) {
+        inputProps.dashboardStore.set(selection);
+      }
+      setInternalDashboard(selection);
+    },
+    [inputProps.dashboardStore],
+  );
+  const closeDashboard = useCallback(() => setDashboard(undefined), [setDashboard]);
   const source = useSurfaceSources({ props: inputProps });
   const props: WorktreeSurfaceProps = {
     ...inputProps,
@@ -55,6 +75,20 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   };
   const registrationState = useRegistrationState({ props });
   const read = useSurfaceRefresh({ source, props, registrationState });
+  const targetWorkspace =
+    dashboard === undefined
+      ? undefined
+      : source.workspaces.items.find(
+          (workspace) => workspace.workspaceId === dashboard.workspaceId,
+        );
+  const targetView =
+    dashboard === undefined ? undefined : read.viewByWorkspace.get(dashboard.workspaceId);
+  const dashboardMainBranch = targetView?.branches.find((branch) => branch.isCurrent)?.name;
+  const dashboardMainRecord =
+    targetWorkspace === undefined
+      ? undefined
+      : createMainWorktreeRecord(targetWorkspace, dashboardMainBranch);
+
   const dashboardRecord = resolveDashboardRecord(
     dashboard,
     source.mode,
@@ -62,7 +96,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     source.workspaceIds,
     dashboard === undefined
       ? undefined
-      : read.viewByWorkspace.get(dashboard.workspaceId)?.worktrees,
+      : targetView?.worktrees,
+    dashboardMainRecord,
   );
   useEffect(() => {
     if (dashboard !== undefined && dashboardRecord === undefined) closeDashboard();
@@ -174,22 +209,38 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             source.sessions,
             dashboardView?.bindings ?? [],
             source.archivedSessionIds,
-            ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+            isMainWorktreeId(dashboardRecord.worktreeId)
+              ? ordering.orderedSessionIdsByAccount.get(`main:${dashboardRecord.workspaceId}`)
+              : ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+            dashboardWorkspace === undefined
+              ? []
+              : workspaceSessionIds(
+                  source.workspaces,
+                  dashboardWorkspace.workspaceId,
+                  source.sessions.ids,
+                ),
           )}
           actionPending={mutation.actionPending}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
           }
           onCreateSession={
-            dashboardCanCreate && props.createSessionForWorktree !== undefined
+            dashboardCanCreate &&
+            (isMainWorktreeId(dashboardRecord.worktreeId)
+              ? props.createMainSession !== undefined
+              : props.createSessionForWorktree !== undefined)
               ? () => {
                   if (mutation.actionPending) return;
                   closeDashboard();
-                  void session.createSession({
-                    workspaceId: dashboardRecord.workspaceId,
-                    worktreeId: dashboardRecord.worktreeId,
-                    cwd: dashboardRecord.absolutePath,
-                  });
+                  if (isMainWorktreeId(dashboardRecord.worktreeId)) {
+                    props.createMainSession?.(dashboardRecord.workspaceId);
+                  } else {
+                    void session.createSession({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      cwd: dashboardRecord.absolutePath,
+                    });
+                  }
                 }
               : undefined
           }
@@ -212,7 +263,9 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               : undefined
           }
           onArchiveWorktree={
-            dashboardRecord.status === 'active' && dashboardRecord.health !== 'recovery-needed'
+            !isMainWorktreeId(dashboardRecord.worktreeId) &&
+            dashboardRecord.status === 'active' &&
+            dashboardRecord.health !== 'recovery-needed'
               ? () => {
                   if (mutation.actionPending) return;
                   lifecycleState.setWorktreeRemoval(dashboardRecord);

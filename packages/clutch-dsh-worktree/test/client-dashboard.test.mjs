@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
-import { resolveDashboardRecord } from '../lib/client/dashboard/dashboard-selection.js';
+import {
+  createMainWorktreeRecord,
+  isMainWorktreeId,
+  resolveDashboardRecord,
+} from '../lib/client/dashboard/dashboard-selection.js';
 import {
   concealDashboardBackground,
   mountDashboardOverlay,
@@ -102,7 +106,15 @@ function renderHarness(writeClipboard) {
         'react/jsx-runtime': { jsx, jsxs: jsx },
         '@deepseek-ai/dsh-client-ui-primitives': { writeClipboard },
         './dashboard-overlay.js': {},
+        './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord },
         './vscode-url.js': { vscodeFolderUrl },
+        './OpenInAppButton.js': {
+          OpenInAppButton: ({ path, t }) => jsx('a', {
+            className: 'dashboardButton',
+            href: vscodeFolderUrl(path),
+            children: t('dashboard.openEditor'),
+          }),
+        },
         '../session/session-view.js': { sessionDisplayLabel },
         './dashboard.css': { default: {} },
       })[name] ?? {},
@@ -383,9 +395,10 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
         useEffect() {},
       };
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
-    if (name.endsWith('dashboard-selection.js')) return { resolveDashboardRecord };
+    if (name.endsWith('dashboard-selection.js')) return { resolveDashboardRecord, createMainWorktreeRecord, isMainWorktreeId };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
+    if (name.endsWith('view-mode.js')) return { workspaceSessionIds: (workspaces, workspaceId, ids) => ids ?? [] };
     if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };
     if (name.endsWith('.css')) return { default: {} };
     const hook = name.match(/\/(use\w+)\.js$/)?.[1];
@@ -599,3 +612,78 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     Object.assign(globalThis, saved);
   }
 });
+
+test('Main (Local) dashboard record resolution, session membership, and Surface integration', () => {
+  const ws = { workspaceId: 'ws-main', path: '/workspaces/main-app' };
+  const mainRec = createMainWorktreeRecord(ws, 'master');
+  assert.equal(isMainWorktreeId(mainRec.worktreeId), true);
+  assert.equal(mainRec.workspaceId, 'ws-main');
+  assert.equal(mainRec.branch, 'master');
+  assert.equal(mainRec.absolutePath, '/workspaces/main-app');
+
+  // resolveDashboardRecord supports mainRecord
+  const selMain = { workspaceId: 'ws-main', worktreeId: 'main', sessionId: 's1' };
+  const resolved = resolveDashboardRecord(selMain, 'worktree', 's1', ['ws-main'], [], mainRec);
+  assert.equal(resolved?.worktreeId, mainRec.worktreeId);
+  assert.equal(resolved?.branch, 'master');
+
+  // dashboardSessionIds handles main worktree sessions (unbound sessions)
+  const sessions = {
+    ids: ['s1', 's2', 's3', 's4'],
+    byId: {
+      s1: { sessionId: 's1' },
+      s2: { sessionId: 's2' },
+      s3: { sessionId: 's3' },
+      s4: { sessionId: 's4' },
+    },
+  };
+  const bindings = [
+    { workspaceId: 'ws-main', worktreeId: 'wt-1', sessionId: 's2' },
+  ];
+  const mainSessions = dashboardSessionIds(
+    mainRec,
+    sessions,
+    bindings,
+    ['s4'], // s4 archived
+    ['s3', 's1'],
+    ['s1', 's2', 's3', 's4'], // all workspace sessions
+  );
+  // s2 is bound to wt-1, s4 is archived -> only s1 and s3 belong to main
+  assert.deepEqual(mainSessions, ['s3', 's1']);
+});
+
+test('OpenInAppController reads apps, remembers choice, and launches via host routes', async () => {
+  const requests = [];
+  const fetcher = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/open-in-app/apps')) {
+      return {
+        ok: true,
+        json: async () => ({ apps: ['cursor', 'vscode', 'webstorm'] }),
+      };
+    }
+    if (String(url).endsWith('/open-in-app/open')) {
+      return { ok: true };
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const { OpenInAppController } = await import('../lib/client/dashboard/open-in-app-controller.js');
+  const controller = new OpenInAppController(fetcher);
+  assert.equal(controller.apps, null);
+
+  await controller.load();
+  assert.deepEqual(controller.apps, ['cursor', 'vscode', 'webstorm']);
+  assert.ok(controller.iconUrl('cursor').includes('/open-in-app/icon/cursor'));
+
+  controller.choose('cursor');
+  assert.equal(controller.choice, 'cursor');
+
+  await controller.launch('cursor', '/path/to/worktree');
+  assert.equal(requests.length, 2);
+  assert.ok(requests[1].url.endsWith('/open-in-app/open'));
+  assert.equal(requests[1].init.method, 'POST');
+  assert.deepEqual(JSON.parse(requests[1].init.body), { app: 'cursor', path: '/path/to/worktree' });
+});
+
+

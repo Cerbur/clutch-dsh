@@ -19,6 +19,7 @@ import type {
   WorktreePermissionResult,
   WorktreeRecord,
 } from '../../contract/index.js';
+import type { DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
 import { WORKTREE_NS } from '../locales.js';
 import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
@@ -61,6 +62,9 @@ export interface WorktreePermissionNotice {
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly openDashboard?: (record: WorktreeRecord) => void;
+  readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
+    set(selection: DashboardSelection | undefined): void;
+  };
   readonly expandState: WorktreeExpandStateStore;
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;

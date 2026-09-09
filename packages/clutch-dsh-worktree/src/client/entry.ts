@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { Context } from '@deepseek-ai/cordis';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
@@ -21,6 +22,9 @@ import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
 import { WorktreeModeAction } from './view/WorktreeModeAction.js';
+import { switchViewMode } from './view/view-mode-dispatch.js';
+import { IconDashboard } from './dashboard/dashboard-icon.js';
+import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
@@ -187,6 +191,7 @@ export function apply(ctx: Context): void {
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
   const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
+  const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const reportPermissionNotice = (
     input: {
       readonly workspaceId: string;
@@ -411,6 +416,7 @@ export function apply(ctx: Context): void {
           available: true,
           expandState,
           sessionOrder,
+          dashboardStore,
           hooks: { worktreeContext: contextProjection.store },
           manager,
           viewReader,
@@ -523,4 +529,58 @@ export function apply(ctx: Context): void {
       WorktreeOverlay,
     ),
   );
+
+  if (typeof (ctx as any).inject === 'function') {
+    (ctx as any).inject(['sessionLogDownload'], (innerCtx: any) => {
+      if (typeof innerCtx.sessionLogDownload?.registerMoreItem !== 'function') return;
+      innerCtx.effect(() => {
+        return innerCtx.sessionLogDownload.registerMoreItem({
+          id: 'clutch-dsh-worktree-dashboard',
+          label: () =>
+            innerCtx.locale?.get?.() === 'zh'
+              ? '前往 Dashboard'
+              : 'Go to Dashboard',
+          icon: createElement(IconDashboard, { size: 16 }),
+          order: -1,
+          onSelect: (sessionId: string) => {
+            switchViewMode('worktree');
+            const contextSnapshot = contextProjection.store.getSnapshot();
+            let targetWorkspaceId: string | undefined;
+            let targetWorktreeId: string | undefined;
+
+            if (contextSnapshot.sessionId === sessionId) {
+              targetWorkspaceId = contextSnapshot.workspaceId;
+              if (contextSnapshot.value.kind === 'worktree') {
+                targetWorktreeId = contextSnapshot.value.worktreeId;
+              } else if (contextSnapshot.value.kind === 'main') {
+                targetWorktreeId = 'main';
+              }
+            }
+
+            if (targetWorkspaceId === undefined) {
+              const workspaces =
+                (
+                  ctx.workspaces.list.getSnapshot() as {
+                    items?: readonly { workspaceId: string; sessionIds: readonly string[] }[];
+                  }
+                )?.items ?? [];
+              const ws = workspaces.find((w) => w.sessionIds?.includes(sessionId));
+              if (ws !== undefined) {
+                targetWorkspaceId = ws.workspaceId;
+                targetWorktreeId = 'main';
+              }
+            }
+
+            if (targetWorkspaceId !== undefined && targetWorktreeId !== undefined) {
+              dashboardStore.set({
+                workspaceId: targetWorkspaceId,
+                worktreeId: targetWorktreeId,
+                sessionId,
+              });
+            }
+          },
+        });
+      }, 'clutch-dsh-worktree: session header more item');
+    });
+  }
 }

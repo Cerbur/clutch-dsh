@@ -1,7 +1,9 @@
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '../dsh-slot-contract.js';
+import { useEffect } from 'react';
 import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { registerViewModeSetter } from './view-mode-dispatch.js';
 import { WORKTREE_NS } from '../locales.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
 import styles from '../worktree.css';
@@ -25,6 +27,13 @@ export function WorktreeModeAction({
   t,
   available,
 }: WorktreeModeActionProps) {
+  useEffect(() => {
+    registerViewModeSetter(actions.setViewMode);
+    return () => {
+      registerViewModeSetter(undefined);
+    };
+  }, [actions.setViewMode]);
+
   if (!available) return null;
   const mode = useStore((state) => state.viewMode);
   const active = mode === 'worktree';

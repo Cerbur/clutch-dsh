@@ -18,6 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { useState } from 'react';
+import { IconDashboard } from '../../dashboard/dashboard-icon.js';
 import {
   isBlankSession,
   relativeTime,
@@ -397,7 +398,7 @@ export function WorktreeGroupRow({
               items={[
                 ...(menu.onDashboard === undefined
                   ? []
-                  : [{ id: 'dashboard', label: t('dashboard.title') }]),
+                  : [{ id: 'dashboard', label: t('dashboard.title'), icon: <IconDashboard size={16} /> }]),
                 ...(menu.showCreate
                   ? [
                       {

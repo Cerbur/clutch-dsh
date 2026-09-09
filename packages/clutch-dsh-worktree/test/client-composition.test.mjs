@@ -1166,3 +1166,38 @@ test('injects a separate browser-local Session order store', async () => {
 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
+
+test('registers "前往 Dashboard" into sessionLogDownload when available', async () => {
+  let registeredItem;
+  const sessionLogDownload = {
+    registerMoreItem: (item) => {
+      registeredItem = item;
+      return () => {
+        registeredItem = undefined;
+      };
+    },
+  };
+  const fixture = await loadClientEntry();
+  const fakeCtx = {
+    ...fixture.fakeContext,
+    locale: { get: () => 'zh', register: () => () => {} },
+    inject: (deps, cb) => {
+      if (deps.includes('sessionLogDownload')) {
+        cb({
+          ...fixture.fakeContext,
+          sessionLogDownload,
+          locale: { get: () => 'zh' },
+          effect: (fn) => fn(),
+        });
+      }
+    },
+  };
+  fixture.exports.apply(fakeCtx);
+
+  assert.ok(registeredItem !== undefined);
+  assert.equal(registeredItem.id, 'clutch-dsh-worktree-dashboard');
+  assert.equal(registeredItem.label('session-1'), '前往 Dashboard');
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+

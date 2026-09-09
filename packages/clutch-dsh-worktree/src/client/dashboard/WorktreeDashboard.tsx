@@ -9,7 +9,9 @@ import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { sessionDisplayLabel, type SessionListLike } from '../session/session-view.js';
 import { vscodeFolderUrl } from './vscode-url.js';
+import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
+import { isMainWorktreeId } from './dashboard-selection.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 
@@ -279,9 +281,7 @@ export function WorktreeDashboard({
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
-            <a className={styles.dashboardButton} href={vscodeFolderUrl(record.absolutePath)}>
-              {t('dashboard.openEditor')}
-            </a>
+            <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
               <div>
                 <dt>{t('dashboard.created')}</dt>
@@ -294,7 +294,9 @@ export function WorktreeDashboard({
               <div>
                 <dt>{t('dashboard.source')}</dt>
                 <dd>
-                  {t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
+                  {isMainWorktreeId(record.worktreeId)
+                    ? t('worktree.main')
+                    : t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
                 </dd>
               </div>
             </dl>
