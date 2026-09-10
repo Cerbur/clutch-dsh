@@ -1,0 +1,20 @@
+{
+  "name": "@cerbur/dsh-web-manager",
+  "version": "0.1.0",
+  "description": "CLI manager for DeepSeek Harness Web",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "bin": {
+    "dwm": "./bin/dwm.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dwm",
+    "cli"
+  ],
+  "license": "MIT"
+}
