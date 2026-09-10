@@ -1,5 +1,13 @@
 # 发布记录
 
+## 0.1.3 — 2026-09-10
+
+### 中文
+
+#### 修复
+
+- 兼容最新 DSH Session Format V3 中的 `tool/ptc-dispatch` 事件标签，并保持向下兼容旧版本 `tool/code-dispatch`，确保在程序代码执行（PTC / `run_code`）子调用场景下 Web UI 礼花动效稳定触发。
+
 ## 0.1.2 — 2026-09-05
 
 ### 中文
@@ -33,6 +41,14 @@
 - 将每次礼花扩展为 40 个视觉元素，并保证 🎉、🌟 和 ✨ 的最低数量，同时提供 seeded variety。
 
 # Release log
+
+## 0.1.3 — 2026-09-10
+
+### English
+
+#### Fixed
+
+- Support the updated `tool/ptc-dispatch` event tag from DSH Session Format V3 alongside legacy `tool/code-dispatch` under programmatic tool calling (PTC / `run_code`) so celebrations trigger reliably across DSH host versions.
 
 ## 0.1.2 — 2026-09-05
 

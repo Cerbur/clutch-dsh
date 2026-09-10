@@ -61,8 +61,12 @@ export function applyFireworksProjection(
     }
   }
 
+  const isPtcDispatch =
+    (event.type as string) === 'tool/ptc-dispatch' ||
+    (event.type as string) === 'tool/code-dispatch';
+
   if (
-    (event.type as string) === 'tool/code-dispatch' &&
+    isPtcDispatch &&
     !(event.data as { isError?: boolean })?.isError &&
     (event.data as { name?: string })?.name === FIREWORKS_TOOL_NAME
   ) {

@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-fireworks",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Adds a celebratory fireworks overlay to the DSH Web UI through a happy_fireworks agent tool.",
   "license": "MIT",
   "repository": {
