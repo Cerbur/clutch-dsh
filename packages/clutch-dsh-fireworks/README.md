@@ -22,7 +22,7 @@ This is a plugin-only extension. It uses DSH's existing tool-result, session-pro
   3. Resolving and verifying a complex bug;
   4. Passing the entire test suite after a refactor or migration.
 - Enforces an explicit negative boundary against invoking the tool for trivial routine steps (such as reading a file, inspecting git status, or running an isolated check).
-- Plays only after a successful tool result or programmatic tool call dispatch (`tool/code-dispatch`); failures and cancellations stay quiet.
+- Plays only after a successful tool result or programmatic tool call dispatch (`tool/ptc-dispatch` / `tool/code-dispatch`); failures and cancellations stay quiet.
 - Renders a click-through full-screen overlay with 40 emoji visuals per burst, including at least
   10 🎉, 5 🌟, and 5 ✨; the remaining 20 visuals use a seeded roll from an expanded celebration
   palette.
