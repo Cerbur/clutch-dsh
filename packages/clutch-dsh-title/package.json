@@ -24,10 +24,23 @@
       "import": "./lib/index.js",
       "default": "./lib/index.js"
     },
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "import": "./lib/types.js",
+      "default": "./lib/types.js"
+    },
     "./package.json": "./package.json",
     "./client": {
       "types": "./lib/client/entry.d.ts",
       "default": "./lib/client.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
     }
   },
   "files": [
@@ -41,7 +54,7 @@
   },
   "scripts": {
     "prepublishOnly": "pnpm run build",
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "pnpm run build && node --test test/*.test.mjs"
@@ -66,10 +79,13 @@
   },
   "dependencies": {
     "yaml": "^2.9.0",
+    "zod": "^4.4.3",
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-settings": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-storage-domain": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.1.2-rc.1",
     "@deepseek-ai/dsh-api-remotes": ">=0.1.2-rc.1",
     "@deepseek-ai/dsh-client-locale": ">=0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": ">=0.1.2-rc.1",
@@ -88,6 +104,11 @@
     "@deepseek-ai/dsh-api-gateway": "0.1.2-rc.1",
     "@deepseek-ai/dsh-settings": "0.1.2-rc.1",
     "@deepseek-ai/dsh-settings-file": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-storage-domain": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-typert-generator": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-typert-loader": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-typert-registry": "0.1.2-rc.1",
     "@deepseek-ai/dsh-api-remotes": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",
@@ -111,7 +132,6 @@
     "@deepseek-ai/dsh-util-values": "0.1.2-rc.1",
     "@types/node": "^22.15.3",
     "js-yaml": "^4.1.0",
-    "typescript": "^5.9.3",
-    "yaml": "^2.9.0"
+    "typescript": "^5.9.3"
   }
 }
