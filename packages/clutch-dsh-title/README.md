@@ -154,9 +154,11 @@ The model returns fields only; the renderer inserts deterministic values and lit
 
 ### Title reasoning effort
 
-Cordis `reasoningEffort` defaults to `off`. The plugin passes this adapter-owned ID through `GenerateOptions.reasoningEffort` for template field extraction, in addition to the concise JSON prompt. Set it to another non-empty ID supported by the selected provider/model, or explicitly set `reasoningEffort: null` to omit the option and use adapter defaults. This is a plugin-level Cordis option, not template YAML or a setting in the template manager; it remains effective across template changes.
+When Cordis `reasoningEffort` is omitted, the plugin automatically adapts to the selected model by querying its metadata via `ctx.llm.resolveModelInfo` and selecting its lowest supported reasoning tier (the first entry in `efforts`, such as `off` for DeepSeek official models or `low` for Gemini models). If the model does not declare reasoning capabilities or metadata lookup fails, `reasoningEffort` is omitted.
 
-Actual thinking behavior depends on the DSH adapter and model. In particular, pi-ai may implement `off` by omitting its reasoning option, which cannot guarantee that the upstream model stops thinking. Unsupported efforts may fail with `UNSUPPORTED_REASONING_EFFORT` and use native title fallback; the plugin does not retry with another effort. This option applies only while title templates are enabled, and does not alter main conversation requests or the native generator used when templates are disabled. The native `session/title-llm-request` event schema remains unchanged and does not record reasoning effort.
+Users can explicitly configure `reasoningEffort` to any non-empty ID supported by the selected provider/model, or set `reasoningEffort: null` to omit the option and use adapter defaults. Unsupported efforts may fail with `UNSUPPORTED_REASONING_EFFORT` and use native title fallback; the plugin does not retry with another effort.
+
+This is a plugin-level Cordis option, not template YAML or a setting in the template manager; it remains effective across template changes. Actual thinking behavior depends on the DSH adapter and model. In particular, pi-ai may implement `off` by omitting its reasoning option, which cannot guarantee that the upstream model stops thinking. This option applies only while title templates are enabled, and does not alter main conversation requests or the native generator used when templates are disabled. The native `session/title-llm-request` event schema remains unchanged and does not record reasoning effort.
 
 ### Long first prompts and input budget
 

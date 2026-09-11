@@ -63,11 +63,20 @@ async function runExtraction({
   requestOptions = {},
   streamBody,
   sourceMessages = selectedMessages,
+  resolveModelInfo,
 } = {}) {
   const { request, events } = makeRequest(requestOptions);
   const requests = [];
   const ctx = {
     llm: {
+      resolveModelInfo:
+        resolveModelInfo ??
+        (async (provider, model) => ({
+          provider,
+          id: model,
+          name: model,
+          reasoning: { efforts: [{ id: 'off', name: 'Off' }] },
+        })),
       async *stream(options) {
         requests.push(options);
         events.push({ kind: 'stream' });
@@ -245,10 +254,45 @@ test('passes explicit reasoning effort and omits it for adapter defaults', async
   assert.equal(Object.hasOwn(inherited.requests[0], 'reasoningEffort'), false);
 });
 
+test('automatically selects lowest reasoning effort from model capabilities when unconfigured', async () => {
+  const gemini = await runExtraction({
+    resolveModelInfo: async (provider, model) => ({
+      provider,
+      id: model,
+      name: model,
+      reasoning: {
+        efforts: [
+          { id: 'low', name: 'Low' },
+          { id: 'medium', name: 'Medium' },
+          { id: 'high', name: 'High' },
+        ],
+      },
+    }),
+  });
+  assert.equal(gemini.requests[0].reasoningEffort, 'low');
+
+  const textOnly = await runExtraction({
+    resolveModelInfo: async (provider, model) => ({
+      provider,
+      id: model,
+      name: model,
+    }),
+  });
+  assert.equal(Object.hasOwn(textOnly.requests[0], 'reasoningEffort'), false);
+
+  const resolveFailed = await runExtraction({
+    resolveModelInfo: async () => {
+      throw new Error('resolve failed');
+    },
+  });
+  assert.equal(Object.hasOwn(resolveFailed.requests[0], 'reasoningEffort'), false);
+});
+
 test('does not retry an unsupported effort with thinking enabled', async () => {
   let calls = 0;
   await assert.rejects(
     runExtraction({
+      config: makeConfig({ reasoningEffort: 'unsupported-tier' }),
       streamBody: async function* () {
         calls++;
         const error = new Error('unsupported effort');

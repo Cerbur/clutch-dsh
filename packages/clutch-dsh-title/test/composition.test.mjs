@@ -124,10 +124,22 @@ test('rejects non-string values from deterministic and extracted fields', () => 
   assert.throws(() => mergeFieldValues({}, { scope: 1 }), /scope|string/i);
 });
 
-test('unsupported off uses native fallback without adapter dispatch', async () => {
+test('model without reasoning capability automatically omits reasoning effort and dispatches successfully', async () => {
   const adapter = new RecordingAdapter();
   adapter.resolveModel = LlmAdapter.prototype.resolveModel;
   const { ctx } = await makeContext({ adapter });
+  const { session } = appendSession(ctx, 'auto-no-reasoning', 'Please improve titles');
+  await settle();
+  assert.equal(adapter.requests.length, 1);
+  assert.equal(adapter.requests[0].reasoningEffort, undefined);
+  assert.equal(ctx.sessionTitle.get(session).title, '0904|优化|优化 session title 生成规则');
+});
+
+test('unsupported explicit reasoning effort uses native fallback without retry', async () => {
+  const adapter = new RecordingAdapter();
+  adapter.resolveModel = LlmAdapter.prototype.resolveModel;
+  const { ctx } = await makeContext({ adapter, installPlugin: false });
+  await ctx.plugin(titlePlugin, { reasoningEffort: 'off' });
   const { session } = appendSession(ctx, 'unsupported-off', 'Please improve titles');
   await settle();
   assert.equal(adapter.requests.length, 0);
@@ -154,22 +166,23 @@ test('settings select templates, external corruption falls back, and disabling u
 });
 
 test('Cordis reasoning effort survives managed template selection and fallback', async () => {
-  for (const reasoningEffort of ['low', null]) {
+  for (const reasoningEffort of ['low', null, undefined]) {
+    const expectedEffort = reasoningEffort === undefined ? 'off' : (reasoningEffort ?? undefined);
     const { ctx, adapter } = await makeContext({ installPlugin: false });
     await ctx.plugin(MemorySettings);
     await ctx.plugin(titlePlugin, { reasoningEffort });
     const { session } = appendSession(ctx, 'effort-' + reasoningEffort, 'Improve titles');
     await settle();
-    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+    assert.equal(adapter.requests.at(-1).reasoningEffort, expectedEffort);
     ctx.settings.external({ active: 'custom', templates: { custom: 'template: "${desc}"' } });
     adapter.response = '{"desc":"Custom title"}';
     await ctx.sessionTitle.refresh(session);
     assert.equal(ctx.sessionTitle.get(session).title, 'Custom title');
-    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+    assert.equal(adapter.requests.at(-1).reasoningEffort, expectedEffort);
     ctx.settings.external({ active: 'missing' });
     adapter.response = '{"type":"优化","desc":"Fallback template"}';
     await ctx.sessionTitle.refresh(session);
-    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+    assert.equal(adapter.requests.at(-1).reasoningEffort, expectedEffort);
   }
 });
 

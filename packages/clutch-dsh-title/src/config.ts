@@ -221,8 +221,10 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
 
   const maxInputBytes = input.maxInputBytes === undefined ? 4096 : input.maxInputBytes;
   const maxOutputTokens = input.maxOutputTokens === undefined ? 512 : input.maxOutputTokens;
-  const reasoningEffort = input.reasoningEffort === undefined ? 'off' : input.reasoningEffort;
-  if (reasoningEffort !== null) assertNonEmptyString('reasoningEffort', reasoningEffort);
+  const reasoningEffort = input.reasoningEffort;
+  if (reasoningEffort !== undefined && reasoningEffort !== null) {
+    assertNonEmptyString('reasoningEffort', reasoningEffort);
+  }
   const timeoutMs = input.timeoutMs === undefined ? 60000 : input.timeoutMs;
   assertPositiveSafeInteger('maxInputBytes', maxInputBytes);
   assertPositiveSafeInteger('maxOutputTokens', maxOutputTokens);
@@ -248,7 +250,7 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
     compiledTemplate,
     maxInputBytes,
     maxOutputTokens,
-    reasoningEffort,
+    ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
     timeoutMs,
     ...(hasProvider ? { provider: input.provider, model: input.model } : {}),
   });

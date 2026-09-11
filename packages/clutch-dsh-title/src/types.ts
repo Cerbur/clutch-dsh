@@ -62,7 +62,7 @@ export interface ResolvedTitleConfig {
   readonly compiledTemplate: CompiledTemplate;
   readonly maxInputBytes: number;
   readonly maxOutputTokens: number;
-  readonly reasoningEffort: string | null;
+  readonly reasoningEffort?: string | null;
   readonly timeoutMs: number;
   readonly provider?: string;
   readonly model?: string;
