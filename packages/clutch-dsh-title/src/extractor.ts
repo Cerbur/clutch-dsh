@@ -94,6 +94,39 @@ function finishError(finish: FinishReason): Error | undefined {
   }
 }
 
+async function determineReasoningEffort(
+  ctx: Context,
+  config: ResolvedTitleConfig,
+  route: SessionTitleModelProvenance,
+  signal: AbortSignal,
+): Promise<string | undefined> {
+  if (config.reasoningEffort !== undefined) {
+    return config.reasoningEffort === null ? undefined : config.reasoningEffort;
+  }
+  try {
+    const llm = (
+      ctx as {
+        llm?: {
+          resolveModelInfo?(
+            provider: string,
+            model: string,
+            signal?: AbortSignal,
+          ): Promise<{ reasoning?: { efforts?: readonly { id: string }[] } }>;
+        };
+      }
+    ).llm;
+    if (typeof llm?.resolveModelInfo === 'function') {
+      const info = await llm.resolveModelInfo(route.provider, route.model, signal);
+      if (info?.reasoning?.efforts && info.reasoning.efforts.length > 0) {
+        return info.reasoning.efforts[0].id;
+      }
+    }
+  } catch {
+    // Model metadata resolution failure falls back to omitting reasoning effort
+  }
+  return undefined;
+}
+
 function cloneSelectedMessages(
   selectedMessages: readonly SessionTitleUserMessage[],
 ): readonly SessionTitleUserMessage[] {
@@ -128,19 +161,9 @@ export async function extractLlmFields(
     }),
   ];
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE);
-  const options: GenerateOptions = deepFreeze({
-    provider: route.provider,
-    model: route.model,
-    messages,
-    system,
-    maxTokens: config.maxOutputTokens,
-    ...(config.reasoningEffort === null
-      ? {}
-      : { reasoningEffort: ReasoningEffortId(config.reasoningEffort) }),
-    sessionId: request.session.id,
-    purpose: 'session-title',
-    signal: callDeadline.signal,
-  });
+
+  const reasoningEffort = await determineReasoningEffort(ctx, config, route, callDeadline.signal);
+
   const event: SessionTitleLlmRequestEventData = deepFreeze({
     titleProvider,
     messageSeqs: sourceMessages.map((message) => message.seq),
@@ -152,13 +175,26 @@ export async function extractLlmFields(
   request.session.append('session/title-llm-request', event);
   callDeadline.signal.throwIfAborted();
 
+  const options: GenerateOptions = deepFreeze({
+    provider: route.provider,
+    model: route.model,
+    messages,
+    system,
+    maxTokens: config.maxOutputTokens,
+    ...(reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
+    sessionId: request.session.id,
+    purpose: 'session-title',
+    signal: callDeadline.signal,
+  });
+
   const assembler = new BlockAssembler();
   for await (const chunk of ctx.llm.stream(options)) {
     callDeadline.signal.throwIfAborted();
     assembler.push(chunk);
   }
   callDeadline.signal.throwIfAborted();
-
   const terminalError = finishError(assembler.finish);
   if (terminalError !== undefined) throw terminalError;
   const blocks = assembler.blocks();

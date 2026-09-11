@@ -153,9 +153,11 @@ fields:
 
 ### 标题思考强度
 
-Cordis `reasoningEffort` 默认为 `off`。除简洁 JSON prompt 外，插件会通过 `GenerateOptions.reasoningEffort` 将这个适配器定义的 ID 传给模板字段提取请求。可设置为所选 provider/model 支持的其他非空 ID，或显式设置 `reasoningEffort: null` 以省略该参数、使用适配器默认值。这是插件级 Cordis 配置，不属于模板 YAML，也不在模板管理器中设置；切换模板后仍然生效。
+当未配置 Cordis `reasoningEffort` 时，插件会自动适配所选模型：通过 `ctx.llm.resolveModelInfo` 查询其元数据，并自动选取其支持的最低思考档位（`efforts` 列表首项，例如 DeepSeek 官方模型的 `off` 或 Gemini 模型的 `low`）。若模型未声明思考能力或元数据解析失败，则不传递 `reasoningEffort`。
 
-实际思考行为取决于 DSH 适配器与模型。特别是 pi-ai 可能通过省略 reasoning 参数实现 `off`，因此不能保证上游模型停止思考。不支持的强度可能以 `UNSUPPORTED_REASONING_EFFORT` 失败并进入原生标题 fallback；插件不会换用其他强度重试。该配置仅在启用标题模板时生效，不修改主会话请求或关闭模板时使用的原生生成器。原生 `session/title-llm-request` 事件 schema 保持不变，不记录思考强度。
+用户可在 Cordis 中显式配置 `reasoningEffort` 为所选 provider/model 支持的其他非空 ID，或显式设置 `reasoningEffort: null` 以省略该参数、使用适配器默认值。不支持的强度可能以 `UNSUPPORTED_REASONING_EFFORT` 失败并进入原生标题 fallback；插件不会换用其他强度重试。
+
+这是插件级 Cordis 配置，不属于模板 YAML，也不在模板管理器中设置；切换模板后仍然生效。实际思考行为取决于 DSH 适配器与模型。特别是 pi-ai 可能通过省略 reasoning 参数实现 `off`，因此不能保证上游模型停止思考。该配置仅在启用标题模板时生效，不修改主会话请求或关闭模板时使用的原生生成器。原生 `session/title-llm-request` 事件 schema 保持不变，不记录思考强度。
 
 ### 长首条消息与输入预算
 

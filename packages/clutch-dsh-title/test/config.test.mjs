@@ -5,8 +5,8 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout';
 
 const { resolveTitleConfig } = await import('../lib/config.js');
 
-test('defaults reasoning effort to off and accepts adapter IDs or explicit null', () => {
-  assert.equal(resolveTitleConfig({}).reasoningEffort, 'off');
+test('leaves reasoning effort undefined by default and accepts adapter IDs or explicit null', () => {
+  assert.equal(resolveTitleConfig({}).reasoningEffort, undefined);
   for (const reasoningEffort of ['off', 'low', 'vendor-specific', null]) {
     assert.equal(resolveTitleConfig({ reasoningEffort }).reasoningEffort, reasoningEffort);
   }
