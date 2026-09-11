@@ -151,6 +151,12 @@ fields:
 
 模型只返回字段；renderer 负责插入 deterministic 值和 literal separator。renderer 不执行 template 内容，field validation 会在渲染前 trim、清理控制字符，并校验 enum membership 或 Unicode character limit。
 
+### 标题思考强度
+
+Cordis `reasoningEffort` 默认为 `off`。除简洁 JSON prompt 外，插件会通过 `GenerateOptions.reasoningEffort` 将这个适配器定义的 ID 传给模板字段提取请求。可设置为所选 provider/model 支持的其他非空 ID，或显式设置 `reasoningEffort: null` 以省略该参数、使用适配器默认值。这是插件级 Cordis 配置，不属于模板 YAML，也不在模板管理器中设置；切换模板后仍然生效。
+
+实际思考行为取决于 DSH 适配器与模型。特别是 pi-ai 可能通过省略 reasoning 参数实现 `off`，因此不能保证上游模型停止思考。不支持的强度可能以 `UNSUPPORTED_REASONING_EFFORT` 失败并进入原生标题 fallback；插件不会换用其他强度重试。该配置仅在启用标题模板时生效，不修改主会话请求或关闭模板时使用的原生生成器。原生 `session/title-llm-request` 事件 schema 保持不变，不记录思考强度。
+
 ### 长首条消息与输入预算
 
 Cordis `maxInputBytes` 默认为 `4096`，约束实际发送给模型的完整 JSON-framed user input，包括 framing 指令、`seq`、JSON 转义和裁剪元数据；不包括独立的 system 指令和模型传输封装。短输入的原有 framing 和文本保持不变。

@@ -49,6 +49,7 @@ export interface TitleConfig {
   readonly fields?: Readonly<Record<string, TitleFieldConfig>>;
   readonly maxInputBytes?: number;
   readonly maxOutputTokens?: number;
+  readonly reasoningEffort?: string | null;
   readonly timeoutMs?: number;
   readonly provider?: string;
   readonly model?: string;
@@ -61,6 +62,7 @@ export interface ResolvedTitleConfig {
   readonly compiledTemplate: CompiledTemplate;
   readonly maxInputBytes: number;
   readonly maxOutputTokens: number;
+  readonly reasoningEffort: string | null;
   readonly timeoutMs: number;
   readonly provider?: string;
   readonly model?: string;

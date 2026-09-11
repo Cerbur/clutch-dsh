@@ -152,6 +152,12 @@ Only fields referenced by the compiled template are resolved. Repeated reference
 
 The model returns fields only; the renderer inserts deterministic values and literal separators. The renderer does not execute template content, and field validation trims, removes control characters, and enforces enum membership or Unicode-character limits before rendering.
 
+### Title reasoning effort
+
+Cordis `reasoningEffort` defaults to `off`. The plugin passes this adapter-owned ID through `GenerateOptions.reasoningEffort` for template field extraction, in addition to the concise JSON prompt. Set it to another non-empty ID supported by the selected provider/model, or explicitly set `reasoningEffort: null` to omit the option and use adapter defaults. This is a plugin-level Cordis option, not template YAML or a setting in the template manager; it remains effective across template changes.
+
+Actual thinking behavior depends on the DSH adapter and model. In particular, pi-ai may implement `off` by omitting its reasoning option, which cannot guarantee that the upstream model stops thinking. Unsupported efforts may fail with `UNSUPPORTED_REASONING_EFFORT` and use native title fallback; the plugin does not retry with another effort. This option applies only while title templates are enabled, and does not alter main conversation requests or the native generator used when templates are disabled. The native `session/title-llm-request` event schema remains unchanged and does not record reasoning effort.
+
 ### Long first prompts and input budget
 
 Cordis `maxInputBytes` defaults to `4096`. It limits the complete JSON-framed user input actually sent to the model, including framing instructions, `seq`, JSON escaping and clipping metadata. It excludes the separate system instructions and model transport envelope. Short inputs retain their original framing and text.

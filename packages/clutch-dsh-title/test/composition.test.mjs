@@ -33,6 +33,18 @@ const CREATED_AT = Date.UTC(2026, 8, 3, 16, 0);
 const contexts = [];
 
 class RecordingAdapter extends LlmAdapter {
+  async resolveModel(provider, model, signal) {
+    return {
+      ...(await super.resolveModel(provider, model, signal)),
+      reasoning: {
+        efforts: [
+          { id: 'off', name: 'Off' },
+          { id: 'low', name: 'Low' },
+        ],
+      },
+    };
+  }
+
   requests = [];
   response = '{"type":"优化","desc":"优化 session title 生成规则"}';
   responseFor = undefined;
@@ -112,6 +124,16 @@ test('rejects non-string values from deterministic and extracted fields', () => 
   assert.throws(() => mergeFieldValues({}, { scope: 1 }), /scope|string/i);
 });
 
+test('unsupported off uses native fallback without adapter dispatch', async () => {
+  const adapter = new RecordingAdapter();
+  adapter.resolveModel = LlmAdapter.prototype.resolveModel;
+  const { ctx } = await makeContext({ adapter });
+  const { session } = appendSession(ctx, 'unsupported-off', 'Please improve titles');
+  await settle();
+  assert.equal(adapter.requests.length, 0);
+  assert.equal(ctx.sessionTitle.get(session).title, 'Please improve titles');
+});
+
 test('settings select templates, external corruption falls back, and disabling uses native plain title generation', async () => {
   const { ctx, adapter } = await makeContext({ installPlugin: false });
   await ctx.plugin(MemorySettings);
@@ -129,6 +151,26 @@ test('settings select templates, external corruption falls back, and disabling u
   assert.equal(ctx.sessionTitle.get(session).title, 'Native title');
   assert.match(adapter.requests.at(-1).system, /plain text/);
   assert.equal(adapter.requests.at(-1).maxTokens, 64);
+});
+
+test('Cordis reasoning effort survives managed template selection and fallback', async () => {
+  for (const reasoningEffort of ['low', null]) {
+    const { ctx, adapter } = await makeContext({ installPlugin: false });
+    await ctx.plugin(MemorySettings);
+    await ctx.plugin(titlePlugin, { reasoningEffort });
+    const { session } = appendSession(ctx, 'effort-' + reasoningEffort, 'Improve titles');
+    await settle();
+    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+    ctx.settings.external({ active: 'custom', templates: { custom: 'template: "${desc}"' } });
+    adapter.response = '{"desc":"Custom title"}';
+    await ctx.sessionTitle.refresh(session);
+    assert.equal(ctx.sessionTitle.get(session).title, 'Custom title');
+    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+    ctx.settings.external({ active: 'missing' });
+    adapter.response = '{"type":"优化","desc":"Fallback template"}';
+    await ctx.sessionTitle.refresh(session);
+    assert.equal(adapter.requests.at(-1).reasoningEffort, reasoningEffort ?? undefined);
+  }
 });
 
 test('invalid managed templates at startup leave provider and repair settings available', async () => {
