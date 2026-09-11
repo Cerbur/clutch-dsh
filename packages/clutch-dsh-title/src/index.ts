@@ -52,6 +52,7 @@ export function apply(ctx: Context, config: Config): void {
         ...state.config,
         maxInputBytes: initial.maxInputBytes,
         maxOutputTokens: initial.maxOutputTokens,
+        reasoningEffort: initial.reasoningEffort,
         timeoutMs: initial.timeoutMs,
         ...(initial.provider === undefined
           ? {}

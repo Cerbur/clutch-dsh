@@ -5,6 +5,16 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout';
 
 const { resolveTitleConfig } = await import('../lib/config.js');
 
+test('defaults reasoning effort to off and accepts adapter IDs or explicit null', () => {
+  assert.equal(resolveTitleConfig({}).reasoningEffort, 'off');
+  for (const reasoningEffort of ['off', 'low', 'vendor-specific', null]) {
+    assert.equal(resolveTitleConfig({ reasoningEffort }).reasoningEffort, reasoningEffort);
+  }
+  for (const reasoningEffort of ['', '  ', false, 0, {}, []]) {
+    assert.throws(() => resolveTitleConfig({ reasoningEffort }), /reasoningEffort/);
+  }
+});
+
 test('supports described enum choices alongside string shorthand', () => {
   const values = [{ value: ' 前端 ', description: ' 修改页面和交互时使用 ' }, '后端'];
   const resolved = resolveTitleConfig({

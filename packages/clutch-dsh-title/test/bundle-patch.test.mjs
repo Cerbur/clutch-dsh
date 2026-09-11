@@ -73,6 +73,13 @@ test('does not disable a same-id entry whose package name changed', async () => 
 });
 
 class LoaderAdapter extends LlmAdapter {
+  async resolveModel(provider, model, signal) {
+    return {
+      ...(await super.resolveModel(provider, model, signal)),
+      reasoning: { efforts: [{ id: 'off', name: 'Off' }] },
+    };
+  }
+
   requests = [];
 
   async *stream(options) {
