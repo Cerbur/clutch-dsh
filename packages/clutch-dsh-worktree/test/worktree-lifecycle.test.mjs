@@ -266,3 +266,59 @@ test('mutation token changes when diskCleanup changes', () => {
   const tok2 = createWorktreeMutationToken(snap, { ...record, diskCleanup: 'completed' });
   assert.notEqual(tok1, tok2);
 });
+
+test('validates sidecar v4 worktree records with optional acquisition metadata', () => {
+  const snapshot = validateSidecarSnapshot(
+    {
+      schemaVersion: 4,
+      workspaceId: 'ws1',
+      revision: '1',
+      worktrees: [
+        {
+          ...record,
+          createdAt: '2026-09-10T13:00:52.192Z',
+          baseBranch: 'main',
+          instructions: 'custom instructions',
+        },
+        {
+          ...record,
+          worktreeId: 'wt_imported',
+          absolutePath: '/tmp/wt_imported',
+          source: 'external',
+          importedAt: '2026-09-10T18:03:35.694Z',
+        },
+      ],
+      bindings: [],
+    },
+    '/tmp/ws1.json',
+  );
+  assert.equal(snapshot.worktrees[0].createdAt, '2026-09-10T13:00:52.192Z');
+  assert.equal(snapshot.worktrees[0].baseBranch, 'main');
+  assert.equal(snapshot.worktrees[0].instructions, 'custom instructions');
+  assert.equal(snapshot.worktrees[1].importedAt, '2026-09-10T18:03:35.694Z');
+  assert.deepEqual(validateSidecarSnapshot(JSON.parse(JSON.stringify(snapshot)), '/tmp/ws1.json'), snapshot);
+});
+
+test('metadata compatibility keeps schema validation strict', () => {
+  for (const metadata of [
+    { instructions: 1 }, { instructions: 'x'.repeat(32_001) },
+    { baseBranch: '' }, { baseBranch: null },
+    { createdAt: 'invalid' }, { importedAt: 42 },
+    { transcript: 'not allowed' }, { health: 'ready' },
+  ]) {
+    assert.throws(() => validateSidecarSnapshot({
+      schemaVersion: 4, workspaceId: 'ws1', revision: '0',
+      worktrees: [{ ...record, ...metadata }], bindings: [],
+    }, '/tmp/ws1.json'), { code: 'SIDECAR_CORRUPT' });
+  }
+  for (const schemaVersion of [1, 2, 3]) {
+    const legacyRecord = { ...record };
+    delete legacyRecord.source;
+    assert.throws(() => validateSidecarSnapshot({
+      schemaVersion, workspaceId: 'ws1',
+      ...(schemaVersion === 3 ? { revision: '0' } : {}),
+      worktrees: [{ ...(schemaVersion === 1 ? legacyRecord : record), createdAt: '2026-09-10T13:00:52.192Z' }],
+      bindings: [],
+    }, '/tmp/ws1.json'), { code: 'SIDECAR_CORRUPT' });
+  }
+});

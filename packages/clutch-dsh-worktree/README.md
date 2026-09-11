@@ -81,6 +81,12 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 
 ### Compatibility and prerequisites
 
+Session reload reads both rc.1 persisted headers and newer DSH header snapshots.
+Known v4 development-build metadata (`instructions`, `createdAt`, `importedAt`,
+`baseBranch`) is preserved across sidecar writes; this release neither creates it nor
+injects instructions. Unknown fields are still rejected. Older v4 plugin readers may
+reject snapshots containing these development fields.
+
 The supported compatibility facts are:
 
 | Component | Min Version | Notes |

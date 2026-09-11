@@ -88,6 +88,12 @@ export type BindingStatus = 'active' | 'detached';
  * Worktree metadata persisted by the plugin sidecar; it contains no DSH Workspace or Session content.
  */
 export interface WorktreeRecord {
+  /** Compatibility-only metadata from development builds; preserved, never injected. */
+  readonly instructions?: string;
+  /** Optional acquisition facts from development builds; absent values remain unknown. */
+  readonly createdAt?: string;
+  readonly importedAt?: string;
+  readonly baseBranch?: string;
   readonly worktreeId: WorktreeId;
   readonly workspaceId: WorkspaceId;
   readonly absolutePath: string;

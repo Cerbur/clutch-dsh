@@ -72,6 +72,11 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件只
 
 ### 兼容性与前置条件
 
+Session 重新加载兼容 rc.1 的持久化 header 与新版 DSH 的 header snapshot。
+v4 开发构建的已知元数据（`instructions`、`createdAt`、`importedAt`、
+`baseBranch`）会在 sidecar 写入时保留；本版本不创建这些字段，也不注入指令。
+未知字段仍会被拒绝。较旧的 v4 插件读取器可能拒绝包含这些开发字段的 snapshot。
+
 兼容性事实表如下：
 
 | 组件 / Component | 最低版本 / Min Version | 说明 / Notes |
