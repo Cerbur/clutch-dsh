@@ -19,7 +19,11 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
     left.branch === right.branch &&
     left.source === right.source &&
     left.status === right.status &&
-    left.diskCleanup === right.diskCleanup
+    left.diskCleanup === right.diskCleanup &&
+    left.instructions === right.instructions &&
+    left.createdAt === right.createdAt &&
+    left.importedAt === right.importedAt &&
+    left.baseBranch === right.baseBranch
   );
 }
 

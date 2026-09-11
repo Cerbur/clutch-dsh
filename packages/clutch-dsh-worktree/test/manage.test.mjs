@@ -819,6 +819,34 @@ test('repeated identical Worktree upsert is idempotent', async () => {
   });
 });
 
+test('preserves compatibility metadata across writes and rejects conflicting upserts', async () => {
+  await withGitFixture(async ({ sidecar, dshHome }) => {
+    const record = {
+      ...makeRecord({ absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_seed') }),
+      instructions: 'preserve only',
+      createdAt: '2026-09-10T13:00:52.192Z',
+      importedAt: '2026-09-10T18:03:35.694Z',
+      baseBranch: 'main',
+    };
+    await sidecar.upsertWorktree(record);
+    assert.deepEqual(await sidecar.upsertWorktree(record), record);
+    for (const metadata of [
+      { instructions: 'different' }, { createdAt: '2026-09-11T13:00:52.192Z' },
+      { importedAt: '2026-09-11T18:03:35.694Z' }, { baseBranch: 'other' },
+    ]) {
+      await expectCode(sidecar.upsertWorktree({ ...record, ...metadata }), 'SIDECAR_CORRUPT');
+    }
+    await sidecar.upsertWorktree(makeRecord({
+      worktreeId: 'wt_other',
+      absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_other'),
+    }));
+    const reloaded = new WorkspaceShardedSidecarRepository({ dshHome });
+    assert.deepEqual((await reloaded.read('ws_one')).worktrees.find(
+      (candidate) => candidate.worktreeId === record.worktreeId,
+    ), record);
+  });
+});
+
 test('prepends new Worktrees in sidecar order and preserves an existing record position', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const root = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');

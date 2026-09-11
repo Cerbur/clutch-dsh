@@ -265,6 +265,14 @@ The Host registers `WorktreeManagerService.close()` as a Cordis effect so a disp
 leave a Git subprocess tree or an in-flight Provider operation behind. This cleanup is lifecycle
 infrastructure only and does not add a Remote method.
 
+Session reload compatibility accepts both rc.1 bare headers and current DSH header snapshots
+from `sessionPersistence.list()`, normalizing them inside the Host read adapter.
+The v4 sidecar reader also preserves the known development-build fields `instructions`,
+`createdAt`, `importedAt`, and `baseBranch`. This is a narrow compatibility exception:
+this package does not author these fields or inject instructions. Unknown fields remain
+corruption errors, and v1/v2/v3 validation is unchanged. Older v4 readers may reject these
+development snapshots; this does not promise backward compatibility with those readers.
+
 `DshHostReadAdapter` 只读取 workspace registry、live Session header 和
 `sessionPersistence.list()` 等 header facts，不加载 transcript；`resolveRuntimeCwd`
 不进入 browser Remote。
