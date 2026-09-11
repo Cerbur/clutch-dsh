@@ -1,5 +1,53 @@
 # Worktree dashboard MVP
 
+## Instructions and acquisition facts extension
+
+The user extended the scope to shared instruction editing and system-reminder injection,
+native open-editor styling, creation time, and base branch. This supersedes the initial
+instructions placeholder and Client-only limit below.
+
+- Add optional v4 Worktree facts: instructions, createdAt, importedAt, baseBranch.
+- Save instructions through the existing Connection/Remote/Manage path, under the shard lock,
+  with a text comparison witness and recovery gate. Empty text disables injection.
+- Contribute the current active binding's instructions through DSH agent/pre-step as a
+  standalone plugin instructions message. DSH owns log admission; deduplicate against
+  visible durable messages, republish after compaction, and invalidate cleared guidance.
+  This supersedes the original combined runtime-context implementation.
+- Preserve drafts on failure and ready content on scoped refresh; no global refresh on save.
+- Record creation facts at acquisition and journal recovery; external imports record only
+  registration time. Legacy absent facts remain unknown.
+- Match the native open-editor split control's typography, spacing and theme colors.
+- Validate persistence, conflicts, archive/detached behavior, Host injection lifecycle,
+  Connection descriptors, UI editing, and the package/workspace checks.
+
+### Extension verification
+
+- Independent pre-step reminder revision: `pnpm test` passed all 560 tests;
+  `pnpm lint` and `git diff --check` passed. A local upstream DSH SessionStore
+  harness accepted the standalone message into its visible log and verified
+  listener restart deduplication and the clearing notice. No live user Session
+  was modified and no model request was sent during this verification.
+
+- Session error diagnosis: the original camelCase prompt variable violated DSH's
+  `/^[a-z][a-z0-9_]*$/` grammar. Reproduced the exact malformed-variable error with
+  upstream `renderContextSections`; use `clutch_worktree_instructions` for both
+  the reference and value. Added a regression for valid, registered references.
+
+- `pnpm test`: 559 passed, no failures or skips, including real-Git persistence,
+  acquisition facts, restart, stale edit rejection, and binding lifecycle coverage.
+- `pnpm typecheck`, `pnpm lint`, `pnpm run check:workspace`,
+  `pnpm run check:patches`, and `git diff --check` passed.
+- After the final Escape guard, `pnpm build` passed and
+  `node --test test/client-dashboard.test.mjs test/client-worktree-instructions.test.mjs`
+  passed all 15 tests.
+- Browser QA used the actual Surface with synthetic data at
+  `/tmp/dashboard-actions-qa`: failed saves retain the draft, retry shows saved text,
+  creation/base facts render, and the detected-app menu opens. Escape now dismisses
+  the menu while retaining Dashboard. English and Chinese layouts were inspected.
+  No real editor launch or live Session/model request was performed.
+- Both public READMEs, the Client README, and package architecture instructions are updated.
+  No commit, version bump, merge, pack, publish, or push was performed.
+
 The dashboard is a plugin-only addition requested for
 `wt-worktree-0.1.10/feat-shorten-worktree-name`. It amends the original plan's
 non-goal of replacing the Session page: replacement is temporary browser

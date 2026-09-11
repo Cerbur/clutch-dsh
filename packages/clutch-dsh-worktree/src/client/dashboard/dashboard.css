@@ -491,7 +491,7 @@
     gap: 12px;
   }
   .dashboardHeaderAside {
-    display: none;
+    display: flex;
   }
   .dashboardGrid {
     grid-template-columns: minmax(0, 1fr);
@@ -519,4 +519,28 @@
     gap: 10px;
     align-items: flex-start;
   }
+}
+.dashboardInstructionsText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.dashboardInstructionsInput {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l4);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+}
+
+.dashboardInstructionActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }

@@ -198,6 +198,14 @@ Client disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
+The Dashboard instructions card edits plugin-owned text through
+`updateWorktreeInstructions` on the existing Connection. Save carries the editor's
+`expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
+ignores completion after unmount. Save refreshes only the owning Workspace with ready content
+preserved. Main does not expose instruction editing. Creation/import time and base branch are
+optional recorded facts; missing values remain unknown. The open-editor control uses the
+native split-button typography, padding, border, and hover colors.
+
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
 are announced once while present; resolved entries leave the queue and a later recurrence

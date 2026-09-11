@@ -58,6 +58,7 @@ export function createWorktreeRemoteProjection(
   permissions?: WorktreePermissionManager,
 ): WorktreeRemoteManager {
   return {
+    updateWorktreeInstructions: (input) => project(() => manager.updateWorktreeInstructions(input)),
     listWorktrees: (input) => project(() => manager.listWorktrees(input)),
     listImportCandidates: (input) => project(() => manager.listImportCandidates(input)),
     listBranches: (input) => project(() => manager.listBranches(input)),

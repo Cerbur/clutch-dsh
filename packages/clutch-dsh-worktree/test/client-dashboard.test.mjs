@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { setImmediate } from 'node:timers';
+import { URL } from 'node:url';
 import ts from 'typescript';
 import {
   createMainWorktreeRecord,
@@ -115,6 +117,7 @@ function renderHarness(writeClipboard) {
             children: t('dashboard.openEditor'),
           }),
         },
+        './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
         '../session/session-view.js': { sessionDisplayLabel },
         './dashboard.css': { default: {} },
       })[name] ?? {},
@@ -173,7 +176,7 @@ test('dashboard renders real identity and explicit placeholders in both language
       ),
     );
     assert.equal(byRole(node, 'tab').length, 5);
-    assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 9);
+    assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 8);
   }
   harness.dispose();
 });
@@ -346,7 +349,13 @@ test('tabs switch panels, keyboard selection wraps, and Escape closes the dashbo
     byRole(node, 'tab')[4].props.onKeyDown({ key: 'ArrowRight', preventDefault() {} });
     node = harness.render();
     assert.equal(byRole(node, 'tab')[0].props['aria-selected'], true);
-    node.props.onKeyDown({ key: 'Escape', stopPropagation() {} });
+    node.props.onKeyDown({
+      key: 'Escape',
+      currentTarget: { querySelector: () => ({ role: 'menu' }) },
+      stopPropagation() { assert.fail('The native menu must receive Escape'); },
+    });
+    assert.equal(closed, 0);
+    node.props.onKeyDown({ key: 'Escape', currentTarget: { querySelector: () => null }, stopPropagation() {} });
     assert.equal(closed, 1);
   } finally {
     globalThis.document = oldDocument;
@@ -408,6 +417,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
           if (hook === 'useSurfaceSources') return sourceState;
           if (hook === 'useSurfaceRefresh')
             return {
+              refresh: async (options) => calls.push(['refresh', options]),
               viewByWorkspace: new Map([
                 [
                   'repo',
@@ -443,6 +453,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     return findAll(
       exports.WorktreeSurface({
         t: (key) => en[key],
+        manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
         createSessionForWorktree() {},
         openSession: (id) => calls.push(['nativeOpen', id]),
       }),
@@ -450,6 +461,12 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     )[0].props;
   };
   let props = render();
+  assert.equal(await props.onSaveInstructions('Use tests', ''), 'Use tests');
+  assert.deepEqual(calls.splice(0), [
+    ['saveInstructions', { workspaceId: 'repo', worktreeId: 'wt', instructions: 'Use tests', expectedInstructions: '' }],
+    ['refresh', { preserveCurrent: true, scope: { kind: 'workspace', workspaceId: 'repo' } }],
+  ]);
+  assert.equal(selected, selection);
   assert.deepEqual(props.sessionIds, ['current']);
   props.onCreateWorktree();
   assert.deepEqual(calls.shift(), [
@@ -685,5 +702,3 @@ test('OpenInAppController reads apps, remembers choice, and launches via host ro
   assert.equal(requests[1].init.method, 'POST');
   assert.deepEqual(JSON.parse(requests[1].init.body), { app: 'cursor', path: '/path/to/worktree' });
 });
-
-

@@ -8,17 +8,18 @@ import {
 import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { sessionDisplayLabel, type SessionListLike } from '../session/session-view.js';
-import { vscodeFolderUrl } from './vscode-url.js';
 import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
 import { isMainWorktreeId } from './dashboard-selection.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
+import { WorktreeInstructions } from './WorktreeInstructions.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
 
 export interface WorktreeDashboardProps {
+  readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
   readonly record: WorktreeRecord;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
@@ -103,6 +104,7 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onSaveInstructions,
 }: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -218,6 +220,8 @@ export function WorktreeDashboard({
       style={placement ?? { visibility: 'hidden', height: 0 }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
+          // Native menus own Escape even when focus remains elsewhere in the dashboard.
+          if (event.currentTarget.querySelector('[role="menu"]')) return;
           event.stopPropagation();
           onClose();
         }
@@ -284,12 +288,15 @@ export function WorktreeDashboard({
             <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
               <div>
-                <dt>{t('dashboard.created')}</dt>
-                <dd>{t('dashboard.notConnected')}</dd>
+                <dt>{t(record.source === 'external' ? 'dashboard.imported' : 'dashboard.created')}</dt>
+                <dd>{(record.source === 'external' ? record.importedAt : record.createdAt)
+                  ? <time dateTime={record.source === 'external' ? record.importedAt : record.createdAt}>
+                    {new Date((record.source === 'external' ? record.importedAt : record.createdAt)!).toLocaleString()}
+                  </time> : t('dashboard.unknown')}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.base')}</dt>
-                <dd>{t('dashboard.notConnected')}</dd>
+                <dd>{record.baseBranch ?? t('dashboard.unknown')}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.source')}</dt>
@@ -382,15 +389,10 @@ export function WorktreeDashboard({
                 <Card
                   title={t('dashboard.instructions')}
                   icon={<DashboardIcon kind="instructions" />}
-                  action={<PlaceholderButton t={t}>{t('dashboard.edit')}</PlaceholderButton>}
                 >
                   <p>{t('dashboard.instructionsDescription')}</p>
-                  <div className={styles.dashboardInstructionPlaceholder}>
-                    <DashboardIcon kind="instructions" />
-                    <strong>{t('dashboard.noInstructions')}</strong>
-                    <p>{t('dashboard.instructionsHint')}</p>
-                    {placeholder}
-                  </div>
+                  <WorktreeInstructions value={record.instructions ?? ''} onSave={onSaveInstructions}
+                    t={t} disabled={actionPending || record.health === 'recovery-needed'} />
                 </Card>
                 <Card
                   title={tabLabel('sessions')}
@@ -415,7 +417,7 @@ export function WorktreeDashboard({
                     </div>
                     <div>
                       <dt>{t('dashboard.base')}</dt>
-                      <dd>{t('dashboard.notConnected')}</dd>
+                      <dd>{record.baseBranch ?? t('dashboard.unknown')}</dd>
                     </div>
                     <div>
                       <dt>{t('dashboard.aheadBehind')}</dt>

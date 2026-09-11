@@ -54,6 +54,19 @@ packages/clutch-dsh-worktree/
 
 ## DSH 数据边界
 
+Dashboard 的共享指令属于用户编写的插件数据：WorktreeRecord 可选保存
+`instructions`（最多 32,000 UTF-16 code units）、`createdAt`、`importedAt`、
+`baseBranch`。v4 接受这些可选字段，旧记录保持未知，不推测 Git 创建时间或基线；
+降级到不认识这些字段的旧版插件前需要迁移数据。创建 journal 恢复使用 startedAt 与
+baseRef/branch 恢复创建事实，导入只记录登记时间且不推测基线。
+Manage 在 shard 锁内通过 expectedInstructions 比较并保存，真实 recovery 阻断编辑。
+Host 在 DSH `agent/pre-step` 中按当前 Session 的 active binding 读取最新指令，
+以独立 `<system-reminder>` 消息贡献给 decision.messages，由 DSH 自己持久化和展示。
+通过原生日志与 surface 判断去重，压缩后按需重新注入。清空、detached、cleaned 或 forget
+后追加旧指令失效提醒；归档保留 active binding 时继续贡献。
+这不重写用户消息、Session metadata 或原有历史。Client 保存只刷新所属 Workspace，保留 ready
+内容和失败草稿；不往业务目录写 AGENTS.md。
+
 DSH 是唯一的原始数据源。plugin 不写入、复制或改造以下内容：
 
 - Project/Workspace identity 和原始工作目录；

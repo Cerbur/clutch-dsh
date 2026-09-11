@@ -530,14 +530,23 @@ export function apply(ctx: Context): void {
     ),
   );
 
-  if (typeof (ctx as any).inject === 'function') {
-    (ctx as any).inject(['sessionLogDownload'], (innerCtx: any) => {
-      if (typeof innerCtx.sessionLogDownload?.registerMoreItem !== 'function') return;
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['sessionLogDownload'], (innerCtx) => {
+      const sessionLogDownload = innerCtx.get('sessionLogDownload') as {
+        registerMoreItem(input: {
+          id: string;
+          label: () => string;
+          icon: ReturnType<typeof createElement>;
+          order: number;
+          onSelect: (sessionId: string) => void;
+        }): () => void;
+      } | undefined;
+      if (typeof sessionLogDownload?.registerMoreItem !== 'function') return;
       innerCtx.effect(() => {
-        return innerCtx.sessionLogDownload.registerMoreItem({
+        return sessionLogDownload.registerMoreItem({
           id: 'clutch-dsh-worktree-dashboard',
           label: () =>
-            innerCtx.locale?.get?.() === 'zh'
+            innerCtx.locale.getLocale().active === 'zh'
               ? '前往 Dashboard'
               : 'Go to Dashboard',
           icon: createElement(IconDashboard, { size: 16 }),

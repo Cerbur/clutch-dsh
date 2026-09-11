@@ -57,6 +57,45 @@ async function runGit(cwd, args) {
   return execFile('git', args, { cwd, encoding: 'utf8' });
 }
 
+test('instructions persist with acquisition facts, reject stale edits, and follow active bindings', async () => {
+  await withGitFixture(async ({ provider, sidecar, dsh, dshHome, workspaceRoot }) => {
+    dsh.listWorkspaces = async () => [{ workspaceId: 'ws_one', rootPath: workspaceRoot }];
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'instructions' });
+    assert.equal(record.baseBranch, 'main');
+    assert.ok(Number.isFinite(Date.parse(record.createdAt)));
+    const input = { workspaceId: 'ws_one', worktreeId: record.worktreeId };
+    const beforeDsh = JSON.stringify(await dsh.listSessions());
+    await provider.updateWorktreeInstructions({ ...input, instructions: 'Use tests\n{{literal}}', expectedInstructions: '' });
+    const first = await sidecar.read('ws_one');
+    await provider.updateWorktreeInstructions({ ...input, instructions: 'Use tests\n{{literal}}', expectedInstructions: '' });
+    assert.equal((await sidecar.read('ws_one')).revision, first.revision);
+    await assert.rejects(provider.updateWorktreeInstructions({ ...input, instructions: 'stale', expectedInstructions: '' }), { code: 'WORKTREE_STATE_CONFLICT' });
+    await assert.rejects(provider.updateWorktreeInstructions({ ...input, instructions: 'x'.repeat(32001), expectedInstructions: '' }), { code: 'WORKTREE_STATE_CONFLICT' });
+    assert.equal(await provider.resolveSessionInstructions('main'), '');
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: { ...snapshot, bindings: [{ ...input, sessionId: 'bound', status: 'active' }] },
+    }));
+    assert.equal(await provider.resolveSessionInstructions('bound'), 'Use tests\n{{literal}}');
+    await provider.removeWorktree({ ...input, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    assert.equal(await provider.resolveSessionInstructions('bound'), 'Use tests\n{{literal}}');
+    const restarted = createWorktreeManager({ dsh, dshHome });
+    assert.equal(await restarted.resolveSessionInstructions('bound'), 'Use tests\n{{literal}}');
+    await restarted.updateWorktreeInstructions({ ...input, instructions: '', expectedInstructions: 'Use tests\n{{literal}}' });
+    assert.equal(await restarted.resolveSessionInstructions('bound'), '');
+    await restarted.updateWorktreeInstructions({ ...input, instructions: 'again', expectedInstructions: '' });
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined, snapshot: { ...snapshot, bindings: snapshot.bindings.map((item) => ({ ...item, status: 'detached' })) },
+    }));
+    assert.equal(await restarted.resolveSessionInstructions('bound'), '');
+    assert.equal(JSON.stringify(await dsh.listSessions()), beforeDsh);
+    await restarted.forgetWorktree({ ...input, mutationToken: await mutationTokenFor(restarted, 'ws_one', record.worktreeId) });
+    await assert.rejects(restarted.updateWorktreeInstructions({ ...input, instructions: 'missing', expectedInstructions: '' }), { code: 'WORKTREE_NOT_FOUND' });
+    await restarted.close();
+    await provider.close();
+  });
+});
+
 async function exists(filePath) {
   try {
     await stat(filePath);
@@ -442,6 +481,8 @@ test('finalizes a pending create when recovery finds the exact Git Worktree', as
       absolutePath: targetPath,
       branch: 'feature/recover-create',
       source: 'plugin',
+      createdAt: snapshot.worktrees[0].createdAt,
+      baseBranch: 'main',
       status: 'active',
     }]);
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
@@ -1656,8 +1697,10 @@ test('imports an external Worktree without mutating Git or its directory and is 
     const gitBefore = (await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout;
 
     const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    assert.ok(Number.isFinite(Date.parse(imported.importedAt)));
     assert.deepEqual(imported, {
       worktreeId: imported.worktreeId,
+      importedAt: imported.importedAt,
       workspaceId: 'ws_one',
       absolutePath: await realpath(externalPath),
       branch: 'feature/external',

@@ -1180,13 +1180,14 @@ test('registers "前往 Dashboard" into sessionLogDownload when available', asyn
   const fixture = await loadClientEntry();
   const fakeCtx = {
     ...fixture.fakeContext,
-    locale: { get: () => 'zh', register: () => () => {} },
+    locale: { getLocale: () => ({ active: 'zh' }), register: () => () => {} },
     inject: (deps, cb) => {
       if (deps.includes('sessionLogDownload')) {
         cb({
           ...fixture.fakeContext,
           sessionLogDownload,
-          locale: { get: () => 'zh' },
+          get: (name) => name === 'sessionLogDownload' ? sessionLogDownload : undefined,
+          locale: { getLocale: () => ({ active: 'zh' }) },
           effect: (fn) => fn(),
         });
       }
@@ -1200,4 +1201,3 @@ test('registers "前往 Dashboard" into sessionLogDownload when available', asyn
 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
-

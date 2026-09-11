@@ -341,6 +341,8 @@ async function createWorktreeAttempt(
     absolutePath: targetPath,
     branch: targetBranch,
     source: 'plugin',
+    createdAt: new Date().toISOString(),
+    baseBranch: input.branch,
     status: 'active',
   };
 
@@ -470,6 +472,7 @@ export async function importWorktree(
         absolutePath: livePath,
         branch: liveWorktree.branch,
         source: 'external',
+        importedAt: new Date().toISOString(),
         status: 'active',
       };
       return {

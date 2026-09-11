@@ -3,7 +3,8 @@
 `@cerbur/clutch-dsh-worktree` adds a Git Worktree view to the DSH Web UI. It groups
 Sessions as Workspace → Worktree → Session while keeping DSH as the source of truth for
 Project/Workspace identity, Session metadata, native lists, and conversation history.
-The plugin stores only external Worktree/Session relationship metadata.
+The plugin stores external Worktree/Session relationships, acquisition facts, and user-authored
+Worktree instructions in its own sidecar.
 
 ## Screenshots
 
@@ -257,9 +258,29 @@ follow the Sidebar's health, archive, and pending-operation gates.
 Open in VS Code uses an encoded `vscode://file/...` link for the recorded cwd. VS Code must be
 installed on the browser's machine and able to access that path; the browser may request
 permission to open the app. This link does not verify directory existence or launch success.
-Git details, derived Worktrees, settings, shared instructions, and other marked quick actions
+Git details, derived Worktrees, settings, and other marked quick actions
 remain placeholders. The layout follows DSH's theme and stacks cards on narrow screens.
 Dashboard selection is transient and is not restored after a reload.
+
+Use **Edit** on the Worktree instructions card to edit, save, or clear shared guidance
+(up to 32,000 UTF-16 code units). Saved text enters bound Sessions' next model request as
+`<system-reminder>` through DSH `agent/pre-step`, as a separate context entry in the
+Session trajectory. DSH records the message; existing history is not rewritten.
+Instruction text is inserted literally, including any `{{...}}` examples.
+Archiving preserves active bindings and instructions; detached bindings, disk cleanup, and
+removal from management stop the guidance. Clearing or losing the binding appends a
+reminder invalidating earlier Worktree instructions on the next step. Unchanged guidance
+is not repeated while its message remains visible, including after restart; compacted
+guidance is republished when needed.
+Failed saves retain the draft. Concurrent edits are rejected; cancel and reopen to load the
+latest saved text before retrying. Instructions remain in the plugin sidecar, never AGENTS.md.
+
+New plugin-created Worktrees show their recorded creation time and selected base branch.
+Imported Worktrees show their registration time; their original creation time and base are
+unknown. Older records without these facts show **Unknown**. The base is the acquisition
+branch name, not a live merge-base or ahead/behind calculation, and does not change on checkout.
+The open-editor split button follows DSH's native styling and offers detected host applications;
+if unavailable, it falls back to the VS Code protocol link described above.
 
 ### Create a Worktree
 

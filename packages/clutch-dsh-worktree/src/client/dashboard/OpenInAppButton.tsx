@@ -7,12 +7,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { vscodeFolderUrl } from './vscode-url.js';
-import {
-  defaultOpenInAppController,
-  type OpenInAppController,
-} from './open-in-app-controller.js';
+import { defaultOpenInAppController, type OpenInAppController } from './open-in-app-controller.js';
 import css from './open-in-app.css';
-import styles from './dashboard.css';
 
 const APP_NAMES: Record<string, string> = {
   cursor: 'Cursor',
@@ -128,11 +124,11 @@ export function OpenInAppButton({
   if (appsSnapshot === null || appsSnapshot.length === 0) {
     return (
       <a
-        className={styles.dashboardButton}
+        className={`${css.split} ${css.fallback}`}
         href={vscodeFolderUrl(path)}
         data-dashboard-action="open-editor"
       >
-        {t('dashboard.openEditor')}
+        <span className={css.main}>{t('dashboard.openEditor')}</span>
       </a>
     );
   }
@@ -177,53 +173,64 @@ export function OpenInAppButton({
   }));
 
   return (
-    <Menu
-      open={open}
-      align="end"
-      dense
-      onClose={() => {
-        setOpen(false);
+    <div
+      className={css.control}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation();
+          setOpen(false);
+        }
       }}
-      items={menuItems}
-      selectedId={currentAppId}
-      onSelect={(id) => {
-        setOpen(false);
-        if (inFlight.current) return;
-        controller.choose(id);
-        launch(id);
-      }}
-      anchor={
-        <div className={css.split} data-dashboard-action="open-editor">
-          <button
-            type="button"
-            className={css.main}
-            data-state={phase}
-            disabled={phase === 'busy'}
-            aria-label={buttonLabel}
-            title={buttonLabel}
-            onClick={() => {
-              launch(currentAppId);
-            }}
-          >
-            <AppIcon id={currentAppId} url={controller.iconUrl(currentAppId)} size={16} />
-            <span>{buttonLabel}</span>
-          </button>
-          {validApps.length > 1 && (
+    >
+      <Menu
+        open={open}
+        align="end"
+        dense
+        onClose={() => {
+          setOpen(false);
+        }}
+        items={menuItems}
+        selectedId={currentAppId}
+        onSelect={(id) => {
+          setOpen(false);
+          if (inFlight.current) return;
+          controller.choose(id);
+          launch(id);
+        }}
+        anchor={
+          <div className={css.split} data-dashboard-action="open-editor">
             <button
               type="button"
-              className={css.chevron}
-              aria-expanded={open}
-              aria-haspopup="menu"
-              aria-label="Toggle editor menu"
+              className={css.main}
+              data-state={phase}
+              disabled={phase === 'busy'}
+              aria-label={buttonLabel}
+              title={buttonLabel}
               onClick={() => {
-                setOpen((prev) => !prev);
+                launch(currentAppId);
               }}
             >
-              <IconChevronDownOutline14 size={12} />
+              <AppIcon id={currentAppId} url={controller.iconUrl(currentAppId)} size={16} />
+              <span>{buttonLabel}</span>
             </button>
-          )}
-        </div>
-      }
-    />
+            {validApps.length > 1 && (
+              <button
+                type="button"
+                className={css.chevron}
+                aria-expanded={open}
+                aria-haspopup="menu"
+                aria-label={t('dashboard.editorMenu')}
+                disabled={phase === 'busy'}
+                onClick={() => {
+                  setOpen((prev) => !prev);
+                }}
+              >
+                <IconChevronDownOutline14 size={12} />
+              </button>
+            )}
+          </div>
+        }
+      />
+    </div>
   );
 }

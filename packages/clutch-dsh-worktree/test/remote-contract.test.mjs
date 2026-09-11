@@ -18,6 +18,7 @@ const worktree = {
 
 test('publishes the browser-safe Worktree Manager method names', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'updateWorktreeInstructions',
     'listWorktrees',
     'listImportCandidates',
     'listBranches',

@@ -202,6 +202,25 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
           record={dashboardRecord}
+          onSaveInstructions={
+            props.manager && !isMainWorktreeId(dashboardRecord.worktreeId)
+              ? async (instructions, expectedInstructions) => {
+                  try {
+                    return await props.manager!.updateWorktreeInstructions({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      instructions,
+                      expectedInstructions,
+                    });
+                  } finally {
+                    void read.refresh({
+                      preserveCurrent: true,
+                      scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId },
+                    });
+                  }
+                }
+              : undefined
+          }
           workspaceTitle={dashboardWorkspace?.title ?? ''}
           sessions={source.sessions}
           sessionIds={dashboardSessionIds(

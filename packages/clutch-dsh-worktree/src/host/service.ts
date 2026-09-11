@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import { registerWorktreeInstructions, type WorktreeInstructionHost } from './worktree-instructions.js';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 
 import type {
@@ -85,6 +86,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
       subprocess,
     });
     this.manager = manager;
+    registerWorktreeInstructions(
+      ctx as unknown as WorktreeInstructionHost,
+      (sessionId) => manager.resolveSessionInstructions(sessionId),
+      () => disposed,
+    );
     ctx.effect(
       () => () => this.manager.close(),
       'clutch-dsh-worktree: Host manager cleanup',
@@ -123,6 +129,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  updateWorktreeInstructions(input: {
+    workspaceId: string;
+    worktreeId: string;
+    instructions: string;
+    expectedInstructions: string;
+  }): Promise<WorktreeRemoteResult<string>> {
+    return this.remote.updateWorktreeInstructions(input);
+  }
+
   @Remote
   listWorktrees(input: {
     readonly workspaceId: string;

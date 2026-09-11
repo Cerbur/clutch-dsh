@@ -2,8 +2,8 @@
 
 `@cerbur/clutch-dsh-worktree` 为 DSH Web UI 增加 Git Worktree 视图，按
 Workspace → Worktree → Session 组织会话，同时继续由 DSH 作为 Project/Workspace 身份、
-Session 元数据、原生列表和会话历史的唯一事实来源。插件只保存 Worktree/Session 的外部
-关系元数据。
+Session 元数据、原生列表和会话历史的唯一事实来源。插件在自己的 sidecar 中保存
+Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree 指令。
 
 ## 界面截图
 
@@ -239,7 +239,23 @@ create/bind/open 流程，保留空白会话复用与失败恢复。
 在 VS Code 中打开使用编码后的 `vscode://file/...` 链接打开记录中的 cwd；浏览器所在机器
 须安装 VS Code 且能访问该路径，浏览器可能要求确认打开应用。链接不核验目录是否存在或
 应用是否成功启动。
-Git 详情、派生 Worktree、设置、共享指令及其他标记的快捷操作仍为占位。界面跟随 DSH
+在 Worktree 指令卡片中点击**编辑**，可编辑、保存或清空共享指引（最多 32,000 个 UTF-16
+code units）。内容保存在插件 sidecar，不写入 AGENTS.md；保存后通过 DSH `agent/pre-step`，
+以独立的 `<system-reminder>` 上下文记录进入会话轨迹和下一次模型请求。
+消息由 DSH 记录，不重写已有历史。
+指令内容按原文插入，其中的 `{{...}}` 示例不会被当作模板变量解析。
+归档保留 active binding 和指令；detached binding、清理磁盘或移出管理后停止注入。
+清空或失去 binding 后，下一步追加提醒使旧指令失效。指令未变且消息仍可见时不重复注入，
+重启后也会去重；压缩移除后按需重新注入。保存失败保留草稿，并发编辑会被拒绝；
+取消并重新打开可加载最新内容后重试。
+
+新建 Worktree 显示记录的创建时间和创建时所选基线分支。导入的 Worktree 显示登记时间，
+不推测原始创建时间或基线；旧记录缺少这些事实时显示**未知**。基线是创建时的分支名，
+不代表当前 merge-base 或领先/落后计算，checkout 不会修改它。
+Open-editor 分体按钮对齐 DSH 原生样式，并提供主机检测到的应用菜单；不可用时回退到上文
+说明的 VS Code 协议链接。
+
+Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位。界面跟随 DSH
 主题，窄屏下卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。
 
 ### 创建 Worktree
