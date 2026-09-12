@@ -42,7 +42,23 @@ export const en = {
     'Settings changed externally. Your draft is preserved. Copy it if needed, then cancel and reopen to edit the latest version.',
   history:
     'Changes apply to future title generation or explicit refresh. Existing titles are not rewritten.',
+  tokenStats: 'Token usage',
+  statsTotalCalls: 'Generations',
+  statsInputTokens: 'Input tokens',
+  statsOutputTokens: 'Output tokens',
+  statsTotalTokens: 'Total tokens',
+  statsRecent: 'Recent generation',
+  statsRecentInput: 'Input',
+  statsRecentOutput: 'Output',
+  statsRecentTotal: 'Total',
+  statsRecentCacheRead: 'cache read',
+  statsRecentCacheWrite: 'cache write',
+  statsRecentThinking: 'thinking',
+  statsReset: 'Reset',
+  statsResetConfirm: 'Reset token usage statistics to zero?',
+  statsEmpty: 'No model requests recorded yet.',
 } as const;
+
 export const zh: Record<keyof typeof en, string> = {
   nav: '会话标题',
   intro: '为新会话选择合适的标题格式。',
@@ -84,5 +100,21 @@ export const zh: Record<keyof typeof en, string> = {
   help: '在 template 中使用 ${field} 占位符。llm-enum 的 values 支持字符串或 { value, description }，用 description 说明何时选择该值。保存时校验 YAML 和字段。',
   stale: '设置已被外部修改，草稿已保留。需要时先复制草稿，再取消并重新打开，基于最新版本编辑。',
   history: '修改用于后续标题生成或显式刷新，不会重写已有标题。',
+  tokenStats: 'Token 消耗统计',
+  statsTotalCalls: '累计生成次数',
+  statsInputTokens: '输入 Token',
+  statsOutputTokens: '输出 Token',
+  statsTotalTokens: '总消耗 Token',
+  statsRecent: '最近一次生成',
+  statsRecentInput: '输入',
+  statsRecentOutput: '输出',
+  statsRecentTotal: '总消耗',
+  statsRecentCacheRead: '缓存读取',
+  statsRecentCacheWrite: '缓存写入',
+  statsRecentThinking: '思考',
+  statsReset: '重置统计',
+  statsResetConfirm: '确定要清零 Token 消耗统计吗？',
+  statsEmpty: '暂无模型调用消耗记录。',
 };
+
 export type Translate = (key: keyof typeof en) => string;

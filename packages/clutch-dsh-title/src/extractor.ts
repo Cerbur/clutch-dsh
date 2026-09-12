@@ -13,6 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-session-title';
 import { selectReferencedFields, validateExtractedFields } from './fields.js';
 import { frameBoundedInput } from './input.js';
+import { normalizeTokenUsage } from './types.js';
 import type { ExtractedLlmFields, ResolvedTitleConfig, TitleFieldConfig } from './types.js';
 
 type DynamicField = Extract<TitleFieldConfig, { kind: 'llm-enum' | 'llm-text' }>;
@@ -217,6 +218,12 @@ export async function extractLlmFields(
   } catch (error) {
     throw new Error('clutch-dsh-title: structured extraction was not valid JSON', { cause: error });
   }
+  const usage = assembler.usage === undefined ? undefined : normalizeTokenUsage(assembler.usage);
+
   const values = validateExtractedFields(fields, candidate);
-  return deepFreeze({ values, model: route });
+  return deepFreeze({
+    values,
+    model: route,
+    ...(usage !== undefined ? { usage: deepFreeze(usage) } : {}),
+  });
 }

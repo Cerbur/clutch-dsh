@@ -23,6 +23,7 @@ export const EMOJI_TEMPLATE = stringify({
     desc: { ...DEFAULT_PRESET.fields.desc, maxCharacters: 1024 },
   },
 });
+
 const MAX_TEMPLATE_LENGTH = 65536;
 
 export interface TemplateRow {
