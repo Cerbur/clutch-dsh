@@ -2,26 +2,22 @@
 
 ## 功能介绍
 
-`@cerbur/clutch-dsh-title` 通过 DSH 原生 `@deepseek-ai/dsh-session-title` seam 和 `ctx.sessionTitle` 替换默认的 `session-title-first-prompt-llm` provider。它只从首条 eligible prompt 提取语义字段，再根据经过校验的 template 以 deterministic 方式生成最终 title。
+为新的 DSH 会话自动生成简洁、易读的标题。在 **设置 → 会话标题** 中选择现成样式，或创建自己的格式。标题可以组合会话日期、emoji 或分类、固定文字，以及对首条 prompt 的简短描述，结果会直接显示在 DSH 原生会话列表中，方便快速浏览。
 
-![默认 deterministic title 流程](assets/screenshots/title-default.svg)
+![DSH 中的会话标题列表](assets/screenshots/session-title-list.png)
 
-默认 title 形态是 `0904|功能|优化 session title 生成规则`：按 timezone 计算的 session 创建日期、LLM 选择的任务类型，以及对首次 prompt 的简短描述。
+例如，标题可以是 `0912 | 🚀 | add token statistics`。激活前可以先预览样式，也可以随时切回 DSH 自带的标题生成方式。
 
 ## 能力
 
-- 提供不可修改的内置 `default` 模板，以及支持开放字段命名的用户模板。
-- 新设置预置可编辑的 `emoji` 模板，支持复制任意模板，并在每行展示标题格式样例。
-- **设置 → 会话标题** 支持新增、编辑、删除、激活模板，或关闭自定义以使用 DSH 原生首条消息标题生成。
-- 数据实时存储于 `$DSH_HOME/settings.yaml`；非法模板保留展示，当前模板非法或缺失时降级到 `default`。
-- field kind 固定为 `datetime`、`literal`、`llm-enum` 和 `llm-text`。
-- 模板实际引用的 `llm-*` 字段去重后合并为一次 structured JSON LLM request；仅含 `datetime`、`literal` 或纯文本的模板不调用模型。
-- 长首条消息在输入字节预算内保留首尾，并明确标记中段省略。
-- template DSL 只支持 `${identifier}`；函数、路径、条件、表达式和代码执行都会被拒绝。
-- 管理的模板非法时使用 `default`；extraction 失败、取消、超时、空输出、tool call 和非 stop finish 使用 DSH 原生 fallback。
-- `maxTitleBytes`、persistence、rename pin、refresh、fork inheritance、取消和 stale-result protection 仍由 DSH 负责。
-- 不批量迁移已有 session；新配置在 native service 执行 explicit refresh 时才影响重新生成。
-- 本 plugin 只注册一个 native session-title provider；同一 context 不要重新启用默认 provider，也不要安装另一个 title provider。
+- 使用内置的 `default` 样式，或为不同类型的工作创建命名模板。
+- 新设置会提供可编辑的 `emoji` 模板。
+- 在模板行中预览标题样例，并复制、编辑、保存、激活或删除模板。
+- 用日期、固定文字、受控分类或首条 prompt 的简短描述组合标题。
+- 通过一个开关启用或关闭标题模板；关闭后恢复 DSH 自带的首条 prompt 标题生成。
+- 在设置中查看标题生成的 Token 用量和最近一次生成明细，并支持重置统计。
+- 非法模板会保留以便修复；标题无法生成时会安全回退。
+- 已有标题不会自动改变，只有显式刷新后才会重新生成；插件不会批量改写历史 session。
 
 ## 安装
 
@@ -34,154 +30,86 @@ npm install @cerbur/clutch-dsh-title
 dsh plugin --profile web add @cerbur/clutch-dsh-title
 ```
 
-package 需要 DSH runtime peer `>=0.1.2-rc.1`，包括 `@deepseek-ai/dsh-session-title`、`@deepseek-ai/dsh-session-title-llm`、`@deepseek-ai/dsh-llm` 和 `@deepseek-ai/dsh-session`。
+需要 DSH `>=0.1.2-rc.1`。
 
 ### 源码 checkout
 
-在本地 `clutch-dsh` checkout 中安装 workspace 依赖，然后加入 plugin 目录：
+进行本地开发时，先安装 workspace 依赖，再加入 plugin 目录：
 
 ```bash
 pnpm install
 dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
 ```
 
-package 包含 Host 和 browser 入口，通过 `cordis.patch.yml` 和 DSH client loader 挂载。设置页面依赖原生 settings、settings UI、locale 和 API remotes；没有 settings 的 Host-only 组合保留 Cordis 配置行为。
-
 ## 详细使用
 
-### 模板管理
+### 打开标题设置
 
-新设置会预置可编辑的 `emoji` 模板：格式为 `MMDD | 🎨 | 描述`，任务类型取值为 🎨 / 🔍 / 🚀 / 🔧 / ♻️ / 📦，并设置 `desc.maxCharacters: 1024`。默认仍选中 `default`。预置模板作为继承配置提供，保存模板改动后写入 `$DSH_HOME/settings.yaml`；已有模板映射或旧 Cordis 模板会保留。可以编辑或删除 `emoji`，删除后不会重新出现。
+1. 启动 DSH Web UI。
+2. 打开 **设置 → 会话标题**。
+3. 保持 **使用标题模板** 开启，选择一个模板并点击 **激活**。
+4. 创建新的 session，在标题中查看所选格式。
 
-点击任意模板行（包括 `default`）的**复制**，会打开包含该行 YAML 的新草稿。填写唯一名称后保存；保存不会自动激活副本。非法模板也可复制后修复，但必须通过校验才能保存。
+页面会展示当前格式、实时样例、模板列表和标题生成 Token 用量：
 
-每行新增**样例**标题，编辑时同步更新。样例使用当前日期及模板时区、literal 值、枚举首个候选项和受 `maxCharacters` 限制的示例文本，不调用模型；真实语义字段与 DSH 最终字节上限可能使实际标题不同。非法 YAML 会显示无法展示。
+![会话标题设置与模板管理](assets/screenshots/title-settings.png)
 
-打开 **设置 → 会话标题**。**新增模板** 会复制 `default`；填写唯一名称、编辑 YAML，然后 **保存**、**激活**。保存新模板不会自动激活。`default` 可以查看和选择，但不能编辑或删除。删除已选择的模板会选择 `default`。关闭 **使用标题模板** 后保留模板及选择，并调用 DSH 原生首条消息 LLM 标题生成器。
+### 选择和管理模板
 
-![会话标题模板管理](assets/screenshots/template-manager.png)
+新设置包含可编辑的 `emoji` 模板，使用日期、emoji 分类和描述。内置的 `default` 模板初始处于选中状态。可以编辑或删除 `emoji`；删除后不会自动重新出现。
 
-模板以紧凑列表展示状态和操作，点击编辑或查看即可就地展开编辑器。
-面板跟随 DSH 浅色/深色主题，并适配窄屏。编辑器打开期间会锁定生成开关，
-避免切换开关导致自己的草稿版本过期。
+- 点击任意模板行（包括 `default`）的**复制**，用相同格式开始新模板。
+- 为副本填写唯一名称、编辑内容并点击**保存**。保存不会自动激活。
+- 需要使用已保存的模板时，点击**激活**。
+- 内置的 `default` 模板可以查看和选择，但不能编辑或删除。
+- 删除当前激活的模板后会选择 `default`。
+- 每行会展示编辑时实时更新的**样例**标题。样例不调用模型，因此实际标题可能不同。
 
-多行编辑器仅接受 `template` 和可选的 `fields`，不填写 `preset`。保存校验 YAML 语法、重复键、`${identifier}` 引用、字段类型、日期/时区格式和枚举/文本约束。名称为 1–64 个字母、数字、空格、下划线或连字符，以字母或数字开头。`default`、`constructor`、`prototype`、`__proto__` 为保留名称。模板文本最多 65536 个字符。字段按名称继承内置字段，覆盖时替换整个定义。
+### 创建自定义格式
 
-唯一数据源是 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`，或 DSH settings provider 配置的文件）中的 `clutch-dsh-title` 命名空间，不使用 browser storage 或 `clutch.yaml`：
-
-```yaml
-clutch-dsh-title:
-  enabled: true
-  active: personal
-  templates:
-    personal: |
-      template: '${daytime}|${desc}'
-```
-
-DSH watcher 接收外部编辑。非法模板保留展示错误、禁止激活。当前选择非法或缺失时使用 `default`；修复并保存后恢复该选择。外部 `default` 覆盖被忽略。容器配置非法时展示诊断并使用安全默认值。整个 YAML 文档损坏时，DSH 在热更新中保留最后可读取的文档。
-
-页面发送写入前执行校验；存储 schema 有意接受外部非法条目，使其仍可修复。运行时生成再次校验。写入保留其他条目并携带 `expectedRevision`；过期保存返回 `settings/conflict`。收到外部更新后保留草稿并要求重新打开编辑器。DSH 在文件 watcher 接收外部编辑前存在竞态窗口，请避免同时手工编辑文件与页面保存。只读 settings 禁用写入。
-
-### 既有 Cordis 配置
-
-bundle patch 会按精确的 id/name 禁用名为 `@deepseek-ai/dsh-session-title-first-prompt-llm` 的 DSH entry，再插入 `preset: default` 的本 plugin。title subsystem 仍只有 native service。
-
-既有 Cordis 覆盖继续支持。组合 settings 时，显式 `template`/`fields` 覆盖成为继承的可编辑 `legacy` 模板，不会修改 `default`。存储的 templates 映射替换继承的映射。模型路由和请求预算仍使用 Cordis 配置。默认 Cordis 配置如下：
+编辑器接受 `template` 和可选的 `fields`，占位符只使用简单的 `${identifier}` 形式。例如：
 
 ```yaml
-preset: default
-
-template: '${daytime}|${type}|${desc}'
-
+template: '${daytime} | ${desc}'
 fields:
   daytime:
     kind: datetime
     source: session.createdAt
     format: MMDD
     timezone: Asia/Shanghai
-
-  type:
-    kind: llm-enum
-    instruction: 判断这个 session 的任务类型
-    values:
-      - value: 设计
-        description: 明确需求、制定实现方案，或设计架构、接口和交互时使用
-      - value: 探索
-        description: 理解代码、调研技术、分析问题或验证可行性，主要目标是获得结论时使用
-      - value: 功能
-        description: 新增此前不存在的能力，或扩展现有功能的使用场景时使用
-      - value: 修复
-        description: 纠正缺陷、排查并解决故障，或恢复预期行为时使用
-      - value: 优化
-        description: 在保持现有功能含义的基础上，改善性能、体验、结构或可维护性时使用
-      - value: 发布
-        description: 准备版本、编写发布说明、打包、部署或执行上线流程时使用
-
   desc:
     kind: llm-text
-    instruction: 总结首次 prompt，保留具体任务含义
+    instruction: Summarize the first prompt in a few words
     maxCharacters: 32
 ```
 
-field definition 按 field name 合并，但每次覆盖会替换整个 field definition。例如可以使用任意 field name 和受控的 values：
+`datetime` 用于会话日期，`literal` 用于固定文字，`llm-enum` 用于受控选项列表，`llm-text` 用于简短描述。保存前会校验占位符、日期、时区、枚举选项和文本长度。不支持函数、表达式、条件或代码执行。
 
-`llm-enum.values` 中每项可以是字符串，也可以是包含非空 `value` 和 `description` 的对象，两种写法可以混用。`description` 告诉模型何时选择该值，标题只输出 `value`。规范化后的值不能重复。非法项会阻止保存和激活；从磁盘读取的当前模板非法时回退到 `default`。
+保存的模板位于 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`）的 `clutch-dsh-title` 部分。该文件是唯一数据源，不使用 browser storage 或 `clutch.yaml`。外部编辑会被 DSH 读取，非法条目会保留以便修复。
 
-```yaml
-preset: default
-template: '${daytime}|${kind}|${desc}'
-fields:
-  kind:
-    kind: llm-enum
-    instruction: 判断任务是优化、功能还是修复
-    values:
-      - value: 优化
-        description: 改进已有功能的性能、体验或结构时使用
-      - value: 功能
-        description: 新增此前不存在的能力时使用
-      - value: 修复
-        description: 纠正错误或恢复预期行为时使用
-  desc:
-    kind: llm-text
-    instruction: 总结首次 prompt
-    maxCharacters: 32
-```
+### 理解更新和回退
 
-只解析 compiled template 实际引用的字段。同一字段重复引用时只提取一次，所有被引用的 LLM 字段合并为一次 JSON-framed request。例如 `${daytime}|${desc}|${desc}` 只请求 `desc`，不要求模型返回继承的 `type`。`${daytime}` 或仅含 literal 的模板不调用模型，也不写入 `session/title-llm-request` event。所有字段定义（包括未使用和继承的字段）仍执行配置合法性校验。
+- 标题使用首条符合条件的用户 prompt，后续消息不会自动替换标题。
+- 新保存的格式会在新生成或显式刷新时生效；已有 session 不会批量迁移。
+- 当前模板非法或缺失时回退到 `default`；字段提取或标题生成失败时使用 DSH 原生标题生成器。
+- 关闭 **使用标题模板** 会保留模板和选择，但改用 DSH 自带的首条 prompt 生成器。
+- 首条 prompt 过长时，会在配置的输入预算内保留开头和结尾进行裁剪；不会使用后续对话生成标题。
+- 标题长度限制、持久化、重命名固定、刷新和 fork 行为继续由 DSH 负责。
 
-模型只返回字段；renderer 负责插入 deterministic 值和 literal separator。renderer 不执行 template 内容，field validation 会在渲染前 trim、清理控制字符，并校验 enum membership 或 Unicode character limit。
+### Token 用量
 
-### 标题思考强度
+设置页面提供标题生成的 Token 用量概览：
 
-当未配置 Cordis `reasoningEffort` 时，插件会自动适配所选模型：通过 `ctx.llm.resolveModelInfo` 查询其元数据，并自动选取其支持的最低思考档位（`efforts` 列表首项，例如 DeepSeek 官方模型的 `off` 或 Gemini 模型的 `low`）。若模型未声明思考能力或元数据解析失败，则不传递 `reasoningEffort`。
+- **累计生成次数**统计带有有效用量数据的标题模型调用，包括 DSH fallback 调用。
+- **输入、输出和总 Token**展示累计用量；如果可用，还会展示最近一次调用的缓存和思考明细。
+- **重置统计**在确认后清空已保存的概览。
 
-用户可在 Cordis 中显式配置 `reasoningEffort` 为所选 provider/model 支持的其他非空 ID，或显式设置 `reasoningEffort: null` 以省略该参数、使用适配器默认值。不支持的强度可能以 `UNSUPPORTED_REASONING_EFFORT` 失败并进入原生标题 fallback；插件不会换用其他强度重试。
+只使用日期或固定文字的确定性格式不会调用模型，也不会计入统计。
 
-这是插件级 Cordis 配置，不属于模板 YAML，也不在模板管理器中设置；切换模板后仍然生效。实际思考行为取决于 DSH 适配器与模型。特别是 pi-ai 可能通过省略 reasoning 参数实现 `off`，因此不能保证上游模型停止思考。该配置仅在启用标题模板时生效，不修改主会话请求或关闭模板时使用的原生生成器。原生 `session/title-llm-request` 事件 schema 保持不变，不记录思考强度。
+### 既有 Cordis 配置
 
-### Token 消耗统计
+如果 DSH profile 已经通过 Cordis 提供标题配置，原有的 `template` 和 `fields` 仍然有效。启用设置页面后，它们会作为可编辑的 legacy 模板出现。模型路由和可选的思考设置仍属于 profile 级配置，不是模板字段。
 
-设置面板（**设置 → 会话标题**）提供了 Token 消耗统计看板：
-
-- **累计生成次数**：报告有效 Usage 指标的标题模型调用总次数，包括 DSH 原生 fallback 调用。
-- **输入 / 输出 / 总消耗 Token**：模型调用的累计统计；输入包含未缓存输入、cache-read 和 cache-write 三类 Token，总计遵循 adapter 报告的完整调用总数。
-- **最近一次生成明细**：展示最近一次调用的消耗（聚合输入、输出、总计、可选缓存分桶、思考 Token 及生成时间）。
-- **重置统计**：支持确认后一键清零统计数据。
-
-在实现上，plugin 观察所有 `purpose` 为 `session-title` 的 LLM stream，因此同时覆盖自定义字段提取和 DSH 原生 fallback，且不会阻塞标题交付。只有 Usage 指标有效的调用才会计入统计；仅包含确定性字段（如 `datetime`、`literal`）的纯确定性模板由于无需调用大模型，不会计入看板。统计数据通过官方 DSH `storageDomain` 能力（`clutch_title_stats` 域）独立持久化存储，与 `settings.yaml` 配置彻底解耦。查询与重置操作通过 Typert Remote RPC（`titleStats` 命名空间）暴露给前端，底层写入操作经内部队列串行化处理，避免并发生成标题时的 CAS 版本冲突、重试开销以及高频写入造成的配置污染与写放大。Token 统计主要用于让用户知晓模型用量概况，而非实时账单确认；设置看板在面板加载、手动点击刷新或重置时拉取最新数据，未维护高频后台实时推送流。
-
-### 长首条消息与输入预算
-
-Cordis `maxInputBytes` 默认为 `4096`，约束实际发送给模型的完整 JSON-framed user input，包括 framing 指令、`seq`、JSON 转义和裁剪元数据；不包括独立的 system 指令和模型传输封装。短输入的原有 framing 和文本保持不变。
-
-输入超限时，plugin 去掉外部空白，保留首条 eligible prompt 的首尾。预留 framing 和标记开销后，按 JSON 转义后的 UTF-8 bytes 将剩余预算尽量均分给首尾，并将余量用于另一端。序列化的消息条目带有 `truncated: true`，省略的中段替换为 `\n[...middle omitted...]\n`。裁剪保留完整 Unicode 码点（包括代理对），但可能拆开组合 emoji 或其他字素簇。最后再次校验完整输入不超过字节上限。
-
-首尾保留兼顾开头背景和末尾要求；中段细节会丢失，标题准确性可能下降。不进行模型摘要、不增加模型调用，也不读取后续对话。首尾各需保留至少一个非空白的原文码点；预算不足以容纳这种有效标记输入时，抛出 `maxInputBytes` 错误并使用原生 fallback。
-
-`session/title-llm-request` event 记录实际发送给模型的完整裁剪后 payload；`messageSeqs` 保留原始来源序号。原始 session 消息不会被修改。DSH 原生自动调度仍会等待 request header，确定性模板也遵循该规则；显式 refresh 可在没有模型路由时渲染这种模板。
-
-如果 extraction 失败，provider 会抛错，由 `ctx.sessionTitle` 使用 DSH 原生 fallback。native `rename()` 仍会 pin 用户 title，后续自动生成不能覆盖；native `refresh()` 仍是显式重新推导操作。title 和 `session/title-llm-request` event 使用 DSH persistence，并由 native fork 继承。配置变化不会重写历史 title event，也不会触发批量 rename。
-
-同一 context 只能注册一个 provider。启用本 package 时请保持默认 provider disabled，也不要和另一个同样注册 `ctx.sessionTitle` 的 provider 组合。
+启用本 package 时请保持 DSH 默认标题 provider 关闭，也不要在同一 profile 中安装另一个 title provider。
 
 package-specific release 参数见 [`docs/RELEASING.md`](docs/RELEASING.md)，公开 release history 见 [`RELEASE-LOG.md`](RELEASE-LOG.md)。

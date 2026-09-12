@@ -30,8 +30,13 @@ test('English and Chinese README files keep the public documentation contract al
   assert.ok(readme.indexOf('## Feature overview') < readme.indexOf('## Capabilities'));
   assert.ok(readme.indexOf('## Capabilities') < readme.indexOf('## Installation'));
   assert.ok(readme.indexOf('## Installation') < readme.indexOf('## Usage'));
-  assert.ok(readme.includes('assets/screenshots/title-default.svg'));
-  assert.ok(readmeZh.includes('assets/screenshots/title-default.svg'));
+  for (const screenshot of [
+    'assets/screenshots/session-title-list.png',
+    'assets/screenshots/title-settings.png',
+  ]) {
+    assert.ok(readme.includes(screenshot), `English README is missing ${screenshot}`);
+    assert.ok(readmeZh.includes(screenshot), `Chinese README is missing ${screenshot}`);
+  }
   assert.ok(readme.includes('dsh plugin --profile web add @cerbur/clutch-dsh-title'));
   assert.ok(readmeZh.includes('dsh plugin --profile web add @cerbur/clutch-dsh-title'));
   assert.ok(
@@ -50,15 +55,13 @@ test('English and Chinese README files keep the public documentation contract al
   assert.ok(!/0\.1\.0/.test(readmeZh));
 
   const requiredKeys = [
-    'preset',
     'template',
     'fields',
     'daytime',
-    'type',
     'desc',
     'kind',
+    'source',
     'instruction',
-    'values',
     'maxCharacters',
     'format',
     'timezone',
