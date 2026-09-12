@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { Button, Input, IconPlusOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { DEFAULT_TEMPLATE, validateTemplate } from '../templates.js';
+import { DEFAULT_TITLE_STATS } from '../types.js';
 import type { TemplateAction } from '../templates.js';
 import type { TemplateStore } from './store.js';
 import type { Translate } from './locales.js';
@@ -28,6 +29,7 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [resettingStats, setResettingStats] = useState(false);
   const [previewTimestamp] = useState(() => Date.now());
   const helpId = useId();
   const validationId = useId();
@@ -36,6 +38,12 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
   }, [controller]);
   const locked = !state.writable || state.busy;
   const stale = draft !== null && draft.revision !== state.revision;
+  const stats = state.stats ?? DEFAULT_TITLE_STATS;
+  const effectiveRow = state.templates.rows.find((row) => row.id === state.templates.effective);
+  const effectiveExpanded =
+    draft !== null && !draft.create && draft.id === state.templates.effective;
+  const effectiveSource = effectiveExpanded ? draft.source : (effectiveRow?.source ?? '');
+  const effectivePreview = previewTemplate(effectiveSource, t('sampleText'), previewTimestamp);
   let validation = '';
   if (draft && draft.id !== 'default') {
     try {
@@ -52,6 +60,7 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
       setNotice(t('saved'));
       if (action.kind === 'save' || action.kind === 'create') setDraft(null);
       setDeleting(null);
+      setResettingStats(false);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
     }
@@ -147,31 +156,158 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
         <h2>{t('nav')}</h2>
         <p>{t('intro')}</p>
       </header>
-      <div className="clutch-title-preference">
-        <div className="clutch-title-preference-copy">
-          <label htmlFor={`${helpId}-enabled`}>{t('enabled')}</label>
-          <p>{t('native')}</p>
+      <article className="clutch-title-stats-card" aria-label={t('tokenStats')}>
+        <div className="clutch-title-stats-header">
+          <div>
+            <h3>{t('tokenStats')}</h3>
+            {stats?.lastUsage ? (
+              <div className="clutch-title-stats-recent">
+                <span>
+                  {t('statsRecent')}: {t('statsRecentInput')}{' '}
+                  {stats.lastUsage.inputTokens.toLocaleString()} · {t('statsRecentOutput')}{' '}
+                  {stats.lastUsage.outputTokens.toLocaleString()} ({t('statsRecentTotal')}{' '}
+                  {stats.lastUsage.totalTokens.toLocaleString()})
+                  {stats.lastUsage.reasoningTokens !== undefined && (
+                    <>
+                      {' '}
+                      · {t('statsRecentThinking')}{' '}
+                      {stats.lastUsage.reasoningTokens.toLocaleString()}
+                    </>
+                  )}
+                  {stats.lastUsage.cacheReadTokens !== undefined && (
+                    <>
+                      {' '}
+                      · {t('statsRecentCacheRead')}{' '}
+                      {stats.lastUsage.cacheReadTokens.toLocaleString()}
+                    </>
+                  )}
+                  {stats.lastUsage.cacheWriteTokens !== undefined && (
+                    <>
+                      {' '}
+                      · {t('statsRecentCacheWrite')}{' '}
+                      {stats.lastUsage.cacheWriteTokens.toLocaleString()}
+                    </>
+                  )}
+                  {stats.lastUsage.timestamp > 0 && (
+                    <span
+                      className="clutch-title-stats-recent-time"
+                      title={new Date(stats.lastUsage.timestamp).toLocaleString()}
+                    >
+                      {' '}
+                      · {new Date(stats.lastUsage.timestamp).toLocaleTimeString()}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="clutch-title-stats-empty">{t('statsEmpty')}</div>
+            )}
+          </div>
+          <div className="clutch-title-actions">
+            {!resettingStats && (
+              <Button
+                size="sm"
+                disabled={state.busy || !controller.canResetStats || stats?.totalCalls === 0}
+                onClick={() => setResettingStats(true)}
+              >
+                {t('statsReset')}
+              </Button>
+            )}
+          </div>
         </div>
-        <input
-          id={`${helpId}-enabled`}
-          className="clutch-title-switch"
-          type="checkbox"
-          role="switch"
-          checked={state.templates.enabled}
-          disabled={locked || draft !== null}
-          onChange={(event) => {
-            void act({ kind: 'enabled', enabled: event.target.checked });
-          }}
-        />
-      </div>
-      <div className="clutch-title-current">
-        <span
-          className="clutch-title-status-dot"
-          data-enabled={state.templates.enabled}
-          aria-hidden="true"
-        />
-        {t('effective')}
-        <strong>{state.templates.enabled ? state.templates.effective : t('nativeMode')}</strong>
+        {resettingStats && (
+          <div className="clutch-title-confirm" role="group" aria-label={t('statsResetConfirm')}>
+            <p>{t('statsResetConfirm')}</p>
+            <div className="clutch-title-actions">
+              <Button size="sm" onClick={() => setResettingStats(false)}>
+                {t('cancel')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="clutch-title-delete"
+                disabled={state.busy || !controller.canResetStats}
+                onClick={async () => {
+                  setFailure('');
+                  setNotice('');
+                  try {
+                    await controller.resetStats();
+                    setNotice(t('saved'));
+                    setResettingStats(false);
+                  } catch (error) {
+                    setFailure(error instanceof Error ? error.message : String(error));
+                  }
+                }}
+              >
+                {t('statsReset')}
+              </Button>
+            </div>
+          </div>
+        )}
+        <div className="clutch-title-stats-grid">
+          <div className="clutch-title-stat-item">
+            <span className="clutch-title-stat-label">{t('statsTotalCalls')}</span>
+            <span className="clutch-title-stat-value">
+              {(stats?.totalCalls ?? 0).toLocaleString()}
+            </span>
+          </div>
+          <div className="clutch-title-stat-item">
+            <span className="clutch-title-stat-label">{t('statsInputTokens')}</span>
+            <span className="clutch-title-stat-value">
+              {(stats?.totalInputTokens ?? 0).toLocaleString()}
+            </span>
+          </div>
+          <div className="clutch-title-stat-item">
+            <span className="clutch-title-stat-label">{t('statsOutputTokens')}</span>
+            <span className="clutch-title-stat-value">
+              {(stats?.totalOutputTokens ?? 0).toLocaleString()}
+            </span>
+          </div>
+          <div className="clutch-title-stat-item">
+            <span className="clutch-title-stat-label">{t('statsTotalTokens')}</span>
+            <span className="clutch-title-stat-value">
+              {(stats?.totalTokens ?? 0).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </article>
+      <div className="clutch-title-preference">
+        <div className="clutch-title-current">
+          <div className="clutch-title-current-header">
+            <h3 className="clutch-title-current-title">{t('effective')}</h3>
+            <span
+              className="clutch-title-status-dot"
+              data-enabled={state.templates.enabled}
+              aria-hidden="true"
+            />
+            <strong className="clutch-title-current-name">
+              {state.templates.enabled ? state.templates.effective : t('nativeMode')}
+            </strong>
+          </div>
+          {state.templates.enabled && (
+            <p className="clutch-title-preview" title={t('sampleHelp')}>
+              <span>{t('sample')}: </span>
+              {effectivePreview === null ? t('sampleInvalid') : <code>{effectivePreview}</code>}
+            </p>
+          )}
+        </div>
+        <div className="clutch-title-preference-row">
+          <div className="clutch-title-preference-copy">
+            <label htmlFor={`${helpId}-enabled`}>{t('enabled')}</label>
+            <p>{t('native')}</p>
+          </div>
+          <input
+            id={`${helpId}-enabled`}
+            className="clutch-title-switch"
+            type="checkbox"
+            role="switch"
+            checked={state.templates.enabled}
+            disabled={locked || draft !== null}
+            onChange={(event) => {
+              void act({ kind: 'enabled', enabled: event.target.checked });
+            }}
+          />
+        </div>
       </div>
       {state.status === 'idle' && (
         <p className="clutch-title-muted" role="status">

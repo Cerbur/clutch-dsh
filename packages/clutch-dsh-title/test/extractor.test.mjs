@@ -63,11 +63,20 @@ async function runExtraction({
   requestOptions = {},
   streamBody,
   sourceMessages = selectedMessages,
+  resolveModelInfo,
 } = {}) {
   const { request, events } = makeRequest(requestOptions);
   const requests = [];
   const ctx = {
     llm: {
+      resolveModelInfo:
+        resolveModelInfo ??
+        (async (provider, model) => ({
+          provider,
+          id: model,
+          name: model,
+          reasoning: { efforts: [{ id: 'off', name: 'Off' }] },
+        })),
       async *stream(options) {
         requests.push(options);
         events.push({ kind: 'stream' });
@@ -100,6 +109,7 @@ test('builds one structured JSON request and records the native request event fi
   assert.equal(options.sessionId, 'title-session');
   assert.equal(options.purpose, 'session-title');
   assert.equal(options.maxTokens, 512);
+  assert.equal(options.reasoningEffort, 'off');
   assert.notEqual(options.signal, request.signal);
   assert.equal(options.messages.length, 1);
   assert.equal(options.messages[0].role, 'user');
@@ -107,6 +117,7 @@ test('builds one structured JSON request and records the native request event fi
   assert.match(options.messages[0].content[0].text, /JSON array/);
   assert.match(options.messages[0].content[0].text, /请优化 session title 生成规则/);
   assert.match(options.system, /JSON object/i);
+  assert.match(options.system, /Do not think or reason/i);
   assert.match(options.system, /Markdown/i);
   assert.match(options.system, /human messages.*data/i);
   assert.match(options.system, /判断这个 session 的任务类型/);
@@ -234,6 +245,65 @@ test('passes enum usage descriptions to the model but accepts only candidate val
       runExtraction({ config, chunks: textChunks(JSON.stringify({ type, desc: '测试' })) }),
     );
   }
+});
+
+test('passes explicit reasoning effort and omits it for adapter defaults', async () => {
+  const explicit = await runExtraction({ config: makeConfig({ reasoningEffort: 'low' }) });
+  assert.equal(explicit.requests[0].reasoningEffort, 'low');
+  const inherited = await runExtraction({ config: makeConfig({ reasoningEffort: null }) });
+  assert.equal(Object.hasOwn(inherited.requests[0], 'reasoningEffort'), false);
+});
+
+test('automatically selects lowest reasoning effort from model capabilities when unconfigured', async () => {
+  const gemini = await runExtraction({
+    resolveModelInfo: async (provider, model) => ({
+      provider,
+      id: model,
+      name: model,
+      reasoning: {
+        efforts: [
+          { id: 'low', name: 'Low' },
+          { id: 'medium', name: 'Medium' },
+          { id: 'high', name: 'High' },
+        ],
+      },
+    }),
+  });
+  assert.equal(gemini.requests[0].reasoningEffort, 'low');
+
+  const textOnly = await runExtraction({
+    resolveModelInfo: async (provider, model) => ({
+      provider,
+      id: model,
+      name: model,
+    }),
+  });
+  assert.equal(Object.hasOwn(textOnly.requests[0], 'reasoningEffort'), false);
+
+  const resolveFailed = await runExtraction({
+    resolveModelInfo: async () => {
+      throw new Error('resolve failed');
+    },
+  });
+  assert.equal(Object.hasOwn(resolveFailed.requests[0], 'reasoningEffort'), false);
+});
+
+test('does not retry an unsupported effort with thinking enabled', async () => {
+  let calls = 0;
+  await assert.rejects(
+    runExtraction({
+      config: makeConfig({ reasoningEffort: 'unsupported-tier' }),
+      streamBody: async function* () {
+        calls++;
+        const error = new Error('unsupported effort');
+        error.code = 'UNSUPPORTED_REASONING_EFFORT';
+        yield* [];
+        throw error;
+      },
+    }),
+    { code: 'UNSUPPORTED_REASONING_EFFORT' },
+  );
+  assert.equal(calls, 1);
 });
 
 test('uses an explicit provider/model pair when configured', async () => {

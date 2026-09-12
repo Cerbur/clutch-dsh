@@ -151,6 +151,25 @@ fields:
 
 模型只返回字段；renderer 负责插入 deterministic 值和 literal separator。renderer 不执行 template 内容，field validation 会在渲染前 trim、清理控制字符，并校验 enum membership 或 Unicode character limit。
 
+### 标题思考强度
+
+当未配置 Cordis `reasoningEffort` 时，插件会自动适配所选模型：通过 `ctx.llm.resolveModelInfo` 查询其元数据，并自动选取其支持的最低思考档位（`efforts` 列表首项，例如 DeepSeek 官方模型的 `off` 或 Gemini 模型的 `low`）。若模型未声明思考能力或元数据解析失败，则不传递 `reasoningEffort`。
+
+用户可在 Cordis 中显式配置 `reasoningEffort` 为所选 provider/model 支持的其他非空 ID，或显式设置 `reasoningEffort: null` 以省略该参数、使用适配器默认值。不支持的强度可能以 `UNSUPPORTED_REASONING_EFFORT` 失败并进入原生标题 fallback；插件不会换用其他强度重试。
+
+这是插件级 Cordis 配置，不属于模板 YAML，也不在模板管理器中设置；切换模板后仍然生效。实际思考行为取决于 DSH 适配器与模型。特别是 pi-ai 可能通过省略 reasoning 参数实现 `off`，因此不能保证上游模型停止思考。该配置仅在启用标题模板时生效，不修改主会话请求或关闭模板时使用的原生生成器。原生 `session/title-llm-request` 事件 schema 保持不变，不记录思考强度。
+
+### Token 消耗统计
+
+设置面板（**设置 → 会话标题**）提供了 Token 消耗统计看板：
+
+- **累计生成次数**：报告有效 Usage 指标的标题模型调用总次数，包括 DSH 原生 fallback 调用。
+- **输入 / 输出 / 总消耗 Token**：模型调用的累计统计；输入包含未缓存输入、cache-read 和 cache-write 三类 Token，总计遵循 adapter 报告的完整调用总数。
+- **最近一次生成明细**：展示最近一次调用的消耗（聚合输入、输出、总计、可选缓存分桶、思考 Token 及生成时间）。
+- **重置统计**：支持确认后一键清零统计数据。
+
+在实现上，plugin 观察所有 `purpose` 为 `session-title` 的 LLM stream，因此同时覆盖自定义字段提取和 DSH 原生 fallback，且不会阻塞标题交付。只有 Usage 指标有效的调用才会计入统计；仅包含确定性字段（如 `datetime`、`literal`）的纯确定性模板由于无需调用大模型，不会计入看板。统计数据通过官方 DSH `storageDomain` 能力（`clutch_title_stats` 域）独立持久化存储，与 `settings.yaml` 配置彻底解耦。查询与重置操作通过 Typert Remote RPC（`titleStats` 命名空间）暴露给前端，底层写入操作经内部队列串行化处理，避免并发生成标题时的 CAS 版本冲突、重试开销以及高频写入造成的配置污染与写放大。Token 统计主要用于让用户知晓模型用量概况，而非实时账单确认；设置看板在面板加载、手动点击刷新或重置时拉取最新数据，未维护高频后台实时推送流。
+
 ### 长首条消息与输入预算
 
 Cordis `maxInputBytes` 默认为 `4096`，约束实际发送给模型的完整 JSON-framed user input，包括 framing 指令、`seq`、JSON 转义和裁剪元数据；不包括独立的 system 指令和模型传输封装。短输入的原有 framing 和文本保持不变。

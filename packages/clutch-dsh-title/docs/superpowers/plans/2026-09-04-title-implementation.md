@@ -15,6 +15,15 @@ fallback / cancellation / request event 契约保留。
 
 ## Global Constraints
 
+2026-09-11 修订：在 `wt-title-0.1.3/feat-optimize-prompt-thinking` 与 `wt-title-0.1.3/bug-fix-thinking` 中，
+依据 DSH session `session-b555e652-640c-4d6d-b4c0-ae4c843e9e1b` 与 `session-1f00baf1-ff36-410f-8b4d-11bc95db68fd` 补齐
+plugin-only 请求参数控制。未显式配置 Cordis `reasoningEffort` 时，插件自适应所选模型
+元数据，自动选择最低思考档位（`efforts` 列表首项，如 DeepSeek 模型的 `off` 或 Gemini 模型的 `low`）；
+模型不支持思考或解析失败时省略该参数。支持显式配置指定非空 ID，或显式 `null` 表示省略参数。
+不支持的强度沿用原生失败 fallback，不自动换强度重试。通过公开 `ReasoningEffortId` / `GenerateOptions.reasoningEffort` 传递，
+仅作用于模板 extraction，管理模板切换不能覆盖此配置。保留现有 prompt 与原生 request-event
+schema，不修改 DSH 源码、主会话或禁用模板时的原生生成器。
+
 - 所有实现和验证都在 /Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_9127140b-5786-4435-a56d-b24fd813d8d0，也就是 wt-session-0.1.0/release；不修改 /Users/yuancheng/Documents/Code/deepseek-harness 源码。
 - 用户已有的 packages/clutch-dsh-title/docs/superpowers/specs/2026-09-04-title-design.md 必须保留并作为设计 source of truth；若实现必须偏离，先更新该 spec 并在本计划对应任务中记录原因。
 - peer dependency 的 DSH 下界固定为 >=0.1.2-rc.1，不能恢复上限，也不能写成 workspace:*；@deepseek-ai/cordis 固定为 4.0.1。

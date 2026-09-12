@@ -58,6 +58,7 @@ export const TitleConfigSchema: z<TitleConfig> = z.object({
   fields: z.dict(FieldConfig),
   maxInputBytes: z.number().step(1).min(1).default(4096),
   maxOutputTokens: z.number().step(1).min(1).default(512),
+  reasoningEffort: z.union([z.string(), z.const(null)]),
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(60000),
   provider: z.string(),
   model: z.string(),
@@ -69,6 +70,7 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'fields',
   'maxInputBytes',
   'maxOutputTokens',
+  'reasoningEffort',
   'timeoutMs',
   'provider',
   'model',
@@ -219,6 +221,10 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
 
   const maxInputBytes = input.maxInputBytes === undefined ? 4096 : input.maxInputBytes;
   const maxOutputTokens = input.maxOutputTokens === undefined ? 512 : input.maxOutputTokens;
+  const reasoningEffort = input.reasoningEffort;
+  if (reasoningEffort !== undefined && reasoningEffort !== null) {
+    assertNonEmptyString('reasoningEffort', reasoningEffort);
+  }
   const timeoutMs = input.timeoutMs === undefined ? 60000 : input.timeoutMs;
   assertPositiveSafeInteger('maxInputBytes', maxInputBytes);
   assertPositiveSafeInteger('maxOutputTokens', maxOutputTokens);
@@ -244,6 +250,7 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
     compiledTemplate,
     maxInputBytes,
     maxOutputTokens,
+    ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
     timeoutMs,
     ...(hasProvider ? { provider: input.provider, model: input.model } : {}),
   });

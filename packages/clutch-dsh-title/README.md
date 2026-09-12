@@ -152,6 +152,25 @@ Only fields referenced by the compiled template are resolved. Repeated reference
 
 The model returns fields only; the renderer inserts deterministic values and literal separators. The renderer does not execute template content, and field validation trims, removes control characters, and enforces enum membership or Unicode-character limits before rendering.
 
+### Title reasoning effort
+
+When Cordis `reasoningEffort` is omitted, the plugin automatically adapts to the selected model by querying its metadata via `ctx.llm.resolveModelInfo` and selecting its lowest supported reasoning tier (the first entry in `efforts`, such as `off` for DeepSeek official models or `low` for Gemini models). If the model does not declare reasoning capabilities or metadata lookup fails, `reasoningEffort` is omitted.
+
+Users can explicitly configure `reasoningEffort` to any non-empty ID supported by the selected provider/model, or set `reasoningEffort: null` to omit the option and use adapter defaults. Unsupported efforts may fail with `UNSUPPORTED_REASONING_EFFORT` and use native title fallback; the plugin does not retry with another effort.
+
+This is a plugin-level Cordis option, not template YAML or a setting in the template manager; it remains effective across template changes. Actual thinking behavior depends on the DSH adapter and model. In particular, pi-ai may implement `off` by omitting its reasoning option, which cannot guarantee that the upstream model stops thinking. This option applies only while title templates are enabled, and does not alter main conversation requests or the native generator used when templates are disabled. The native `session/title-llm-request` event schema remains unchanged and does not record reasoning effort.
+
+### Token usage statistics
+
+The settings panel (**Settings → Session Title**) displays a token consumption overview:
+
+- **Total generations**: Number of title model calls that reported valid usage metrics, including native DSH fallback calls.
+- **Input / Output / Total tokens**: Cumulative model-request counts; input includes uncached input plus cache-read and cache-write buckets, while total follows the adapter's full-call total.
+- **Recent generation details**: Breakdown of the most recent invocation (aggregate input, output, total, optional cache buckets, thinking tokens, and timestamp).
+- **Reset statistics**: A button to clear accumulated usage statistics with confirmation.
+
+Under the hood, the plugin observes every LLM stream whose purpose is `session-title`, covering custom extraction and native fallback calls without delaying title delivery. Only calls with valid usage metrics are counted; purely deterministic templates (such as `datetime` or `literal` fields only) make no model call and are not counted. Statistics are persisted via the official DSH `storageDomain` capability (`clutch_title_stats`), completely decoupled from `settings.yaml`. Query and reset operations are exposed over Typert Remote RPC (`titleStats` namespace), and internal writes are sequentially queued, eliminating CAS contention, retry overhead, and settings write amplification during concurrent title generations. Token statistics serve as user awareness metrics rather than real-time billing confirmations; the settings panel fetches fresh statistics upon mounting or manual refresh/reset, without maintaining a continuous background push stream.
+
 ### Long first prompts and input budget
 
 Cordis `maxInputBytes` defaults to `4096`. It limits the complete JSON-framed user input actually sent to the model, including framing instructions, `seq`, JSON escaping and clipping metadata. It excludes the separate system instructions and model transport envelope. Short inputs retain their original framing and text.

@@ -9,6 +9,8 @@ import {
 } from '@deepseek-ai/dsh-session-title-llm';
 import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title';
 import { registerTemplateSettings } from './settings.js';
+import { createTitleStatsStore, installTitleTokenStatsRecorder } from './storage.js';
+import { TitleRemoteService } from './host/remote.js';
 
 export const name = 'clutch-dsh-title';
 export const inject = ['sessionTitle', 'llm', 'sessions'];
@@ -17,13 +19,20 @@ export type Config = TitleConfig;
 export const Config: z<Config> = TitleConfigSchema;
 
 export function apply(ctx: Context, config: Config): void {
+  const statsStore = createTitleStatsStore(ctx);
+  installTitleTokenStatsRecorder(ctx, statsStore);
+  new TitleRemoteService(ctx, statsStore);
+
   const initial = resolveTitleConfig(config);
   let read = () => ({ enabled: true, config: initial });
+  let settingsContext: Context | undefined;
   // Retain the host-only composition path when no settings provider is composed.
   ctx.inject(['settings'], (settingsCtx) => {
+    settingsContext = settingsCtx;
     const next = registerTemplateSettings(settingsCtx, config);
     read = next;
     settingsCtx.effect(() => () => {
+      settingsContext = undefined;
       read = () => ({ enabled: true, config: initial });
     });
   });
@@ -52,12 +61,13 @@ export function apply(ctx: Context, config: Config): void {
         ...state.config,
         maxInputBytes: initial.maxInputBytes,
         maxOutputTokens: initial.maxOutputTokens,
+        reasoningEffort: initial.reasoningEffort,
         timeoutMs: initial.timeoutMs,
         ...(initial.provider === undefined
           ? {}
           : { provider: initial.provider, model: initial.model }),
       };
-      return createTitleProvider(ctx, selected).generate(request);
+      return createTitleProvider(settingsContext ?? ctx, selected).generate(request);
     },
   });
 }
@@ -71,6 +81,7 @@ export {
 } from './fields.js';
 export { createTitleProvider, hasLlmFields, mergeFieldValues } from './provider.js';
 export { resolveTitleConfig, TitleConfigSchema } from './config.js';
+export { TitleRemoteService } from './host/remote.js';
 export type {
   CompiledTemplate,
   DateTimeFieldConfig,
@@ -83,4 +94,7 @@ export type {
   TemplateSegment,
   TitleConfig,
   TitleFieldConfig,
+  TitleTokenUsage,
+  TitleTokenStats,
+  TitleTokenLastUsage,
 } from './types.js';

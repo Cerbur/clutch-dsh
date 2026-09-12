@@ -1,5 +1,29 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.3 — 2026-09-12
+
+### 中文
+
+#### 新增
+
+- 新增设置中心 Token 消耗统计看板与重置能力，支持展示累计用量与最近一次生成明细。
+- 优化标题生成思考强度（reasoningEffort），自适应所选模型支持的最低思考档位并支持自定义配置，以降低生成延迟与 Token 消耗。
+
+#### 说明
+
+- 后续将进一步优化生成提示词与首条消息（first-prompt）截断逻辑，以更加节约生成标题时的 Token 消耗。
+
+### English
+
+#### Added
+
+- Add token consumption statistics display and reset capability in Settings, showing cumulative metrics and recent generation breakdown.
+- Optimize title generation reasoning effort by dynamically selecting the lowest supported tier and supporting custom configuration to reduce latency and token usage.
+
+#### Note
+
+- Upcoming updates will further optimize generation prompts and first-prompt truncation logic to reduce token consumption when generating titles.
+
 ## 0.1.2 — 2026-09-08
 
 ### 中文
