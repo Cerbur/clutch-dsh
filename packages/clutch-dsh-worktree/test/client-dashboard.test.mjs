@@ -16,7 +16,12 @@ import {
 import { en, zh } from '../lib/client/locales.js';
 import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
 import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
-import { sessionDisplayLabel } from '../lib/client/session/session-view.js';
+import {
+  isBlankSession,
+  relativeTime,
+  sessionDisplayLabel,
+} from '../lib/client/session/session-view.js';
+import { sessionStatusLabel, sessionTimeLabel } from '../lib/client/session/session-labels.js';
 
 const record = {
   workspaceId: 'repo',
@@ -106,7 +111,10 @@ function renderHarness(writeClipboard) {
       ({
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
-        '@deepseek-ai/dsh-client-ui-primitives': { writeClipboard },
+        '@deepseek-ai/dsh-client-ui-primitives': {
+          StateDot: ({ state }) => jsx('span', { 'data-state-dot': state }),
+          writeClipboard,
+        },
         './dashboard-overlay.js': {},
         './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord },
         './vscode-url.js': { vscodeFolderUrl },
@@ -118,7 +126,8 @@ function renderHarness(writeClipboard) {
           }),
         },
         './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
-        '../session/session-view.js': { sessionDisplayLabel },
+        '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
+        '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
       })[name] ?? {},
     exports,
@@ -129,6 +138,7 @@ function renderHarness(writeClipboard) {
     t: (key) => en[key],
     onClose() {},
     sessions: { ids: [], byId: {} },
+    sessionPresentations: {},
     sessionIds: [],
     actionPending: false,
     onOpenSession() {},
@@ -158,6 +168,8 @@ function findAll(node, predicate) {
 const byRole = (node, role) => findAll(node, (item) => item.props?.role === role);
 const copyButton = (node) =>
   findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0];
+const copyBranchTitle = (node) =>
+  findAll(node, (item) => item.props?.['data-dashboard-copy'] === 'branch')[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 test('dashboard renders real identity and explicit placeholders in both languages', () => {
@@ -280,6 +292,78 @@ test('dashboard actions delegate, pending disables mutations, and Sessions displ
   harness.dispose();
 });
 
+test('dashboard Sessions mirror Worktree status dots, idle relative time, and blank metadata rules', () => {
+  const now = Date.now();
+  const ids = ['running', 'waiting', 'completed', 'idle', 'blank', 'missing'];
+  const sessions = {
+    ids,
+    current: 'running',
+    byId: {
+      running: { displayTitle: 'Running session' },
+      waiting: { displayTitle: 'Waiting session' },
+      completed: { displayTitle: 'Completed session' },
+      idle: { displayTitle: 'Idle session' },
+      blank: { blank: true },
+      missing: { displayTitle: 'Missing presentation' },
+    },
+  };
+  const presentation = (status, extra = {}) => ({
+    status,
+    running: status.labelKey === 'running',
+    ongoing: status.state === 'ongoing',
+    runningSubagentCount: status.runningSubagentCount,
+    completed: status.labelKey === 'completed',
+    ...extra,
+  });
+  const presentations = {
+    running: presentation({ state: 'ongoing', labelKey: 'running', runningSubagentCount: 0 }),
+    waiting: presentation({ state: 'warning', labelKey: 'waitingApproval', runningSubagentCount: 0 }),
+    completed: presentation({ state: 'done', labelKey: 'completed', runningSubagentCount: 0 }),
+    idle: presentation(
+      { state: 'done', labelKey: 'idle', runningSubagentCount: 0 },
+      { updatedAt: now - 3 * 60_000 },
+    ),
+    blank: presentation(
+      { state: 'done', labelKey: 'idle', runningSubagentCount: 0 },
+      { updatedAt: now - 5 * 60_000 },
+    ),
+  };
+  const translate = (key, params = {}) =>
+    en[key].replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? '{' + name + '}'));
+  const harness = renderHarness(async () => true);
+  let node = harness.render({
+    t: translate,
+    sessions,
+    sessionPresentations: presentations,
+    sessionIds: ids,
+  });
+  const rows = (value) => findAll(value, (item) => item.props?.['data-dashboard-session']);
+  const statusRows = (value) =>
+    findAll(value, (item) => item.props?.['data-dashboard-session-status'] !== undefined);
+  const timeRows = (value) => findAll(value, (item) => item.props?.['data-dashboard-session-time']);
+  assert.equal(rows(node).length, 5);
+  assert.equal(statusRows(node).length, 3);
+  assert.deepEqual(
+    statusRows(node).map((item) => item.props['aria-label']),
+    [en['session.status.running'], en['session.status.waitingApproval'], en['session.status.completed']],
+  );
+  assert.equal(timeRows(node).length, 1);
+  assert.match(timeRows(node)[0].props.children, /^3min$/);
+  const blankRow = findAll(node, (item) => item.props?.['data-dashboard-session'] === 'blank')[0];
+  assert.equal(findAll(blankRow, (item) => item.props?.['data-dashboard-session-status'] !== undefined).length, 0);
+
+  byRole(node, 'tab')[2].props.onClick();
+  node = harness.render();
+  assert.equal(rows(node).length, ids.length);
+  assert.equal(statusRows(node).length, 3);
+  assert.equal(timeRows(node).length, 1);
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-session'] === 'missing').length,
+    1,
+  );
+  harness.dispose();
+});
+
 test('copy uses the complete cwd, coalesces pending clicks, and reports boolean failure', async () => {
   const calls = [];
   let complete;
@@ -301,6 +385,33 @@ test('copy uses the complete cwd, coalesces pending clicks, and reports boolean 
   complete(true);
   await tick();
   assert.equal(byRole(harness.render(), 'status')[0].props.children, en['dashboard.copied']);
+  harness.dispose();
+});
+
+test('dashboard title copies the accepted branch and coalesces keyboard activation', async () => {
+  const calls = [];
+  let complete;
+  const harness = renderHarness((value) => {
+    calls.push(value);
+    return new Promise((resolve) => {
+      complete = resolve;
+    });
+  });
+  let prevented = 0;
+  const title = copyBranchTitle(harness.render());
+  title.props.onClick();
+  title.props.onClick();
+  title.props.onKeyDown({ key: 'Enter', preventDefault: () => prevented++ });
+  title.props.onKeyDown({ key: ' ', preventDefault: () => prevented++ });
+  assert.deepEqual(calls, [record.branch]);
+  assert.equal(prevented, 2);
+  assert.equal(copyBranchTitle(harness.render()).props['aria-busy'], true);
+  complete(true);
+  await tick();
+  assert.equal(
+    byRole(harness.render(), 'status')[0].props.children,
+    en['dashboard.branchCopied'],
+  );
   harness.dispose();
 });
 
@@ -382,6 +493,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     workspaceIds: ['repo'],
     workspaces: { items: [workspace] },
     sessions: { ids: ['current'], current: 'current', byId: {} },
+    sessionPresentations: { current: { status: { state: 'done', labelKey: 'idle', runningSubagentCount: 0 } } },
     archivedSessionIds: [],
     bounds: { ready: false },
   };
@@ -468,6 +580,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   ]);
   assert.equal(selected, selection);
   assert.deepEqual(props.sessionIds, ['current']);
+  assert.equal(props.sessionPresentations, sourceState.sessionPresentations);
   props.onCreateWorktree();
   assert.deepEqual(calls.shift(), [
     'creator',
@@ -605,13 +718,14 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     const dispose = mountDashboardOverlay(surface, (next) => {
       placement = next;
     });
-    assert.equal(placement.left, 280);
-    assert.equal(placement.width, 920);
+    assert.equal(placement.left, 284);
+    assert.equal(placement.width, 916);
     assert.equal(center.getAttribute('inert'), '');
     sidebar.rect.right = 64;
     observers[0].callback();
     pending();
-    assert.equal(placement.width, 1136);
+    assert.equal(placement.left, 68);
+    assert.equal(placement.width, 1132);
     right.nextElementSibling = undefined;
     observers[1].callback();
     pending();

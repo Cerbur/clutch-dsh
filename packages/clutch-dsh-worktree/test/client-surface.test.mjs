@@ -1474,6 +1474,40 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
+test('adds a hover-only Dashboard action without removing the menu action', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
+  const rowStart = source.indexOf('function WorktreeGroupRow');
+  const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(rowSource, /className=\{styles\.dashboardAction\}/);
+  assert.match(rowSource, /data-dashboard-action/);
+  assert.match(rowSource, /aria-label=\{t\('dashboard\.title'\)\}/);
+  assert.match(
+    rowSource,
+    /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
+  );
+  assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
+  assert.match(styles, /\.treeActionSlotWithDashboard\s*\{[\s\S]*flex: 0 0 92px;[\s\S]*width: 92px;/);
+  assert.match(
+    styles,
+    /\.treeActionSlot > \.dashboardAction\s*\{[\s\S]*right: 64px;/,
+  );
+  assert.match(styles, /\.dashboardAction\s*\{[\s\S]*visibility: hidden;/);
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.dashboardAction,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.dashboardAction,[\s\S]*\.worktreeRow:focus-within \.dashboardAction[\s\S]*visibility: visible;/,
+  );
+
+  const activeCall = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
+  const archivedCall = await readSurfaceGroupRow('components/ArchivedWorktree.tsx', 'worktree');
+  assert.match(activeCall, /onDashboard:/);
+  assert.match(archivedCall, /onDashboard:/);
+});
+
 test('reduces the left offset before the nested tree line', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeChildren {');
@@ -1492,8 +1526,8 @@ test('indents Session tabs by the Worktree icon width', async () => {
   assert.notEqual(ruleEnd, -1);
 
   const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
-  assert.match(sessionRule, /margin-left: 22px;/);
-  assert.match(sessionRule, /width: calc\(100% - 22px\);/);
+  assert.match(sessionRule, /margin-left: 20px;/);
+  assert.match(sessionRule, /width: calc\(100% - 20px\);/);
 });
 
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
@@ -1597,7 +1631,7 @@ test('polishes Main and Worktree row hover presentation', async () => {
 
   assert.match(
     styles,
-    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 22px;/,
+    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 20px;/,
   );
   assert.match(
     styles,

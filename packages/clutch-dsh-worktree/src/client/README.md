@@ -100,6 +100,12 @@ both candidate reads and import mutations and releases the membership projection
 selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
 No additional read or global refresh is triggered by opening the dashboard. Read-only
 menu refreshes retain ready facts; updated and forgotten records project normally.
+Active and archived Worktree rows also expose a hover-only Dashboard icon in the existing action
+rail; it reuses the same callback as the menu entry and is hidden until the row is hovered, focused,
+or its menu is open. The Worktree rail expands only for rows with this action, while the leading
+Worktree and nested Session alignment slots are compacted to preserve the Sidebar width. Dashboard
+placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
+Dashboard is open.
 
 The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
 It does not register over the occupied `conversation` slot. The AppFrame column order
@@ -110,9 +116,10 @@ are restored on close or disposal. Session identity changes, explicit Sidebar Se
 opens (including the same Session), mode exit, and removal of the selected identity
 close the dashboard. No native Session or Workspace state is changed.
 
-The accepted branch supplies the Worktree name, and `absolutePath` supplies the displayed
-and copied cwd. Clipboard success requires `writeClipboard` to return true; failures are
-visible, concurrent clicks coalesce, and late results after path changes/unmount are ignored.
+The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
+branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
+`writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
+results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. All unconnected data and actions are labeled rather
 than populated with fabricated status. No instructions are persisted or injected.
 
@@ -334,6 +341,8 @@ The Worktree surface is additive:
   that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
   timestamp. The trailing slot swaps to the existing Session menu on hover, focus, or menu-open
   without adding plugin animation CSS.
+- Dashboard Session cards consume the same presentation map: both the overview preview and the full
+  Sessions tab show the same status dot or idle relative-time metadata as Worktree rows.
 - Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
   complete title, relative time, and current status; the card is suppressed while the Session menu
   is open or a row is being dragged.

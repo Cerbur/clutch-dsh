@@ -19,8 +19,9 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
 
 ## 能力
 
-- 从 active 或 archived Worktree 的菜单打开 Dashboard，查看真实名称和 cwd、复制完整路径，
-  并切换概览、Git 与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确标记为“即将推出”。
+- 从 active 或 archived Worktree 的菜单或行内悬浮操作打开 Dashboard，查看真实名称和 cwd、复制完整
+  路径，并切换概览、Git 与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确
+  标记为“即将推出”。
 
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
@@ -36,6 +37,8 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
   `workspace-write + ask`；如果无法验证权限能力，则显示可重试的降级状态，不伪称已获得完全访问。
 - 复用原生动画 `StateDot` 展示运行中的 Session，并为最近一条用户发送的 Session 消息显示
   原生相对时间；hover 或打开菜单时，右侧位置让位给已有的操作菜单。
+- Dashboard 的 Session 卡片在概览预览和完整的 Session 页签中复用同样的状态或相对时间信息，
+  与 Worktree 列表保持一致。
 - 使用 DSH 原生 Session hover 详情卡片展示完整标题、相对时间和当前状态；打开 Session 操作
   菜单或拖拽行时，详情卡片让位。
 - 补齐原生的等待审批、计划待审、等待回答、已完成、空闲和运行中子代理状态；插件不会复制
@@ -50,8 +53,8 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
   这一时序避免 child 短暂出现在 Main/Local。sidecar 失败时 child 会保留，并显示可重试的
   binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
-- 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外提供 Dashboard，
-  active Worktree 提供“归档 Worktree”并要求确认。
+- 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外通过选项菜单和
+  行内悬浮操作提供 Dashboard，active Worktree 提供“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree
   不显示该动作。
@@ -221,13 +224,14 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 ### 打开 Worktree Dashboard
 
-在 Worktree 模式中，打开已管理 Worktree 的选项菜单并选择 **Dashboard**。Dashboard 会临时
-替换 Sidebar 旁的区域（含 Session 页面），原生会话组件保持挂载。点击**返回会话**、按
-**Escape**、从 Sidebar 打开 Session 或退出 Worktree 模式，即可恢复原生页面。打开 Dashboard
-不会创建或修改 Session；Local/Main 不提供此入口。
+在 Worktree 模式中，将鼠标悬浮到已管理 Worktree 行并点击 Dashboard 图标，或打开行的选项菜单
+并选择 **Dashboard**。Dashboard 会临时替换 Sidebar 旁的区域（含 Session 页面），原生会话组件
+保持挂载。点击**返回会话**、按 **Escape**、从 Sidebar 打开 Session 或退出 Worktree 模式，即可
+恢复原生页面。打开 Dashboard 不会创建或修改 Session；Local/Main 不提供行内 Dashboard 图标。
+Dashboard 打开后仍可拖动 Sidebar 的宽度。
 
-标题沿用 Worktree 行的已接受分支名称。cwd 展示记录中的完整绝对路径，复制按钮明确反馈成功
-或失败。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
+标题沿用 Worktree 行的已接受分支名称，点击标题即可直接复制分支名称。cwd 展示记录中的完整
+绝对路径，复制按钮明确反馈成功或失败。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
 Git 文件没有变更。归档或已清理记录仍展示记录中的路径，该路径不一定仍存在于磁盘。
 
 五个 tab 支持左右方向键、Home 和 End。概览显示当前 Worktree 的前五个会话，会话 tab

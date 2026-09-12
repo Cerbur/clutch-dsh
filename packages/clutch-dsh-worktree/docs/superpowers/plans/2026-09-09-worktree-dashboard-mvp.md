@@ -63,7 +63,8 @@ presentation, with no DSH source or persisted Session changes.
 - Keep only the selected Workspace/Worktree identity in memory. Resolve the name
   (accepted branch), cwd, current branch, and health from the existing ready
   Worktree projection; targeted refreshes retain the current dashboard.
-- Copy the exact absolute cwd with explicit success/failure feedback.
+- Copy the exact absolute cwd with explicit success/failure feedback; clicking the accepted
+  branch title copies that branch name directly with the same feedback.
 - Implement Dashboard, Git & Changes, Sessions, Children, and Settings tabs with
   keyboard navigation. The reference image informs the two-column card layout.
 - Clearly label unconnected actions and data as coming soon. Do not invent clean
@@ -82,6 +83,10 @@ and the non-destructive Archive confirmation. Keep the existing eligibility and
 pending-operation gates. Launch VS Code through an encoded `vscode://file/...` link.
 The remaining Git, instructions, children, settings, and quick actions stay placeholders.
 No new reads are introduced by dashboard entry, Session rendering, or tab changes.
+The Worktree row keeps the existing Dashboard menu entry and adds a hover-only icon action for
+active/archived Worktrees. Its conditional 92px rail places Dashboard/menu/+ at 64/32/0px,
+compacts the Worktree leading and nested Session alignment slots to 20px, and reserves the
+native Sidebar resize handle's 4px half-width when positioning the Dashboard overlay.
 
 ## Verification
 

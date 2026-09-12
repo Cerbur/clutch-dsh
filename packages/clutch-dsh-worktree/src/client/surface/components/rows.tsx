@@ -307,6 +307,7 @@ export function WorktreeGroupRow({
   drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
+  const showDashboardAction = !main && menu?.onDashboard !== undefined;
   const markerClass =
     drag?.marker === 'before'
       ? styles.dropBefore
@@ -378,7 +379,9 @@ export function WorktreeGroupRow({
         </span>
       )}
       <span className={styles.worktreeLabel}>{label}</span>
-      <span className={styles.treeActionSlot}>
+      <span
+        className={`${styles.treeActionSlot} ${showDashboardAction ? styles.treeActionSlotWithDashboard : ''}`}
+      >
         <span
           className={styles.groupActivity}
           data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
@@ -388,6 +391,22 @@ export function WorktreeGroupRow({
         >
           {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
         </span>
+        {showDashboardAction && (
+          <span className={styles.dashboardAction}>
+            <button
+              type="button"
+              className={styles.iconButton}
+              data-dashboard-action
+              aria-label={t('dashboard.title')}
+              onClick={(event) => {
+                event.stopPropagation();
+                menu?.onDashboard?.();
+              }}
+            >
+              <IconDashboard size={16} />
+            </button>
+          </span>
+        )}
         {menu !== undefined && (
           <span className={styles.menuAction}>
             <Menu

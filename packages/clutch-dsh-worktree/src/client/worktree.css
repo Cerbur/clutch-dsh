@@ -715,12 +715,27 @@
 .workspaceActions {
   position: relative;
   display: inline-flex;
-  flex: 0 0 64px;
   align-items: center;
   justify-content: flex-end;
-  width: 64px;
   height: 28px;
   margin-left: auto;
+}
+
+.treeActionSlot,
+.workspaceActions {
+  flex: 0 0 64px;
+  width: 64px;
+}
+
+.treeActionSlotWithDashboard {
+  flex: 0 0 92px;
+  width: 92px;
+}
+
+.treeActionSlot > .dashboardAction {
+  position: absolute;
+  top: 0;
+  right: 64px;
 }
 
 .treeActionSlot > .menuAction {
@@ -780,6 +795,13 @@
   visibility: visible;
 }
 
+.dashboardAction {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  visibility: hidden;
+}
+
 .menuAction {
   display: inline-flex;
   width: 28px;
@@ -790,7 +812,10 @@
 .workspaceRow:hover .menuAction,
 .workspaceRow[data-menu-open='true'] .menuAction,
 .worktreeRow:hover .menuAction,
-.worktreeRow[data-menu-open='true'] .menuAction {
+.worktreeRow[data-menu-open='true'] .menuAction,
+.worktreeRow:hover .dashboardAction,
+.worktreeRow[data-menu-open='true'] .dashboardAction,
+.worktreeRow:focus-within .dashboardAction {
   visibility: visible;
 }
 
@@ -866,17 +891,18 @@
   min-height: 34px;
 }
 
+/* Compact the Worktree leading slots to make room for its third action. */
 .worktreeRow .worktreeIcon,
 .worktreeRow .disclosureButton {
-  width: 22px;
+  width: 20px;
 }
 
 .treeSessionRow {
   position: relative;
   display: flex;
   align-items: center;
-  width: calc(100% - 22px);
-  margin-left: 22px;
+  width: calc(100% - 20px);
+  margin-left: 20px;
   min-width: 0;
   min-height: 31px;
   box-sizing: border-box;

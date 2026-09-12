@@ -3,11 +3,14 @@ import type { ReactNode } from 'react';
 import {
   IconBranchOutline16,
   IconCopyOutline16,
+  StateDot,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
-import { sessionDisplayLabel, type SessionListLike } from '../session/session-view.js';
+import { isBlankSession, relativeTime, sessionDisplayLabel } from '../session/session-view.js';
+import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
+import { sessionStatusLabel, sessionTimeLabel } from '../session/session-labels.js';
 import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
 import { isMainWorktreeId } from './dashboard-selection.js';
@@ -25,6 +28,7 @@ export interface WorktreeDashboardProps {
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
   readonly sessions: SessionListLike;
+  readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly sessionIds: readonly string[];
   readonly actionPending: boolean;
   readonly onOpenSession: (sessionId: string) => void;
@@ -98,6 +102,7 @@ export function WorktreeDashboard({
   t,
   onClose,
   sessions,
+  sessionPresentations,
   sessionIds,
   actionPending,
   onOpenSession,
@@ -111,8 +116,11 @@ export function WorktreeDashboard({
   const [placement, setPlacement] = useState<DashboardPlacement>();
   const [tab, setTab] = useState<DashboardTab>('overview');
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
+  const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const copyGeneration = useRef(0);
+  const branchCopyGeneration = useRef(0);
   const copyPending = useRef(false);
+  const branchCopyPending = useRef(false);
   const id = useId();
   useLayoutEffect(() => {
     const element = surface.current;
@@ -146,6 +154,14 @@ export function WorktreeDashboard({
       copyGeneration.current += 1;
     };
   }, [record.absolutePath]);
+  useEffect(() => {
+    branchCopyGeneration.current += 1;
+    branchCopyPending.current = false;
+    setBranchCopyState('idle');
+    return () => {
+      branchCopyGeneration.current += 1;
+    };
+  }, [record.branch]);
   const copyPath = async () => {
     if (copyPending.current) return;
     copyPending.current = true;
@@ -158,6 +174,21 @@ export function WorktreeDashboard({
       if (generation === copyGeneration.current) setCopyState('failed');
     } finally {
       if (generation === copyGeneration.current) copyPending.current = false;
+    }
+  };
+  const copyBranch = async () => {
+    if (branchCopyPending.current) return;
+    branchCopyPending.current = true;
+    const generation = branchCopyGeneration.current;
+    setBranchCopyState('pending');
+    try {
+      const copied = await writeClipboard(record.branch);
+      if (generation === branchCopyGeneration.current)
+        setBranchCopyState(copied ? 'copied' : 'failed');
+    } catch {
+      if (generation === branchCopyGeneration.current) setBranchCopyState('failed');
+    } finally {
+      if (generation === branchCopyGeneration.current) branchCopyPending.current = false;
     }
   };
   const healthKey =
@@ -195,20 +226,56 @@ export function WorktreeDashboard({
       </div>
     ) : (
       <ul className={styles.dashboardSessions}>
-        {ids.map((sessionId) => (
-          <li key={sessionId}>
-            <button
-              type="button"
-              data-dashboard-session={sessionId}
-              aria-current={sessions.current === sessionId ? 'page' : undefined}
-              onClick={() => onOpenSession(sessionId)}
-            >
-              <DashboardIcon kind="sessions" />
-              <span>{sessionDisplayLabel(sessionId, sessions, t('session.new'))}</span>
-              <span aria-hidden="true">→</span>
-            </button>
-          </li>
-        ))}
+        {ids.map((sessionId) => {
+          const presentation = sessionPresentations[sessionId];
+          const blank = isBlankSession(sessionId, sessions);
+          const statusLabel =
+            presentation === undefined ? undefined : sessionStatusLabel(t, presentation.status);
+          const showTrailingStatus =
+            !blank &&
+            presentation !== undefined &&
+            (presentation.status.state !== 'done' || presentation.completed);
+          const timeValue =
+            !blank && !showTrailingStatus && presentation?.updatedAt !== undefined
+              ? relativeTime(presentation.updatedAt, Date.now())
+              : undefined;
+          const timeLabel = timeValue === undefined ? undefined : sessionTimeLabel(t, timeValue);
+          return (
+            <li key={sessionId}>
+              <button
+                type="button"
+                data-dashboard-session={sessionId}
+                aria-current={sessions.current === sessionId ? 'page' : undefined}
+                onClick={() => onOpenSession(sessionId)}
+              >
+                <DashboardIcon kind="sessions" />
+                <span className={styles.dashboardSessionLabel}>
+                  {sessionDisplayLabel(sessionId, sessions, t('session.new'))}
+                </span>
+                {!blank && (
+                  <span className={styles.dashboardSessionMeta}>
+                    {showTrailingStatus && presentation !== undefined ? (
+                      <span
+                        className={styles.dashboardSessionStatus}
+                        data-dashboard-session-status={statusLabel}
+                        role="img"
+                        aria-label={statusLabel}
+                        title={statusLabel}
+                      >
+                        <StateDot state={presentation.status.state} />
+                      </span>
+                    ) : timeLabel !== undefined ? (
+                      <span className={styles.dashboardSessionTime} data-dashboard-session-time>
+                        {timeLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                )}
+                <span aria-hidden="true">→</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     );
   return (
@@ -240,7 +307,24 @@ export function WorktreeDashboard({
         </div>
         <header className={styles.dashboardHeader}>
           <div className={styles.dashboardIdentity}>
-            <div className={styles.dashboardTitleRow}>
+            <div
+              className={styles.dashboardTitleRow}
+              data-dashboard-copy="branch"
+              role="button"
+              tabIndex={0}
+              aria-label={t('dashboard.copyBranch')}
+              title={t('dashboard.copyBranch')}
+              aria-busy={branchCopyState === 'pending'}
+              onClick={() => {
+                void copyBranch();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  void copyBranch();
+                }
+              }}
+            >
               <IconBranchOutline16 />
               <h1 id={`${id}-title`} ref={heading} tabIndex={-1}>
                 {record.branch}
@@ -252,10 +336,6 @@ export function WorktreeDashboard({
               {record.status === 'removed' && (
                 <span className={styles.dashboardSoon}>{t('dashboard.archived')}</span>
               )}
-            </div>
-            <div className={styles.dashboardBranch}>
-              <IconBranchOutline16 />
-              <code>{liveBranch}</code>
             </div>
             <div className={styles.dashboardPath}>
               <span className={styles.dashboardFieldLabel}>cwd</span>
@@ -275,13 +355,24 @@ export function WorktreeDashboard({
             </div>
             <p
               className={styles.dashboardCopyStatus}
-              role={copyState === 'failed' ? 'alert' : 'status'}
+              role={
+                branchCopyState === 'failed' ||
+                (branchCopyState === 'idle' && copyState === 'failed')
+                  ? 'alert'
+                  : 'status'
+              }
             >
-              {copyState === 'copied'
-                ? t('dashboard.copied')
-                : copyState === 'failed'
-                  ? t('dashboard.copyFailed')
-                  : '\u00a0'}
+              {branchCopyState === 'pending'
+                ? '\u00a0'
+                : branchCopyState === 'copied'
+                  ? t('dashboard.branchCopied')
+                  : branchCopyState === 'failed'
+                    ? t('dashboard.branchCopyFailed')
+                    : copyState === 'copied'
+                      ? t('dashboard.copied')
+                      : copyState === 'failed'
+                        ? t('dashboard.copyFailed')
+                        : '\u00a0'}
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>

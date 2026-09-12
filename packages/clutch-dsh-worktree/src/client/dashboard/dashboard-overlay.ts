@@ -5,6 +5,10 @@ export interface DashboardPlacement {
   readonly height: number;
 }
 
+// Upstream AppFrame's 8px Sidebar handle is centered on the track boundary.
+// Keep its 4px right half outside this higher stacking-context overlay.
+const SIDEBAR_RESIZE_HANDLE_HALF_WIDTH = 4;
+
 /** Reversible presentation only: leave the native React tree and Session alive. */
 export function concealDashboardBackground(element: HTMLElement): () => void {
   const visibility = element.style.getPropertyValue('visibility');
@@ -81,7 +85,7 @@ export function mountDashboardOverlay(
     }
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
-    const left = Math.max(0, boundary.right - box.left);
+    const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
     const width = box.width - left;
     if (width <= 0 || box.height <= 0) {
       restore();

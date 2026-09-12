@@ -223,6 +223,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           }
           workspaceTitle={dashboardWorkspace?.title ?? ''}
           sessions={source.sessions}
+          sessionPresentations={source.sessionPresentations}
           sessionIds={dashboardSessionIds(
             dashboardRecord,
             source.sessions,

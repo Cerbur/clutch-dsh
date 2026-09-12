@@ -21,9 +21,9 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 ## Capabilities
 
 - Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
-- Open Dashboard from an active or archived Worktree menu. View the real name and cwd, copy
-  the full path, and switch between Dashboard, Git & Changes, Sessions, Children, and Settings.
-  Unconnected MVP cards and actions are explicitly marked Coming soon.
+- Open Dashboard from an active or archived Worktree menu or its hover-only row action. View the
+  real name and cwd, copy the full path, and switch between Dashboard, Git & Changes, Sessions,
+  Children, and Settings. Unconnected MVP cards and actions are explicitly marked Coming soon.
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
 - Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
 - Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
@@ -42,6 +42,8 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   and completed states occupy the trailing slot; idle Sessions show native relative time for the
   last human-authored message there. Hover or an open menu gives the trailing slot back to the
   existing actions menu.
+- Dashboard Session cards use the same status-or-relative-time metadata in both the overview
+  preview and the full Sessions tab, keeping status semantics consistent with the Worktree list.
 - Show the native DSH Session hover detail card with the complete title, relative time, and current
   status; the card yields to the Session actions menu and row dragging.
 - Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
@@ -57,7 +59,8 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
-  Managed Worktree rows also expose Dashboard; active rows offer `Archive Worktree` with confirmation.
+  Managed Worktree rows also expose Dashboard through the existing menu and a hover-only row action;
+  active rows offer `Archive Worktree` with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
   name, such as `feature-2` or `feature-3`; detached Worktrees do not expose this action.
@@ -235,15 +238,17 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Open a Worktree dashboard
 
-In Worktree mode, open a managed Worktree's options menu and choose **Dashboard**. The
-dashboard temporarily replaces the area beside the Sidebar, including the Session page.
+In Worktree mode, hover a managed Worktree row and click its Dashboard icon, or open the row's
+options menu and choose **Dashboard**. The dashboard temporarily replaces the area beside the
+Sidebar, including the Session page.
 The native conversation remains mounted. Use **Back to session**, press **Escape**, open
 a Session from the Sidebar, or exit Worktree mode to restore the native page. No Session
-is created or changed by opening the dashboard. Local/Main has no dashboard entry.
+is created or changed by opening the dashboard. Local/Main has no inline Dashboard icon. The
+Dashboard keeps the Sidebar resize handle available while it is open.
 
-The title uses the same accepted branch name as the Worktree row. The cwd is the record's
-full absolute path; its copy button reports success or failure. Current branch, availability,
-and source use the existing Worktree projection. Ready means the Worktree is available;
+The title uses the same accepted branch name as the Worktree row. Click the title to copy the
+branch name directly. The cwd is the record's full absolute path; its copy button reports success
+or failure. Current branch, availability, and source use the existing Worktree projection. Ready means the Worktree is available;
 it does **not** assert that Git files are clean. An archived or cleaned record still shows
 its recorded path, which need not exist on disk.
 

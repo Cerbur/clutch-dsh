@@ -62,10 +62,32 @@
   text-align: left;
   cursor: pointer;
 }
-.dashboardSessions button > span:first-of-type {
+.dashboardSessionLabel {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.dashboardSessionMeta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 28px;
+  color: var(--dsw-alias-label-tertiary, #858e9d);
+}
+.dashboardSessionStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.dashboardSessionTime {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 20px;
 }
 .dashboardSessions button:hover,
 .dashboardSessions button[aria-current] {
@@ -122,6 +144,14 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.dashboardTitleRow[role='button'] {
+  cursor: pointer;
+}
+.dashboardTitleRow[role='button']:focus-visible {
+  outline: 2px solid #497cd4;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
 .dashboardHealth,
 .dashboardSoon {
   display: inline-flex;
@@ -144,14 +174,6 @@
 .dashboardHealth[data-health='branch-drift'] {
   background: color-mix(in srgb, #e7a839 14%, transparent);
   color: #b27a1e;
-}
-.dashboardBranch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  color: #4777c1;
-  overflow-wrap: anywhere;
 }
 .dashboardPath {
   display: flex;
