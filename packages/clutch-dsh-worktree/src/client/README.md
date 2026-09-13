@@ -102,7 +102,7 @@ No additional read or global refresh is triggered by opening the dashboard. Read
 menu refreshes retain ready facts; updated and forgotten records project normally.
 The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
 active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
-reuses the same callback as the menu entry, and stays hidden until the row is hovered, focused, or its menu is open. The Worktree rail remains zero-width at rest, so Dashboard, the menu, and the Session `+` do not reserve label space; when interaction reveals the row, the available controls use their intrinsic width. Long Worktree labels become horizontally scrollable while the rail is visible, and the existing delayed HoverCard remains the accessible full-value fallback. The leading
+reuses the same callback as the menu entry, and stays hidden until the row is hovered, focused, or its menu is open. The Worktree rail remains zero-width at rest, so Dashboard, the menu, and the Session `+` do not reserve label space; when interaction reveals the row, the available controls use their intrinsic width. Long Worktree labels automatically scroll while the pointer is over the row and reset to their original position when it leaves; the existing delayed HoverCard remains the accessible full-value fallback. The leading
 Worktree and nested Session alignment slots are compacted to preserve the Sidebar width. Dashboard
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.

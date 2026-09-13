@@ -55,7 +55,8 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外通过选项菜单和
   行内悬浮操作提供 Dashboard。Worktree 分组的右侧操作栏在静止时为零宽度；hover、focus 或打开 menu
-  时才按实际可用的 Dashboard、menu 和 Session `+` 控件占用宽度，过长的 Worktree 名称可横向滚动。
+  时才按实际可用的 Dashboard、menu 和 Session `+` 控件占用宽度；过长的 Worktree 名称悬浮时会自动横向
+  滚动，鼠标离开后回到原始位置。
   active Worktree 提供“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree

@@ -17,7 +17,7 @@ import {
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DragEvent as ReactDragEvent } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IconDashboard } from '../../dashboard/dashboard-icon.js';
 import {
   isBlankSession,
@@ -38,6 +38,30 @@ import type {
 function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
   const rect = event.currentTarget.getBoundingClientRect();
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
+
+const WORKTREE_LABEL_SCROLL_START_PAUSE_MS = 800;
+const WORKTREE_LABEL_SCROLL_FORWARD_MS = 3_000;
+const WORKTREE_LABEL_SCROLL_END_PAUSE_MS = 1_000;
+const WORKTREE_LABEL_SCROLL_RETURN_MS = 3_000;
+const WORKTREE_LABEL_SCROLL_CYCLE_MS =
+  WORKTREE_LABEL_SCROLL_START_PAUSE_MS +
+  WORKTREE_LABEL_SCROLL_FORWARD_MS +
+  WORKTREE_LABEL_SCROLL_END_PAUSE_MS +
+  WORKTREE_LABEL_SCROLL_RETURN_MS;
+
+function worktreeLabelScrollProgress(elapsedMs: number): number {
+  const elapsed = elapsedMs % WORKTREE_LABEL_SCROLL_CYCLE_MS;
+  const forwardStart = WORKTREE_LABEL_SCROLL_START_PAUSE_MS;
+  const forwardEnd = forwardStart + WORKTREE_LABEL_SCROLL_FORWARD_MS;
+  const returnStart = forwardEnd + WORKTREE_LABEL_SCROLL_END_PAUSE_MS;
+
+  if (elapsed < forwardStart) return 0;
+  if (elapsed < forwardEnd) {
+    return (elapsed - forwardStart) / WORKTREE_LABEL_SCROLL_FORWARD_MS;
+  }
+  if (elapsed < returnStart) return 1;
+  return 1 - (elapsed - returnStart) / WORKTREE_LABEL_SCROLL_RETURN_MS;
 }
 
 function sessionStatusLabel(
@@ -310,6 +334,60 @@ export function WorktreeGroupRow({
   const main = kind === 'main';
   const dashboardActionVisible =
     showDashboardAction === true && menu?.onDashboard !== undefined;
+  const worktreeLabelRef = useRef<HTMLSpanElement>(null);
+  const labelScrollFrameRef = useRef<number | undefined>(undefined);
+
+  const stopWorktreeLabelScroll = () => {
+    if (labelScrollFrameRef.current !== undefined) {
+      cancelAnimationFrame(labelScrollFrameRef.current);
+      labelScrollFrameRef.current = undefined;
+    }
+    if (worktreeLabelRef.current !== null) {
+      worktreeLabelRef.current.scrollLeft = 0;
+    }
+  };
+
+  const startWorktreeLabelScroll = () => {
+    stopWorktreeLabelScroll();
+    const labelElement = worktreeLabelRef.current;
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (labelElement === null || prefersReducedMotion) {
+      return;
+    }
+
+    const startedAt = performance.now();
+    const animate = (timestamp: number) => {
+      if (worktreeLabelRef.current !== labelElement) {
+        labelScrollFrameRef.current = undefined;
+        return;
+      }
+
+      const maxScrollLeft = Math.max(0, labelElement.scrollWidth - labelElement.clientWidth);
+      if (maxScrollLeft === 0) {
+        labelElement.scrollLeft = 0;
+        labelScrollFrameRef.current = undefined;
+        return;
+      }
+
+      labelElement.scrollLeft =
+        maxScrollLeft * worktreeLabelScrollProgress(timestamp - startedAt);
+      labelScrollFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    labelScrollFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (labelScrollFrameRef.current !== undefined) {
+        cancelAnimationFrame(labelScrollFrameRef.current);
+        labelScrollFrameRef.current = undefined;
+      }
+    };
+  }, []);
+
   const markerClass =
     drag?.marker === 'before'
       ? styles.dropBefore
@@ -350,6 +428,8 @@ export function WorktreeGroupRow({
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
       onClick={onToggle}
+      onMouseEnter={startWorktreeLabelScroll}
+      onMouseLeave={stopWorktreeLabelScroll}
     >
       <button
         type="button"
@@ -380,7 +460,9 @@ export function WorktreeGroupRow({
           <StateDot state={state} />
         </span>
       )}
-      <span className={styles.worktreeLabel}>{label}</span>
+      <span ref={worktreeLabelRef} className={styles.worktreeLabel}>
+        {label}
+      </span>
       <span
         className={styles.treeActionSlot}
       >

@@ -1474,7 +1474,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
-test('keeps group actions hover-only without reserving Worktree label space', async () => {
+test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const rowProps = await readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8');
@@ -1492,6 +1492,15 @@ test('keeps group actions hover-only without reserving Worktree label space', as
   assert.match(rowSource, /className=\{styles\.dashboardAction\}/);
   assert.match(rowSource, /data-dashboard-action/);
   assert.match(rowSource, /aria-label=\{t\('dashboard\.title'\)\}/);
+  assert.match(rowSource, /const worktreeLabelRef = useRef<HTMLSpanElement>\(null\)/);
+  assert.match(rowSource, /const labelScrollFrameRef = useRef<number \| undefined>\(undefined\)/);
+  assert.match(rowSource, /onMouseEnter=\{startWorktreeLabelScroll\}/);
+  assert.match(rowSource, /onMouseLeave=\{stopWorktreeLabelScroll\}/);
+  assert.match(source, /function worktreeLabelScrollProgress/);
+  assert.match(source, /labelElement\.scrollWidth - labelElement\.clientWidth/);
+  assert.match(source, /labelElement\.scrollLeft = 0/);
+  assert.match(source, /requestAnimationFrame\(animate\)/);
+  assert.match(source, /cancelAnimationFrame\(/);
   assert.match(
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,

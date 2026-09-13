@@ -88,7 +88,8 @@ The shared Worktree row keeps the existing Dashboard menu entry and adds a hover
 controlled by the `showDashboardAction` flag for Local/Main and active/archived Worktrees. Its trailing
 action rail is zero-width while idle, so Dashboard, menu, and Session `+` do not reduce the Worktree
 label's available width. Hover, focus, or an open menu reveals the available controls in intrinsic-width
-flow; a long Worktree label is horizontally scrollable in the revealed state. The leading Worktree and
+flow; a long Worktree label automatically scrolls while the pointer is over the row and resets to its
+original position when the pointer leaves. The leading Worktree and
 nested Session alignment slots remain compacted to 20px, and Dashboard overlay positioning still reserves
 the native Sidebar resize handle's 4px half-width.
 
@@ -162,7 +163,8 @@ The follow-up keeps the change inside the browser Consumer. WorktreeGroupRow now
 action rail at zero width while idle, so the Dashboard icon, options menu, and Session creation `+`
 are visually hidden without consuming Worktree label space. Hover, focus, and an open menu reveal the
 controls with their intrinsic spacing and preserve keyboard reachability through opacity and pointer-event
-states. Long labels switch from ellipsis to horizontal scrolling while the rail is revealed; the existing
+states. Long labels switch from ellipsis to an automatic forward-and-return scroll while the rail is
+revealed; leaving the row cancels the animation and resets the label to its original position. The existing
 500 ms Worktree HoverCard remains the full-value fallback. Workspace rows retain their native fixed rail.
 
 No DSH source, Host/Provider/Remote contract, sidecar data, Session data, or Worktree behavior changes.

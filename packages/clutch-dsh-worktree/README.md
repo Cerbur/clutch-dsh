@@ -62,7 +62,8 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action.
   The Worktree group rail is zero-width at rest; hover, focus, or an open menu reveals the available Dashboard,
-  menu, and Session `+` controls at intrinsic width, while long Worktree labels can scroll horizontally.
+  menu, and Session `+` controls at intrinsic width; long Worktree labels automatically scroll while hovered
+  and reset to their original position when the pointer leaves.
   Active rows offer `Archive Worktree` with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
