@@ -1474,15 +1474,21 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
-test('adds a hover-only Dashboard action without removing the menu action', async () => {
+test('adds a parameterized hover-only Dashboard action without removing the menu action', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
+  const rowProps = await readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8');
   const rowStart = source.indexOf('function WorktreeGroupRow');
   const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
   assert.notEqual(rowStart, -1);
   assert.notEqual(rowEnd, -1);
   const rowSource = source.slice(rowStart, rowEnd);
 
+  assert.match(rowProps, /interface WorktreeGroupRowProps[\s\S]*showDashboardAction\?: boolean;/);
+  assert.match(
+    rowSource,
+    /dashboardActionVisible =\s*showDashboardAction === true && menu\?\.onDashboard !== undefined/,
+  );
   assert.match(rowSource, /className=\{styles\.dashboardAction\}/);
   assert.match(rowSource, /data-dashboard-action/);
   assert.match(rowSource, /aria-label=\{t\('dashboard\.title'\)\}/);
@@ -1502,8 +1508,12 @@ test('adds a hover-only Dashboard action without removing the menu action', asyn
     /\.worktreeRow:hover \.dashboardAction,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.dashboardAction,[\s\S]*\.worktreeRow:focus-within \.dashboardAction[\s\S]*visibility: visible;/,
   );
 
+  const mainCall = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
   const activeCall = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
   const archivedCall = await readSurfaceGroupRow('components/ArchivedWorktree.tsx', 'worktree');
+  assert.match(mainCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
+  assert.match(activeCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
+  assert.match(archivedCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
   assert.match(activeCall, /onDashboard:/);
   assert.match(archivedCall, /onDashboard:/);
 });

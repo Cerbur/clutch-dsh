@@ -200,6 +200,7 @@ export function ActiveWorktree({
         onToggle={() => {
           toggleWorktree(record.worktreeId);
         }}
+        showDashboardAction={props.openDashboard !== undefined}
         onCreateSession={
           record.status === 'active' &&
           record.health !== 'repair' &&

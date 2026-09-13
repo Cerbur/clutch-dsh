@@ -288,6 +288,8 @@ export interface WorktreeGroupRowProps {
   readonly repairGuidance?: string;
   readonly onToggle: () => void;
   readonly onCreateSession?: () => void;
+  /** Whether this row should expose the inline Dashboard action when wired. */
+  readonly showDashboardAction?: boolean;
   readonly menu?: WorktreeGroupMenuProps;
   readonly drag?: WorktreeDragProps;
 }

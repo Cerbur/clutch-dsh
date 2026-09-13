@@ -21,7 +21,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 ## Capabilities
 
 - Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
-- Open Dashboard from an active or archived Worktree menu or its hover-only row action, or use
+- Open Dashboard from the Local/Main or active/archived Worktree menu or its hover-only row action, or use
   the quick Dashboard icon to the left of the native Session-header More actions button. View the
   real name and cwd, copy the full path, and switch between Dashboard, Git & Changes, Sessions,
   Children, and Settings. Unconnected MVP cards and actions are explicitly marked Coming soon.
@@ -60,7 +60,7 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
-  Managed Worktree rows also expose Dashboard through the existing menu and a hover-only row action;
+  Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action;
   active rows offer `Archive Worktree` with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
@@ -246,8 +246,8 @@ Session header. The dashboard temporarily replaces the area beside the Sidebar, 
 Session page.
 The native conversation remains mounted. Use **Back to session**, press **Escape**, open
 a Session from the Sidebar, or exit Worktree mode to restore the native page. No Session
-is created or changed by opening the dashboard. Local/Main has no inline Worktree-row Dashboard
-icon; its current Session can still use the Session-header shortcut. The Dashboard keeps the
+is created or changed by opening the dashboard. Local/Main and managed Worktree rows can use the
+inline Dashboard icon; the current Session can also use the Session-header shortcut. The Dashboard keeps the
 Sidebar resize handle available while it is open.
 
 The title uses the same accepted branch name as the Worktree row. Click the title to copy the

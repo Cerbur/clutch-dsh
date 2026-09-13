@@ -180,6 +180,7 @@ export function ArchivedWorktree({
         onToggle={() => {
           toggleWorktree(record.worktreeId);
         }}
+        showDashboardAction={props.openDashboard !== undefined}
         menu={(() => {
           const activityBlocked = worktreeLifecycleBlockReason(actionPending, record.health);
           const blockedReasonText =

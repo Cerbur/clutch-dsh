@@ -335,8 +335,9 @@ commands 仍通过 `ctx.workspaces` 调用。旧 `dsh-client-runtime` 已移除�
 Client surface 的当前约束：
 
 - Worktree mode 只从 Sidebar footer action 进入，不添加独立 Workspace/Worktree Tab；
-- 已管理的 active/archived Worktree 菜单提供 Dashboard。Dashboard 使用现有 `shell.overlay`
-  临时覆盖 Sidebar 右侧页面，保留原生 Session 组件；关闭、Session 导航、模式退出、布局
+- Local/Main 与已管理的 active/archived Worktree 行都提供 Dashboard；对应 menu 以及行 hover 后的行内
+  icon 都可打开 Dashboard。Dashboard 使用现有 `shell.overlay` 临时覆盖 Sidebar 右侧页面，保留原生
+  Session 组件；关闭、Session 导航、模式退出、布局
   anchor 丢失或 dispose 时恢复原生列的可见性与键盘访问。选中身份只保存在浏览器内存，
   名称/cwd 来自现有 ready projection，不新增 Host/Remote/sidecar 能力。MVP 中未接入的
   卡片与操作明确标记占位，不伪造 Git 或 Session 数据。实现边界见 `src/client/README.md`。

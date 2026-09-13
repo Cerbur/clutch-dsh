@@ -303,11 +303,13 @@ export function WorktreeGroupRow({
   repairGuidance,
   onToggle,
   onCreateSession,
+  showDashboardAction,
   menu,
   drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
-  const showDashboardAction = !main && menu?.onDashboard !== undefined;
+  const dashboardActionVisible =
+    showDashboardAction === true && menu?.onDashboard !== undefined;
   const markerClass =
     drag?.marker === 'before'
       ? styles.dropBefore
@@ -380,7 +382,7 @@ export function WorktreeGroupRow({
       )}
       <span className={styles.worktreeLabel}>{label}</span>
       <span
-        className={`${styles.treeActionSlot} ${showDashboardAction ? styles.treeActionSlotWithDashboard : ''}`}
+        className={`${styles.treeActionSlot} ${dashboardActionVisible ? styles.treeActionSlotWithDashboard : ''}`}
       >
         <span
           className={styles.groupActivity}
@@ -391,7 +393,7 @@ export function WorktreeGroupRow({
         >
           {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
         </span>
-        {showDashboardAction && (
+        {dashboardActionVisible && (
           <span className={styles.dashboardAction}>
             <button
               type="button"

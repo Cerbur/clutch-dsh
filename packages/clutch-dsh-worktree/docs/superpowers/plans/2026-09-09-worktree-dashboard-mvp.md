@@ -55,7 +55,7 @@ presentation, with no DSH source or persisted Session changes.
 
 ## Scope and composition
 
-- Add Dashboard to managed active and archived Worktree menus; Local stays unchanged.
+- Add Dashboard to the Local/Main and managed active/archived Worktree menus and row actions.
 - Reuse `shell.overlay` to cover the area beside the Sidebar. Keep the native
   conversation mounted and temporarily hide/inert its columns, restoring them on
   close, Session navigation, mode exit, anchor loss, and disposal. Missing layout
@@ -83,8 +83,9 @@ and the non-destructive Archive confirmation. Keep the existing eligibility and
 pending-operation gates. Launch VS Code through an encoded `vscode://file/...` link.
 The remaining Git, instructions, children, settings, and quick actions stay placeholders.
 No new reads are introduced by dashboard entry, Session rendering, or tab changes.
-The Worktree row keeps the existing Dashboard menu entry and adds a hover-only icon action for
-active/archived Worktrees. Its conditional 92px rail places Dashboard/menu/+ at 64/32/0px,
+The shared Worktree row keeps the existing Dashboard menu entry and adds a hover-only icon action
+controlled by the `showDashboardAction` flag for Local/Main and active/archived Worktrees. Its conditional
+92px rail places Dashboard/menu/+ at 64/32/0px,
 compacts the Worktree leading and nested Session alignment slots to 20px, and reserves the
 native Sidebar resize handle's 4px half-width when positioning the Dashboard overlay.
 

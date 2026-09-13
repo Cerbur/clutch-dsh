@@ -307,6 +307,7 @@ export function WorkspaceTree({
                       onToggle={() => {
                         toggleMain(workspace.workspaceId);
                       }}
+                      showDashboardAction={props.openDashboard !== undefined}
                       menu={{
                         onDashboard:
                           props.openDashboard === undefined

@@ -96,13 +96,13 @@ both candidate reads and import mutations and releases the membership projection
 ### Worktree dashboard
 
 `dashboard/` owns the transient dashboard selection, page, and presentation lifecycle.
-`WorktreeSurface` opens it from active and archived Worktree menus and resolves the
+`WorktreeSurface` opens it from Local/Main and active/archived Worktree menus and resolves the
 selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
 No additional read or global refresh is triggered by opening the dashboard. Read-only
 menu refreshes retain ready facts; updated and forgotten records project normally.
-Active and archived Worktree rows also expose a hover-only Dashboard icon in the existing action
-rail; it reuses the same callback as the menu entry and is hidden until the row is hovered, focused,
-or its menu is open. The Worktree rail expands only for rows with this action, while the leading
+The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
+active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
+reuses the same callback as the menu entry, and stays hidden until the row is hovered, focused, or its menu is open. The Worktree rail expands only for rows with this action, while the leading
 Worktree and nested Session alignment slots are compacted to preserve the Sidebar width. Dashboard
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
