@@ -8,6 +8,7 @@ import {
 import { unboundSessionIds, workspaceSessionIds } from '../../view/view-mode.js';
 import { isMainExpanded, isWorkspaceExpanded } from '../../view/worktree-expand-state.js';
 import { createNumberedWorktreeName, filterArchivedSessionIds } from '../../view/worktree-view.js';
+import { createMainWorktreeRecord } from '../../dashboard/dashboard-selection.js';
 import styles from '../../worktree.css';
 import { ActiveWorktree } from './ActiveWorktree.js';
 import { ArchivedWorktrees } from './ArchivedWorktrees.js';
@@ -31,6 +32,7 @@ export type WorkspaceTreeInput = {
   props: Pick<
     WorktreeSurfaceProps,
     | 't'
+    | 'openDashboard'
     | 'createMainSession'
     | 'openSession'
     | 'renameSession'
@@ -305,7 +307,15 @@ export function WorkspaceTree({
                       onToggle={() => {
                         toggleMain(workspace.workspaceId);
                       }}
+                      showDashboardAction={props.openDashboard !== undefined}
                       menu={{
+                        onDashboard:
+                          props.openDashboard === undefined
+                            ? undefined
+                            : () =>
+                                props.openDashboard?.(
+                                  createMainWorktreeRecord(workspace, currentBranch),
+                                ),
                         open: openMainMenuId === workspace.workspaceId,
                         label: mainLabel,
                         copyPath: workspace.path,

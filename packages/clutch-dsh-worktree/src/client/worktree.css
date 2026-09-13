@@ -675,6 +675,25 @@
   font-weight: 600;
 }
 
+/* A collapsed running row keeps one shared scroll container for its label. */
+.worktreeRow[data-group-activity='true'] .worktreeLabel,
+/* Once the action rail is revealed, allow long branch labels to scroll inline. */
+.worktreeRow:hover .worktreeLabel,
+.worktreeRow[data-menu-open='true'] .worktreeLabel,
+.worktreeRow:focus-within .worktreeLabel {
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+}
+
+.worktreeRow[data-group-activity='true'] .worktreeLabel::-webkit-scrollbar,
+.worktreeRow:hover .worktreeLabel::-webkit-scrollbar,
+.worktreeRow[data-menu-open='true'] .worktreeLabel::-webkit-scrollbar,
+.worktreeRow:focus-within .worktreeLabel::-webkit-scrollbar {
+  display: none;
+}
+
 .worktreeHoverTitle {
   color: var(--dsw-static-neutral-bluish-00);
   font-size: 14px;
@@ -715,24 +734,59 @@
 .workspaceActions {
   position: relative;
   display: inline-flex;
-  flex: 0 0 64px;
   align-items: center;
   justify-content: flex-end;
-  width: 64px;
   height: 28px;
   margin-left: auto;
 }
 
-.treeActionSlot > .menuAction {
+/* Workspace rows retain the native fixed action column. */
+.workspaceActions {
+  flex: 0 0 64px;
+  width: 64px;
+}
+
+/* Group actions do not reserve space until their row needs to show them. */
+.worktreeRow .treeActionSlot {
+  min-width: 0;
+  flex: 0 0 0;
+  width: 0;
+  gap: 4px;
+}
+
+/* Keep the 28px activity indicator plus a 4px label gap while collapsed. */
+.worktreeRow[data-group-activity='true'] .treeActionSlot {
+  flex: 0 0 32px;
+  width: 32px;
+}
+
+.worktreeRow:hover .treeActionSlot,
+.worktreeRow[data-menu-open='true'] .treeActionSlot,
+.worktreeRow:focus-within .treeActionSlot {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.workspaceActions > .menuAction {
   position: absolute;
   top: 0;
   right: 32px;
 }
 
-.treeActionSlot > .iconButton:last-child {
+.workspaceActions > .iconButton:last-child {
   position: absolute;
   top: 0;
   right: 0;
+}
+
+/* Worktree actions flow naturally so the rail matches the controls that exist. */
+.worktreeRow .treeActionSlot > .dashboardAction,
+.worktreeRow .treeActionSlot > .menuAction,
+.worktreeRow .treeActionSlot > .iconButton:last-child {
+  position: static;
+  opacity: 0;
+  pointer-events: none;
+  visibility: visible;
 }
 
 .groupActivity {
@@ -780,17 +834,38 @@
   visibility: visible;
 }
 
+.dashboardAction {
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  visibility: hidden;
+}
+
 .menuAction {
   display: inline-flex;
+  flex: 0 0 28px;
   width: 28px;
   height: 28px;
   visibility: hidden;
 }
 
 .workspaceRow:hover .menuAction,
-.workspaceRow[data-menu-open='true'] .menuAction,
-.worktreeRow:hover .menuAction,
-.worktreeRow[data-menu-open='true'] .menuAction {
+.workspaceRow[data-menu-open='true'] .menuAction {
+  visibility: visible;
+}
+
+.worktreeRow:hover .treeActionSlot > .dashboardAction,
+.worktreeRow[data-menu-open='true'] .treeActionSlot > .dashboardAction,
+.worktreeRow:focus-within .treeActionSlot > .dashboardAction,
+.worktreeRow:hover .treeActionSlot > .menuAction,
+.worktreeRow[data-menu-open='true'] .treeActionSlot > .menuAction,
+.worktreeRow:focus-within .treeActionSlot > .menuAction,
+.worktreeRow:hover .treeActionSlot > .iconButton:last-child,
+.worktreeRow[data-menu-open='true'] .treeActionSlot > .iconButton:last-child,
+.worktreeRow:focus-within .treeActionSlot > .iconButton:last-child {
+  opacity: 1;
+  pointer-events: auto;
   visibility: visible;
 }
 
@@ -866,17 +941,18 @@
   min-height: 34px;
 }
 
+/* Compact the Worktree leading slots to make room for its third action. */
 .worktreeRow .worktreeIcon,
 .worktreeRow .disclosureButton {
-  width: 22px;
+  width: 20px;
 }
 
 .treeSessionRow {
   position: relative;
   display: flex;
   align-items: center;
-  width: calc(100% - 22px);
-  margin-left: 22px;
+  width: calc(100% - 20px);
+  margin-left: 20px;
   min-width: 0;
   min-height: 31px;
   box-sizing: border-box;

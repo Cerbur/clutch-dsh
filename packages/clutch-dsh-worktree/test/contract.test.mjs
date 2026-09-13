@@ -95,6 +95,7 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
 
 test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'updateWorktreeInstructions',
     'listWorktrees',
     'listImportCandidates',
     'listBranches',

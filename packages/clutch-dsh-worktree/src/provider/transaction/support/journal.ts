@@ -53,6 +53,8 @@ export function recordForCreate(input: CreateWorktreeTransactionInput): Worktree
     workspaceId: input.workspaceId,
     absolutePath: input.targetPath,
     branch: input.targetBranch,
+    createdAt: new Date().toISOString(),
+    baseBranch: input.baseBranch,
     source: 'plugin',
     status: 'active',
   };

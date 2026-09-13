@@ -5,6 +5,9 @@ import { URL } from 'node:url';
 
 const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
+const screenshots = JSON.parse(
+  await readFile(new URL('../screenshots.json', import.meta.url), 'utf8'),
+);
 
 function headingShape(source) {
   return [...source.matchAll(/^(#{1,3})\s+/gm)].map(([heading]) => heading.trim().length);
@@ -19,6 +22,9 @@ test('keeps English and Chinese plugin READMEs structurally aligned', async () =
   assert.deepEqual(headingShape(readme), headingShape(readmeZh));
   assert.match(readme, /assets\/screenshots\/screenshots-en\.png/);
   assert.match(readmeZh, /assets\/screenshots\/screenshots-zh\.png/);
+  assert.match(readme, /assets\/screenshots\/screenshots-dashboard\.webp/);
+  assert.match(readmeZh, /assets\/screenshots\/screenshots-dashboard\.webp/);
+  assert.ok(screenshots.includes('assets/screenshots/screenshots-dashboard.webp'));
 
   const npmInstall = indexOfAny(readme, [
     'dsh plugin --profile web add @cerbur/clutch-dsh-worktree',

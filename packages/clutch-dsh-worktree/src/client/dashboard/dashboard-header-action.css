@@ -1,0 +1,25 @@
+/* Match the native 28px circular Session-header utility controls. */
+.headerDashboardButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+}
+
+.headerDashboardButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.headerDashboardButton:hover,
+.headerDashboardButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}

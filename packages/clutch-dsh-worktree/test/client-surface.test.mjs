@@ -1414,10 +1414,10 @@ test('matches native Workspace interaction, typography, and action rail', async 
   assert.match(styles, /\.sessionOverflowButton\s*\{[\s\S]*font-size: 12px;/);
   assert.match(styles, /\.searchInput\s*\{[\s\S]*font-size: 13px;/);
 
-  assert.match(styles, /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*flex: 0 0 64px;/);
-  assert.match(styles, /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*width: 64px;/);
-  assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
-  assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
+  assert.match(styles, /\.workspaceActions\s*\{[\s\S]*flex: 0 0 64px;/);
+  assert.match(styles, /\.workspaceActions\s*\{[\s\S]*width: 64px;/);
+  assert.match(styles, /\.workspaceActions > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
+  assert.match(styles, /\.workspaceActions > \.menuAction\s*\{[\s\S]*right: 32px;/);
   assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
 });
 
@@ -1474,6 +1474,111 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
+test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
+  const rowProps = await readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8');
+  const rowStart = source.indexOf('function WorktreeGroupRow');
+  const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(rowProps, /interface WorktreeGroupRowProps[\s\S]*showDashboardAction\?: boolean;/);
+  assert.match(
+    rowSource,
+    /dashboardActionVisible =\s*showDashboardAction === true && menu\?\.onDashboard !== undefined/,
+  );
+  assert.match(rowSource, /className=\{styles\.dashboardAction\}/);
+  assert.match(rowSource, /data-dashboard-action/);
+  assert.match(rowSource, /aria-label=\{t\('dashboard\.title'\)\}/);
+  assert.match(rowSource, /const worktreeLabelRef = useRef<HTMLSpanElement>\(null\)/);
+  assert.match(rowSource, /const labelScrollFrameRef = useRef<number \| undefined>\(undefined\)/);
+  assert.match(rowSource, /onMouseEnter=\{\(\) => \{/);
+  assert.match(rowSource, /onMouseLeave=\{\(\) => \{/);
+  assert.match(source, /function worktreeLabelScrollProgress/);
+  assert.match(source, /labelElement\.scrollWidth - labelElement\.clientWidth/);
+  assert.match(source, /labelElement\.scrollLeft = 0/);
+  assert.match(source, /requestAnimationFrame\(animate\)/);
+  assert.match(source, /cancelAnimationFrame\(/);
+  assert.match(
+    rowSource,
+    /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
+  );
+  assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
+  assert.match(
+    styles,
+    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*min-width: 0;[\s\S]*flex: 0 0 0;[\s\S]*width: 0;[\s\S]*gap: 4px;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.treeActionSlot,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.treeActionSlot,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot[\s\S]*flex: 0 0 auto;[\s\S]*width: auto;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.menuAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeLabel,[\s\S]*\.worktreeRow:focus-within \.worktreeLabel[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
+  );
+
+  const mainCall = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
+  const activeCall = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
+  const archivedCall = await readSurfaceGroupRow('components/ArchivedWorktree.tsx', 'worktree');
+  assert.match(mainCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
+  assert.match(activeCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
+  assert.match(archivedCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
+  assert.match(activeCall, /onDashboard:/);
+  assert.match(archivedCall, /onDashboard:/);
+});
+
+test('separates collapsed running activity and coordinates it with hover scrolling', async () => {
+  const source = (await readSurfaceSources()).combined;
+  const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
+  const rowStart = source.indexOf('function WorktreeGroupRow');
+  const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
+  assert.notEqual(rowStart, -1);
+  assert.notEqual(rowEnd, -1);
+  const rowSource = source.slice(rowStart, rowEnd);
+
+  assert.match(rowSource, /const worktreeLabelPointerInsideRef = useRef<boolean>\(false\)/);
+  assert.match(rowSource, /const syncWorktreeLabelScroll = \(\) =>/);
+  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| \(!expanded && hasOngoingSession\)/);
+  assert.match(
+    rowSource,
+    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[expanded, hasOngoingSession, label\]\)/,
+  );
+  assert.match(
+    rowSource,
+    /onMouseEnter=\{\(\) => \{\s*worktreeLabelPointerInsideRef\.current = true;\s*syncWorktreeLabelScroll\(\);\s*\}\}/,
+  );
+  assert.match(
+    rowSource,
+    /onMouseLeave=\{\(\) => \{\s*worktreeLabelPointerInsideRef\.current = false;\s*syncWorktreeLabelScroll\(\);\s*\}\}/,
+  );
+
+  const activityRailStart = styles.indexOf(
+    ".worktreeRow[data-group-activity='true'] .treeActionSlot {",
+  );
+  const activityRailEnd = styles.indexOf('}', activityRailStart);
+  assert.notEqual(activityRailStart, -1);
+  assert.match(
+    styles.slice(activityRailStart, activityRailEnd + 1),
+    /flex: 0 0 32px;[\s\S]*width: 32px;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow\[data-group-activity='true'\] \.worktreeLabel,[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
+  );
+  const hoverRailStart = styles.indexOf('.worktreeRow:hover .treeActionSlot');
+  assert.ok(hoverRailStart > activityRailStart);
+});
+
 test('reduces the left offset before the nested tree line', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeChildren {');
@@ -1492,8 +1597,8 @@ test('indents Session tabs by the Worktree icon width', async () => {
   assert.notEqual(ruleEnd, -1);
 
   const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
-  assert.match(sessionRule, /margin-left: 22px;/);
-  assert.match(sessionRule, /width: calc\(100% - 22px\);/);
+  assert.match(sessionRule, /margin-left: 20px;/);
+  assert.match(sessionRule, /width: calc\(100% - 20px\);/);
 });
 
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
@@ -1597,7 +1702,7 @@ test('polishes Main and Worktree row hover presentation', async () => {
 
   assert.match(
     styles,
-    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 22px;/,
+    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 20px;/,
   );
   assert.match(
     styles,

@@ -39,7 +39,7 @@ type Input = {
   ordering: Pick<ArchivedWorktreesInput['ordering'], 'orderedSessionIdsByAccount'>;
   props: Pick<
     ArchivedWorktreesInput['props'],
-    't' | 'manager' | 'renameSession' | 'forkSession' | 'archiveSession'
+    't' | 'manager' | 'renameSession' | 'forkSession' | 'archiveSession' | 'openDashboard'
   >;
   lifecycle: Pick<ArchivedWorktreesInput['lifecycle'], 'branchLabel' | 'branchActions'>;
   mutation: Pick<
@@ -180,11 +180,14 @@ export function ArchivedWorktree({
         onToggle={() => {
           toggleWorktree(record.worktreeId);
         }}
+        showDashboardAction={props.openDashboard !== undefined}
         menu={(() => {
           const activityBlocked = worktreeLifecycleBlockReason(actionPending, record.health);
           const blockedReasonText =
             activityBlocked === 'recovery' ? t('worktree.recovery') : undefined;
           return {
+            onDashboard:
+              props.openDashboard === undefined ? undefined : () => props.openDashboard?.(record),
             ...branchActions(record),
             open: openWorktreeMenuId === record.worktreeId,
             label: record.branch,

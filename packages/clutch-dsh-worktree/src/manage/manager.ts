@@ -83,6 +83,74 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     });
   }
 
+  updateWorktreeInstructions(input: {
+    workspaceId: string;
+    worktreeId: string;
+    instructions: string;
+    expectedInstructions: string;
+  }): Promise<string> {
+    return this.afterRecovery(async () => {
+      await requireWorkspace(this.context, input.workspaceId);
+      if (
+        typeof input.instructions !== 'string' ||
+        input.instructions.length > 32000 ||
+        typeof input.expectedInstructions !== 'string'
+      ) {
+        throw providerError(
+          'WORKTREE_STATE_CONFLICT',
+          'Instructions must be text of at most 32000 characters',
+          {},
+        );
+      }
+      return this.context.sidecar.mutate(input.workspaceId, (snapshot) => {
+        const record = snapshot.worktrees.find((item) => item.worktreeId === input.worktreeId);
+        if (!record) throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found', {});
+        if (snapshot.pendingOperation || snapshot.recoveryIssues?.length) {
+          throw providerError(
+            'WORKTREE_RECOVERY_REQUIRED',
+            'Resolve Worktree recovery before editing instructions',
+            {},
+          );
+        }
+        const current = record.instructions ?? '';
+        if (current === input.instructions) return { snapshot, result: current, changed: false };
+        if (current !== input.expectedInstructions) {
+          throw providerError(
+            'WORKTREE_STATE_CONFLICT',
+            'Instructions changed; reopen the editor before saving',
+            {},
+          );
+        }
+        return {
+          snapshot: {
+            ...snapshot,
+            worktrees: snapshot.worktrees.map((item) =>
+              item === record ? { ...item, instructions: input.instructions } : item,
+            ),
+          },
+          result: input.instructions,
+        };
+      });
+    });
+  }
+
+  resolveSessionInstructions(sessionId: string): Promise<string> {
+    return this.afterRecovery(async () => {
+      const workspaces = (await this.context.dsh.listWorkspaces?.()) ?? [];
+      for (const workspace of workspaces) {
+        const snapshot = await this.context.sidecar.read(workspace.workspaceId);
+        const binding = snapshot.bindings.find(
+          (item) => item.sessionId === sessionId && item.status === 'active',
+        );
+        if (!binding) continue;
+        const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
+        if (!record || record.diskCleanup === 'completed') return '';
+        return record.instructions ?? '';
+      }
+      return '';
+    });
+  }
+
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
     return this.afterRecovery(() => listWorktrees(this.context, input));
   }

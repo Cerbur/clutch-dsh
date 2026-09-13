@@ -22,6 +22,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session';
       owner: ConversationHeaderActionOwnerProps;
     };
+    'conversation.session.header.utilities': {
+      kind: 'list';
+      scope: 'session';
+      owner: ConversationHeaderActionOwnerProps;
+    };
     'sidebar.footer.action': {
       kind: 'list';
       scope: 'root';

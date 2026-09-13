@@ -89,6 +89,8 @@ export async function recoverWorktreeTransaction(
               workspaceId: input.workspaceId,
               absolutePath: pending.targetPath,
               branch: pending.branch,
+              createdAt: pending.startedAt,
+              baseBranch: pending.baseRef ?? pending.branch,
               source: 'plugin',
               status: 'active',
             };

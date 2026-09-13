@@ -3,7 +3,13 @@
 `@cerbur/clutch-dsh-worktree` adds a Git Worktree view to the DSH Web UI. It groups
 Sessions as Workspace → Worktree → Session while keeping DSH as the source of truth for
 Project/Workspace identity, Session metadata, native lists, and conversation history.
-The plugin stores only external Worktree/Session relationship metadata.
+The plugin stores external Worktree/Session relationships, acquisition facts, and user-authored
+Worktree instructions in its own sidecar.
+
+> **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. The overview, Session
+> navigation, Worktree instructions, Worktree creation/archive, and the direct VS Code launch action are
+> connected; Git details, derived Worktrees, Settings, and other actions marked **Coming soon** remain
+> placeholders.
 
 ## Screenshots
 
@@ -17,15 +23,23 @@ Worktree rows, and the read-only blank-session Hero context.
 The Import screenshot shows the existing Workspace `+` dialog with Create selected by default,
 the adjacent Import tab, and a standard dropdown containing safe example branch/path values.
 
+![Worktree Dashboard preview (Chinese UI)](assets/screenshots/screenshots-dashboard.webp)
+
+The Dashboard screenshot records the current preview UI: Worktree identity, acquisition facts,
+connected Session and Worktree actions, and clearly marked placeholder cards.
+
 ## Capabilities
 
 - Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
+- Open Dashboard from the Local/Main or active/archived Worktree menu or its hover-only row action, or use
+  the quick Dashboard icon to the left of the native Session-header More actions button. View the
+  real name and cwd, copy the full path, and switch between Dashboard, Git & Changes, Sessions,
+  Children, and Settings. Unconnected MVP cards and actions are explicitly marked Coming soon.
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
 - Choose Import in the same dialog to discover unmanaged, branch-attached Git Worktrees linked to the Workspace repository. The first version omits the repository root and detached HEAD entries.
-- Register an existing Worktree in place without moving, copying, or editing its directory; the imported record uses `source: external` and then follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
-- Archive Worktrees non-destructively (`status: removed`), preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation: users must confirm all Sessions, subagents, and other tasks using the directory have stopped. Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
-- Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then
-  open it directly.
+- Register an existing Worktree in place without moving, copying, or editing its directory; the imported record follows the same Session, binding, health, ordering, cwd, projection, refresh, and recovery flow as a plugin-created record.
+- Archive Worktrees non-destructively, preserving disk files, active bindings, and runtime cwd. Disk cleanup (`git worktree remove`) requires secondary confirmation: users must confirm all Sessions, subagents, and other tasks using the directory have stopped. Worktrees can also be forgotten from plugin management while retaining disk files and Sessions.
+- Create a normal Session from Main or a Session whose runtime cwd is an active Worktree, then open it directly.
 - For active Worktree Sessions, request the named `worktree-full-access` preset after an
   explicit confirmation. It combines DSH `danger-full-access` with `ask`: it removes filesystem
   confinement for linked Git metadata while keeping approval prompts enabled; network and
@@ -38,23 +52,30 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   and completed states occupy the trailing slot; idle Sessions show native relative time for the
   last human-authored message there. Hover or an open menu gives the trailing slot back to the
   existing actions menu.
+- Dashboard Session cards use the same status-or-relative-time metadata in both the overview
+  preview and the full Sessions tab, keeping status semantics consistent with the Worktree list.
 - Show the native DSH Session hover detail card with the complete title, relative time, and current
   status; the card yields to the Session actions menu and row dragging.
 - Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
   states without copying the animation implementation into the plugin.
 - Show one native running indicator on a collapsed Workspace, Main, or Worktree when any of its
-  non-archived Sessions is active; expanded groups keep their normal action rail instead.
+  non-archived Sessions is active. A collapsed active group reserves the indicator's 28px box plus
+  a 4px label gap, and its long Worktree label scrolls while activity remains active; expanded groups
+  keep their normal action rail instead.
 - Promote a Session to the head of its Main or Worktree visual group after a newer user message.
   This ordering is browser-local and does not mutate DSH Workspace order or the Worktree sidecar.
 - Fork a Session from the native DSH Workspace tab, the Worktree view, or the Conversation fork
-  action. When the parent has an active Worktree binding, the child is bound to the same Worktree,
-  then added to the browser-local Workspace membership projection after the binding refresh; the
-  child remains a normal DSH Session. The refresh ordering keeps it from briefly appearing in
-  Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
+  action. When the parent has an active Worktree binding, the child is bound to the same Worktree
+  and opens directly in the Worktree view. The child remains a normal DSH Session.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
-  Main and detached rows show only `Copy path`; active Worktree rows also show `Archive Worktree`
-  with confirmation.
+  Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action.
+  The Worktree group rail is zero-width at rest unless a group is collapsed with active Session activity;
+  that state reserves the 28px running indicator and a 4px text gap. Hover, focus, or an open menu
+  reveals the available Dashboard, menu, and Session `+` controls at intrinsic width. Long Worktree labels
+  automatically scroll while hovered or while collapsed activity remains active, using one shared scroll
+  loop and resetting when neither trigger applies.
+  Active rows offer Archive Worktree with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
   name, such as `feature-2` or `feature-3`; detached Worktrees do not expose this action.
@@ -74,33 +95,22 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   `WT` button when the Sidebar is collapsed.
 - Keep Worktree Sessions in the original DSH Project/Workspace view; the plugin does not copy
   Session content or modify messages, prompts, transcripts, or history.
-- Worktree fork membership is not written to DSH's durable `Workspace.sessionIds`. While this
-  plugin is loaded, the browser can show the child through its local projection; without the
-  plugin, the child remains in DSH's global Session management but is not durably attached to the
-  native Workspace root membership.
 
 ### Compatibility and prerequisites
 
-Session reload reads both rc.1 persisted headers and newer DSH header snapshots.
-Known v4 development-build metadata (`instructions`, `createdAt`, `importedAt`,
-`baseBranch`) is preserved across sidecar writes; this release neither creates it nor
-injects instructions. Unknown fields are still rejected. Older v4 plugin readers may
-reject snapshots containing these development fields.
+Session reload is compatible with DSH rc.1 persisted headers and newer DSH header snapshots.
+The Worktree Dashboard preview records acquisition facts for new Worktrees and injects saved instructions for active sessions.
 
-The supported compatibility facts are:
+The supported compatibility requirements are:
 
-| Component | Min Version | Notes |
-| --- | --- | --- |
-| DSH Client | `>=0.1.2-rc.1` | Requires the Session/Workspace Controllers and Client Store |
-| DSH Host | `>=0.1.2-rc.1` | Requires the Typert Gateway `/api` protocol and subprocess capability |
-| Git | `>=2.20.0` | Requires worktree core commands and branch discovery |
-| Node.js | `>=20.0.0` | LTS is recommended |
+| Component  | Min Version    | Notes                                                                 |
+| ---------- | -------------- | --------------------------------------------------------------------- |
+| DSH Client | `>=0.1.2-rc.1` | Requires the Session/Workspace Controllers and Client Store           |
+| DSH Host   | `>=0.1.2-rc.1` | Requires the Typert Gateway `/api` protocol and subprocess capability |
+| Git        | `>=2.20.0`     | Requires worktree core commands and branch discovery                  |
+| Node.js    | `>=20.0.0`     | LTS is recommended                                                    |
 
 ## Installation
-
-Use the npm package for the normal user installation. Use a repository checkout to develop or
-validate local source, or use the GitHub source path when installing the source package through a
-marketplace entry.
 
 ### Install from npm (recommended)
 
@@ -126,58 +136,6 @@ To inspect the currently published version on the official registry:
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
 ```
 
-### Prepare the current upstream DSH checkout
-
-For source-based development or validation, prepare the upstream checkout first. The current
-upstream default branch is `master`; follow the repository's default branch if it changes later.
-For the minimum rc.1 compatibility validation path, check out `dsh-v0.1.2-rc.1`:
-
-```bash
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-git fetch origin
-git checkout dsh-v0.1.2-rc.1
-pnpm install
-pnpm run build
-```
-
-### Install from a repository checkout
-
-Build the package from the `clutch-dsh` checkout, then install its absolute path into the DSH
-profile:
-
-```bash
-cd /path/to/clutch-dsh
-pnpm install
-pnpm --filter @cerbur/clutch-dsh-worktree build
-
-cd /path/to/deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
-pnpm dsh web --dump-config
-pnpm dsh web
-```
-
-The `--dump-config` output should include the plugin bundle layer. If the profile still contains
-an old unscoped installation, remove it first:
-
-```bash
-pnpm dsh plugin --profile web remove clutch-dsh-worktree
-```
-
-To update a local checkout, rebuild the package and restart DSH:
-
-```bash
-cd /path/to/clutch-dsh
-pnpm --filter @cerbur/clutch-dsh-worktree build
-cd /path/to/deepseek-harness
-pnpm dsh web
-```
-
-After changing `package.json`, `cordis.patch.yml`, or the profile bundle members, run the plugin
-add command again.
-
 ### Install from GitHub source
 
 The source path generated by `awesome-dsh-plugin` is:
@@ -186,28 +144,8 @@ The source path generated by `awesome-dsh-plugin` is:
 dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh-worktree"
 ```
 
-This is a source Git dependency, not a prebuilt npm package. Its `prepare` lifecycle generates
-`lib/`. The current DSH profile uses pnpm 11 `allowBuilds`: on the first Git installation, pnpm
-intentionally rejects the build and prints a complete key containing the package name, Git URL,
-resolved commit, and subdirectory path. Copy that complete key into the profile's
-`pnpm-workspace.yaml`, for example:
-
-```yaml
-allowBuilds:
-  '@cerbur/clutch-dsh-worktree@git+https://github.com/Cerbur/clutch-dsh#<resolved-commit>&path:/packages/clutch-dsh-worktree': true
-```
-
-Use the exact package key printed by pnpm: `<resolved-commit>`, the Git URL, and the path must
-match the error output. A package-name-only entry is not enough for a direct Git dependency, and
-`onlyBuiltDependencies` is not the configuration used by the current pnpm 11 Git prepare flow.
-After saving the allowlist, rerun the original install command. A new commit requires a new key.
-The allowlist belongs to the profile owner who trusts that Git commit; do not add it to this
-plugin package.
-
-After authorization, Git prepare runs `pnpm install` in the checked-out monorepo and then
-`pnpm run build`, so the profile must be able to reach its configured registry. Registry DNS,
-mirror, or lockfile errors after authorization are installation-environment errors, not
-`allowBuilds` rejections. Use the npm installation above to avoid source-build authorization.
+This is a source Git dependency that builds during installation. For pnpm 11 `allowBuilds`
+authorization, local development, and contributor workflows, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ### Uninstall
 
@@ -229,6 +167,70 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 The screenshot above illustrates the Sidebar entry point and the visual context shown in the
 blank-session Hero. The displayed language follows DSH's current language setting.
+
+### Open a Worktree dashboard
+
+The Dashboard is a plugin-only preview MVP; it does not replace DSH's native Session page or
+write DSH-owned Workspace/Session data.
+
+In Worktree mode, hover a managed Worktree row and click its Dashboard icon, or open the row's
+options menu and choose **Dashboard**. For a current Session with a ready Main or Worktree
+context, click the Dashboard icon to the left of the native **More actions** button in the
+Session header. The dashboard temporarily replaces the area beside the Sidebar, including the
+Session page.
+The native conversation remains mounted. Use **Back to session**, press **Escape**, open
+a Session from the Sidebar, or exit Worktree mode to restore the native page. No Session
+is created or changed by opening the dashboard. Local/Main and managed Worktree rows can use the
+inline Dashboard icon; the current Session can also use the Session-header shortcut. The Dashboard keeps the
+Sidebar resize handle available while it is open.
+
+![Worktree Dashboard preview](assets/screenshots/screenshots-dashboard.webp)
+
+The screenshot above shows the preview Dashboard beside the native Worktree Sidebar. Its connected
+controls are intentionally limited to the MVP surface; unfinished cards remain visibly marked.
+
+The title uses the same accepted branch name as the Worktree row. Click the title to copy the
+branch name directly. The cwd is the record's full absolute path; its copy button reports success
+or failure. If DSH cannot provide Main's current branch, the Dashboard labels it unavailable and
+does not offer branch copying. Current branch, availability, and source use the existing Worktree projection. Ready means the Worktree is available;
+it does **not** assert that Git files are clean. An archived or cleaned record still shows
+its recorded path, which need not exist on disk.
+
+The five tabs support Left/Right, Home, and End keys. Overview shows up to five current
+Worktree Sessions; Sessions shows the full list. Both consume the existing in-memory Sessions
+and bindings with Sidebar ordering and visibility rules, independent of Sidebar search.
+Click a Session to return to its native page. New Session uses the existing create/bind/open
+flow, including blank-Session reuse and failure recovery, and leaves the dashboard.
+New Worktree opens the existing Create dialog with the current branch and numbered-name
+defaults. Archive Worktree opens the existing non-destructive confirmation. These actions
+follow the Sidebar's health, archive, and pending-operation gates.
+Open in VS Code uses an encoded `vscode://file/...` link for the recorded cwd. VS Code must be
+installed on the browser's machine and able to access that path; the browser may request
+permission to open the app. This link does not verify directory existence or launch success.
+Git details, derived Worktrees, settings, and other marked quick actions
+remain placeholders. The layout follows DSH's theme and stacks cards on narrow screens.
+Dashboard selection is transient and is not restored after a reload.
+
+Use **Edit** on the Worktree instructions card to edit, save, or clear shared guidance
+(up to 32,000 UTF-16 code units). Saved text enters bound Sessions' next model request as
+`<system-reminder>` through DSH `agent/pre-step`, as a separate context entry in the
+Session trajectory. DSH records the message; existing history is not rewritten.
+Instruction text is inserted literally, including any `{{...}}` examples.
+Archiving preserves active bindings and instructions; detached bindings, disk cleanup, and
+removal from management stop the guidance. Clearing or losing the binding appends a
+reminder invalidating earlier Worktree instructions on the next step. Unchanged guidance
+is not repeated while its message remains visible, including after restart; compacted
+guidance is republished when needed.
+Failed saves retain the draft. Concurrent edits are rejected; cancel and reopen to load the
+latest saved text before retrying. Instructions remain in the plugin sidecar, never AGENTS.md.
+
+New plugin-created Worktrees show their recorded creation time and selected base branch.
+Imported Worktrees show their registration time and do not infer an original creation time or
+base. When these historical facts are unavailable, the Dashboard shows **Unavailable for
+historical Worktrees** instead of Unknown. The base is the acquisition
+branch name, not a live merge-base or ahead/behind calculation, and does not change on checkout.
+The open-editor control follows DSH's native styling and uses the encoded VS Code protocol link
+described above. It makes no separate host request and does not verify launch success.
 
 ### Create a Worktree
 
@@ -265,24 +267,18 @@ other Git failures retain their normal error handling.
 3. Choose an option and select `Import Worktree`. Registration writes only the plugin sidecar;
    the existing Worktree directory and Git working state remain in place. Import then creates or
    reuses a Session at that Worktree cwd and runs the same bind → open → binding refresh flow as
-   Create. Newly created Sessions are not projected into native Workspace membership before the
-   binding refresh.
+   Create.
 4. An active external import for the same Workspace and physical path is idempotent. A path already
-   managed by the plugin returns `WORKTREE_ALREADY_MANAGED`; invalid or stale candidates return
-   `WORKTREE_IMPORT_INVALID` and can be retried after the repository state is fixed.
+   managed by the plugin returns an error; invalid or stale candidates can be retried after the repository state is fixed.
 
 ### Create Main and Worktree Sessions
 
 - Use Main's `+` to create a normal DSH Session in the Project-root view.
-- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The
-  plugin calls the DSH Session Controller with `ctx.sessions.create({ cwd: worktreePath })`, then
-  saves the external binding and opens the Session. The browser-local `{ workspaceId, sessionId }`
-  membership projection is refreshed afterward, so the newly created Session does not briefly
-  appear in Main.
+- Use a Worktree's `+` to create or reuse a Session with that Worktree as its runtime cwd. The Session
+  opens directly in the Worktree view without briefly appearing in Main.
 - The connector reuses an unarchived blank Session with the exact target cwd when possible. An
-  already-bound Session opens directly; an unbound candidate is bound before projection and
-  opening. Otherwise the new-Session flow is `create → bind → open → refresh`, and concurrent
-  clicks for the same Worktree are coalesced.
+  already-bound Session opens directly; an unbound candidate is bound before opening. Otherwise, a
+  new Session is created and bound, and concurrent clicks for the same Worktree are coalesced.
 - If binding fails after DSH has created the Session, the Session ID remains available for Retry
   or Open recovery. The plugin does not delete or mutate that DSH Session.
 - Before opening an active Worktree Session, the plugin explains in a DSH-styled in-page dialog why
@@ -310,7 +306,8 @@ other Git failures retain their normal error handling.
   being dragged.
 - A collapsed Workspace, Main group, or Worktree group shows the same running dot when any
   non-archived member is ongoing, including activity hidden by search. Expanding the group hides
-  the aggregate dot; hover, focus, or an open menu reveals the existing action controls.
+  the aggregate dot; hover, focus, or an open menu reveals the existing action controls and only then
+  reserves their width.
 - A newer user message promotes its Session to the head of the current Main or Worktree visual
   group. The promotion, observed timestamps, and per-group order live only in browser-local state;
   successful manual drag still uses the native DSH ordering API before updating that local order.
@@ -318,59 +315,46 @@ other Git failures retain their normal error handling.
 ### Fork Worktree Sessions
 
 - Use any native DSH fork entry point: a Session-list tab, a Worktree Session menu, or the
-  Conversation fork action. The plugin wraps the shared DSH `sessions.fork` service, so the
-  original fork cut, title increment, and child lineage stay native.
-- After DSH creates the child, the plugin looks up the parent's active sidecar binding, writes the
-  child binding through the existing `/api` Manager. The Worktree view refreshes the binding before
-  replaying the browser-local Workspace membership projection, so the child does not briefly appear
-  in Main/Local; ready content is retained during that refresh.
-- If the child is created but sidecar lookup or binding fails, DSH keeps the child and the plugin
-  shows Retry Binding/Open Created Session recovery. A later plugin initialization also retries
-  recoverable fork children from native Session lineage summaries; it never binds unrelated
-  subagents automatically.
-- This flow does not persist the child into DSH `Workspace.sessionIds`. The native DSH Workspace
-  view can only see the temporary browser projection while the plugin is loaded; the durable native
-  Workspace data is unchanged.
+  Conversation fork action. Lineage, title increments, and conversation fork history remain native DSH behavior.
+- When the parent Session has an active Worktree binding, the forked child Session is automatically
+  bound to the same Worktree and opens directly in that Worktree view. Ready content is retained during the binding refresh.
+- If the child is created but binding fails, DSH keeps the child Session, and the Worktree view provides
+  Retry Binding and Open recovery actions. Later plugin initializations also retry recoverable fork children
+  from native Session lineage; unrelated subagents are never bound automatically.
+- Fork binding is maintained by the plugin's external index without mutating DSH's durable Workspace storage.
 
 ### Reorder and manage Worktrees
 
-- Drag Worktrees within their owning Workspace. The ordered `worktrees` array is persisted in
-  the plugin sidecar; Main is a fixed first row and Worktrees cannot move across Workspaces.
-- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
+- Drag Worktrees within their owning Workspace to reorder them. The custom order is preserved by the plugin;
+  Main is always fixed as the first row, and Worktrees cannot be dragged across Workspaces.
+- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved.
 - Open the shared Main and Worktree options menu to copy the selected row's absolute path. Active
   Worktrees show `Copy path` and `Archive Worktree`. Archiving an active Worktree is an internal
-  archive operation: it sets `status: removed`, preserves disk files, active bindings, and runtime cwd,
-  and moves the Worktree into the default-collapsed `Archived` group at the bottom of the Workspace.
+  archive operation: it preserves disk files, active bindings, and runtime cwd, and moves the Worktree into
+  the default-collapsed `Archived` group at the bottom of the Workspace.
 - The `Archived` group is rendered at the bottom of the Workspace when archived Worktrees exist and is
   collapsed by default. Its label includes the total archived Worktree count, even when collapsed.
   Each Workspace tracks its own collapsed state independently.
-- Active Worktrees with `health: repair` also offer `Archive Worktree` to archive the record without
-  touching disk files or bindings. `recovery-needed` still blocks removal pending recovery.
+- Active Worktrees requiring repair also offer `Archive Worktree` to archive the record without
+  touching disk files or bindings. Worktrees in recovery-needed state block removal until recovery completes.
 - For archived Worktrees whose disk has not been cleaned, the options menu provides:
   1. `Unarchive Worktree`: Restores a metadata-archived Worktree whose disk directory is intact back to active status, without secondary confirmation.
   2. `Clean Up Disk`: Prompts for secondary confirmation detailing the path and irreversible deletion,
      tells you that the plugin does not check Session or subagent activity and requires you to confirm
      that all tasks using the directory have stopped (otherwise deletion may cause task failures or data loss),
-     runs real non-forced `git worktree remove`, and upon success records
-     `diskCleanup: completed`, projects health as `cleaned`, transitions bindings to detached, and
-     normalizes Full Access permissions to `workspace-write + ask`. Disk removal commitment is decoupled
-     from permission normalization: once disk removal commits, the dialog closes and the record updates to
-     `cleaned`; any follow-up permission or refresh failure provides independent retry without re-executing disk removal.
-     Use `Retry` in the permission notice to retry only permission normalization for the cleaned Worktree.
-     If the Worktree directory or its `.git` entry was already deleted externally, confirming cleanup only marks
-     the plugin record as completed and detaches its bindings. It does not run Git removal or prune
-     stale Git registration. Any remaining directory and files are preserved. The completed status
-     reads `Worktree removed`, which does not imply residual files were deleted. Ordinary refreshes still show
-     missing directories as `repair` until cleanup is explicitly confirmed.
+     runs real non-forced `git worktree remove`, and upon success records the record as cleaned, transitions
+     bindings to detached, and normalizes Full Access permissions to `workspace-write + ask`. Disk removal
+     commitment is decoupled from permission normalization: once disk removal commits, the dialog closes and the
+     record updates to cleaned; any follow-up permission or refresh failure provides independent retry without
+     re-executing disk removal. If the Worktree directory or its `.git` entry was already deleted externally,
+     confirming cleanup marks the plugin record as completed and detaches its bindings without running Git removal.
   3. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
      its bindings, while preserving disk files and native DSH Sessions. It retires in-flight fork operations,
      recovery state, and permission notices for that Worktree. No Session activity check is required.
-- For archived Worktrees whose disk has already been cleaned (`health: cleaned`), the menu provides
-  `Remove from Management` to prune the sidecar record completely.
-- Session activity is informational and does not block cleanup or removal from management.
-  The default Host may report `unknown`. Before confirming disk cleanup, stop all tasks using
-  the directory yourself; the plugin does not verify that they have stopped. Native activity
-  changes and reopening the archived menu refresh its owning Workspace while retaining ready content.
+- For archived Worktrees whose disk has already been cleaned, the menu provides `Remove from Management`
+  to prune the sidecar record completely.
+- Session activity is informational and does not block cleanup or removal from management. Stop all tasks
+  using the directory yourself before confirming disk cleanup; the plugin does not verify that they have stopped.
 - Deleting a Workspace removes only DSH's Workspace registration; its directory, Sessions, Git Worktrees,
   and plugin sidecar remain.
 - DSH-native Workspace rename/delete/reorder and Session menus remain available. Session drag
@@ -410,8 +394,7 @@ adoption; detached HEAD does not offer this action.
 For `recovery-needed`, the Worktree menu offers `Retry recovery` for its Workspace.
 This retries safe journal recovery; it does not adopt branches, delete unknown paths, or
 clear unresolved identity issues. Successful adoption and recovery refresh only the owning
-Workspace while preserving existing ready content. Legacy non-transactional branch observations
-are retired automatically; there is no need to edit sidecar JSON for ordinary checkout drift.
+Workspace while preserving existing ready content.
 
 ### Understand status and recovery messages
 
@@ -424,7 +407,6 @@ are retired automatically; there is no need to edit sidecar JSON for ordinary ch
   menu or dragging suppresses the hover card. Archive confirmation explicitly preserves the
   directory, Session bindings, and cwd for both plugin-created and external Worktrees;
   Clean Disk remains a separate action.
-
 - `ready` means the Worktree is available. `cleaned` indicates disk cleanup completed while the
   sidecar archive entry is retained. `repair` identifies a missing or invalid Worktree, Session, binding,
   or cwd. `recovery-needed` means a Git/sidecar operation or identity check is unresolved and
@@ -432,9 +414,7 @@ are retired automatically; there is no need to edit sidecar JSON for ordinary ch
   was retained. An active binding pointing to a missing Worktree produces
   an explicit repair warning or error; it never silently falls back to another Worktree.
 - Without a pending Git transaction, missing active or archived Worktrees remain `repair` and
-  can be archived without blocking healthy Worktree Session bindings. Legacy non-transactional
-  `WORKTREE_RECOVERY_REQUIRED` observations for existing, uncleaned records are retired under
-  the sidecar lock; pending transactions, unknown records, and identity-change issues still block.
+  can be archived without blocking healthy Worktree Session bindings.
 - Worktree health is a runtime Git projection and is not written to the sidecar. Git readiness
   failures are shown per Workspace: a missing Git executable shows installation guidance without
   commands, while repository, initial commit, or local branch failures show copyable setup
@@ -464,9 +444,9 @@ when no current branch is reported.
 DSH owns the original Project/Workspace identity and root, Session identity and metadata, native
 Project/Session lists, messages, prompts, transcripts, and history. The plugin does not copy or
 rewrite any of those values. Its external index lives in the DSH host's plugin data directory or
-an independent sidecar store and may contain only relationship facts such as:
+an independent sidecar store and contains only relationship facts such as:
 
-- `projectId`, `worktreeId`, and `sessionId`;
+- `projectId`, `worktreeId`, and `sessionId` mappings;
 - an absolute Worktree path, branch, and lifecycle state;
 - the Worktree source (`plugin` or `external`);
 - binding status and schema version.
@@ -476,98 +456,31 @@ store a copy of `projectRoot` or any Session content. If the sidecar is unavaila
 the native Project/Session view remains readable and the plugin becomes degraded/read-only; an
 empty index must never overwrite the native DSH lists.
 
-The sidecar accepts v1, v2, and v3 snapshots for backwards-compatible reads. Legacy records are
-normalized in memory, and the first successful mutation atomically upgrades the shard to v4.
-Legacy removed records become `diskCleanup: completed`; v3 revisions are preserved.
-New v4 snapshots use a revision, an opaque repository fingerprint, and durable pending-operation
-metadata for Git create/remove. A transitional v3 snapshot containing an older raw repository
-field is read and cleaned on its next stable write. Invalid JSON, unknown schema versions, and
-invariant violations are reported as corruption rather than reset to an empty index.
-
 Each Session has at most one active Worktree binding, while a Worktree may have multiple bound
 Sessions. Rebinding the same Session to the same Worktree is idempotent; binding it to two active
 Worktrees is a conflict. A Session with no binding, a Main binding, or a detached binding runs
 with the Project root as cwd. An active Worktree binding runs with that Worktree path. The cwd is
 derived for each execution and is never persisted back into DSH Session metadata.
 
-Worktree creation creates the Git Worktree before recording its external relationship. Git
-create/remove mutations are serialized across Host processes per Workspace and repository,
-record a durable pending operation, and verify the actual Git result before publishing stable
-sidecar state. If a create cannot be reconciled or a path/repository identity changes, the
-operation remains explicitly recoverable; the plugin never uses force removal or deletes an
-unknown directory. If a sidecar write fails, the new Git Worktree is cleaned up when possible. A
-failed Worktree deletion does not silently change the relation, so it remains retryable or is
-marked `recovery-needed`. Session creation uses the native DSH API before binding; a binding
-failure never deletes or modifies the already-created Session.
+Worktree creation creates the Git Worktree before recording its external relationship; if a sidecar
+write fails, the newly created Git Worktree is cleaned up when possible. Session creation uses the
+native DSH API before binding; a binding failure never deletes or modifies the already-created Session.
 
-On Host startup, the plugin performs a best-effort safe recovery for known DSH Workspaces. It may
-finalize a pending create/remove only when Git path and repository identity are certain; otherwise
-it retains the marker and surfaces `WORKTREE_RECOVERY_REQUIRED` or
-`WORKTREE_IDENTITY_CHANGED`. It never guesses at destructive cleanup. A destructive action may
-also carry an opaque mutation token from the latest Worktree projection so a stale UI cannot act
-on a changed record.
+The Worktree session flow presents Sessions in their bound Worktree context using browser-side
+view projections without mutating DSH native Workspace storage.
 
-The Worktree session flow sends the independent Worktree cwd through the DSH Session Controller and
-keeps `{ workspaceId, sessionId }` as a browser-local membership projection rather than a
-persistent DSH attach. It does not modify DSH source, Session metadata, or native Workspace
-storage. The projection is replayed after native list refreshes and removed when the binding
-disappears or the Client is disposed.
-
-Permission changes use only the public DSH per-Session permission service and its
-`permission/preset`, `sandbox/mode`, and `approval/policy` records. The plugin does not write
-messages, prompts, transcripts, Workspace data, or Session metadata, and cannot enlarge a
+Permission changes use only the public DSH per-Session permission service. The plugin does not
+write messages, prompts, transcripts, Workspace data, or Session metadata, and cannot enlarge a
 filesystem sandbox imposed by the host running DSH.
 
 The blank Hero context is visual only. Because the current upstream DSH source checkout has no
-additive Hero headline slot, its placement depends on the native `[data-phase="hero"]` and title
-anchors; it disappears when those anchors are unavailable and should move to a formal DSH slot
-when one exists.
+additive Hero headline slot, its placement depends on native DOM anchors; it disappears when those
+anchors are unavailable and should move to a formal DSH slot when one exists.
 
-## Development and verification
+For detailed architectural models, lifecycle transitions, recovery guarantees, and developer documentation, see:
 
-From the workspace root:
-
-```bash
-cd /path/to/clutch-dsh
-pnpm install
-pnpm run check:workspace
-pnpm run check:patches
-pnpm --filter @cerbur/clutch-dsh-worktree typecheck
-pnpm --filter @cerbur/clutch-dsh-worktree build
-pnpm --filter @cerbur/clutch-dsh-worktree test
-```
-
-For the bilingual README contract and formatting:
-
-```bash
-cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
-node --test test/readme-parity.test.mjs
-pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
-```
-
-The full workspace check is:
-
-```bash
-cd /path/to/clutch-dsh
-pnpm run check
-```
-
-Do not commit generated `lib/`, coverage, sidecar data, or local credentials. See [AGENTS.md](AGENTS.md)
-for package data boundaries and lifecycle rules, [docs/RELEASING.md](docs/RELEASING.md) for
-version and installation-source details, and [src/client/README.md](src/client/README.md) for
-the browser Consumer boundary.
-
-## Marketplace description
-
-When submitting to `awesome-dsh-plugin`, use the `git` category and keep the description aligned
-with the package:
-
-```yaml
-category: git
-description:
-  en: Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.
-  zh: 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project/Workspace 和 Session 数据。
-```
-
-Marketplace submission also requires external checks such as the `dsh-plugin` topic, repository
-age, and commit count. A package README cannot set those external properties.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Canonical architecture, lifecycle, and recovery invariants
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — Local development, testing, and contribution guide
+- [docs/RELEASING.md](docs/RELEASING.md) — Release parameters and versioning policy
+- [AGENTS.md](AGENTS.md) — Coding agent working instructions
+- [src/client/README.md](src/client/README.md) — Browser client integration and surface boundaries

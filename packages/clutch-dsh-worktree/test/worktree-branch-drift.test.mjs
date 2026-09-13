@@ -240,6 +240,12 @@ test('restart clears legacy branch observations but adoption preserves identity 
     await manager.close();
     const snapshot = JSON.parse(await readFile(shard, 'utf8'));
     snapshot.schemaVersion = 3;
+    for (const item of snapshot.worktrees) {
+      delete item.createdAt;
+      delete item.baseBranch;
+      delete item.importedAt;
+      delete item.instructions;
+    }
     snapshot.recoveryIssues = [
       {
         code: 'WORKTREE_RECOVERY_REQUIRED',
