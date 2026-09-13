@@ -17,7 +17,8 @@ import {
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DragEvent as ReactDragEvent } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { IconDashboard } from '../../dashboard/dashboard-icon.js';
 import {
   isBlankSession,
   relativeTime,
@@ -37,6 +38,30 @@ import type {
 function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
   const rect = event.currentTarget.getBoundingClientRect();
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
+
+const WORKTREE_LABEL_SCROLL_START_PAUSE_MS = 800;
+const WORKTREE_LABEL_SCROLL_FORWARD_MS = 3_000;
+const WORKTREE_LABEL_SCROLL_END_PAUSE_MS = 1_000;
+const WORKTREE_LABEL_SCROLL_RETURN_MS = 3_000;
+const WORKTREE_LABEL_SCROLL_CYCLE_MS =
+  WORKTREE_LABEL_SCROLL_START_PAUSE_MS +
+  WORKTREE_LABEL_SCROLL_FORWARD_MS +
+  WORKTREE_LABEL_SCROLL_END_PAUSE_MS +
+  WORKTREE_LABEL_SCROLL_RETURN_MS;
+
+function worktreeLabelScrollProgress(elapsedMs: number): number {
+  const elapsed = elapsedMs % WORKTREE_LABEL_SCROLL_CYCLE_MS;
+  const forwardStart = WORKTREE_LABEL_SCROLL_START_PAUSE_MS;
+  const forwardEnd = forwardStart + WORKTREE_LABEL_SCROLL_FORWARD_MS;
+  const returnStart = forwardEnd + WORKTREE_LABEL_SCROLL_END_PAUSE_MS;
+
+  if (elapsed < forwardStart) return 0;
+  if (elapsed < forwardEnd) {
+    return (elapsed - forwardStart) / WORKTREE_LABEL_SCROLL_FORWARD_MS;
+  }
+  if (elapsed < returnStart) return 1;
+  return 1 - (elapsed - returnStart) / WORKTREE_LABEL_SCROLL_RETURN_MS;
 }
 
 function sessionStatusLabel(
@@ -302,10 +327,84 @@ export function WorktreeGroupRow({
   repairGuidance,
   onToggle,
   onCreateSession,
+  showDashboardAction,
   menu,
   drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
+  const dashboardActionVisible =
+    showDashboardAction === true && menu?.onDashboard !== undefined;
+  const worktreeLabelRef = useRef<HTMLSpanElement>(null);
+  const labelScrollFrameRef = useRef<number | undefined>(undefined);
+  const worktreeLabelPointerInsideRef = useRef<boolean>(false);
+
+  const stopWorktreeLabelScroll = () => {
+    if (labelScrollFrameRef.current !== undefined) {
+      cancelAnimationFrame(labelScrollFrameRef.current);
+      labelScrollFrameRef.current = undefined;
+    }
+    if (worktreeLabelRef.current !== null) {
+      worktreeLabelRef.current.scrollLeft = 0;
+    }
+  };
+
+  const startWorktreeLabelScroll = () => {
+    if (labelScrollFrameRef.current !== undefined) {
+      return;
+    }
+
+    const labelElement = worktreeLabelRef.current;
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (labelElement === null || prefersReducedMotion) {
+      return;
+    }
+
+    const startedAt = performance.now();
+    const animate = (timestamp: number) => {
+      if (worktreeLabelRef.current !== labelElement) {
+        labelScrollFrameRef.current = undefined;
+        return;
+      }
+
+      const maxScrollLeft = Math.max(0, labelElement.scrollWidth - labelElement.clientWidth);
+      if (maxScrollLeft === 0) {
+        labelElement.scrollLeft = 0;
+        labelScrollFrameRef.current = undefined;
+        return;
+      }
+
+      labelElement.scrollLeft =
+        maxScrollLeft * worktreeLabelScrollProgress(timestamp - startedAt);
+      labelScrollFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    labelScrollFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  const syncWorktreeLabelScroll = () => {
+    if (worktreeLabelPointerInsideRef.current || (!expanded && hasOngoingSession)) {
+      startWorktreeLabelScroll();
+    } else {
+      stopWorktreeLabelScroll();
+    }
+  };
+
+  useEffect(() => {
+    syncWorktreeLabelScroll();
+  }, [expanded, hasOngoingSession, label]);
+
+  useEffect(() => {
+    return () => {
+      if (labelScrollFrameRef.current !== undefined) {
+        cancelAnimationFrame(labelScrollFrameRef.current);
+        labelScrollFrameRef.current = undefined;
+      }
+    };
+  }, []);
+
   const markerClass =
     drag?.marker === 'before'
       ? styles.dropBefore
@@ -346,6 +445,14 @@ export function WorktreeGroupRow({
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
       onClick={onToggle}
+      onMouseEnter={() => {
+        worktreeLabelPointerInsideRef.current = true;
+        syncWorktreeLabelScroll();
+      }}
+      onMouseLeave={() => {
+        worktreeLabelPointerInsideRef.current = false;
+        syncWorktreeLabelScroll();
+      }}
     >
       <button
         type="button"
@@ -376,8 +483,12 @@ export function WorktreeGroupRow({
           <StateDot state={state} />
         </span>
       )}
-      <span className={styles.worktreeLabel}>{label}</span>
-      <span className={styles.treeActionSlot}>
+      <span ref={worktreeLabelRef} className={styles.worktreeLabel}>
+        {label}
+      </span>
+      <span
+        className={styles.treeActionSlot}
+      >
         <span
           className={styles.groupActivity}
           data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
@@ -387,6 +498,22 @@ export function WorktreeGroupRow({
         >
           {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
         </span>
+        {dashboardActionVisible && (
+          <span className={styles.dashboardAction}>
+            <button
+              type="button"
+              className={styles.iconButton}
+              data-dashboard-action
+              aria-label={t('dashboard.title')}
+              onClick={(event) => {
+                event.stopPropagation();
+                menu?.onDashboard?.();
+              }}
+            >
+              <IconDashboard size={16} />
+            </button>
+          </span>
+        )}
         {menu !== undefined && (
           <span className={styles.menuAction}>
             <Menu
@@ -395,6 +522,9 @@ export function WorktreeGroupRow({
                 menu.onOpenChange(false);
               }}
               items={[
+                ...(menu.onDashboard === undefined
+                  ? []
+                  : [{ id: 'dashboard', label: t('dashboard.title'), icon: <IconDashboard size={16} /> }]),
                 ...(menu.showCreate
                   ? [
                       {
@@ -479,6 +609,7 @@ export function WorktreeGroupRow({
               onSelect={(id) => {
                 menu.onOpenChange(false);
                 if (id === 'create' && menu.showCreate) menu.onCreateWorktree?.();
+                if (id === 'dashboard') menu.onDashboard?.();
                 if (id === 'adopt-branch') menu.onAdoptBranch?.();
                 if (id === 'recover') menu.onRecover?.();
                 if (id === 'copy-path') void writeClipboard(menu.copyPath);

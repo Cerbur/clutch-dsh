@@ -22,6 +22,11 @@ interface DshSessionView {
   readonly header: DshSessionHeaderView;
 }
 
+// rc.1 lists bare headers; newer DSH lists snapshots containing a header.
+type DshSessionPersistenceEntryView =
+  | DshSessionHeaderView
+  | Pick<DshSessionView, 'header'>;
+
 /**
  * plugin 从 DSH Host 消费的最小只读 service slice。
  *
@@ -48,7 +53,7 @@ export interface DshHostReadContext {
    * Lists persisted headers only; inspect, load, and mutation are deliberately absent.
    */
   readonly sessionPersistence: {
-    list(): Promise<readonly DshSessionHeaderView[]>;
+    list(): Promise<readonly DshSessionPersistenceEntryView[]>;
   };
   readonly activitySource?: WorktreeActivitySource;
 }
@@ -108,7 +113,7 @@ export class DshHostReadAdapter implements DshReadAdapter {
     // path reads transcripts.
     const live = this.ctx.sessions.get(sessionId as SessionId);
     if (live !== undefined) return this.sessionSummary(live.header);
-    const header = (await this.ctx.sessionPersistence.list()).find(
+    const header = (await this.listPersistedHeaders()).find(
       (candidate) => candidate.id === sessionId,
     );
     return header === undefined ? undefined : this.sessionSummary(header);
@@ -123,10 +128,16 @@ export class DshHostReadAdapter implements DshReadAdapter {
     for (const session of this.ctx.sessions.list()) {
       summaries.set(session.id, this.sessionSummary(session.header));
     }
-    for (const header of await this.ctx.sessionPersistence.list()) {
+    for (const header of await this.listPersistedHeaders()) {
       if (!summaries.has(header.id)) summaries.set(header.id, this.sessionSummary(header));
     }
     return [...summaries.values()];
+  }
+
+  private async listPersistedHeaders(): Promise<readonly DshSessionHeaderView[]> {
+    return (await this.ctx.sessionPersistence.list()).map(
+      (entry) => 'header' in entry ? entry.header : entry,
+    );
   }
 
   private sessionSummary(header: DshSessionHeaderView): DshSessionSummary {

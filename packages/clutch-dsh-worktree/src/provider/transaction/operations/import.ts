@@ -123,6 +123,7 @@ export async function importWorktreeTransaction(
             absolutePath: normalizedPath,
             branch: liveWorktree.branch,
             source: 'external',
+            importedAt: new Date().toISOString(),
             status: 'active',
           };
           return {

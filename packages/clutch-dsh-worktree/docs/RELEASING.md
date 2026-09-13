@@ -2,18 +2,18 @@
 
 本 package 是 DSH 的 worktree 管理 plugin。通用发布生命周期——release log 规则、worktree
 门禁、npm 发布步骤、`<release-name>-release-<version>` tag 命名等——统一记录在仓库根目录的
-[`docs/RELEASING.md`](../../docs/RELEASING.md)；本文档只保留本包的包参数、版本约束和安装来源，
+[`docs/RELEASING.md`](../../../docs/RELEASING.md)；本文档只保留本包的包参数、版本约束和安装来源，
 不复制通用流程。
 
 ## 包参数
 
-| 参数 | 值 |
-| ---- | ---- |
-| `<npm-package-name>` | `@cerbur/clutch-dsh-worktree` |
-| `<plugin>`（workspace 目录名） | `clutch-dsh-worktree` |
-| `<release-name>` | `worktree` |
-| release branch / worktree 前缀 | `wt-worktree-<version>` |
-| release tag | `worktree-release-<version>` |
+| 参数                           | 值                            |
+| ------------------------------ | ----------------------------- |
+| `<npm-package-name>`           | `@cerbur/clutch-dsh-worktree` |
+| `<plugin>`（workspace 目录名） | `clutch-dsh-worktree`         |
+| `<release-name>`               | `worktree`                    |
+| release branch / worktree 前缀 | `wt-worktree-<version>`       |
+| release tag                    | `worktree-release-<version>`  |
 
 ## 版本规则
 
@@ -36,7 +36,7 @@ npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.o
 
 ## 发布日志
 
-Release log 的内容规则和更新时机见根目录 [`docs/RELEASING.md`](../../docs/RELEASING.md)。本包的
+Release log 的内容规则和更新时机见根目录 [`docs/RELEASING.md`](../../../docs/RELEASING.md)。本包的
 `RELEASE-LOG.md` 位于 package 目录下，属于仓库内文档，不要求进入 npm package files。
 
 ## DSH source baseline
@@ -64,13 +64,13 @@ runtime 版本承诺。
 
 本 package 的最低 DSH 兼容 graph 为 `dsh-v0.1.2-rc.1`：
 
-| 项目 | 约束 |
-| ---- | ---- |
-| DSH compatibility floor | `dsh-v0.1.2-rc.1` |
-| package DSH peer range | 所有 `@deepseek-ai/dsh-*` peer 使用 `>=0.1.2-rc.1` |
-| local validation graph | 所有对应 `@deepseek-ai/dsh-*` dev dependency 固定 `0.1.2-rc.1` |
-| unsupported graph | `dsh-v0.1.1-rc.2` 及更早版本；其中已删除的 Client runtime 和可写 Workspace list 不再兼容 |
-| forward compatibility | 更高版本只有在保持 Controller、Store、WorkspaceSource、Connection 和 Slot contract 时才可候选，必须重新验证 |
+| 项目                    | 约束                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| DSH compatibility floor | `dsh-v0.1.2-rc.1`                                                                                           |
+| package DSH peer range  | 所有 `@deepseek-ai/dsh-*` peer 使用 `>=0.1.2-rc.1`                                                          |
+| local validation graph  | 所有对应 `@deepseek-ai/dsh-*` dev dependency 固定 `0.1.2-rc.1`                                              |
+| unsupported graph       | `dsh-v0.1.1-rc.2` 及更早版本；其中已删除的 Client runtime 和可写 Workspace list 不再兼容                    |
+| forward compatibility   | 更高版本只有在保持 Controller、Store、WorkspaceSource、Connection 和 Slot contract 时才可候选，必须重新验证 |
 
 ## 安装来源
 
@@ -146,5 +146,5 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
   生命周期。若要避免 Git prepare 和 `allowBuilds`，应改走已发布的 npm tarball，而不是把构建产物
   偷偷加入 Git。
 
-version 不一致时的处理按根目录 [`docs/RELEASING.md`](../../docs/RELEASING.md) 的表格执行，检查对象是
+version 不一致时的处理按根目录 [`docs/RELEASING.md`](../../../docs/RELEASING.md) 的表格执行，检查对象是
 `@cerbur/clutch-dsh-worktree`。

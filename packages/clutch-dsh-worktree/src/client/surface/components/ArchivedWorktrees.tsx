@@ -23,7 +23,7 @@ export type ArchivedWorktreesInput = {
   >;
   props: Pick<
     WorkspaceTreeInput['props'],
-    't' | 'manager' | 'renameSession' | 'forkSession' | 'archiveSession'
+    't' | 'manager' | 'renameSession' | 'forkSession' | 'archiveSession' | 'openDashboard'
   >;
   source: Pick<
     WorkspaceTreeInput['source'],

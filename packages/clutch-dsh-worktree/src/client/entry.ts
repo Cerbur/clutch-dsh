@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { Context } from '@deepseek-ai/cordis';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
@@ -21,6 +22,10 @@ import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
 import { WorktreeModeAction } from './view/WorktreeModeAction.js';
+import { switchViewMode } from './view/view-mode-dispatch.js';
+import { IconDashboard } from './dashboard/dashboard-icon.js';
+import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
+import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
@@ -187,6 +192,7 @@ export function apply(ctx: Context): void {
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
   const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
+  const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const reportPermissionNotice = (
     input: {
       readonly workspaceId: string;
@@ -374,6 +380,45 @@ export function apply(ctx: Context): void {
     'clutch-dsh-worktree: Worktree Session connector cleanup',
   );
 
+  const openDashboardForSession = (sessionId: string): void => {
+    switchViewMode('worktree');
+    const contextSnapshot = contextProjection.store.getSnapshot();
+    let targetWorkspaceId: string | undefined;
+    let targetWorktreeId: string | undefined;
+
+    if (contextSnapshot.sessionId === sessionId) {
+      if (contextSnapshot.value.kind === 'worktree') {
+        targetWorkspaceId = contextSnapshot.workspaceId;
+        targetWorktreeId = contextSnapshot.value.worktreeId;
+      } else if (contextSnapshot.value.kind === 'main') {
+        targetWorkspaceId = contextSnapshot.workspaceId;
+        targetWorktreeId = 'main';
+      }
+    }
+
+    if (targetWorkspaceId === undefined) {
+      const workspaces =
+        (
+          ctx.workspaces.list.getSnapshot() as {
+            items?: readonly { workspaceId: string; sessionIds: readonly string[] }[];
+          }
+        )?.items ?? [];
+      const workspace = workspaces.find((candidate) => candidate.sessionIds?.includes(sessionId));
+      if (workspace !== undefined) {
+        targetWorkspaceId = workspace.workspaceId;
+        targetWorktreeId = 'main';
+      }
+    }
+
+    if (targetWorkspaceId !== undefined && targetWorktreeId !== undefined) {
+      dashboardStore.set({
+        workspaceId: targetWorkspaceId,
+        worktreeId: targetWorktreeId,
+        sessionId,
+      });
+    }
+  };
+
   slots.inject('conversation.session.header.actions', () =>
     slots.register(
       {
@@ -384,6 +429,22 @@ export function apply(ctx: Context): void {
         inject: () => ({ hooks: { worktreeContext: contextProjection.store } }),
       },
       WorktreeHeaderContext,
+    ),
+  );
+
+  slots.inject('conversation.session.header.utilities', () =>
+    slots.register(
+      {
+        name: 'conversation.session.header.utilities',
+        id: 'clutch-dsh-worktree-dashboard-header',
+        order: -10,
+        locale: WORKTREE_NS,
+        inject: () => ({
+          hooks: { worktreeContext: contextProjection.store },
+          openDashboard: openDashboardForSession,
+        }),
+      },
+      DashboardHeaderAction,
     ),
   );
 
@@ -411,6 +472,7 @@ export function apply(ctx: Context): void {
           available: true,
           expandState,
           sessionOrder,
+          dashboardStore,
           hooks: { worktreeContext: contextProjection.store },
           manager,
           viewReader,
@@ -523,4 +585,31 @@ export function apply(ctx: Context): void {
       WorktreeOverlay,
     ),
   );
+
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['sessionLogDownload'], (innerCtx) => {
+      const sessionLogDownload = innerCtx.get('sessionLogDownload') as {
+        registerMoreItem(input: {
+          id: string;
+          label: () => string;
+          icon: ReturnType<typeof createElement>;
+          order: number;
+          onSelect: (sessionId: string) => void;
+        }): () => void;
+      } | undefined;
+      if (typeof sessionLogDownload?.registerMoreItem !== 'function') return;
+      innerCtx.effect(() => {
+        return sessionLogDownload.registerMoreItem({
+          id: 'clutch-dsh-worktree-dashboard',
+          label: () =>
+            innerCtx.locale.getLocale().active === 'zh'
+              ? '前往 Dashboard'
+              : 'Go to Dashboard',
+          icon: createElement(IconDashboard, { size: 16 }),
+          order: -1,
+          onSelect: openDashboardForSession,
+        });
+      }, 'clutch-dsh-worktree: session header more item');
+    });
+  }
 }

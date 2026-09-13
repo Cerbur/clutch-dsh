@@ -1,5 +1,41 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.11 — 2026-09-14
+
+### 中文
+
+#### 新增
+
+- 增加仅插件的 Worktree Dashboard 预览版，提供概览、会话、Worktree 指令、创建/归档和在应用中打开入口。
+- 支持从 Worktree、Local/Main 行和 Session 标题快捷入口打开 Dashboard，并保持原生 Session 页面与 DSH 数据不变。
+
+#### 优化
+
+- 优化 Dashboard 的会话导航、获取事实展示和 Worktree 行内操作栏，悬浮时为过长名称提供横向滚动。
+
+#### 修复
+
+- 修复 Local 行 Dashboard 入口和预览状态文案，明确标识尚未接入的操作。
+- 修复折叠且有 Session 运行时的 Worktree 指示器与名称重叠，并让运行状态与悬浮名称滚动共用同一套协调逻辑。
+- 修复并兼容 DSH 会话持久化快照格式，并在 Sidecar 存储中保留 Worktree 指令、创建与导入时间等获取元数据。
+
+### English
+
+#### Added
+
+- Add a plugin-only Worktree Dashboard preview with overview, Sessions, Worktree instructions, creation/archive, and an open-in-app launch entry point.
+- Open the Dashboard from Worktree, Local/Main, and Session-header shortcuts while leaving the native Session page and DSH-owned data unchanged.
+
+#### Improved
+
+- Improve Dashboard Session navigation, acquisition-fact presentation, and the Worktree inline action rail with hover scrolling for long labels.
+
+#### Fixed
+
+- Fix the Local-row Dashboard entry and preview status copy so unavailable actions are clearly marked.
+- Fix collapsed running Worktree rows whose activity indicator overlapped the label, and coordinate activity scrolling with hover scrolling through one shared loop.
+- Support DSH session persistence snapshot reloading and preserve acquisition metadata in sidecar storage.
+
 ## 0.1.10 — 2026-09-08
 
 ### 中文

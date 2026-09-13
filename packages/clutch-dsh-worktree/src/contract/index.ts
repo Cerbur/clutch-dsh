@@ -88,6 +88,12 @@ export type BindingStatus = 'active' | 'detached';
  * Worktree metadata persisted by the plugin sidecar; it contains no DSH Workspace or Session content.
  */
 export interface WorktreeRecord {
+  /** User-authored shared instructions; empty or absent disables injection. */
+  readonly instructions?: string;
+  /** Acquisition facts; legacy records remain unknown. */
+  readonly createdAt?: string;
+  readonly importedAt?: string;
+  readonly baseBranch?: string;
   readonly worktreeId: WorktreeId;
   readonly workspaceId: WorkspaceId;
   readonly absolutePath: string;
@@ -164,6 +170,12 @@ export function createWorktreeError(
  * Stable Manage-layer domain contract; it coordinates read-only DSH data, Git worktrees, and the external sidecar without owning DSH data.
  */
 export interface WorktreeManager {
+  updateWorktreeInstructions(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    instructions: string;
+    expectedInstructions: string;
+  }): Promise<string>;
   /**
    * 返回 Workspace 的全部已记录 Worktree，包括为 detached 关系保留的 removed 记录。
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
@@ -256,6 +268,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'updateWorktreeInstructions',
   'listWorktrees',
   'listImportCandidates',
   'listBranches',
@@ -289,6 +302,12 @@ export type WorktreeRemoteResult<Value> =
  * Browser-safe Host projection containing only domain values and serializable results, never Provider objects.
  */
 export interface WorktreeRemoteManager {
+  updateWorktreeInstructions(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    instructions: string;
+    expectedInstructions: string;
+  }): Promise<WorktreeRemoteResult<string>>;
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;

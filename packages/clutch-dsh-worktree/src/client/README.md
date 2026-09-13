@@ -93,9 +93,66 @@ both candidate reads and import mutations and releases the membership projection
 
 ## Conversation context
 
+### Worktree dashboard
+
+The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
+Worktree projection, not a replacement for DSH's native Session page or a new source of truth.
+
+`dashboard/` owns the transient dashboard selection, page, and presentation lifecycle.
+`WorktreeSurface` opens it from Local/Main and active/archived Worktree menus and resolves the
+selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
+No additional read or global refresh is triggered by opening the dashboard. Read-only
+menu refreshes retain ready facts; updated and forgotten records project normally.
+The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
+active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
+reuses the same callback as the menu entry, and stays hidden until the row is hovered, focused, or its menu is open. The Worktree rail remains zero-width at rest, so Dashboard, the menu, and the Session `+` do not reserve label space; when interaction reveals the row, the available controls use their intrinsic width. Long Worktree labels automatically scroll while the pointer is over the row and reset to their original position when it leaves; the existing delayed HoverCard remains the accessible full-value fallback. The leading
+Worktree and nested Session alignment slots are compacted to preserve the Sidebar width. Dashboard
+placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
+Dashboard is open.
+
+The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
+It does not register over the occupied `conversation` slot. The AppFrame column order
+(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow
+the live Sidebar width, and missing/replaced anchors produce zero coverage and restore
+the native columns. Native center/rightbar visibility, inert, and aria-hidden attributes
+are restored on close or disposal. Session identity changes, explicit Sidebar Session
+opens (including the same Session), mode exit, and removal of the selected identity
+close the dashboard. No native Session or Workspace state is changed.
+
+The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
+branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
+`writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
+results after branch/path changes or unmount are ignored.
+Tabs implement roving keyboard focus. Git details, derived Worktrees, Settings, and other unconnected
+data and actions are labeled rather than populated with fabricated status. The connected Worktree
+instructions card persists plugin-owned text through the existing Manager path; active bindings receive
+that text through the Host's DSH `agent/pre-step` hook.
+
+The page is a plugin-only preview MVP. Its instruction editor uses this package's
+Host/Provider/Remote/sidecar extension; the Dashboard adds no second transport and does not
+modify DSH source or native Session/Workspace data.
+
+Dashboard actions reuse `session.createSession`, `session.openWorkspaceSession`,
+`registration.openWorktreeCreator`, and `lifecycleState.setWorktreeRemoval` in the
+surface composition. New Session closes the dashboard before entering the existing
+permission/binding/recovery flow; Worktree dialogs retain the dashboard underneath.
+The Session list joins the retained Sessions and Workspace bindings, excludes archived
+and non-current blank Sessions, and follows the existing group order without a new read.
+Overview limits presentation to five rows; Sessions shows every visible member.
+The VS Code anchor encodes the recorded path into `vscode://file/...` and delegates
+launching to the browser's protocol handler; it makes no success or existence claim.
+
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.
+
+The Client contributes a quick Dashboard button to the existing
+`conversation.session.header.utilities` list. It appears only when the shared
+context is ready and matches the native Session, and its negative order places it
+before the native More actions button. Clicking it switches to Worktree mode and
+opens the current Session's Main or Worktree Dashboard. This browser-local action
+does not change DSH Session or Workspace data.
+
 The Client also contributes a browser-local `shell.overlay` companion for the
 blank Hero. It positions `Workspace (branch)` after the native Hero headline
 while `[data-phase='hero']` is present. The suffix is derived from the selected
@@ -111,7 +168,7 @@ more stable placement.
 The context is derived from one browser-local projection shared by the header
 consumer. It does not write DSH Workspace or Session data. A compatible DSH Client
 must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
-`conversation.session.header.actions` seat.
+`conversation.session.header.actions` and `conversation.session.header.utilities` seats.
 
 The shared projection compares the current Session and Workspace identity before
 reacting to native snapshot notifications. Conversation updates for the same
@@ -163,6 +220,15 @@ Client disposal stops late projection callbacks without deleting the DSH child.
 
 ## Worktree surface contract
 
+The Dashboard instructions card edits plugin-owned text through
+`updateWorktreeInstructions` on the existing Connection. Save carries the editor's
+`expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
+ignores completion after unmount. Save refreshes only the owning Workspace with ready content
+preserved. Main does not expose instruction editing. Creation/import time and base branch are
+optional recorded facts; missing values remain unknown. The open-editor control uses the
+native split-button typography, padding, border, and hover colors, launching detected host
+applications or falling back to the encoded VS Code protocol link.
+
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
 are announced once while present; resolved entries leave the queue and a later recurrence
@@ -187,6 +253,7 @@ The directory layout follows those responsibilities:
 ```text
 client/
 ├── context/     # Conversation and Hero context projection
+├── dashboard/   # Dashboard preview, selection and open-in-app action
 ├── session/     # Session creation, fork, ordering and membership
 ├── permission/  # Permission confirmation and native icon integration
 ├── view/        # View mode, scoped reads, actions and error presentation
@@ -291,13 +358,18 @@ The Worktree surface is additive:
   that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
   timestamp. The trailing slot swaps to the existing Session menu on hover, focus, or menu-open
   without adding plugin animation CSS.
+- Dashboard Session cards consume the same presentation map: both the overview preview and the full
+  Sessions tab show the same status dot or idle relative-time metadata as Worktree rows.
 - Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
   complete title, relative time, and current status; the card is suppressed while the Session menu
   is open or a row is being dragged.
 - Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
   search filtering and the five-row limit are applied. When collapsed, the flag renders one native
-  ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions. Main and Worktree share the same parameterized group-row path.
+  ongoing `StateDot` in the trailing action rail; the activity rail reserves 28px for the indicator
+  plus a 4px label gap, and a long Worktree label uses the same forward/return scroll loop while
+  activity remains active. Expansion, hover/focus, and menu-open state yield the rail to its existing
+  actions without starting a competing scroll loop. Main and Worktree share the same parameterized
+  group-row path.
 - A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
   Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
   observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates

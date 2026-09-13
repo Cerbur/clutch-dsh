@@ -19,12 +19,99 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
+import {
+  createMainWorktreeRecord,
+  isMainWorktreeId,
+  isManagedDashboardRecord,
+  resolveDashboardRecord,
+  type DashboardSelection,
+} from './dashboard/dashboard-selection.js';
+import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
+import { createNumberedWorktreeName } from './view/worktree-view.js';
+import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Composes independent surface state/action domains into the sidebar overlay. */
-export function WorktreeSurface(props: WorktreeSurfaceProps) {
-  const source = useSurfaceSources({ props });
+export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
+  const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
+  const externalDashboard = inputProps.dashboardStore
+    ? useSyncExternalStore(
+        inputProps.dashboardStore.subscribe,
+        inputProps.dashboardStore.getSnapshot,
+        () => undefined,
+      )
+    : undefined;
+  const dashboard = inputProps.dashboardStore !== undefined ? externalDashboard : internalDashboard;
+  const setDashboard = useCallback(
+    (selection: DashboardSelection | undefined) => {
+      if (inputProps.dashboardStore !== undefined) {
+        inputProps.dashboardStore.set(selection);
+      }
+      setInternalDashboard(selection);
+    },
+    [inputProps.dashboardStore],
+  );
+  const closeDashboard = useCallback(() => setDashboard(undefined), [setDashboard]);
+  const source = useSurfaceSources({ props: inputProps });
+  useEffect(() => {
+    if (source.mode !== 'worktree') setDashboard(undefined);
+  }, [source.mode, setDashboard]);
+  useEffect(
+    () => () => {
+      inputProps.dashboardStore?.set(undefined);
+    },
+    [inputProps.dashboardStore],
+  );
+  const props: WorktreeSurfaceProps = {
+    ...inputProps,
+    openDashboard: (record) =>
+      setDashboard({
+        workspaceId: record.workspaceId,
+        worktreeId: record.worktreeId,
+        sessionId: source.currentSessionId,
+      }),
+    openSession: (sessionId) => {
+      closeDashboard();
+      inputProps.openSession(sessionId);
+    },
+    createMainSession:
+      inputProps.createMainSession === undefined
+        ? undefined
+        : (workspaceId) => {
+            closeDashboard();
+            inputProps.createMainSession?.(workspaceId);
+          },
+  };
   const registrationState = useRegistrationState({ props });
   const read = useSurfaceRefresh({ source, props, registrationState });
+  const targetWorkspace =
+    dashboard === undefined
+      ? undefined
+      : source.workspaces.items.find(
+          (workspace) => workspace.workspaceId === dashboard.workspaceId,
+        );
+  const targetView =
+    dashboard === undefined ? undefined : read.viewByWorkspace.get(dashboard.workspaceId);
+  const dashboardMainBranch = targetView?.branches.find((branch) => branch.isCurrent)?.name;
+  const dashboardMainRecord =
+    targetWorkspace === undefined
+      ? undefined
+      : createMainWorktreeRecord(targetWorkspace, dashboardMainBranch);
+
+  const dashboardRecord = resolveDashboardRecord(
+    dashboard,
+    source.mode,
+    source.currentSessionId,
+    source.workspaceIds,
+    dashboard === undefined
+      ? undefined
+      : targetView?.worktrees,
+    dashboardMainRecord,
+  );
+  useEffect(() => {
+    if (dashboard !== undefined && dashboardRecord === undefined) closeDashboard();
+  }, [dashboard, dashboardRecord, closeDashboard]);
   const mutation = useSurfaceMutation({ read });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
@@ -42,70 +129,189 @@ export function WorktreeSurface(props: WorktreeSurfaceProps) {
     session,
   });
   const lifecycle = useLifecycleActions({ read, lifecycleState, source, props, mutation });
+  const dashboardWorkspace = source.workspaces.items.find(
+    (workspace) => workspace.workspaceId === dashboardRecord?.workspaceId,
+  );
+  const dashboardView =
+    dashboardRecord === undefined
+      ? undefined
+      : read.viewByWorkspace.get(dashboardRecord.workspaceId);
+  const dashboardCanCreate =
+    dashboardRecord?.status === 'active' &&
+    dashboardRecord.diskCleanup !== 'completed' &&
+    dashboardRecord.health !== 'cleaned' &&
+    dashboardRecord.health !== 'repair' &&
+    dashboardRecord.health !== 'recovery-needed';
+  const dashboardManagedRecord =
+    dashboardRecord !== undefined && isManagedDashboardRecord(dashboardRecord)
+      ? dashboardRecord
+      : undefined;
   if (source.mode !== 'worktree') return null;
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
   return (
-    <aside
-      ref={ref}
-      className={styles.surface}
-      data-worktree-surface
-      data-collapsed={collapsed || undefined}
-      aria-label={t('mode.navigation')}
-      style={{
-        width: `${width}px`,
-        ...(bounds.ready
-          ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
-          : { height: '0px', visibility: 'hidden' }),
-      }}
-    >
-      <div className={styles.wideContent}>
-        <SurfaceHeader
-          expansion={expansion}
-          props={props}
-          source={source}
-          read={read}
-          mutation={mutation}
-        />
+    <>
+      <aside
+        ref={ref}
+        className={styles.surface}
+        data-worktree-surface
+        data-collapsed={collapsed || undefined}
+        aria-label={t('mode.navigation')}
+        style={{
+          width: `${width}px`,
+          ...(bounds.ready
+            ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
+            : { height: '0px', visibility: 'hidden' }),
+        }}
+      >
+        <div className={styles.wideContent}>
+          <SurfaceHeader
+            expansion={expansion}
+            props={props}
+            source={source}
+            read={read}
+            mutation={mutation}
+          />
 
-        <SurfaceContent
-          source={source}
+          <SurfaceContent
+            source={source}
+            props={props}
+            lifecycle={lifecycle}
+            mutation={mutation}
+            session={session}
+            read={read}
+            expansion={expansion}
+            ordering={ordering}
+            drag={drag}
+            menus={menus}
+            registration={registration}
+            native={native}
+            lifecycleState={lifecycleState}
+          />
+        </div>
+
+        <NativeDialogs props={props} native={native} />
+
+        <RegistrationDialog
           props={props}
-          lifecycle={lifecycle}
-          mutation={mutation}
-          session={session}
-          read={read}
-          expansion={expansion}
-          ordering={ordering}
-          drag={drag}
-          menus={menus}
           registration={registration}
-          native={native}
-          lifecycleState={lifecycleState}
+          registrationState={registrationState}
+          mutation={mutation}
+          read={read}
         />
-      </div>
 
-      <NativeDialogs props={props} native={native} />
+        <LifecycleDialogs
+          props={props}
+          lifecycleState={lifecycleState}
+          mutation={mutation}
+          lifecycle={lifecycle}
+          expansion={expansion}
+          read={read}
+          session={session}
+        />
 
-      <RegistrationDialog
-        props={props}
-        registration={registration}
-        registrationState={registrationState}
-        mutation={mutation}
-        read={read}
-      />
-
-      <LifecycleDialogs
-        props={props}
-        lifecycleState={lifecycleState}
-        mutation={mutation}
-        lifecycle={lifecycle}
-        expansion={expansion}
-        read={read}
-        session={session}
-      />
-
-      <AccessConfirmation source={source} props={props} />
-    </aside>
+        <AccessConfirmation source={source} props={props} />
+      </aside>
+      {dashboardRecord !== undefined && (
+        <WorktreeDashboard
+          key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
+          record={dashboardRecord}
+          onSaveInstructions={
+            props.manager && !isMainWorktreeId(dashboardRecord.worktreeId)
+              ? async (instructions, expectedInstructions) => {
+                  try {
+                    return await props.manager!.updateWorktreeInstructions({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      instructions,
+                      expectedInstructions,
+                    });
+                  } finally {
+                    void read.refresh({
+                      preserveCurrent: true,
+                      scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId },
+                    });
+                  }
+                }
+              : undefined
+          }
+          workspaceTitle={dashboardWorkspace?.title ?? ''}
+          sessions={source.sessions}
+          sessionPresentations={source.sessionPresentations}
+          sessionIds={dashboardSessionIds(
+            dashboardRecord,
+            source.sessions,
+            dashboardView?.bindings ?? [],
+            source.archivedSessionIds,
+            isMainWorktreeId(dashboardRecord.worktreeId)
+              ? ordering.orderedSessionIdsByAccount.get(`main:${dashboardRecord.workspaceId}`)
+              : ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+            dashboardWorkspace === undefined
+              ? []
+              : workspaceSessionIds(
+                  source.workspaces,
+                  dashboardWorkspace.workspaceId,
+                  source.sessions.ids,
+                ),
+          )}
+          actionPending={mutation.actionPending}
+          onOpenSession={(sessionId) =>
+            session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
+          }
+          onCreateSession={
+            dashboardCanCreate &&
+            (isMainWorktreeId(dashboardRecord.worktreeId)
+              ? props.createMainSession !== undefined
+              : props.createSessionForWorktree !== undefined)
+              ? () => {
+                  if (mutation.actionPending) return;
+                  closeDashboard();
+                  if (isMainWorktreeId(dashboardRecord.worktreeId)) {
+                    props.createMainSession?.(dashboardRecord.workspaceId);
+                  } else {
+                    void session.createSession({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      cwd: dashboardRecord.absolutePath,
+                    });
+                  }
+                }
+              : undefined
+          }
+          onCreateWorktree={
+            dashboardCanCreate &&
+            dashboardRecord.currentBranch !== null &&
+            dashboardRecord.branch.length > 0 &&
+            dashboardWorkspace !== undefined &&
+            dashboardView !== undefined
+              ? () => {
+                  if (mutation.actionPending) return;
+                  const branch = dashboardRecord.currentBranch ?? dashboardRecord.branch;
+                  registration.openWorktreeCreator(dashboardWorkspace, {
+                    baseBranch: branch,
+                    newBranch: createNumberedWorktreeName(branch, [
+                      ...dashboardView.branches.map((candidate) => candidate.name),
+                      ...dashboardView.worktrees.map((candidate) => candidate.branch),
+                    ]),
+                  });
+                }
+              : undefined
+          }
+          onArchiveWorktree={
+            dashboardManagedRecord !== undefined &&
+            dashboardManagedRecord.status === 'active' &&
+            dashboardManagedRecord.health !== 'recovery-needed'
+              ? () => {
+                  if (mutation.actionPending) return;
+                  lifecycleState.setWorktreeRemoval(dashboardManagedRecord);
+                  mutation.setActionError(undefined);
+                }
+              : undefined
+          }
+          t={t}
+          onClose={closeDashboard}
+        />
+      )}
+    </>
   );
 }

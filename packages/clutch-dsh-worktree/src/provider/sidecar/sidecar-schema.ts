@@ -15,6 +15,8 @@ import {
 
 const LEGACY_WORKTREE_KEYS = ['absolutePath', 'branch', 'status', 'workspaceId', 'worktreeId'];
 const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceId', 'worktreeId'];
+// Preserve known development-build metadata without accepting arbitrary fields.
+const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
 const BINDING_KEYS = ['sessionId', 'status', 'workspaceId', 'worktreeId'];
 const LEGACY_SNAPSHOT_KEYS = ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_REQUIRED_SNAPSHOT_KEYS = ['bindings', 'revision', 'schemaVersion', 'workspaceId', 'worktrees'];
@@ -37,6 +39,10 @@ function hasAllowedKeys(
   return required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => allowed.has(key));
 }
 
+function isOptionalTimestamp(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
+}
+
 export function corrupt(
   pathname: string,
   message: string,
@@ -55,13 +61,15 @@ function assertWorktreeRecord(
   if (!isObject(value)) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
-  const keys = legacy
-    ? LEGACY_WORKTREE_KEYS
-    : isV4
-      ? (value.diskCleanup !== undefined ? [...WORKTREE_KEYS, 'diskCleanup'] : WORKTREE_KEYS)
-      : WORKTREE_KEYS;
+  const keys = legacy ? LEGACY_WORKTREE_KEYS : WORKTREE_KEYS;
   if (
-    !hasExactKeys(value, keys) ||
+    !hasAllowedKeys(value, keys, isV4 ? V4_OPTIONAL_WORKTREE_KEYS : []) ||
+    (value.instructions !== undefined &&
+      (typeof value.instructions !== 'string' || value.instructions.length > 32_000)) ||
+    (value.baseBranch !== undefined &&
+      (typeof value.baseBranch !== 'string' || value.baseBranch.length === 0)) ||
+    !isOptionalTimestamp(value.createdAt) ||
+    !isOptionalTimestamp(value.importedAt) ||
     typeof value.worktreeId !== 'string' ||
     typeof value.workspaceId !== 'string' ||
     typeof value.absolutePath !== 'string' ||

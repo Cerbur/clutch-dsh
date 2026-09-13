@@ -19,6 +19,7 @@ import type {
   WorktreePermissionResult,
   WorktreeRecord,
 } from '../../contract/index.js';
+import type { DashboardRecord, DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
 import { WORKTREE_NS } from '../locales.js';
 import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
@@ -60,6 +61,10 @@ export interface WorktreePermissionNotice {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly openDashboard?: (record: DashboardRecord) => void;
+  readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
+    set(selection: DashboardSelection | undefined): void;
+  };
   readonly expandState: WorktreeExpandStateStore;
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
@@ -241,6 +246,7 @@ export interface WorktreeWorkspaceRowProps {
 }
 
 export interface WorktreeGroupMenuProps {
+  readonly onDashboard?: () => void;
   readonly open: boolean;
   readonly label: string;
   readonly copyPath: string;
@@ -282,6 +288,8 @@ export interface WorktreeGroupRowProps {
   readonly repairGuidance?: string;
   readonly onToggle: () => void;
   readonly onCreateSession?: () => void;
+  /** Whether this row should expose the inline Dashboard action when wired. */
+  readonly showDashboardAction?: boolean;
   readonly menu?: WorktreeGroupMenuProps;
   readonly drag?: WorktreeDragProps;
 }
