@@ -303,7 +303,7 @@ export function WorktreeDashboard({
           <span>
             {workspaceTitle}
             <span aria-hidden="true"> / </span>
-            {t('dashboard.title')}
+            {t('dashboard.preview')}
           </span>
           <button type="button" className={styles.dashboardButton} onClick={onClose}>
             ← {t('dashboard.back')}

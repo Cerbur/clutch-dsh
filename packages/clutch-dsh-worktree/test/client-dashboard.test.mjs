@@ -218,6 +218,16 @@ test('dashboard renders real identity and explicit placeholders in both language
     });
     assert.equal(findAll(node, (item) => item.type === 'h1')[0].props.children, record.branch);
     assert.ok(
+      findAll(
+        node,
+        (item) =>
+          item.type === 'span' &&
+          Array.isArray(item.props.children) &&
+          item.props.children.includes(locale['dashboard.preview']),
+      ),
+      'dashboard topline uses the preview label',
+    );
+    assert.ok(
       findAll(node, (item) => item.type === 'code').some(
         (item) => item.props.children === record.absolutePath,
       ),

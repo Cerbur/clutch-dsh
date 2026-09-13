@@ -2,6 +2,7 @@ export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
   'dashboard.title': "Dashboard",
+  'dashboard.preview': 'Dashboard 预览',
   'dashboard.open': '打开 Dashboard',
   'dashboard.copyBranch': '复制分支名称',
   'dashboard.branchCopied': '已复制分支名称',
@@ -249,6 +250,7 @@ export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
   'dashboard.title': "Dashboard",
+  'dashboard.preview': 'Dashboard preview',
   'dashboard.open': 'Open Dashboard',
   'dashboard.copyBranch': 'Copy branch name',
   'dashboard.branchCopied': 'Branch name copied',
