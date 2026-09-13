@@ -1,5 +1,20 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.12 — 2026-09-14
+
+### 中文
+
+#### 优化
+
+- 将支持的最低 DSH 版本基线提高至 `dsh-v0.1.5-rc.1`，并更新所有 `@deepseek-ai/dsh-*` peerDependencies 范围为 `>=0.1.5-rc.1`，解决新版 DSH 环境下的安装依赖匹配问题。
+
+### English
+
+#### Improved
+
+- Raise the minimum DSH compatibility floor to `dsh-v0.1.5-rc.1` and update all `@deepseek-ai/dsh-*` peerDependencies to `>=0.1.5-rc.1` to resolve prerelease dependency resolution in modern DSH environments.
+
+
 ## 0.1.11 — 2026-09-14
 
 ### 中文

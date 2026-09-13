@@ -93,8 +93,8 @@ Worktree Dashboard 预览版会为新 Worktree 记录获取事实，并为 activ
 
 | 组件 / Component | 最低版本 / Min Version | 说明 / Notes                                            |
 | ---------------- | ---------------------- | ------------------------------------------------------- |
-| DSH Client       | `>=0.1.2-rc.1`         | 依赖 Session/Workspace Controller 及 Client Store       |
-| DSH Host         | `>=0.1.2-rc.1`         | 依赖 Typert Gateway `/api` 协议与 subprocess capability |
+| DSH Client       | `>=0.1.5-rc.1`         | 依赖 Session/Workspace Controller 及 Client Store       |
+| DSH Host         | `>=0.1.5-rc.1`         | 依赖 Typert Gateway `/api` 协议与 subprocess capability |
 | Git              | `>=2.20.0`             | 要求支持 worktree 核心命令与 branch 发现                |
 | Node.js          | `>=20.0.0`             | 推荐使用 LTS 版本                                       |
 

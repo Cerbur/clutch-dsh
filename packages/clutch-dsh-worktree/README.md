@@ -105,8 +105,8 @@ The supported compatibility requirements are:
 
 | Component  | Min Version    | Notes                                                                 |
 | ---------- | -------------- | --------------------------------------------------------------------- |
-| DSH Client | `>=0.1.2-rc.1` | Requires the Session/Workspace Controllers and Client Store           |
-| DSH Host   | `>=0.1.2-rc.1` | Requires the Typert Gateway `/api` protocol and subprocess capability |
+| DSH Client | `>=0.1.5-rc.1` | Requires the Session/Workspace Controllers and Client Store           |
+| DSH Host   | `>=0.1.5-rc.1` | Requires the Typert Gateway `/api` protocol and subprocess capability |
 | Git        | `>=2.20.0`     | Requires worktree core commands and branch discovery                  |
 | Node.js    | `>=20.0.0`     | LTS is recommended                                                    |
 
