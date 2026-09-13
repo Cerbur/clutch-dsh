@@ -6,8 +6,8 @@
 仓库根目录 [`../../AGENTS.md`](../../AGENTS.md) 的 workspace 规则同样适用。
 
 - **术语规范**：DSH 当前 UI 将 Project 称为 Workspace。在描述领域关系模型时使用 Project，在描述 DSH API 或 UI 结构时沿用 Workspace。
-- **Package 性质**：`@cerbur/clutch-dsh-worktree` 是单一插件 package，同时包含 contract、provider、manage、host 与 browser client。它们是内部源码模块，不是需独立发布的 workspace package。
-- **详细架构与生命周期**：完整的领域模型、Worktree 四大生命周期、事务控制、分支漂移与恢复算法已收拢至权威架构文档，修改前先阅读：
+- **Package 性质**：`@cerbur/clutch-dsh-worktree` 是单一插件 package，包含 contract、provider、manage、host 与 browser client 内部源码模块，不是需独立发布的 workspace package。
+- **权威设计文档索引**：完整的领域模型、Worktree 四大生命周期、事务控制、分支漂移与恢复算法已收拢至权威架构文档，修改前先阅读：
   - 架构与设计：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
   - 本地开发与联调：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
   - 浏览器客户端接缝：[`src/client/README.md`](src/client/README.md)
@@ -67,7 +67,7 @@ Refresh scope is determined by the smallest affected identity.
 - 必须具备命令超时与进程清理超时（cleanup deadline），防止子进程树挂起；
 - Git 操作仅限管理 worktree 与元数据，**严禁修改工作树中的业务文件**。
 
-### 7. 生命周期与磁盘操作安全
+### 7. 生命周期与破坏性操作安全
 
 - 磁盘清理（`git worktree remove`）必须经过二次确认，明确告知不校验运行状态，由用户确认任务已停止；
 - 移出管理仅清理插件索引，保留磁盘文件与 DSH 原生 Session；
@@ -83,6 +83,15 @@ Refresh scope is determined by the smallest affected identity.
 - ❌ 严禁从 feature worktree 执行 `npm publish`（发布必须在 release worktree 进行）；
 - ❌ 严禁在未经确信或未经用户二次确认时执行破坏性清理；
 - ❌ 严禁破坏双语 README 的结构同步性（中英文 README 标题级别序列必须完全一致）。
+
+---
+
+## 文档同步要求 (Documentation Synchronization)
+
+- **公开行为变动**：修改用户可见能力、菜单项、安装命令或前置兼容条件时，必须同步更新 `README.md` 与 `README.zh.md`，确保标题级别序列和语义完全对齐；
+- **架构与模型变动**：调整领域模型、数据边界、生命周期状态、并发锁或依赖拓扑时，必须更新 `docs/ARCHITECTURE.md`；
+- **开发与构建变动**：修改开发依赖、upstream DSH 基线、测试命令、本地联调步骤时，必须更新 `docs/DEVELOPMENT.md`；
+- **版本发布前**：在 `RELEASE-LOG.md` 追加中英文双语变更日志；`package.json` 的 `version` 是版本唯一事实来源，禁止在 README 中硬编码当前版本号。
 
 ---
 
@@ -106,10 +115,9 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 # 5. 本包全量单元/集成测试
 pnpm --filter @cerbur/clutch-dsh-worktree test
 
-# 6. README 双语结构与格式校验
+# 6. README 双语结构校验
 cd packages/clutch-dsh-worktree
 node --test test/readme-parity.test.mjs
-pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
 ```
 
 ---
@@ -120,7 +128,7 @@ pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
 
 - **使用指南**：[`README.md`](README.md)（英文用户手册）、[`README.zh.md`](README.zh.md)（中文用户手册）
 - **架构设计**：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（核心领域模型、生命周期、事务控制、持久化设计）
-- **开发指引**：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（环境准备、本地安装、联调与贡献者门禁）
+- **开发指引**：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（环境准备、本地安装、联调、调试与贡献者门禁）
 - **发布指南**：[`docs/RELEASING.md`](docs/RELEASING.md)（包版本参数与发布前提）
 - **客户端规范**：[`src/client/README.md`](src/client/README.md)（Browser Consumer、Overlay 与 Connection 契约）
 - **更新历史**：[`RELEASE-LOG.md`](RELEASE-LOG.md)（面向用户的双语版本更新日志）

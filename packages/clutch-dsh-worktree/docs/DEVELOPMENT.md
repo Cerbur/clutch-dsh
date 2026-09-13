@@ -1,8 +1,8 @@
 # @cerbur/clutch-dsh-worktree 开发与贡献指南
 
-本文档为 `@cerbur/clutch-dsh-worktree` 插件的开发者和贡献者提供完整的开发环境准备、源码构建、测试验证、调试以及发布前检查指引。
+本文档为 `@cerbur/clutch-dsh-worktree` 插件的开发者与贡献者提供完整的开发环境搭建、源码构建、本地安装调试、测试验证以及贡献者工作流指引。
 
-关于插件的架构设计与实现原理，请参阅 [ARCHITECTURE.md](ARCHITECTURE.md)。
+关于插件的权威架构设计与实现原理，请参阅 [ARCHITECTURE.md](ARCHITECTURE.md)。
 关于 Agent 维护指令与关键约束，请参阅 [../AGENTS.md](../AGENTS.md)。
 关于通用与本包的发布流程，请参阅 [RELEASING.md](RELEASING.md) 及根目录 [../../../docs/RELEASING.md](../../../docs/RELEASING.md)。
 
@@ -47,6 +47,8 @@ pnpm install
 pnpm --filter @cerbur/clutch-dsh-worktree build
 ```
 
+构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。
+
 ### 3.2 将本地插件添加到 DSH Profile
 
 使用绝对路径将构建出的插件包注册至 DSH 的 web profile 中：
@@ -57,13 +59,13 @@ pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktr
 pnpm dsh web --dump-config
 ```
 
-`--dump-config` 输出应包含插件的 bundle 层。如 profile 中残留有旧的未加 scope 安装，先将其移除：
+`--dump-config` 输出应包含本插件的 bundle 补丁层。如 profile 中残留有旧的未加 scope 安装，先将其移除：
 
 ```bash
 pnpm dsh plugin --profile web remove clutch-dsh-worktree
 ```
 
-启动 DSH Web 服务以验证插件功能：
+启动 DSH Web 服务以验证插件加载：
 
 ```bash
 pnpm dsh web
@@ -71,7 +73,7 @@ pnpm dsh web
 
 ### 3.3 开发迭代与重载
 
-修改代码后，重新构建插件并重启 DSH：
+修改代码后，重新构建插件包并重启 DSH：
 
 ```bash
 cd /path/to/clutch-dsh
@@ -81,7 +83,7 @@ cd /path/to/deepseek-harness
 pnpm dsh web
 ```
 
-> **提示：** 修改了 `package.json`、`cordis.patch.yml` 或 profile bundle 成员后，需重新执行一次 `plugin add`。
+> **提示：** 若修改了 `package.json`、`cordis.patch.yml` 或 profile bundle 成员，需重新执行一次 `pnpm dsh plugin --profile web add ...`。
 
 ### 3.4 卸载本地插件
 
@@ -112,6 +114,7 @@ allowBuilds:
 ```
 
 **注意事项：**
+
 1. 必须使用 pnpm 错误提示输出的精确字符串。仅配置包名对直接 Git 依赖无效。
 2. `onlyBuiltDependencies` 不是当前 pnpm 11 Git prepare 所用的配置项。
 3. 当仓库有新提交时，解析后的 commit hash 改变，需要对应添加新 key。
@@ -119,7 +122,50 @@ allowBuilds:
 
 ---
 
-## 5. 校验与测试命令
+## 5. 本地调试与排错 (Debugging & Diagnostics)
+
+### 5.1 Profile 配置与 Bundle 挂载排查
+
+运行以下命令检查插件是否被 DSH 成功发现并打补丁：
+
+```bash
+cd /path/to/deepseek-harness
+pnpm dsh web --dump-config | grep -A 10 clutch-dsh-worktree
+```
+
+- 确认 `dshHomePath()` 正确解析并注入。
+- 确认 Typert Gateway 在 `/api` 上正常注册了 `worktreeManager/*` endpoint。
+
+### 5.2 Sidecar 存储与跨进程锁排查
+
+插件在本地维护的外部状态位于用户主目录的 DSH Home 下：
+
+- **工作区 Sidecar JSON**：`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`
+- **新建 Worktree 根目录**：`$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/`
+- **跨进程文件锁**：`$dshHome/clutch-dsh-worktree/locks/`
+
+在开发调试过程中，若遇到并发异常或需要重置本地测试数据：
+
+- 观察对应 workspace 的 JSON 文件的 `schemaVersion` 和 `worktrees` 条目；
+- 检查是否存在未释放的锁文件；正常退出或崩溃恢复时锁会自动释放；
+- **切勿手动删除正在执行 Git mutation 的临时标记**。
+
+### 5.3 浏览器客户端与 DevTools 调试
+
+- **Client 资源重载**：修改 `src/client/` 代码后必须执行 `pnpm --filter @cerbur/clutch-dsh-worktree build` 重新生成客户端 bundle；在浏览器中硬刷新（Cmd+Shift+R / Ctrl+F5）加载最新 JS。
+- **控制台错误定位**：打开浏览器开发者工具 Console：
+  - 过滤 `[worktree]` 或 `[clutch-dsh-worktree]` 日志；
+  - 检查 DSH `/api` 请求的 payload 与返回的错误码（如 `WORKTREE_ALREADY_MANAGED`、`WORKTREE_NOT_FOUND`、`WORKTREE_STALE_MUTATION_TOKEN` 等）。
+
+### 5.4 Subprocess 与 Git 错误诊断
+
+- 插件通过直接 argv 数组调用 Git，不经过 shell；
+- 若出现 `GIT_OPERATION_FAILED`，检查返回的 `exitCode`、`stderr` 与 `gitProcessTreeDidNotExit` 标记；
+- 确认当前系统的 Git 满足版本要求（`git --version >= 2.20.0`），且目标仓库非损坏裸库。
+
+---
+
+## 6. 校验与测试命令
 
 在提交任何改动前，必须在 monorepo 根目录下运行并通过以下全部检查：
 
@@ -149,7 +195,6 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 ```bash
 cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
 node --test test/readme-parity.test.mjs
-pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
 ```
 
 ### Monorepo 全局检查
@@ -161,12 +206,12 @@ pnpm run check
 
 ---
 
-## 6. 贡献者工作流与门禁
+## 7. 贡献者工作流与门禁
 
-1. **分支与 Worktree 规范**：遵循根目录 `AGENTS.md` 的 release/feature worktree 模型。所有修改必须在 feature worktree 中完成。
+1. **分支与 Worktree 规范**：遵循根目录 `AGENTS.md` 的 release/feature worktree 模型。所有功能修改必须在独立 feature worktree 中完成。
 2. **提交与门禁**：
-   - 合并前必须 rebase 到最新 release 基线；
-   - 必须通过 clean worktree 检查（无任何 staged、unstaged、untracked 文件）；
+   - 合并前必须 rebase 到最新 release worktree 基线；
+   - 必须通过 clean worktree 检查（无任何 staged、unstaged 或 untracked 文件）；
    - 严禁从 feature worktree 执行 `npm publish`。
 3. **禁止提交的文件**：
    - `lib/` 构建产物（由 `prepare` 自动生成）
@@ -174,13 +219,13 @@ pnpm run check
    - 本地临时 sidecar 数据（如 `$dshHome/clutch-dsh-worktree/`）
    - 个人本地凭据与环境文件
 4. **文档同步要求**：
-   - 公开行为或参数变动时，必须同步更新 `README.md` 与 `README.zh.md`；
-   - 架构或生命周期变动时，必须同步更新 `docs/ARCHITECTURE.md` 与 `AGENTS.md`；
-   - 发布前必须在 `RELEASE-LOG.md` 中追加中英文更新摘要。
+   - 公开行为或用户界面变动时，必须同步更新 `README.md` 与 `README.zh.md`；
+   - 架构模型、生命周期或数据边界变动时，必须同步更新 `docs/ARCHITECTURE.md` 与 `AGENTS.md`；
+   - 发布前必须在 `RELEASE-LOG.md` 中追加中英文双语更新摘要。
 
 ---
 
-## 7. 插件市场（awesome-dsh-plugin）元数据规范
+## 8. 插件市场（awesome-dsh-plugin）元数据规范
 
 向 `awesome-dsh-plugin` 提交插件时，分类使用 `git`，并保持与包定义一致：
 

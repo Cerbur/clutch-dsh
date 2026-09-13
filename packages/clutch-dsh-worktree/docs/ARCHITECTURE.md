@@ -57,23 +57,28 @@ contract  ←  provider
 DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件遵循以下严格数据边界：
 
 ### DSH 拥有的数据（插件严禁写入、修改或复制）
+
 - Project / Workspace 身份（Identity）与原始根工作目录；
 - Session 身份、Session 元数据及原始列表；
 - 消息、提示词（Prompt）、Transcript 以及历史记录。
 
 ### 插件维护的数据（存储于独立 Sidecar）
+
 插件只在 DSH Host 提供的插件数据目录（`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`）中维护外部关系索引与插件配置：
+
 - `projectId`、`worktreeId`、`sessionId` 之间的绑定映射；
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
 - 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建事实（`createdAt`、`baseBranch`）或导入时间（`importedAt`）。
 
 ### 共享指令（Instructions）注入机制
+
 - Worktree 指令保存在 Sidecar 中，**绝不写入业务仓库目录下的 AGENTS.md**。
 - Host 在 DSH `agent/pre-step` 钩子中根据当前 Session 的 active binding 读取最新指令，以独立的 `<system-reminder>` 消息注入到 `decision.messages`，由 DSH 自行持久化与展示。
-- 当绑定解除、Worktree 归档、清理或遗忘时，插件在下一步中追加一条失效提醒；已注入指令不重写历史消息。
+- 当绑定解除、Worktree 归档、清理或移出管理时，插件在下一步中追加一条失效提醒；已注入指令不重写历史消息。
 
 ### 故障降级（Degraded State）
+
 Sidecar 文件损坏或不可用时，原始 Project / Session 视图必须保持完全可读；插件进入降级只读状态，严禁使用空索引覆盖已有的数据。
 
 ---
@@ -81,15 +86,18 @@ Sidecar 文件损坏或不可用时，原始 Project / Session 视图必须保�
 ## 4. 关系模型与运行时 cwd
 
 `WorktreeRecord.source` 记录来源类型：
+
 - `plugin`：在插件管理目录（`$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-chars>`）下新建；
 - `external`：登记已存在的独立 Git linked worktree。
 
 ### 外部导入（External Import）规则
+
 - 导入操作仅在 Sidecar 中建立索引登记，**严禁对外部目录执行移动、复制、文件修改或 Git 变更**。
 - 首版导入候选严格限定为：与当前 Workspace 仓库关联、未被管理的、已挂载具体本地分支的非根 Worktree；Detached HEAD 与仓库根目录被排除，不可导入。
 - 重复导入使用规范物理路径进行幂等校验：同一 Workspace 下相同路径返回已有记录；已被插件管理的路径返回 `WORKTREE_ALREADY_MANAGED`。
 
 ### Session 与 Worktree 绑定模型
+
 - **1 对多约束**：一个 Session 最多绑定一个 active Worktree；一个 Worktree 可同时绑定多个 Session。
 - **运行时 cwd 派生**：
   - 无绑定、绑定 Main 或处于 detached 状态时：cwd 使用 Project / Workspace 根目录；
@@ -98,6 +106,7 @@ Sidecar 文件损坏或不可用时，原始 Project / Session 视图必须保�
 - **孤儿与解绑语义**：未绑定的 Session 归入 Main 分组展示；删除 Worktree 不会删除 Session，关系转换为 `detached`；只有显式解绑才会回归 Main。
 
 ### 时序约束
+
 1. 创建 Worktree：先创建物理 Git worktree，再写入 Sidecar。Sidecar 写入失败时回滚清理 Git worktree。
 2. 创建 Session：先调用 DSH 原生 API 创建 Session，再写入外部绑定关系。绑定写入失败时保留已创建的 Session，由界面提供重试与直接打开入口，绝不删除 DSH Session。
 
@@ -152,11 +161,14 @@ Worktree 生命周期由四个正交的独立操作组成：
 Sidecar 中记录的 `WorktreeRecord.branch` 是**最近一次被显式接受的分支**，而非不可变的物理身份。
 
 ### 运行时状态映射
+
 Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missing`、`prunable`、`bare`、`detached`、`unavailable`：
+
 - 该状态属于运行时动态观察，不进行持久化；
 - 普通的外部 `git checkout` 导致分支不一致时，投影为 `branch-drift` 警告，不产生 recovery issue，Session 绑定与 cwd 保持不变。
 
 ### 分支同步（adoptWorktreeBranch）
+
 - 用户在弹窗中确认分支切换后，调用 `adoptWorktreeBranch`；
 - 在 Shard 锁与 Repository 锁内校验 mutation token、期望分支、真实路径和仓库指纹；
 - 原子更新记录中的 `branch`；
@@ -164,7 +176,8 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 - 派生新建 Worktree 时，允许使用已观察到的实际分支作为基线。
 
 ### 安全恢复（recoverWorktrees）
-独立的 Remote 恢复重试入口，仅重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。
+
+独立的 Remote 恢复重试入口，仅重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。旧版无事务分支观察标记会在获取 Sidecar 锁后自动淘汰，普通 checkout 漂移不需要手动编辑 JSON。
 
 ---
 
@@ -176,6 +189,8 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
   - v3 记录保留 revision 字符串；
   - 旧版 `status: 'removed'` 规范化为 `diskCleanup: 'completed'` 且绑定解为 detached；
   - **首次成功变更时，原子持久化为 v4 格式**。
+- **v4 扩展元数据保留**：
+  已知 v4 开发构建元数据（`instructions`、`createdAt`、`importedAt`、`baseBranch`）在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
 - **指纹与防串仓**：v4 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
 - **并发锁与原子写入**：
   `SidecarPersistence` 在 `$dshHome/clutch-dsh-worktree/locks` 下使用跨进程文件锁对 Workspace Shard 进行互斥，并通过同目录临时文件 + `rename` 原语完成全量快照的原子发布。
@@ -199,7 +214,7 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
    - Host 启动时对已知 Workspace 执行非阻塞的安全恢复扫描；
    - 仅当路径与仓库指纹完全确定时才尝试完成或清理；
    - **绝不对未知路径执行删除，绝不使用 force 移除，绝不修改 DSH Session**；
-   - 存在歧义时保持阻塞状态（`WORKTREE_RECOVERY_REQUIRED`），等待人工介入或显式恢复调用。
+   - 存在歧义时保持阻塞状态（`WORKTREE_RECOVERY_REQUIRED`），等待人工介入或显式恢复调用。指向现有未清理记录的历史无事务 `WORKTREE_RECOVERY_REQUIRED` 观察标记在持有 Sidecar 锁时自动淘汰。
 4. **防陈旧写入（Stale Mutation Tokens）**：
    关键修改携带上一次读取投影生成的防陈旧 token，防止陈旧前端快照触发冲突操作。
 
@@ -215,12 +230,28 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 ---
 
-## 10. 浏览器客户端架构与原生集成
+## 10. 权限与安全边界 (Permissions & Security)
 
-### 客户端边界
+- **Worktree Full Access 预设**：
+  为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
+- **权限降级与回退**：
+  当命名预设不可用时，系统自动回退至 `workspace-write + ask`；若权限能力无法确认，则进入可重试的降级状态，绝不向用户谎称已获得完全访问。
+- **解耦设计**：
+  磁盘清理提交与权限后续处理解耦，清理成功后无论权限重置是否遇到异常，均不会回滚已完成的物理清理。
+- **沙箱宿主上限**：
+  插件权限调整严格限制在 DSH 官方 per-Session 权限系统内，不能也不可能突破宿主运行 DSH 时的外部系统沙箱边界。
+
+---
+
+## 11. 浏览器客户端架构与原生集成
+
+### 客户端边界与接口契约
+
 - 遵循 DSH `dsh-v0.1.2-rc.1` 接口规范。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
 - 导航与目录选取委托至 `ctx.uiWorkspace.startSession()` 与 `ctx.uiWorkspace.pickDirectory()`。
+- **Session 归属与 Projection**：
+  Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
 
 ### 最小刷新作用域不变量 (Minimum-Scope Refresh Invariant)
 
@@ -242,9 +273,16 @@ Refresh scope is determined by the smallest affected identity.
 ```
 
 ### 保持就绪内容 (Ready Content Preservation)
+
 任意客户端刷新、投影重放或错误切换，**严禁先清空当前 ready 内容触发白屏**。新数据到达前保留当前可见投影，loading 状态仅允许在首次进入或显式全局重试时呈现。
 
+### 状态指示与活动聚合 (StateDot & Aggregate Activity)
+
+- 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核与已完成等状态；
+- 当工作区、Main 或 Worktree 折叠时，若内部存在未归档且活动中的 Session，外层容器自动呈现聚合运行指示器，并在展开或交互时平滑让位。
+
 ### Shell Overlay 呈现
+
 - Worktree Dashboard 使用 DSH `shell.overlay` 临时覆盖 Sidebar 右侧的主区域；
 - 保留原生 Conversation 组件的挂载状态；
 - Overlay 边界由原生 Sidebar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；

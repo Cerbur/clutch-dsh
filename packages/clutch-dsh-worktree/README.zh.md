@@ -31,12 +31,11 @@ Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实�
 - 从 Local/Main 或 active/archived Worktree 的菜单、行内悬浮操作，或原生 Session 标题行 More actions 按钮
   左侧的快捷 Dashboard 图标打开 Dashboard，查看真实名称和 cwd、复制完整路径，并切换概览、Git
   与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确标记为“即将推出”。
-
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
 - 在同一个弹窗中选择导入，发现与当前 Workspace repository 关联、尚未由 sidecar 管理且绑定 branch 的 Git Worktree。第一版不展示 repository root 和 detached HEAD 条目。
-- 导入只登记已有 Worktree，不移动、复制或编辑其目录；记录使用 `source: external`，之后与 plugin 创建的记录共享 Session、binding、health、排序、cwd、projection、刷新和恢复流程。
-- 非破坏性归档 Worktree（`status: removed`），保留磁盘文件、活动 binding 与运行时 cwd。磁盘清理（`git worktree remove`）需经二次确认，由用户自行确认使用该目录的 Session/子代理与其他任务已停止；亦支持移出插件管理并保留磁盘文件与 Session。
+- 导入只登记已有 Worktree，不移动、复制或编辑其目录；导入记录与插件创建的记录共享相同的 Session、binding、health、排序、cwd、投影、刷新和恢复流程。
+- 非破坏性归档 Worktree，保留磁盘文件、活动绑定与运行时 cwd。磁盘清理（`git worktree remove`）需经二次确认，由用户自行确认使用该目录的 Session/子代理与其他任务已停止；亦支持移出插件管理并保留磁盘文件与 Session。
 - 在 Main 或 active Worktree 下创建普通 Session 或 Worktree Session，并直接打开新会话。
 - 对 active Worktree Session，先经明确确认，再请求命名的 `worktree-full-access` 预设。它将
   DSH 的 `danger-full-access` 与 `ask` 组合：关闭关联 Git 元数据的文件系统限制，但保留
@@ -58,10 +57,8 @@ Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实�
 - 用户在 Session 中发送新消息后，该 Session 会移动到当前 Main 或 Worktree 视觉分组的队首。
   该排序只保存在浏览器本地，不修改 DSH Workspace 顺序或 Worktree sidecar。
 - 从 DSH 原生 Workspace session list tab、Worktree view 或 Conversation fork 操作 fork
-  Session。parent 有 active Worktree binding 时，child 会先绑定到同一个 Worktree，再在 binding
-  refresh 完成后加入浏览器本地 Workspace membership projection；child 仍然是普通 DSH Session。
-  这一时序避免 child 短暂出现在 Main/Local。sidecar 失败时 child 会保留，并显示可重试的
-  binding 恢复操作。
+  Session。parent 有 active Worktree binding 时，child 会自动绑定到同一个 Worktree 并直接在
+  Worktree 视图中打开；child 仍然是普通 DSH Session。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外通过选项菜单和
   行内悬浮操作提供 Dashboard。Worktree 分组的右侧操作栏在静止时为零宽度；折叠且有活动时会为 28px 运行指示器和 4px 文字间距
@@ -86,17 +83,11 @@ Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实�
   对齐原生字体和排版，Sidebar 折叠后不再额外显示 `WT` 按钮。
 - Worktree Session 仍出现在原始 DSH Project/Workspace 视角中；插件不复制 Session 内容，
   也不修改消息、prompt、transcript 或历史记录。
-- Worktree fork 的 membership 不会写入 DSH 持久化的 `Workspace.sessionIds`。plugin 加载期间，
-  浏览器可以通过本地 projection 显示 child；不加载 plugin 时，child 仍在 DSH 全局 Session 管理中，
-  但不会被持久化挂到 native Workspace root membership 下。
 
 ### 兼容性与前置条件
 
-Session 重新加载兼容 rc.1 的持久化 header 与新版 DSH 的 header snapshot。
-v4 开发构建的已知元数据（`instructions`、`createdAt`、`importedAt`、
-`baseBranch`）会在 sidecar 写入时保留。Dashboard 预览版会为新 Worktree 记录获取事实，
-并为 active binding 注入已保存的指令；未知字段仍会被拒绝。较旧的 v4 插件读取器可能
-拒绝包含这些开发字段的 snapshot。
+Session 重新加载兼容 DSH rc.1 的持久化 header 与新版 DSH 的 header snapshot。
+Worktree Dashboard 预览版会为新 Worktree 记录获取事实，并为 active binding 注入已保存的指令。
 
 兼容性事实表如下：
 
@@ -108,9 +99,6 @@ v4 开发构建的已知元数据（`instructions`、`createdAt`、`importedAt`�
 | Node.js          | `>=20.0.0`             | 推荐使用 LTS 版本                                       |
 
 ## 安装
-
-普通用户安装请使用 npm package。开发或验证本地源码时使用仓库 checkout；从市场条目安装
-源码 package 时使用 GitHub source path。
 
 ### 从 npm 安装（推荐）
 
@@ -144,15 +132,7 @@ npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.o
 dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh-worktree"
 ```
 
-这是源码 Git 依赖，不是预构建的 npm package。它的 `prepare` 生命周期会生成 `lib/`。
-在 pnpm 11 的 `allowBuilds` 机制下安装直接 Git 依赖时，需在 profile 的 `pnpm-workspace.yaml` 中
-配置构建授权。完整的授权与排查步骤详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
-### 从本地源码安装
-
-针对在本地源码 checkout 中开发 `clutch-dsh` 的场景，可通过 `pnpm --filter @cerbur/clutch-dsh-worktree build`
-构建包并注册至 DSH profile。完整的开发环境准备、upstream checkout 配置与联调指南详见
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+这是源码 Git 依赖，安装时由构建脚本生成。关于 pnpm 11 的 `allowBuilds` 授权配置、本地开发与贡献者流程，详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ### 卸载
 
@@ -259,31 +239,25 @@ Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位�
    作为诊断信息。
 3. 在下拉框中选择一个选项并点击 `导入 Worktree`。登记只写入 plugin sidecar，已有 Worktree 目录和 Git
    工作状态保持不变。随后会在该 Worktree cwd 创建或复用 Session，并执行与创建相同的
-   `bind → open → binding refresh` 流程；新建 Session 不会在 binding 刷新前投影到原生
-   Workspace membership。
+   `bind → open → binding refresh` 流程。
 4. 同一 Workspace、同一物理路径的 active external 导入是幂等的。已经由 plugin 管理的路径
-   返回 `WORKTREE_ALREADY_MANAGED`；无效或过期候选项返回 `WORKTREE_IMPORT_INVALID`，修复
-   repository 状态后可以重试。
+   会报错提示；无效或过期候选项在修复 repository 状态后可以重试。
 
 ### 创建 Main 和 Worktree Session
 
 - 使用 Main 的 `+`，在 Project 根目录视角中创建普通 DSH Session。
-- 使用 Worktree 的 `+`，创建或复用 runtime cwd 指向该 Worktree 的 Session。插件通过 DSH
-  Session Controller 调用 `ctx.sessions.create({ cwd: worktreePath })`，随后保存外部 binding
-  并打开该 Session。当前浏览器内的 `{ workspaceId, sessionId }` membership projection 会在
-  之后刷新，因此新建 Session 不会短暂出现在 Main 中。
-- 如果存在目标 cwd 完全匹配的未归档 blank Session，连接器会优先复用它。已绑定的 Session
-  会直接打开；未绑定的候选会先 binding，再 projection 和打开。否则执行
-  新建路径执行 `create → bind → open → refresh`，同一个 Worktree 的并发点击会合并。
-- 如果 DSH 创建 Session 后 binding 失败，Session ID 仍会保留，可用于 Retry 或 Open 恢复。
-  插件不会删除或修改该 DSH Session。
+- 使用 Worktree 的 `+`，创建或复用以该 Worktree 为运行时工作目录（`cwd`）的 Session。Session
+  直接在 Worktree 视图中打开，不会短暂出现在 Main 列表中。
+- 如果存在目标 cwd 完全匹配的未归档空白 Session，连接器会优先复用它。已绑定的 Session 会直接打开；
+  未绑定的候选会先完成绑定再打开。否则走新建并绑定的流程，同一个 Worktree 的并发点击会合并处理。
+- 如果 DSH 创建 Session 后绑定失败，Session ID 仍会保留，可用于重试或直接打开。插件绝不删除或修改已创建的 DSH Session。
 - 打开 active Worktree Session 前，插件会在 DSH 风格的页面内弹窗中说明关联 Git 元数据为什么
   可能需要访问 Session 目录之外的内容。弹窗要求明确勾选风险确认；取消会保留 Session 和
-  binding，不改变权限，并留下可重试的待处理状态。需要切换到其他权限模式时，继续使用 DSH
+  绑定关系，不改变权限，并留下可重试的待处理状态。需要切换到其他权限模式时，继续使用 DSH
   原生 Access 选择器。
 - provisional blank Session 遵循 DSH 原生显示规则：只在当前选中的视角中显示，使用本地化
   的 `New Session` 文案，不显示生成的 ID，也没有 Rename、Fork 或 Archive 菜单。接受第一条
-  prompt 后，它会变为普通 Session 行；隐藏 blank 行不会删除 Session 或 Worktree binding。
+  prompt 后，它会变为普通 Session 行；隐藏 blank 行不会删除 Session 或 Worktree 绑定。
 
 ### Session 活动与排序
 
@@ -303,55 +277,30 @@ Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位�
 
 ### Fork Worktree Session
 
-- 可以使用任意 DSH 原生 fork 入口：Session list 中的 tab、Worktree Session 菜单或
-  Conversation fork 操作。插件包装共享的 DSH `sessions.fork` service，因此原生的 fork cut、
-  标题递增和 child lineage 语义保持不变。
-- DSH 创建 child 后，插件读取 parent 的 active sidecar binding，通过现有 `/api` Manager 写入
-  child binding。随后 Worktree view 先刷新 binding，再重放浏览器本地 Workspace membership
-  projection，因此 child 不会短暂出现在 Main/Local；刷新期间保留 ready 内容。
-- 如果 child 已创建但 sidecar 查询或 binding 失败，DSH 仍保留 child，plugin 显示 Retry Binding/
-  Open Created Session 恢复操作。后续 plugin 初始化也会根据原生 Session lineage summary 重试可恢复
-  的 fork child；不会自动绑定无关的 subagent。
-- 这一流程不会把 child 持久化写入 DSH `Workspace.sessionIds`。native DSH Workspace view 只有在
-  plugin 加载期间才能看到临时浏览器 projection；native Workspace 持久化数据保持不变。
+- 支持通过任意 DSH 原生 fork 入口（会话列表选项、Worktree Session 菜单或会话内的 fork 操作）分叉会话。会话历史截取、标题递增和分叉血缘完全沿用 DSH 原生行为。
+- 当父 Session 拥有活跃的 Worktree 绑定时，分叉出的子 Session 会自动继承并绑定到同一 Worktree，直接在 Worktree 视图中呈现。绑定刷新期间保持当前已就绪内容可见。
+- 如果子 Session 已由 DSH 创建但插件绑定失败，DSH 仍保留该子 Session，界面提供“重试绑定”与“打开已创建会话”恢复操作。后续插件初始化也会根据原生会话血缘重试可恢复的子会话，绝不会自动绑定无关的子代理。
+- 分叉绑定由插件外部索引维护，不修改 DSH 原生工作区持久化存储。
 
 ### 排序与管理 Worktree
 
-- 在所属 Workspace 内拖动 Worktree。排序持久化在 plugin sidecar 的有序 `worktrees` 数组中；
-  Main 是固定的第一行，Worktree 不能跨 Workspace 移动。
-- 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
-- 打开 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径。active Worktree 提供“复制路径”与
-  “归档 Worktree”。归档 active Worktree 属于内部归档操作：将其标记为 `status: removed`，完整保留
-  磁盘目录、关联 binding 与运行时 cwd，并将该 Worktree 沉底移动到工作区底部的“已归档”（Archived）分组中。
+- 在所属 Workspace 内拖动 Worktree 可进行排序。自定义顺序由插件保存；Main 始终固定在第一行，Worktree 不能跨 Workspace 移动。
+- 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变。
+- 打开 Main 和 Worktree 共用的选项菜单可复制所选行的绝对路径。active Worktree 提供“复制路径”与
+  “归档 Worktree”。归档 active Worktree 属于内部归档操作：完整保留磁盘目录、关联绑定与运行时 cwd，并将该 Worktree 移动到工作区底部的“已归档”（Archived）分组中。
 - 工作区底部在存在已归档 Worktree 时渲染“已归档”分组，默认处于折叠状态；标题显示已归档 Worktree 总数，收起时仍然显示。每个 Workspace 维护独立的折叠状态。
-- `health: repair` 的 active Worktree 也提供“归档 Worktree”，仅归档记录，保留磁盘文件和 binding。`recovery-needed` 状态仍须先处理恢复问题，不能归档。
+- 处于 repair 状态的 active Worktree 也提供“归档 Worktree”，仅归档记录，保留磁盘文件和绑定。处于 recovery-needed 状态的记录须先完成恢复，不能直接归档。
 - 对于未清理磁盘的已归档 Worktree，选项菜单提供：
-  1. “取消归档”（Unarchive Worktree）：对于仅元数据标记归档且磁盘未清理的 Worktree，可直接在菜单中点击取消归档，无需二次确认弹窗，立即恢复为活跃状态。
-  2. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，
-     请用户自行确认使用该目录的任务均已停止，否则删除可能导致任务失败或数据丢失；执行真正的非强制 `git worktree remove`，
-     成功后记录 `diskCleanup: completed`，运行时健康状态投影为 `cleaned`，关联 binding 转为 detached，并将完全访问权限
-     归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为 `cleaned`；
-     权限归一化失败或刷新异常提供独立恢复，不重复执行磁盘删除。
-     点击权限提示中的“重试”（Retry），仅重试该已清理 Worktree 的权限归一化。
-     如果 Worktree 目录或其 `.git` 入口已在外部删除，确认清理只将插件记录标记为完成并将 binding 转为 detached，
-     不再执行 Git 删除，也不清理残留 Git registration。剩余目录和文件完整保留，完成状态显示
-     “Worktree 已移除”，不代表剩余文件已被删除。普通刷新仍显示 `repair`，直到用户显式确认清理。
-  3. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的 sidecar 记录与全部关联 binding，完整保留
-     磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。不需要校验 Session 活动。
-- 对于已清理磁盘的 Worktree（`health: cleaned`），选项菜单提供“移出管理”以从 sidecar 中彻底移除该记录。
-- 删除 Workspace 只会删除 DSH 的 Workspace registration；其目录、Session、Git Worktree 和 plugin sidecar 会保留。
-- DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序
-  限定在当前视觉 Main 或 Worktree 分组中。
-- Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时
-  回退为 `本地`。如果导入的 Workspace 是 Git 仓库中的子目录，会先解析 Git 根目录，再
-  复用与 Git 根目录相同的 branch/worktree 信息。branch 名称、路径、Workspace 名称、Session
-  标题以及原始 DSH/Git 错误信息保持原值。
-- 已有 Session 会在标题行显示只读上下文，格式为 `Session title` → `Agent mode` →
-  `current branch / Worktree branch`。过长值在紧凑 chip 中折叠，并通过 hover card 显示完整
-  内容。原生标题存在且有锚点时，新会话空白 Hero 会在标题后显示 `Workspace (branch)`，并
-  提供相同的完整值 hover card。
-- Sidebar 折叠后，footer 保留原生的 icon-only action 尺寸和排版；插件不会再绘制独立的
-  `WT` rail control。
+  1. “取消归档”（Unarchive Worktree）：对于仅元数据标记归档且磁盘目录完好的 Worktree，可直接在菜单中点击取消归档，无需二次确认弹窗，立即恢复为活跃状态。
+  2. “清理磁盘”（Clean Up Disk）：弹出二次确认弹窗（明确提示工作树路径与破坏性删除不可逆），告知插件不核验 Session/子代理活动，请用户自行确认使用该目录的任务均已停止，否则删除可能导致任务失败或数据丢失；执行真正的非强制 `git worktree remove`，成功后记录清理完成，关联绑定转为 detached，并将完全访问权限归一化为 `workspace-write + ask`。磁盘清理提交与权限后续解耦：清理成功即确认提交、关闭对话框并将状态转为已清理；权限归一化失败或刷新异常提供独立恢复，不重复执行磁盘删除。如果 Worktree 目录或其 `.git` 入口已在外部删除，确认清理只将插件记录标记为完成并解绑，不再执行 Git 删除。
+  3. “移出管理”（Remove from Management）：弹出确认弹窗，删除该 Worktree 的插件记录与全部关联绑定，完整保留磁盘文件与 DSH 原生 Session；同时定向淘汰该 Worktree 的未决 fork 恢复、投影与权限提示。不需要校验 Session 活动。
+- 对于已清理磁盘的 Worktree，选项菜单提供“移出管理”以彻底移除该插件记录。
+- 会话活动展示仅用于信息参考，不阻断磁盘清理或移出管理。确认磁盘清理前，请自行停止所有使用该目录的任务，插件不会核验任务是否已停止。
+- 删除 Workspace 只会删除 DSH 的 Workspace 登记；其目录、Session、Git Worktree 和插件数据完整保留。
+- DSH 原生的 Workspace rename/delete/reorder 和 Session 菜单继续可用。Session 拖动排序限定在当前视觉 Main 或 Worktree 分组中。
+- Main 分组显示当前 local branch：有分支时为 `本地（branch）`，DSH 没有返回当前分支时回退为 `本地`。如果导入的 Workspace 是 Git 仓库中的子目录，会先解析 Git 根目录，再复用与 Git 根目录相同的 branch/worktree 信息。branch 名称、路径、Workspace 名称、Session 标题以及原始错误信息保持原值。
+- 已有 Session 会在标题行显示只读上下文，格式为 `Session title` → `Agent mode` → `current branch / Worktree branch`。过长值在紧凑 chip 中折叠，并通过 hover card 显示完整内容。原生标题存在且有锚点时，新会话空白 Hero 会在标题后显示 `Workspace (branch)`，并提供相同的完整值 hover card。
+- Sidebar 折叠后，footer 保留原生的 icon-only action 尺寸和排版；插件不会额外绘制独立的 `WT` rail control。
 
 ### 同步在 Git 中切换的分支
 
@@ -372,7 +321,6 @@ Git 明确证明原记录已切走时，允许用空闲的旧分支创建 Worktr
 `recovery-needed` 行的菜单提供“重试恢复”（`Retry recovery`），作用于所属 Workspace。
 该操作只重试安全 journal 恢复，不自动采用分支、不删除未知路径、不清除未解决的身份问题。
 采用分支和恢复成功后只刷新所属 Workspace，并保留现有 ready 内容。
-旧版非事务分支观察标记会自动淘汰，普通 checkout 漂移不需要手工编辑 sidecar JSON。
 
 ### 理解状态与恢复提示
 
@@ -382,24 +330,21 @@ Git 明确证明原记录已切走时，允许用空闲的旧分支创建 Worktr
 - 悬停或聚焦 active Worktree 行可查看状态、路径以及目录/Git 登记缺失、分支漂移/分离 HEAD、
   恢复未完成的处理指引。打开菜单或拖动时不显示 hover 卡片。归档确认明确说明插件创建及外部
   Worktree 都保留目录、Session 绑定和 cwd；“清理磁盘”仍是独立操作。
-
-- 没有未完成 Git 事务时，目录缺失的 active 或 archived Worktree 保持 `repair`，可归档，
-  不会阻断健康 Worktree 的 Session 绑定。指向现有且未清理记录的旧版无事务
-  `WORKTREE_RECOVERY_REQUIRED` 观察标记在 sidecar 锁内淘汰；未完成事务、未知记录和身份变化问题仍然阻断操作。
-
 - `ready` 表示 Worktree 可用。`cleaned` 表示磁盘清理已完成且保留 sidecar 归档条目。
   `repair` 表示 Worktree、Session、binding 或 cwd 缺失/无效。`recovery-needed` 表示 Git/sidecar
   操作或身份校验尚未解决，破坏性操作会被阻止。`detached` 表示 Git Worktree 已被移除，但关系仍然保留。active binding 指向缺失
   Worktree 时会显示明确的 repair 警告或错误，不会静默切换到其他 Worktree。
+- 没有未完成 Git 事务时，目录缺失的 active 或 archived Worktree 保持 `repair`，可归档，
+  不会阻断健康 Worktree 的 Session 绑定。
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar。Git 前置条件失败按
   Workspace 显示提示：Git 可执行文件缺失时显示安装提示且不显示命令块，缺少 repository、
   初始 commit 或本地 branch 时显示可复制的 setup 命令。Connection、Gateway 和未预期的
   Worktree domain 错误会保留为可重试错误，不会伪装为空列表。
+- 权限状态会明确显示为完全访问、回退到 `workspace-write`、保留用户限制、能力未验证、
+  等待确认或可重试的设置失败，不会静默折叠为空列表或伪造成功。
 - 已经 ready 的视角刷新时会保留当前 projection，直到替换数据可用。同一个 Session 的
   snapshot 更新不会清空上下文，也不会触发重复读取；没有缓存视角时，首次进入和显式 Retry
   可以显示 loading 状态。
-- 权限状态会明确显示为完全访问、回退到 `workspace-write`、保留用户限制、能力未验证、
-  等待确认或可重试的设置失败，不会静默折叠为空列表或伪造成功。
 
 ## 界面语言
 
@@ -417,7 +362,7 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 列表、消息、prompt、transcript 和历史记录。插件不会复制或重写这些内容。插件的外部索引
 位于 DSH host 的 plugin data directory 或独立 sidecar 存储中，只能包含以下关系事实：
 
-- `projectId`、`worktreeId` 和 `sessionId`；
+- `projectId`、`worktreeId` 和 `sessionId` 映射关系；
 - 绝对 Worktree 路径、branch 和生命周期状态；
 - Worktree 来源（`plugin` 或 `external`）；
 - binding 状态和 schema version。
@@ -426,8 +371,7 @@ DSH 管理原始 Project/Workspace 身份和根目录、Session 身份和元数�
 Session 内容。如果 sidecar 不可用或损坏，原生 Project/Session 视角仍然可读，插件进入
 degraded/read-only 状态；不能用空索引覆盖 DSH 原生列表。
 
-Session 活动仅用于信息展示，不阻断磁盘清理或移出管理；默认 Host 仍可能显示 `unknown`。
-确认磁盘清理前，请自行停止所有使用该目录的任务，插件不会核验任务是否已停止。
+Session 活动仅用于信息展示，不阻断磁盘清理或移出管理。确认磁盘清理前，请自行停止所有使用该目录的任务，插件不会核验任务是否已停止。
 原生活动变化或重新打开归档菜单会刷新所属 Workspace 并保留 ready 内容。
 
 一个 Session 最多绑定一个 active Worktree，一个 Worktree 可以绑定多个 Session。Session
@@ -439,18 +383,13 @@ Worktree binding 使用对应的 Worktree 路径。cwd 在每次执行时派生�
 Git Worktree。创建 Session 时先调用 DSH 原生 API，再写入 binding；binding 失败不会删除或修改
 已创建的 Session。
 
-Worktree Session 流程将独立的 Worktree cwd 交给 DSH Session Controller，并将
-`{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
-attach。它不会修改 DSH 源码、Session metadata 或原生 Workspace 存储。native list 刷新后会
-重放 projection；binding 消失或 Client dispose 时会移除 projection。
+Worktree Session 视图通过前端视图投影呈现绑定的 Worktree 上下文，不修改 DSH 原生 Workspace 持久化数据。
 
-权限变更只使用 DSH 公共的 per-Session 权限服务及其 `permission/preset`、`sandbox/mode`、
-`approval/policy` 记录。插件不会写入消息、prompt、transcript、Workspace 数据或 Session
+权限变更只使用 DSH 公共的 per-Session 权限服务。插件不会写入消息、prompt、transcript、Workspace 数据或 Session
 metadata，也不能扩大运行 DSH 的宿主沙箱边界。
 
 空白 Hero 上下文只用于展示。由于当前 upstream DSH source checkout 没有 additive Hero
-headline slot，它的位置依赖原生 `[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，
-未来有正式 DSH slot 时应迁移到该 slot。
+headline slot，它的位置依赖原生 DOM 锚点；锚点不可用时浮层会消失，未来有正式 DSH slot 时应迁移到该 slot。
 
 关于详细的领域模型、生命周期迁移、恢复保证与开发贡献流程，请参阅：
 
