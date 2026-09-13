@@ -87,3 +87,7 @@ by that workflow.
 The command itself does not create a session or write a file. Once the user approves a
 design, the skill's documented destination is `docs/clutch/specs/`; subsequent planning or
 implementation remains an ordinary DSH workflow.
+
+## Friendly Links
+
+- [LINUX DO](https://linux.do/) — A new ideal community

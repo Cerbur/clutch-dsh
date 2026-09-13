@@ -499,3 +499,7 @@ description:
 
 市场投稿还需要在外部确认 `dsh-plugin` topic、仓库年龄和提交数等信息；这些外部属性无法
 由 package README 设置。
+
+## 友情链接
+
+- [LINUX DO](https://linux.do/) — 新的理想型社区

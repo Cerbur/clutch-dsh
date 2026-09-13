@@ -74,3 +74,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-ti
   - [`clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)
   - [`clutch-dsh-title`](packages/clutch-dsh-title/README.md)
 - 各 package 的 `docs/RELEASING.md`：包参数和安装来源说明。
+
+## 友情链接
+
+- [LINUX DO](https://linux.do/) — 新的理想型社区

@@ -113,3 +113,7 @@ fields:
 启用本 package 时请保持 DSH 默认标题 provider 关闭，也不要在同一 profile 中安装另一个 title provider。
 
 package-specific release 参数见 [`docs/RELEASING.md`](docs/RELEASING.md)，公开 release history 见 [`RELEASE-LOG.md`](RELEASE-LOG.md)。
+
+## 友情链接
+
+- [LINUX DO](https://linux.do/) — 新的理想型社区

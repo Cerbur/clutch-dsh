@@ -92,3 +92,7 @@ tool result 会出现在会话中，礼花层会覆盖当前选中的 session �
 ```bash
 pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-fireworks
 ```
+
+## 友情链接
+
+- [LINUX DO](https://linux.do/) — 新的理想型社区

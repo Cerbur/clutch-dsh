@@ -113,3 +113,7 @@ If your DSH profile already provides title settings through Cordis, the existing
 Keep DSH's default title provider disabled when this package is enabled, and do not install another title provider in the same profile.
 
 For package-specific release parameters, see [`docs/RELEASING.md`](docs/RELEASING.md). For the public release history, see [`RELEASE-LOG.md`](RELEASE-LOG.md).
+
+## Friendly Links
+
+- [LINUX DO](https://linux.do/) — A new ideal community

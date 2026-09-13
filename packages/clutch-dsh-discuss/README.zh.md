@@ -78,3 +78,7 @@ plugin 会 trim 输入，并将 brainstorming gesture 作为一条 user message 
 
 命令本身不会创建独立 session，也不会写文件。用户批准设计后，skill 规定的文档目标是
 `docs/clutch/specs/`；后续计划或实现仍然是普通 DSH workflow。
+
+## 友情链接
+
+- [LINUX DO](https://linux.do/) — 新的理想型社区

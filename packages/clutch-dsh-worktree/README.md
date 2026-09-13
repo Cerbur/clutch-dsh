@@ -565,3 +565,7 @@ description:
 
 Marketplace submission also requires external checks such as the `dsh-plugin` topic, repository
 age, and commit count. A package README cannot set those external properties.
+
+## Friendly Links
+
+- [LINUX DO](https://linux.do/) — A new ideal community

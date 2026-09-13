@@ -97,3 +97,7 @@ To remove the plugin from a profile:
 ```bash
 pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-fireworks
 ```
+
+## Friendly Links
+
+- [LINUX DO](https://linux.do/) — A new ideal community
