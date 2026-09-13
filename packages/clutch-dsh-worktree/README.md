@@ -60,7 +60,9 @@ connected Session and Worktree actions, and clearly marked placeholder cards.
 - Cover native waiting-for-approval, plan-review, question, completed, idle, and running-subagent
   states without copying the animation implementation into the plugin.
 - Show one native running indicator on a collapsed Workspace, Main, or Worktree when any of its
-  non-archived Sessions is active; expanded groups keep their normal action rail instead.
+  non-archived Sessions is active. A collapsed active group reserves the indicator's 28px box plus
+  a 4px label gap, and its long Worktree label scrolls while activity remains active; expanded groups
+  keep their normal action rail instead.
 - Promote a Session to the head of its Main or Worktree visual group after a newer user message.
   This ordering is browser-local and does not mutate DSH Workspace order or the Worktree sidecar.
 - Fork a Session from the native DSH Workspace tab, the Worktree view, or the Conversation fork
@@ -71,9 +73,11 @@ connected Session and Worktree actions, and clearly marked placeholder cards.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
   Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action.
-  The Worktree group rail is zero-width at rest; hover, focus, or an open menu reveals the available Dashboard,
-  menu, and Session `+` controls at intrinsic width; long Worktree labels automatically scroll while hovered
-  and reset to their original position when the pointer leaves.
+  The Worktree group rail is zero-width at rest unless a group is collapsed with active Session activity;
+  that state reserves the 28px running indicator and a 4px text gap. Hover, focus, or an open menu
+  reveals the available Dashboard, menu, and Session `+` controls at intrinsic width. Long Worktree labels
+  automatically scroll while hovered or while collapsed activity remains active, using one shared scroll
+  loop and resetting when neither trigger applies.
   Active rows offer `Archive Worktree` with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered

@@ -365,8 +365,11 @@ The Worktree surface is additive:
   is open or a row is being dragged.
 - Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
   search filtering and the five-row limit are applied. When collapsed, the flag renders one native
-  ongoing `StateDot` in the trailing action rail; expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions. Main and Worktree share the same parameterized group-row path.
+  ongoing `StateDot` in the trailing action rail; the activity rail reserves 28px for the indicator
+  plus a 4px label gap, and a long Worktree label uses the same forward/return scroll loop while
+  activity remains active. Expansion, hover/focus, and menu-open state yield the rail to its existing
+  actions without starting a competing scroll loop. Main and Worktree share the same parameterized
+  group-row path.
 - A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
   Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
   observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates

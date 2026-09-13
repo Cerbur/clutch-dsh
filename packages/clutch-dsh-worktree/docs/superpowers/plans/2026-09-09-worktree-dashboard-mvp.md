@@ -173,6 +173,16 @@ revealed; leaving the row cancels the animation and resets the label to its orig
 No DSH source or upstream behavior changes. The Dashboard remains a plugin-only preview MVP;
 its public documentation and screenshot evidence are recorded in the package docs.
 
+## Collapsed activity follow-up (2026-09-13)
+
+A collapsed Main or Worktree group with ongoing Session activity now reserves a 32px trailing
+activity rail: 28px for the native `StateDot` container and 4px of label breathing room. The
+long-label scroll loop starts for collapsed activity as well as pointer hover, and both triggers
+share one RAF owner. Hover, focus, and an open menu still hide the activity dot and take the rail
+back for the existing actions; leaving a running row no longer cancels its activity scroll. When
+neither trigger applies, the loop is cancelled and the label returns to its starting position.
+This remains a Client-only fix and does not modify DSH source or persisted data.
+
 ## Dashboard preview evidence (2026-09-13)
 
 - The user-authorized Dashboard preview is stored as `assets/screenshots/screenshots-dashboard.webp`

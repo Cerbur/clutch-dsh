@@ -336,6 +336,7 @@ export function WorktreeGroupRow({
     showDashboardAction === true && menu?.onDashboard !== undefined;
   const worktreeLabelRef = useRef<HTMLSpanElement>(null);
   const labelScrollFrameRef = useRef<number | undefined>(undefined);
+  const worktreeLabelPointerInsideRef = useRef<boolean>(false);
 
   const stopWorktreeLabelScroll = () => {
     if (labelScrollFrameRef.current !== undefined) {
@@ -348,9 +349,13 @@ export function WorktreeGroupRow({
   };
 
   const startWorktreeLabelScroll = () => {
-    stopWorktreeLabelScroll();
+    if (labelScrollFrameRef.current !== undefined) {
+      return;
+    }
+
     const labelElement = worktreeLabelRef.current;
     const prefersReducedMotion =
+      typeof window !== 'undefined' &&
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (labelElement === null || prefersReducedMotion) {
@@ -378,6 +383,18 @@ export function WorktreeGroupRow({
 
     labelScrollFrameRef.current = requestAnimationFrame(animate);
   };
+
+  const syncWorktreeLabelScroll = () => {
+    if (worktreeLabelPointerInsideRef.current || (!expanded && hasOngoingSession)) {
+      startWorktreeLabelScroll();
+    } else {
+      stopWorktreeLabelScroll();
+    }
+  };
+
+  useEffect(() => {
+    syncWorktreeLabelScroll();
+  }, [expanded, hasOngoingSession, label]);
 
   useEffect(() => {
     return () => {
@@ -428,8 +445,14 @@ export function WorktreeGroupRow({
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
       onClick={onToggle}
-      onMouseEnter={startWorktreeLabelScroll}
-      onMouseLeave={stopWorktreeLabelScroll}
+      onMouseEnter={() => {
+        worktreeLabelPointerInsideRef.current = true;
+        syncWorktreeLabelScroll();
+      }}
+      onMouseLeave={() => {
+        worktreeLabelPointerInsideRef.current = false;
+        syncWorktreeLabelScroll();
+      }}
     >
       <button
         type="button"

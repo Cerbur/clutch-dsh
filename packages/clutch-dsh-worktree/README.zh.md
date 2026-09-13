@@ -53,7 +53,8 @@ Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实�
 - 补齐原生的等待审批、计划待审、等待回答、已完成、空闲和运行中子代理状态；插件不会复制
   原生动画实现。
 - 当折叠的 Workspace、Main 或 Worktree 中存在任一未归档的活动 Session 时，在其右侧显示
-  一个原生运行指示器；展开后恢复普通操作栏。
+  一个原生运行指示器；折叠运行状态会为 28px 指示器和 4px 文字间距预留空间，过长的 Worktree
+  名称会在活动持续期间滚动；展开后恢复普通操作栏。
 - 用户在 Session 中发送新消息后，该 Session 会移动到当前 Main 或 Worktree 视觉分组的队首。
   该排序只保存在浏览器本地，不修改 DSH Workspace 顺序或 Worktree sidecar。
 - 从 DSH 原生 Workspace session list tab、Worktree view 或 Conversation fork 操作 fork
@@ -63,9 +64,10 @@ Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实�
   binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外通过选项菜单和
-  行内悬浮操作提供 Dashboard。Worktree 分组的右侧操作栏在静止时为零宽度；hover、focus 或打开 menu
-  时才按实际可用的 Dashboard、menu 和 Session `+` 控件占用宽度；过长的 Worktree 名称悬浮时会自动横向
-  滚动，鼠标离开后回到原始位置。
+  行内悬浮操作提供 Dashboard。Worktree 分组的右侧操作栏在静止时为零宽度；折叠且有活动时会为 28px 运行指示器和 4px 文字间距
+  预留空间。hover、focus 或打开 menu 时才按实际可用的 Dashboard、menu 和 Session `+` 控件占用宽度；
+  过长的 Worktree 名称会在悬浮或折叠运行期间自动横向滚动，两个触发条件共用一个滚动循环，均不满足
+  后回到原始位置。
   active Worktree 提供“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree

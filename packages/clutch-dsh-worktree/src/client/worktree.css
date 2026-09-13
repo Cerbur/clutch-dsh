@@ -675,6 +675,8 @@
   font-weight: 600;
 }
 
+/* A collapsed running row keeps one shared scroll container for its label. */
+.worktreeRow[data-group-activity='true'] .worktreeLabel,
 /* Once the action rail is revealed, allow long branch labels to scroll inline. */
 .worktreeRow:hover .worktreeLabel,
 .worktreeRow[data-menu-open='true'] .worktreeLabel,
@@ -685,6 +687,7 @@
   scrollbar-width: none;
 }
 
+.worktreeRow[data-group-activity='true'] .worktreeLabel::-webkit-scrollbar,
 .worktreeRow:hover .worktreeLabel::-webkit-scrollbar,
 .worktreeRow[data-menu-open='true'] .worktreeLabel::-webkit-scrollbar,
 .worktreeRow:focus-within .worktreeLabel::-webkit-scrollbar {
@@ -749,6 +752,12 @@
   flex: 0 0 0;
   width: 0;
   gap: 4px;
+}
+
+/* Keep the 28px activity indicator plus a 4px label gap while collapsed. */
+.worktreeRow[data-group-activity='true'] .treeActionSlot {
+  flex: 0 0 32px;
+  width: 32px;
 }
 
 .worktreeRow:hover .treeActionSlot,

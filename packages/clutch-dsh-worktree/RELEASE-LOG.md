@@ -16,6 +16,7 @@
 #### 修复
 
 - 修复 Local 行 Dashboard 入口和预览状态文案，明确标识尚未接入的操作。
+- 修复折叠且有 Session 运行时的 Worktree 指示器与名称重叠，并让运行状态与悬浮名称滚动共用同一套协调逻辑。
 
 ### English
 
@@ -31,6 +32,7 @@
 #### Fixed
 
 - Fix the Local-row Dashboard entry and preview status copy so unavailable actions are clearly marked.
+- Fix collapsed running Worktree rows whose activity indicator overlapped the label, and coordinate activity scrolling with hover scrolling through one shared loop.
 
 ## 0.1.10 — 2026-09-08
 
