@@ -92,8 +92,8 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   });
 });
 
-test('declares the dsh-v0.1.2-rc.1 compatibility floor', () => {
-  const minimumDshVersion = '>=0.1.2-rc.1';
+test('declares the dsh-v0.1.5-rc.1 compatibility floor', () => {
+  const minimumDshVersion = '>=0.1.5-rc.1';
   const validatedDshVersion = '0.1.2-rc.1';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
@@ -118,7 +118,7 @@ test('declares the dsh-v0.1.2-rc.1 compatibility floor', () => {
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '>=0.1.2-rc.1',
+    '>=0.1.5-rc.1',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
