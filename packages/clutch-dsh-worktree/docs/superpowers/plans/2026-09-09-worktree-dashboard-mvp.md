@@ -84,10 +84,12 @@ pending-operation gates. Launch VS Code through an encoded `vscode://file/...` l
 The remaining Git, instructions, children, settings, and quick actions stay placeholders.
 No new reads are introduced by dashboard entry, Session rendering, or tab changes.
 The shared Worktree row keeps the existing Dashboard menu entry and adds a hover-only icon action
-controlled by the `showDashboardAction` flag for Local/Main and active/archived Worktrees. Its conditional
-92px rail places Dashboard/menu/+ at 64/32/0px,
-compacts the Worktree leading and nested Session alignment slots to 20px, and reserves the
-native Sidebar resize handle's 4px half-width when positioning the Dashboard overlay.
+controlled by the `showDashboardAction` flag for Local/Main and active/archived Worktrees. Its trailing
+action rail is zero-width while idle, so Dashboard, menu, and Session `+` do not reduce the Worktree
+label's available width. Hover, focus, or an open menu reveals the available controls in intrinsic-width
+flow; a long Worktree label is horizontally scrollable in the revealed state. The leading Worktree and
+nested Session alignment slots remain compacted to 20px, and Dashboard overlay positioning still reserves
+the native Sidebar resize handle's 4px half-width.
 
 ## Verification
 
@@ -152,3 +154,14 @@ The extension adds bilingual accessible copy, native-sized icon-button styling, 
 rendering regression, and a Client-composition registration/navigation regression. `pnpm run build`
 and the targeted header tests passed. The full package test passed all 572 tests; package typecheck
 and lint, workspace shape/patch validation, and `git diff --check` also passed.
+
+## Worktree group row rail optimization (2026-09-13)
+
+The follow-up keeps the change inside the browser Consumer. WorktreeGroupRow now keeps its trailing
+action rail at zero width while idle, so the Dashboard icon, options menu, and Session creation `+`
+are visually hidden without consuming Worktree label space. Hover, focus, and an open menu reveal the
+controls with their intrinsic spacing and preserve keyboard reachability through opacity and pointer-event
+states. Long labels switch from ellipsis to horizontal scrolling while the rail is revealed; the existing
+500 ms Worktree HoverCard remains the full-value fallback. Workspace rows retain their native fixed rail.
+
+No DSH source, Host/Provider/Remote contract, sidecar data, Session data, or Worktree behavior changes.

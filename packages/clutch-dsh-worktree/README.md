@@ -60,8 +60,10 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
   Main/Local. A sidecar failure keeps the child available and exposes retryable binding recovery.
 - See ready, repair, active, and detached Worktree states, including retryable operation errors.
 - Use the shared Main and Worktree row options menu to copy the selected row's absolute path.
-  Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action;
-  active rows offer `Archive Worktree` with confirmation.
+  Local/Main and managed Worktree rows expose Dashboard through the existing menu and a hover-only row action.
+  The Worktree group rail is zero-width at rest; hover, focus, or an open menu reveals the available Dashboard,
+  menu, and Session `+` controls at intrinsic width, while long Worktree labels can scroll horizontally.
+  Active rows offer `Archive Worktree` with confirmation.
 - Create a new Worktree from the Local or an active Worktree's options menu. The Create dialog
   uses the selected row's current branch as its base and suggests the next available numbered
   name, such as `feature-2` or `feature-3`; detached Worktrees do not expose this action.
@@ -371,7 +373,8 @@ other Git failures retain their normal error handling.
   being dragged.
 - A collapsed Workspace, Main group, or Worktree group shows the same running dot when any
   non-archived member is ongoing, including activity hidden by search. Expanding the group hides
-  the aggregate dot; hover, focus, or an open menu reveals the existing action controls.
+  the aggregate dot; hover, focus, or an open menu reveals the existing action controls and only then
+  reserves their width.
 - A newer user message promotes its Session to the head of the current Main or Worktree visual
   group. The promotion, observed timestamps, and per-group order live only in browser-local state;
   successful manual drag still uses the native DSH ordering API before updating that local order.

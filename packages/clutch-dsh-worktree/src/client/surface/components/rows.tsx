@@ -382,7 +382,7 @@ export function WorktreeGroupRow({
       )}
       <span className={styles.worktreeLabel}>{label}</span>
       <span
-        className={`${styles.treeActionSlot} ${dashboardActionVisible ? styles.treeActionSlotWithDashboard : ''}`}
+        className={styles.treeActionSlot}
       >
         <span
           className={styles.groupActivity}

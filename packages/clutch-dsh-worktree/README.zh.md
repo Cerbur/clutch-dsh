@@ -54,7 +54,9 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
   binding 恢复操作。
 - 查看 ready、repair、active 和 detached Worktree 状态，包括可重试的操作错误。
 - 通过 Main 和 Worktree 共用的选项菜单复制所选行的绝对路径；已管理 Worktree 额外通过选项菜单和
-  行内悬浮操作提供 Dashboard，active Worktree 提供“归档 Worktree”并要求确认。
+  行内悬浮操作提供 Dashboard。Worktree 分组的右侧操作栏在静止时为零宽度；hover、focus 或打开 menu
+  时才按实际可用的 Dashboard、menu 和 Session `+` 控件占用宽度，过长的 Worktree 名称可横向滚动。
+  active Worktree 提供“归档 Worktree”并要求确认。
 - 通过 Local 或 active Worktree 的选项菜单创建新的 Worktree。创建弹窗会以所选行的当前 branch
   为基线，并预填下一个可用的递增名称，例如 `feature-2` 或 `feature-3`；detached Worktree
   不显示该动作。
@@ -334,7 +336,7 @@ Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位�
   和状态；Session 菜单打开或行正在拖拽时不显示卡片。
 - 折叠的 Workspace、Main 或 Worktree 分组，只要任一未归档成员正在运行就显示相同的原生运行点，
   即使该 Session 被搜索隐藏也会计入。展开后隐藏聚合点；hover、focus 或打开菜单时显示原有
-  操作控件。
+  操作控件，并只在此时占用操作栏宽度。
 - 用户发送新消息后，Session 会移动到当前 Main 或 Worktree 视觉分组队首。promotion、已观察
   时间戳和每组顺序只存在浏览器本地；手动拖动仍先调用 DSH 原生排序 API，成功后再更新本地顺序。
 

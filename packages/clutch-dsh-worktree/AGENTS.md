@@ -348,6 +348,7 @@ Client surface 的当前约束：
 - Main 与 Worktree 共用 parameterized split-row，Session reorder 限定在当前视觉分组内；
 - 每组默认显示五行，更多内容使用 Expand more/Collapse；
 - Main 与 Worktree 共用 parameterized split-row；active Worktree 通过可选参数暴露 remove menu、确认弹窗和状态，Main 与 detached binding 不传入 menu，因此不显示 Worktree remove 选项；
+- Main 与 Worktree group row 的 trailing action rail 在静止时保持零宽度，不为 Dashboard、menu 或 Session `+` 预留空间；hover、focus 或打开 menu 时才按实际可用控件的 intrinsic width 展示，过长的 Worktree label 同时允许横向滚动；
 - Worktree health 是 Git 的运行时 projection，不写入 sidecar；
 - Worktree health also exposes `recovery-needed` while a durable Git/sidecar operation or recovery
   issue is unresolved; this is a runtime projection and is not persisted;

@@ -1414,10 +1414,10 @@ test('matches native Workspace interaction, typography, and action rail', async 
   assert.match(styles, /\.sessionOverflowButton\s*\{[\s\S]*font-size: 12px;/);
   assert.match(styles, /\.searchInput\s*\{[\s\S]*font-size: 13px;/);
 
-  assert.match(styles, /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*flex: 0 0 64px;/);
-  assert.match(styles, /\.treeActionSlot\s*,[\s\S]*\.workspaceActions\s*\{[\s\S]*width: 64px;/);
-  assert.match(styles, /\.treeActionSlot > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
-  assert.match(styles, /\.treeActionSlot > \.menuAction\s*\{[\s\S]*right: 32px;/);
+  assert.match(styles, /\.workspaceActions\s*\{[\s\S]*flex: 0 0 64px;/);
+  assert.match(styles, /\.workspaceActions\s*\{[\s\S]*width: 64px;/);
+  assert.match(styles, /\.workspaceActions > \.iconButton:last-child\s*\{[\s\S]*right: 0;/);
+  assert.match(styles, /\.workspaceActions > \.menuAction\s*\{[\s\S]*right: 32px;/);
   assert.match(styles, /\.groupHeader\s*\{[\s\S]*padding-right: 4px;/);
 });
 
@@ -1474,7 +1474,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
   assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
 });
 
-test('adds a parameterized hover-only Dashboard action without removing the menu action', async () => {
+test('keeps group actions hover-only without reserving Worktree label space', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const rowProps = await readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8');
@@ -1497,15 +1497,25 @@ test('adds a parameterized hover-only Dashboard action without removing the menu
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
   );
   assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
-  assert.match(styles, /\.treeActionSlotWithDashboard\s*\{[\s\S]*flex: 0 0 92px;[\s\S]*width: 92px;/);
   assert.match(
     styles,
-    /\.treeActionSlot > \.dashboardAction\s*\{[\s\S]*right: 64px;/,
+    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*min-width: 0;[\s\S]*flex: 0 0 0;[\s\S]*width: 0;[\s\S]*gap: 4px;/,
   );
-  assert.match(styles, /\.dashboardAction\s*\{[\s\S]*visibility: hidden;/);
   assert.match(
     styles,
-    /\.worktreeRow:hover \.dashboardAction,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.dashboardAction,[\s\S]*\.worktreeRow:focus-within \.dashboardAction[\s\S]*visibility: visible;/,
+    /\.worktreeRow:hover \.treeActionSlot,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.treeActionSlot,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot[\s\S]*flex: 0 0 auto;[\s\S]*width: auto;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.menuAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeLabel,[\s\S]*\.worktreeRow:focus-within \.worktreeLabel[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
   );
 
   const mainCall = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
