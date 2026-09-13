@@ -16,6 +16,7 @@ import {
 import { en, zh } from '../lib/client/locales.js';
 import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
 import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
+import { selectWorktreeAcquisitionFacts } from '../lib/client/dashboard/worktree-acquisition-facts.js';
 import {
   isBlankSession,
   relativeTime,
@@ -34,6 +35,34 @@ const record = {
   health: 'ready',
 };
 const selection = { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' };
+
+test('dashboard acquisition facts preserve management provenance and unknowns', () => {
+  assert.deepEqual(
+    selectWorktreeAcquisitionFacts({
+      source: 'plugin',
+      createdAt: '2026-09-13T01:02:03.000Z',
+      baseBranch: 'main',
+    }),
+    {
+      timestampKind: 'created',
+      timestamp: '2026-09-13T01:02:03.000Z',
+      baseBranch: 'main',
+    },
+  );
+  assert.deepEqual(
+    selectWorktreeAcquisitionFacts({
+      source: 'external',
+      importedAt: '2026-09-13T04:05:06.000Z',
+    }),
+    {
+      timestampKind: 'imported',
+      timestamp: '2026-09-13T04:05:06.000Z',
+    },
+  );
+  assert.deepEqual(selectWorktreeAcquisitionFacts({ source: 'plugin' }), {
+    timestampKind: 'created',
+  });
+});
 
 test('dashboard follows the selected Worktree, ready refreshes, and native navigation', () => {
   const resolve = (
@@ -117,6 +146,7 @@ function renderHarness(writeClipboard) {
         },
         './dashboard-overlay.js': {},
         './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord },
+        './worktree-acquisition-facts.js': { selectWorktreeAcquisitionFacts },
         './vscode-url.js': { vscodeFolderUrl },
         './OpenInAppButton.js': {
           OpenInAppButton: ({ path, t }) => jsx('a', {
@@ -190,6 +220,43 @@ test('dashboard renders real identity and explicit placeholders in both language
     assert.equal(byRole(node, 'tab').length, 5);
     assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 8);
   }
+  harness.dispose();
+});
+
+test('dashboard renders source-aware acquisition facts and keeps absent facts unknown', () => {
+  const harness = renderHarness(async () => true);
+  let node = harness.render({
+    record: {
+      ...record,
+      createdAt: '2026-09-13T01:02:03.000Z',
+      baseBranch: 'main',
+    },
+  });
+  assert.equal(findAll(node, (item) => item.type === 'dt')[0].props.children, en['dashboard.created']);
+  assert.equal(
+    findAll(node, (item) => item.type === 'time')[0].props.dateTime,
+    '2026-09-13T01:02:03.000Z',
+  );
+  assert.ok(findAll(node, (item) => item.type === 'dd' && item.props.children === 'main').length > 0);
+
+  node = harness.render({
+    record: {
+      ...record,
+      source: 'external',
+      importedAt: '2026-09-13T04:05:06.000Z',
+    },
+  });
+  assert.equal(findAll(node, (item) => item.type === 'dt')[0].props.children, en['dashboard.imported']);
+  assert.equal(
+    findAll(node, (item) => item.type === 'time')[0].props.dateTime,
+    '2026-09-13T04:05:06.000Z',
+  );
+  assert.ok(findAll(node, (item) => item.type === 'dd' && item.props.children === en['dashboard.unknown']).length > 0);
+
+  node = harness.render({ record });
+  assert.equal(findAll(node, (item) => item.type === 'dt')[0].props.children, en['dashboard.created']);
+  assert.equal(findAll(node, (item) => item.type === 'time').length, 0);
+  assert.ok(findAll(node, (item) => item.type === 'dd' && item.props.children === en['dashboard.unknown']).length >= 2);
   harness.dispose();
 });
 

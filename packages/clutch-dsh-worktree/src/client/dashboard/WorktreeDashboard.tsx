@@ -14,6 +14,7 @@ import { sessionStatusLabel, sessionTimeLabel } from '../session/session-labels.
 import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
 import { isMainWorktreeId } from './dashboard-selection.js';
+import { selectWorktreeAcquisitionFacts } from './worktree-acquisition-facts.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
@@ -207,6 +208,9 @@ export function WorktreeDashboard({
     record.currentBranch === null
       ? t('dashboard.detached')
       : (record.currentBranch ?? t('dashboard.unknown'));
+  const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
+  const acquisitionLabel =
+    acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
   const tabLabel = (value: DashboardTab) => t(`dashboard.tab.${value}`);
   const placeholder = <span className={styles.dashboardSoon}>{t('dashboard.soon')}</span>;
   const selectTab = (next: DashboardTab, focus = false) => {
@@ -379,15 +383,15 @@ export function WorktreeDashboard({
             <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
               <div>
-                <dt>{t(record.source === 'external' ? 'dashboard.imported' : 'dashboard.created')}</dt>
-                <dd>{(record.source === 'external' ? record.importedAt : record.createdAt)
-                  ? <time dateTime={record.source === 'external' ? record.importedAt : record.createdAt}>
-                    {new Date((record.source === 'external' ? record.importedAt : record.createdAt)!).toLocaleString()}
+                <dt>{t(acquisitionLabel)}</dt>
+                <dd>{acquisitionFacts.timestamp
+                  ? <time dateTime={acquisitionFacts.timestamp}>
+                    {new Date(acquisitionFacts.timestamp).toLocaleString()}
                   </time> : t('dashboard.unknown')}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.base')}</dt>
-                <dd>{record.baseBranch ?? t('dashboard.unknown')}</dd>
+                <dd>{acquisitionFacts.baseBranch ?? t('dashboard.unknown')}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.source')}</dt>

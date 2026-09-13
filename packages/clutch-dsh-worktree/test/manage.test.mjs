@@ -1743,8 +1743,10 @@ test('prepends Worktrees created and imported through the compatibility path', a
 
     const created = await provider.createWorktree({
       workspaceId: 'ws_one',
-      branch: 'feature/legacy-create-one',
+      branch: ' feature/legacy-create-one ',
     });
+    assert.equal(created.baseBranch, 'feature/legacy-create-one');
+    assert.ok(Number.isFinite(Date.parse(created.createdAt)));
     const secondCreated = await provider.createWorktree({
       workspaceId: 'ws_one',
       branch: 'feature/legacy-create-two',

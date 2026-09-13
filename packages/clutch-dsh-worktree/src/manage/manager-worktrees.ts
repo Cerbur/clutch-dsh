@@ -342,7 +342,7 @@ async function createWorktreeAttempt(
     branch: targetBranch,
     source: 'plugin',
     createdAt: new Date().toISOString(),
-    baseBranch: input.branch,
+    baseBranch,
     status: 'active',
   };
 
