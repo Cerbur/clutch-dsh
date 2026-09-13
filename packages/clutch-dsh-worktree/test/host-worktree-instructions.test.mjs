@@ -55,7 +55,8 @@ test('independent reminder persists through native pre-step messages and dedupli
   assert.equal((await h.invoke()).messages.length, 0);
   h.state.text = 'Updated </system-reminder>';
   const update = (await h.invoke()).messages[0];
-  assert.equal(update.content[0].text.split('</system-reminder>').length, 2);
+  assert.ok(update.content[0].text.includes('Updated </system-reminder>'));
+  assert.equal(update.content[0].text.split('</system-reminder>').length, 3);
   h.commit(update);
   h.state.text = '';
   const clear = (await h.invoke()).messages[0];

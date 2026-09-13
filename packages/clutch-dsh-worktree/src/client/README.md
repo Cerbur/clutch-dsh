@@ -95,6 +95,9 @@ both candidate reads and import mutations and releases the membership projection
 
 ### Worktree dashboard
 
+The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
+Worktree projection, not a replacement for DSH's native Session page or a new source of truth.
+
 `dashboard/` owns the transient dashboard selection, page, and presentation lifecycle.
 `WorktreeSurface` opens it from Local/Main and active/archived Worktree menus and resolves the
 selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
@@ -120,10 +123,14 @@ The accepted branch supplies the Worktree name, and clicking the dashboard title
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
-Tabs implement roving keyboard focus. All unconnected data and actions are labeled rather
-than populated with fabricated status. No instructions are persisted or injected.
+Tabs implement roving keyboard focus. Git details, derived Worktrees, Settings, and other unconnected
+data and actions are labeled rather than populated with fabricated status. The connected Worktree
+instructions card persists plugin-owned text through the existing Manager path; active bindings receive
+that text through the Host's DSH `agent/pre-step` hook.
 
-The page is an MVP presentation and introduces no Host, Provider, Remote, or sidecar contract.
+The page is a plugin-only preview MVP. Its instruction editor uses this package's
+Host/Provider/Remote/sidecar extension; the Dashboard adds no second transport and does not
+modify DSH source or native Session/Workspace data.
 
 Dashboard actions reuse `session.createSession`, `session.openWorkspaceSession`,
 `registration.openWorktreeCreator`, and `lifecycleState.setWorktreeRemoval` in the
@@ -219,7 +226,8 @@ The Dashboard instructions card edits plugin-owned text through
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
 preserved. Main does not expose instruction editing. Creation/import time and base branch are
 optional recorded facts; missing values remain unknown. The open-editor control uses the
-native split-button typography, padding, border, and hover colors.
+native button typography, padding, border, and hover colors, and links directly to the encoded
+VS Code protocol without a second host transport.
 
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
@@ -245,6 +253,7 @@ The directory layout follows those responsibilities:
 ```text
 client/
 ├── context/     # Conversation and Hero context projection
+├── dashboard/   # Dashboard preview, selection and direct VS Code action
 ├── session/     # Session creation, fork, ordering and membership
 ├── permission/  # Permission confirmation and native icon integration
 ├── view/        # View mode, scoped reads, actions and error presentation

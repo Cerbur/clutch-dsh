@@ -43,8 +43,8 @@ instructions placeholder and Client-only limit below.
   passed all 15 tests.
 - Browser QA used the actual Surface with synthetic data at
   `/tmp/dashboard-actions-qa`: failed saves retain the draft, retry shows saved text,
-  creation/base facts render, and the detected-app menu opens. Escape now dismisses
-  the menu while retaining Dashboard. English and Chinese layouts were inspected.
+  creation/base facts render, and the encoded VS Code link is present. Escape now dismisses
+  the Dashboard. English and Chinese layouts were inspected.
   No real editor launch or live Session/model request was performed.
 - Both public READMEs, the Client README, and package architecture instructions are updated.
   No commit, version bump, merge, pack, publish, or push was performed.
@@ -70,8 +70,9 @@ presentation, with no DSH source or persisted Session changes.
   keyboard navigation. The reference image informs the two-column card layout.
 - Clearly label unconnected actions and data as coming soon. Do not invent clean
   Git status, ahead/behind counts, instructions, children, or running Sessions.
-- No Host/Provider/Remote/sidecar changes, new dependencies, version bump, commit,
-  publish, or changes to the DSH source checkout.
+- Keep the plugin-only boundary: no changes to the DSH source checkout. The instruction and
+  acquisition extension uses this package's existing Host/Manage/provider/Remote/sidecar path;
+  no second transport, new dependency, version bump, commit, or publish is part of the Dashboard MVP.
 
 ## Dashboard action extension (2026-09-09)
 
@@ -103,8 +104,10 @@ limits in both public READMEs and the Client README.
 
 ## Initial implementation and verification evidence
 
-- Implemented only in this package's Client, tests, and documentation. DSH source,
-  Host/Provider/Remote contracts, package metadata and release version are unchanged.
+- At the initial presentation checkpoint, implementation was limited to this package's
+  Client, tests, and documentation; DSH source and package metadata remained unchanged.
+  Later instruction/acquisition work extends this package's contract and Host/Manage/provider
+  modules without touching DSH source.
 - `pnpm build`, `pnpm typecheck`, and `pnpm lint`: passed.
 - `pnpm test`: 547 passed, 0 failed or skipped. Seven new handler/presentation
   regressions cover identity, refreshed facts, navigation, both locales, tabs,
@@ -114,10 +117,10 @@ limits in both public READMEs and the Client README.
   plugin using the unmodified local upstream source. A separate static fixture
   at `/tmp/clutch-dashboard-preview` bundles the real `WorktreeSurface` with
   synthetic data for visual review without a DSH connection.
-- Browser verification is pending explicit user authorization: automatic approval
-  rejected the temporary DSH token login and then access to the static fixture's
-  local origin. No browser screenshot or visual pass is claimed. Public screenshot
-  updates should follow authorized visual verification.
+- At the initial implementation checkpoint, browser verification was pending explicit
+  user authorization: automatic approval rejected the temporary DSH token login and
+  then access to the static fixture's local origin. No browser screenshot or visual pass
+  was claimed at that checkpoint; the authorized preview evidence is recorded below.
 - No feature commit, version bump, release merge, pack, publish, or push was performed.
 
 ## Action extension verification
@@ -167,4 +170,25 @@ states. Long labels switch from ellipsis to an automatic forward-and-return scro
 revealed; leaving the row cancels the animation and resets the label to its original position. The existing
 500 ms Worktree HoverCard remains the full-value fallback. Workspace rows retain their native fixed rail.
 
-No DSH source, Host/Provider/Remote contract, sidecar data, Session data, or Worktree behavior changes.
+No DSH source or upstream behavior changes. The Dashboard remains a plugin-only preview MVP;
+its public documentation and screenshot evidence are recorded in the package docs.
+
+## Dashboard preview evidence (2026-09-13)
+
+- The user-authorized Dashboard preview is stored as `assets/screenshots/screenshots-dashboard.webp`
+  (2584 × 1622) and listed in `screenshots.json`.
+- Both public READMEs show the screenshot and identify the Dashboard as a plugin-only preview MVP,
+  including the connected actions and the placeholder tabs.
+- `test/readme-parity.test.mjs` asserts the Dashboard screenshot references and manifest entry; no
+  DSH source or generated runtime artifact is used by the documentation asset.
+
+## Review follow-up verification (2026-09-13)
+
+- Main is represented as a browser-only Dashboard projection. Missing branch, health, and source
+  facts remain absent and render as unavailable rather than `main`, `ready`, or plugin provenance.
+- The open-editor action uses only the encoded `vscode://file/...` link; generic host app discovery
+  and the second `/open-in-app` transport are not part of this plugin-only MVP.
+- Dashboard selection is cleared when Worktree mode exits and when the surface is disposed, so
+  re-entry cannot reopen a stale overlay.
+- Host instruction injection preserves the user's instruction text literally, including a literal
+  `</system-reminder>` sequence; the surrounding reminder remains the plugin-owned wrapper.

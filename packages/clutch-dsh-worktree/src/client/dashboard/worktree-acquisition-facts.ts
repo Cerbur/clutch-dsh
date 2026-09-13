@@ -1,4 +1,4 @@
-import type { WorktreeRecord } from '../../contract/index.js';
+import type { DashboardRecord } from './dashboard-selection.js';
 
 /**
  * Dashboard-facing acquisition facts from the Worktree management record.
@@ -15,7 +15,7 @@ export interface WorktreeAcquisitionFacts {
 }
 
 export function selectWorktreeAcquisitionFacts(
-  record: Pick<WorktreeRecord, 'source' | 'createdAt' | 'importedAt' | 'baseBranch'>,
+  record: Pick<DashboardRecord, 'source' | 'createdAt' | 'importedAt' | 'baseBranch'>,
 ): WorktreeAcquisitionFacts {
   return {
     timestampKind: record.source === 'external' ? 'imported' : 'created',

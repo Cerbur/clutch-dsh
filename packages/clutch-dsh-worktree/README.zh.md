@@ -5,6 +5,10 @@ Workspace → Worktree → Session 组织会话，同时继续由 DSH 作为 Pro
 Session 元数据、原生列表和会话历史的唯一事实来源。插件在自己的 sidecar 中保存
 Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree 指令。
 
+> **预览版：** Worktree Dashboard 是仅插件的早期 MVP 预览版。目前已接入概览、会话
+> 列表与导航、Worktree 指令、新建/归档 Worktree 和直接打开 VS Code；Git 详情、派生
+> Worktree、设置及其他标记为**即将推出**的操作仍是占位。
+
 ## 界面截图
 
 ![中文 Worktree 侧边栏和新会话空白 Hero](assets/screenshots/screenshots-zh.png)
@@ -16,6 +20,11 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
 
 导入截图展示了现有 Workspace `+` 弹窗：默认选中创建，旁边是导入 Tab，并在普通下拉框中
 使用安全的示例 branch 和路径值。
+
+![Worktree Dashboard 预览（中文界面）](assets/screenshots/screenshots-dashboard.webp)
+
+Dashboard 截图记录了当前预览版界面：Worktree 身份、获取事实、已接入的会话与 Worktree
+操作，以及明确标出的占位卡片。
 
 ## 能力
 
@@ -83,8 +92,9 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
 
 Session 重新加载兼容 rc.1 的持久化 header 与新版 DSH 的 header snapshot。
 v4 开发构建的已知元数据（`instructions`、`createdAt`、`importedAt`、
-`baseBranch`）会在 sidecar 写入时保留；本版本不创建这些字段，也不注入指令。
-未知字段仍会被拒绝。较旧的 v4 插件读取器可能拒绝包含这些开发字段的 snapshot。
+`baseBranch`）会在 sidecar 写入时保留。Dashboard 预览版会为新 Worktree 记录获取事实，
+并为 active binding 注入已保存的指令；未知字段仍会被拒绝。较旧的 v4 插件读取器可能
+拒绝包含这些开发字段的 snapshot。
 
 兼容性事实表如下：
 
@@ -227,6 +237,9 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 
 ### 打开 Worktree Dashboard
 
+Dashboard 是仅插件的预览版 MVP，不会替换 DSH 原生 Session 页面，也不会写入 DSH 管理的
+Workspace/Session 数据。
+
 在 Worktree 模式中，将鼠标悬浮到已管理 Worktree 行并点击 Dashboard 图标，或打开行的选项菜单
 并选择 **Dashboard**。对于具有 ready Main 或 Worktree 上下文的当前 Session，也可以点击 Session
 标题行中原生 **More actions** 按钮左侧的 Dashboard 图标。Dashboard 会临时替换 Sidebar 旁的区域
@@ -235,8 +248,14 @@ Session 或退出 Worktree 模式，即可恢复原生页面。打开 Dashboard 
 Local/Main 与已管理 Worktree 行都提供行内 Dashboard 图标，当前 Session 仍可使用标题行快捷入口。
 Dashboard 打开后仍可拖动 Sidebar 的宽度。
 
+![Worktree Dashboard 预览](assets/screenshots/screenshots-dashboard.webp)
+
+上图展示了原生 Worktree Sidebar 旁的预览版 Dashboard。已接入的控件仅覆盖 MVP 范围；
+未完成的卡片仍会明确标记。
+
 标题沿用 Worktree 行的已接受分支名称，点击标题即可直接复制分支名称。cwd 展示记录中的完整
-绝对路径，复制按钮明确反馈成功或失败。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
+绝对路径，复制按钮明确反馈成功或失败。如果 DSH 无法提供 Main 的当前分支，Dashboard 会标记为
+无法获取且不会提供分支复制。当前分支、可用性与来源使用现有 Worktree 投影；ready 表示 Worktree 可用，**不代表**
 Git 文件没有变更。归档或已清理记录仍展示记录中的路径，该路径不一定仍存在于磁盘。
 
 五个 tab 支持左右方向键、Home 和 End。概览显示当前 Worktree 的前五个会话，会话 tab
@@ -262,8 +281,8 @@ code units）。内容保存在插件 sidecar，不写入 AGENTS.md；保存后�
 不推测原始创建时间或基线；缺少这些历史事实时，Dashboard 提示**历史 Worktree 无法获取**，
 不再显示“未知”。基线是创建时的分支名，
 不代表当前 merge-base 或领先/落后计算，checkout 不会修改它。
-Open-editor 分体按钮对齐 DSH 原生样式，并提供主机检测到的应用菜单；不可用时回退到上文
-说明的 VS Code 协议链接。
+Open-editor 控件对齐 DSH 原生样式，并使用上文说明的 VS Code 协议链接。它不会发起额外的
+主机请求，也不会验证应用是否成功启动。
 
 Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位。界面跟随 DSH
 主题，窄屏下卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。

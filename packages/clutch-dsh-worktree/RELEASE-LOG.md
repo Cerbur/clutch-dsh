@@ -1,5 +1,37 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.11 — 2026-09-13
+
+### 中文
+
+#### 新增
+
+- 增加仅插件的 Worktree Dashboard 预览版，提供概览、会话、Worktree 指令、创建/归档和直接打开 VS Code 入口。
+- 支持从 Worktree、Local/Main 行和 Session 标题快捷入口打开 Dashboard，并保持原生 Session 页面与 DSH 数据不变。
+
+#### 优化
+
+- 优化 Dashboard 的会话导航、获取事实展示和 Worktree 行内操作栏，悬浮时为过长名称提供横向滚动。
+
+#### 修复
+
+- 修复 Local 行 Dashboard 入口和预览状态文案，明确标识尚未接入的操作。
+
+### English
+
+#### Added
+
+- Add a plugin-only Worktree Dashboard preview with overview, Sessions, Worktree instructions, creation/archive, and a direct VS Code launch entry point.
+- Open the Dashboard from Worktree, Local/Main, and Session-header shortcuts while leaving the native Session page and DSH-owned data unchanged.
+
+#### Improved
+
+- Improve Dashboard Session navigation, acquisition-fact presentation, and the Worktree inline action rail with hover scrolling for long labels.
+
+#### Fixed
+
+- Fix the Local-row Dashboard entry and preview status copy so unavailable actions are clearly marked.
+
 ## 0.1.10 — 2026-09-08
 
 ### 中文

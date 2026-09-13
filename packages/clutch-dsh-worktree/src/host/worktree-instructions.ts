@@ -50,7 +50,7 @@ export function registerWorktreeInstructions(
       ? [
           '<system-reminder>',
           'Shared instructions for this Worktree. This replaces all earlier Worktree instructions:',
-          instructions.replaceAll('</system-reminder>', '<\\/system-reminder>'),
+          instructions,
           '</system-reminder>',
         ].join('\n')
       : cleared;

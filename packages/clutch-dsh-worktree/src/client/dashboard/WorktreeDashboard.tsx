@@ -6,7 +6,7 @@ import {
   StateDot,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
-import type { WorktreeRecord } from '../../contract/index.js';
+import type { DashboardRecord } from './dashboard-selection.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { isBlankSession, relativeTime, sessionDisplayLabel } from '../session/session-view.js';
 import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
@@ -24,7 +24,7 @@ type DashboardTab = (typeof TABS)[number];
 
 export interface WorktreeDashboardProps {
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
-  readonly record: WorktreeRecord;
+  readonly record: DashboardRecord;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
@@ -96,7 +96,7 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
   );
 }
 
-/** A real Worktree projection with explicitly unconnected MVP cards. */
+/** A Worktree or browser Main projection with explicitly unconnected MVP cards. */
 export function WorktreeDashboard({
   record,
   workspaceTitle,
@@ -177,8 +177,10 @@ export function WorktreeDashboard({
       if (generation === copyGeneration.current) copyPending.current = false;
     }
   };
+  const branchAvailable = record.branch.length > 0;
+  const displayBranch = branchAvailable ? record.branch : t('dashboard.branchUnavailable');
   const copyBranch = async () => {
-    if (branchCopyPending.current) return;
+    if (!branchAvailable || branchCopyPending.current) return;
     branchCopyPending.current = true;
     const generation = branchCopyGeneration.current;
     setBranchCopyState('pending');
@@ -207,7 +209,8 @@ export function WorktreeDashboard({
   const liveBranch =
     record.currentBranch === null
       ? t('dashboard.detached')
-      : (record.currentBranch ?? t('dashboard.unknown'));
+      : (record.currentBranch ??
+        (branchAvailable ? record.branch : t('dashboard.branchUnavailable')));
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
@@ -314,24 +317,26 @@ export function WorktreeDashboard({
             <div
               className={styles.dashboardTitleRow}
               data-dashboard-copy="branch"
-              role="button"
-              tabIndex={0}
-              aria-label={t('dashboard.copyBranch')}
-              title={t('dashboard.copyBranch')}
-              aria-busy={branchCopyState === 'pending'}
-              onClick={() => {
-                void copyBranch();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  void copyBranch();
-                }
-              }}
+              role={branchAvailable ? 'button' : undefined}
+              tabIndex={branchAvailable ? 0 : undefined}
+              aria-label={branchAvailable ? t('dashboard.copyBranch') : undefined}
+              title={branchAvailable ? t('dashboard.copyBranch') : undefined}
+              aria-busy={branchAvailable && branchCopyState === 'pending' ? true : undefined}
+              onClick={branchAvailable ? () => void copyBranch() : undefined}
+              onKeyDown={
+                branchAvailable
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        void copyBranch();
+                      }
+                    }
+                  : undefined
+              }
             >
               <IconBranchOutline16 />
               <h1 id={`${id}-title`} ref={heading} tabIndex={-1}>
-                {record.branch}
+                {displayBranch}
               </h1>
               <span className={styles.dashboardHealth} data-health={record.health ?? 'unknown'}>
                 <span aria-hidden="true">●</span>

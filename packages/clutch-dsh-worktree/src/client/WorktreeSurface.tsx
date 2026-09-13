@@ -24,6 +24,7 @@ import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
 import {
   createMainWorktreeRecord,
   isMainWorktreeId,
+  isManagedDashboardRecord,
   resolveDashboardRecord,
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
@@ -53,6 +54,15 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   );
   const closeDashboard = useCallback(() => setDashboard(undefined), [setDashboard]);
   const source = useSurfaceSources({ props: inputProps });
+  useEffect(() => {
+    if (source.mode !== 'worktree') setDashboard(undefined);
+  }, [source.mode, setDashboard]);
+  useEffect(
+    () => () => {
+      inputProps.dashboardStore?.set(undefined);
+    },
+    [inputProps.dashboardStore],
+  );
   const props: WorktreeSurfaceProps = {
     ...inputProps,
     openDashboard: (record) =>
@@ -132,6 +142,10 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     dashboardRecord.health !== 'cleaned' &&
     dashboardRecord.health !== 'repair' &&
     dashboardRecord.health !== 'recovery-needed';
+  const dashboardManagedRecord =
+    dashboardRecord !== undefined && isManagedDashboardRecord(dashboardRecord)
+      ? dashboardRecord
+      : undefined;
   if (source.mode !== 'worktree') return null;
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
@@ -267,6 +281,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           onCreateWorktree={
             dashboardCanCreate &&
             dashboardRecord.currentBranch !== null &&
+            dashboardRecord.branch.length > 0 &&
             dashboardWorkspace !== undefined &&
             dashboardView !== undefined
               ? () => {
@@ -283,12 +298,12 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               : undefined
           }
           onArchiveWorktree={
-            !isMainWorktreeId(dashboardRecord.worktreeId) &&
-            dashboardRecord.status === 'active' &&
-            dashboardRecord.health !== 'recovery-needed'
+            dashboardManagedRecord !== undefined &&
+            dashboardManagedRecord.status === 'active' &&
+            dashboardManagedRecord.health !== 'recovery-needed'
               ? () => {
                   if (mutation.actionPending) return;
-                  lifecycleState.setWorktreeRemoval(dashboardRecord);
+                  lifecycleState.setWorktreeRemoval(dashboardManagedRecord);
                   mutation.setActionError(undefined);
                 }
               : undefined

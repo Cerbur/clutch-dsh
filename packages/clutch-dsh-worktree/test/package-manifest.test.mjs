@@ -19,7 +19,7 @@ test('prepares Git dependencies from source with the publish build layout', () =
     packageManifest.scripts.build,
     'tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs',
   );
-  assert.deepEqual(packageManifest.files, ['lib', 'cordis.patch.yml']);
+  assert.deepEqual(packageManifest.files, ['lib', 'cordis.patch.yml', 'assets']);
   assert.equal(tsconfig.compilerOptions.rootDir, 'src');
   assert.equal(tsconfig.compilerOptions.outDir, 'lib');
   assert.ok(tsconfig.compilerOptions.lib.includes('DOM.Iterable'));

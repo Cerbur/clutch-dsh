@@ -1,11 +1,12 @@
-import type { SessionBinding, WorktreeRecord } from '../../contract/index.js';
+import type { SessionBinding } from '../../contract/index.js';
+import type { DashboardRecord } from './dashboard-selection.js';
 import { filterVisibleSessionIds, type SessionListLike } from '../session/session-view.js';
 import { filterArchivedSessionIds } from '../view/worktree-view.js';
 import { isMainWorktreeId } from './dashboard-selection.js';
 
 /** Join retained snapshots without reading, mutating, or applying Sidebar search. */
 export function dashboardSessionIds(
-  record: Pick<WorktreeRecord, 'workspaceId' | 'worktreeId'>,
+  record: Pick<DashboardRecord, 'workspaceId' | 'worktreeId'>,
   sessions: SessionListLike,
   bindings: readonly SessionBinding[],
   archivedSessionIds: readonly string[],

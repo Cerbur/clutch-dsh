@@ -6,6 +6,11 @@ Project/Workspace identity, Session metadata, native lists, and conversation his
 The plugin stores external Worktree/Session relationships, acquisition facts, and user-authored
 Worktree instructions in its own sidecar.
 
+> **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. The overview, Session
+> navigation, Worktree instructions, Worktree creation/archive, and the direct VS Code launch action are
+> connected; Git details, derived Worktrees, Settings, and other actions marked **Coming soon** remain
+> placeholders.
+
 ## Screenshots
 
 ![English Worktree sidebar and blank-session Hero](assets/screenshots/screenshots-en.png)
@@ -17,6 +22,11 @@ Worktree rows, and the read-only blank-session Hero context.
 
 The Import screenshot shows the existing Workspace `+` dialog with Create selected by default,
 the adjacent Import tab, and a standard dropdown containing safe example branch/path values.
+
+![Worktree Dashboard preview (Chinese UI)](assets/screenshots/screenshots-dashboard.webp)
+
+The Dashboard screenshot records the current preview UI: Worktree identity, acquisition facts,
+connected Session and Worktree actions, and clearly marked placeholder cards.
 
 ## Capabilities
 
@@ -93,9 +103,9 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 
 Session reload reads both rc.1 persisted headers and newer DSH header snapshots.
 Known v4 development-build metadata (`instructions`, `createdAt`, `importedAt`,
-`baseBranch`) is preserved across sidecar writes; this release neither creates it nor
-injects instructions. Unknown fields are still rejected. Older v4 plugin readers may
-reject snapshots containing these development fields.
+`baseBranch`) is preserved across sidecar writes. The Dashboard preview records acquisition facts
+for new Worktrees and injects saved instructions for active bindings; unknown fields are still
+rejected. Older v4 plugin readers may reject snapshots containing these development fields.
 
 The supported compatibility facts are:
 
@@ -242,6 +252,9 @@ blank-session Hero. The displayed language follows DSH's current language settin
 
 ### Open a Worktree dashboard
 
+The Dashboard is a plugin-only preview MVP; it does not replace DSH's native Session page or
+write DSH-owned Workspace/Session data.
+
 In Worktree mode, hover a managed Worktree row and click its Dashboard icon, or open the row's
 options menu and choose **Dashboard**. For a current Session with a ready Main or Worktree
 context, click the Dashboard icon to the left of the native **More actions** button in the
@@ -253,9 +266,15 @@ is created or changed by opening the dashboard. Local/Main and managed Worktree 
 inline Dashboard icon; the current Session can also use the Session-header shortcut. The Dashboard keeps the
 Sidebar resize handle available while it is open.
 
+![Worktree Dashboard preview](assets/screenshots/screenshots-dashboard.webp)
+
+The screenshot above shows the preview Dashboard beside the native Worktree Sidebar. Its connected
+controls are intentionally limited to the MVP surface; unfinished cards remain visibly marked.
+
 The title uses the same accepted branch name as the Worktree row. Click the title to copy the
 branch name directly. The cwd is the record's full absolute path; its copy button reports success
-or failure. Current branch, availability, and source use the existing Worktree projection. Ready means the Worktree is available;
+or failure. If DSH cannot provide Main's current branch, the Dashboard labels it unavailable and
+does not offer branch copying. Current branch, availability, and source use the existing Worktree projection. Ready means the Worktree is available;
 it does **not** assert that Git files are clean. An archived or cleaned record still shows
 its recorded path, which need not exist on disk.
 
@@ -292,8 +311,8 @@ Imported Worktrees show their registration time and do not infer an original cre
 base. When these historical facts are unavailable, the Dashboard shows **Unavailable for
 historical Worktrees** instead of Unknown. The base is the acquisition
 branch name, not a live merge-base or ahead/behind calculation, and does not change on checkout.
-The open-editor split button follows DSH's native styling and offers detected host applications;
-if unavailable, it falls back to the VS Code protocol link described above.
+The open-editor control follows DSH's native styling and uses the encoded VS Code protocol link
+described above. It makes no separate host request and does not verify launch success.
 
 ### Create a Worktree
 
