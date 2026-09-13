@@ -6,7 +6,7 @@ Session 元数据、原生列表和会话历史的唯一事实来源。插件在
 Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree 指令。
 
 > **预览版：** Worktree Dashboard 是仅插件的早期 MVP 预览版。目前已接入概览、会话
-> 列表与导航、Worktree 指令、新建/归档 Worktree 和直接打开 VS Code；Git 详情、派生
+> 列表与导航、Worktree 指令、新建/归档 Worktree 和在应用中打开入口；Git 详情、派生
 > Worktree、设置及其他标记为**即将推出**的操作仍是占位。
 
 ## 界面截图
@@ -201,8 +201,8 @@ code units）。内容保存在插件 sidecar，不写入 AGENTS.md；保存后�
 不推测原始创建时间或基线；缺少这些历史事实时，Dashboard 提示**历史 Worktree 无法获取**，
 不再显示“未知”。基线是创建时的分支名，
 不代表当前 merge-base 或领先/落后计算，checkout 不会修改它。
-Open-editor 控件对齐 DSH 原生样式，并使用上文说明的 VS Code 协议链接。它不会发起额外的
-主机请求，也不会验证应用是否成功启动。
+Open-editor 分体按钮对齐 DSH 原生样式，并提供主机检测到的应用菜单；不可用时回退到上文
+说明的 VS Code 协议链接。
 
 Git 详情、派生 Worktree、设置及其他标记的快捷操作仍为占位。界面跟随 DSH
 主题，窄屏下卡片纵向排列。Dashboard 选择状态是临时的，刷新页面后不会恢复。

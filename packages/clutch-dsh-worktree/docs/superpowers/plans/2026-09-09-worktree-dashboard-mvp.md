@@ -196,8 +196,8 @@ This remains a Client-only fix and does not modify DSH source or persisted data.
 
 - Main is represented as a browser-only Dashboard projection. Missing branch, health, and source
   facts remain absent and render as unavailable rather than `main`, `ready`, or plugin provenance.
-- The open-editor action uses only the encoded `vscode://file/...` link; generic host app discovery
-  and the second `/open-in-app` transport are not part of this plugin-only MVP.
+- The open-editor action reuses DSH's native open-in-app host routes and split button presentation,
+  falling back to the encoded `vscode://file/...` link when host app discovery is unavailable.
 - Dashboard selection is cleared when Worktree mode exits and when the surface is disposed, so
   re-entry cannot reopen a stale overlay.
 - Host instruction injection preserves the user's instruction text literally, including a literal

@@ -7,7 +7,7 @@ The plugin stores external Worktree/Session relationships, acquisition facts, an
 Worktree instructions in its own sidecar.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. The overview, Session
-> navigation, Worktree instructions, Worktree creation/archive, and the direct VS Code launch action are
+> navigation, Worktree instructions, Worktree creation/archive, and the open-in-app action are
 > connected; Git details, derived Worktrees, Settings, and other actions marked **Coming soon** remain
 > placeholders.
 
@@ -229,8 +229,8 @@ Imported Worktrees show their registration time and do not infer an original cre
 base. When these historical facts are unavailable, the Dashboard shows **Unavailable for
 historical Worktrees** instead of Unknown. The base is the acquisition
 branch name, not a live merge-base or ahead/behind calculation, and does not change on checkout.
-The open-editor control follows DSH's native styling and uses the encoded VS Code protocol link
-described above. It makes no separate host request and does not verify launch success.
+The open-editor split button follows DSH's native styling and offers detected host applications;
+if unavailable, it falls back to the VS Code protocol link described above.
 
 ### Create a Worktree
 

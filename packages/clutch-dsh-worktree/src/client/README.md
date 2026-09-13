@@ -226,8 +226,8 @@ The Dashboard instructions card edits plugin-owned text through
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
 preserved. Main does not expose instruction editing. Creation/import time and base branch are
 optional recorded facts; missing values remain unknown. The open-editor control uses the
-native button typography, padding, border, and hover colors, and links directly to the encoded
-VS Code protocol without a second host transport.
+native split-button typography, padding, border, and hover colors, launching detected host
+applications or falling back to the encoded VS Code protocol link.
 
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
@@ -253,7 +253,7 @@ The directory layout follows those responsibilities:
 ```text
 client/
 ├── context/     # Conversation and Hero context projection
-├── dashboard/   # Dashboard preview, selection and direct VS Code action
+├── dashboard/   # Dashboard preview, selection and open-in-app action
 ├── session/     # Session creation, fork, ordering and membership
 ├── permission/  # Permission confirmation and native icon integration
 ├── view/        # View mode, scoped reads, actions and error presentation

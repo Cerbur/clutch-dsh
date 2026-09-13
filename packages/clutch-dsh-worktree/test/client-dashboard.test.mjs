@@ -885,3 +885,37 @@ test('Main (Local) dashboard record resolution, session membership, and Surface 
   // s2 is bound to wt-1, s4 is archived -> only s1 and s3 belong to main
   assert.deepEqual(mainSessions, ['s3', 's1']);
 });
+
+test('OpenInAppController reads apps, remembers choice, and launches via host routes', async () => {
+  const requests = [];
+  const fetcher = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/open-in-app/apps')) {
+      return {
+        ok: true,
+        json: async () => ({ apps: ['cursor', 'vscode', 'webstorm'] }),
+      };
+    }
+    if (String(url).endsWith('/open-in-app/open')) {
+      return { ok: true };
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const { OpenInAppController } = await import('../lib/client/dashboard/open-in-app-controller.js');
+  const controller = new OpenInAppController(fetcher);
+  assert.equal(controller.apps, null);
+
+  await controller.load();
+  assert.deepEqual(controller.apps, ['cursor', 'vscode', 'webstorm']);
+  assert.ok(controller.iconUrl('cursor').includes('/open-in-app/icon/cursor'));
+
+  controller.choose('cursor');
+  assert.equal(controller.choice, 'cursor');
+
+  await controller.launch('cursor', '/path/to/worktree');
+  assert.equal(requests.length, 2);
+  assert.ok(requests[1].url.endsWith('/open-in-app/open'));
+  assert.equal(requests[1].init.method, 'POST');
+  assert.deepEqual(JSON.parse(requests[1].init.body), { app: 'cursor', path: '/path/to/worktree' });
+});

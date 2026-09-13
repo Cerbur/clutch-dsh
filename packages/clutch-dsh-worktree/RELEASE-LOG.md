@@ -6,7 +6,7 @@
 
 #### 新增
 
-- 增加仅插件的 Worktree Dashboard 预览版，提供概览、会话、Worktree 指令、创建/归档和直接打开 VS Code 入口。
+- 增加仅插件的 Worktree Dashboard 预览版，提供概览、会话、Worktree 指令、创建/归档和在应用中打开入口。
 - 支持从 Worktree、Local/Main 行和 Session 标题快捷入口打开 Dashboard，并保持原生 Session 页面与 DSH 数据不变。
 
 #### 优化
@@ -22,7 +22,7 @@
 
 #### Added
 
-- Add a plugin-only Worktree Dashboard preview with overview, Sessions, Worktree instructions, creation/archive, and a direct VS Code launch entry point.
+- Add a plugin-only Worktree Dashboard preview with overview, Sessions, Worktree instructions, creation/archive, and an open-in-app launch entry point.
 - Open the Dashboard from Worktree, Local/Main, and Session-header shortcuts while leaving the native Session page and DSH-owned data unchanged.
 
 #### Improved
