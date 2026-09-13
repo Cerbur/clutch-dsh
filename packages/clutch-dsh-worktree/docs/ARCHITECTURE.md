@@ -247,7 +247,7 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 ### 客户端边界与接口契约
 
-- 遵循 DSH `dsh-v0.1.2-rc.1` 接口规范。
+- 遵循 DSH `dsh-v0.1.5-rc.1` 接口规范。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
 - 导航与目录选取委托至 `ctx.uiWorkspace.startSession()` 与 `ctx.uiWorkspace.pickDirectory()`。
 - **Session 归属与 Projection**：
