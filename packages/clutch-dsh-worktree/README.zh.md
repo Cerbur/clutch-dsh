@@ -100,12 +100,12 @@ v4 开发构建的已知元数据（`instructions`、`createdAt`、`importedAt`�
 
 兼容性事实表如下：
 
-| 组件 / Component | 最低版本 / Min Version | 说明 / Notes |
-| --- | --- | --- |
-| DSH Client | `>=0.1.2-rc.1` | 依赖 Session/Workspace Controller 及 Client Store |
-| DSH Host | `>=0.1.2-rc.1` | 依赖 Typert Gateway `/api` 协议与 subprocess capability |
-| Git | `>=2.20.0` | 要求支持 worktree 核心命令与 branch 发现 |
-| Node.js | `>=20.0.0` | 推荐使用 LTS 版本 |
+| 组件 / Component | 最低版本 / Min Version | 说明 / Notes                                            |
+| ---------------- | ---------------------- | ------------------------------------------------------- |
+| DSH Client       | `>=0.1.2-rc.1`         | 依赖 Session/Workspace Controller 及 Client Store       |
+| DSH Host         | `>=0.1.2-rc.1`         | 依赖 Typert Gateway `/api` 协议与 subprocess capability |
+| Git              | `>=2.20.0`             | 要求支持 worktree 核心命令与 branch 发现                |
+| Node.js          | `>=20.0.0`             | 推荐使用 LTS 版本                                       |
 
 ## 安装
 
@@ -136,57 +136,6 @@ pnpm dsh web
 npm view @cerbur/clutch-dsh-worktree version --registry=https://registry.npmjs.org/
 ```
 
-### 准备当前 upstream DSH checkout
-
-进行源码开发或验证时，先准备 upstream checkout。当前 upstream 默认分支是 `master`；如果仓库
-未来切换默认分支，应跟随仓库的当前默认分支。最小 rc.1 兼容性验证路径切换到
-`dsh-v0.1.2-rc.1`：
-
-```bash
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-git fetch origin
-git checkout dsh-v0.1.2-rc.1
-pnpm install
-pnpm run build
-```
-
-### 从仓库 checkout 安装
-
-先从 `clutch-dsh` checkout 构建 package，再把绝对路径安装到 DSH profile：
-
-```bash
-cd /path/to/clutch-dsh
-pnpm install
-pnpm --filter @cerbur/clutch-dsh-worktree build
-
-cd /path/to/deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
-pnpm dsh web --dump-config
-pnpm dsh web
-```
-
-`--dump-config` 输出中应包含该 plugin 的 bundle layer。如果 profile 中仍有旧的 unscoped
-安装，先移除：
-
-```bash
-pnpm dsh plugin --profile web remove clutch-dsh-worktree
-```
-
-更新本地 checkout 时，重新构建 package 并重启 DSH：
-
-```bash
-cd /path/to/clutch-dsh
-pnpm --filter @cerbur/clutch-dsh-worktree build
-cd /path/to/deepseek-harness
-pnpm dsh web
-```
-
-修改 `package.json`、`cordis.patch.yml` 或 profile bundle 成员后，需要再次执行 plugin add
-命令。
-
 ### 从 GitHub 源码安装
 
 `awesome-dsh-plugin` 生成的源码路径为：
@@ -195,26 +144,15 @@ pnpm dsh web
 dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh-worktree"
 ```
 
-这是源码 Git 依赖，不是预构建的 npm package。它的 `prepare` 生命周期会生成 `lib/`。当前
-DSH profile 使用 pnpm 11 的 `allowBuilds`：首次执行 Git 安装时，pnpm 会故意拒绝构建，并
-在错误信息中打印包含包名、Git URL、解析后的 commit 和子目录 path 的完整 key。将完整
-key 复制到 profile 的 `pnpm-workspace.yaml`，例如：
+这是源码 Git 依赖，不是预构建的 npm package。它的 `prepare` 生命周期会生成 `lib/`。
+在 pnpm 11 的 `allowBuilds` 机制下安装直接 Git 依赖时，需在 profile 的 `pnpm-workspace.yaml` 中
+配置构建授权。完整的授权与排查步骤详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-```yaml
-allowBuilds:
-  '@cerbur/clutch-dsh-worktree@git+https://github.com/Cerbur/clutch-dsh#<resolved-commit>&path:/packages/clutch-dsh-worktree': true
-```
+### 从本地源码安装
 
-必须使用 pnpm 错误提示中打印的完整包 key：`<resolved-commit>`、Git URL 和 path 都必须与
-错误输出一致。对于直接 Git 依赖，只写包名不够；当前 pnpm 11 的 Git prepare 流程也不使用
-`onlyBuiltDependencies` 这一配置。保存授权后重新执行原安装命令；commit 变化后需要为新
-commit 增加对应的 key。该 allowlist 属于信任此 Git commit 的 profile 维护者，不要写入
-plugin package。
-
-授权后，Git prepare 会在 checkout 的 monorepo 中执行 `pnpm install`，再执行
-`pnpm run build`，因此 profile 必须能访问其配置的 registry。授权之后出现 registry DNS、
-镜像或 lockfile 错误，属于安装环境问题，不是 `allowBuilds` 拒绝。若要避免源码构建授权，
-请使用上面的 npm 安装方式。
+针对在本地源码 checkout 中开发 `clutch-dsh` 的场景，可通过 `pnpm --filter @cerbur/clutch-dsh-worktree build`
+构建包并注册至 DSH profile。完整的开发环境准备、upstream checkout 配置与联调指南详见
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ### 卸载
 
@@ -492,31 +430,14 @@ Session 活动仅用于信息展示，不阻断磁盘清理或移出管理；默
 确认磁盘清理前，请自行停止所有使用该目录的任务，插件不会核验任务是否已停止。
 原生活动变化或重新打开归档菜单会刷新所属 Workspace 并保留 ready 内容。
 
-sidecar 兼容读取 v1、v2 和 v3 snapshot。旧记录会先在内存中归一化，第一次成功 mutation 会
-以原子方式将 shard 升级为 v4。旧 removed 记录归一化为 `diskCleanup: completed`，保留 v3 revision。
-新的 v4 snapshot 使用 revision、不可逆向还原的 repository
-fingerprint，以及为 Git create/remove 保存的 durable pending-operation metadata。早期 v3
-实现可能写入的 raw repository 字段也可以读取，并会在下一次稳定写入时清理。无效 JSON、
-未知 schema version 和关系不变量错误都会报告为 corruption，不会静默重置为空索引。
-
 一个 Session 最多绑定一个 active Worktree，一个 Worktree 可以绑定多个 Session。Session
 重复绑定同一个 Worktree 是幂等的，绑定两个 active Worktree 会产生 conflict。没有 binding、
 使用 Main binding 或处于 detached binding 的 Session 使用 Project 根目录作为 cwd；active
 Worktree binding 使用对应的 Worktree 路径。cwd 在每次执行时派生，不会写回 DSH Session 元数据。
 
-创建 Worktree 时先创建 Git Worktree，再记录外部关系。Git create/remove mutation 会按
-Workspace 和 repository 串行化跨 Host 进程执行，写入 durable pending operation，并在确认
-实际 Git 结果后才发布稳定 sidecar 状态。如果 create 无法对账，或 path/repository identity
-发生变化，操作会明确保留为可恢复状态；插件不会使用 force remove，也不会删除未知目录。
-sidecar 写入失败时会尽可能清理刚创建的 Git Worktree。删除 Worktree 失败时不会静默改变
-关系，因此关系仍可重试，或会标记为 `recovery-needed`。创建 Session 时先调用 DSH 原生
-API，再写入 binding；binding 失败不会删除或修改已创建的 Session。
-
-Host 启动时，插件会针对已知 DSH Workspace 执行一次尽力而为的安全恢复。只有在 Git path
-和 repository identity 都能确认时，才会完成 pending create/remove；否则保留 marker，并
-显示 `WORKTREE_RECOVERY_REQUIRED` 或 `WORKTREE_IDENTITY_CHANGED`。它不会猜测性清理破坏性
-状态。破坏性操作还可以携带最新 Worktree projection 生成的 opaque mutation token，避免
-过期 UI 对已变化的记录执行操作。
+创建 Worktree 时先创建 Git Worktree，再记录外部关系；sidecar 写入失败时会尽可能清理刚创建的
+Git Worktree。创建 Session 时先调用 DSH 原生 API，再写入 binding；binding 失败不会删除或修改
+已创建的 Session。
 
 Worktree Session 流程将独立的 Worktree cwd 交给 DSH Session Controller，并将
 `{ workspaceId, sessionId }` 保持为浏览器本地 membership projection，而不是持久化的 DSH
@@ -531,49 +452,10 @@ metadata，也不能扩大运行 DSH 的宿主沙箱边界。
 headline slot，它的位置依赖原生 `[data-phase="hero"]` 和标题锚点；锚点不可用时浮层会消失，
 未来有正式 DSH slot 时应迁移到该 slot。
 
-## 开发与验证
+关于详细的领域模型、生命周期迁移、恢复保证与开发贡献流程，请参阅：
 
-从 workspace 根目录执行：
-
-```bash
-cd /path/to/clutch-dsh
-pnpm install
-pnpm run check:workspace
-pnpm run check:patches
-pnpm --filter @cerbur/clutch-dsh-worktree typecheck
-pnpm --filter @cerbur/clutch-dsh-worktree build
-pnpm --filter @cerbur/clutch-dsh-worktree test
-```
-
-验证双语 README contract 和格式：
-
-```bash
-cd /path/to/clutch-dsh/packages/clutch-dsh-worktree
-node --test test/readme-parity.test.mjs
-pnpm exec prettier --check README.md README.zh.md test/readme-parity.test.mjs
-```
-
-完整 workspace 检查为：
-
-```bash
-cd /path/to/clutch-dsh
-pnpm run check
-```
-
-不要提交生成的 `lib/`、coverage、sidecar 数据或本地凭据。数据边界和生命周期规则见
-[AGENTS.md](AGENTS.md)，版本与安装来源见 [docs/RELEASING.md](docs/RELEASING.md)，浏览器
-Consumer 边界见 [src/client/README.md](src/client/README.md)。
-
-## 插件市场描述
-
-向 `awesome-dsh-plugin` 投稿时使用 `git` 分类，并保持描述与 package 一致：
-
-```yaml
-category: git
-description:
-  en: Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.
-  zh: 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，同时继续由 DSH 管理原始 Project/Workspace 和 Session 数据。
-```
-
-市场投稿还需要在外部确认 `dsh-plugin` topic、仓库年龄和提交数等信息；这些外部属性无法
-由 package README 设置。
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 权威架构设计、生命周期与恢复不变量
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — 本地开发、测试验证与贡献指南
+- [docs/RELEASING.md](docs/RELEASING.md) — 发布参数与版本规则
+- [AGENTS.md](AGENTS.md) — Coding Agent 维护说明
+- [src/client/README.md](src/client/README.md) — 浏览器客户端集成与界面接缝
