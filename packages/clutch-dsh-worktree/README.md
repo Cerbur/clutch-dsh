@@ -21,7 +21,8 @@ the adjacent Import tab, and a standard dropdown containing safe example branch/
 ## Capabilities
 
 - Enter Worktree mode from the DSH Sidebar footer and browse Workspace → Worktree → Session.
-- Open Dashboard from an active or archived Worktree menu or its hover-only row action. View the
+- Open Dashboard from an active or archived Worktree menu or its hover-only row action, or use
+  the quick Dashboard icon to the left of the native Session-header More actions button. View the
   real name and cwd, copy the full path, and switch between Dashboard, Git & Changes, Sessions,
   Children, and Settings. Unconnected MVP cards and actions are explicitly marked Coming soon.
 - Search Workspaces and create a Git Worktree and branch from an existing local branch.
@@ -239,12 +240,15 @@ blank-session Hero. The displayed language follows DSH's current language settin
 ### Open a Worktree dashboard
 
 In Worktree mode, hover a managed Worktree row and click its Dashboard icon, or open the row's
-options menu and choose **Dashboard**. The dashboard temporarily replaces the area beside the
-Sidebar, including the Session page.
+options menu and choose **Dashboard**. For a current Session with a ready Main or Worktree
+context, click the Dashboard icon to the left of the native **More actions** button in the
+Session header. The dashboard temporarily replaces the area beside the Sidebar, including the
+Session page.
 The native conversation remains mounted. Use **Back to session**, press **Escape**, open
 a Session from the Sidebar, or exit Worktree mode to restore the native page. No Session
-is created or changed by opening the dashboard. Local/Main has no inline Dashboard icon. The
-Dashboard keeps the Sidebar resize handle available while it is open.
+is created or changed by opening the dashboard. Local/Main has no inline Worktree-row Dashboard
+icon; its current Session can still use the Session-header shortcut. The Dashboard keeps the
+Sidebar resize handle available while it is open.
 
 The title uses the same accepted branch name as the Worktree row. Click the title to copy the
 branch name directly. The cwd is the record's full absolute path; its copy button reports success

@@ -138,6 +138,14 @@ launching to the browser's protocol handler; it makes no success or existence cl
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.
+
+The Client contributes a quick Dashboard button to the existing
+`conversation.session.header.utilities` list. It appears only when the shared
+context is ready and matches the native Session, and its negative order places it
+before the native More actions button. Clicking it switches to Worktree mode and
+opens the current Session's Main or Worktree Dashboard. This browser-local action
+does not change DSH Session or Workspace data.
+
 The Client also contributes a browser-local `shell.overlay` companion for the
 blank Hero. It positions `Workspace (branch)` after the native Hero headline
 while `[data-phase='hero']` is present. The suffix is derived from the selected
@@ -153,7 +161,7 @@ more stable placement.
 The context is derived from one browser-local projection shared by the header
 consumer. It does not write DSH Workspace or Session data. A compatible DSH Client
 must provide the native `@deepseek-ai/dsh-client-ui-conversation` package and its
-`conversation.session.header.actions` seat.
+`conversation.session.header.actions` and `conversation.session.header.utilities` seats.
 
 The shared projection compares the current Session and Workspace identity before
 reacting to native snapshot notifications. Conversation updates for the same

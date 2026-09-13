@@ -19,9 +19,9 @@ Worktree/Session 外部关系、创建或登记事实及用户编写的 Worktree
 
 ## 能力
 
-- 从 active 或 archived Worktree 的菜单或行内悬浮操作打开 Dashboard，查看真实名称和 cwd、复制完整
-  路径，并切换概览、Git 与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确
-  标记为“即将推出”。
+- 从 active 或 archived Worktree 的菜单、行内悬浮操作，或原生 Session 标题行 More actions 按钮
+  左侧的快捷 Dashboard 图标打开 Dashboard，查看真实名称和 cwd、复制完整路径，并切换概览、Git
+  与变更、会话、派生 Worktree 和设置。尚未接入的 MVP 卡片与操作明确标记为“即将推出”。
 
 - 从 DSH Sidebar footer 进入 Worktree 模式，按 Workspace → Worktree → Session 浏览会话。
 - 搜索 Workspace，并从已有 local branch 创建 Git Worktree 和 branch。
@@ -225,9 +225,11 @@ pnpm dsh plugin --profile web remove @cerbur/clutch-dsh-worktree
 ### 打开 Worktree Dashboard
 
 在 Worktree 模式中，将鼠标悬浮到已管理 Worktree 行并点击 Dashboard 图标，或打开行的选项菜单
-并选择 **Dashboard**。Dashboard 会临时替换 Sidebar 旁的区域（含 Session 页面），原生会话组件
-保持挂载。点击**返回会话**、按 **Escape**、从 Sidebar 打开 Session 或退出 Worktree 模式，即可
-恢复原生页面。打开 Dashboard 不会创建或修改 Session；Local/Main 不提供行内 Dashboard 图标。
+并选择 **Dashboard**。对于具有 ready Main 或 Worktree 上下文的当前 Session，也可以点击 Session
+标题行中原生 **More actions** 按钮左侧的 Dashboard 图标。Dashboard 会临时替换 Sidebar 旁的区域
+（含 Session 页面），原生会话组件保持挂载。点击**返回会话**、按 **Escape**、从 Sidebar 打开
+Session 或退出 Worktree 模式，即可恢复原生页面。打开 Dashboard 不会创建或修改 Session；
+Local/Main 不提供行内 Worktree Dashboard 图标，但当前 Session 仍可使用标题行快捷入口。
 Dashboard 打开后仍可拖动 Sidebar 的宽度。
 
 标题沿用 Worktree 行的已接受分支名称，点击标题即可直接复制分支名称。cwd 展示记录中的完整

@@ -137,3 +137,17 @@ limits in both public READMEs and the Client README.
   launch was attempted; the protocol link was inspected in the browser accessibility tree.
 - Both public READMEs and the Client README describe the connected actions and limits.
   Changes remain uncommitted; no version, release, publish, or push operation occurred.
+
+## Session header shortcut extension (2026-09-10)
+
+The plugin now registers a browser-only Dashboard utility in the existing
+`conversation.session.header.utilities` list. It is ordered before the native More actions
+control and appears only when the shared current-Session context is ready and resolves to Main
+or a Worktree. Clicking the icon switches to Worktree mode and reuses the existing transient
+Dashboard selection and overlay; no DSH source, Session data, Workspace data, Host, Provider,
+Remote, or sidecar contract is changed. The existing More-menu fallback remains available.
+
+The extension adds bilingual accessible copy, native-sized icon-button styling, a source-level
+rendering regression, and a Client-composition registration/navigation regression. `pnpm run build`
+and the targeted header tests passed. The full package test passed all 572 tests; package typecheck
+and lint, workspace shape/patch validation, and `git diff --check` also passed.

@@ -869,6 +869,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   assert.equal(typeof fixture.exports.apply, 'function');
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
     'conversation.session.header.actions',
+    'conversation.session.header.utilities',
     'shell.overlay',
     'sidebar.footer.action',
   ]);
@@ -881,6 +882,7 @@ test('contributes context to the active Session title row and the Hero overlay',
   const fixture = await loadClientEntry();
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
     'conversation.session.header.actions',
+    'conversation.session.header.utilities',
     'shell.overlay',
     'sidebar.footer.action',
   ]);
@@ -894,6 +896,44 @@ test('contributes context to the active Session title row and the Hero overlay',
   assert.equal(typeof store.getSnapshot, 'function');
   const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
   assert.equal(overlay.hooks.worktreeContext, store);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('registers a quick Dashboard utility before the native More action', async () => {
+  const fixture = await loadClientEntry();
+  const header = fixture.registrationsBySlot.get('conversation.session.header.utilities');
+  assert.ok(header);
+  assert.equal(header.options.id, 'clutch-dsh-worktree-dashboard-header');
+  assert.equal(header.options.order, -10);
+
+  const injected = header.options.inject();
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  assert.strictEqual(injected.hooks.worktreeContext, overlay.hooks.worktreeContext);
+  injected.openDashboard('session-current');
+  assert.deepEqual(overlay.dashboardStore.getSnapshot(), {
+    workspaceId: 'workspace-current',
+    worktreeId: 'main',
+    sessionId: 'session-current',
+  });
+  injected.hooks.worktreeContext.set({
+    status: 'ready',
+    sessionId: 'session-current',
+    workspaceId: 'workspace-current',
+    value: {
+      kind: 'worktree',
+      workspaceId: 'workspace-current',
+      worktreeId: 'worktree-one',
+      label: 'feature/dashboard',
+      source: 'active-binding',
+    },
+  });
+  injected.openDashboard('session-current');
+  assert.deepEqual(overlay.dashboardStore.getSnapshot(), {
+    workspaceId: 'workspace-current',
+    worktreeId: 'worktree-one',
+    sessionId: 'session-current',
+  });
 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
@@ -1070,6 +1110,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
       name: 'root',
       children: {
         'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+        'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
@@ -1099,11 +1140,13 @@ test('disposes Client slot contributions through a real Cordis Client context', 
       { workspaceId: 'ws_native', sessionIds: ['s_virtual'] },
     ]);
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
+    assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 1);
 
     await clientFiber.dispose();
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 0);
+    assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 0);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 0);
     assert.equal(ctx.slots.entries('shell.overlay').length, 0);
   } finally {
