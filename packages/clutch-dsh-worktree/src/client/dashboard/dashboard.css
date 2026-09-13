@@ -443,6 +443,9 @@
   padding: 4px 0;
   border: 0;
 }
+.dashboardHistorical {
+  color: var(--dsw-alias-label-secondary, #788191);
+}
 .dashboardLink {
   display: flex;
   align-items: center;

@@ -15,7 +15,8 @@ instructions placeholder and Client-only limit below.
   This supersedes the original combined runtime-context implementation.
 - Preserve drafts on failure and ready content on scoped refresh; no global refresh on save.
 - Record creation facts at acquisition and journal recovery; external imports record only
-  registration time. Legacy absent facts remain unknown.
+  registration time. Absent facts are never inferred or fabricated; the Dashboard shows a
+  historical-unavailable hint instead of the generic Unknown label.
 - Match the native open-editor split control's typography, spacing and theme colors.
 - Validate persistence, conflicts, archive/detached behavior, Host injection lifecycle,
   Connection descriptors, UI editing, and the package/workspace checks.

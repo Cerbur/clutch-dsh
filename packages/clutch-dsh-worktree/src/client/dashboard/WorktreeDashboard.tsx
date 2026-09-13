@@ -387,11 +387,18 @@ export function WorktreeDashboard({
                 <dd>{acquisitionFacts.timestamp
                   ? <time dateTime={acquisitionFacts.timestamp}>
                     {new Date(acquisitionFacts.timestamp).toLocaleString()}
-                  </time> : t('dashboard.unknown')}</dd>
+                  </time>
+                  : <span className={styles.dashboardHistorical}>
+                    {t('dashboard.historicalUnavailable')}
+                  </span>}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.base')}</dt>
-                <dd>{acquisitionFacts.baseBranch ?? t('dashboard.unknown')}</dd>
+                <dd>{acquisitionFacts.baseBranch ?? (
+                  <span className={styles.dashboardHistorical}>
+                    {t('dashboard.historicalUnavailable')}
+                  </span>
+                )}</dd>
               </div>
               <div>
                 <dt>{t('dashboard.source')}</dt>
@@ -512,7 +519,11 @@ export function WorktreeDashboard({
                     </div>
                     <div>
                       <dt>{t('dashboard.base')}</dt>
-                      <dd>{record.baseBranch ?? t('dashboard.unknown')}</dd>
+                      <dd>{record.baseBranch ?? (
+                        <span className={styles.dashboardHistorical}>
+                          {t('dashboard.historicalUnavailable')}
+                        </span>
+                      )}</dd>
                     </div>
                     <div>
                       <dt>{t('dashboard.aheadBehind')}</dt>

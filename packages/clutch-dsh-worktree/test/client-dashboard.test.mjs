@@ -201,6 +201,11 @@ const copyButton = (node) =>
 const copyBranchTitle = (node) =>
   findAll(node, (item) => item.props?.['data-dashboard-copy'] === 'branch')[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+const historicalHints = (node, t) =>
+  findAll(
+    node,
+    (item) => item.type === 'span' && item.props.children === t['dashboard.historicalUnavailable'],
+  );
 
 test('dashboard renders real identity and explicit placeholders in both languages', () => {
   const harness = renderHarness(async () => true);
@@ -223,7 +228,7 @@ test('dashboard renders real identity and explicit placeholders in both language
   harness.dispose();
 });
 
-test('dashboard renders source-aware acquisition facts and keeps absent facts unknown', () => {
+test('dashboard renders source-aware acquisition facts and flags absent facts as historical', () => {
   const harness = renderHarness(async () => true);
   let node = harness.render({
     record: {
@@ -251,12 +256,19 @@ test('dashboard renders source-aware acquisition facts and keeps absent facts un
     findAll(node, (item) => item.type === 'time')[0].props.dateTime,
     '2026-09-13T04:05:06.000Z',
   );
-  assert.ok(findAll(node, (item) => item.type === 'dd' && item.props.children === en['dashboard.unknown']).length > 0);
+  // Imported records have no inferred base: both the header fact and the status
+  // card base show the historical hint instead of the generic unknown label.
+  assert.equal(historicalHints(node, en).length, 2);
+  assert.equal(
+    findAll(node, (item) => item.type === 'dd' && item.props.children === en['dashboard.unknown']).length,
+    0,
+  );
 
   node = harness.render({ record });
   assert.equal(findAll(node, (item) => item.type === 'dt')[0].props.children, en['dashboard.created']);
   assert.equal(findAll(node, (item) => item.type === 'time').length, 0);
-  assert.ok(findAll(node, (item) => item.type === 'dd' && item.props.children === en['dashboard.unknown']).length >= 2);
+  // Missing creation time, plus the header and status base facts.
+  assert.equal(historicalHints(node, en).length, 3);
   harness.dispose();
 });
 

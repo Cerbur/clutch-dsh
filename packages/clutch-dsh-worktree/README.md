@@ -287,8 +287,9 @@ Failed saves retain the draft. Concurrent edits are rejected; cancel and reopen 
 latest saved text before retrying. Instructions remain in the plugin sidecar, never AGENTS.md.
 
 New plugin-created Worktrees show their recorded creation time and selected base branch.
-Imported Worktrees show their registration time; their original creation time and base are
-unknown. Older records without these facts show **Unknown**. The base is the acquisition
+Imported Worktrees show their registration time and do not infer an original creation time or
+base. When these historical facts are unavailable, the Dashboard shows **Unavailable for
+historical Worktrees** instead of Unknown. The base is the acquisition
 branch name, not a live merge-base or ahead/behind calculation, and does not change on checkout.
 The open-editor split button follows DSH's native styling and offers detected host applications;
 if unavailable, it falls back to the VS Code protocol link described above.
