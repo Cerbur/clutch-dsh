@@ -9,6 +9,7 @@ import test from 'node:test';
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
 import {
   LocalGitAdapter,
+  WORKTREE_GIT_WORKING_TREE,
   WorkspaceShardedSidecarRepository,
   createWorktreeManager,
 } from '../lib/index.js';
@@ -97,6 +98,66 @@ test('captures an immutable baseline and serves commit history, files, and a fil
     });
     assert.equal(diff.binary, false);
     assert.match(diff.patch, /\+second/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('puts staged, unstaged, and untracked changes at the top of history', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/working-tree',
+    });
+    const targetPath = record.absolutePath;
+    await writeFile(path.join(targetPath, 'README.md'), '# baseline\nunstaged\n');
+    await writeFile(path.join(targetPath, 'staged.txt'), 'staged\n');
+    await runGit(targetPath, ['add', 'staged.txt']);
+    await writeFile(path.join(targetPath, 'untracked.txt'), 'untracked\n');
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.equal(history.commits[0].sha, WORKTREE_GIT_WORKING_TREE);
+    assert.equal(history.commits[0].kind, 'working-tree');
+    assert.equal(history.commits.length, 1);
+    assert.equal(history.headCommit, record.baseCommit);
+
+    const files = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: WORKTREE_GIT_WORKING_TREE,
+    });
+    assert.deepEqual(
+      files.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'README.md', status: 'modified' },
+        { path: 'staged.txt', status: 'added' },
+        { path: 'untracked.txt', status: 'added' },
+      ],
+    );
+
+    const trackedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: 'README.md',
+    });
+    assert.equal(trackedDiff.commit, WORKTREE_GIT_WORKING_TREE);
+    assert.match(trackedDiff.patch, /\+unstaged/u);
+
+    const untrackedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: 'untracked.txt',
+    });
+    assert.equal(untrackedDiff.binary, false);
+    assert.match(untrackedDiff.patch, /\+untracked/u);
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });
@@ -422,6 +483,72 @@ test('loads Git lazily, preserves ready refresh content, and ignores stale commi
   await refreshTask;
   assert.equal(controller.getSnapshot().history.status, 'ready');
   assert.equal(controller.getSnapshot().history.value.commits.length, 0);
+  controller.dispose();
+});
+
+test('selects the working-tree entry first and refreshes its live files', async () => {
+  const committed = 'a'.repeat(40);
+  let history = {
+    headCommit: committed,
+    baseline: { commit: '0'.repeat(40), source: 'captured' },
+    commits: [
+      {
+        sha: WORKTREE_GIT_WORKING_TREE,
+        kind: 'working-tree',
+        parents: [committed],
+        subject: '',
+        authorName: '',
+        authoredAt: '',
+      },
+      {
+        sha: committed,
+        parents: ['0'.repeat(40)],
+        subject: 'committed',
+        authorName: 'Test',
+        authoredAt: '2026-09-14T00:00:00Z',
+      },
+    ],
+    truncated: false,
+  };
+  let version = 1;
+  const fileCalls = [];
+  const manager = {
+    listWorktreeCommits() {
+      return Promise.resolve(history);
+    },
+    listWorktreeCommitFiles({ commit }) {
+      fileCalls.push(commit);
+      const path = commit === WORKTREE_GIT_WORKING_TREE ? `working-${version}.txt` : 'committed.txt';
+      return Promise.resolve({ commit, files: [{ path, status: 'modified' }] });
+    },
+    getWorktreeCommitFileDiff({ commit, path }) {
+      return Promise.resolve({ commit, path, patch: `+${version}\n`, binary: false });
+    },
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+  });
+
+  await controller.loadHistory();
+  await flush();
+  assert.equal(controller.getSnapshot().selectedCommit, WORKTREE_GIT_WORKING_TREE);
+  assert.deepEqual(fileCalls, [WORKTREE_GIT_WORKING_TREE]);
+  assert.equal(controller.getSnapshot().selectedPath, 'working-1.txt');
+
+  version = 2;
+  await controller.refresh();
+  await flush();
+  assert.equal(controller.getSnapshot().selectedCommit, WORKTREE_GIT_WORKING_TREE);
+  assert.equal(controller.getSnapshot().selectedPath, 'working-2.txt');
+  assert.deepEqual(fileCalls, [WORKTREE_GIT_WORKING_TREE, WORKTREE_GIT_WORKING_TREE]);
+
+  history = { ...history, commits: [history.commits[1]] };
+  await controller.refresh();
+  await flush();
+  assert.equal(controller.getSnapshot().selectedCommit, committed);
+  assert.equal(controller.getSnapshot().selectedPath, 'committed.txt');
   controller.dispose();
 });
 

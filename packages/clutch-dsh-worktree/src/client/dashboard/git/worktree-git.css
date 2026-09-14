@@ -143,6 +143,14 @@
   box-shadow: inset 2px 0 #467bc8;
 }
 
+.gitCommitList button[data-dashboard-git-commit-kind='working-tree'] {
+  background: #f8f5ed;
+}
+
+.gitCommitList button[data-dashboard-git-commit-kind='working-tree'][aria-selected='true'] {
+  box-shadow: inset 2px 0 #b18435;
+}
+
 .gitCommitSubject {
   display: block;
   overflow: hidden;
@@ -169,6 +177,11 @@
 
 .gitCommitMeta time {
   margin-left: auto;
+}
+
+.gitCommitWorkingTree {
+  color: #8a6728;
+  font-weight: 620;
 }
 
 .gitChangedFileList button {

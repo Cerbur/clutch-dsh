@@ -36,6 +36,19 @@ function selectedCommit(
   return history?.commits.find((commit) => commit.sha === sha);
 }
 
+function commitCountLabel(history: WorktreeGitHistory, t: WorktreeTranslate): string {
+  const committedCount = history.commits.filter((commit) => commit.kind !== 'working-tree').length;
+  return history.commits.some((commit) => commit.kind === 'working-tree')
+    ? t('dashboard.git.commitCountWithWorkingTree', { commits: committedCount })
+    : t('dashboard.git.commitCount', { n: committedCount });
+}
+
+function commitLabel(commit: WorktreeGitCommit, t: WorktreeTranslate): string {
+  return commit.kind === 'working-tree'
+    ? t('dashboard.git.workingTree')
+    : shortCommit(commit.sha);
+}
+
 function readyFiles(value: WorktreeGitCommitFiles | undefined): readonly WorktreeGitCommitFiles['files'][number][] {
   return value?.files ?? [];
 }
@@ -73,7 +86,7 @@ export function WorktreeGitPanel({ manager, workspaceId, worktreeId, t }: Worktr
               </div>
               <div>
                 <dt>{t('dashboard.git.commits')}</dt>
-                <dd>{t('dashboard.git.commitCount', { n: historyValue.commits.length })}</dd>
+                <dd>{commitCountLabel(historyValue, t)}</dd>
               </div>
             </dl>
           ) : null}
@@ -134,7 +147,9 @@ export function WorktreeGitPanel({ manager, workspaceId, worktreeId, t }: Worktr
               <section className={styles.gitColumn} aria-label={t('dashboard.git.changedFiles')}>
                 <div className={styles.gitColumnHeader}>
                   <h3>{t('dashboard.git.changedFiles')}</h3>
-                  {commit !== undefined && <code>{shortCommit(commit.sha)}</code>}
+                  {commit !== undefined && (commit.kind === 'working-tree'
+                    ? <span>{commitLabel(commit, t)}</span>
+                    : <code>{commitLabel(commit, t)}</code>)}
                 </div>
                 {commit === undefined ? (
                   <div className={styles.gitEmpty}>{t('dashboard.git.selectCommit')}</div>

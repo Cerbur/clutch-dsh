@@ -1498,6 +1498,16 @@ Do not create generic abstraction layers without demonstrated reuse.
 
 Do not weaken existing invariants for convenience.
 
+## Working-tree projection amendment
+
+The original V1 exclusion of staged and unstaged working-tree changes is superseded for the managed
+Worktree Dashboard. The history projection now prepends a temporary `working-tree` entry when the
+current Worktree contains staged, unstaged, or untracked files. Its file list and unified diffs are
+read-only snapshots against `HEAD`; they are not persisted, do not add to the committed-history cap,
+and do not introduce staging or commit controls. Manage re-reads and authorizes each selected path
+against the current working-tree projection so races fail closed. Local/Main remains unavailable for
+committed history as before.
+
 Do not silently ignore errors.
 
 Do not persist runtime Git observations unless explicitly specified.

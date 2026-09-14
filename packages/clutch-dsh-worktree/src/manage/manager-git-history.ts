@@ -1,9 +1,11 @@
-import type {
-  WorktreeGitBaseline,
-  WorktreeGitCommitFiles,
-  WorktreeGitFileDiff,
-  WorktreeGitHistory,
-  WorktreeRecord,
+import {
+  WORKTREE_GIT_WORKING_TREE,
+  type WorktreeGitBaseline,
+  type WorktreeGitCommit,
+  type WorktreeGitCommitFiles,
+  type WorktreeGitFileDiff,
+  type WorktreeGitHistory,
+  type WorktreeRecord,
 } from '../contract/index.js';
 import type { GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
@@ -27,6 +29,17 @@ function unavailableHistory(reason: 'baseline-unknown' | 'main'): WorktreeGitHis
     commits: [],
     truncated: false,
     unavailableReason: reason,
+  };
+}
+
+function workingTreeCommit(headCommit: string): WorktreeGitCommit {
+  return {
+    sha: WORKTREE_GIT_WORKING_TREE,
+    kind: 'working-tree',
+    parents: [headCommit],
+    subject: '',
+    authorName: '',
+    authoredAt: '',
   };
 }
 
@@ -230,6 +243,18 @@ async function authorizeCommit(
   return { commit, baseline };
 }
 
+async function authorizeWorkingTree(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+): Promise<void> {
+  const baseline = await requireBaseline(context, resolved);
+  if (!(await baselineIsCurrentAncestor(context, resolved, baseline))) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The Worktree history changed before the working-tree projection could be read', {
+      worktreeId: resolved.record.worktreeId,
+    });
+  }
+}
+
 export async function listWorktreeCommits(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: string; readonly worktreeId: string },
@@ -246,13 +271,22 @@ export async function listWorktreeCommits(
       worktreeId: input.worktreeId,
     });
   }
-  const history = await context.git.listCommits(
-    resolved.value.record.absolutePath,
-    baseline.commit,
-    { signal: context.signal },
-  );
+  const [history, workingTreeFiles] = await Promise.all([
+    context.git.listCommits(
+      resolved.value.record.absolutePath,
+      baseline.commit,
+      { signal: context.signal },
+    ),
+    context.git.listWorkingTreeFiles?.(
+      resolved.value.record.absolutePath,
+      { signal: context.signal },
+    ) ?? Promise.resolve([]),
+  ]);
   return {
     ...history,
+    commits: workingTreeFiles.length > 0
+      ? [workingTreeCommit(history.headCommit), ...history.commits]
+      : history.commits,
     baseline,
   };
 }
@@ -266,6 +300,21 @@ export async function listWorktreeCommitFiles(
     throw providerError('WORKTREE_STATE_CONFLICT', 'Git history is unavailable for the Main projection', {
       workspaceId: input.workspaceId,
     });
+  }
+  if (input.commit === WORKTREE_GIT_WORKING_TREE) {
+    await authorizeWorkingTree(context, resolved.value);
+    if (context.git.listWorkingTreeFiles === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree history is unavailable', {
+        worktreeId: input.worktreeId,
+      });
+    }
+    return {
+      commit: WORKTREE_GIT_WORKING_TREE,
+      files: await context.git.listWorkingTreeFiles(
+        resolved.value.record.absolutePath,
+        { signal: context.signal },
+      ),
+    };
   }
   const authorized = await authorizeCommit(context, resolved.value, input.commit);
   if (context.git.listCommitFiles === undefined) {
@@ -297,6 +346,36 @@ export async function getWorktreeCommitFileDiff(
     throw providerError('WORKTREE_STATE_CONFLICT', 'A changed file path is required', {
       worktreeId: input.worktreeId,
     });
+  }
+  if (input.commit === WORKTREE_GIT_WORKING_TREE) {
+    await authorizeWorkingTree(context, resolved.value);
+    if (context.git.listWorkingTreeFiles === undefined || context.git.readWorkingTreeFileDiff === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree file diff is unavailable', {
+        worktreeId: input.worktreeId,
+      });
+    }
+    const files = await context.git.listWorkingTreeFiles(
+      resolved.value.record.absolutePath,
+      { signal: context.signal },
+    );
+    const changedFile = files.find((file) => file.path === input.path || file.oldPath === input.path);
+    if (changedFile === undefined) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the working tree', {
+        worktreeId: input.worktreeId,
+        commit: WORKTREE_GIT_WORKING_TREE,
+        path: input.path,
+      });
+    }
+    const diff = await context.git.readWorkingTreeFileDiff(
+      resolved.value.record.absolutePath,
+      changedFile.path,
+      { signal: context.signal },
+    );
+    return {
+      ...diff,
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: input.path,
+    };
   }
   const authorized = await authorizeCommit(context, resolved.value, input.commit);
   if (context.git.listCommitFiles === undefined || context.git.readCommitFileDiff === undefined) {

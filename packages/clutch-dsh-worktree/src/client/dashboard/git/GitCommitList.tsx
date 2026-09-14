@@ -28,13 +28,16 @@ export function GitCommitList({ commits, selectedCommit, onSelect, t }: GitCommi
 
   return (
     <ul className={styles.gitCommitList} role="listbox" aria-label={t('dashboard.git.commits')}>
-      {commits.map((commit, index) => (
-        <li key={commit.sha}>
-          <button
+      {commits.map((commit, index) => {
+        const isWorkingTree = commit.kind === 'working-tree';
+        return (
+          <li key={commit.sha}>
+            <button
             type="button"
             role="option"
             aria-selected={selectedCommit === commit.sha}
             data-dashboard-git-commit={commit.sha}
+            data-dashboard-git-commit-kind={commit.kind ?? 'commit'}
             onClick={() => onSelect(commit.sha)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowUp') {
@@ -55,17 +58,26 @@ export function GitCommitList({ commits, selectedCommit, onSelect, t }: GitCommi
               }
             }}
           >
-            <span className={styles.gitCommitSubject}>{commit.subject || t('dashboard.git.untitledCommit')}</span>
+            <span className={styles.gitCommitSubject}>
+              {isWorkingTree ? t('dashboard.git.uncommittedChanges') : commit.subject || t('dashboard.git.untitledCommit')}
+            </span>
             <span className={styles.gitCommitMeta}>
-              <code>{commit.sha.slice(0, 7)}</code>
-              <span>{commit.authorName}</span>
-              <time dateTime={commit.authoredAt} title={commitDate(commit.authoredAt)}>
-                {commitDate(commit.authoredAt)}
-              </time>
+              {isWorkingTree ? (
+                <span className={styles.gitCommitWorkingTree}>{t('dashboard.git.workingTree')}</span>
+              ) : (
+                <>
+                  <code>{commit.sha.slice(0, 7)}</code>
+                  <span>{commit.authorName}</span>
+                  <time dateTime={commit.authoredAt} title={commitDate(commit.authoredAt)}>
+                    {commitDate(commit.authoredAt)}
+                  </time>
+                </>
+              )}
             </span>
           </button>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

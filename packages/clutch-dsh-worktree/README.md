@@ -129,7 +129,9 @@ launch success.
 Open the **Git & Changes** tab from a managed Worktree Dashboard. Opening the Dashboard or its
 Overview tab does not query Git; the first Git tab activation loads commit history through the
 existing `/api` Connection. Selecting a commit loads its changed files, and selecting a file loads
-that file's unified diff. The first changed file is selected automatically when files are ready.
+that file's unified diff. The first changed file is selected automatically when files are ready. When the
+Worktree has staged, unstaged, or untracked files, the list prepends an **Uncommitted changes** entry;
+selecting it compares the live working tree with `HEAD` and uses the same changed-file and diff views.
 
 The comparison range is `baseCommit..HEAD`. For a plugin-created Worktree, `baseCommit` is the
 immutable commit captured at acquisition time. `baseBranch` remains the human-readable branch or
@@ -143,12 +145,14 @@ The history is capped at 200 commits and marks longer histories as truncated. Co
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. If a repository rewrite
 makes the captured baseline no longer an ancestor of the current `HEAD`, history is unavailable
-instead of being guessed. The view is read-only and never includes staged or unstaged working-tree
-changes.
+instead of being guessed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted,
+and is not a Git watcher; refresh it to see later edits. The view is read-only and does not provide
+commit or staging controls.
 
-The browser can select only commits and paths returned by the current Worktree projection. The
-plugin validates the commit against the current `baseCommit..HEAD` range and validates the path
-against that commit's changed files, so these endpoints are not a generic Git object or file reader.
+The browser can select only commits, the current **Uncommitted changes** entry, and paths returned
+by the current Worktree projection. The plugin validates committed entries against the current
+`baseCommit..HEAD` range; working-tree paths are re-read and authorized against a fresh status
+projection, so these endpoints are not generic Git object or file readers.
 Refresh keeps ready content visible while replacement data loads, and late responses for an older
 commit or file selection are ignored.
 
@@ -199,9 +203,11 @@ injection; unchanged instruction text is not repeatedly added while its message 
 - Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
   not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File
   diffs disable external diff and text conversion and are bounded for safe display.
-- The Git Dashboard is intentionally limited to commit history, changed files, and one unified
-  diff at a time. It does not provide staged or unstaged changes, commit, staging, reset, revert,
-  cherry-pick, fetch, push, pull, pull requests, graph lanes, pagination, or syntax highlighting.
+- The Git Dashboard is intentionally limited to committed history, one read-only **Uncommitted
+  changes** snapshot, changed files, and one unified diff at a time. The snapshot combines staged,
+  unstaged, and untracked files but is never written back to Git. The Dashboard does not provide
+  commit, staging, reset, revert, cherry-pick, fetch, push, pull, pull requests, graph lanes, pagination,
+  or syntax highlighting.
 - Session rows use DSH's native status and relative-time presentation. Collapsed Workspace, Main,
   and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
   approval (and other pending-interaction warnings) takes priority over running, and running

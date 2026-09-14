@@ -127,12 +127,14 @@ branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success 
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected, so opening the
-Dashboard or its Overview tab does not issue a Git read. Its first mount loads commit history; a
-commit selection loads changed files and a file selection loads one diff. The Git state machine keeps
-bounded per-commit/per-file caches, retains ready content during refresh, and uses request generations
-to ignore late results after a newer selection or disposal. Main and Worktrees without an honest
-acquisition baseline render an explicit unavailable state. The Git tab never reads sidecar files or
-`.git`, and it exposes no working-tree mutation controls.
+Dashboard or its Overview tab does not issue a Git read. Its first mount loads committed history and
+the current working-tree snapshot; a commit or **Uncommitted changes** selection loads changed files
+and a file selection loads one diff. The Git state machine keeps bounded per-entry/per-file caches,
+retains ready content during refresh, and uses request generations to ignore late results after a newer
+selection or disposal. Working-tree paths are authorized against a fresh Host projection because the
+files can change between reads. Main and Worktrees without an honest acquisition baseline render an
+explicit unavailable state. The Git tab never reads sidecar files or `.git`, and it exposes no
+working-tree mutation controls.
 
 Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The connected Worktree

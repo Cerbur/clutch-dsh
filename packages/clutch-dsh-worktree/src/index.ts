@@ -14,7 +14,7 @@ export {
   WORKTREE_REMOTE_METHODS,
   createWorktreeError,
 } from './contract/index.js';
-export { WORKTREE_FULL_ACCESS_PRESET } from './contract/index.js';
+export { WORKTREE_FULL_ACCESS_PRESET, WORKTREE_GIT_WORKING_TREE } from './contract/index.js';
 export type {
   AdoptWorktreeBranchInput,
   BranchRecord,

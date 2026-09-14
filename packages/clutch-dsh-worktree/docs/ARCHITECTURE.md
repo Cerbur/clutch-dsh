@@ -233,12 +233,15 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
 插件创建 Worktree 时，在既有事务中捕获获取时的 `baseCommit`；`baseBranch` 只用于人类可读的
-获取 ref 展示，不能替代比较边界。历史读取使用 `baseCommit..HEAD`，最多返回 200 个 commit，
-再按需读取一个 commit 的 changed files 和一个文件的 unified diff。
+获取 ref 展示，不能替代比较边界。历史读取使用 `baseCommit..HEAD`，最多返回 200 个 commit；
+当 tracked、staged、unstaged 或 untracked 文件存在时，历史顶部额外投影一个临时的
+`working-tree` entry，其文件和 unified diff 都相对于当前 `HEAD`。该 entry 不写入 Sidecar 或
+DSH，也不计入 committed history 的 200 个 commit 上限。
 
 Manage 在每次文件/差异读取前校验 Worktree 仍是当前 Git registration，并验证 commit 同时属于
-baseline 之后且可从 Worktree `HEAD` 到达；随后只允许 changed-file projection 中的精确 `path`
-（rename/copy 也保留 `oldPath`）。因此 Remote 不提供通用 Git object、ref、文件或命令读取能力。
+baseline 之后且可从 Worktree `HEAD` 到达；working-tree entry 则重新读取当前状态。随后只
+允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次
+读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git object、ref、文件或命令读取能力。
 正常 commit 使用 first-parent，root commit 使用 empty tree；diff 固定禁用 external diff 与
 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、输出上限、超时、cleanup
 deadline 和 AbortSignal。

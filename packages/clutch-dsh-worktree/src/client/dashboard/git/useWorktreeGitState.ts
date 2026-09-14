@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
 import type {
   WorktreeGitChangedFile,
   WorktreeGitCommitFiles,
@@ -96,6 +97,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const listeners = new Set<() => void>();
   const filesCache = new Map<string, WorktreeGitCommitFiles>();
   const diffCache = new Map<string, WorktreeGitFileDiff>();
+
+  const invalidateWorkingTreeCache = (): void => {
+    filesCache.delete(WORKTREE_GIT_WORKING_TREE);
+    const prefix = `${WORKTREE_GIT_WORKING_TREE}\u0000`;
+    for (const key of diffCache.keys()) {
+      if (key.startsWith(prefix)) diffCache.delete(key);
+    }
+  };
 
   const emit = (): void => {
     if (disposed) return;
@@ -198,7 +207,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     if (selectedPath !== undefined) void loadDiff(commit, selectedPath, selectedPath);
   };
 
-  const loadFiles = async (commit: string): Promise<void> => {
+  const loadFiles = async (commit: string, preserveReady = false): Promise<void> => {
     const request = ++filesRequest;
     ++diffRequest;
     const cached = filesCache.get(commit);
@@ -206,7 +215,12 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       applyFiles(commit, cached);
       return;
     }
-    update({ ...state, files: { status: 'loading' }, selectedPath: undefined, diff: { status: 'idle' } });
+    const previousFiles = state.files.status === 'ready' ? state.files : undefined;
+    if (!preserveReady || previousFiles === undefined) {
+      update({ ...state, files: { status: 'loading' }, selectedPath: undefined, diff: { status: 'idle' } });
+    } else {
+      update({ ...state, files: { ...previousFiles, refreshing: true } });
+    }
     try {
       const value = await requestFiles(commit);
       filesCache.set(commit, value);
@@ -215,7 +229,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       applyFiles(commit, value);
     } catch (error) {
       if (disposed || request !== filesRequest || state.selectedCommit !== commit) return;
-      update({ ...state, files: { status: 'error', error: asError(error) }, selectedPath: undefined, diff: { status: 'idle' } });
+      if (preserveReady && previousFiles !== undefined) {
+        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error) } });
+      } else {
+        update({ ...state, files: { status: 'error', error: asError(error) }, selectedPath: undefined, diff: { status: 'idle' } });
+      }
     }
   };
 
@@ -250,6 +268,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     if (!refresh && historyLoaded) return Promise.resolve();
     const request = ++historyRequest;
     const previous = state.history;
+    const refreshesWorkingTree = refresh && state.selectedCommit === WORKTREE_GIT_WORKING_TREE;
+    if (refreshesWorkingTree) invalidateWorkingTreeCache();
     if (refresh && previous.status === 'ready') {
       update({ ...state, history: { status: 'ready', value: previous.value, refreshing: true } });
     } else if (refresh && previous.status === 'error' && previous.previous !== undefined) {
@@ -283,6 +303,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           } else {
             selectCommit(nextCommit);
           }
+        } else if (refreshesWorkingTree && state.selectedCommit === WORKTREE_GIT_WORKING_TREE) {
+          void loadFiles(WORKTREE_GIT_WORKING_TREE, true);
         }
       } catch (error) {
         if (disposed || request !== historyRequest) return;

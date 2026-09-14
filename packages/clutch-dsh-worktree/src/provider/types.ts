@@ -176,9 +176,9 @@ export type GitSubprocessRuntime = Pick<SubprocessRuntime, 'resolveExecutable' |
 
 /**
  * Git worktree 的窄端口：只允许校验、列举、创建和删除，以及受约束的历史读取，
- * 不提供任意 Git、远程或业务文件操作。
+ * 不提供任意 Git、远程或业务文件操作；工作区变更只能通过受约束的只读投影读取。
  * Narrow Git worktree port: it permits validation, listing, creation, removal,
- * and constrained history reads, with no arbitrary Git, remote, or working-file operations.
+ * and constrained history/working-tree reads, with no arbitrary Git, remote, or business-file operations.
  */
 export interface GitWorktreeAdapter {
   /** Validate the repository without changing the long-standing adapter contract. */
@@ -223,6 +223,17 @@ export interface GitWorktreeAdapter {
     baseCommit: string,
     options?: GitCommandOptions,
   ): Promise<GitCommitHistoryRead>;
+  /** Read tracked and untracked changes in the live working tree against HEAD. */
+  listWorkingTreeFiles?(
+    worktreeRoot: string,
+    options?: GitCommandOptions,
+  ): Promise<readonly WorktreeGitChangedFile[]>;
+  /** Read one live working-tree file diff against HEAD or the empty tree. */
+  readWorkingTreeFileDiff?(
+    worktreeRoot: string,
+    filePath: string,
+    options?: GitCommandOptions,
+  ): Promise<WorktreeGitFileDiff>;
   /** Read changed-file metadata for one commit. */
   listCommitFiles?(
     worktreeRoot: string,

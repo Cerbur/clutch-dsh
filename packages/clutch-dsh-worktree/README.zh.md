@@ -126,6 +126,8 @@ Session。
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
 Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载 commit history。选择 commit 后
 加载其 changed files，再选择文件加载该文件的 unified diff；文件列表就绪后会自动选择第一个文件。
+当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入 **未提交的改动**；选择它
+会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
 
 比较范围是 `baseCommit..HEAD`。对于 plugin 创建的 Worktree，`baseCommit` 是获取时捕获并保持不变
 的 commit。`baseBranch` 只是获取时使用的人类可读 branch 或 ref；即使该 branch 后续前进或在
@@ -137,12 +139,13 @@ Local/Main 会显示诚实的不可用状态。
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，
 root commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全
 状态。如果仓库发生 rewrite，导致已捕获的 baseline 不再是当前 `HEAD` 的 ancestor，历史会显示为
-不可用，而不会猜测比较边界。视图是只读的，不包含 staged 或 unstaged working-tree changes。
+不可用，而不会猜测比较边界。**未提交的改动**是按需读取的临时快照，不会持久化，也不会持续
+监视 Git；刷新后才能看到后续编辑。视图是只读的，不提供 commit 或 staging 控件。
 
-浏览器只能选择当前 Worktree projection 返回的 commit 和 path。插件会验证 commit 是否属于当前
-`baseCommit..HEAD` 范围，并验证 path 是否属于该 commit 的 changed files，因此这些 endpoint 不是
-通用 Git object 或文件读取器。刷新会在替换数据加载期间保留 ready 内容；旧 commit 或文件选择的
-迟到响应会被忽略。
+浏览器只能选择当前 Worktree projection 返回的 commit、**未提交的改动**和 path。插件会验证
+commit 是否属于当前 `baseCommit..HEAD` 范围；工作区 path 会重新读取并依据最新状态投影授权，因此
+这些 endpoint 不是通用 Git object 或文件读取器。刷新会在替换数据加载期间保留 ready 内容；旧 commit
+或文件选择的迟到响应会被忽略。
 
 ### 添加 Worktree 指令
 
@@ -185,9 +188,10 @@ root commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或�
 - Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
   sidecar 或 `.git`，也不会提供 working-tree mutation 控件。文件 diff 会禁用 external diff 和
   text conversion，并限制输出大小以保证安全展示。
-- Git Dashboard 只实现 commit history、changed files 和一次一个 unified diff。V1 不提供 staged
-  或 unstaged changes、commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull
-  request、graph lanes、pagination 或 syntax highlighting。
+- Git Dashboard 只实现 commit history、顶部的只读**未提交的改动**快照、changed files 和一次一个
+  unified diff。快照合并 staged、unstaged 和 untracked 文件，但不会写回 Git。Dashboard 不提供
+  commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull request、graph lanes、
+  pagination 或 syntax highlighting。
 - Session 行使用 DSH 原生的状态和相对时间展示。折叠的 Workspace、Main 和 Worktree 分组会
   从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍

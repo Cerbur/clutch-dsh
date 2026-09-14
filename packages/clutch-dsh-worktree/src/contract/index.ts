@@ -63,8 +63,15 @@ export interface WorktreeGitBaseline {
   readonly source: 'captured' | 'derived';
 }
 
+/** Stable synthetic commit id used for the current uncommitted working tree entry. */
+export const WORKTREE_GIT_WORKING_TREE = 'working-tree' as const;
+
+export type WorktreeGitCommitKind = 'commit' | 'working-tree';
+
 export interface WorktreeGitCommit {
+  /** A Git SHA for commits, or WORKTREE_GIT_WORKING_TREE for the live working tree entry. */
   readonly sha: string;
+  readonly kind?: WorktreeGitCommitKind;
   readonly parents: readonly string[];
   readonly subject: string;
   readonly authorName: string;

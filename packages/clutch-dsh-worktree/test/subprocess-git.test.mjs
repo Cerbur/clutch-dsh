@@ -7,7 +7,7 @@ import process from 'node:process';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { LocalGitAdapter } from '../lib/index.js';
+import { LocalGitAdapter, WORKTREE_GIT_WORKING_TREE } from '../lib/index.js';
 
 test('preserves porcelain status flags with and without reasons', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
@@ -574,6 +574,59 @@ test('reads machine-delimited commit history with the immutable range and visibl
       '--max-count=201',
       '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
       `${baseline}..HEAD`,
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('reads tracked and untracked working-tree files with bounded argv paths', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: 'M\0space file.txt\0' },
+        { stdout: 'untracked.txt\0' },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    assert.deepEqual(await git.listWorkingTreeFiles(workspaceRoot), [
+      { path: 'space file.txt', status: 'modified' },
+      { path: 'untracked.txt', status: 'added' },
+    ]);
+    assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
+      ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('reads an untracked working-tree diff after handling no-index exit 1', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const filePath = '-untracked name.txt';
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { outcome: { exitCode: 1, signal: null } },
+        {
+          outcome: { exitCode: 1, signal: null },
+          stdout: `diff --no-index /dev/null b/${filePath}\n@@ -0,0 +1 @@\n+new\n`,
+        },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    const diff = await git.readWorkingTreeFileDiff(workspaceRoot, filePath);
+
+    assert.equal(diff.commit, WORKTREE_GIT_WORKING_TREE);
+    assert.equal(diff.binary, false);
+    assert.match(diff.patch, /\+new/u);
+    assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['ls-files', '--error-unmatch', '--', filePath],
+      ['diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
