@@ -72,6 +72,7 @@ test('captures an immutable baseline and serves commit history, files, and a fil
     await runGit(targetPath, ['add', 'change.txt']);
     await runGit(targetPath, ['commit', '-m', 'update dashboard file']);
     const secondCommit = (await runGit(targetPath, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(fixture.workspaceRoot, ['branch', 'dashboard-baseline']);
 
     const history = await fixture.manager.listWorktreeCommits({
       workspaceId: 'ws_dashboard',
@@ -82,6 +83,41 @@ test('captures an immutable baseline and serves commit history, files, and a fil
     assert.deepEqual(history.commits.map((commit) => commit.sha), [secondCommit, firstCommit]);
     assert.equal(history.headCommit, secondCommit);
     assert.equal(history.truncated, false);
+
+    const selectedHistory = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'dashboard-baseline',
+    });
+    assert.equal(selectedHistory.baseline.ref, 'dashboard-baseline');
+    assert.equal(selectedHistory.baseline.source, 'branch');
+    assert.equal(selectedHistory.baseline.commit, record.baseCommit);
+    assert.deepEqual(selectedHistory.commits.map((commit) => commit.sha), [secondCommit, firstCommit]);
+
+    await assert.rejects(
+      fixture.manager.listWorktreeCommits({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        baseBranch: 'refs/heads/dashboard-baseline',
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    const selectedFiles = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: firstCommit,
+      baseBranch: 'dashboard-baseline',
+    });
+    assert.deepEqual(selectedFiles.files, [{ path: 'change.txt', status: 'added' }]);
+    const selectedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: secondCommit,
+      path: 'change.txt',
+      baseBranch: 'dashboard-baseline',
+    });
+    assert.equal(selectedDiff.binary, false);
+    assert.match(selectedDiff.patch, /\+second/u);
 
     const files = await fixture.manager.listWorktreeCommitFiles({
       workspaceId: 'ws_dashboard',
@@ -404,6 +440,7 @@ test('loads Git lazily, preserves ready refresh content, and ignores stale commi
     manager,
     workspaceId: 'ws_dashboard',
     worktreeId: 'wt_dashboard',
+    defaultBaselineBranch: 'main',
   });
   assert.deepEqual(calls, []);
 
@@ -529,6 +566,7 @@ test('selects the working-tree entry first and refreshes its live files', async 
     manager,
     workspaceId: 'ws_dashboard',
     worktreeId: 'wt_dashboard',
+    defaultBaselineBranch: 'main',
   });
 
   await controller.loadHistory();
@@ -579,6 +617,7 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
     manager,
     workspaceId: 'ws_dashboard',
     worktreeId: 'wt_dashboard',
+    defaultBaselineBranch: 'main',
   });
 
   const firstHistoryTask = controller.loadHistory();
@@ -618,6 +657,71 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
   });
   await flush();
   assert.equal(controller.getSnapshot().diff.status, 'ready');
+  controller.dispose();
+});
+
+test('starts unselected without a creation branch and reloads history for a changed branch baseline', async () => {
+  const branches = [
+    { name: 'main', isCurrent: true, checkedOut: true },
+    { name: 'develop', isCurrent: false, checkedOut: false },
+  ];
+  const historyBranches = [];
+  const manager = {
+    listBranches() {
+      return Promise.resolve(branches);
+    },
+    listWorktreeCommits({ baseBranch }) {
+      historyBranches.push(baseBranch);
+      return Promise.resolve({
+        headCommit: 'f'.repeat(40),
+        baseline: { commit: '0'.repeat(40), ref: baseBranch, source: 'branch' },
+        commits: [],
+        truncated: false,
+      });
+    },
+    listWorktreeCommitFiles() {
+      return Promise.resolve({ commit: 'working-tree', files: [] });
+    },
+    getWorktreeCommitFileDiff() {
+      return Promise.resolve({ commit: 'working-tree', path: 'file.txt', patch: '', binary: false });
+    },
+  };
+
+  const defaultController = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+    defaultBaselineBranch: 'main',
+  });
+  await defaultController.loadHistory();
+  assert.deepEqual(historyBranches, ['main']);
+  defaultController.dispose();
+  historyBranches.length = 0;
+
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+  });
+  assert.equal(controller.getSnapshot().baselineBranch, undefined);
+  await controller.loadBranches();
+  await controller.loadHistory();
+  assert.deepEqual(historyBranches, []);
+  assert.equal(controller.getSnapshot().history.status, 'idle');
+
+  controller.selectBaselineBranch('main');
+  await flush();
+  assert.deepEqual(historyBranches, ['main']);
+  assert.equal(controller.getSnapshot().history.status, 'ready');
+
+  controller.selectBaselineBranch('develop');
+  await flush();
+  assert.deepEqual(historyBranches, ['main', 'develop']);
+  assert.equal(controller.getSnapshot().baselineBranch, 'develop');
+
+  controller.selectBaselineBranch(undefined);
+  assert.equal(controller.getSnapshot().baselineBranch, undefined);
+  assert.equal(controller.getSnapshot().history.status, 'idle');
   controller.dispose();
 });
 

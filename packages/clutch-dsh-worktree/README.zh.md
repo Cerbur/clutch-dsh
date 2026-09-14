@@ -7,7 +7,7 @@
 历史的事实来源地位。
 
 插件只在自己的 sidecar 中保存 Worktree 关系、获取事实和共享 Worktree 指令。对于受管理的
-Worktree，插件还提供相对于获取 baseline 的只读 Git 与变更 Dashboard；不会复制 transcript
+Worktree，插件还提供可选择本地 branch 基线的只读 Git 与变更 Dashboard；不会复制 transcript
 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期
@@ -95,8 +95,8 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
    使用与新建 Worktree 相同的 Session 流程。
 
 第一版只列出尚未被插件管理、状态 ready、绑定 branch 且不是 repository root 的 Git Worktree。
-Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 没有记录 acquisition
-commit，因此其 Git 与变更 baseline 不可用。
+Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 仍可在选择本地基线 branch 后
+使用 Git 与变更。
 
 ### 创建并打开 Session
 
@@ -124,28 +124,24 @@ Session。
 ### 使用 Git 与变更
 
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
-Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载 commit history。选择 commit 后
-加载其 changed files，再选择文件加载该文件的 unified diff；文件列表就绪后会自动选择第一个文件。
-当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入 **未提交的改动**；选择它
-会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
+Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载本地 branch 列表，并在选择基线后加载
+commit history。选择器默认使用 Worktree 创建时记录的 `baseBranch`；如果没有该事实，Git Tab 会保持
+未选择状态并提示用户选择。用户只能选择本地 branch，修改选择后会重新加载 history、changed files
+和 Diff，但不会修改 Worktree 记录。即使没有选择 Git 基线，Overview 中的身份、路径和 Session 信息
+仍然正常展示。
 
-比较范围是 `baseCommit..HEAD`。对于 plugin 创建的 Worktree，`baseCommit` 是获取时捕获并保持不变
-的 commit。`baseBranch` 只是获取时使用的人类可读 branch 或 ref；即使该 branch 后续前进或在
-其他位置被 checkout，也不会改变。某些没有 `baseCommit` 的旧 plugin 创建记录，只有在记录的
-base branch 与当前 Worktree branch 不同且能够证明时，才会使用明确标注的运行时 derived merge
-base；这个 derived 值不会持久化。导入的 Worktree、无法判断的旧记录、Detached Worktree 以及
-Local/Main 会显示诚实的不可用状态。
+比较范围是所选 branch 当前指向的 commit 到 `HEAD`，每次读取都会重新解析 branch。浏览器不能直接
+选择 commit SHA 或任意 Git ref；所选 branch 必须是 Worktree `HEAD` 的 ancestor，互不相关或已 rewrite
+的基线会显示明确的不可用状态。`baseCommit` 仍作为兼容和恢复用的 acquisition 元数据保留，但不再
+作为用户可选择的基线。当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入
+**未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
 
-历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，
-root commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全
-状态。如果仓库发生 rewrite，导致已捕获的 baseline 不再是当前 `HEAD` 的 ancestor，历史会显示为
-不可用，而不会猜测比较边界。**未提交的改动**是按需读取的临时快照，不会持久化，也不会持续
-监视 Git；刷新后才能看到后续编辑。视图是只读的，不提供 commit 或 staging 控件。
-
-浏览器只能选择当前 Worktree projection 返回的 commit、**未提交的改动**和 path。插件会验证
-commit 是否属于当前 `baseCommit..HEAD` 范围；工作区 path 会重新读取并依据最新状态投影授权，因此
-这些 endpoint 不是通用 Git object 或文件读取器。刷新会在替换数据加载期间保留 ready 内容；旧 commit
-或文件选择的迟到响应会被忽略。
+历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
+commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。
+**未提交的改动**是按需读取的临时快照，不会持久化，也不会持续监视 Git；刷新后才能看到后续编辑。
+视图是只读的，不提供 commit 或 staging 控件。插件会依据所选 branch 到 `HEAD` 的 projection 验证
+commit，并依据最新状态重新读取和授权工作区 path，因此这些 endpoint 不是通用 Git object 或文件读取器。
+刷新会在替换数据加载期间保留 ready 内容；旧 commit 或文件选择的迟到响应会被忽略。
 
 ### 添加 Worktree 指令
 

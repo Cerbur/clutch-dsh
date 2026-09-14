@@ -153,6 +153,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
+    readonly baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
     return this.remote.listWorktreeCommits(input);
   }
@@ -162,6 +163,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
     readonly commit: string;
+    readonly baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
     return this.remote.listWorktreeCommitFiles(input);
   }
@@ -172,6 +174,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly worktreeId: WorktreeId;
     readonly commit: string;
     readonly path: string;
+    readonly baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
     return this.remote.getWorktreeCommitFileDiff(input);
   }

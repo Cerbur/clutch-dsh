@@ -24,7 +24,7 @@ function isMainWorktreeId(worktreeId: string): boolean {
   return worktreeId === 'main' || worktreeId.startsWith('main:');
 }
 
-function unavailableHistory(reason: 'baseline-unknown' | 'main'): WorktreeGitHistory {
+function unavailableHistory(reason: 'baseline-unselected' | 'baseline-unknown' | 'main'): WorktreeGitHistory {
   return {
     commits: [],
     truncated: false,
@@ -118,11 +118,55 @@ async function resolveWorktree(
   };
 }
 
+async function resolveSelectedBaseline(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  rawBranch: string,
+): Promise<WorktreeGitBaseline | undefined> {
+  const baseBranch = rawBranch.trim();
+  if (baseBranch.length === 0) return undefined;
+  const repositoryRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(resolved.workspaceRoot, { signal: context.signal })
+    : resolved.workspaceRoot;
+  const branches = await context.git.listBranches(repositoryRoot, { signal: context.signal });
+  if (!branches.includes(baseBranch)) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  }
+  if (context.git.resolveCommit === undefined) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git baseline branch resolution is unavailable', {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  }
+  const commit = await context.git.resolveCommit(resolved.record.absolutePath, baseBranch, {
+    signal: context.signal,
+  });
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid selected baseline commit', {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  }
+  return { commit, ref: baseBranch, source: 'branch' };
+}
+
 async function resolveBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
+  requestedBaseBranch?: string,
 ): Promise<WorktreeGitBaseline | undefined> {
   const { record } = resolved;
+  if (requestedBaseBranch !== undefined) {
+    if (typeof requestedBaseBranch !== 'string') {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline branch must be a string', {
+        worktreeId: record.worktreeId,
+      });
+    }
+    return resolveSelectedBaseline(context, resolved, requestedBaseBranch);
+  }
   if (record.baseCommit !== undefined) {
     if (!COMMIT_PATTERN.test(record.baseCommit)) {
       throw providerError('SIDECAR_CORRUPT', 'Worktree has an invalid acquisition baseline', {
@@ -170,16 +214,33 @@ async function resolveBaseline(
 async function requireBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
+  requestedBaseBranch?: string,
 ): Promise<WorktreeGitBaseline> {
-  const baseline = await resolveBaseline(context, resolved);
+  const baseline = await resolveBaseline(context, resolved, requestedBaseBranch);
   if (baseline === undefined) {
     throw providerError(
       'WORKTREE_STATE_CONFLICT',
-      'The Worktree acquisition baseline is unavailable; Git history cannot be authorized safely',
+      'Select a local baseline branch before reading Git changes',
       { worktreeId: resolved.record.worktreeId },
     );
   }
   return baseline;
+}
+
+async function isCommitAncestor(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  ancestor: string,
+  descendant: string,
+): Promise<boolean> {
+  if (ancestor === descendant) return true;
+  if (context.git.isCommitAncestor === undefined) return false;
+  return context.git.isCommitAncestor(
+    resolved.record.absolutePath,
+    ancestor,
+    descendant,
+    { signal: context.signal },
+  );
 }
 
 async function baselineIsCurrentAncestor(
@@ -187,30 +248,25 @@ async function baselineIsCurrentAncestor(
   resolved: ResolvedWorktree,
   baseline: WorktreeGitBaseline,
 ): Promise<boolean> {
-  if (context.git.isCommitAncestor === undefined) return false;
   const head = resolved.live.headCommit ?? (context.git.resolveCommit
     ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
     : undefined);
   if (head === undefined) return false;
-  return baseline.commit === head || await context.git.isCommitAncestor(
-    resolved.record.absolutePath,
-    baseline.commit,
-    head,
-    { signal: context.signal },
-  );
+  return isCommitAncestor(context, resolved, baseline.commit, head);
 }
 
 async function authorizeCommit(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   commitInput: string,
+  requestedBaseBranch?: string,
 ): Promise<{ readonly commit: string; readonly baseline: WorktreeGitBaseline }> {
   if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
       worktreeId: resolved.record.worktreeId,
     });
   }
-  const baseline = await requireBaseline(context, resolved);
+  const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
   if (context.git.resolveCommit === undefined || context.git.isCommitAncestor === undefined) {
     throw providerError('GIT_OPERATION_FAILED', 'Git commit authorization is unavailable', {
       worktreeId: resolved.record.worktreeId,
@@ -222,19 +278,15 @@ async function authorizeCommit(
   const head = await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', {
     signal: context.signal,
   });
-  const afterBaseline = commit !== baseline.commit && await context.git.isCommitAncestor(
-    resolved.record.absolutePath,
+  const baselineIsAncestor = await baselineIsCurrentAncestor(context, resolved, baseline);
+  const afterBaseline = commit !== baseline.commit && await isCommitAncestor(
+    context,
+    resolved,
     baseline.commit,
     commit,
-    { signal: context.signal },
   );
-  const reachableFromHead = commit === head || await context.git.isCommitAncestor(
-    resolved.record.absolutePath,
-    commit,
-    head,
-    { signal: context.signal },
-  );
-  if (!afterBaseline || !reachableFromHead) {
+  const reachableFromHead = await isCommitAncestor(context, resolved, commit, head);
+  if (!baselineIsAncestor || !afterBaseline || !reachableFromHead) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
       worktreeId: resolved.record.worktreeId,
       commit,
@@ -246,10 +298,11 @@ async function authorizeCommit(
 async function authorizeWorkingTree(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
+  requestedBaseBranch?: string,
 ): Promise<void> {
-  const baseline = await requireBaseline(context, resolved);
+  const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
   if (!(await baselineIsCurrentAncestor(context, resolved, baseline))) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The Worktree history changed before the working-tree projection could be read', {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is not an ancestor of the Worktree', {
       worktreeId: resolved.record.worktreeId,
     });
   }
@@ -257,12 +310,19 @@ async function authorizeWorkingTree(
 
 export async function listWorktreeCommits(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: string; readonly worktreeId: string },
+  input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
 ): Promise<WorktreeGitHistory> {
   const resolved = await resolveWorktree(context, input);
   if (resolved.main) return unavailableHistory('main');
-  const baseline = await resolveBaseline(context, resolved.value);
-  if (baseline === undefined) return unavailableHistory('baseline-unknown');
+  const baseline = await resolveBaseline(context, resolved.value, input.baseBranch);
+  if (baseline === undefined) {
+    const selectedBranch = input.baseBranch ?? resolved.value.record.baseBranch;
+    return unavailableHistory(
+      selectedBranch === undefined || selectedBranch.trim().length === 0
+        ? 'baseline-unselected'
+        : 'baseline-unknown',
+    );
+  }
   if (!(await baselineIsCurrentAncestor(context, resolved.value, baseline))) {
     return unavailableHistory('baseline-unknown');
   }
@@ -293,7 +353,12 @@ export async function listWorktreeCommits(
 
 export async function listWorktreeCommitFiles(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: string; readonly worktreeId: string; readonly commit: string },
+  input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly commit: string;
+    readonly baseBranch?: string;
+  },
 ): Promise<WorktreeGitCommitFiles> {
   const resolved = await resolveWorktree(context, input);
   if (resolved.main) {
@@ -302,7 +367,7 @@ export async function listWorktreeCommitFiles(
     });
   }
   if (input.commit === WORKTREE_GIT_WORKING_TREE) {
-    await authorizeWorkingTree(context, resolved.value);
+    await authorizeWorkingTree(context, resolved.value, input.baseBranch);
     if (context.git.listWorkingTreeFiles === undefined) {
       throw providerError('GIT_OPERATION_FAILED', 'Git working-tree history is unavailable', {
         worktreeId: input.worktreeId,
@@ -316,7 +381,7 @@ export async function listWorktreeCommitFiles(
       ),
     };
   }
-  const authorized = await authorizeCommit(context, resolved.value, input.commit);
+  const authorized = await authorizeCommit(context, resolved.value, input.commit, input.baseBranch);
   if (context.git.listCommitFiles === undefined) {
     throw providerError('GIT_OPERATION_FAILED', 'Git changed-file history is unavailable', {
       worktreeId: input.worktreeId,
@@ -334,7 +399,13 @@ export async function listWorktreeCommitFiles(
 
 export async function getWorktreeCommitFileDiff(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: string; readonly worktreeId: string; readonly commit: string; readonly path: string },
+  input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly commit: string;
+    readonly path: string;
+    readonly baseBranch?: string;
+  },
 ): Promise<WorktreeGitFileDiff> {
   const resolved = await resolveWorktree(context, input);
   if (resolved.main) {
@@ -348,7 +419,7 @@ export async function getWorktreeCommitFileDiff(
     });
   }
   if (input.commit === WORKTREE_GIT_WORKING_TREE) {
-    await authorizeWorkingTree(context, resolved.value);
+    await authorizeWorkingTree(context, resolved.value, input.baseBranch);
     if (context.git.listWorkingTreeFiles === undefined || context.git.readWorkingTreeFileDiff === undefined) {
       throw providerError('GIT_OPERATION_FAILED', 'Git working-tree file diff is unavailable', {
         worktreeId: input.worktreeId,
@@ -377,7 +448,7 @@ export async function getWorktreeCommitFileDiff(
       path: input.path,
     };
   }
-  const authorized = await authorizeCommit(context, resolved.value, input.commit);
+  const authorized = await authorizeCommit(context, resolved.value, input.commit, input.baseBranch);
   if (context.git.listCommitFiles === undefined || context.git.readCommitFileDiff === undefined) {
     throw providerError('GIT_OPERATION_FAILED', 'Git file diff is unavailable', {
       worktreeId: input.worktreeId,

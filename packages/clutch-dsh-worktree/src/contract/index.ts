@@ -56,11 +56,13 @@ export type WorktreeStatus = 'active' | 'removed';
 
 export type WorktreeSource = 'plugin' | 'external';
 
-/** Stable acquisition boundary and read-only Git projections used by the Dashboard. */
+/** Branch-selected comparison boundary and read-only Git projections used by the Dashboard. */
 export interface WorktreeGitBaseline {
   readonly commit: string;
+  /** The local branch selected as the baseline, when the projection was branch-selected. */
   readonly ref?: string;
-  readonly source: 'captured' | 'derived';
+  /** Branch selection is the UI source; captured/derived values remain for legacy API compatibility. */
+  readonly source: 'captured' | 'derived' | 'branch';
 }
 
 /** Stable synthetic commit id used for the current uncommitted working tree entry. */
@@ -84,7 +86,7 @@ export interface WorktreeGitHistory {
   readonly baseline?: WorktreeGitBaseline;
   readonly commits: readonly WorktreeGitCommit[];
   readonly truncated: boolean;
-  readonly unavailableReason?: 'baseline-unknown' | 'main';
+  readonly unavailableReason?: 'baseline-unselected' | 'baseline-unknown' | 'main';
 }
 
 export type WorktreeGitFileStatus =
@@ -152,7 +154,7 @@ export interface WorktreeRecord {
   readonly createdAt?: string;
   readonly importedAt?: string;
   readonly baseBranch?: string;
-  /** Immutable acquisition commit used as the Git Dashboard comparison boundary. */
+  /** Legacy acquisition commit retained for compatibility and recovery; the Dashboard selects a branch. */
   readonly baseCommit?: string;
   readonly worktreeId: WorktreeId;
   readonly workspaceId: WorkspaceId;
@@ -245,12 +247,16 @@ export interface WorktreeManager {
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
+    /** Optional local branch selected as the comparison baseline. */
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitHistory>;
 
   listWorktreeCommitFiles(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
     readonly commit: string;
+    /** Optional local branch selected as the comparison baseline. */
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitCommitFiles>;
 
   getWorktreeCommitFileDiff(input: {
@@ -258,6 +264,8 @@ export interface WorktreeManager {
     readonly worktreeId: WorktreeId;
     readonly commit: string;
     readonly path: string;
+    /** Optional local branch selected as the comparison baseline. */
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitFileDiff>;
 
   listImportCandidates(input: {
@@ -396,12 +404,16 @@ export interface WorktreeRemoteManager {
   listWorktreeCommits(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
+    /** Optional local branch selected as the comparison baseline. */
+    baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitHistory>>;
 
   listWorktreeCommitFiles(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
     commit: string;
+    /** Optional local branch selected as the comparison baseline. */
+    baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>>;
 
   getWorktreeCommitFileDiff(input: {
@@ -409,6 +421,8 @@ export interface WorktreeRemoteManager {
     worktreeId: WorktreeId;
     commit: string;
     path: string;
+    /** Optional local branch selected as the comparison baseline. */
+    baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>>;
 
   listImportCandidates(input: {

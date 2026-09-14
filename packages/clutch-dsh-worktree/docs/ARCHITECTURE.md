@@ -232,24 +232,31 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 ### Git Dashboard 只读投影
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
-插件创建 Worktree 时，在既有事务中捕获获取时的 `baseCommit`；`baseBranch` 只用于人类可读的
-获取 ref 展示，不能替代比较边界。历史读取使用 `baseCommit..HEAD`，最多返回 200 个 commit；
-当 tracked、staged、unstaged 或 untracked 文件存在时，历史顶部额外投影一个临时的
-`working-tree` entry，其文件和 unified diff 都相对于当前 `HEAD`。该 entry 不写入 Sidecar 或
-DSH，也不计入 committed history 的 200 个 commit 上限。
+Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktree 记录存在创建时的
+`baseBranch`，客户端以它作为初始选择，否则保持未选择并提示用户。客户端只能提交本地 branch
+名称，Manage 会再次校验该 branch 属于 `refs/heads/`，解析其当前 commit，并把选择沿着
+Contract → Remote → Host → Manage 传递；选择不会写回 Sidecar，因此用户可以在 Dashboard 内随时
+修改比较基线。没有选择基线时只暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常
+展示。
+
+历史读取使用所选 branch 当前 commit 到 Worktree `HEAD` 的范围，且要求基线是当前 `HEAD` 的
+ancestor；最多返回 200 个 commit。当 tracked、staged、unstaged 或 untracked 文件存在时，历史
+顶部额外投影一个临时的 `working-tree` entry，其文件和 unified diff 都相对于当前 `HEAD`。
+该 entry 不写入 Sidecar 或 DSH，也不计入 committed history 的 200 个 commit 上限。Sidecar 中的
+`baseCommit` 仍保留给历史 API 兼容和恢复逻辑，但不是新的用户选择类型。
 
 Manage 在每次文件/差异读取前校验 Worktree 仍是当前 Git registration，并验证 commit 同时属于
-baseline 之后且可从 Worktree `HEAD` 到达；working-tree entry 则重新读取当前状态。随后只
-允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次
-读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git object、ref、文件或命令读取能力。
-正常 commit 使用 first-parent，root commit 使用 empty tree；diff 固定禁用 external diff 与
-textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、输出上限、超时、cleanup
-deadline 和 AbortSignal。
+所选 branch 到 `HEAD` 的 projection 且可从 Worktree `HEAD` 到达；working-tree entry 则重新
+读取当前状态。随后只允许 changed-file projection 中的精确 `path`（rename/copy 也保留
+`oldPath`），因此文件在两次读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git
+object、ref、文件或命令读取能力。正常 commit 使用 first-parent，root commit 使用 empty tree；
+diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
+输出上限、超时、cleanup deadline 和 AbortSignal。
 
-没有可证明获取 baseline 的旧 managed/imported Worktree 不猜测历史：旧记录只有在 base branch
-与当前 branch 不同且 merge-base 可证明时返回临时 `derived` baseline，歧义记录和 Main 返回
-明确的 unavailable projection；derived 结果不会写回 Sidecar。Sidecar 损坏或恢复未完成时，
-Git 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。
+没有选择 branch 的旧 managed/imported Worktree 返回明确的 `baseline-unselected` projection，
+而不是用移动的 ref 猜测比较点；选择无效、无法解析或不再是 ancestor 时返回 honest unavailable
+projection。所有 derived/captured 兼容结果都不会写回 Sidecar。Sidecar 损坏或恢复未完成时，Git
+读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。
 
 ---
 

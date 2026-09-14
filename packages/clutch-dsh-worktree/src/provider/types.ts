@@ -158,7 +158,7 @@ export interface GitCommandOptions {
   readonly signal?: AbortSignal;
 }
 
-/** Provider-only history result before Manage attaches the acquisition baseline. */
+/** Provider-only history result before Manage attaches the selected baseline. */
 export interface GitCommitHistoryRead {
   readonly headCommit: string;
   readonly commits: readonly WorktreeGitCommit[];

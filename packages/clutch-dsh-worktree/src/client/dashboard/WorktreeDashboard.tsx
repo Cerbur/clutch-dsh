@@ -582,6 +582,7 @@ export function WorktreeDashboard({
               manager={manager}
               workspaceId={record.workspaceId}
               worktreeId={record.worktreeId}
+              defaultBaselineBranch={record.baseBranch}
               t={t}
             />
           ) : tab === 'sessions' ? (

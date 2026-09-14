@@ -16,6 +16,53 @@
   font-weight: 620;
 }
 
+.gitPanelHeading {
+  min-width: 0;
+}
+
+.gitBaselineSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 12px;
+}
+
+.gitBaselineSelector select {
+  min-width: 180px;
+  max-width: min(360px, 60vw);
+  padding: 5px 8px;
+  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #273142);
+  font: inherit;
+}
+
+.gitBaselineSelector select:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.gitBaselinePrompt {
+  padding: 22px;
+  border: 1px dashed var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+}
+
+.gitBaselinePrompt strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--dsw-alias-label-primary, #273142);
+}
+
+.gitBaselinePrompt p {
+  margin: 0;
+}
+
 .gitBaselineFacts {
   display: flex;
   flex-wrap: wrap;

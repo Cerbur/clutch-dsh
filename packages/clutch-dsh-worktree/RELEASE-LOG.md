@@ -6,7 +6,8 @@
 
 #### 新增
 
-- 为已管理 Worktree 增加只读“Git 与变更”Dashboard：按不可变 acquisition `baseCommit` 展示 commit 历史、changed files 和 unified diff。
+- 为已管理 Worktree 增加只读“Git 与变更”Dashboard：用户可选择并修改本地 branch 基线，查看 commit 历史、changed files 和 unified diff。
+- 创建时记录的 `baseBranch` 作为默认选择；缺少该事实时 Git Tab 提示用户选择，同时保持 Dashboard 工作区信息正常展示。
 - 增加 commit/path 归属校验、首个 Git Tab lazy load、刷新 ready 内容保留、binary/超大 diff 降级以及旧请求结果隔离。
 
 #### 优化
@@ -18,7 +19,8 @@
 
 #### Added
 
-- Add a read-only Git & Changes Dashboard for managed Worktrees, showing commit history, changed files, and unified diffs relative to the immutable acquisition `baseCommit`.
+- Add a read-only Git & Changes Dashboard for managed Worktrees where users can select and change a local branch baseline for commit history, changed files, and unified diffs.
+- Default the selector to the creation-time `baseBranch`; when that fact is absent, prompt for a baseline while keeping Dashboard Workspace information visible.
 - Add commit/path membership checks, first-Git-tab lazy loading, ready-content-preserving refreshes, binary/oversized-diff degradation, and stale-result isolation.
 
 #### Improved

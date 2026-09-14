@@ -7,8 +7,8 @@ Sessions as Workspace → Worktree → Session while keeping DSH as the source o
 Workspace identity, Session metadata, native lists, messages, and conversation history.
 
 The plugin stores Worktree relationships, acquisition facts, and shared Worktree instructions in
-its own sidecar. Managed Worktrees also expose a read-only Git & Changes dashboard relative to
-their acquisition baseline; the plugin does not copy transcripts or rewrite DSH Sessions.
+its own sidecar. Managed Worktrees also expose a read-only Git & Changes dashboard where users can
+choose a local branch baseline; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation,
 > lifecycle actions, Session actions, instructions, and the managed Worktree Git & Changes view
@@ -97,8 +97,8 @@ shows the relevant readiness message and copyable setup guidance.
    copying, or changing its files, then uses the same Session flow as a created Worktree.
 
 The first version lists only ready, branch-attached, non-root Git Worktrees that are not already
-managed by the plugin. Detached, bare, prunable, missing, and invalid entries are omitted. An
-imported Worktree has no recorded acquisition commit, so its Git & Changes baseline is unavailable.
+managed by the plugin. Detached, bare, prunable, missing, and invalid entries are omitted. Imported
+Worktrees can still use Git & Changes after you choose a local baseline branch.
 
 ### Create and open Sessions
 
@@ -127,34 +127,30 @@ launch success.
 ### Use Git & Changes
 
 Open the **Git & Changes** tab from a managed Worktree Dashboard. Opening the Dashboard or its
-Overview tab does not query Git; the first Git tab activation loads commit history through the
-existing `/api` Connection. Selecting a commit loads its changed files, and selecting a file loads
-that file's unified diff. The first changed file is selected automatically when files are ready. When the
-Worktree has staged, unstaged, or untracked files, the list prepends an **Uncommitted changes** entry;
-selecting it compares the live working tree with `HEAD` and uses the same changed-file and diff views.
+Overview tab does not query Git; the first Git tab activation loads the local branch list and, when a
+baseline is selected, commit history through the existing `/api` Connection. The selector defaults to
+the Worktree's creation-time `baseBranch` when that fact exists. If it does not, the Git tab leaves the
+baseline unselected and prompts you to choose one. Only local branches are offered, and changing the
+branch reloads history, changed files, and diffs without changing the Worktree record. The Overview
+identity, path, and Session information remain available even when the Git baseline is not selected.
 
-The comparison range is `baseCommit..HEAD`. For a plugin-created Worktree, `baseCommit` is the
-immutable commit captured at acquisition time. `baseBranch` remains the human-readable branch or
-ref used for acquisition and does not move when the branch later advances or is checked out
-elsewhere. Some older plugin-created records without `baseCommit` can use a clearly labelled,
-runtime-derived merge base only when their recorded base branch differs from the current Worktree
-branch; that derived value is never persisted. Imported Worktrees, ambiguous legacy records,
-detached Worktrees, and Local/Main show an honest unavailable state.
+The comparison range is the selected branch's current tip to `HEAD`; the branch is resolved again for
+each read. The browser can choose only a local branch, not a raw commit SHA or arbitrary Git ref. The
+selected branch must be an ancestor of the Worktree `HEAD`; an unrelated or rewritten baseline renders
+an explicit unavailable state. `baseCommit` remains acquisition metadata for compatibility and recovery,
+but it is not the user-selectable baseline. When the Worktree has staged, unstaged, or untracked files,
+the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
+`HEAD` and uses the same changed-file and diff views.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
-both paths; binary or oversized diffs show an explicit display-safe state. If a repository rewrite
-makes the captured baseline no longer an ancestor of the current `HEAD`, history is unavailable
-instead of being guessed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted,
-and is not a Git watcher; refresh it to see later edits. The view is read-only and does not provide
-commit or staging controls.
-
-The browser can select only commits, the current **Uncommitted changes** entry, and paths returned
-by the current Worktree projection. The plugin validates committed entries against the current
-`baseCommit..HEAD` range; working-tree paths are re-read and authorized against a fresh status
-projection, so these endpoints are not generic Git object or file readers.
-Refresh keeps ready content visible while replacement data loads, and late responses for an older
-commit or file selection are ignored.
+both paths; binary or oversized diffs show an explicit display-safe state. The **Uncommitted changes**
+entry is an on-demand snapshot, is not persisted, and is not a Git watcher; refresh it to see later edits.
+The view is read-only and does not provide commit or staging controls. The plugin validates committed
+entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh
+status projection, so these endpoints are not generic Git object or file readers. Refresh keeps ready
+content visible while replacement data loads, and late responses for an older commit or file selection
+are ignored.
 
 ### Add Worktree instructions
 

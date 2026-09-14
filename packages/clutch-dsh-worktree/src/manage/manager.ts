@@ -166,6 +166,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: string;
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitHistory> {
     return this.afterRecovery(() => listWorktreeCommits(this.context, input));
   }
@@ -174,6 +175,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: string;
     readonly commit: string;
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitCommitFiles> {
     return this.afterRecovery(() => listWorktreeCommitFiles(this.context, input));
   }
@@ -183,6 +185,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly worktreeId: string;
     readonly commit: string;
     readonly path: string;
+    readonly baseBranch?: string;
   }): Promise<WorktreeGitFileDiff> {
     return this.afterRecovery(() => getWorktreeCommitFileDiff(this.context, input));
   }
