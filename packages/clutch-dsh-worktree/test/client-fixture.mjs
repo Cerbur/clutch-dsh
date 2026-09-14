@@ -297,6 +297,7 @@ export async function loadClientEntry({
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
     if (specifier === 'react') return { createElement: (type, props) => ({ type, props }) };
+    if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return {};
     throw new Error(`unexpected browser module request: ${specifier}`);
