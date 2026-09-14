@@ -2,7 +2,7 @@ import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { openWorktreeSession } from '../../view/navigation.js';
 import {
   filterVisibleSessionIds,
-  hasOngoingSession,
+  aggregateSessionStatus,
   sessionMatchesQuery,
 } from '../../session/session-view.js';
 import { unboundSessionIds, workspaceSessionIds } from '../../view/view-mode.js';
@@ -184,7 +184,7 @@ export function WorkspaceTree({
               allWorkspaceSessionIds,
               sessions,
             );
-            const workspaceHasOngoingSession = hasOngoingSession(
+            const workspaceGroupActivityStatus = aggregateSessionStatus(
               workspaceActivitySessionIds,
               sessionPresentations,
             );
@@ -238,7 +238,7 @@ export function WorkspaceTree({
                   t={t}
                   workspace={workspace}
                   expanded={expanded}
-                  hasOngoingSession={workspaceHasOngoingSession}
+                  groupActivityStatus={workspaceGroupActivityStatus}
                   actionPending={actionPending}
                   menuOpen={openWorkspaceMenuId === workspace.workspaceId}
                   drag={{
@@ -301,7 +301,7 @@ export function WorkspaceTree({
                       kind="main"
                       label={mainLabel}
                       expanded={mainExpanded}
-                      hasOngoingSession={hasOngoingSession(mainSessionIds, sessionPresentations)}
+                      groupActivityStatus={aggregateSessionStatus(mainSessionIds, sessionPresentations)}
                       icon={<IconBranchOutline16 />}
                       workspaceTitle={workspace.title}
                       onToggle={() => {

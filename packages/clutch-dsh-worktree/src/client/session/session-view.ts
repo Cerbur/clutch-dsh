@@ -198,6 +198,70 @@ export function hasOngoingSession(
   return sessionIds.some((sessionId) => presentations[sessionId]?.ongoing === true);
 }
 
+function pendingStatusRank(status: SessionStatusPresentation): number {
+  switch (status.labelKey) {
+    case 'waitingApproval':
+      return 3;
+    case 'planReview':
+      return 2;
+    case 'waitingAnswer':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function ongoingStatusRank(status: SessionStatusPresentation): number {
+  return status.labelKey === 'running' ? 2 : status.labelKey === 'subagentsRunning' ? 1 : 0;
+}
+
+/**
+ * Select the single Session status that a collapsed group should expose.
+ *
+ * The result is a representative status rather than a list: callers render at most one
+ * StateDot. Pending interaction warnings outrank live activity, which outranks a completed
+ * reminder. Idle Sessions do not contribute a group status.
+ */
+export function aggregateSessionStatus(
+  sessionIds: readonly string[],
+  presentations: Readonly<
+    Record<string, Pick<SessionPresentation, 'status' | 'ongoing' | 'completed'> | undefined>
+  >,
+): SessionStatusPresentation | undefined {
+  let pending: SessionStatusPresentation | undefined;
+  let pendingRank = 0;
+  let ongoing: SessionStatusPresentation | undefined;
+  let ongoingRank = 0;
+  let completed = false;
+
+  for (const sessionId of sessionIds) {
+    const presentation = presentations[sessionId];
+    if (presentation === undefined) continue;
+
+    if (presentation.status.state === 'warning') {
+      const rank = pendingStatusRank(presentation.status);
+      if (pending === undefined || rank > pendingRank) {
+        pending = presentation.status;
+        pendingRank = rank;
+      }
+    } else if (presentation.ongoing === true) {
+      const rank = ongoingStatusRank(presentation.status);
+      if (ongoing === undefined || rank > ongoingRank) {
+        ongoing = presentation.status;
+        ongoingRank = rank;
+      }
+    }
+
+    if (presentation.completed === true) completed = true;
+  }
+
+  if (pending !== undefined) return pending;
+  if (ongoing !== undefined) return ongoing;
+  return completed
+    ? { state: 'done', labelKey: 'completed', runningSubagentCount: 0 }
+    : undefined;
+}
+
 /** Read the native blank flag without inferring blankness from title or id. */
 export function isBlankSession(
   sessionId: string,

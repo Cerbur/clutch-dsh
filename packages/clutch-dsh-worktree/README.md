@@ -164,9 +164,12 @@ injection; an unchanged instruction is not repeatedly added while its message re
 - Git is read on refresh and when relevant menus open; the plugin does not watch Git continuously.
   An external branch change is shown as branch drift and requires explicit **Adopt current branch**
   before disk cleanup. Detached HEAD and recovery-needed states remain visible and retryable.
-- Session rows use DSH's native status and relative-time presentation. Collapsed groups can show
-  aggregate activity, and visual Session ordering is browser-local; these views do not rewrite
-  native Workspace order.
+- Session rows use DSH's native status and relative-time presentation. Collapsed Workspace, Main,
+  and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
+  approval (and other pending-interaction warnings) takes priority over running, and running
+  takes priority over completed. Idle Sessions do not contribute a group dot; Worktree health
+  remains a separate leading indicator. Visual Session ordering is browser-local; these views do not
+  rewrite native Workspace order.
 - Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
   confirmation. It combines DSH `danger-full-access` with `ask`, keeps approval prompts enabled,
   and does not change network or process policy. If unavailable, the plugin falls back to

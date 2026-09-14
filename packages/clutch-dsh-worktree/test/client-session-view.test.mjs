@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  aggregateSessionStatus,
   deriveSessionPresentationIndex,
   filterVisibleSessionIds,
   hasOngoingSession,
@@ -154,6 +155,43 @@ test('aggregates ongoing activity from complete group membership', () => {
     }),
     true,
   );
+});
+
+test('selects one prioritized aggregate status for a collapsed group', () => {
+  const presentations = {
+    completed: {
+      status: { state: 'done', labelKey: 'completed', runningSubagentCount: 0 },
+      ongoing: false,
+      completed: true,
+    },
+    idle: {
+      status: { state: 'done', labelKey: 'idle', runningSubagentCount: 0 },
+      ongoing: false,
+      completed: false,
+    },
+    running: {
+      status: { state: 'ongoing', labelKey: 'running', runningSubagentCount: 0 },
+      ongoing: true,
+      completed: false,
+    },
+    approval: {
+      status: { state: 'warning', labelKey: 'waitingApproval', runningSubagentCount: 0 },
+      ongoing: false,
+      completed: false,
+    },
+  };
+
+  assert.deepEqual(aggregateSessionStatus(['completed'], presentations), presentations.completed.status);
+  assert.equal(aggregateSessionStatus(['idle'], presentations), undefined);
+  assert.deepEqual(
+    aggregateSessionStatus(['completed', 'running'], presentations),
+    presentations.running.status,
+  );
+  assert.deepEqual(
+    aggregateSessionStatus(['completed', 'running', 'approval'], presentations),
+    presentations.approval.status,
+  );
+  assert.equal(aggregateSessionStatus(['missing'], presentations), undefined);
 });
 
 test('keeps the locale status and time labels synchronized', () => {

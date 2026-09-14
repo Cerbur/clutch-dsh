@@ -157,8 +157,10 @@ MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Wo
 - Git 会在刷新和相关菜单打开时读取，插件不会持续监视 Git。外部切换 branch 会显示 branch
   drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和 recovery-needed
   状态会保持可见并支持重试。
-- Session 行使用 DSH 原生的状态和相对时间展示。折叠分组可以显示聚合活动状态，视觉上的
-  Session 排序只保存在浏览器本地，不会改写原生 Workspace 顺序。
+- Session 行使用 DSH 原生的状态和相对时间展示。折叠的 Workspace、Main 和 Worktree 分组会
+  从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
+  优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
+  使用独立的前置指示器。视觉上的 Session 排序只保存在浏览器本地，不会改写原生 Workspace 顺序。
 - active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
   不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态；它不能突破

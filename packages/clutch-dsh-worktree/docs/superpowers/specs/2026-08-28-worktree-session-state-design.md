@@ -13,7 +13,8 @@ Expose the native Workspace Session activity model in the Worktree view:
 - reuse the native animated `StateDot` for ongoing work;
 - show native-style relative time for the last human-authored Session message;
 - replace that time with the ongoing dot while the Session is running;
-- aggregate ongoing activity on collapsed Workspace, Main, and Worktree rows;
+- aggregate Session status on collapsed Workspace, Main, and Worktree rows;
+- render at most one aggregate status dot per collapsed group, with waiting approval ahead of running and completed;
 - promote a Session to the head of its visual group after a new user message;
 - cover waiting approval, completed, and subagent states.
 
@@ -30,6 +31,11 @@ boundaries.
 3. Running subagent descendants count as ongoing for their parent row and for collapsed group
    indicators. The lineage algorithm follows native semantics instead of inferring from titles
    or IDs.
+4. A collapsed Workspace, Main, or Worktree group renders at most one aggregate Session status dot.
+   The aggregate priority is waiting approval (and the other pending-interaction warning states),
+   then running (including running subagent descendants), then completed. A warning therefore
+   wins over a running Session, and a running Session wins over a completed reminder. The existing
+   Worktree health indicator remains a separate leading indicator; its branch-icon tint is independent of the aggregate Session status.
 
 ## Non-goals
 
@@ -37,8 +43,8 @@ boundaries.
 - No activity order in the Worktree sidecar.
 - No duplicated StateDot SVG, keyframes, delays, or animation CSS.
 - No changes to Worktree lifecycle, native Workspace ordering, or existing manual drag semantics.
-- Collapsed groups aggregate ongoing activity only; completed and waiting labels remain Session-row
-  capabilities in this version.
+- No more than one aggregate Session status dot is rendered for a collapsed group; status
+  selection is derived from complete membership rather than the filtered or truncated rows.
 
 ## Native research
 
@@ -136,18 +142,23 @@ when the animated dot is hidden by hover/menu state.
 
 ### Workspace, Main, and Worktree rows
 
-`WorktreeWorkspaceRow` and the shared `WorktreeGroupRow` receive a semantic ongoing-activity
-prop:
+`WorktreeWorkspaceRow` and the shared `WorktreeGroupRow` receive one semantic aggregate
+Session-status projection:
 
-- collapsed + any ongoing non-archived member → trailing native ongoing dot;
+- collapsed + any non-archived member with a selected aggregate status → one trailing native
+  warning, ongoing, or done dot;
+- aggregate priority is waiting approval (including the other pending-interaction warning states),
+  then running (including running subagent descendants), then completed;
+- completed is selected only from the native `completed` reminder flag, not from an idle Session;
 - expanded → no group dot;
 - hover, focus-within, or menu-open → dot yields to existing actions;
-- Worktree health remains the separate leading health dot;
+- Worktree health remains the separate leading health indicator; its branch-icon tint is independent of the aggregate Session status;
 - Main uses exactly the same `WorktreeGroupRow` path as Worktree.
 
-Group membership is computed before search filtering and row limits. A search query must not
-make a group look idle because its running Session is currently hidden. Workspace aggregation
-covers Main and all Worktree memberships; group aggregation covers its complete membership.
+After native blank/archive eligibility filtering, group membership is computed before search
+filtering and row limits. A search query must not make a group look idle because its running
+Session is currently hidden. Workspace aggregation covers Main and all Worktree memberships;
+group aggregation covers its complete eligible membership.
 
 The existing fixed action rail remains the width budget. Activity and action wrappers must be
 layered without covering the menu or `+` button, and keyboard/focus interaction must have the
@@ -195,10 +206,11 @@ only after success.
 ## Test matrix
 
 Pure tests cover native time thresholds, future/invalid/missing timestamps, status priority,
-subagent lineage, group aggregation, initial order, strict promotion, replay protection, new and
-removed IDs, manual order, storage normalization, and store disposal.
+subagent lineage, group status aggregation (including one-dot and waiting-approval/running/
+completed precedence), initial order, strict promotion, replay protection, new and removed IDs,
+manual order, storage normalization, and store disposal.
 
 Surface tests cover Session right-side ongoing/time placement, warning/completed/subagent labels,
-hover/menu handoff, collapsed versus expanded Workspace/Main/Worktree activity, health-dot
-separation, search-hidden aggregation, send-to-head without DSH/sidecar mutation, and refresh
-ready-content preservation.
+hover/menu handoff, one prioritized dot on collapsed versus expanded Workspace/Main/Worktree rows,
+health-indicator separation, search-hidden aggregation, send-to-head without DSH/sidecar mutation, and
+refresh ready-content preservation.

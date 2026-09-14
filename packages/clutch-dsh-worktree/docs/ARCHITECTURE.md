@@ -279,7 +279,7 @@ Refresh scope is determined by the smallest affected identity.
 ### 状态指示与活动聚合 (StateDot & Aggregate Activity)
 
 - 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核与已完成等状态；
-- 当工作区、Main 或 Worktree 折叠时，若内部存在未归档且活动中的 Session，外层容器自动呈现聚合运行指示器，并在展开或交互时平滑让位。
+- 当 Workspace、Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他 pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。
 
 ### Shell Overlay 呈现
 

@@ -1,7 +1,7 @@
 import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   filterVisibleSessionIds,
-  hasOngoingSession,
+  aggregateSessionStatus,
   sessionMatchesQuery,
 } from '../../session/session-view.js';
 import { isWorktreeExpanded } from '../../view/worktree-expand-state.js';
@@ -183,7 +183,7 @@ export function ActiveWorktree({
         label={branchLabel(record)}
         worktreeId={record.worktreeId}
         expanded={worktreeExpanded}
-        hasOngoingSession={hasOngoingSession(worktreeSessionIds, sessionPresentations)}
+        groupActivityStatus={aggregateSessionStatus(worktreeSessionIds, sessionPresentations)}
         icon={<IconBranchOutline16 />}
         workspaceTitle={workspace.title}
         state={state}
