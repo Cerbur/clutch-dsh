@@ -69,7 +69,8 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - `projectId`、`worktreeId`、`sessionId` 之间的绑定映射；
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
-- 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建事实（`createdAt`、`baseBranch`、不可变 `baseCommit`）或导入时间（`importedAt`）。
+- 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
+  新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据。
 
 ### 共享指令（Instructions）注入机制
 
@@ -232,12 +233,14 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 ### Git Dashboard 只读投影
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
-Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktree 记录存在创建时的
-`baseBranch`，客户端以它作为初始选择，否则保持未选择并提示用户。客户端只能提交本地 branch
-名称，Manage 会再次校验该 branch 属于 `refs/heads/`，解析其当前 commit，并把选择沿着
-Contract → Remote → Host → Manage 传递；选择不会写回 Sidecar，因此用户可以在 Dashboard 内随时
-修改比较基线。没有选择基线时只暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常
-展示。
+Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktree 记录存在持久化的
+`baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择，否则保持未选择并提示
+用户。受管理 Worktree 的 Overview
+Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排除当前 Worktree branch；保存通过
+`updateWorktreeBaseBranch` 沿 Contract → Remote → Host → Manage 传递，使用 expected branch
+执行乐观并发校验，只更新 Sidecar 的 `baseBranch`。`baseCommit` 不会被该操作修改。Git Tab
+自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
+暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。
 
 历史读取使用所选 branch 当前 commit 到 Worktree `HEAD` 的范围，且要求基线是当前 `HEAD` 的
 ancestor；最多返回 200 个 commit。当 tracked、staged、unstaged 或 untracked 文件存在时，历史
@@ -255,7 +258,8 @@ diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边�
 
 没有选择 branch 的旧 managed/imported Worktree 返回明确的 `baseline-unselected` projection，
 而不是用移动的 ref 猜测比较点；选择无效、无法解析或不再是 ancestor 时返回 honest unavailable
-projection。所有 derived/captured 兼容结果都不会写回 Sidecar。Sidecar 损坏或恢复未完成时，Git
+projection。运行时 derived/captured 兼容结果不会自动写回 Sidecar；只有用户明确保存 Dashboard
+facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar 损坏或恢复未完成时，Git
 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。
 
 ---

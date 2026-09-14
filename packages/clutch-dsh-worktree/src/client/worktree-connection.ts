@@ -33,6 +33,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   forgetWorktree: 'worktreeManager/forgetWorktree',
   insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   updateWorktreeInstructions: 'worktreeManager/updateWorktreeInstructions',
+  updateWorktreeBaseBranch: 'worktreeManager/updateWorktreeBaseBranch',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
   ensureWorktreePermission: 'worktreeManager/ensureWorktreePermission',
@@ -209,6 +210,9 @@ export function createWorktreeConnectionAdapter(
     },
     async updateWorktreeInstructions(input): Promise<string> {
       return invoke<string>('updateWorktreeInstructions', input);
+    },
+    async updateWorktreeBaseBranch(input): Promise<string> {
+      return invoke<string>('updateWorktreeBaseBranch', input);
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),

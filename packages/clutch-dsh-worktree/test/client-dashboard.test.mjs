@@ -282,6 +282,51 @@ test('dashboard renders source-aware acquisition facts and flags absent facts as
   harness.dispose();
 });
 
+test('dashboardFacts saves a non-current baseline and feeds it to Git tab defaults', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  const branches = [
+    { name: 'main', isCurrent: true, checkedOut: true },
+    { name: 'develop', isCurrent: false, checkedOut: false },
+    { name: record.branch, isCurrent: false, checkedOut: true },
+  ];
+  let node = harness.render({
+    branches,
+    onSaveBaseline: async (baseBranch, expectedBaseBranch) => {
+      calls.push({ baseBranch, expectedBaseBranch });
+      return baseBranch;
+    },
+    record: { ...record, baseBranch: 'main' },
+  });
+  const editButton = findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0];
+  assert.equal(editButton.props.disabled, false);
+  editButton.props.onClick();
+  node = harness.render();
+  const select = findAll(node, (item) => item.props?.['data-dashboard-baseline-select'])[0];
+  assert.deepEqual(
+    select.props.children.flat(Infinity).slice(1).map((option) => option.props.value),
+    ['main', 'develop'],
+  );
+  select.props.onChange({ currentTarget: { value: 'develop' } });
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(calls, [{ baseBranch: 'develop', expectedBaseBranch: 'main' }]);
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-value'])[0]?.props.children,
+    'develop',
+  );
+
+  const gitTab = byRole(node, 'tab').find((item) => item.props.children.includes(en['dashboard.tab.git']));
+  gitTab.props.onClick();
+  node = harness.render();
+  const gitPanel = findAll(node, (item) => item.props?.defaultBaselineBranch !== undefined)[0];
+  assert.equal(gitPanel.props.defaultBaselineBranch, 'develop');
+  assert.equal(gitPanel.props.currentBranch, record.currentBranch);
+  harness.dispose();
+});
+
 test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {
   const sessions = {
     ids: ['one', 'two', 'archived', 'blank', 'current', 'other'],

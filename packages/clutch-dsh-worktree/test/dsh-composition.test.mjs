@@ -168,6 +168,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
       'worktreeManager/unarchiveWorktree',
+      'worktreeManager/updateWorktreeBaseBranch',
       'worktreeManager/updateWorktreeInstructions',
     ],
   );
@@ -366,6 +367,7 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/updateWorktreeInstructions',
+    'worktreeManager/updateWorktreeBaseBranch',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
     'worktreeManager/ensureWorktreePermission',

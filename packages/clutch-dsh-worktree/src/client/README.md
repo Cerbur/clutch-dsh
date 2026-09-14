@@ -9,7 +9,8 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
   `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
   outer/inner error normalization. The Git endpoints are `listWorktreeCommits`,
-  `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; no second transport is added.
+  `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; the Dashboard facts mutation uses
+  `updateWorktreeBaseBranch` on the same adapter, and no second transport is added.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -128,16 +129,19 @@ branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success 
 results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected, so opening the
 Dashboard or its Overview tab does not issue a Git read. Its first mount loads local branches and uses
-the recorded creation-time `baseBranch` as the initial selection when available; otherwise it prompts
-for a baseline. Selecting or changing a local branch reloads committed history and the current
-working-tree snapshot. A commit or **Uncommitted changes** selection loads changed files and a file
-selection loads one diff. The Git state machine keeps bounded baseline-scoped per-entry/per-file caches,
-retains ready content during refresh, and uses request generations to ignore late results after a newer
-selection or disposal. Working-tree paths are authorized against a fresh Host projection because the
-files can change between reads. Main remains explicitly unavailable, while an unselected or unrelated
-branch baseline prompts or renders an honest unavailable state without hiding the Dashboard’s Workspace
-information. The Git tab never reads sidecar files or `.git`, and it exposes no working-tree mutation
-controls.
+the persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and
+different from the current Worktree branch; otherwise it prompts for a baseline. The Overview facts editor saves
+a replacement through the existing Worktree
+Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
+value back as the next Git selector default. Selecting or changing a local branch inside the Git tab
+reloads committed history and the current working-tree snapshot but remains transient. A commit or
+**Uncommitted changes** selection loads changed files and a file selection loads one diff. The Git state
+machine keeps bounded baseline-scoped per-entry/per-file caches, retains ready content during refresh,
+and uses request generations to ignore late results after a newer selection or disposal. Working-tree
+paths are authorized against a fresh Host projection because the files can change between reads. Main
+remains explicitly unavailable, while an unselected or unrelated branch baseline prompts or renders an
+honest unavailable state without hiding the Dashboard’s Workspace information. The Git tab never reads
+sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
 Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The connected Worktree
@@ -240,8 +244,11 @@ The Dashboard instructions card edits plugin-owned text through
 `updateWorktreeInstructions` on the existing Connection. Save carries the editor's
 `expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
-preserved. Main does not expose instruction editing. Creation/import time and base branch are
-optional recorded facts; missing values remain unknown. The open-editor control uses the
+preserved. Main does not expose instruction editing. The Dashboard Base fact for a managed Worktree
+can be replaced with a saved local branch other than the current Worktree branch through
+`updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
+owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
+remains untouched. Missing creation/import facts remain unknown. The open-editor control uses the
 native split-button typography, padding, border, and hover colors, launching detected host
 applications or falling back to the encoded VS Code protocol link.
 

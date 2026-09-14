@@ -9,6 +9,7 @@ import {
 
 const METHODS = [
   ['updateWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1', instructions: 'Use tests', expectedInstructions: '' }, 'Use tests'],
+  ['updateWorktreeBaseBranch', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main', expectedBaseBranch: 'old' }, 'main'],
   ['adoptWorktreeBranch', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token', expectedBranch: 'merge/foo' }, null],
   ['recoverWorktrees', { workspaceId: 'ws1' }, null],
   ['listWorktrees', { workspaceId: 'ws1' }, []],
@@ -89,6 +90,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/updateWorktreeInstructions',
+    'worktreeManager/updateWorktreeBaseBranch',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
     'worktreeManager/ensureWorktreePermission',

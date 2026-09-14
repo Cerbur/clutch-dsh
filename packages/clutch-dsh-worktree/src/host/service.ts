@@ -143,6 +143,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  updateWorktreeBaseBranch(input: {
+    workspaceId: string;
+    worktreeId: string;
+    baseBranch: string;
+    expectedBaseBranch?: string;
+  }): Promise<WorktreeRemoteResult<string>> {
+    return this.remote.updateWorktreeBaseBranch(input);
+  }
+
+  @Remote
   listWorktrees(input: {
     readonly workspaceId: string;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>> {

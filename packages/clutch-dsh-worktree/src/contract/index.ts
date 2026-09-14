@@ -239,6 +239,17 @@ export interface WorktreeManager {
     expectedInstructions: string;
   }): Promise<string>;
   /**
+   * Replace the persisted branch used as the Dashboard baseline. The expected
+   * value is an optimistic-concurrency witness; an absent value represents no
+   * previously selected baseline.
+   */
+  updateWorktreeBaseBranch(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    baseBranch: string;
+    expectedBaseBranch?: string;
+  }): Promise<string>;
+  /**
    * 返回 Workspace 的全部已记录 Worktree，包括为 detached 关系保留的 removed 记录。
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
@@ -355,6 +366,7 @@ export interface WorktreeManager {
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'updateWorktreeInstructions',
+  'updateWorktreeBaseBranch',
   'listWorktrees',
   'listWorktreeCommits',
   'listWorktreeCommitFiles',
@@ -396,6 +408,12 @@ export interface WorktreeRemoteManager {
     worktreeId: WorktreeId;
     instructions: string;
     expectedInstructions: string;
+  }): Promise<WorktreeRemoteResult<string>>;
+  updateWorktreeBaseBranch(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    baseBranch: string;
+    expectedBaseBranch?: string;
   }): Promise<WorktreeRemoteResult<string>>;
   listWorktrees(input: {
     workspaceId: WorkspaceId;

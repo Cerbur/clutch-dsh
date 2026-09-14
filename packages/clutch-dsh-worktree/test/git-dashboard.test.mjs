@@ -52,6 +52,52 @@ async function createFixture() {
   return { tempRoot, dshHome, workspaceRoot, sidecar, manager };
 }
 
+test('persists a manually selected baseline branch and rejects the current branch', async () => {
+  const fixture = await createFixture();
+  try {
+    await runGit(fixture.workspaceRoot, ['branch', 'develop']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/baseline-editor',
+    });
+
+    const saved = await fixture.manager.updateWorktreeBaseBranch({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'develop',
+      expectedBaseBranch: record.baseBranch,
+    });
+    assert.equal(saved, 'develop');
+    const snapshot = await fixture.sidecar.read('ws_dashboard');
+    const savedRecord = snapshot.worktrees.find((item) => item.worktreeId === record.worktreeId);
+    assert.equal(savedRecord.baseBranch, 'develop');
+    assert.equal(savedRecord.baseCommit, record.baseCommit);
+
+    await assert.rejects(
+      fixture.manager.updateWorktreeBaseBranch({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        baseBranch: record.branch,
+        expectedBaseBranch: 'develop',
+      }),
+      (error) => error.code === 'WORKTREE_STATE_CONFLICT',
+    );
+    await assert.rejects(
+      fixture.manager.updateWorktreeBaseBranch({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        baseBranch: 'main',
+        expectedBaseBranch: record.baseBranch,
+      }),
+      (error) => error.code === 'WORKTREE_STATE_CONFLICT',
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('captures an immutable baseline and serves commit history, files, and a file diff', async () => {
   const fixture = await createFixture();
   try {

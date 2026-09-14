@@ -128,11 +128,16 @@ launch success.
 
 Open the **Git & Changes** tab from a managed Worktree Dashboard. Opening the Dashboard or its
 Overview tab does not query Git; the first Git tab activation loads the local branch list and, when a
-baseline is selected, commit history through the existing `/api` Connection. The selector defaults to
-the Worktree's creation-time `baseBranch` when that fact exists. If it does not, the Git tab leaves the
-baseline unselected and prompts you to choose one. Only local branches are offered, and changing the
-branch reloads history, changed files, and diffs without changing the Worktree record. The Overview
-identity, path, and Session information remain available even when the Git baseline is not selected.
+baseline is selected, commit history through the existing `/api` Connection. The Git selector defaults to the Worktree's
+persisted `baseBranch`, which is also shown in the Overview Dashboard facts, only when that value is
+present and different from the current Worktree branch. To replace that baseline, edit the Base fact,
+choose any local branch except the current Worktree branch, and save.
+The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default
+for the Git selector. Once the Git tab is open, changing its selector remains a transient view choice
+and reloads history, changed files, and diffs without another Worktree-record write. If no valid baseline
+is saved (including a value equal to the current Worktree branch), the Git tab leaves it unselected and
+prompts you to choose one. The Overview identity, path, and
+Session information remain available even when the Git baseline is not selected.
 
 The comparison range is the selected branch's current tip to `HEAD`; the branch is resolved again for
 each read. The browser can choose only a local branch, not a raw commit SHA or arbitrary Git ref. The
@@ -179,9 +184,12 @@ injection; unchanged instruction text is not repeatedly added while its message 
 - DSH owns Workspace identity and root paths, Session identity and metadata, native lists,
   messages, prompts, transcripts, and history. The plugin never copies or rewrites those values.
 - The plugin's external index stores Worktree paths, branches, sources, lifecycle state, bindings,
-  ordering, instructions, acquisition facts, and related metadata. It is kept in the DSH host
-  plugin data directory, not in a project directory or DSH's raw data store. It does not store
-  Session content or a copy of the Workspace root.
+  ordering, instructions, acquisition facts, and related metadata. For managed Worktrees, the
+  Dashboard Base fact is the persisted `baseBranch`; users can replace it with a local branch other
+  than the current Worktree branch, and the saved value becomes the Git-tab selector default. The
+  immutable acquisition `baseCommit` remains separate and is not rewritten by that edit. The index is
+  kept in the DSH host plugin data directory, not in a project directory or DSH's raw data store. It
+  does not store Session content or a copy of the Workspace root.
 - Runtime `cwd` is derived for each execution. No binding, Main, or detached binding uses the
   Workspace root; an active Worktree binding uses that Worktree path. The cwd is never persisted
   into DSH Session metadata.

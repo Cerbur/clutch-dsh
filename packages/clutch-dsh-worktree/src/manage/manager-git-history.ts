@@ -153,6 +153,100 @@ async function resolveSelectedBaseline(
   return { commit, ref: baseBranch, source: 'branch' };
 }
 
+/** Persist a user-selected local branch as the Worktree's Dashboard baseline. */
+export async function updateWorktreeBaseBranch(
+  context: WorktreeManagerContext,
+  input: {
+    readonly workspaceId: string;
+    readonly worktreeId: string;
+    readonly baseBranch: string;
+    readonly expectedBaseBranch?: string;
+  },
+): Promise<string> {
+  if (typeof input.baseBranch !== 'string') {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The baseline branch must be a string', {
+      worktreeId: input.worktreeId,
+    });
+  }
+  const baseBranch = input.baseBranch.trim();
+  if (baseBranch.length === 0) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The baseline branch cannot be empty', {
+      worktreeId: input.worktreeId,
+    });
+  }
+  if (input.expectedBaseBranch !== undefined && typeof input.expectedBaseBranch !== 'string') {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The expected baseline branch must be a string', {
+      worktreeId: input.worktreeId,
+    });
+  }
+  const expectedBaseBranch = input.expectedBaseBranch?.trim() || undefined;
+  const resolved = await resolveWorktree(context, input);
+  if (resolved.main) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The local Workspace has no editable baseline', {
+      workspaceId: input.workspaceId,
+    });
+  }
+  const currentBranch = resolved.value.live.detached === true ? undefined : resolved.value.live.branch;
+  if (currentBranch === baseBranch) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The baseline branch cannot be the current Worktree branch', {
+      worktreeId: input.worktreeId,
+      baseBranch,
+    });
+  }
+  const repositoryRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(resolved.value.workspaceRoot, { signal: context.signal })
+    : resolved.value.workspaceRoot;
+  const branches = await context.git.listBranches(repositoryRoot, { signal: context.signal });
+  if (!branches.includes(baseBranch)) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
+      worktreeId: input.worktreeId,
+      baseBranch,
+    });
+  }
+
+  return context.sidecar.mutate(input.workspaceId, (snapshot) => {
+    if (snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0) {
+      throw providerError(
+        'WORKTREE_RECOVERY_REQUIRED',
+        'Workspace Worktree state needs recovery: ' + input.workspaceId,
+        { workspaceId: input.workspaceId },
+      );
+    }
+    const record = snapshot.worktrees.find((candidate) => candidate.worktreeId === input.worktreeId);
+    if (!record) {
+      throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found: ' + input.worktreeId, {
+        workspaceId: input.workspaceId,
+        worktreeId: input.worktreeId,
+      });
+    }
+    if (record.status === 'removed' || record.diskCleanup === 'completed') {
+      throw providerError('WORKTREE_REMOVED', 'Worktree is no longer active: ' + input.worktreeId, {
+        workspaceId: input.workspaceId,
+        worktreeId: input.worktreeId,
+      });
+    }
+    if (input.expectedBaseBranch !== undefined && (record.baseBranch ?? undefined) !== expectedBaseBranch) {
+      throw providerError(
+        'WORKTREE_STATE_CONFLICT',
+        'Baseline branch changed; reopen the editor before saving',
+        { workspaceId: input.workspaceId, worktreeId: input.worktreeId },
+      );
+    }
+    if (record.baseBranch === baseBranch) {
+      return { result: baseBranch, snapshot, changed: false };
+    }
+    return {
+      result: baseBranch,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((item) =>
+          item === record ? { ...item, baseBranch } : item,
+        ),
+      },
+    };
+  });
+}
+
 async function resolveBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,

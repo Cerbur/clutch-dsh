@@ -108,7 +108,7 @@ All Git operations MUST reuse the existing Git subprocess implementation and obe
 * cleanup deadline;
 * abort support;
 * no remote access;
-* no mutation for this feature.
+* no Git worktree/content mutation; the only feature write is the explicit Sidecar `baseBranch` update.
 
 Never add:
 
@@ -127,6 +127,8 @@ Use `LocalGitAdapter` / `runGit`.
 ## V1 MUST implement
 
 1. Persist a stable Worktree baseline commit for newly created plugin Worktrees.
+   For managed Worktrees, expose an Overview Dashboard Base fact that can replace the persisted
+   `baseBranch` with a saved local branch other than the current Worktree branch.
 2. Display commits introduced after that baseline.
 3. Select a commit.
 4. Display files changed by that commit.
@@ -145,6 +147,8 @@ Use `LocalGitAdapter` / `runGit`.
 * oversized diff;
 * Git failure;
 * unknown legacy baseline.
+
+The original V1 exclusions below are superseded by the working-tree projection amendment in §37.
 
 ## V1 MUST NOT implement
 
@@ -169,15 +173,14 @@ Do not expand scope into:
 
 # 4. Critical Domain Decision: Stable Baseline
 
-Do NOT implement commit history simply as:
+Do NOT implicitly use a moving `baseBranch` as the immutable acquisition boundary:
 
 ```bash
 git log <baseBranch>..HEAD
 ```
 
-That is semantically incorrect for the current Worktree model.
-
-Current creation semantics allow:
+That is semantically incorrect when `baseBranch` is only the acquisition ref and that ref advances
+with the Worktree. Current creation semantics allow:
 
 ```ts
 targetBranch = newBranch ?? baseBranch
@@ -189,17 +192,11 @@ If a Worktree directly checks out the selected branch, then:
 record.branch === record.baseBranch
 ```
 
-As the Worktree commits advance, that branch ref advances too.
-
-Therefore:
-
-```text
-baseBranch..HEAD
-```
-
-can incorrectly become empty.
-
-The comparison boundary must be an immutable commit captured at acquisition time.
+As the Worktree commits advance, that branch ref advances too, so an implicit `baseBranch..HEAD`
+range can incorrectly become empty. The immutable acquisition `baseCommit` remains the fallback
+boundary for reads without an explicit branch. An explicit Dashboard-selected local branch is instead
+resolved at its current tip for that read (`source = branch`); saving it as the Dashboard Base fact
+only changes the persisted default branch and never rewrites `baseCommit`.
 
 ---
 
@@ -214,20 +211,20 @@ readonly baseCommit?: string;
 Semantics:
 
 ```text
-baseBranch = human-readable acquisition branch/ref
-baseCommit = immutable acquisition commit used for Git comparison
+baseBranch = persisted human-readable baseline branch/ref (initially the acquisition branch/ref; replaceable by an explicit Dashboard save)
+baseCommit = immutable acquisition commit used for compatibility and acquisition recovery
 ```
 
-The Dashboard comparison should fundamentally operate on:
+Reads without an explicit branch use the immutable acquisition `baseCommit..HEAD` boundary (or the
+documented legacy derived fallback). When a user explicitly saves a Dashboard baseline or changes the
+Git-tab selector, Manage resolves that local branch's current tip for the requested read and returns
+`source: branch`; the immutable `baseCommit` remains acquisition metadata and is not rewritten.
+
+The Dashboard therefore has two deliberate modes:
 
 ```text
-baseCommit..HEAD
-```
-
-not:
-
-```text
-baseBranch..HEAD
+implicit/default read       -> baseCommit..HEAD (or legacy derived baseline)
+explicit local branch read  -> current baseBranch tip..HEAD
 ```
 
 ---
@@ -331,8 +328,17 @@ type WorktreeGitBaseline =
       commit: string;
       ref?: string;
       source: 'derived';
+    }
+  | {
+      commit: string;
+      ref: string;
+      source: 'branch';
     };
 ```
+
+Resolution precedence is explicit branch request first, then captured acquisition data, then the
+legacy derived fallback. A saved Dashboard `baseBranch` is passed as the explicit branch request when
+the Git tab opens; a direct Git-tab change overrides it only for that tab session.
 
 Rules:
 
@@ -344,6 +350,19 @@ If `baseCommit` exists:
 baseline = baseCommit
 source = captured
 ```
+
+## Explicitly selected branch
+
+When the request includes a local `baseBranch` (as the Git-tab selector does):
+
+```text
+baseline = current tip of baseBranch
+source = branch
+```
+
+The persisted Dashboard `baseBranch` supplies this request by default. It is validated against the
+current Worktree branch and local branch list before the Sidecar mutation is accepted; the Git-tab
+selector may still override it for a transient read without changing the record.
 
 ## Legacy managed Worktree
 
@@ -422,7 +441,7 @@ Suggested shapes:
 export interface WorktreeGitBaseline {
   readonly commit: string;
   readonly ref?: string;
-  readonly source: 'captured' | 'derived';
+  readonly source: 'captured' | 'derived' | 'branch';
 }
 
 export interface WorktreeGitCommit {
@@ -439,7 +458,7 @@ export interface WorktreeGitHistory {
   readonly baseline?: WorktreeGitBaseline;
   readonly commits: readonly WorktreeGitCommit[];
   readonly truncated: boolean;
-  readonly unavailableReason?: 'baseline-unknown' | 'main';
+  readonly unavailableReason?: 'baseline-unselected' | 'baseline-unknown' | 'main';
 }
 
 export type WorktreeGitFileStatus =
@@ -476,7 +495,7 @@ Names may be adjusted to match repository conventions, but preserve these semant
 
 # 10. Manager API
 
-Add three narrow read-only APIs:
+Add three narrow read-only APIs plus one explicit Dashboard baseline mutation:
 
 ```ts
 listWorktreeCommits(input: {
@@ -496,7 +515,18 @@ getWorktreeCommitFileDiff(input: {
   readonly commit: string;
   readonly path: string;
 }): Promise<WorktreeGitFileDiff>;
+
+updateWorktreeBaseBranch(input: {
+  readonly workspaceId: WorkspaceId;
+  readonly worktreeId: WorktreeId;
+  readonly baseBranch: string;
+  readonly expectedBaseBranch?: string;
+}): Promise<string>;
 ```
+
+`updateWorktreeBaseBranch` is the only mutating Git Dashboard API: it persists the selected local
+branch in the Sidecar after rejecting the current Worktree branch and stale expected values; it does
+not alter `baseCommit` or any business files.
 
 Update all contract completeness checks:
 
@@ -851,6 +881,7 @@ with:
 worktreeManager/listWorktreeCommits
 worktreeManager/listWorktreeCommitFiles
 worktreeManager/getWorktreeCommitFileDiff
+worktreeManager/updateWorktreeBaseBranch
 ```
 
 All endpoint strings must remain centralized in:
@@ -872,6 +903,10 @@ The existing Dashboard Git tab is currently a placeholder.
 Replace only that tab.
 
 Do not change the Dashboard's overall navigation semantics.
+
+The Overview Dashboard facts also include a separate baseline editor. It offers only local branches
+other than the current Worktree branch, saves through the existing Manager/Connection path, and
+passes the saved value to the Git tab as its default; direct Git-tab selection remains transient.
 
 Suggested structure:
 
@@ -903,13 +938,25 @@ Preserve that behavior.
 Expected sequence:
 
 ```text
-open Dashboard
+open Dashboard / Overview
     ↓
 no Git request
 
 select Git tab
     ↓
-listWorktreeCommits
+listBranches
+    ↓
+if saved baseBranch exists and differs from current Worktree branch
+    ↓
+listWorktreeCommits(baseBranch)
+
+if no valid default branch is selected
+    ↓
+show baseline-unselected; do not request history
+
+select or change a local branch in the Git selector
+    ↓
+listWorktreeCommits(selected branch)  [transient override]
 
 select commit
     ↓
@@ -1020,11 +1067,21 @@ Disposal must make late completions harmless.
 
 # 26. Suggested UX
 
+Overview Dashboard facts:
+
+```text
+Base  [Edit baseline]
+main
+```
+
+Only local branches other than the current Worktree branch appear in the editor. Saving replaces
+the persisted `baseBranch`; the immutable `baseCommit` is separate acquisition metadata.
+
 Git tab header:
 
 ```text
-Base
-main @ a817c12
+Baseline  [main ▼]
+main @ current branch tip
 
 HEAD
 feature/foo @ f397cab
@@ -1034,7 +1091,9 @@ feature/foo @ f397cab
 [Refresh]
 ```
 
-For derived baseline:
+The selected branch label is a current ref resolved for this read, not a claim that the acquisition
+commit moved. If no valid default is selected, show the branch selector without history and prompt
+for a baseline. For a runtime-derived compatibility baseline:
 
 ```text
 main @ a817c12
@@ -1197,7 +1256,7 @@ Worktree commit comparison is available for managed Worktrees.
 Main represents the repository root and has no Worktree acquisition baseline.
 ```
 
-Keep the implementation read-only.
+Keep Git history, changed files, and diffs read-only; allow only the explicit Dashboard Sidecar `baseBranch` update.
 
 ---
 
@@ -1213,11 +1272,16 @@ Prefer successful projections like:
 
 ```ts
 {
-  unavailableReason: 'baseline-unknown',
+  unavailableReason: 'baseline-unselected' | 'baseline-unknown',
   commits: [],
   truncated: false,
 }
 ```
+
+`baseline-unselected` means no valid explicit/default branch was chosen and must not trigger a
+history request; `baseline-unknown` means a selected/captured/derived boundary cannot be resolved or
+is no longer an ancestor. A persisted `baseBranch` equal to the current Worktree branch is excluded
+from selector defaults and therefore follows the unselected path until the user chooses another branch.
 
 for normal unsupported historical states.
 
@@ -1292,6 +1356,10 @@ derived legacy baseline
 ambiguous legacy baseline
 external baseline unavailable
 Main unavailable
+explicit branch baseline resolves current local tip
+updateWorktreeBaseBranch persists a replacement without changing baseCommit
+stale expectedBaseBranch save rejected
+current Worktree branch rejected as a baseline
 commit outside baseline..HEAD rejected
 file not in commit rejected
 removed/cleaned/missing Worktree behavior
@@ -1305,7 +1373,7 @@ Test new DTO projection and error projection.
 
 ## Client connection
 
-Test all three endpoint strings and request shapes.
+Test all three read endpoint strings plus the baseline-mutation endpoint and their request shapes.
 
 Test cancellation/disposal.
 
@@ -1322,6 +1390,11 @@ commit A/B race
 file A/B race
 late completion after unmount ignored
 baseline unavailable state
+Dashboard facts save a replacement branch
+current branch is excluded from baseline options
+stale expected baseline keeps the draft
+persisted baseline becomes Git selector default
+direct Git-tab baseline override remains transient
 truncated diff state
 binary state
 ```
@@ -1354,6 +1427,8 @@ Document:
 
 ```text
 baseBranch vs baseCommit
+persisted Dashboard Base-fact editing and current-branch exclusion
+saved-baseline default versus transient Git-tab selection
 Git Dashboard read-only projection
 commit/path authorization boundary
 no arbitrary Git RPC
@@ -1420,6 +1495,7 @@ Implement in this order:
 * sidecar schema v5;
 * migrations;
 * capture baseline on create;
+* add persisted `baseBranch` replacement with optimistic expected-value validation;
 * tests.
 
 Do not start the UI before baseline semantics are correct.
@@ -1451,10 +1527,11 @@ manager-git-history.ts
 Implement:
 
 ```text
-baseline resolution
+baseline resolution (captured, derived, and explicit branch)
 commit membership validation
 file membership validation
 DTO projection
+persisted Dashboard baseline mutation
 ```
 
 Add tests.
@@ -1482,6 +1559,7 @@ changed files
 diff
 refresh
 async guards
+Overview baseline editor and saved-default wiring
 ```
 
 ## Phase 6 — Documentation and gates
@@ -1516,6 +1594,24 @@ Do not cache Git state globally in a way that becomes another source of truth.
 
 Keep Git data ephemeral and on-demand.
 
+## Persisted Dashboard baseline amendment
+
+The implemented Worktree Dashboard extends the original transient branch-selector design:
+
+- A managed Worktree's Overview Dashboard facts expose an editable `baseBranch`.
+- The editor offers local branches except the current Worktree branch and saves through
+  `updateWorktreeBaseBranch` on the existing Contract → Remote → Host → Manage path.
+- Saves use the previous `baseBranch` as an optimistic expected value, update only the Sidecar's
+  `baseBranch`, and retain the immutable acquisition `baseCommit`; stale or invalid saves fail closed.
+- The saved `baseBranch` is passed as the Git tab's initial selector value. Changes made directly in
+  the Git-tab selector remain transient and do not write the Worktree record.
+- The mutation refreshes only the owning Workspace while preserving ready content, and the browser
+  keeps the editor draft on failure for retry or cancellation.
+
+This amendment supersedes any wording above that treats `baseBranch` as immutable acquisition-only
+metadata or says that an explicit baseline choice cannot be persisted. Runtime-derived/captured
+compatibility baselines still are not written automatically.
+
 Prefer tests around observable behavior instead of private implementation details.
 
 ---
@@ -1525,6 +1621,9 @@ Prefer tests around observable behavior instead of private implementation detail
 The task is complete when all of the following are true:
 
 * Worktree created at commit A stores A as `baseCommit`;
+* Dashboard facts can save a local baseline other than the current Worktree branch;
+* a stale expected `baseBranch` save is rejected without losing the draft;
+* the saved `baseBranch` becomes the Git-tab default while direct selector changes stay transient;
 * Worktree commits B and C appear as two Dashboard commits;
 * selecting B/C shows its changed files;
 * selecting a changed file shows its unified diff;

@@ -11,6 +11,7 @@ import type {
 // These lists are deliberately independent of the interfaces so omissions or accidental expansion fail at type-check time.
 const expectedManagerKeys = [
   'updateWorktreeInstructions',
+  'updateWorktreeBaseBranch',
   'listWorktrees',
   'listWorktreeCommits',
   'listWorktreeCommitFiles',
@@ -50,6 +51,7 @@ const expectedRemoteKeys = [
   'ensureWorktreePermission',
   'normalizeDetachedWorktreePermissions',
   'updateWorktreeInstructions',
+  'updateWorktreeBaseBranch',
 ] as const;
 
 type Equal<Left, Right> =

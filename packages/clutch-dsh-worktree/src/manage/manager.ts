@@ -40,6 +40,7 @@ import {
   getWorktreeCommitFileDiff,
   listWorktreeCommitFiles,
   listWorktreeCommits,
+  updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
 import { requireWorkspace } from './manager-support.js';
@@ -140,6 +141,15 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
         };
       });
     });
+  }
+
+  updateWorktreeBaseBranch(input: {
+    workspaceId: string;
+    worktreeId: string;
+    baseBranch: string;
+    expectedBaseBranch?: string;
+  }): Promise<string> {
+    return this.afterRecovery(() => updateWorktreeBaseBranch(this.context, input));
   }
 
   resolveSessionInstructions(sessionId: string): Promise<string> {

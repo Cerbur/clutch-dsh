@@ -19,7 +19,7 @@ import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
-import type { WorktreeManager } from '../../contract/index.js';
+import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
@@ -27,6 +27,8 @@ type DashboardTab = (typeof TABS)[number];
 export interface WorktreeDashboardProps {
   readonly manager?: WorktreeManager;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
+  readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly branches?: readonly BranchRecord[];
   readonly record: DashboardRecord;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
@@ -99,6 +101,139 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
   );
 }
 
+function WorktreeBaselineEditor({
+  value,
+  branches,
+  currentBranch,
+  onSave,
+  t,
+  disabled,
+}: {
+  readonly value?: string;
+  readonly branches: readonly BranchRecord[];
+  readonly currentBranch?: string;
+  readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly t: WorktreeTranslate;
+  readonly disabled: boolean;
+}) {
+  const [saved, setSaved] = useState(value);
+  const [draft, setDraft] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
+  const busy = useRef(false);
+  const alive = useRef(true);
+  const expected = useRef(value);
+  const options = branches.filter((branch) => branch.name !== currentBranch);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    setSaved(value);
+  }, [value]);
+
+  const save = async () => {
+    if (
+      busy.current ||
+      draft === undefined ||
+      onSave === undefined ||
+      !options.some((branch) => branch.name === draft)
+    )
+      return;
+    busy.current = true;
+    setPending(true);
+    setError(false);
+    try {
+      const result = await onSave(draft, expected.current);
+      if (alive.current) {
+        setSaved(result);
+        expected.current = result;
+        setDraft(undefined);
+      }
+    } catch {
+      if (alive.current) setError(true);
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(false);
+    }
+  };
+
+  if (draft === undefined) {
+    return (
+      <dd data-dashboard-baseline>
+        {saved === undefined ? (
+          <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+        ) : (
+          <span data-dashboard-baseline-value>{saved}</span>
+        )}
+        {onSave !== undefined && (
+          <button
+            type="button"
+            className={styles.dashboardButton}
+            data-dashboard-baseline-edit
+            disabled={disabled || options.length === 0}
+            onClick={() => {
+              expected.current = saved;
+              setDraft(saved ?? '');
+              setError(false);
+            }}
+          >
+            {t('dashboard.editBase')}
+          </button>
+        )}
+      </dd>
+    );
+  }
+
+  return (
+    <dd data-dashboard-baseline>
+      <label className={styles.dashboardBaselineEditor}>
+        <span className={styles.dashboardVisuallyHidden}>{t('dashboard.base')}</span>
+        <select
+          aria-label={t('dashboard.base')}
+          data-dashboard-baseline-select
+          value={draft}
+          disabled={pending || disabled}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+        >
+          <option value="">{t('dashboard.selectBaseBranch')}</option>
+          {options.map((branch) => (
+            <option key={branch.name} value={branch.name}>
+              {branch.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className={styles.dashboardBaselineActions}>
+        <button
+          type="button"
+          className={styles.dashboardButton}
+          data-dashboard-baseline-save
+          disabled={pending || disabled || !options.some((branch) => branch.name === draft)}
+          onClick={() => void save()}
+        >
+          {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
+        </button>
+        <button
+          type="button"
+          className={styles.dashboardButton}
+          data-dashboard-baseline-cancel
+          disabled={pending}
+          onClick={() => {
+            setDraft(undefined);
+            setError(false);
+          }}
+        >
+          {t('dashboard.cancelBase')}
+        </button>
+      </span>
+      {error && <span role="alert">{t('dashboard.baseSaveFailed')}</span>}
+    </dd>
+  );
+}
+
 /** A Worktree or browser Main projection with explicitly unconnected MVP cards. */
 export function WorktreeDashboard({
   manager,
@@ -115,11 +250,14 @@ export function WorktreeDashboard({
   onCreateWorktree,
   onArchiveWorktree,
   onSaveInstructions,
+  onSaveBaseline,
+  branches = [],
 }: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
   const [tab, setTab] = useState<DashboardTab>('overview');
+  const [baselineBranch, setBaselineBranch] = useState(record.baseBranch);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const copyGeneration = useRef(0);
@@ -127,6 +265,9 @@ export function WorktreeDashboard({
   const copyPending = useRef(false);
   const branchCopyPending = useRef(false);
   const id = useId();
+  useEffect(() => {
+    setBaselineBranch(record.baseBranch);
+  }, [record.baseBranch]);
   useLayoutEffect(() => {
     const element = surface.current;
     if (!element) return;
@@ -215,6 +356,17 @@ export function WorktreeDashboard({
       ? t('dashboard.detached')
       : (record.currentBranch ??
         (branchAvailable ? record.branch : t('dashboard.branchUnavailable')));
+  const baselineCurrentBranch =
+    record.currentBranch === undefined ? record.branch : record.currentBranch ?? undefined;
+  const persistBaseline =
+    onSaveBaseline === undefined
+      ? undefined
+      : async (baseBranch: string, expectedBaseBranch?: string) => {
+          const result = await onSaveBaseline(baseBranch, expectedBaseBranch);
+          setBaselineBranch(result);
+          return result;
+        };
+  const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
@@ -403,11 +555,22 @@ export function WorktreeDashboard({
               </div>
               <div>
                 <dt>{t('dashboard.base')}</dt>
-                <dd>{acquisitionFacts.baseBranch ?? (
-                  <span className={styles.dashboardHistorical}>
-                    {t('dashboard.historicalUnavailable')}
-                  </span>
-                )}</dd>
+                {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
+                  <WorktreeBaselineEditor
+                    value={baselineBranch}
+                    branches={branches}
+                    currentBranch={baselineCurrentBranch}
+                    onSave={persistBaseline}
+                    t={t}
+                    disabled={record.status !== 'active' || record.health === 'recovery-needed'}
+                  />
+                ) : (
+                  <dd>{displayedBaseline ?? (
+                    <span className={styles.dashboardHistorical}>
+                      {t('dashboard.historicalUnavailable')}
+                    </span>
+                  )}</dd>
+                )}
               </div>
               <div>
                 <dt>{t('dashboard.source')}</dt>
@@ -528,7 +691,7 @@ export function WorktreeDashboard({
                     </div>
                     <div>
                       <dt>{t('dashboard.base')}</dt>
-                      <dd>{record.baseBranch ?? (
+                      <dd>{displayedBaseline ?? (
                         <span className={styles.dashboardHistorical}>
                           {t('dashboard.historicalUnavailable')}
                         </span>
@@ -582,7 +745,8 @@ export function WorktreeDashboard({
               manager={manager}
               workspaceId={record.workspaceId}
               worktreeId={record.worktreeId}
-              defaultBaselineBranch={record.baseBranch}
+              defaultBaselineBranch={displayedBaseline}
+              currentBranch={baselineCurrentBranch}
               t={t}
             />
           ) : tab === 'sessions' ? (

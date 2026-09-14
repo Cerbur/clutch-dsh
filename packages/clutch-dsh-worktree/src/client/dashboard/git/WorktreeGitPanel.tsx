@@ -19,6 +19,7 @@ export interface WorktreeGitPanelProps {
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
+  readonly currentBranch?: string;
   readonly t: WorktreeTranslate;
 }
 
@@ -60,14 +61,17 @@ export function WorktreeGitPanel({
   workspaceId,
   worktreeId,
   defaultBaselineBranch,
+  currentBranch,
   t,
 }: WorktreeGitPanelProps) {
   const isMain = worktreeId === 'main' || worktreeId.startsWith('main:');
+  const selectedDefaultBaseline =
+    defaultBaselineBranch !== currentBranch ? defaultBaselineBranch : undefined;
   const state = useWorktreeGitState({
     manager,
     workspaceId,
     worktreeId,
-    defaultBaselineBranch: isMain ? undefined : defaultBaselineBranch,
+    defaultBaselineBranch: isMain ? undefined : selectedDefaultBaseline,
   });
   const historyValue = state.history.status === 'ready' ? state.history.value : undefined;
   const commit = selectedCommit(historyValue, state.selectedCommit);
@@ -75,7 +79,8 @@ export function WorktreeGitPanel({
   const diff = state.diff.status === 'ready' ? state.diff.value : undefined;
   const refreshing = state.history.status === 'ready' && state.history.refreshing === true;
   const unavailable = historyValue?.unavailableReason;
-  const branchOptions = state.branches.status === 'ready' ? state.branches.value : [];
+  const branchOptions = (state.branches.status === 'ready' ? state.branches.value : [])
+    .filter((branch) => branch.name !== currentBranch);
   const branchError = state.branches.status === 'error'
     ? state.branches.error
     : state.branches.status === 'ready'

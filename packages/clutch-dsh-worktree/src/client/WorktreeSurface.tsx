@@ -242,6 +242,29 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 }
               : undefined
           }
+          onSaveBaseline={
+            props.manager &&
+            typeof props.manager.updateWorktreeBaseBranch === 'function' &&
+            dashboardManagedRecord !== undefined &&
+            dashboardCanCreate
+              ? async (baseBranch, expectedBaseBranch) => {
+                  try {
+                    return await props.manager!.updateWorktreeBaseBranch({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      baseBranch,
+                      expectedBaseBranch,
+                    });
+                  } finally {
+                    void read.refresh({
+                      preserveCurrent: true,
+                      scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId },
+                    });
+                  }
+                }
+              : undefined
+          }
+          branches={dashboardView?.branches ?? []}
           workspaceTitle={dashboardWorkspace?.title ?? ''}
           sessions={source.sessions}
           sessionPresentations={source.sessionPresentations}

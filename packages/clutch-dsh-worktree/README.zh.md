@@ -125,10 +125,13 @@ Session。
 
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
 Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载本地 branch 列表，并在选择基线后加载
-commit history。选择器默认使用 Worktree 创建时记录的 `baseBranch`；如果没有该事实，Git Tab 会保持
-未选择状态并提示用户选择。用户只能选择本地 branch，修改选择后会重新加载 history、changed files
-和 Diff，但不会修改 Worktree 记录。即使没有选择 Git 基线，Overview 中的身份、路径和 Session 信息
-仍然正常展示。
+commit history。Git 选择器仅在 Worktree 持久化的 `baseBranch` 存在且不同于当前 Worktree branch 时
+将其作为默认值；这个值也显示在 Overview 的 Dashboard facts 中。要替换基线，可以编辑 Base fact，
+选择除当前 Worktree branch 之外的任一本地 branch，然后保存。保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器
+会以保存后的值作为默认值。Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载
+history、changed files 和 Diff，不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前
+Worktree branch），Git Tab 会保持未选择状态并提示用户选择。即使没有选择 Git 基线，Overview 中的
+身份、路径和 Session 信息仍然正常展示。
 
 比较范围是所选 branch 当前指向的 commit 到 `HEAD`，每次读取都会重新解析 branch。浏览器不能直接
 选择 commit SHA 或任意 Git ref；所选 branch 必须是 Worktree `HEAD` 的 ancestor，互不相关或已 rewrite
@@ -166,9 +169,11 @@ commit，并依据最新状态重新读取和授权工作区 path，因此这些
 
 - DSH 拥有 Workspace 身份与根目录、Session 身份与元数据、原生列表、消息、prompt、transcript
   和历史。插件不会复制或改写这些数据。
-- 插件外部索引只保存 Worktree 路径、branch、来源、生命周期状态、binding、排序、指令及相关
-  元数据。它位于 DSH host 的 plugin data directory，不写入项目目录或 DSH raw data，也不保存
-  Session 内容或 Workspace 根目录副本。
+- 插件外部索引保存 Worktree 路径、branch、来源、生命周期状态、binding、排序、指令、获取事实
+  及相关元数据。对于受管理 Worktree，Dashboard Base fact 是持久化的 `baseBranch`；用户可以将其
+  替换为除当前 Worktree branch 之外的本地 branch，保存后的值会成为 Git Tab 选择器的默认值。
+  不可变的获取 `baseCommit` 与它分开保存，不会因该编辑被重写。索引位于 DSH host 的 plugin data
+  directory，不写入项目目录或 DSH raw data，也不保存 Session 内容或 Workspace 根目录副本。
 - runtime `cwd` 在每次执行时派生。无 binding、Main 或 detached binding 使用 Workspace root；
   active Worktree binding 使用 Worktree path。cwd 不会持久化写回 DSH Session metadata。
 - 一个 Session 最多有一个 active Worktree binding，一个 Worktree 可以有多个 Session。移除或

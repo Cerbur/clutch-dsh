@@ -59,6 +59,7 @@ export function createWorktreeRemoteProjection(
 ): WorktreeRemoteManager {
   return {
     updateWorktreeInstructions: (input) => project(() => manager.updateWorktreeInstructions(input)),
+    updateWorktreeBaseBranch: (input) => project(() => manager.updateWorktreeBaseBranch(input)),
     listWorktrees: (input) => project(() => manager.listWorktrees(input)),
     listWorktreeCommits: (input) => project(() => manager.listWorktreeCommits(input)),
     listWorktreeCommitFiles: (input) => project(() => manager.listWorktreeCommitFiles(input)),

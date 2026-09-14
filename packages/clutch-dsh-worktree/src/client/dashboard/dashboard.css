@@ -446,6 +446,45 @@
 .dashboardHistorical {
   color: var(--dsw-alias-label-secondary, #788191);
 }
+.dashboardFacts dd[data-dashboard-baseline] {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  text-align: right;
+}
+.dashboardBaselineEditor {
+  display: block;
+  max-width: 100%;
+}
+.dashboardBaselineEditor select {
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #273142);
+  font: inherit;
+}
+.dashboardBaselineActions {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.dashboardFacts dd[data-dashboard-baseline] > [role='alert'] {
+  color: var(--dsw-alias-state-error-label, #bd5d43);
+}
+.dashboardVisuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .dashboardLink {
   display: flex;
   align-items: center;
