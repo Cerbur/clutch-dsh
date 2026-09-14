@@ -19,6 +19,12 @@ It provides service daemonization, argument persistence, one-step repository bui
    - Automatically restarts the Web service if it was running.
 5. **Observability (`dwm status` / `dwm logs`)**:
    - Inspect home path, process state, PID, uptime, and view/follow live logs.
+6. **Version Management & Switching (`dwm version` / `dwm versions` / `dwm switch <version>`)**:
+   - `dwm version`: Show dwm CLI version and current DSH repository checkout version (compact `dwm -v` also available).
+   - `dwm versions`: Fetch remote tags and list all available versions in DSH repository (alias: `dwm version list`).
+   - `dwm switch <version>`: Switch DSH repository to the specified version/tag, clean stale dependencies (`pnpm install`), and build packages (`pnpm run build`).
+7. **Self-Upgrade (`dwm upgrade`)**:
+   - Upgrade the current `dwm` installation by executing the latest upgrade script directly from GitHub.
 
 ---
 
@@ -90,7 +96,48 @@ Pass `--skip-install` if you only want to run `pnpm run build`:
 dwm update --skip-install
 ```
 
-### 3. Start DSH Web Service
+### 3. Check Versions & List DSH Tags
+
+View current dwm and DSH repository checkout status:
+
+```bash
+dwm version
+# Concise version only:
+dwm -v
+```
+
+Fetch remote tags and list all available versions in your configured DSH repository:
+
+```bash
+dwm versions
+# or alias:
+dwm version list
+dwm version ls
+```
+
+### 4. Switch DSH Version & Build
+
+Switch the configured DSH repository to a specific tag/version and rebuild (automatically runs `git checkout`, `pnpm install` to clean stale dependencies, and `pnpm run build`):
+
+```bash
+# By full tag name
+dwm switch dsh-v0.1.5-rc.2
+
+# By version number
+dwm switch 0.1.5-rc.2
+dwm switch v0.1.5-rc.2
+
+# Using version namespace alias
+dwm version switch dsh-v0.1.5-rc.2
+```
+
+Pass `--skip-install` or `--skip-build` if desired:
+
+```bash
+dwm switch 0.1.5-rc.2 --skip-install
+```
+
+### 5. Start DSH Web Service
 
 Start in the background with optional arguments (all arguments pass through to `pnpm dsh web`):
 
@@ -108,7 +155,7 @@ To run attached in the current terminal foreground instead:
 dwm start -f
 ```
 
-### 4. Stop DSH Web Service
+### 6. Stop DSH Web Service
 
 Gracefully shut down the background DSH Web service:
 
@@ -118,7 +165,7 @@ dwm down
 dwm stop
 ```
 
-### 5. Restart DSH Web Service
+### 7. Restart DSH Web Service
 
 Restart the service using the parameters specified when it was started:
 
@@ -132,7 +179,7 @@ You can also pass new parameters to override:
 dwm restart --port 3090
 ```
 
-### 6. Install Plugins
+### 8. Install Plugins
 
 Install an npm package or a local directory plugin into the DSH `web` profile. If DSH Web is running, it will automatically restart with your previous start arguments:
 
@@ -147,7 +194,7 @@ dwm plugin install ./packages/clutch-dsh-worktree
 dwm plugin install dshmarket
 ```
 
-### 7. Remove Plugins
+### 9. Remove Plugins
 
 Remove an installed plugin from the `web` profile. If DSH Web is running, it will automatically restart:
 
@@ -155,7 +202,7 @@ Remove an installed plugin from the `web` profile. If DSH Web is running, it wil
 dwm plugin remove @cerbur/clutch-dsh-worktree
 ```
 
-### 8. List Plugins
+### 10. List Plugins
 
 List all installed plugins in the `web` profile:
 
@@ -163,7 +210,7 @@ List all installed plugins in the `web` profile:
 dwm plugin list
 ```
 
-### 9. Check Status
+### 11. Check Status
 
 View DSH home validity, process status, PID, uptime, and last log lines:
 
@@ -171,7 +218,7 @@ View DSH home validity, process status, PID, uptime, and last log lines:
 dwm status
 ```
 
-### 10. View Logs
+### 12. View Logs
 
 ```bash
 # View last 30 lines
@@ -181,7 +228,18 @@ dwm logs
 dwm logs -n 100 -f
 ```
 
-### 11. Command Help
+### 13. Upgrade dwm
+
+Upgrade `dwm` to the latest version by fetching and executing the upgrade script from GitHub:
+
+```bash
+dwm upgrade
+
+# Upgrade to a specific branch, tag, or commit:
+dwm upgrade --ref main
+```
+
+### 14. Command Help
 
 View global usage instructions or detailed help for any specific command:
 
@@ -197,7 +255,7 @@ dwm home --help
 dwm logs --help
 ```
 
-### 12. Uninstall dwm
+### 15. Uninstall dwm
 
 Stop running services, remove global binary links (npm/pnpm), and clean runtime state:
 

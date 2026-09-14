@@ -19,6 +19,12 @@
    - 安装或移除插件完成后，若 Web 服务处于启动状态则自动用先前参数重启。
 5. **状态监测与日志查看 (`dwm status` / `dwm logs`)**:
    - 查看 DSH 目录有效性、当前运行 PID、运行时间、启动参数，以及查看与追踪实时日志。
+6. **版本查看与切换 (`dwm version` / `dwm versions` / `dwm switch <version>`)**:
+   - `dwm version`: 查看 dwm 本身版本与当前 DSH 仓库检出版本（亦支持简洁形式 `dwm -v`）。
+   - `dwm versions`: 在 DSH home 下 fetch 远程最新 tags 并展示所有可用版本列表（别名：`dwm version list`）。
+   - `dwm switch <version>`: 在 DSH home 下切换到指定版本/tag，清理过时依赖（执行 `pnpm install`）并重新构建包（`pnpm run build`）。
+7. **一键自我升级 (`dwm upgrade`)**:
+   - 通过 GitHub 执行最新的 upgrade 脚本升级当前的 `dwm` 版本。
 
 ---
 
@@ -90,7 +96,48 @@ dwm update
 dwm update --skip-install
 ```
 
-### 3. 启动 DSH Web 服务
+### 3. 查看版本信息与 DSH 版本列表
+
+查看当前 dwm 自身版本与 DSH 仓库检出版本：
+
+```bash
+dwm version
+# 仅输出 dwm 自身版本（适合脚本）：
+dwm -v
+```
+
+fetch 远程最新 tags 并展示配置的 DSH 仓库中所有可用的 tag 版本：
+
+```bash
+dwm versions
+# 或使用别名：
+dwm version list
+dwm version ls
+```
+
+### 4. 切换 DSH 版本并构建
+
+将 DSH 仓库切换至指定的 tag/版本并重新构建（自动执行 `git checkout`，清理过时依赖 `pnpm install` 以及 `pnpm run build`）：
+
+```bash
+# 使用完整 tag 名称
+dwm switch dsh-v0.1.5-rc.2
+
+# 使用版本号
+dwm switch 0.1.5-rc.2
+dwm switch v0.1.5-rc.2
+
+# 亦支持通过 version 子命令别名切换
+dwm version switch dsh-v0.1.5-rc.2
+```
+
+如有需要，也可追加 `--skip-install` 或 `--skip-build`：
+
+```bash
+dwm switch 0.1.5-rc.2 --skip-install
+```
+
+### 5. 启动 DSH Web 服务
 
 在后台启动 DSH Web，后续所有参数都会原样透传给 `pnpm dsh web`：
 
@@ -108,7 +155,7 @@ dwm start --port 3080 --no-open
 dwm start -f
 ```
 
-### 4. 停止 DSH Web 服务
+### 6. 停止 DSH Web 服务
 
 优雅停止后台运行的 DSH Web 进程：
 
@@ -118,7 +165,7 @@ dwm down
 dwm stop
 ```
 
-### 5. 重启 DSH Web 服务
+### 7. 重启 DSH Web 服务
 
 使用上一次 `dwm start` 时传入的参数重启服务：
 
@@ -132,7 +179,7 @@ dwm restart
 dwm restart --port 3090
 ```
 
-### 6. 安装插件
+### 8. 安装插件
 
 支持输入 npm 包名或本地绝对/相对路径。安装完成后，如果 Web 服务处于运行状态，会自动平滑重启：
 
@@ -147,7 +194,7 @@ dwm plugin install ./packages/clutch-dsh-worktree
 dwm plugin install dshmarket
 ```
 
-### 7. 移除插件
+### 9. 移除插件
 
 输入插件名称移除插件。移除完成后，如果 Web 服务处于运行状态，会自动重启：
 
@@ -155,7 +202,7 @@ dwm plugin install dshmarket
 dwm plugin remove @cerbur/clutch-dsh-worktree
 ```
 
-### 8. 查看已安装插件
+### 10. 查看已安装插件
 
 查看当前 web profile 下安装的所有插件：
 
@@ -163,7 +210,7 @@ dwm plugin remove @cerbur/clutch-dsh-worktree
 dwm plugin list
 ```
 
-### 9. 查看运行状态
+### 11. 查看运行状态
 
 查看 DSH 仓库目录状态、Web 运行状态、进程 PID、运行时长与最近日志：
 
@@ -171,7 +218,7 @@ dwm plugin list
 dwm status
 ```
 
-### 10. 查看日志
+### 12. 查看日志
 
 ```bash
 # 查看最近 30 行日志
@@ -181,7 +228,18 @@ dwm logs
 dwm logs -n 100 -f
 ```
 
-### 11. 指令帮助与使用说明
+### 13. 升级 dwm
+
+从 GitHub 获取并执行最新的升级脚本，升级当前的 `dwm` 版本：
+
+```bash
+dwm upgrade
+
+# 升级到指定的 branch、tag 或 commit：
+dwm upgrade --ref main
+```
+
+### 14. 指令帮助与使用说明
 
 查看全局帮助或特定指令的详细参数与用法：
 
@@ -198,7 +256,7 @@ dwm logs --help
 dwm plugin --help
 ```
 
-### 12. 卸载 dwm
+### 15. 卸载 dwm
 
 停止运行中的 Web 服务、解除全局二进制软链接（npm / pnpm），并清理状态文件：
 

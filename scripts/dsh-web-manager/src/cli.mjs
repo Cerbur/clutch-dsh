@@ -15,6 +15,8 @@ import {
 import { updateDsh } from './update.mjs';
 import { installPlugin, listPlugins, removePlugin } from './plugin.mjs';
 import { uninstallDwm } from './uninstall.mjs';
+import { getCurrentDshVersion, listDshVersions, switchDshVersion } from './version.mjs';
+import { upgradeDwm } from './upgrade.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,12 +56,21 @@ Commands:
   plugin list              List installed plugins for web profile
   status                   Show DSH home and Web service running status
   logs [-n <lines>] [-f]   View or follow DSH Web log output
+  switch <version>         Switch DSH repository to specified version/tag and build
+                           (alias: dwm version switch <version>)
+  versions                 List available DSH tag versions (alias: dwm version list)
+  version [list]           Show dwm and DSH versions (list: list available DSH tags)
+  upgrade [--ref <ref>]    Upgrade dwm to latest version from GitHub
   uninstall [--purge]      Stop services, unlink global dwm command, and clean state (alias: unlink)
   help, -h, --help         Show this help message
-  version, -v, --version   Show dwm version
 
 Examples:
   dwm home /path/to/deepseek-harness
+  dwm version
+  dwm versions
+  dwm version list
+  dwm switch dsh-v0.1.5-rc.2
+  dwm switch 0.1.5-rc.2
   dwm update
   dwm start --port 3080 --no-open
   dwm status
@@ -69,6 +80,7 @@ Examples:
   dwm plugin remove @cerbur/clutch-dsh-worktree
   dwm down
   dwm restart
+  dwm upgrade
 
 Run "dwm help <command>" or "dwm <command> --help" for detailed help on any command.
 `);
@@ -229,6 +241,72 @@ Examples:
 Usage:
   dwm unlink [--purge]
   (Alias for "uninstall")
+`,
+  versions: `
+Usage:
+  dwm versions
+  dwm version list
+  dwm version ls
+
+Description:
+  Fetch remote tags and list all available tag versions in the configured
+  DSH repository (runs "git fetch --tags" in DSH home).
+
+Examples:
+  dwm versions
+  dwm version list
+`,
+  version: `
+Usage:
+  dwm version
+  dwm versions
+  dwm version list
+  dwm version switch <version>
+  dwm -v, --version
+
+Description:
+  Show current dwm and DSH repository versions.
+  When invoked with -v or --version, outputs only dwm version.
+  When invoked with "list" (or as "dwm versions"), lists available DSH tag versions.
+  Supports "dwm version switch <version>" as alias for "dwm switch <version>".
+
+Examples:
+  dwm version
+  dwm versions
+  dwm version list
+  dwm version switch dsh-v0.1.5-rc.2
+`,
+  switch: `
+Usage:
+  dwm switch <version> [--skip-install] [--skip-build]
+
+Description:
+  Switch the configured DSH repository to the specified version/tag and
+  build packages. Runs git checkout, pnpm install (cleaning stale dependencies),
+  and pnpm run build.
+
+Options:
+  --skip-install     Skip running "pnpm install"
+  --skip-build       Skip running "pnpm run build"
+
+Examples:
+  dwm switch dsh-v0.1.5-rc.2
+  dwm switch 0.1.5-rc.2
+  dwm switch v0.1.5-rc.2
+`,
+  upgrade: `
+Usage:
+  dwm upgrade [--ref <branch-or-tag>]
+
+Description:
+  Upgrade the current dwm installation by executing the latest upgrade script
+  from GitHub. Preserves configuration and logs.
+
+Options:
+  --ref <ref>        Target clutch-dsh branch, tag, or commit (default: main)
+
+Examples:
+  dwm upgrade
 `,
 };
 
@@ -484,6 +562,108 @@ async function handleLogs(args) {
 }
 
 /**
+ * Handle "versions" command.
+ */
+async function handleVersions() {
+  const res = await listDshVersions();
+  if (!res.success) {
+    console.error(`[DWM] ❌ ${res.error}`);
+    return 1;
+  }
+  console.log(`[DWM] Available DSH versions (${res.versions.length} tags):`);
+  if (res.versions.length === 0) {
+    console.log('  <no tags found>');
+  } else {
+    for (const v of res.versions) {
+      if (v === res.current) {
+        console.log(`* ${v} (current)`);
+      } else {
+        console.log(`  ${v}`);
+      }
+    }
+  }
+  return 0;
+}
+
+/**
+ * Handle "version" command.
+ * @param {string[]} [args=[]]
+ * @param {boolean} [isFlag=false] Whether invoked via -v / --version
+ */
+async function handleVersion(args = [], isFlag = false) {
+  const sub = args[0];
+  if (sub === 'list' || sub === 'ls') {
+    return await handleVersions();
+  }
+
+  if (sub === 'switch') {
+    return await handleSwitch(args.slice(1));
+  }
+
+  const v = getVersion();
+
+  if (isFlag) {
+    console.log(`dwm v${v}`);
+    return 0;
+  }
+
+  const home = resolveDshHome();
+  console.log(`dwm: v${v}`);
+  if (home.valid && home.path) {
+    const dshVer = await getCurrentDshVersion(home.path);
+    console.log(`DSH: ${dshVer} (${home.path})`);
+  } else if (home.path) {
+    console.log(`DSH: <invalid repository> (${home.path})`);
+  } else {
+    console.log('DSH: <not configured> (set with "dwm home <path>")');
+  }
+  return 0;
+}
+
+/**
+ * Handle "switch" command.
+ * @param {string[]} args
+ */
+async function handleSwitch(args) {
+  const target = args[0];
+  if (!target) {
+    console.error('[DWM] ❌ Target version is required: dwm switch <version>');
+    return 1;
+  }
+
+  const skipInstall = args.includes('--skip-install');
+  const skipBuild = args.includes('--skip-build');
+
+  const res = await switchDshVersion(target, { skipInstall, skipBuild });
+  if (!res.success) {
+    console.error(`[DWM] ❌ ${res.error}`);
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * Handle "upgrade" command.
+ * @param {string[]} args
+ */
+async function handleUpgrade(args) {
+  let ref;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--ref' && args[i + 1]) {
+      ref = args[i + 1];
+      i++;
+    }
+  }
+
+  const res = await upgradeDwm({ ref });
+  if (!res.success) {
+    console.error(`[DWM] ❌ ${res.error}`);
+    return 1;
+  }
+  return 0;
+}
+
+/**
  * Main CLI entry point.
  * @param {string[]} argv
  * @returns {Promise<number>} exit code
@@ -552,11 +732,21 @@ export async function runCli(argv = []) {
       }
       return 0;
 
+    case 'switch':
+      return await handleSwitch(args);
+
+    case 'upgrade':
+      return await handleUpgrade(args);
+
+    case 'versions':
+      return await handleVersions();
+
     case 'version':
+      return await handleVersion(args, false);
+
     case '-v':
     case '--version':
-      console.log(`dwm v${getVersion()}`);
-      return 0;
+      return await handleVersion(args, true);
 
     default:
       console.error(`[DWM] Unknown command: "${command}"`);
