@@ -21,10 +21,23 @@ function indexOfAny(source, patterns) {
 test('keeps English and Chinese plugin READMEs structurally aligned', async () => {
   assert.deepEqual(headingShape(readme), headingShape(readmeZh));
   assert.match(readme, /assets\/screenshots\/screenshots-en\.png/);
-  assert.match(readmeZh, /assets\/screenshots\/screenshots-zh\.png/);
+  assert.match(readmeZh, /assets\/screenshots\/screenshots-en\.png/);
+  assert.match(readme, /assets\/screenshots\/screenshots-import\.png/);
+  assert.match(readmeZh, /assets\/screenshots\/screenshots-import\.png/);
   assert.match(readme, /assets\/screenshots\/screenshots-dashboard\.webp/);
   assert.match(readmeZh, /assets\/screenshots\/screenshots-dashboard\.webp/);
   assert.ok(screenshots.includes('assets/screenshots/screenshots-dashboard.webp'));
+
+  const englishInstallation = readme.indexOf('## Installation');
+  const englishFeatures = readme.indexOf('## Features');
+  const englishUsage = readme.indexOf('## Usage');
+  const chineseInstallation = readmeZh.indexOf('## 安装');
+  const chineseFeatures = readmeZh.indexOf('## 功能');
+  const chineseUsage = readmeZh.indexOf('## 使用');
+  assert.ok(englishInstallation < englishFeatures && englishFeatures < englishUsage);
+  assert.ok(chineseInstallation < chineseFeatures && chineseFeatures < chineseUsage);
+  assert.doesNotMatch(readme, /^## (Screenshots|Capabilities)$/m);
+  assert.doesNotMatch(readmeZh, /^## (界面截图|能力)$/m);
 
   const npmInstall = indexOfAny(readme, [
     'dsh plugin --profile web add @cerbur/clutch-dsh-worktree',
@@ -37,7 +50,7 @@ test('keeps English and Chinese plugin READMEs structurally aligned', async () =
   assert.ok(repositoryInstall > npmInstall);
 
   assert.match(readme, /Git must be installed and available on `PATH`/);
-  assert.match(readme, /A missing Git\s+executable shows install guidance and no command block/);
+  assert.match(readme, /A missing Git\s+executable shows install guidance\s+and no command block/);
   assert.match(readme, /does not run setup or installation commands/);
   assert.match(readmeZh, /Git 必须已安装且可在 PATH 中使用/);
   assert.match(readmeZh, /Git 可执行文件缺失时显示安装提示且不显示命令块/);

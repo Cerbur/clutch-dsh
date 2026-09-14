@@ -1,23 +1,18 @@
-# @cerbur/clutch-dsh
+[English](README.md) | [简体中文](README.zh.md)
 
-这是一个用于开发和维护 DSH（DeepSeek Harness）plugin 的 pnpm workspace。这里的插件可以安装到 DSH Web UI，为会话标题、Worktree 管理和开发流程增加额外能力。
+# clutch-dsh
 
-如果你只是想使用插件，可以直接查看下面的列表和各 package 的 README；如果你要参与开发，再阅读文档和维护说明。
+`clutch-dsh` is a pnpm workspace and collection of plugins for DeepSeek Harness (DSH).
+Install only the plugins you need in your DSH Web profile.
 
-## 已发布 plugin
+The repository currently contains Worktree, Fireworks, Discuss, and Title plugins. Each
+package has its own user documentation and can be built or installed independently.
 
-当前可安装的 plugin packages 包括：
+## Installation
 
-| Plugin name                                                               | Screenshot                                                                                                                                      | 功能描述                                                                                                                                              |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.webp" width="240" alt="clutch-dsh-worktree Dashboard 预览截图"> | 为 DSH Web UI 增加按 Git Worktree 组织 Session 的视角，并提供仅插件的 Dashboard 预览版和在应用中打开入口；原始 Project 和 Session 数据仍由 DSH 管理。 |
-| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="clutch-dsh-fireworks 截图">                     | 通过 `happy_fireworks` Agent 工具为 DSH Web UI 增加庆祝礼花覆盖层。                                                                                   |
-| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="clutch-dsh-discuss MVP flow">                        | 通过 `/discuss [topic]` 激活 DSH brainstorming skill 并产出 design doc。                                                                              |
-| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/template-manager.png" width="240" alt="clutch-dsh-title 截图">                           | 通过原生 `ctx.sessionTitle` 为 DSH 提供确定性会话标题生成与设置中心模板管理器。                                                                       |
+### Install from npm
 
-## 快速开始
-
-在已经安装 DSH CLI 的环境中，选择需要的 plugin 安装到 Web profile：
+With an installed DSH CLI, add any plugin to the Web profile and start DSH Web:
 
 ```bash
 dsh plugin --profile web add @cerbur/clutch-dsh-worktree
@@ -27,11 +22,41 @@ dsh plugin --profile web add @cerbur/clutch-dsh-title
 dsh web
 ```
 
-每个 plugin 的具体功能、限制和配置方式见对应的 README。
+You do not need to install every plugin. See the package README for each plugin's behavior,
+requirements, and usage.
 
-## 本地开发
+### Install from a local checkout
 
-从仓库源码开发或验证 plugin 时：
+Use this flow when you are working from a `clutch-dsh` checkout and want to load a locally
+built package into a DSH source checkout:
+
+```bash
+cd /absolute/path/to/clutch-dsh
+pnpm install
+pnpm --filter @cerbur/clutch-dsh-worktree build
+
+cd /absolute/path/to/deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+pnpm dsh web
+```
+
+Replace the package name and path with the plugin you want to test. The package README contains
+the exact local build command and any package-specific development notes.
+
+## Plugins
+
+| Plugin                                                                    | Preview                                                                                                                             | What it does                                                                                                                   |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.webp" width="240" alt="Worktree Dashboard preview"> | Adds a Git Worktree view that groups DSH Sessions by Workspace, Worktree, and Session. The Dashboard is a plugin-only preview. |
+| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="Fireworks overlay in DSH Web UI">   | Adds the `happy_fireworks` tool and a short celebration overlay for meaningful milestones.                                     |
+| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming workflow">         | Adds `/discuss [topic]`, an entry point for the bundled brainstorming workflow and reviewed design documents.                  |
+| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="Session title list in DSH">         | Adds configurable session title templates and a settings manager for new DSH Sessions.                                         |
+
+## Development
+
+Install the workspace dependencies and run the repository checks from the root:
 
 ```bash
 pnpm install
@@ -40,7 +65,7 @@ pnpm run build
 pnpm run test
 ```
 
-修改 package 后，也可以分别运行：
+Useful focused checks are:
 
 ```bash
 pnpm run check:workspace
@@ -50,31 +75,21 @@ pnpm run lint
 pnpm run typecheck
 ```
 
-本地安装某个 package 时，使用它自己的 README 中提供的绝对路径命令。例如：
+To build, type-check, or test one package, use its package filter. Package-specific source
+installation and DSH compatibility notes live in that package's documentation.
 
-```bash
-dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
-```
+The workspace root stays private. Its checks cover package shape, Cordis bundle patches,
+formatting, linting, types, and tests; publishable plugins live under `packages/`.
 
-## Workspace 结构（维护者）
+## Documentation
 
-- `packages/*` 下的目录可以是完整 plugin package，也可以是包含 nested module packages 的 plugin 根目录。
-- 只有需要独立替换、发布或安装的能力角色才拆成独立 package；Service Definition、Provider 和 Consumer 不要求分别拆包。
-- 没有 `package.json` 的目录可以作为规划入口存在，不会被 workspace 检查视为可运行 package。
-- 可安装的 DSH bundle 使用真实 manifest：`package.json` 的 `dsh.bundle.patch` 指向同 package 内的 `cordis.patch.yml`。
-- 根 package 保持 private，不作为可发布 plugin；额外的 `clutchDsh` metadata 只用于 workspace 结构校验和角色记录。
+- [Plugin authoring guide](docs/PLUGIN_AUTHORING.md) — package shape, roles, and bundle patches.
+- [Release guide](docs/RELEASING.md) — shared version, worktree, pack, and publish workflow.
+- [Worktree README](packages/clutch-dsh-worktree/README.md) — Git Worktree navigation and lifecycle.
+- [Fireworks README](packages/clutch-dsh-fireworks/README.md) — milestone celebrations.
+- [Discuss README](packages/clutch-dsh-discuss/README.md) — the `/discuss` brainstorming entry point.
+- [Title README](packages/clutch-dsh-title/README.md) — session title templates.
 
-## 文档
+## Friendly Links
 
-- [Plugin authoring guide](docs/PLUGIN_AUTHORING.md)：命名、依赖和 patch 规则。
-- [Release guide](docs/RELEASING.md)：通用版本、检查、打包和发布流程。
-- 各 package 的 README：
-  - [`clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)
-  - [`clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md)
-  - [`clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)
-  - [`clutch-dsh-title`](packages/clutch-dsh-title/README.md)
-- 各 package 的 `docs/RELEASING.md`：包参数和安装来源说明。
-
-## 友情链接
-
-- [LINUX DO](https://linux.do/) — 新的理想型社区
+- [LINUX DO](https://linux.do/) — A new ideal community.

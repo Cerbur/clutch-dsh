@@ -52,7 +52,7 @@ test('Cordis patch inserts the discuss plugin into the DSH bundle', async () => 
   ]);
 });
 
-test('documents the four required sections and ships the skill resources', async () => {
+test('documents the public sections and ships the skill resources', async () => {
   const readme = await readFile(path.join(packageDirectory, 'README.md'), 'utf8');
   const readmeZh = await readFile(path.join(packageDirectory, 'README.zh.md'), 'utf8');
   const skill = await readFile(
@@ -60,12 +60,14 @@ test('documents the four required sections and ships the skill resources', async
     'utf8',
   );
 
-  assert.ok(readme.indexOf('## Feature introduction') < readme.indexOf('## Capabilities'));
-  assert.ok(readme.indexOf('## Capabilities') < readme.indexOf('## Installation'));
-  assert.ok(readme.indexOf('## Installation') < readme.indexOf('## Detailed usage'));
-  assert.ok(readmeZh.indexOf('## 功能介绍') < readmeZh.indexOf('## 能力'));
-  assert.ok(readmeZh.indexOf('## 能力') < readmeZh.indexOf('## 安装'));
-  assert.ok(readmeZh.indexOf('## 安装') < readmeZh.indexOf('## 详细使用'));
+  assert.ok(readme.indexOf('[English](README.md) | [简体中文](README.zh.md)') === 0);
+  assert.ok(readmeZh.indexOf('[English](README.md) | [简体中文](README.zh.md)') === 0);
+  assert.ok(readme.indexOf('## Installation') < readme.indexOf('## Features'));
+  assert.ok(readme.indexOf('## Features') < readme.indexOf('## Usage'));
+  assert.ok(readmeZh.indexOf('## 安装') < readmeZh.indexOf('## 功能'));
+  assert.ok(readmeZh.indexOf('## 功能') < readmeZh.indexOf('## 使用'));
+  assert.doesNotMatch(readme, /^## (Feature introduction|Capabilities|Detailed usage)$/m);
+  assert.doesNotMatch(readmeZh, /^## (功能介绍|能力|详细使用)$/m);
   assert.match(readme, /assets\/screenshots\/discuss-mvp\.svg/u);
   assert.match(readmeZh, /assets\/screenshots\/discuss-mvp\.svg/u);
   assert.match(readme, /dsh plugin --profile web add @cerbur\/clutch-dsh-discuss/u);

@@ -27,7 +27,7 @@ clutch-dsh 是一个 pnpm workspace，用于开发一系列 DSH（DeepSeek Harne
   - `README.md`：英文公开文档；
   - `README.zh.md`：中文公开文档；
   - `assets/screenshots/`：当 UI 行为需要视觉说明时，存放文档引用的截图。
-- 两份 README 必须按以下顺序包含四个部分：功能介绍（含截图）、能力、安装（先 npm，再仓库/源码安装）、详细使用（含相关图片）。
+- 两份 README 必须保持双语结构一致：顶部语言切换、简洁功能介绍、安装（先 npm，再本地 checkout）、安装后的 Features 截图表、Usage，以及后置的要求、行为限制和开发信息。截图不得出现在 Overview 或 Installation 前。
 - 公开行为、能力、安装方式或限制发生变化时，必须同时更新两份 README。README 不得重复当前 package version；`package.json` 是版本唯一来源。两种语言中的命令、package 名称、错误码、路径和 source-of-truth 说明必须保持同步。
 - plugin 专属文档和计划放在对应 plugin 目录下，优先使用最近的 AGENTS.md。
 
@@ -129,3 +129,31 @@ main
 - 不修改与当前任务无关的 plugin、计划或公共配置。
 - 不把构建产物、coverage、临时 sidecar 数据或本地凭据加入 Git。
 - 完成前用 git status、目标文件检查和适当的测试验证实际状态。
+
+## README maintenance
+
+This repository maintains English and Simplified Chinese README files.
+
+For the repository root and packages that provide localized documentation:
+
+- `README.md` is the canonical English README.
+- `README.zh.md` is the Simplified Chinese counterpart.
+- User-visible documentation changes must update both files in the same change.
+- Keep both README files structurally aligned, including section order, installation commands, feature tables, screenshots, links, requirements, and limitations.
+- Do not hard-code package versions in README files; `package.json` is the source of truth.
+- When a user-visible feature is added, removed, renamed, or materially changed, update the affected package README files.
+- When installation or build behavior changes, update the affected package README files and the root README if the project-level installation guidance is affected.
+- When adding or replacing a screenshot, update the corresponding feature-table row in both language versions.
+- Keep screenshots after Installation in the Features section; do not move screenshots into the introductory overview.
+- Prefer user-facing behavior in README files. Move low-level architecture or implementation details to package `docs/` when they are useful to maintainers but not necessary for normal users.
+
+Package scope:
+
+- User-visible changes in `packages/clutch-dsh-worktree` require checking both `packages/clutch-dsh-worktree/README.md` and `packages/clutch-dsh-worktree/README.zh.md`.
+- User-visible changes in `packages/clutch-dsh-fireworks` require checking both corresponding README files.
+- User-visible changes in `packages/clutch-dsh-discuss` require checking both corresponding README files.
+- Adding or removing a repository-level plugin, or changing root installation or workspace structure, requires checking both `/README.md` and `/README.zh.md`.
+
+These rules apply to user-visible behavior, installation, compatibility, screenshots, public APIs,
+and commands. They do not require README changes for internal refactors that do not change the
+public behavior.
