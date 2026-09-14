@@ -1,73 +1,90 @@
+[English](README.md) | [简体中文](README.zh.md)
+
 # @cerbur/clutch-dsh-title
 
-## Feature overview
+@cerbur/clutch-dsh-title gives new DSH Sessions configurable, scannable titles. In DSH Web,
+open Settings → Session Title to choose a built-in or saved template, or create your own.
 
-Give new DSH sessions short, useful titles automatically. Choose a ready-made style or create your own in **Settings → Session Title**. A title can combine the session date, an emoji or category, fixed text, and a concise summary of the first prompt. The result appears in the normal DSH session list and is easy to scan.
-
-![Session title list in DSH](assets/screenshots/session-title-list.png)
-
-For example, a title may look like `0912 | 🚀 | add token statistics`. Preview a style before activating it, and switch back to DSH's built-in title generation whenever you want.
-
-## Capabilities
-
-- Choose the built-in `default` style or create named templates for different kinds of work.
-- Start with the editable `emoji` template included in fresh settings.
-- Preview the example title in each template row, then duplicate, edit, save, activate, or delete templates.
-- Build titles from a date, fixed text, a controlled category, or a short description of the first prompt.
-- Turn title templates on or off from one switch; turning them off returns to DSH's built-in first-prompt title generation.
-- See title-generation token usage and the most recent generation details in Settings, with an option to reset the statistics.
-- Keep invalid templates visible for repair and fall back safely when a title cannot be generated.
-- Leave existing titles unchanged until you explicitly refresh them; the plugin does not batch-rewrite past sessions.
+A title can combine the session date, fixed text, a controlled category, and a short description
+of the first prompt, for example 0912 | 🚀 | add token statistics. The result stays in DSH's
+native Session list; this package adds the title provider and settings manager without replacing
+that list.
 
 ## Installation
 
-### npm registry
+### Install from npm
 
-Install the package and add it to the DSH web profile:
+With an installed DSH CLI, add the package to the Web profile and start DSH Web:
 
 ```bash
-npm install @cerbur/clutch-dsh-title
 dsh plugin --profile web add @cerbur/clutch-dsh-title
+dsh web
 ```
 
-Use DSH `>=0.1.2-rc.1`.
+When using a DeepSeek Harness source checkout without a standalone dsh command, use the equivalent
+pnpm dsh form.
 
-### Source checkout
+### Install from a local checkout
 
-For local development, install the workspace dependencies and add the plugin directory:
+The package's lib/ directory is generated and is not committed. Build both this workspace package
+and the DSH source checkout, then add the package by absolute path:
 
 ```bash
+cd /absolute/path/to/clutch-dsh
 pnpm install
-dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
+pnpm --filter @cerbur/clutch-dsh-title build
+
+cd /absolute/path/to/deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
+pnpm dsh web
 ```
+
+After changing source files, package metadata, or cordis.patch.yml, rebuild the package and repeat
+the absolute-path add command.
+
+## Features
+
+| Feature                  | Preview                                                                                                                      | What it does                                                                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Native Session titles    | <img src="assets/screenshots/session-title-list.png" width="420" alt="Custom session titles in the native DSH Session list"> | The selected template automatically composes a compact title from date, category, fixed text, and first-prompt summary. Titles remain in DSH's native Session list; the plugin does not take over that list. |
+| Template manager         | <img src="assets/screenshots/title-settings.png" width="420" alt="Session title template manager in DSH Settings">           | Settings → Session Title supports preview, duplicate, edit, save, activate, and delete. The same page enables or disables custom title generation.                                                           |
+| Flexible template fields | —                                                                                                                            | datetime and literal fields resolve deterministically without a model. llm-enum and llm-text fields are model-backed; referenced LLM fields are extracted in one structured request.                         |
+| Generation statistics    | —                                                                                                                            | View generation count, cumulative input/output/total tokens, and the latest generation details when available. Reset the stored statistics after confirmation.                                               |
 
 ## Usage
 
-### Open title settings
+### Choose a title template
 
-1. Start the DSH Web UI.
-2. Open **Settings → Session Title**.
-3. Keep **Use title templates** enabled, choose a template, and select **Activate**.
-4. Create a new session to see the selected format in its title.
+1. Start DSH Web with dsh web.
+2. Open Settings → Session Title.
+3. Keep Use title templates enabled, choose a row, and select Activate.
+4. Create a new Session, or use DSH's native title refresh action for an existing Session.
 
-The page shows the current format, a live example, template rows, and title-generation token usage:
+The read-only default template is selected in a fresh settings file. A newly selected format does
+not rewrite existing titles until DSH explicitly generates or refreshes one.
 
-![Session Title settings and template manager](assets/screenshots/title-settings.png)
+### Manage templates
 
-### Choose and manage templates
+Fresh settings include an editable emoji template while the built-in default template remains
+selected. The emoji template can be edited or deleted; deleting it does not recreate it on a later
+settings registration.
 
-Fresh settings include an editable `emoji` template using a date, an emoji category, and a description. The built-in `default` template remains selected initially. You can edit or delete `emoji`; deleting it does not recreate it.
+- Duplicate any row, including default, to open an editable copy.
+- Give a copy a unique name, edit its YAML, and select Save. Saving does not activate it.
+- Select Activate when a saved template should become effective.
+- View or select default, but do not edit or delete it.
+- Deleting the active custom template selects default.
+- Each row shows an illustrative example while editing. Examples do not call a model.
 
-- Select **Duplicate** on any row, including `default`, to start a new template with the same format.
-- Give the copy a unique name, edit it, and choose **Save**. Saving does not activate it.
-- Select **Activate** when you want to use a saved template.
-- The built-in `default` template can be viewed and selected, but cannot be edited or deleted.
-- Deleting the active template selects `default`.
-- Each row shows an **Example** title that updates while you edit. Examples do not use a model, so the real title may differ.
+### Create a custom template
 
-### Create a custom format
+The editor accepts a template and optional fields. A template reference such as
+${daytime} is resolved from fields.daytime, and ${desc} is resolved from fields.desc:
 
-The editor accepts a `template` and optional `fields`. Placeholders use the simple `${identifier}` form. For example:
+Each ${fieldName} reference is resolved by fields.<fieldName>; it is a field substitution, not
+an instruction or expression.
 
 ```yaml
 template: '${daytime} | ${desc}'
@@ -83,37 +100,123 @@ fields:
     maxCharacters: 32
 ```
 
-Use `datetime` for a session date, `literal` for fixed text, `llm-enum` for a controlled list of choices, and `llm-text` for a short description. The editor validates placeholders, dates, timezones, enum choices, and text limits before saving. Functions, expressions, conditions, and code are not supported.
+Use datetime or literal for deterministic values. Use llm-enum for a controlled model-selected
+value, or llm-text for a short model-generated value. Saving validates the YAML and field
+definitions before the template can be activated.
 
-Saved templates are stored in the `clutch-dsh-title` section of `$DSH_HOME/settings.yaml` (normally `~/.dsh/settings.yaml`). This file is the source of truth; browser storage and `clutch.yaml` are not used. External edits are picked up by DSH, and invalid entries remain visible so they can be repaired.
+### Refresh / regenerate a title
 
-### Understand updates and fallback
+Use DSH's native Session title refresh action to explicitly run the current provider again. The
+refresh uses the current template and the Session's original createdAt value, so a datetime field
+does not change merely because the title was refreshed.
 
-- Titles use the first eligible user prompt. Later messages do not automatically replace a title.
-- A newly saved format affects new generation or an explicit refresh; existing sessions are not batch-migrated.
-- Invalid or missing active templates fall back to `default`. If field extraction or title generation fails, DSH uses its normal title generator.
-- Turning **Use title templates** off keeps your templates and selection, but uses DSH's built-in first-prompt generator.
-- Long first prompts are clipped within the configured input budget while retaining their beginning and end. Later conversation messages are not used for the title.
-- DSH continues to own title length limits, persistence, rename pinning, refresh, and fork behavior.
+### Disable custom titles
 
-### Token usage
+Turn off Use title templates in Settings → Session Title. The package keeps the saved templates and
+selection, but DSH resumes its native first-prompt title generator.
 
-The Settings page includes a token overview for title generation:
+### View generation statistics
 
-- **Total generations** counts title model calls with valid usage data, including DSH fallback calls.
-- **Input, output, and total tokens** show cumulative usage, with the latest call's cache and thinking details when available.
-- **Reset statistics** clears the stored overview after confirmation.
+Open Settings → Session Title to see cumulative title-model generations with valid usage data, input
+tokens, output tokens, total tokens, and the latest call details when the model reports them. Reset
+requires confirmation. Deterministic-only templates make no model request and therefore do not add a
+generation statistic.
 
-Deterministic formats that use only dates or fixed text do not make a model call and are not counted.
+## Template reference
 
-### Existing Cordis configuration
+Templates use simple field substitution:
 
-If your DSH profile already provides title settings through Cordis, the existing `template` and `fields` values remain supported. With the Settings page enabled, they appear as an editable legacy template. Model routing and optional reasoning settings remain profile-level configuration rather than template fields.
+| Field kind | Purpose                                             | Uses a model |
+| ---------- | --------------------------------------------------- | ------------ |
+| datetime   | Format the Session timestamp from session.createdAt | No           |
+| literal    | Insert fixed text                                   | No           |
+| llm-enum   | Select one of the declared controlled values        | Yes          |
+| llm-text   | Generate a short text value                         | Yes          |
 
-Keep DSH's default title provider disabled when this package is enabled, and do not install another title provider in the same profile.
+Use the placeholder form ${identifier}. The identifier must name a declared field. Placeholders
+do not support functions, expressions, conditions, loops, or arbitrary code. Unknown fields,
+malformed YAML, and invalid field definitions are rejected during validation.
 
-For package-specific release parameters, see [`docs/RELEASING.md`](docs/RELEASING.md). For the public release history, see [`RELEASE-LOG.md`](RELEASE-LOG.md).
+## Configuration
+
+Template settings are stored under the clutch-dsh-title section of
+$DSH_HOME/settings.yaml. This settings file is the source of truth for the template map, active
+template, and enabled state.
+
+DSH normally uses ~/.dsh/settings.yaml as the default location for that file, but the documented
+source of truth is $DSH_HOME/settings.yaml rather than a hard-coded home-directory path. The
+package does not use browser storage or clutch.yaml.
+
+External edits to the settings file are picked up by DSH's settings reload path. Invalid template
+entries remain visible in Settings so they can be repaired instead of silently disappearing.
+
+## Behavior and limitations
+
+- Only the first eligible user prompt contributes to an automatic title. Later messages do not
+  automatically replace it.
+- A long first prompt is bounded by the configured input-byte budget while preserving its head and
+  tail. The original Session message is not modified.
+- A changed template affects future generation or an explicit refresh. Existing titles are not
+  batch-rewritten.
+- If the active template is missing or invalid, the settings manager uses the built-in default
+  template.
+- If field extraction, rendering, or custom title generation fails, DSH's normal first-prompt
+  generator handles the title instead.
+- DSH remains responsible for title length limits, title persistence, manual rename pinning,
+  refresh and unpin behavior, fork title-event inheritance, cancellation, and stale-result
+  protection.
+- The bundle patch disables DSH's default session-title-first-prompt-llm provider before inserting
+  this provider. DSH permits only one session-title provider: do not re-enable the default or
+  install another title provider in the same profile. A second registration is rejected by DSH's
+  single-provider invariant.
+
+## Requirements
+
+- DSH peers: @deepseek-ai/dsh-settings, @deepseek-ai/dsh-storage-domain,
+  @deepseek-ai/dsh-typert-protocol, @deepseek-ai/dsh-api-remotes, @deepseek-ai/dsh-client-locale,
+  @deepseek-ai/dsh-client-ui-settings, @deepseek-ai/dsh-client-ui-slots,
+  @deepseek-ai/dsh-client-ui-primitives, @deepseek-ai/dsh-llm, @deepseek-ai/dsh-session,
+  @deepseek-ai/dsh-session-title, @deepseek-ai/dsh-session-title-llm, @deepseek-ai/dsh-timeout,
+  and @deepseek-ai/dsh-util-values, all at >=0.1.2-rc.1.
+- Cordis: @deepseek-ai/cordis 4.0.1.
+- Profile: a DSH Web profile that provides the session, session-title, LLM, settings, storage,
+  remote, and browser settings services declared by the package.
+
+### Compatibility
+
+Cordis configuration using template and fields remains supported. When those values come from the
+profile configuration, Settings exposes them as an editable legacy row. The current Settings template
+manager and the legacy configuration use the same validation rules.
+
+Model routing and optional reasoning settings are profile-level configuration, not template field
+settings. Keep the DSH default title provider disabled and do not compose a second title provider
+with this package.
+
+## Development
+
+Build, type-check, and test the package from the workspace root:
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-title typecheck
+pnpm --filter @cerbur/clutch-dsh-title build
+pnpm --filter @cerbur/clutch-dsh-title test
+```
+
+Package-specific release parameters and source-install constraints are documented in
+[docs/RELEASING.md](docs/RELEASING.md). User-facing release history is in
+[RELEASE-LOG.md](RELEASE-LOG.md).
+
+## Uninstall
+
+With the DSH CLI:
+
+```bash
+dsh plugin --profile web remove @cerbur/clutch-dsh-title
+```
+
+From a DeepSeek Harness source checkout, use pnpm dsh plugin --profile web remove with the same
+package name.
 
 ## Friendly Links
 
-- [LINUX DO](https://linux.do/) — A new ideal community
+- [LINUX DO](https://linux.do/) — A new ideal community.

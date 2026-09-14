@@ -149,10 +149,16 @@ For the repository root and packages that provide localized documentation:
 
 Package scope:
 
+- User-visible changes in packages/clutch-dsh-title require checking both packages/clutch-dsh-title/README.md and packages/clutch-dsh-title/README.zh.md.
 - User-visible changes in `packages/clutch-dsh-worktree` require checking both `packages/clutch-dsh-worktree/README.md` and `packages/clutch-dsh-worktree/README.zh.md`.
 - User-visible changes in `packages/clutch-dsh-fireworks` require checking both corresponding README files.
 - User-visible changes in `packages/clutch-dsh-discuss` require checking both corresponding README files.
 - Adding or removing a repository-level plugin, or changing root installation or workspace structure, requires checking both `/README.md` and `/README.zh.md`.
+
+The localized README set currently covers the repository root plus these four plugin packages:
+clutch-dsh-worktree, clutch-dsh-fireworks, clutch-dsh-discuss, and clutch-dsh-title.
+Repository-wide documentation changes therefore cover five English and five Simplified Chinese
+README files.
 
 These rules apply to user-visible behavior, installation, compatibility, screenshots, public APIs,
 and commands. They do not require README changes for internal refactors that do not change the

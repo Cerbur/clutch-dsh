@@ -1,73 +1,87 @@
+[English](README.md) | [简体中文](README.zh.md)
+
 # @cerbur/clutch-dsh-title
 
-## 功能介绍
+@cerbur/clutch-dsh-title 为新的 DSH Session 提供可配置、易浏览的标题。在 DSH Web 中打开
+设置 → 会话标题，可以选择内置或已保存的模板，也可以创建自己的模板。
 
-为新的 DSH 会话自动生成简洁、易读的标题。在 **设置 → 会话标题** 中选择现成样式，或创建自己的格式。标题可以组合会话日期、emoji 或分类、固定文字，以及对首条 prompt 的简短描述，结果会直接显示在 DSH 原生会话列表中，方便快速浏览。
-
-![DSH 中的会话标题列表](assets/screenshots/session-title-list.png)
-
-例如，标题可以是 `0912 | 🚀 | add token statistics`。激活前可以先预览样式，也可以随时切回 DSH 自带的标题生成方式。
-
-## 能力
-
-- 使用内置的 `default` 样式，或为不同类型的工作创建命名模板。
-- 新设置会提供可编辑的 `emoji` 模板。
-- 在模板行中预览标题样例，并复制、编辑、保存、激活或删除模板。
-- 用日期、固定文字、受控分类或首条 prompt 的简短描述组合标题。
-- 通过一个开关启用或关闭标题模板；关闭后恢复 DSH 自带的首条 prompt 标题生成。
-- 在设置中查看标题生成的 Token 用量和最近一次生成明细，并支持重置统计。
-- 非法模板会保留以便修复；标题无法生成时会安全回退。
-- 已有标题不会自动改变，只有显式刷新后才会重新生成；插件不会批量改写历史 session。
+标题可以组合会话日期、固定文字、受控分类和首条 prompt 的简短描述，例如
+0912 | 🚀 | add token statistics。生成结果仍显示在 DSH 原生 Session 列表中；本 package
+增加标题 provider 和设置管理器，不会替换原生列表。
 
 ## 安装
 
-### npm registry
+### 从 npm 安装
 
-安装 package 并将它加入 DSH web profile：
+在已安装 DSH CLI 的环境中，将 package 加入 Web profile 并启动 DSH Web：
 
 ```bash
-npm install @cerbur/clutch-dsh-title
 dsh plugin --profile web add @cerbur/clutch-dsh-title
+dsh web
 ```
 
-需要 DSH `>=0.1.2-rc.1`。
+如果使用 DeepSeek Harness 源码 checkout 且没有独立的 dsh 命令，可使用等价的 pnpm dsh
+形式。
 
-### 源码 checkout
+### 从本地 checkout 安装
 
-进行本地开发时，先安装 workspace 依赖，再加入 plugin 目录：
+package 的 lib/ 目录由构建生成，不会提交到仓库。先构建 workspace package 和 DSH 源码
+checkout，再通过绝对路径添加 package：
 
 ```bash
+cd /absolute/path/to/clutch-dsh
 pnpm install
-dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
+pnpm --filter @cerbur/clutch-dsh-title build
+
+cd /absolute/path/to/deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title
+pnpm dsh web
 ```
 
-## 详细使用
+修改源码、package 元数据或 cordis.patch.yml 后，需要重新构建 package，并再次执行绝对路径
+添加命令。
 
-### 打开标题设置
+## 功能
 
-1. 启动 DSH Web UI。
-2. 打开 **设置 → 会话标题**。
-3. 保持 **使用标题模板** 开启，选择一个模板并点击 **激活**。
-4. 创建新的 session，在标题中查看所选格式。
+| 功能              | 预览                                                                                                        | 作用                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 原生 Session 标题 | <img src="assets/screenshots/session-title-list.png" width="420" alt="DSH 原生 Session 列表中的自定义标题"> | 选中的模板会自动组合日期、分类、固定文字和首条 prompt 摘要，生成紧凑标题。标题仍位于 DSH 原生 Session 列表中；plugin 不会接管该列表。    |
+| 模板管理器        | <img src="assets/screenshots/title-settings.png" width="420" alt="DSH 设置中的会话标题模板管理器">          | 设置 → 会话标题支持预览、复制、编辑、保存、激活和删除，也可以在同一页面启用或关闭自定义标题生成。                                        |
+| 灵活的模板字段    | —                                                                                                           | datetime 和 literal 字段以确定性方式解析，不使用模型。llm-enum 和 llm-text 是模型字段；当前模板引用的 LLM 字段会在一次结构化请求中提取。 |
+| 生成统计          | —                                                                                                           | 查看生成次数、累计输入/输出/总 Token，以及可用时的最近一次生成明细。确认后可以重置已保存的统计。                                         |
 
-页面会展示当前格式、实时样例、模板列表和标题生成 Token 用量：
+## 使用
 
-![会话标题设置与模板管理](assets/screenshots/title-settings.png)
+### 选择标题模板
 
-### 选择和管理模板
+1. 使用 dsh web 启动 DSH Web。
+2. 打开设置 → 会话标题。
+3. 保持使用标题模板开启，选择一行并点击激活。
+4. 创建新的 Session，或对已有 Session 使用 DSH 原生的标题刷新操作。
 
-新设置包含可编辑的 `emoji` 模板，使用日期、emoji 分类和描述。内置的 `default` 模板初始处于选中状态。可以编辑或删除 `emoji`；删除后不会自动重新出现。
+新设置文件默认选中只读的 default 模板。新选择的格式不会改写已有标题，除非 DSH 显式
+生成或刷新标题。
 
-- 点击任意模板行（包括 `default`）的**复制**，用相同格式开始新模板。
-- 为副本填写唯一名称、编辑内容并点击**保存**。保存不会自动激活。
-- 需要使用已保存的模板时，点击**激活**。
-- 内置的 `default` 模板可以查看和选择，但不能编辑或删除。
-- 删除当前激活的模板后会选择 `default`。
-- 每行会展示编辑时实时更新的**样例**标题。样例不调用模型，因此实际标题可能不同。
+### 管理模板
 
-### 创建自定义格式
+全新的设置包含可编辑的 emoji 模板，同时保持内置 default 模板处于选中状态。emoji 模板
+可以编辑或删除；删除后，在之后重新注册设置时不会自动重新出现。
 
-编辑器接受 `template` 和可选的 `fields`，占位符只使用简单的 `${identifier}` 形式。例如：
+- 可以复制任意一行（包括 default），打开可编辑副本。
+- 为副本填写唯一名称，编辑 YAML 并点击保存。保存不会自动激活。
+- 需要让已保存模板生效时，点击激活。
+- 可以查看或选择 default，但不能编辑或删除。
+- 删除当前激活的自定义模板后，会选择 default。
+- 每一行在编辑时都会展示示例标题。示例不调用模型。
+
+### 创建自定义模板
+
+编辑器接受 template 和可选的 fields。模板中的
+${daytime} 会从 fields.daytime 解析，${desc} 会从 fields.desc 解析：
+
+每个 ${fieldName} 引用都会由 fields.<fieldName> 解析；它只是字段替换，不是指令或表达式。
 
 ```yaml
 template: '${daytime} | ${desc}'
@@ -83,37 +97,112 @@ fields:
     maxCharacters: 32
 ```
 
-`datetime` 用于会话日期，`literal` 用于固定文字，`llm-enum` 用于受控选项列表，`llm-text` 用于简短描述。保存前会校验占位符、日期、时区、枚举选项和文本长度。不支持函数、表达式、条件或代码执行。
+确定性值使用 datetime 或 literal；受控的模型分类使用 llm-enum；简短的模型生成文本使用
+llm-text。保存时会先校验 YAML 和字段定义，校验通过后模板才可以被激活。
 
-保存的模板位于 `$DSH_HOME/settings.yaml`（通常为 `~/.dsh/settings.yaml`）的 `clutch-dsh-title` 部分。该文件是唯一数据源，不使用 browser storage 或 `clutch.yaml`。外部编辑会被 DSH 读取，非法条目会保留以便修复。
+### 刷新 / 重新生成标题
 
-### 理解更新和回退
+使用 DSH 原生的 Session 标题刷新操作，显式再次运行当前 provider。刷新使用当前模板和
+Session 原始的 createdAt，因此仅刷新标题不会改变日期字段。
 
-- 标题使用首条符合条件的用户 prompt，后续消息不会自动替换标题。
-- 新保存的格式会在新生成或显式刷新时生效；已有 session 不会批量迁移。
-- 当前模板非法或缺失时回退到 `default`；字段提取或标题生成失败时使用 DSH 原生标题生成器。
-- 关闭 **使用标题模板** 会保留模板和选择，但改用 DSH 自带的首条 prompt 生成器。
-- 首条 prompt 过长时，会在配置的输入预算内保留开头和结尾进行裁剪；不会使用后续对话生成标题。
-- 标题长度限制、持久化、重命名固定、刷新和 fork 行为继续由 DSH 负责。
+### 关闭自定义标题
 
-### Token 用量
+在设置 → 会话标题中关闭使用标题模板。已保存的模板和选择会保留，但 DSH 会恢复使用原生
+的首条 prompt 标题生成器。
 
-设置页面提供标题生成的 Token 用量概览：
+### 查看生成统计
 
-- **累计生成次数**统计带有有效用量数据的标题模型调用，包括 DSH fallback 调用。
-- **输入、输出和总 Token**展示累计用量；如果可用，还会展示最近一次调用的缓存和思考明细。
-- **重置统计**在确认后清空已保存的概览。
+打开设置 → 会话标题，可以查看有有效用量数据的标题模型累计调用次数、输入 Token、输出
+Token、总 Token，以及模型提供时的最近一次调用明细。重置需要确认。只包含确定性字段的
+模板不会调用模型，也不会增加生成统计。
 
-只使用日期或固定文字的确定性格式不会调用模型，也不会计入统计。
+## 模板参考
 
-### 既有 Cordis 配置
+模板使用简单的字段替换：
 
-如果 DSH profile 已经通过 Cordis 提供标题配置，原有的 `template` 和 `fields` 仍然有效。启用设置页面后，它们会作为可编辑的 legacy 模板出现。模型路由和可选的思考设置仍属于 profile 级配置，不是模板字段。
+| 字段类型 | 用途                                         | 是否使用模型 |
+| -------- | -------------------------------------------- | ------------ |
+| datetime | 使用 session.createdAt 格式化 Session 时间戳 | 否           |
+| literal  | 插入固定文字                                 | 否           |
+| llm-enum | 从声明的受控值中选择一个                     | 是           |
+| llm-text | 生成一段简短文本                             | 是           |
 
-启用本 package 时请保持 DSH 默认标题 provider 关闭，也不要在同一 profile 中安装另一个 title provider。
+使用 ${identifier} 形式的占位符。identifier 必须对应已声明的字段。占位符不支持函数、
+表达式、条件、循环或任意代码。未知字段、格式错误的 YAML 和非法字段定义会在校验时被
+拒绝。
 
-package-specific release 参数见 [`docs/RELEASING.md`](docs/RELEASING.md)，公开 release history 见 [`RELEASE-LOG.md`](RELEASE-LOG.md)。
+## 配置
+
+模板设置保存在 $DSH_HOME/settings.yaml 的 clutch-dsh-title 区段中。这个设置文件是模板
+映射、当前模板和启用状态的 source of truth。
+
+DSH 通常会将 ~/.dsh/settings.yaml 作为该文件的默认位置，但文档约定的 source of truth 是
+$DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使用 browser storage，也不
+使用 clutch.yaml。
+
+通过外部方式修改设置文件后，DSH 的设置重新加载路径会读取这些修改。非法模板条目会继续
+显示在设置中，便于修复，而不会被静默丢弃。
+
+## 行为与限制
+
+- 自动标题只使用首条符合条件的用户 prompt，后续消息不会自动替换标题。
+- 首条 prompt 过长时，会在配置的输入字节预算内裁剪，并尽量保留开头和结尾。原始
+  Session 消息不会被修改。
+- 修改模板只影响后续生成或显式刷新，不会批量重写已有标题。
+- 当前激活模板缺失或非法时，设置管理器会使用内置 default 模板。
+- 如果字段提取、渲染或自定义标题生成失败，DSH 会使用正常的首条 prompt 标题生成器。
+- 标题长度限制、标题持久化、手动重命名后的 pin、刷新和取消 pin、fork 的标题事件继承、
+  取消以及过期结果保护，仍由 DSH 负责。
+- bundle patch 会先禁用 DSH 默认的 session-title-first-prompt-llm provider，再插入本
+  provider。DSH 只允许一个 session-title provider：不要重新启用默认 provider，也不要在
+  同一 profile 中安装另一个 title provider。第二次注册会被 DSH 的单 provider 约束拒绝。
+
+## 要求
+
+- DSH peer 包括 @deepseek-ai/dsh-settings、@deepseek-ai/dsh-storage-domain、
+  @deepseek-ai/dsh-typert-protocol、@deepseek-ai/dsh-api-remotes、
+  @deepseek-ai/dsh-client-locale、@deepseek-ai/dsh-client-ui-settings、
+  @deepseek-ai/dsh-client-ui-slots、@deepseek-ai/dsh-client-ui-primitives、
+  @deepseek-ai/dsh-llm、@deepseek-ai/dsh-session、@deepseek-ai/dsh-session-title、
+  @deepseek-ai/dsh-session-title-llm、@deepseek-ai/dsh-timeout 和
+  @deepseek-ai/dsh-util-values，全部要求 >=0.1.2-rc.1。
+- Cordis：@deepseek-ai/cordis 4.0.1。
+- Profile：提供 package 所声明的 session、session-title、LLM、settings、storage、remote
+  和 browser settings service 的 DSH Web profile。
+
+### 兼容性
+
+通过 Cordis 配置提供的 template 和 fields 仍然兼容。当这些值来自 profile 配置时，设置页面
+会将它们显示为可编辑的 legacy 行。当前设置模板管理器和 legacy 配置使用相同的校验规则。
+
+模型路由和可选的 reasoning 设置属于 profile 级配置，不属于模板字段设置。请保持 DSH 默认
+title provider 关闭，也不要将第二个 title provider 与本 package 组合。
+
+## 开发
+
+在 workspace 根目录构建、类型检查和测试：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-title typecheck
+pnpm --filter @cerbur/clutch-dsh-title build
+pnpm --filter @cerbur/clutch-dsh-title test
+```
+
+package 特有的发布参数和源码安装限制见
+[docs/RELEASING.md](docs/RELEASING.md)。面向用户的发布历史见
+[RELEASE-LOG.md](RELEASE-LOG.md)。
+
+## 卸载
+
+使用 DSH CLI：
+
+```bash
+dsh plugin --profile web remove @cerbur/clutch-dsh-title
+```
+
+如果使用 DeepSeek Harness 源码 checkout，可对同一个 package name 使用 pnpm dsh plugin
+--profile web remove。
 
 ## 友情链接
 
-- [LINUX DO](https://linux.do/) — 新的理想型社区
+- [LINUX DO](https://linux.do/) — 新的理想型社区。
