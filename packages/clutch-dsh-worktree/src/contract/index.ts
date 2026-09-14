@@ -56,6 +56,57 @@ export type WorktreeStatus = 'active' | 'removed';
 
 export type WorktreeSource = 'plugin' | 'external';
 
+/** Stable acquisition boundary and read-only Git projections used by the Dashboard. */
+export interface WorktreeGitBaseline {
+  readonly commit: string;
+  readonly ref?: string;
+  readonly source: 'captured' | 'derived';
+}
+
+export interface WorktreeGitCommit {
+  readonly sha: string;
+  readonly parents: readonly string[];
+  readonly subject: string;
+  readonly authorName: string;
+  readonly authorEmail?: string;
+  readonly authoredAt: string;
+}
+
+export interface WorktreeGitHistory {
+  readonly headCommit?: string;
+  readonly baseline?: WorktreeGitBaseline;
+  readonly commits: readonly WorktreeGitCommit[];
+  readonly truncated: boolean;
+  readonly unavailableReason?: 'baseline-unknown' | 'main';
+}
+
+export type WorktreeGitFileStatus =
+  | 'added'
+  | 'modified'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'type-changed';
+
+export interface WorktreeGitChangedFile {
+  readonly path: string;
+  readonly oldPath?: string;
+  readonly status: WorktreeGitFileStatus;
+}
+
+export interface WorktreeGitCommitFiles {
+  readonly commit: string;
+  readonly files: readonly WorktreeGitChangedFile[];
+}
+
+export interface WorktreeGitFileDiff {
+  readonly commit: string;
+  readonly path: string;
+  readonly patch: string;
+  readonly binary: boolean;
+  readonly truncated?: boolean;
+}
+
 export * from './worktree-permission.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
@@ -94,6 +145,8 @@ export interface WorktreeRecord {
   readonly createdAt?: string;
   readonly importedAt?: string;
   readonly baseBranch?: string;
+  /** Immutable acquisition commit used as the Git Dashboard comparison boundary. */
+  readonly baseCommit?: string;
   readonly worktreeId: WorktreeId;
   readonly workspaceId: WorkspaceId;
   readonly absolutePath: string;
@@ -181,6 +234,24 @@ export interface WorktreeManager {
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
+
+  listWorktreeCommits(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+  }): Promise<WorktreeGitHistory>;
+
+  listWorktreeCommitFiles(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+    readonly commit: string;
+  }): Promise<WorktreeGitCommitFiles>;
+
+  getWorktreeCommitFileDiff(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+    readonly commit: string;
+    readonly path: string;
+  }): Promise<WorktreeGitFileDiff>;
 
   listImportCandidates(input: {
     readonly workspaceId: string;
@@ -270,6 +341,9 @@ export interface WorktreeManager {
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'updateWorktreeInstructions',
   'listWorktrees',
+  'listWorktreeCommits',
+  'listWorktreeCommitFiles',
+  'getWorktreeCommitFileDiff',
   'listImportCandidates',
   'listBranches',
   'createWorktree',
@@ -311,6 +385,24 @@ export interface WorktreeRemoteManager {
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+
+  listWorktreeCommits(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+  }): Promise<WorktreeRemoteResult<WorktreeGitHistory>>;
+
+  listWorktreeCommitFiles(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    commit: string;
+  }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>>;
+
+  getWorktreeCommitFileDiff(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+    commit: string;
+    path: string;
+  }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>>;
 
   listImportCandidates(input: {
     workspaceId: WorkspaceId;

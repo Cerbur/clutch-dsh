@@ -69,7 +69,7 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - `projectId`、`worktreeId`、`sessionId` 之间的绑定映射；
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
-- 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建事实（`createdAt`、`baseBranch`）或导入时间（`importedAt`）。
+- 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建事实（`createdAt`、`baseBranch`、不可变 `baseCommit`）或导入时间（`importedAt`）。
 
 ### 共享指令（Instructions）注入机制
 
@@ -183,15 +183,16 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 ## 7. Sidecar 持久化与 Schema 演进
 
-- **版本演进**：支持从 v1/v2/v3 到 v4 的向后兼容读取。
+- **版本演进**：支持从 v1/v2/v3/v4 到 v5 的向后兼容读取。
   - v1 记录读取时规范化为 `source: 'plugin'`；
   - v2 记录保留其显式 source；
   - v3 记录保留 revision 字符串；
   - 旧版 `status: 'removed'` 规范化为 `diskCleanup: 'completed'` 且绑定解为 detached；
-  - **首次成功变更时，原子持久化为 v4 格式**。
-- **v4 扩展元数据保留**：
-  已知 v4 开发构建元数据（`instructions`、`createdAt`、`importedAt`、`baseBranch`）在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
-- **指纹与防串仓**：v4 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
+  - **首次成功变更时，原子持久化为 v5 格式**。
+- **v4/v5 扩展元数据保留**：
+  已知开发构建元数据（`instructions`、`createdAt`、`importedAt`、`baseBranch`）以及 v5 的
+  `baseCommit` 在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
+- **指纹与防串仓**：v4/v5 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
 - **并发锁与原子写入**：
   `SidecarPersistence` 在 `$dshHome/clutch-dsh-worktree/locks` 下使用跨进程文件锁对 Workspace Shard 进行互斥，并通过同目录临时文件 + `rename` 原语完成全量快照的原子发布。
 - **防损坏**：未知版本、格式非法或不变量冲突均视为严重损坏错误，**绝不静默覆盖为空索引**。
@@ -227,6 +228,25 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 - **直接命令调用**：所有 Git 调用均使用结构化直接 argv 数组、显式 cwd、受限输出缓冲区（bounded output），**严禁通过 bash、cmd、powershell 或其他 shell 解释器执行**。
 - **超时与清理保证**：执行器拥有命令超时和独立的进程清理超时（cleanup deadline）。在取消或执行结束后，强制等待子进程树退出；若子进程树未在清理时限内退出，产生 `GIT_OPERATION_FAILED` 并标记 `gitProcessTreeDidNotExit`，严禁无限制挂起 mutation。
 - **锁隔离**：使用 `GIT_OPTIONAL_LOCKS=undefined` 墓碑标记，防止外部环境的只读环境变量削弱 Git 写入安全。
+
+### Git Dashboard 只读投影
+
+Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
+插件创建 Worktree 时，在既有事务中捕获获取时的 `baseCommit`；`baseBranch` 只用于人类可读的
+获取 ref 展示，不能替代比较边界。历史读取使用 `baseCommit..HEAD`，最多返回 200 个 commit，
+再按需读取一个 commit 的 changed files 和一个文件的 unified diff。
+
+Manage 在每次文件/差异读取前校验 Worktree 仍是当前 Git registration，并验证 commit 同时属于
+baseline 之后且可从 Worktree `HEAD` 到达；随后只允许 changed-file projection 中的精确 `path`
+（rename/copy 也保留 `oldPath`）。因此 Remote 不提供通用 Git object、ref、文件或命令读取能力。
+正常 commit 使用 first-parent，root commit 使用 empty tree；diff 固定禁用 external diff 与
+textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、输出上限、超时、cleanup
+deadline 和 AbortSignal。
+
+没有可证明获取 baseline 的旧 managed/imported Worktree 不猜测历史：旧记录只有在 base branch
+与当前 branch 不同且 merge-base 可证明时返回临时 `derived` baseline，歧义记录和 Main 返回
+明确的 unavailable projection；derived 结果不会写回 Sidecar。Sidecar 损坏或恢复未完成时，
+Git 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。
 
 ---
 

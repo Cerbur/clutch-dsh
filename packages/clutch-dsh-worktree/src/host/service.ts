@@ -5,6 +5,9 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type {
   BranchRecord,
   SessionBinding,
+  WorktreeGitCommitFiles,
+  WorktreeGitFileDiff,
+  WorktreeGitHistory,
   WorktreeId,
   WorktreeRecord,
   WorktreeImportCandidate,
@@ -144,6 +147,33 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly workspaceId: string;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>> {
     return this.remote.listWorktrees(input);
+  }
+
+  @Remote
+  listWorktreeCommits(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+  }): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
+    return this.remote.listWorktreeCommits(input);
+  }
+
+  @Remote
+  listWorktreeCommitFiles(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+    readonly commit: string;
+  }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
+    return this.remote.listWorktreeCommitFiles(input);
+  }
+
+  @Remote
+  getWorktreeCommitFileDiff(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: WorktreeId;
+    readonly commit: string;
+    readonly path: string;
+  }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
+    return this.remote.getWorktreeCommitFileDiff(input);
   }
 
   @Remote

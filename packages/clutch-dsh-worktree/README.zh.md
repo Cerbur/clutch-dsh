@@ -2,14 +2,17 @@
 
 # @cerbur/clutch-dsh-worktree
 
-`@cerbur/clutch-dsh-worktree` 为 DSH Web UI 增加 Git Worktree 视图，按 Workspace →
-Worktree → Session 浏览会话，同时保留原有的 DSH Workspace 和 Session 视角。
+`@cerbur/clutch-dsh-worktree` 为 DSH Web UI 增加 Git Worktree 视图，按 Workspace → Worktree
+→ Session 组织会话，同时保留 DSH 对 Workspace 身份、Session 元数据、原生列表、消息和会话
+历史的事实来源地位。
 
-DSH 仍然是 Workspace 身份、Session 元数据、消息和会话历史的事实来源。插件只在自己的
-数据中维护 Worktree 关系和额外元数据，不复制 transcript，也不改写 DSH Session。
+插件只在自己的 sidecar 中保存 Worktree 关系、获取事实和共享 Worktree 指令。对于受管理的
+Worktree，插件还提供相对于获取 baseline 的只读 Git 与变更 Dashboard；不会复制 transcript
+或改写 DSH Session。
 
-Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。导航、Worktree 生命周期、Session
-操作、指令和已经连接的 Dashboard 动作可用；未完成的卡片和操作会标记为**即将推出**。
+> **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期
+> 操作、Session 操作、指令和受管理 Worktree 的 Git 与变更视图已经连接。派生 Worktree、设置和
+> 其他未完成操作仍标记为**即将推出**。
 
 ## 安装
 
@@ -41,8 +44,8 @@ pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-d
 pnpm dsh web
 ```
 
-DSH Web profile 必须已经能够正常启动。修改 `package.json` 或 `cordis.patch.yml` 后，
-需要重新执行绝对路径安装命令。
+DSH Web profile 必须已经能够正常启动。修改 `package.json` 或 `cordis.patch.yml` 后，需要重新
+执行绝对路径安装命令。
 
 ### 从 GitHub 源码安装（可选）
 
@@ -61,7 +64,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | --- | --- | --- |
 | **Worktree 导航** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 Sidebar 增加 Worktree 模式。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗"> | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。 |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.webp" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、指令，以及复制路径、在 VS Code 中打开、新建 Session 和归档等已连接动作。Git 与变更、派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.webp" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、指令、已连接操作，以及符合条件的受管理 Worktree 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
 
 ## 使用
 
@@ -69,8 +72,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 1. 启动 DSH Web，在 DSH Sidebar 底部选择 **Worktree**。
 2. 在 Worktree 树中搜索或展开 Workspace。
-3. 选择 Local/Main 或某个 Worktree 浏览其 Session。这个视角是附加的，DSH 原生的
-   Workspace 和 Session 导航仍然可用。
+3. 选择 Local/Main 或某个 Worktree 浏览其 Session。这个视角是附加的，DSH 原生的 Workspace
+   和 Session 导航仍然可用。每组初始显示五行，可使用**展开更多**和**收起**查看其余内容。
 4. 使用 header 中的 **Collapse All** 折叠其他无关的 Workspace 和 Worktree，当前 Session 所在的
    Workspace 与 Worktree 保持展开。
 
@@ -78,21 +81,22 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 1. 打开 Local/Main 或 active Worktree 的选项菜单，选择 **Create Worktree**。
 2. 选择本地 base branch，也可以填写新的 branch 名称。
-3. 确认弹窗。插件会创建 Git Worktree 并登记；从该 Worktree 打开 Session 时继续执行
+3. 确认弹窗。插件会创建 Git Worktree，记录获取事实；从该 Worktree 打开 Session 时继续执行
    正常的 Session 和 binding 流程。
 
-Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示
-对应的 readiness 提示和可复制的 setup 指引。
+Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
+的 readiness 提示和可复制的 setup 指引。
 
 ### 导入已有 Worktree
 
 1. 选择 Workspace，打开它的 `+` 操作，然后切换到 **Import**。
 2. 从 branch 和 path 列表中选择候选项。
-3. 选择 **Import Worktree**。插件会原地登记已有目录，不移动、复制或修改其中的文件，
-   随后使用与新建 Worktree 相同的 Session 流程。
+3. 选择 **Import Worktree**。插件会原地登记已有目录，不移动、复制或修改其中的文件，随后
+   使用与新建 Worktree 相同的 Session 流程。
 
-第一版只列出尚未被插件管理、状态 ready、绑定 branch 且不是 repository root 的 Git
-Worktree。Detached、bare、prunable、缺失或无效条目会被省略。
+第一版只列出尚未被插件管理、状态 ready、绑定 branch 且不是 repository root 的 Git Worktree。
+Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 没有记录 acquisition
+commit，因此其 Git 与变更 baseline 不可用。
 
 ### 创建并打开 Session
 
@@ -102,28 +106,52 @@ Worktree。Detached、bare、prunable、缺失或无效条目会被省略。
 - 可以使用 Session list、Worktree Session 菜单或 conversation 中的 DSH 原生 fork 操作。
   Worktree-bound Session 的 child 会绑定到同一个 Worktree，并在该视角打开。
 
-如果 DSH 已创建 Session 但 binding 失败，Session 会被保留。Worktree 视图会提供重试或
-直接打开的恢复操作；插件不会删除或改写 DSH Session。
+如果 DSH 已创建 Session 但 binding 失败，Session 会被保留。Worktree 视图会提供重试或直接打开
+的恢复操作；插件不会删除或改写 DSH Session。
 
 ### 打开 Worktree Dashboard
 
-可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的
-Dashboard 图标打开。Dashboard 是 Sidebar 旁边的 overlay，不会替代 DSH 原生 Session 页面，
-也不会创建 Session。
+可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
+图标打开。Dashboard 是 Sidebar 旁边的 overlay，不会替代 DSH 原生 Session 页面，也不会创建
+Session。
 
-使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。当前
-MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、
-编辑指令、复制路径以及在 VS Code 中打开记录的目录。VS Code 必须安装在浏览器所在机器上，
-且能够访问该路径；链接不会验证应用是否成功启动。
+使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。当前 MVP 已
+连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、
+复制路径、在 VS Code 中打开记录的目录以及查看 Git 与变更。派生 Worktree、设置和其他标记的
+快捷操作仍是占位内容。VS Code 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证
+应用是否成功启动。
+
+### 使用 Git 与变更
+
+从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
+Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载 commit history。选择 commit 后
+加载其 changed files，再选择文件加载该文件的 unified diff；文件列表就绪后会自动选择第一个文件。
+
+比较范围是 `baseCommit..HEAD`。对于 plugin 创建的 Worktree，`baseCommit` 是获取时捕获并保持不变
+的 commit。`baseBranch` 只是获取时使用的人类可读 branch 或 ref；即使该 branch 后续前进或在
+其他位置被 checkout，也不会改变。某些没有 `baseCommit` 的旧 plugin 创建记录，只有在记录的
+base branch 与当前 Worktree branch 不同且能够证明时，才会使用明确标注的运行时 derived merge
+base；这个 derived 值不会持久化。导入的 Worktree、无法判断的旧记录、Detached Worktree 以及
+Local/Main 会显示诚实的不可用状态。
+
+历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，
+root commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全
+状态。如果仓库发生 rewrite，导致已捕获的 baseline 不再是当前 `HEAD` 的 ancestor，历史会显示为
+不可用，而不会猜测比较边界。视图是只读的，不包含 staged 或 unstaged working-tree changes。
+
+浏览器只能选择当前 Worktree projection 返回的 commit 和 path。插件会验证 commit 是否属于当前
+`baseCommit..HEAD` 范围，并验证 path 是否属于该 commit 的 changed files，因此这些 endpoint 不是
+通用 Git object 或文件读取器。刷新会在替换数据加载期间保留 ready 内容；旧 commit 或文件选择的
+迟到响应会被忽略。
 
 ### 添加 Worktree 指令
 
-在 Dashboard 的指令卡片上使用 **Edit** 保存或清空共享指引，长度上限为 32,000 个 UTF-16
-代码单元。存在 active binding 时，下一次模型请求会通过 DSH pre-step hook 收到独立的
+在 Dashboard 的指令卡片上使用 **Edit** 保存或清空共享指引，长度上限为 32,000 个 UTF-16 代码
+单元。存在 active binding 时，下一次模型请求会通过 DSH pre-step hook 收到独立的
 `<system-reminder>` 上下文条目。
 
-指令保存在 plugin 自己的数据中，不会写入项目目录或 `AGENTS.md`。清空、解绑、归档、清理或
-移出管理后，后续请求不再注入；指令消息仍可见时，不变的指令不会重复追加。
+指令保存在 plugin 自己的数据中，不会写入项目目录或 `AGENTS.md`。清空、解绑、归档、清理或移出
+管理后，后续请求不再注入；指令消息仍可见时，不变的指令不会重复追加。
 
 ### 归档或移除 Worktree
 
@@ -132,17 +160,8 @@ MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Wo
 - **Clean Up Disk** 是单独的操作，需要二次确认，并执行普通的非强制 `git worktree remove`。
   插件不会检查 Session 或子代理是否仍在使用该目录；确认前请先停止这些任务。清理成功后
   binding 会 detached，记录会保留到之后显式移出管理。
-- **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和
-  原生 DSH Session，也不要求检查 Session 活动状态。
-
-## 要求
-
-| 组件 | 要求 |
-| --- | --- |
-| DSH Client | `>=0.1.5-rc.1`，需要 Session/Workspace Controller 和 Client Store |
-| DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
-| Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
-| Node.js | `>=20.0.0`，用于 DSH host runtime |
+- **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
+  DSH Session，也不要求检查 Session 活动状态。
 
 ## 行为与限制
 
@@ -156,13 +175,19 @@ MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Wo
 - 一个 Session 最多有一个 active Worktree binding，一个 Worktree 可以有多个 Session。移除或
   清理 Worktree 不会删除 DSH Session。失效的 active binding 会显示 repair 状态，不会静默切换到
   另一个 Worktree。
-- Git 会在刷新和相关菜单打开时读取，插件不会持续监视 Git。外部切换 branch 会显示 branch
-  drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和 recovery-needed
-  状态会保持可见并支持重试。
+- Git 会在相关刷新、相关菜单打开和进入 Git Dashboard 时读取，插件不会持续监视 Git。外部切换
+  branch 会显示 branch drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和
+  recovery-needed 状态会保持可见并支持重试。
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
+- Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
+  sidecar 或 `.git`，也不会提供 working-tree mutation 控件。文件 diff 会禁用 external diff 和
+  text conversion，并限制输出大小以保证安全展示。
+- Git Dashboard 只实现 commit history、changed files 和一次一个 unified diff。V1 不提供 staged
+  或 unstaged changes、commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull
+  request、graph lanes、pagination 或 syntax highlighting。
 - Session 行使用 DSH 原生的状态和相对时间展示。折叠的 Workspace、Main 和 Worktree 分组会
   从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
@@ -177,10 +202,19 @@ MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Wo
 - 如果插件外部索引不可用或损坏，原生 DSH Workspace 和 Session 视图仍可读取，插件会进入
   degraded read-only 状态；它不会用空索引覆盖原生数据。
 
+## 要求
+
+| 组件 | 要求 |
+| --- | --- |
+| DSH Client | `>=0.1.5-rc.1`，需要 Session/Workspace Controller 和 Client Store |
+| DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
+| Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
+| Node.js | `>=20.0.0`，用于 DSH host runtime |
+
 ## 界面语言
 
-Worktree 模式跟随 DSH 当前界面语言。入口、树、菜单、弹窗、状态和重试提示提供英文和中文；
-Workspace 名称、Session 标题、branch、路径以及原始 DSH 或 Git 错误保留原值。
+Worktree 模式跟随 DSH 当前界面语言。入口、树、菜单、弹窗、状态、Dashboard 标签和重试提示
+提供英文和中文。Workspace 名称、Session 标题、branch、路径以及原始 DSH 或 Git 错误保留原值。
 
 ## 开发
 
@@ -198,6 +232,12 @@ Workspace 名称、Session 标题、branch、路径以及原始 DSH 或 Git 错�
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
+```
+
+中英文 README 的结构通过以下测试校验：
+
+```bash
+node --test test/readme-parity.test.mjs
 ```
 
 ## 卸载

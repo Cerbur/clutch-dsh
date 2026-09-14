@@ -18,11 +18,14 @@ import { selectWorktreeAcquisitionFacts } from './worktree-acquisition-facts.js'
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
+import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
+import type { WorktreeManager } from '../../contract/index.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
 
 export interface WorktreeDashboardProps {
+  readonly manager?: WorktreeManager;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
   readonly record: DashboardRecord;
   readonly workspaceTitle: string;
@@ -98,6 +101,7 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
 
 /** A Worktree or browser Main projection with explicitly unconnected MVP cards. */
 export function WorktreeDashboard({
+  manager,
   record,
   workspaceTitle,
   t,
@@ -573,6 +577,13 @@ export function WorktreeDashboard({
                 </Card>
               </div>
             </div>
+          ) : tab === 'git' ? (
+            <WorktreeGitPanel
+              manager={manager}
+              workspaceId={record.workspaceId}
+              worktreeId={record.worktreeId}
+              t={t}
+            />
           ) : tab === 'sessions' ? (
             <Card
               title={tabLabel('sessions')}

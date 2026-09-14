@@ -7,6 +7,7 @@ import {
 } from './subprocess.js';
 import type { GitCommandResult } from './subprocess.js';
 import type {
+  GitCommitHistoryRead,
   GitCommandOptions,
   GitBranchWorktreeInfo,
   GitSubprocessRuntime,
@@ -14,6 +15,113 @@ import type {
   GitWorktreeInfo,
 } from '../types.js';
 import { WorktreeProviderError, providerError } from '../types.js';
+import type { WorktreeGitChangedFile, WorktreeGitFileDiff } from '../../contract/index.js';
+
+const COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu;
+const HISTORY_REQUEST_LIMIT = 201;
+const HISTORY_VISIBLE_LIMIT = 200;
+
+function parseCommitHash(stdout: string, operation: string, workspaceRoot: string): string {
+  const commit = stdout.trim();
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', `Git ${operation} returned an invalid commit`, {
+      workspaceRoot,
+      operation,
+    });
+  }
+  return commit;
+}
+
+function assertCommitArgument(commit: string, operation: string, workspaceRoot: string): void {
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', `Invalid commit supplied to Git ${operation}`, {
+      workspaceRoot,
+      operation,
+    });
+  }
+}
+
+function parseCommitRecord(record: string, workspaceRoot: string): GitCommitHistoryRead['commits'][number] {
+  const fields = record.split('\0');
+  if (fields.length !== 6) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed commit history data', {
+      workspaceRoot,
+      operation: 'list commits',
+    });
+  }
+  const [sha, parents, subject, authorName, authorEmail, authoredAt] = fields;
+  if (
+    !sha ||
+    !COMMIT_PATTERN.test(sha) ||
+    (parents !== '' && parents.split(/\s+/u).some((parent) => !COMMIT_PATTERN.test(parent))) ||
+    !authorName ||
+    !authoredAt
+  ) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned invalid commit history data', {
+      workspaceRoot,
+      operation: 'list commits',
+    });
+  }
+  return {
+    sha,
+    parents: parents === '' ? [] : parents.split(/\s+/u),
+    subject,
+    authorName,
+    ...(authorEmail ? { authorEmail } : {}),
+    authoredAt,
+  };
+}
+
+function parseChangedFiles(stdout: string, workspaceRoot: string): readonly WorktreeGitChangedFile[] {
+  const fields = stdout.split('\0');
+  const files: WorktreeGitChangedFile[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const statusField = (fields[index++] ?? '').replace(/^[\r\n]+/u, '');
+    if (statusField === '') continue;
+    const statusCode = statusField[0]?.toUpperCase();
+    const status = statusCode === 'A'
+      ? 'added'
+      : statusCode === 'M'
+        ? 'modified'
+        : statusCode === 'D'
+          ? 'deleted'
+          : statusCode === 'R'
+            ? 'renamed'
+            : statusCode === 'C'
+              ? 'copied'
+              : statusCode === 'T'
+                ? 'type-changed'
+                : undefined;
+    if (status === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned an unsupported changed-file status', {
+        workspaceRoot,
+        operation: 'list commit files',
+        status: statusField,
+      });
+    }
+    const firstPath = fields[index++];
+    if (!firstPath) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned a changed file without a path', {
+        workspaceRoot,
+        operation: 'list commit files',
+      });
+    }
+    if (status === 'renamed' || status === 'copied') {
+      const newPath = fields[index++];
+      if (!newPath) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned a rename/copy without two paths', {
+          workspaceRoot,
+          operation: 'list commit files',
+        });
+      }
+      files.push({ path: newPath, oldPath: firstPath, status });
+    } else {
+      files.push({ path: firstPath, status });
+    }
+  }
+  return files;
+}
 
 export interface LocalGitAdapterOptions extends GitCommandOptions {
   readonly executable?: string;
@@ -366,6 +474,221 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     } catch (error) {
       if (error instanceof WorktreeProviderError) throw error;
       throw operationError('resolve repository identity', workspaceRoot, undefined, undefined, error);
+    }
+  }
+
+  /** Resolve a ref to one canonical commit object for a bounded Manage operation. */
+  async resolveCommit(workspaceRoot: string, ref: string, options: GitCommandOptions = {}): Promise<string> {
+    try {
+      const result = await this.run(
+        ['rev-parse', '--verify', `${ref}^{commit}`],
+        workspaceRoot,
+        options,
+      );
+      return parseCommitHash(result.stdout, 'resolve commit', workspaceRoot);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('resolve commit', workspaceRoot, undefined, ref, error);
+    }
+  }
+
+  /** Resolve a common ancestor for an explicitly selected legacy baseline. */
+  async findMergeBase(
+    workspaceRoot: string,
+    left: string,
+    right: string,
+    options: GitCommandOptions = {},
+  ): Promise<string | undefined> {
+    try {
+      const result = await this.run(['merge-base', left, right], workspaceRoot, options);
+      return parseCommitHash(result.stdout, 'find merge base', workspaceRoot);
+    } catch (error) {
+      if (
+        error instanceof GitCommandError &&
+        error.exitCode === 1 &&
+        !error.timedOut &&
+        !error.aborted &&
+        !error.outputTruncated
+      ) {
+        return undefined;
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('find merge base', workspaceRoot, undefined, left, error);
+    }
+  }
+
+  /** Check ancestry without exposing a general-purpose commit/object endpoint. */
+  async isCommitAncestor(
+    workspaceRoot: string,
+    ancestor: string,
+    descendant: string,
+    options: GitCommandOptions = {},
+  ): Promise<boolean> {
+    try {
+      await this.run(
+        ['merge-base', '--is-ancestor', ancestor, descendant],
+        workspaceRoot,
+        options,
+      );
+      return true;
+    } catch (error) {
+      if (
+        error instanceof GitCommandError &&
+        error.exitCode === 1 &&
+        !error.timedOut &&
+        !error.aborted &&
+        !error.outputTruncated
+      ) {
+        return false;
+      }
+      throw operationError('check commit ancestry', workspaceRoot, undefined, descendant, error);
+    }
+  }
+
+  /** Read at most 201 commits after a resolved immutable baseline. */
+  async listCommits(
+    worktreeRoot: string,
+    baseCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitCommitHistoryRead> {
+    assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
+    const headCommit = await this.resolveCommit(worktreeRoot, 'HEAD', options);
+    try {
+      const result = await this.run(
+        [
+          'log',
+          '--no-color',
+          '--topo-order',
+          `--max-count=${HISTORY_REQUEST_LIMIT}`,
+          '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+          `${baseCommit}..HEAD`,
+        ],
+        worktreeRoot,
+        options,
+      );
+      const commits = result.stdout
+        .split('\x1e')
+        .map((record) => record.replace(/^[\r\n]+|[\r\n]+$/gu, ''))
+        .filter((record) => record.length > 0)
+        .map((record) => parseCommitRecord(record, worktreeRoot));
+      return {
+        headCommit,
+        commits: commits.slice(0, HISTORY_VISIBLE_LIMIT),
+        truncated: commits.length > HISTORY_VISIBLE_LIMIT,
+      };
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('list commits', worktreeRoot, undefined, baseCommit, error);
+    }
+  }
+
+  private async resolveCommitParents(
+    worktreeRoot: string,
+    commit: string,
+    options: GitCommandOptions,
+  ): Promise<readonly string[]> {
+    assertCommitArgument(commit, 'read commit parents', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['rev-list', '--parents', '-n', '1', commit],
+        worktreeRoot,
+        options,
+      );
+      const fields = result.stdout.trim().split(/\s+/u).filter((field) => field.length > 0);
+      if (fields.length === 0 || !COMMIT_PATTERN.test(fields[0] ?? '') ||
+        fields.slice(1).some((parent) => !COMMIT_PATTERN.test(parent))) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed commit parent data', {
+          workspaceRoot: worktreeRoot,
+          operation: 'read commit parents',
+        });
+      }
+      return fields.slice(1);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('read commit parents', worktreeRoot, undefined, commit, error);
+    }
+  }
+
+  /** Read first-parent (or root) changed-file metadata using NUL-safe output. */
+  async listCommitFiles(
+    worktreeRoot: string,
+    commit: string,
+    options: GitCommandOptions = {},
+  ): Promise<readonly WorktreeGitChangedFile[]> {
+    const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
+    const args = parents.length > 0
+      ? ['diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', parents[0]!, commit]
+      : ['diff-tree', '--root', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', commit];
+    try {
+      const result = await this.run(args, worktreeRoot, options);
+      return parseChangedFiles(result.stdout, worktreeRoot);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('list commit files', worktreeRoot, undefined, commit, error);
+    }
+  }
+
+  /** Read one authorized file patch with external diff and textconv disabled. */
+  async readCommitFileDiff(
+    worktreeRoot: string,
+    commit: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    if (filePath.length === 0) {
+      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
+        workspaceRoot: worktreeRoot,
+        operation: 'read commit file diff',
+      });
+    }
+    const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
+    const args = parents.length > 0
+      ? [
+          'diff',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '-M',
+          parents[0]!,
+          commit,
+          '--',
+          filePath,
+        ]
+      : [
+          'diff-tree',
+          '--root',
+          '--no-commit-id',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '-p',
+          '-M',
+          commit,
+          '--',
+          filePath,
+        ];
+    try {
+      const result = await this.run(args, worktreeRoot, options);
+      const binary = /^Binary files .* differ$/mu.test(result.stdout) ||
+        /^GIT binary patch$/mu.test(result.stdout);
+      return {
+        commit,
+        path: filePath,
+        patch: binary ? '' : result.stdout,
+        binary,
+      };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.outputTruncated) {
+        return {
+          commit,
+          path: filePath,
+          patch: '',
+          binary: false,
+          truncated: true,
+        };
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('read commit file diff', worktreeRoot, filePath, commit, error);
     }
   }
 

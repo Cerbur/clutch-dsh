@@ -17,6 +17,7 @@ const LEGACY_WORKTREE_KEYS = ['absolutePath', 'branch', 'status', 'workspaceId',
 const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceId', 'worktreeId'];
 // Preserve known development-build metadata without accepting arbitrary fields.
 const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
+const V5_OPTIONAL_WORKTREE_KEYS = [...V4_OPTIONAL_WORKTREE_KEYS, 'baseCommit'];
 const BINDING_KEYS = ['sessionId', 'status', 'workspaceId', 'worktreeId'];
 const LEGACY_SNAPSHOT_KEYS = ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_REQUIRED_SNAPSHOT_KEYS = ['bindings', 'revision', 'schemaVersion', 'workspaceId', 'worktrees'];
@@ -57,17 +58,21 @@ function assertWorktreeRecord(
   schemaVersion: number,
 ): asserts value is WorktreeRecord {
   const legacy = schemaVersion === LEGACY_SIDECAR_SCHEMA_VERSION;
-  const isV4 = schemaVersion === SIDECAR_SCHEMA_VERSION;
+  const isV4 = schemaVersion === 4;
+  const isV5 = schemaVersion === SIDECAR_SCHEMA_VERSION;
+  const supportsAcquisitionMetadata = isV4 || isV5;
   if (!isObject(value)) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
   const keys = legacy ? LEGACY_WORKTREE_KEYS : WORKTREE_KEYS;
   if (
-    !hasAllowedKeys(value, keys, isV4 ? V4_OPTIONAL_WORKTREE_KEYS : []) ||
+    !hasAllowedKeys(value, keys, isV5 ? V5_OPTIONAL_WORKTREE_KEYS : supportsAcquisitionMetadata ? V4_OPTIONAL_WORKTREE_KEYS : []) ||
     (value.instructions !== undefined &&
       (typeof value.instructions !== 'string' || value.instructions.length > 32_000)) ||
     (value.baseBranch !== undefined &&
       (typeof value.baseBranch !== 'string' || value.baseBranch.length === 0)) ||
+    (value.baseCommit !== undefined &&
+      (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
     !isOptionalTimestamp(value.createdAt) ||
     !isOptionalTimestamp(value.importedAt) ||
     typeof value.worktreeId !== 'string' ||
@@ -80,7 +85,7 @@ function assertWorktreeRecord(
   ) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
-  if (isV4 && value.diskCleanup !== undefined) {
+  if (supportsAcquisitionMetadata && value.diskCleanup !== undefined) {
     if (value.diskCleanup !== 'completed') {
       throw corrupt(pathname, 'invalid diskCleanup value');
     }
@@ -116,7 +121,11 @@ function assertRepositoryIdentity(value: unknown, pathname: string): asserts val
   }
 }
 
-function assertPendingOperation(value: unknown, pathname: string): asserts value is PendingOperation {
+function assertPendingOperation(
+  value: unknown,
+  pathname: string,
+  schemaVersion: number,
+): asserts value is PendingOperation {
   if (!isObject(value)) throw corrupt(pathname, 'invalid pending operation');
 
   const commonKeys = [
@@ -158,9 +167,16 @@ function assertPendingOperation(value: unknown, pathname: string): asserts value
 
   if (value.type === 'create-worktree') {
     if (
-      !hasAllowedKeys(value, commonKeys, ['baseCommit', 'baseRef', 'branch', 'repository', 'repositoryFingerprint']) ||
+      !hasAllowedKeys(value, commonKeys, [
+        ...(schemaVersion === SIDECAR_SCHEMA_VERSION ? ['baseCommit'] : []),
+        'baseRef',
+        'branch',
+        'repository',
+        'repositoryFingerprint',
+      ]) ||
       typeof value.branch !== 'string' ||
-      (value.baseCommit !== undefined && typeof value.baseCommit !== 'string') ||
+      (value.baseCommit !== undefined &&
+        (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
       (value.baseRef !== undefined && typeof value.baseRef !== 'string')
     ) {
       throw corrupt(pathname, 'invalid create pending operation');
@@ -236,7 +252,7 @@ function assertGeneratedPluginPath(
   }
 }
 
-/** Validate v1/v2/v3 on-disk data and return the current in-memory v3 projection. */
+/** Validate supported legacy/current on-disk data and return the current in-memory v5 projection. */
 export function validateSidecarSnapshot(
   value: unknown,
   pathname: string,
@@ -251,7 +267,7 @@ export function validateSidecarSnapshot(
     ? hasExactKeys(value, LEGACY_SNAPSHOT_KEYS)
     : schemaVersion === 2
       ? hasExactKeys(value, ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'])
-      : (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+      : (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
         hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, V3_OPTIONAL_SNAPSHOT_KEYS);
   if (!validShape || !Array.isArray(value.worktrees) || !Array.isArray(value.bindings)) {
     throw corrupt(pathname, 'invalid sidecar snapshot');
@@ -260,12 +276,13 @@ export function validateSidecarSnapshot(
     schemaVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
     schemaVersion !== 2 &&
     schemaVersion !== 3 &&
+    schemaVersion !== 4 &&
     schemaVersion !== SIDECAR_SCHEMA_VERSION
   ) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion });
   }
   if (
-    (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+    (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
     (typeof value.revision !== 'string' || !/^\d+$/.test(value.revision))
   ) {
     throw corrupt(pathname, 'invalid sidecar revision');
@@ -280,7 +297,7 @@ export function validateSidecarSnapshot(
   for (const record of value.worktrees) assertWorktreeRecord(record, pathname, schemaVersion);
   for (const binding of value.bindings) assertBinding(binding, pathname);
   if (value.repository !== undefined) assertRepositoryIdentity(value.repository, pathname);
-  if (value.pendingOperation !== undefined) assertPendingOperation(value.pendingOperation, pathname);
+  if (value.pendingOperation !== undefined) assertPendingOperation(value.pendingOperation, pathname, schemaVersion);
   if (value.recoveryIssues !== undefined) {
     if (!Array.isArray(value.recoveryIssues)) throw corrupt(pathname, 'invalid recovery issues');
     for (const issue of value.recoveryIssues) assertRecoveryIssue(issue, pathname);

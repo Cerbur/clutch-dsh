@@ -1,0 +1,517 @@
+import assert from 'node:assert/strict';
+import { execFile as execFileCallback } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import test from 'node:test';
+
+import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
+import {
+  LocalGitAdapter,
+  WorkspaceShardedSidecarRepository,
+  createWorktreeManager,
+} from '../lib/index.js';
+
+const execFile = promisify(execFileCallback);
+
+async function runGit(cwd, args) {
+  return execFile('git', args, { cwd, encoding: 'utf8' });
+}
+
+async function createFixture() {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-dashboard-'));
+  const dshHome = path.join(tempRoot, 'dsh-home');
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  await mkdir(dshHome, { recursive: true });
+  await mkdir(workspaceRoot, { recursive: true });
+  await runGit(workspaceRoot, ['init']);
+  await runGit(workspaceRoot, ['config', 'user.email', 'test@example.invalid']);
+  await runGit(workspaceRoot, ['config', 'user.name', 'Dashboard Test']);
+  await runGit(workspaceRoot, ['branch', '-M', 'main']);
+  await writeFile(path.join(workspaceRoot, 'README.md'), '# baseline\n');
+  await runGit(workspaceRoot, ['add', 'README.md']);
+  await runGit(workspaceRoot, ['commit', '-m', 'baseline']);
+
+  const dsh = {
+    async getWorkspace(workspaceId) {
+      return workspaceId === 'ws_dashboard'
+        ? { workspaceId, projectId: 'project_dashboard', rootPath: workspaceRoot }
+        : undefined;
+    },
+    async getSession() {
+      return undefined;
+    },
+    async listSessions() {
+      return [];
+    },
+  };
+  const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
+  const manager = createWorktreeManager({ dsh, dshHome, sidecar });
+  return { tempRoot, dshHome, workspaceRoot, sidecar, manager };
+}
+
+test('captures an immutable baseline and serves commit history, files, and a file diff', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/dashboard',
+    });
+    assert.match(record.baseCommit, /^[0-9a-f]{40}$/u);
+
+    const targetPath = record.absolutePath;
+    await writeFile(path.join(targetPath, 'change.txt'), 'first\n');
+    await runGit(targetPath, ['add', 'change.txt']);
+    await runGit(targetPath, ['commit', '-m', 'add dashboard file']);
+    const firstCommit = (await runGit(targetPath, ['rev-parse', 'HEAD'])).stdout.trim();
+
+    await writeFile(path.join(targetPath, 'change.txt'), 'first\nsecond\n');
+    await runGit(targetPath, ['add', 'change.txt']);
+    await runGit(targetPath, ['commit', '-m', 'update dashboard file']);
+    const secondCommit = (await runGit(targetPath, ['rev-parse', 'HEAD'])).stdout.trim();
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.equal(history.baseline.commit, record.baseCommit);
+    assert.equal(history.baseline.source, 'captured');
+    assert.deepEqual(history.commits.map((commit) => commit.sha), [secondCommit, firstCommit]);
+    assert.equal(history.headCommit, secondCommit);
+    assert.equal(history.truncated, false);
+
+    const files = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: firstCommit,
+    });
+    assert.deepEqual(files.files, [{ path: 'change.txt', status: 'added' }]);
+
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: secondCommit,
+      path: 'change.txt',
+    });
+    assert.equal(diff.binary, false);
+    assert.match(diff.patch, /\+second/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects baseline commits and paths that are outside the authorized Worktree projection', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/security',
+    });
+    await writeFile(path.join(record.absolutePath, 'allowed.txt'), 'allowed\n');
+    await runGit(record.absolutePath, ['add', 'allowed.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'authorized change']);
+    const commit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        commit: record.baseCommit,
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.getWorktreeCommitFileDiff({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        commit,
+        path: 'README.md',
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.getWorktreeCommitFileDiff({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        commit: 'not-a-commit',
+        path: 'allowed.txt',
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('keeps the captured baseline stable when the source branch moves and compares merge files to the first parent', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/merge-dashboard',
+    });
+    const baseline = record.baseCommit;
+
+    await writeFile(path.join(fixture.workspaceRoot, 'main-after-acquisition.txt'), 'main moved\n');
+    await runGit(fixture.workspaceRoot, ['add', 'main-after-acquisition.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'move acquisition branch']);
+
+    await writeFile(path.join(record.absolutePath, 'feature.txt'), 'feature\n');
+    await runGit(record.absolutePath, ['add', 'feature.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'feature parent']);
+    await runGit(record.absolutePath, ['checkout', '-b', 'dashboard-merge-side']);
+    await writeFile(path.join(record.absolutePath, 'side.txt'), 'side\n');
+    await runGit(record.absolutePath, ['add', 'side.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'merge side']);
+    await runGit(record.absolutePath, ['checkout', record.branch]);
+    await runGit(record.absolutePath, ['merge', '--no-ff', 'dashboard-merge-side', '-m', 'merge dashboard side']);
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    const mergeCommit = history.commits.find((commit) => commit.subject === 'merge dashboard side');
+    assert.equal(record.baseCommit, baseline);
+    assert.equal(history.baseline.commit, baseline);
+    assert.equal(mergeCommit?.parents.length, 2);
+
+    const files = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: mergeCommit.sha,
+    });
+    assert.deepEqual(files.files, [{ path: 'side.txt', status: 'added' }]);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('returns an unavailable projection when a captured baseline is no longer an ancestor', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/history-rewrite',
+    });
+    await runGit(record.absolutePath, ['checkout', '--orphan', 'unrelated-dashboard']);
+    await runGit(record.absolutePath, ['rm', '-r', '-f', '--ignore-unmatch', '.']);
+    await writeFile(path.join(record.absolutePath, 'unrelated.txt'), 'unrelated\n');
+    await runGit(record.absolutePath, ['add', 'unrelated.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'unrelated history']);
+
+    const capturedHistory = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.deepEqual(capturedHistory, {
+      commits: [],
+      truncated: false,
+      unavailableReason: 'baseline-unknown',
+    });
+
+    await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((candidate) => {
+          if (candidate.worktreeId !== record.worktreeId) return candidate;
+          const { baseCommit: _baseCommit, ...legacy } = candidate;
+          void _baseCommit;
+          return legacy;
+        }),
+      },
+    }));
+    const legacyHistory = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.deepEqual(legacyHistory, {
+      commits: [],
+      truncated: false,
+      unavailableReason: 'baseline-unknown',
+    });
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('keeps Main and ambiguous legacy Worktrees unavailable while deriving only a legacy branch baseline', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/legacy',
+    });
+    await writeFile(path.join(record.absolutePath, 'legacy.txt'), 'legacy\n');
+    await runGit(record.absolutePath, ['add', 'legacy.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'legacy change']);
+
+    await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map(({ baseCommit: _baseCommit, ...item }) => ({
+          ...item,
+          baseBranch: 'main',
+        })),
+      },
+    }));
+    const derived = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.equal(derived.baseline.source, 'derived');
+    assert.equal(derived.commits.length, 1);
+
+    await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((item) => ({ ...item, baseBranch: 'feature/legacy' })),
+      },
+    }));
+    const ambiguous = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.deepEqual(ambiguous, {
+      commits: [],
+      truncated: false,
+      unavailableReason: 'baseline-unknown',
+    });
+
+    assert.deepEqual(
+      await fixture.manager.listWorktreeCommits({ workspaceId: 'ws_dashboard', worktreeId: 'main' }),
+      { commits: [], truncated: false, unavailableReason: 'main' },
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flush() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+test('loads Git lazily, preserves ready refresh content, and ignores stale commit/file responses', async () => {
+  const firstCommit = '1'.repeat(40);
+  const secondCommit = '2'.repeat(40);
+  const calls = [];
+  const historyResponse = deferred();
+  const fileResponses = new Map();
+  const diffResponses = new Map();
+  const manager = {
+    listWorktreeCommits() {
+      calls.push('history');
+      return historyResponse.promise;
+    },
+    listWorktreeCommitFiles({ commit }) {
+      calls.push(`files:${commit}`);
+      const response = deferred();
+      fileResponses.set(commit, response);
+      return response.promise;
+    },
+    getWorktreeCommitFileDiff({ commit, path: filePath }) {
+      calls.push(`diff:${commit}:${filePath}`);
+      const response = deferred();
+      diffResponses.set(`${commit}:${filePath}`, response);
+      return response.promise;
+    },
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+  });
+  assert.deepEqual(calls, []);
+
+  const historyTask = controller.loadHistory();
+  assert.deepEqual(calls, ['history']);
+  historyResponse.resolve({
+    headCommit: secondCommit,
+    baseline: { commit: '0'.repeat(40), source: 'captured' },
+    commits: [
+      {
+        sha: secondCommit,
+        parents: [firstCommit],
+        subject: 'second',
+        authorName: 'Test',
+        authoredAt: '2026-09-14T00:00:00Z',
+      },
+      {
+        sha: firstCommit,
+        parents: ['0'.repeat(40)],
+        subject: 'first',
+        authorName: 'Test',
+        authoredAt: '2026-09-13T00:00:00Z',
+      },
+    ],
+    truncated: false,
+  });
+  await historyTask;
+  await flush();
+  assert.equal(controller.getSnapshot().selectedCommit, secondCommit);
+  assert.equal(fileResponses.has(secondCommit), true);
+
+  const firstFiles = fileResponses.get(secondCommit);
+  firstFiles.resolve({
+    commit: secondCommit,
+    files: [
+      { path: 'one.txt', status: 'modified' },
+      { path: 'two.txt', status: 'added' },
+    ],
+  });
+  await flush();
+  assert.equal(diffResponses.has(`${secondCommit}:one.txt`), true);
+
+  controller.selectPath('two.txt');
+  assert.equal(diffResponses.has(`${secondCommit}:two.txt`), true);
+  diffResponses.get(`${secondCommit}:two.txt`).resolve({
+    commit: secondCommit,
+    path: 'two.txt',
+    patch: '@@ -0,0 +1 @@\n+two\n',
+    binary: false,
+  });
+  diffResponses.get(`${secondCommit}:one.txt`).resolve({
+    commit: secondCommit,
+    path: 'one.txt',
+    patch: '@@ -1 +1 @@\n-one\n+late\n',
+    binary: false,
+  });
+  await flush();
+  assert.equal(controller.getSnapshot().selectedPath, 'two.txt');
+  assert.equal(controller.getSnapshot().diff.status, 'ready');
+  assert.equal(controller.getSnapshot().diff.value.path, 'two.txt');
+
+  const refreshResponse = deferred();
+  manager.listWorktreeCommits = () => {
+    calls.push('history:refresh');
+    return refreshResponse.promise;
+  };
+  const refreshTask = controller.refresh();
+  assert.equal(controller.getSnapshot().history.status, 'ready');
+  assert.equal(controller.getSnapshot().history.refreshing, true);
+  assert.equal(controller.getSnapshot().history.value.headCommit, secondCommit);
+  refreshResponse.resolve({
+    headCommit: secondCommit,
+    baseline: { commit: '0'.repeat(40), source: 'captured' },
+    commits: [],
+    truncated: false,
+  });
+  await refreshTask;
+  assert.equal(controller.getSnapshot().history.status, 'ready');
+  assert.equal(controller.getSnapshot().history.value.commits.length, 0);
+  controller.dispose();
+});
+
+test('shares equivalent in-flight history, file, and diff reads', async () => {
+  const commit = '3'.repeat(40);
+  const parent = '2'.repeat(40);
+  const historyResponse = deferred();
+  const filesResponse = deferred();
+  const diffResponse = deferred();
+  let historyCalls = 0;
+  let filesCalls = 0;
+  let diffCalls = 0;
+  const manager = {
+    listWorktreeCommits() {
+      historyCalls += 1;
+      return historyResponse.promise;
+    },
+    listWorktreeCommitFiles() {
+      filesCalls += 1;
+      return filesResponse.promise;
+    },
+    getWorktreeCommitFileDiff() {
+      diffCalls += 1;
+      return diffResponse.promise;
+    },
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+  });
+
+  const firstHistoryTask = controller.loadHistory();
+  assert.equal(controller.loadHistory(), firstHistoryTask);
+  assert.equal(historyCalls, 1);
+  historyResponse.resolve({
+    headCommit: commit,
+    baseline: { commit: '1'.repeat(40), source: 'captured' },
+    commits: [{
+      sha: commit,
+      parents: [parent],
+      subject: 'shared request',
+      authorName: 'Test',
+      authoredAt: '2026-09-14T00:00:00Z',
+    }],
+    truncated: false,
+  });
+  await firstHistoryTask;
+  controller.selectCommit(commit);
+  assert.equal(filesCalls, 1);
+
+  filesResponse.resolve({
+    commit,
+    files: [{ path: 'shared.txt', status: 'modified' }],
+  });
+  await flush();
+  controller.selectPath('shared.txt');
+  assert.equal(diffCalls, 1);
+  controller.selectPath('shared.txt');
+  assert.equal(diffCalls, 1);
+
+  diffResponse.resolve({
+    commit,
+    path: 'shared.txt',
+    patch: '@@ -1 +1 @@\n-old\n+new\n',
+    binary: false,
+  });
+  await flush();
+  assert.equal(controller.getSnapshot().diff.status, 'ready');
+  controller.dispose();
+});
+
+test('reads binary commit files without returning patch bytes', async () => {
+  const fixture = await createFixture();
+  try {
+    const adapter = new LocalGitAdapter();
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/binary',
+    });
+    await writeFile(path.join(record.absolutePath, 'asset.bin'), Buffer.from([0, 1, 2, 3]));
+    await runGit(record.absolutePath, ['add', 'asset.bin']);
+    await runGit(record.absolutePath, ['commit', '-m', 'add binary asset']);
+    const commit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    const diff = await adapter.readCommitFileDiff(record.absolutePath, commit, 'asset.bin');
+    assert.equal(diff.binary, true);
+    assert.equal(diff.patch, '');
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});

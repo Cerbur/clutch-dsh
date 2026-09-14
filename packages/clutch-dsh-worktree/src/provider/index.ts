@@ -27,6 +27,7 @@ export type {
   DshSessionSummary,
   DshWorkspaceSummary,
   GitBranchWorktreeInfo,
+  GitCommitHistoryRead,
   GitCommandOptions,
   GitSubprocessRuntime,
   GitWorktreeAdapter,

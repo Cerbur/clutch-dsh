@@ -6,7 +6,10 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
-- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, the nine `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and outer/inner error normalization. The import endpoints are `listImportCandidates` and `importWorktree`; no second transport is added.
+- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
+  `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
+  outer/inner error normalization. The Git endpoints are `listWorktreeCommits`,
+  `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; no second transport is added.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -123,7 +126,15 @@ The accepted branch supplies the Worktree name, and clicking the dashboard title
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
-Tabs implement roving keyboard focus. Git details, derived Worktrees, Settings, and other unconnected
+Tabs implement roving keyboard focus. The Git tab is mounted only while selected, so opening the
+Dashboard or its Overview tab does not issue a Git read. Its first mount loads commit history; a
+commit selection loads changed files and a file selection loads one diff. The Git state machine keeps
+bounded per-commit/per-file caches, retains ready content during refresh, and uses request generations
+to ignore late results after a newer selection or disposal. Main and Worktrees without an honest
+acquisition baseline render an explicit unavailable state. The Git tab never reads sidecar files or
+`.git`, and it exposes no working-tree mutation controls.
+
+Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The connected Worktree
 instructions card persists plugin-owned text through the existing Manager path; active bindings receive
 that text through the Host's DSH `agent/pre-step` hook.

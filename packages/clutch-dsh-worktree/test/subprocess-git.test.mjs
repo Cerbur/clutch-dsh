@@ -548,3 +548,148 @@ test('immediately rejects and does not run when signal is pre-aborted', async ()
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
+
+test('reads machine-delimited commit history with the immutable range and visible limit', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const baseline = 'b'.repeat(40);
+  const head = 'a'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: `${head}\n` },
+        { stdout: `${head}\0${baseline}\0subject with spaces and unicode ✓\0Alice\0alice@example.invalid\x002026-09-14T00:00:00+00:00\x1e` },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    const history = await git.listCommits(workspaceRoot, baseline);
+
+    assert.equal(history.headCommit, head);
+    assert.equal(history.commits.length, 1);
+    assert.equal(history.commits[0].subject, 'subject with spaces and unicode ✓');
+    assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      'log',
+      '--no-color',
+      '--topo-order',
+      '--max-count=201',
+      '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+      `${baseline}..HEAD`,
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('projects rename/copy statuses and uses root or first-parent file comparisons', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const commit = 'a'.repeat(40);
+  const parent = 'b'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: `${commit} ${parent}\n` },
+        { stdout: 'R100\0old name.txt\0new name.txt\0C100\0source.txt\0copy.txt\0M\0space file.txt\0' },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    assert.deepEqual(await git.listCommitFiles(workspaceRoot, commit), [
+      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
+      { path: 'copy.txt', oldPath: 'source.txt', status: 'copied' },
+      { path: 'space file.txt', status: 'modified' },
+    ]);
+    assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      'diff-tree',
+      '--no-commit-id',
+      '--name-status',
+      '-z',
+      '-r',
+      '-M',
+      '-C',
+      parent,
+      commit,
+    ]);
+
+    const rootCommit = 'c'.repeat(40);
+    const rootRuntime = createFakeRuntime({
+      responses: [
+        { stdout: `${rootCommit}\n` },
+        { stdout: 'A\0README.md\0' },
+      ],
+    });
+    const rootGit = new LocalGitAdapter({ subprocess: rootRuntime });
+    assert.deepEqual(await rootGit.listCommitFiles(workspaceRoot, rootCommit), [
+      { path: 'README.md', status: 'added' },
+    ]);
+    assert.deepEqual(rootRuntime.spawnCalls[1].argv.slice(1), [
+      'diff-tree',
+      '--root',
+      '--no-commit-id',
+      '--name-status',
+      '-z',
+      '-r',
+      '-M',
+      '-C',
+      rootCommit,
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('reads one file diff with the mandatory safe-diff flags and an argv path boundary', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const commit = 'a'.repeat(40);
+  const parent = 'b'.repeat(40);
+  const filePath = '-name with spaces.txt';
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: `${commit} ${parent}\n` },
+        { stdout: `diff --git a/${filePath} b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n` },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    const diff = await git.readCommitFileDiff(workspaceRoot, commit, filePath);
+
+    assert.equal(diff.binary, false);
+    assert.match(diff.patch, /\+new/u);
+    assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '-M',
+      parent,
+      commit,
+      '--',
+      filePath,
+    ]);
+    assert.equal('shell' in runtime.spawnCalls[1], false);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('returns a bounded truncated result for oversized diff output', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const commit = 'a'.repeat(40);
+  const parent = 'b'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: `${commit} ${parent}\n` },
+        { stdout: 'partial diff output', lossy: true },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime, maxOutputBytes: 1024 });
+
+    assert.deepEqual(
+      await git.readCommitFileDiff(workspaceRoot, commit, 'large.txt'),
+      { commit, path: 'large.txt', patch: '', binary: false, truncated: true },
+    );
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});

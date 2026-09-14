@@ -3,6 +3,9 @@ import type {
   WorktreeActivity,
   WorktreeErrorCode,
   WorktreeErrorDetails,
+  WorktreeGitChangedFile,
+  WorktreeGitCommit,
+  WorktreeGitFileDiff,
   WorktreeId,
   WorktreeRecord,
   WorkspaceId,
@@ -15,7 +18,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess';
  * corruption rather than guessed or silently migrated.
  */
 export const LEGACY_SIDECAR_SCHEMA_VERSION = 1 as const;
-export const SIDECAR_SCHEMA_VERSION = 4 as const;
+export const SIDECAR_SCHEMA_VERSION = 5 as const;
 
 export interface RepositoryIdentity {
   readonly topLevel: string;
@@ -155,6 +158,13 @@ export interface GitCommandOptions {
   readonly signal?: AbortSignal;
 }
 
+/** Provider-only history result before Manage attaches the acquisition baseline. */
+export interface GitCommitHistoryRead {
+  readonly headCommit: string;
+  readonly commits: readonly WorktreeGitCommit[];
+  readonly truncated: boolean;
+}
+
 /**
  * Git Provider 消费的最小 subprocess capability；具体 local implementation 由 DSH Host
  * composition 持有。
@@ -165,9 +175,10 @@ export interface GitCommandOptions {
 export type GitSubprocessRuntime = Pick<SubprocessRuntime, 'resolveExecutable' | 'spawn'>;
 
 /**
- * Git worktree 的窄端口：只允许校验、列举、创建和删除，不提供任意 Git、远程或业务文件操作。
- * Narrow Git worktree port: it permits validation, listing, creation, and
- * removal only, with no arbitrary Git, remote, or working-file operations.
+ * Git worktree 的窄端口：只允许校验、列举、创建和删除，以及受约束的历史读取，
+ * 不提供任意 Git、远程或业务文件操作。
+ * Narrow Git worktree port: it permits validation, listing, creation, removal,
+ * and constrained history reads, with no arbitrary Git, remote, or working-file operations.
  */
 export interface GitWorktreeAdapter {
   /** Validate the repository without changing the long-standing adapter contract. */
@@ -190,6 +201,41 @@ export interface GitWorktreeAdapter {
   ): Promise<readonly GitBranchWorktreeInfo[]>;
   listBranches(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly string[]>;
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
+  /** Resolve one commit object without exposing a generic object reader. */
+  resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;
+  /** Resolve a common ancestor for legacy baseline projection. */
+  findMergeBase?(
+    workspaceRoot: string,
+    left: string,
+    right: string,
+    options?: GitCommandOptions,
+  ): Promise<string | undefined>;
+  /** Check ancestry for Manage-side commit membership validation. */
+  isCommitAncestor?(
+    workspaceRoot: string,
+    ancestor: string,
+    descendant: string,
+    options?: GitCommandOptions,
+  ): Promise<boolean>;
+  /** Read the bounded commit history after one already-resolved baseline. */
+  listCommits?(
+    worktreeRoot: string,
+    baseCommit: string,
+    options?: GitCommandOptions,
+  ): Promise<GitCommitHistoryRead>;
+  /** Read changed-file metadata for one commit. */
+  listCommitFiles?(
+    worktreeRoot: string,
+    commit: string,
+    options?: GitCommandOptions,
+  ): Promise<readonly WorktreeGitChangedFile[]>;
+  /** Read one file patch after Manage has authorized both commit and path. */
+  readCommitFileDiff?(
+    worktreeRoot: string,
+    commit: string,
+    filePath: string,
+    options?: GitCommandOptions,
+  ): Promise<WorktreeGitFileDiff>;
   createWorktree(
     workspaceRoot: string,
     targetPath: string,

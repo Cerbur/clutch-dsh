@@ -23,7 +23,8 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
     left.instructions === right.instructions &&
     left.createdAt === right.createdAt &&
     left.importedAt === right.importedAt &&
-    left.baseBranch === right.baseBranch
+    left.baseBranch === right.baseBranch &&
+    left.baseCommit === right.baseCommit
   );
 }
 

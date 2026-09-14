@@ -1,5 +1,31 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## Unreleased
+
+### 中文
+
+#### 新增
+
+- 为已管理 Worktree 增加只读“Git 与变更”Dashboard：按不可变 acquisition `baseCommit` 展示 commit 历史、changed files 和 unified diff。
+- 增加 commit/path 归属校验、首个 Git Tab lazy load、刷新 ready 内容保留、binary/超大 diff 降级以及旧请求结果隔离。
+
+#### 优化
+
+- Sidecar schema 升级至 v5，严格保留可选 `baseCommit`，同时兼容读取 v1–v4 历史记录。
+- Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
+
+### English
+
+#### Added
+
+- Add a read-only Git & Changes Dashboard for managed Worktrees, showing commit history, changed files, and unified diffs relative to the immutable acquisition `baseCommit`.
+- Add commit/path membership checks, first-Git-tab lazy loading, ready-content-preserving refreshes, binary/oversized-diff degradation, and stale-result isolation.
+
+#### Improved
+
+- Upgrade the sidecar schema to v5 with strict optional `baseCommit` support while continuing to read v1–v4 historical records.
+- Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
+
 ## 0.1.12 — 2026-09-14
 
 ### 中文

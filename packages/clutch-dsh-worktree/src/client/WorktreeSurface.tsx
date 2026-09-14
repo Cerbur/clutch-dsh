@@ -221,6 +221,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       {dashboardRecord !== undefined && (
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
+          manager={props.manager}
           record={dashboardRecord}
           onSaveInstructions={
             props.manager && !isMainWorktreeId(dashboardRecord.worktreeId)

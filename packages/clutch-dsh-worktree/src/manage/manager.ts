@@ -7,6 +7,9 @@ import type {
   SessionBinding,
   WorktreeId,
   WorktreeImportCandidate,
+  WorktreeGitCommitFiles,
+  WorktreeGitFileDiff,
+  WorktreeGitHistory,
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
@@ -33,6 +36,11 @@ import {
   unarchiveWorktree,
   recoverWorktrees,
 } from './manager-worktrees.js';
+import {
+  getWorktreeCommitFileDiff,
+  listWorktreeCommitFiles,
+  listWorktreeCommits,
+} from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
 import { requireWorkspace } from './manager-support.js';
 
@@ -153,6 +161,30 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
     return this.afterRecovery(() => listWorktrees(this.context, input));
+  }
+
+  listWorktreeCommits(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+  }): Promise<WorktreeGitHistory> {
+    return this.afterRecovery(() => listWorktreeCommits(this.context, input));
+  }
+
+  listWorktreeCommitFiles(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly commit: string;
+  }): Promise<WorktreeGitCommitFiles> {
+    return this.afterRecovery(() => listWorktreeCommitFiles(this.context, input));
+  }
+
+  getWorktreeCommitFileDiff(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly commit: string;
+    readonly path: string;
+  }): Promise<WorktreeGitFileDiff> {
+    return this.afterRecovery(() => getWorktreeCommitFileDiff(this.context, input));
   }
 
   listImportCandidates(input: {

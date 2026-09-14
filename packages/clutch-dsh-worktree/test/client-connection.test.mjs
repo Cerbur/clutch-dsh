@@ -12,6 +12,9 @@ const METHODS = [
   ['adoptWorktreeBranch', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token', expectedBranch: 'merge/foo' }, null],
   ['recoverWorktrees', { workspaceId: 'ws1' }, null],
   ['listWorktrees', { workspaceId: 'ws1' }, []],
+  ['listWorktreeCommits', { workspaceId: 'ws1', worktreeId: 'wt1' }, { commits: [], truncated: false }],
+  ['listWorktreeCommitFiles', { workspaceId: 'ws1', worktreeId: 'wt1', commit: 'a'.repeat(40) }, { commit: 'a'.repeat(40), files: [] }],
+  ['getWorktreeCommitFileDiff', { workspaceId: 'ws1', worktreeId: 'wt1', commit: 'a'.repeat(40), path: 'src/index.ts' }, { commit: 'a'.repeat(40), path: 'src/index.ts', patch: '', binary: false }],
   ['listImportCandidates', { workspaceId: 'ws1' }, []],
   ['listBranches', { workspaceId: 'ws1' }, []],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
@@ -71,6 +74,9 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
     'worktreeManager/listWorktrees',
+    'worktreeManager/listWorktreeCommits',
+    'worktreeManager/listWorktreeCommitFiles',
+    'worktreeManager/getWorktreeCommitFileDiff',
     'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',

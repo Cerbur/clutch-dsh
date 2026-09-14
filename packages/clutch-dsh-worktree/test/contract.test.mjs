@@ -97,6 +97,9 @@ test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'updateWorktreeInstructions',
     'listWorktrees',
+    'listWorktreeCommits',
+    'listWorktreeCommitFiles',
+    'getWorktreeCommitFileDiff',
     'listImportCandidates',
     'listBranches',
     'createWorktree',
