@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
+import test from 'node:test';
+
+const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
+
+function cssBlock(source, selector) {
+  const start = source.indexOf(selector);
+  assert.notEqual(start, -1, 'missing CSS selector: ' + selector);
+  const end = source.indexOf('}', start);
+  assert.notEqual(end, -1, 'unterminated CSS block: ' + selector);
+  return source.slice(start, end).replace(/\s+/gu, ' ').replace(/\(\s+/gu, '(').replace(/\s+\)/gu, ')');
+}
+
+test('Git diff surfaces use DSH theme tokens for dark mode', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const diff = cssBlock(css, '.gitDiff {');
+  const hunk = cssBlock(css, '.gitDiffHunkHeader {');
+  const additions = cssBlock(css, '.gitDiffLineadd {');
+  const deletions = cssBlock(css, '.gitDiffLinedelete {');
+  const raw = cssBlock(css, '.gitRawDiff {');
+
+  assert.ok(diff.includes('background: var(--dsw-alias-markdown-code-block, #fafbfc);'));
+  assert.ok(diff.includes('color: var(--dsw-alias-label-primary, #263342);'));
+  assert.ok(hunk.includes('background: var(--dsw-alias-markdown-code-block-banner, #edf3fb);'));
+  assert.ok(hunk.includes('color: var(--dsw-alias-state-business-primary, #4a70a1);'));
+  assert.ok(
+    additions.includes(
+      'background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #23845f) 18%, var(--dsw-alias-markdown-code-block, #fafbfc));',
+    ),
+  );
+  assert.ok(
+    deletions.includes(
+      'background: color-mix(in srgb, var(--dsw-alias-state-error-secondary, #bd5d55) 18%, var(--dsw-alias-markdown-code-block, #fafbfc));',
+    ),
+  );
+  assert.ok(raw.includes('background: var(--dsw-alias-markdown-code-block, #fafbfc);'));
+  assert.ok(raw.includes('color: var(--dsw-alias-label-primary, #263342);'));
+
+  for (const lightOnlyColor of ['#fafbfc', '#263342', '#edf3fb', '#ecf8f0', '#fff0ef']) {
+    assert.equal(diff.includes('background: ' + lightOnlyColor), false);
+    assert.equal(diff.includes('color: ' + lightOnlyColor), false);
+    assert.equal(hunk.includes('background: ' + lightOnlyColor), false);
+    assert.equal(hunk.includes('color: ' + lightOnlyColor), false);
+    assert.equal(additions.includes('background: ' + lightOnlyColor), false);
+    assert.equal(deletions.includes('background: ' + lightOnlyColor), false);
+    assert.equal(raw.includes('background: ' + lightOnlyColor), false);
+    assert.equal(raw.includes('color: ' + lightOnlyColor), false);
+  }
+});
