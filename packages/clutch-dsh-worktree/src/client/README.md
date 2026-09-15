@@ -11,8 +11,8 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   outer/inner error normalization. The Git endpoints are `listWorktreeCommits`,
   `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; the Dashboard facts mutation uses
   `updateWorktreeBaseBranch` on the same adapter, and no second transport is added. Overview reuses the
-  existing history and working-tree-file reads for one compact status projection when a valid persisted
-  baseline exists; it does not add a Git-specific endpoint or branch-list read.
+  existing history, committed-summary, and working-tree-file reads for one compact status projection when a
+  valid persisted baseline exists; it does not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -130,8 +130,9 @@ branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success 
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. For a managed Worktree
-with a valid persisted `baseBranch`, Overview performs one compact status read for ahead/behind and live
-working-tree line counts without loading the branch list; Main, unavailable, and baseline-unselected views
+with a valid persisted `baseBranch`, Overview performs one compact status read for ahead/behind, committed
+baseline-to-HEAD line counts, and live working-tree line counts without loading the branch list; Main, unavailable,
+and baseline-unselected views
 remain disconnected. The Git tab's first mount loads local branches and uses the persisted `baseBranch` shown
 in Dashboard facts as the initial selection when it is present and different from the current Worktree branch;
 otherwise it prompts for a baseline. The Overview facts editor keeps

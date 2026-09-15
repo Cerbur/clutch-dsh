@@ -22,7 +22,8 @@ export type WorktreeGitOverviewState =
   | {
       readonly status: 'ready';
       readonly history: WorktreeGitHistory;
-      readonly files: readonly WorktreeGitChangedFile[];
+      readonly committedFiles: readonly WorktreeGitChangedFile[];
+      readonly workingTreeFiles: readonly WorktreeGitChangedFile[];
     }
   | { readonly status: 'error' };
 
@@ -48,7 +49,7 @@ function sumMetrics(files: readonly WorktreeGitChangedFile[]):
   return { additions, deletions };
 }
 
-/** Read the small Git projection needed by the Overview status facts. */
+/** Read the compact Git projections needed by the Overview status facts. */
 export function useWorktreeGitOverview(
   input: WorktreeGitOverviewInput,
 ): WorktreeGitOverviewState {
@@ -64,24 +65,37 @@ export function useWorktreeGitOverview(
       setState({ status: 'unavailable' });
       return;
     }
+    const manager = input.manager;
     let active = true;
     setState({ status: 'loading' });
-    void input.manager.listWorktreeCommits({
+    void manager.listWorktreeCommits({
       workspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
       baseBranch: baselineBranch,
     })
       .then(async (history) => {
         const workingTree = history.commits.find(isWorkingTreeCommit);
-        const files = workingTree === undefined
-          ? []
-          : (await input.manager!.listWorktreeCommitFiles({
+        const committedFilesPromise = history.unavailableReason === undefined
+          ? manager.listWorktreeCommitFiles({
+              workspaceId: input.workspaceId,
+              worktreeId: input.worktreeId,
+              baseBranch: baselineBranch,
+              selection: { kind: 'summary', includeWorkingTree: false },
+            }).then((result) => result.files)
+          : Promise.resolve([] as readonly WorktreeGitChangedFile[]);
+        const workingTreeFilesPromise = workingTree === undefined
+          ? Promise.resolve([] as readonly WorktreeGitChangedFile[])
+          : manager.listWorktreeCommitFiles({
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
               baseBranch: baselineBranch,
               commit: workingTree.sha,
-            })).files;
-        if (active) setState({ status: 'ready', history, files });
+            }).then((result) => result.files);
+        const [committedFiles, workingTreeFiles] = await Promise.all([
+          committedFilesPromise,
+          workingTreeFilesPromise,
+        ]);
+        if (active) setState({ status: 'ready', history, committedFiles, workingTreeFiles });
       })
       .catch(() => {
         if (active) setState({ status: 'error' });
@@ -99,7 +113,7 @@ export function WorktreeGitOverviewValue({
   t,
 }: {
   readonly state: WorktreeGitOverviewState;
-  readonly metric: 'aheadBehind' | 'workingTree';
+  readonly metric: 'aheadBehind' | 'committed' | 'workingTree';
   readonly t: WorktreeTranslate;
 }) {
   if (state.status !== 'ready') {
@@ -121,7 +135,8 @@ export function WorktreeGitOverviewValue({
   if (state.history.unavailableReason !== undefined) {
     return <span className={styles.dashboardHistorical}>{t('dashboard.notConnected')}</span>;
   }
-  const totals = sumMetrics(state.files);
+  const files = metric === 'committed' ? state.committedFiles : state.workingTreeFiles;
+  const totals = sumMetrics(files);
   if (totals === undefined) {
     return <span className={styles.dashboardHistorical}>{t('dashboard.unknown')}</span>;
   }

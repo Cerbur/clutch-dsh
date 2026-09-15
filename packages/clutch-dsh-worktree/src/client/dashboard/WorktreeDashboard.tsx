@@ -874,6 +874,9 @@ export function WorktreeDashboard({
                     <DashboardFactRow label={t('dashboard.aheadBehind')}>
                       <WorktreeGitOverviewValue state={gitOverview} metric="aheadBehind" t={t} />
                     </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.committedChanges')}>
+                      <WorktreeGitOverviewValue state={gitOverview} metric="committed" t={t} />
+                    </DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.workingTree')}>
                       <WorktreeGitOverviewValue state={gitOverview} metric="workingTree" t={t} />
                     </DashboardFactRow>

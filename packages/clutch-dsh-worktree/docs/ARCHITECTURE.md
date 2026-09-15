@@ -71,7 +71,7 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - 关系状态与 schema 版本（`schemaVersion`）；
 - 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
   新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据。
-- Git ahead/behind、changed-file additions/deletions 以及工作区行数都属于运行时 Git projection，仅通过 contract/Manager 读取，不写入 `WorktreeRecord` 或 Sidecar；不可安全读取时必须返回显式 unavailable，而不是持久化猜测值。
+- Git ahead/behind、已提交/未提交 changed-file additions/deletions 以及工作区行数都属于运行时 Git projection，仅通过 contract/Manager 读取，不写入 `WorktreeRecord` 或 Sidecar；不可安全读取时必须返回显式 unavailable，而不是持久化猜测值。
 
 ### 共享指令（Instructions）注入机制
 
@@ -242,8 +242,8 @@ Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排
 执行乐观并发校验，只更新 Sidecar 的 `baseBranch`。`baseCommit` 不会被该操作修改。Git Tab
 自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
 暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。对于已保存且有效的基线，Overview
-会复用 listWorktreeCommits 与工作区文件读取展示一次 compact ahead/behind 和 additions/deletions
-projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若基线已分叉，ahead/behind 可
+会复用 listWorktreeCommits、committed summary 与工作区文件读取展示一次 compact ahead/behind、已提交
+和未提交 additions/deletions projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若基线已分叉，ahead/behind 可
 继续显示，但 history 与工作区文件读取必须保持 unavailable，直到比较范围重新安全。
 
 历史读取使用所选 branch 当前 commit 到 Worktree `HEAD` 的范围，且要求基线是当前 `HEAD` 的

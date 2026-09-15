@@ -125,8 +125,9 @@ Session。
 
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。对于持久化 `baseBranch` 存在且不同于当前
 branch 的 managed Worktree，Overview 会通过现有 `/api` Connection 做一次轻量、按需的 Git 状态读取，
-展示 ahead/behind commit 数量和当前工作区的文件行数。这是临时 projection，不是 watcher，也不会写入
-Worktree 记录。Main、不可用或未选择基线时会诚实显示 **待接入**。打开 Overview 不会加载 branch 列表；
+分别展示 ahead/behind commit 数量、已提交（基线到 HEAD）和未提交（当前工作区）的文件行数。这是临时
+projection，不是 watcher，也不会写入 Worktree 记录。Main、不可用或未选择基线时会诚实显示 **待接入**。
+打开 Overview 不会加载 branch 列表；
 第一次进入 Git Tab 时才加载本地 branch，并在选择基线后加载 commit history。要替换基线，可以点击
 Base fact 旁的铅笔图标，再点击第一行搜索框展开响应式 branch 选择器；搜索固定在顶部，较小窗口中较长的
 branch 列表会在受限区域内滚动。然后过滤 branch，选择除当前 Worktree branch 之外的任一本地 branch，

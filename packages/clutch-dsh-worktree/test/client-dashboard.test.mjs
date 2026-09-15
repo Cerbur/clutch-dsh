@@ -179,7 +179,10 @@ function renderHarness(writeClipboard) {
         './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
         './git/WorktreeGitOverview.js': {
           useWorktreeGitOverview: () => ({ status: 'unavailable' }),
-          WorktreeGitOverviewValue: ({ metric }) => jsx('span', { 'data-dashboard-overview-metric': metric, children: metric === 'aheadBehind' ? '+3 / -1' : '+12 / -4' }),
+          WorktreeGitOverviewValue: ({ metric }) => jsx('span', {
+            'data-dashboard-overview-metric': metric,
+            children: metric === 'aheadBehind' ? '+3 / -1' : metric === 'committed' ? '+20 / -6' : '+12 / -4',
+          }),
         },
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
@@ -232,7 +235,7 @@ const historicalHints = (node, t) =>
     (item) => item.type === 'span' && item.props.children === t['dashboard.historicalUnavailable'],
   );
 
-test('Dashboard renders separate ahead-behind and working-tree metric rows', () => {
+test('Dashboard renders separate ahead-behind, committed, and uncommitted metric rows', () => {
   const harness = renderHarness(async () => true);
   const node = harness.render({ record: { ...record, baseBranch: 'main' } });
   const metrics = findAll(node, (item) => item.props?.['data-dashboard-overview-metric']);
@@ -240,6 +243,7 @@ test('Dashboard renders separate ahead-behind and working-tree metric rows', () 
     metrics.map((item) => [item.props['data-dashboard-overview-metric'], item.props.children]),
     [
       ['aheadBehind', '+3 / -1'],
+      ['committed', '+20 / -6'],
       ['workingTree', '+12 / -4'],
     ],
   );

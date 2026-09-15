@@ -950,6 +950,13 @@ test('serves baseline summary and exact selected-commit sections', async () => {
     assert.equal(summary.commit, 'summary');
     assert.deepEqual(summary.selection, { kind: 'summary' });
     assert.deepEqual(summary.files.map((file) => file.path).toSorted(), ['aggregate.txt', 'other.txt']);
+    assert.deepEqual(
+      summary.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'aggregate.txt', status: 'added', additions: 2, deletions: 0 },
+        { path: 'other.txt', status: 'added', additions: 1, deletions: 0 },
+      ],
+    );
     const summaryDiff = await fixture.manager.getWorktreeCommitFileDiff({
       workspaceId: 'ws_dashboard',
       worktreeId: record.worktreeId,

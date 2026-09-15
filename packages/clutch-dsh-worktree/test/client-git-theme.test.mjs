@@ -113,11 +113,14 @@ test('changed-file stats use explicit green additions and red deletions', async 
   assert.match(css, /\.gitLineRemoved[\s\S]*state-error-secondary/u);
 });
 
-test('Overview Git facts reuse existing history and working-tree reads', async () => {
+test('Overview Git facts reuse history, committed summary, and working-tree reads', async () => {
   const source = await readFile(new URL('../src/client/dashboard/git/WorktreeGitOverview.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /listWorktreeCommits/);
   assert.match(source, /listWorktreeCommitFiles/);
-  assert.match(source, /metric: 'aheadBehind' \| 'workingTree'/u);
+  assert.match(source, /selection: \{ kind: 'summary', includeWorkingTree: false \}/u);
+  assert.match(source, /committedFiles/);
+  assert.match(source, /workingTreeFiles/);
+  assert.match(source, /metric: 'aheadBehind' \| 'committed' \| 'workingTree'/u);
   assert.match(source, /history\.unavailableReason/);
 });

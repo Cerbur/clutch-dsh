@@ -941,7 +941,7 @@ Expected sequence:
 ```text
 open Dashboard / Overview with a valid persisted baseline
     ↓
-listWorktreeCommits + working-tree files when present (compact status projection)
+listWorktreeCommits + committed summary + working-tree files when present (compact status projection)
 
 select Git tab
     ↓
@@ -1073,8 +1073,9 @@ Overview Dashboard facts:
 ```text
 Base  [Edit baseline]
 main
-Ahead / Behind   +3 / -1
-Working tree    +12 / -4
+Ahead / Behind       +3 / -1
+Committed changes    +20 / -6
+Uncommitted changes  +12 / -4
 ```
 
 Only local branches other than the current Worktree branch appear in the editor. Saving replaces
@@ -1610,6 +1611,9 @@ The implemented Worktree Dashboard extends the original transient branch-selecto
   the Git-tab selector remain transient and do not write the Worktree record.
 - The mutation refreshes only the owning Workspace while preserving ready content, and the browser
   keeps the editor draft on failure for retry or cancellation.
+- With a valid persisted baseline, Overview reads the history plus separate committed-summary and
+  working-tree projections. It presents their line counts independently; divergent or unavailable
+  baselines may retain ahead/behind counts but must not present fabricated committed/working counts.
 
 This amendment supersedes any wording above that treats `baseBranch` as immutable acquisition-only
 metadata or says that an explicit baseline choice cannot be persisted. Runtime-derived/captured

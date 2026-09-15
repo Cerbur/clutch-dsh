@@ -128,8 +128,9 @@ launch success.
 
 Open the **Git & Changes** tab from a managed Worktree Dashboard. For a managed Worktree with a
 persisted `baseBranch` that differs from the current branch, the Overview performs one compact, on-demand
-Git status read through the existing `/api` Connection. It shows ahead/behind commit counts and current
-working-tree line totals; this is an ephemeral projection, not a watcher or a Worktree-record field. Main,
+Git status read through the existing `/api` Connection. It shows ahead/behind commit counts plus separate
+committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
+projection, not a watcher or a Worktree-record field. Main,
 unavailable, or baseline-unselected views honestly remain **Not connected**. Opening Overview does not
 load the branch list; the first Git tab activation loads local branches and, when a baseline is selected,
 commit history. To replace that baseline, click the pencil icon beside the Base fact, click the first-row
