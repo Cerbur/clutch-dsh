@@ -168,6 +168,25 @@
   font-size: 10px;
 }
 
+.gitColumnHeaderMeta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gitColumnHeader .gitLineStats,
+.gitColumnHeader .gitLineStats > span {
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 11px;
+}
+
+.gitColumnHeaderUnknown {
+  color: var(--dsw-alias-label-tertiary, #8a94a3);
+}
+
 .gitSummaryButton {
   display: flex;
   width: calc(100% - 10px);
@@ -468,6 +487,10 @@
   gap: 6px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.gitChangedFileList .gitLineStats {
+  font-size: 11px;
 }
 
 .gitLineAdded {

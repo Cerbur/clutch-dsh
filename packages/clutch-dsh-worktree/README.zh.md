@@ -150,7 +150,8 @@ commit 到当前工作区的一次净差异，其中包含已提交、staged、u
 改动。这是按需读取的新鲜 projection，而不是简单拼接两段 Diff。在 commit 列表中可以同时选择
 多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
-commit。未提交改动 entry 与已提交的多选互斥。
+commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
+`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更

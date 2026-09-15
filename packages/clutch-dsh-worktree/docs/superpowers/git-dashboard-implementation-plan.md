@@ -1639,8 +1639,10 @@ second transport or generic Git reader:
   selection. Requests enforce commit XOR selection at the contract and runtime seams.
 - Browser cache keys include the resolved baseline, captured HEAD projection, and summary mode. Live
   summary reads bypass completed-summary caches so staged, unstaged, and untracked changes are observed
-  on demand. Aggregate state keeps the same stale-response, ready-content, bounded-output, and
-  path-authorization guarantees as single commit reads.
+  on demand. The changed-files column header shows aggregate additions/deletions for the current target
+  (baseline summary, selected commits, or working tree); binary-only totals remain explicitly unknown.
+  Aggregate state keeps the same stale-response, ready-content, bounded-output, and path-authorization
+  guarantees as single commit reads.
 
 This amendment supersedes any wording above that describes only single-commit Git targets.
 

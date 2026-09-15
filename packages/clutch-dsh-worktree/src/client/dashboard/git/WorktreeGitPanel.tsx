@@ -1,4 +1,5 @@
 import type {
+  WorktreeGitChangedFile,
   WorktreeGitCommit,
   WorktreeGitCommitFiles,
   WorktreeGitHistory,
@@ -11,6 +12,22 @@ import { GitCommitList } from './GitCommitList.js';
 import { GitDiffView } from './GitDiffView.js';
 import { useWorktreeGitState } from './useWorktreeGitState.js';
 import styles from './worktree-git.css';
+
+interface GitLineTotals {
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+function sumLineStats(files: readonly WorktreeGitChangedFile[]): GitLineTotals | undefined {
+  let additions = 0;
+  let deletions = 0;
+  for (const file of files) {
+    if (file.additions === undefined || file.deletions === undefined) return undefined;
+    additions += file.additions;
+    deletions += file.deletions;
+  }
+  return { additions, deletions };
+}
 
 export interface WorktreeGitPanelProps {
   readonly manager?: Pick<
@@ -93,6 +110,7 @@ export function WorktreeGitPanel({
         ? undefined
         : commitLabel(commit, t);
   const hasTarget = state.view === 'summary' || commit !== undefined;
+  const lineTotals = state.files.status === 'ready' && hasTarget ? sumLineStats(files) : undefined;
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
@@ -270,9 +288,25 @@ export function WorktreeGitPanel({
           <section className={styles.gitColumn} aria-label={t('dashboard.git.changedFiles')} aria-busy={state.files.status === 'loading'}>
             <div className={styles.gitColumnHeader}>
               <h3>{t('dashboard.git.changedFiles')}</h3>
-              {targetLabel !== undefined && (state.selectedCommits.length > 1 || state.view === 'summary'
-                ? <span>{targetLabel}</span>
-                : <code>{targetLabel}</code>)}
+              <div className={styles.gitColumnHeaderMeta}>
+                {targetLabel !== undefined && (state.selectedCommits.length > 1 || state.view === 'summary'
+                  ? <span>{targetLabel}</span>
+                  : <code>{targetLabel}</code>)}
+                {state.files.status === 'ready' && hasTarget && (
+                  lineTotals === undefined ? (
+                    <span className={styles.gitColumnHeaderUnknown}>{t('dashboard.unknown')}</span>
+                  ) : (
+                    <GitLineStats
+                      additions={lineTotals.additions}
+                      deletions={lineTotals.deletions}
+                      ariaLabel={t('dashboard.git.lineStats', {
+                        additions: lineTotals.additions,
+                        deletions: lineTotals.deletions,
+                      })}
+                    />
+                  )
+                )}
+              </div>
             </div>
             {state.selectedCommits.length > 0 && state.view === 'commits' && (
               <div className={styles.gitSelectionToolbar}>

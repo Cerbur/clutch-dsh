@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
 const changedFilesUrl = new URL('../src/client/dashboard/git/GitChangedFiles.tsx', import.meta.url);
+const gitPanelUrl = new URL('../src/client/dashboard/git/WorktreeGitPanel.tsx', import.meta.url);
 
 function cssBlock(source, selector) {
   const start = source.indexOf(selector);
@@ -104,13 +105,19 @@ test('changed-file folders use the native DSH folder icons', async () => {
 test('changed-file stats use explicit green additions and red deletions', async () => {
   const css = await readFile(cssUrl, 'utf8');
   const source = await readFile(changedFilesUrl, 'utf8');
+  const panel = await readFile(gitPanelUrl, 'utf8');
   const lineStats = await readFile(new URL('../src/client/dashboard/git/GitLineStats.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /<GitLineStats[\s\S]*additions=\{file\.additions\}[\s\S]*deletions=\{file\.deletions\}/u);
+  assert.match(panel, /data-dashboard-git-summary/);
+  assert.match(panel, /gitColumnHeaderMeta/);
+  assert.match(panel, /lineTotals\.additions/);
+  assert.match(panel, /lineTotals\.deletions/);
   assert.match(lineStats, /data-dashboard-git-additions/);
   assert.match(lineStats, /data-dashboard-git-deletions/);
   assert.match(css, /\.gitLineAdded[\s\S]*state-success-primary/u);
   assert.match(css, /\.gitLineRemoved[\s\S]*state-error-secondary/u);
+  assert.match(css, /\.gitChangedFileList \.gitLineStats[\s\S]*font-size: 11px;/u);
 });
 
 test('Overview Git facts reuse history, committed summary, and working-tree reads', async () => {

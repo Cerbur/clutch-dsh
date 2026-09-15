@@ -159,7 +159,9 @@ working tree, including committed, staged, unstaged, untracked, deleted, and ren
 fresh on-demand projection rather than a concatenation of two diffs. In the commit list, select more than
 one committed row to view the exact union of those commits' first-parent deltas. The changed-file list
 records the contributing commits, and each selected commit is rendered as its own diff segment; this is
-not an implicit range and does not include unselected commits. The working-tree entry remains mutually
+not an implicit range and does not include unselected commits. The changed-files column header shows the
+aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
+commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
 exclusive with committed multi-selection.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use

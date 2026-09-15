@@ -243,8 +243,10 @@ Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排
 自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
 暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。对于已保存且有效的基线，Overview
 会复用 listWorktreeCommits、committed summary 与工作区文件读取展示一次 compact ahead/behind、已提交
-和未提交 additions/deletions projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若基线已分叉，ahead/behind 可
-继续显示，但 history 与工作区文件读取必须保持 unavailable，直到比较范围重新安全。
+和未提交 additions/deletions projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若基线已分叉，
+ahead/behind 可继续显示，但 history 与工作区文件读取必须保持 unavailable，直到比较范围重新安全。Git changed-file
+column header 根据当前目标（基线汇总、已提交选择或未提交 entry）展示变更文件的 additions/deletions 总数；binary-only
+统计保持显式 unknown。
 
 历史读取使用所选 branch 当前 commit 到 Worktree `HEAD` 的范围，且要求基线是当前 `HEAD` 的
 ancestor；最多返回 200 个 commit。当 tracked、staged、unstaged 或 untracked 文件存在时，历史
