@@ -116,14 +116,18 @@ Worktree and nested Session alignment slots are compacted to preserve the Sideba
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
 
-The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
-It does not register over the occupied `conversation` slot. The AppFrame column order
-(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow
-the live Sidebar width, and missing/replaced anchors produce zero coverage and restore
-the native columns. Native center/rightbar visibility, inert, and aria-hidden attributes
-are restored on close or disposal. Session identity changes, explicit Sidebar Session
-opens (including the same Session), mode exit, and removal of the selected identity
-close the dashboard. No native Session or Workspace state is changed.
+The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
+occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
+already-open native right sidebar remains visible. The AppFrame column order (Sidebar, center, rightbar,
+overlay) is an explicit upstream layout seam: bounds follow the live Sidebar and rightbar widths, and
+missing/replaced anchors produce zero coverage and restore the native columns. Only the native center is
+concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden attributes are
+restored on close or disposal. Opening a Worktree Dashboard first navigates to that Worktree's retained
+head Session when one exists; an initial pending list defers that decision until the list is ready, while
+an empty ready list leaves navigation unchanged and does not create a Session. Later Session identity changes
+close only a Session-bound Dashboard; a sessionless empty-list Dashboard remains a page-level target. Explicit
+Sidebar Session opens (including the same Session), mode exit, and removal of the selected identity close the
+dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
 
 The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires

@@ -114,8 +114,11 @@ or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 ### Open the Worktree Dashboard
 
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon
-beside the native Session-header actions. The Dashboard is an overlay beside the Sidebar and does
-not replace DSH's native Session page or create a Session.
+beside the native Session-header actions. The Dashboard is a peer page to the native Session content: it
+occupies the center area beside the Sidebar while leaving an already-open right sidebar visible. When the
+target Worktree has Sessions, opening its Dashboard waits for an initial pending Session list to become
+ready, then switches to the retained head Session so both views stay aligned. A ready empty Session list opens
+a page-level Dashboard without changing the current Session and does not create a Session automatically.
 
 Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. The connected
 MVP surface can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit
@@ -165,7 +168,9 @@ records the contributing commits, and each selected commit is rendered as its ow
 not an implicit range and does not include unselected commits. The changed-files column header shows the
 aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
 commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
-exclusive with committed multi-selection.
+exclusive with committed multi-selection. Opening a changed file targets the Dashboard Worktree's
+first existing Session; when that list is empty, the action does not fall back to an unrelated current
+Session.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain

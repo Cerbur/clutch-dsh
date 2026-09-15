@@ -112,8 +112,10 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 ### 打开 Worktree Dashboard
 
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
-图标打开。Dashboard 是 Sidebar 旁边的 overlay，不会替代 DSH 原生 Session 页面，也不会创建
-Session。
+图标打开。Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域，同时保留已经
+打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果目标 Worktree 已有
+Session，随后会先切换到该 Worktree 保留顺序中排在最前的 Session，让两侧视图保持一致。ready 的空
+Session list 会打开不绑定当前 Session 的 page-level Dashboard，不会自动创建 Session。
 
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。当前 MVP 已
 连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、
@@ -153,7 +155,8 @@ commit 到当前工作区的一次净差异，其中包含已提交、staged、u
 多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
-`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。
+`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。打开变更文件时会使用
+Dashboard 对应 Worktree 的第一个现有 Session；如果 list 为空，不会回退到无关的当前 Session。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更

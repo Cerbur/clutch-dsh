@@ -15,6 +15,7 @@ import {
 } from '../lib/client/dashboard/dashboard-overlay.js';
 import { en, zh } from '../lib/client/locales.js';
 import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
+import { prepareDashboardNavigation } from '../lib/client/dashboard/dashboard-navigation.js';
 import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
 import { selectWorktreeAcquisitionFacts } from '../lib/client/dashboard/worktree-acquisition-facts.js';
 import {
@@ -90,6 +91,46 @@ test('dashboard follows the selected Worktree, ready refreshes, and native navig
     ),
     record,
   );
+  assert.equal(
+    resolveDashboardRecord(
+      { ...selection, sessionId: undefined },
+      'worktree',
+      'other-session',
+      ['repo'],
+      [record],
+    ),
+    record,
+  );
+});
+
+test('dashboard navigation follows the Worktree head Session without creating an empty one', () => {
+  assert.deepEqual(
+    prepareDashboardNavigation(record, ['worktree-head', 'worktree-tail'], 'session-a'),
+    {
+      selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+      sessionIdToOpen: 'worktree-head',
+    },
+  );
+  assert.deepEqual(
+    prepareDashboardNavigation(record, ['session-a'], 'session-a'),
+    {
+      selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'session-a' },
+      sessionIdToOpen: undefined,
+    },
+  );
+  assert.deepEqual(prepareDashboardNavigation(record, ['worktree-head'], 'session-a', 'pending'), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+    waitForSessionList: true,
+  });
+  assert.deepEqual(prepareDashboardNavigation(record, [], 'session-a'), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+  });
+  assert.deepEqual(prepareDashboardNavigation(record, [], undefined), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+  });
 });
 
 // Match the existing source-handler regressions: execute production JSX handlers
@@ -783,8 +824,17 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(surfaceSource, /if \(source\.mode !== 'worktree'\) setDashboard\(undefined\)/);
+  assert.match(surfaceSource, /if \(source\.mode !== 'worktree'\) closeDashboard\(\)/);
   assert.match(surfaceSource, /inputProps\.dashboardStore\?\.set\(undefined\)/);
+  assert.match(surfaceSource, /const targetSessionId = worktreeSessions\[0\]/);
+  assert.doesNotMatch(surfaceSource, /worktreeSessions\[0\] \?\? source\.currentSessionId/);
+  assert.match(surfaceSource, /source\.sessions\.phase \?\? 'ready'/);
+  assert.match(surfaceSource, /pendingDashboardRecord\.current = record/);
+  assert.match(
+    surfaceSource,
+    /if \(navigation\.waitForSessionList === true\) \{\s+pendingDashboard\.current = undefined;/,
+  );
+  assert.match(surfaceSource, /if \(source\.sessions\.phase === 'pending'\) return/);
   const compiled = ts.transpileModule(surfaceSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
@@ -820,6 +870,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
         ],
         useCallback: (fn) => fn,
         useEffect() {},
+        useRef: (initial) => ({ current: initial }),
       };
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name.endsWith('dashboard-selection.js'))
@@ -830,6 +881,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
         isManagedDashboardRecord: (record) => !isMainWorktreeId(record.worktreeId),
       };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
+    if (name.endsWith('dashboard-navigation.js')) return { prepareDashboardNavigation };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
     if (name.endsWith('view-mode.js')) return { workspaceSessionIds: (workspaces, workspaceId, ids) => ids ?? [] };
     if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };
@@ -1026,18 +1078,21 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     overlay.parentElement = frame;
     surface.closest = () => overlay;
     sidebar.rect.right = 280;
+    right.rect.left = 960;
     let placement;
     const dispose = mountDashboardOverlay(surface, (next) => {
       placement = next;
     });
     assert.equal(placement.left, 284);
-    assert.equal(placement.width, 916);
+    assert.equal(placement.width, 676);
     assert.equal(center.getAttribute('inert'), '');
+    assert.equal(right.getAttribute('inert'), null);
+    assert.equal(right.style.getPropertyValue('visibility'), '');
     sidebar.rect.right = 64;
     observers[0].callback();
     pending();
     assert.equal(placement.left, 68);
-    assert.equal(placement.width, 1132);
+    assert.equal(placement.width, 892);
     right.nextElementSibling = undefined;
     observers[1].callback();
     pending();

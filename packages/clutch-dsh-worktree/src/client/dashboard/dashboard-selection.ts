@@ -1,6 +1,6 @@
 import type { WorktreeRecord } from '../../contract/index.js';
 
-/** Navigation identity only; the ready view remains the source of display facts. */
+/** Navigation identity only; an undefined Session id denotes a page-level Dashboard. */
 export interface DashboardSelection {
   readonly workspaceId: string;
   readonly worktreeId: string;
@@ -61,7 +61,7 @@ export function resolveDashboardRecord(
   if (
     selection === undefined ||
     mode !== 'worktree' ||
-    selection.sessionId !== currentSessionId ||
+    (selection.sessionId !== undefined && selection.sessionId !== currentSessionId) ||
     !workspaceIds.includes(selection.workspaceId)
   )
     return undefined;

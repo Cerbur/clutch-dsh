@@ -85,22 +85,22 @@ export function mountDashboardOverlay(
     }
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
+    const rightBoundary = right.getBoundingClientRect();
     const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
-    const width = box.width - left;
+    const rightEdge = Math.min(box.right, rightBoundary.left);
+    const width = rightEdge - box.left - left;
     if (width <= 0 || box.height <= 0) {
       restore();
       onPlacement(undefined);
       return;
     }
     for (const [element, cleanup] of hidden) {
-      if (element !== center && element !== right) {
+      if (element !== center) {
         cleanup();
         hidden.delete(element);
       }
     }
-    for (const element of [center, right]) {
-      if (!hidden.has(element)) hidden.set(element, concealDashboardBackground(element));
-    }
+    if (!hidden.has(center)) hidden.set(center, concealDashboardBackground(center));
     onPlacement({ left, top: 0, width, height: box.height });
   };
   const mutation =

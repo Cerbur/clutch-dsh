@@ -19,16 +19,18 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
 import {
   createMainWorktreeRecord,
   isMainWorktreeId,
   isManagedDashboardRecord,
   resolveDashboardRecord,
+  type DashboardRecord,
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
 import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
+import { prepareDashboardNavigation } from './dashboard/dashboard-navigation.js';
 import { buildSessionFileAddress } from './dashboard/git/file-address.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
@@ -36,6 +38,9 @@ export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/ty
 /** Composes independent surface state/action domains into the sidebar overlay. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
+  const pendingDashboard = useRef<DashboardSelection>();
+  const pendingDashboardRecord = useRef<DashboardRecord>();
+  const openDashboardRef = useRef<(record: DashboardRecord) => void>();
   const externalDashboard = inputProps.dashboardStore
     ? useSyncExternalStore(
         inputProps.dashboardStore.subscribe,
@@ -53,11 +58,15 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     },
     [inputProps.dashboardStore],
   );
-  const closeDashboard = useCallback(() => setDashboard(undefined), [setDashboard]);
+  const closeDashboard = useCallback(() => {
+    pendingDashboard.current = undefined;
+    pendingDashboardRecord.current = undefined;
+    setDashboard(undefined);
+  }, [setDashboard]);
   const source = useSurfaceSources({ props: inputProps });
   useEffect(() => {
-    if (source.mode !== 'worktree') setDashboard(undefined);
-  }, [source.mode, setDashboard]);
+    if (source.mode !== 'worktree') closeDashboard();
+  }, [source.mode, closeDashboard]);
   useEffect(
     () => () => {
       inputProps.dashboardStore?.set(undefined);
@@ -66,12 +75,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   );
   const props: WorktreeSurfaceProps = {
     ...inputProps,
-    openDashboard: (record) =>
-      setDashboard({
-        workspaceId: record.workspaceId,
-        worktreeId: record.worktreeId,
-        sessionId: source.currentSessionId,
-      }),
+    openDashboard: (record) => openDashboardRef.current?.(record),
     openSession: (sessionId) => {
       closeDashboard();
       inputProps.openSession(sessionId);
@@ -117,6 +121,69 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
   const ordering = useSessionOrdering({ read, source, props });
+  const openDashboard = useCallback(
+    (record: DashboardRecord) => {
+      const workspace = source.workspaces.items.find(
+        (candidate) => candidate.workspaceId === record.workspaceId,
+      );
+      const view = read.viewByWorkspace.get(record.workspaceId);
+      const sessionIds = dashboardSessionIds(
+        record,
+        source.sessions,
+        view?.bindings ?? [],
+        source.archivedSessionIds,
+        isMainWorktreeId(record.worktreeId)
+          ? ordering.orderedSessionIdsByAccount.get(`main:${record.workspaceId}`)
+          : ordering.orderedSessionIdsByAccount.get(`worktree:${record.worktreeId}`),
+        workspace === undefined
+          ? []
+          : workspaceSessionIds(source.workspaces, workspace.workspaceId, source.sessions.ids),
+      );
+      const navigation = prepareDashboardNavigation(
+        record,
+        sessionIds,
+        source.currentSessionId,
+        source.sessions.phase ?? 'ready',
+      );
+      if (navigation.waitForSessionList === true) {
+        pendingDashboard.current = undefined;
+        pendingDashboardRecord.current = record;
+        return;
+      }
+      pendingDashboardRecord.current = undefined;
+      if (navigation.sessionIdToOpen !== undefined) {
+        pendingDashboard.current = navigation.selection;
+        inputProps.openSession(navigation.sessionIdToOpen);
+        return;
+      }
+      pendingDashboard.current = undefined;
+      setDashboard(navigation.selection);
+    },
+    [
+      inputProps.openSession,
+      ordering.orderedSessionIdsByAccount,
+      read.viewByWorkspace,
+      setDashboard,
+      source.archivedSessionIds,
+      source.currentSessionId,
+      source.sessions,
+      source.workspaces,
+    ],
+  );
+  openDashboardRef.current = openDashboard;
+  useEffect(() => {
+    if (source.sessions.phase === 'pending') return;
+    const pendingRecord = pendingDashboardRecord.current;
+    if (pendingRecord === undefined) return;
+    pendingDashboardRecord.current = undefined;
+    openDashboard(pendingRecord);
+  }, [openDashboard, source.sessions.phase]);
+  useEffect(() => {
+    const pending = pendingDashboard.current;
+    if (pending === undefined || pending.sessionId !== source.currentSessionId) return;
+    pendingDashboard.current = undefined;
+    setDashboard(pending);
+  }, [setDashboard, source.currentSessionId]);
   const expansion = useSessionExpansion({ read, source, props });
   const native = useNativeActions({ source, props, mutation });
   const drag = useDragActions({
@@ -172,11 +239,9 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               source.sessions.ids,
             ),
       );
-      const targetSessionId =
-        worktreeSessions[0] ??
-        source.currentSessionId ??
-        dashboardWorkspace?.sessionIds[0] ??
-        source.sessions.ids[0];
+      // A file opened from Git must stay inside the Dashboard Worktree.
+      // Never fall back to the current or another Workspace Session.
+      const targetSessionId = worktreeSessions[0];
       if (targetSessionId === undefined) return;
       const address = buildSessionFileAddress(targetSessionId, filePath);
       props.openResource(address, options);
@@ -185,7 +250,6 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       props.openResource,
       dashboardRecord,
       source.sessions,
-      source.currentSessionId,
       source.archivedSessionIds,
       source.workspaces,
       dashboardView?.bindings,
