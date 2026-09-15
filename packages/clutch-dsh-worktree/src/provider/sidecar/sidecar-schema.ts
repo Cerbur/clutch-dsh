@@ -227,14 +227,32 @@ function assertRecoveryIssue(value: unknown, pathname: string): asserts value is
   }
 }
 
-function normalizeWorktreeRecord(record: WorktreeRecord, schemaVersion: number): WorktreeRecord {
-  return {
+function normalizeWorktreeRecord(
+  record: WorktreeRecord,
+  schemaVersion: number,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
+): WorktreeRecord {
+  const normalized: Record<string, unknown> = {
     ...record,
     source: record.source ?? 'plugin',
-    ...(schemaVersion < 4 && record.status === 'removed'
-      ? { diskCleanup: 'completed' as const }
-      : {}),
   };
+  if (schemaVersion < 4 && targetVersion >= 4 && record.status === 'removed') {
+    normalized.diskCleanup = 'completed';
+  }
+  if (targetVersion < 5) {
+    delete normalized.baseCommit;
+  }
+  if (targetVersion < 4) {
+    delete normalized.diskCleanup;
+    delete normalized.instructions;
+    delete normalized.createdAt;
+    delete normalized.importedAt;
+    delete normalized.baseBranch;
+  }
+  if (targetVersion < 2) {
+    delete normalized.source;
+  }
+  return normalized as unknown as WorktreeRecord;
 }
 
 function assertGeneratedPluginPath(
@@ -252,12 +270,35 @@ function assertGeneratedPluginPath(
   }
 }
 
-/** Validate supported legacy/current on-disk data and return the current in-memory v5 projection. */
+/** Validate supported legacy/current on-disk data and return the projection migrated to targetVersion (defaults to SIDECAR_SCHEMA_VERSION). */
 export function validateSidecarSnapshot(
   value: unknown,
   pathname: string,
   generatedWorktreeRoot?: string,
+  targetVersion?: typeof SIDECAR_SCHEMA_VERSION,
+): SidecarSnapshot;
+export function validateSidecarSnapshot(
+  value: unknown,
+  pathname: string,
+  generatedWorktreeRoot: string | undefined,
+  targetVersion: number,
+): SidecarSnapshot;
+export function validateSidecarSnapshot(
+  value: unknown,
+  pathname: string,
+  generatedWorktreeRoot?: string,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
 ): SidecarSnapshot {
+  if (
+    targetVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
+    targetVersion !== 2 &&
+    targetVersion !== 3 &&
+    targetVersion !== 4 &&
+    targetVersion !== SIDECAR_SCHEMA_VERSION
+  ) {
+    throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion: targetVersion });
+  }
+
   if (!isObject(value) || typeof value.schemaVersion !== 'number' || typeof value.workspaceId !== 'string') {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
@@ -280,6 +321,9 @@ export function validateSidecarSnapshot(
     schemaVersion !== SIDECAR_SCHEMA_VERSION
   ) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion });
+  }
+  if (schemaVersion > targetVersion) {
+    throw corrupt(pathname, 'cannot downgrade sidecar schema version', { schemaVersion, targetVersion });
   }
   if (
     (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
@@ -304,7 +348,7 @@ export function validateSidecarSnapshot(
   }
 
   const workspaceId = value.workspaceId;
-  const worktrees = value.worktrees.map((record) => normalizeWorktreeRecord(record, schemaVersion));
+  const worktrees = value.worktrees.map((record) => normalizeWorktreeRecord(record, schemaVersion, targetVersion));
   const worktreeIds = new Set<string>();
   for (const record of worktrees) {
     if (record.workspaceId !== workspaceId) {
@@ -353,14 +397,37 @@ export function validateSidecarSnapshot(
     }
   }
 
-  const pendingOperation = value.pendingOperation === undefined
+  if (targetVersion === 1) {
+    return {
+      schemaVersion: 1,
+      workspaceId,
+      worktrees,
+      bindings: value.bindings,
+    } as unknown as SidecarSnapshot;
+  }
+
+  if (targetVersion === 2) {
+    return {
+      schemaVersion: 2,
+      workspaceId,
+      worktrees,
+      bindings: value.bindings,
+    } as unknown as SidecarSnapshot;
+  }
+
+  let pendingOperation = value.pendingOperation === undefined
     ? undefined
     : normalizePendingOperation(value.pendingOperation);
+  if (pendingOperation && targetVersion < 5 && 'baseCommit' in pendingOperation) {
+    const { baseCommit: _discarded, ...restOp } = pendingOperation as unknown as Record<string, unknown>;
+    void _discarded;
+    pendingOperation = restOp as unknown as PendingOperation;
+  }
   const repositoryFingerprint = value.repositoryFingerprint ??
     (value.repository === undefined ? undefined : createRepositoryFingerprint(value.repository));
 
   return {
-    schemaVersion: SIDECAR_SCHEMA_VERSION,
+    schemaVersion: targetVersion as typeof SIDECAR_SCHEMA_VERSION,
     workspaceId,
     revision: schemaVersion >= 3 ? (value.revision as string) : '0',
     ...(repositoryFingerprint !== undefined ? { repositoryFingerprint } : {}),
@@ -369,6 +436,15 @@ export function validateSidecarSnapshot(
     ...(pendingOperation !== undefined ? { pendingOperation } : {}),
     ...(value.recoveryIssues !== undefined ? { recoveryIssues: value.recoveryIssues } : {}),
   };
+}
+
+export function migrateSidecarSnapshot(
+  value: unknown,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
+  pathname: string = '/tmp/sidecar.json',
+  generatedWorktreeRoot?: string,
+): SidecarSnapshot {
+  return validateSidecarSnapshot(value, pathname, generatedWorktreeRoot, targetVersion);
 }
 
 export function emptySnapshot(workspaceId: string): SidecarSnapshot {

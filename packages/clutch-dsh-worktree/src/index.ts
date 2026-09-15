@@ -59,9 +59,11 @@ export {
 } from './provider/index.js';
 export {
   WorkspaceShardedSidecarRepository,
+  migrateSidecarSnapshot,
   validateSidecarSnapshot,
 } from './provider/sidecar/repository.js';
 export {
+  LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,
   isWorktreeProviderError,

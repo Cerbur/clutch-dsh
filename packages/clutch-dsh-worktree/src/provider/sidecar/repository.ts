@@ -9,7 +9,7 @@ import {
 } from '../types.js';
 import { SidecarPersistence } from './sidecar-persistence.js';
 
-export { validateSidecarSnapshot } from './sidecar-schema.js';
+export { migrateSidecarSnapshot, validateSidecarSnapshot } from './sidecar-schema.js';
 
 function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
   return (

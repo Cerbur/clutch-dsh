@@ -9,6 +9,7 @@
 export { LocalGitAdapter } from './git/adapter.js';
 export {
   WorkspaceShardedSidecarRepository,
+  migrateSidecarSnapshot,
   validateSidecarSnapshot,
 } from './sidecar/repository.js';
 export {
