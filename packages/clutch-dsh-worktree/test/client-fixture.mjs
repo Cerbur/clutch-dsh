@@ -14,6 +14,7 @@ export async function loadClientEntry({
   sessionListSnapshot,
   workspaceSnapshot: initialWorkspaceSnapshot,
   fork,
+  sidebarRight,
 } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
@@ -236,6 +237,7 @@ export async function loadClientEntry({
     locale,
     localeRegistrations,
     remote,
+    sidebarRight,
     sessions: fakeSessions,
     workspaces: {
       list: workspaceList,

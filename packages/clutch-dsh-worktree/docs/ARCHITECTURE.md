@@ -372,7 +372,7 @@ Refresh scope is determined by the smallest affected identity.
 ### Shell Overlay 呈现
 
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
-- Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域，保留已经打开的 rightbar 及其状态；
+- Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
-- 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；ready 且目标 Worktree 有可见 Session 时，先导航到其保留顺序中的第一个 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session；
-- Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
+- 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；ready 且目标 Worktree 有可见 Session 时，先导航到其保留顺序中的第一个 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session，Dashboard header 提供原生风格的展开按钮；
+- Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。

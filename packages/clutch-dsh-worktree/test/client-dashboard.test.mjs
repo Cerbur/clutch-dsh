@@ -217,6 +217,7 @@ function renderHarness(writeClipboard) {
           IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
           IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
           IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+          IconPanelLeftOutline16: () => jsx('svg', { 'data-icon': 'sidebar' }),
           Input: ({ children, ...props }) => jsx('input', { ...props, children }),
           Modal: ({ open, children, footer, ...props }) =>
             open
@@ -844,7 +845,45 @@ test('tabs switch panels, keyboard selection wraps, and Escape closes the dashbo
   }
 });
 
-test('Surface connects dashboard actions to existing Session and dialog domains with eligibility gates', async () => {
+test('empty Dashboard offers new Session and the native rightbar button', () => {
+  const harness = renderHarness(async () => true);
+  let created = 0;
+  let opened = 0;
+  const node = harness.render({
+    sessionIds: [],
+    onCreateSession: () => { created += 1; },
+    onOpenSidebar: () => { opened += 1; },
+  });
+  const createButton = findAll(
+    node,
+    (item) => item.props?.['aria-label'] === en['dashboard.newSession'],
+  )[0];
+  assert.ok(createButton);
+  assert.equal(createButton.props.children, en['dashboard.newSession']);
+  createButton.props.onClick();
+  assert.equal(created, 1);
+
+  const sidebarButton = findAll(
+    node,
+    (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+  )[0];
+  assert.ok(sidebarButton);
+  assert.equal(findAll(sidebarButton, (item) => item.props?.['data-icon'] === 'sidebar').length, 1);
+  sidebarButton.props.onClick();
+  assert.equal(opened, 1);
+  assert.match(dashboardCssSource, /\.dashboardSidebarButton[\s\S]*?width: 28px;[\s\S]*?height: 28px;/);
+  assert.match(dashboardCssSource, /\.dashboardSidebarButton svg[\s\S]*?transform: scaleX\(-1\);/);
+
+  const populated = harness.render({ sessionIds: ['session-1'], onClose: () => {} });
+  const backButton = findAll(
+    populated,
+    (item) => item.props?.['aria-label'] === en['dashboard.back'],
+  )[0];
+  assert.ok(backButton);
+  harness.dispose();
+});
+
+test('Surface connects dashboard actions and preserves external Dashboard navigation', async () => {
   const surfaceSource = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
@@ -871,6 +910,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   let refCursor = 0;
   let selected = selection;
   let target = record;
+  let additionalTargets = [];
   const workspace = { workspaceId: 'repo', title: 'Repo' };
   const sourceState = {
     mode: 'worktree',
@@ -897,6 +937,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
             selected = next;
           },
         ],
+        useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
         useCallback: (fn) => fn,
         useEffect: (effect) => effect(),
         useRef: (initial) => {
@@ -933,7 +974,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
                 [
                   'repo',
                   {
-                    worktrees: [target],
+                    worktrees: [target, ...additionalTargets],
                     branches: [{ name: record.branch }],
                     bindings: [
                       {
@@ -965,11 +1006,21 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
       };
     return {};
   }, exports);
+  const dashboardStore = {
+    snapshot: undefined,
+    getSnapshot: () => dashboardStore.snapshot,
+    subscribe: () => () => {},
+    set: (next) => {
+      dashboardStore.snapshot = next;
+    },
+  };
   const surfaceInput = {
     t: (key) => en[key],
     manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
     createSessionForWorktree() {},
     openSession: (id) => calls.push(['nativeOpen', id]),
+    closeRightSidebar: () => calls.push(['closeRightSidebar']),
+    dashboardStore: undefined,
   };
   const renderTree = (resetSelected = true) => {
     if (resetSelected) selected = selection;
@@ -1023,10 +1074,33 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   target = { ...record, currentBranch: null, health: 'branch-drift' };
   assert.equal(render().onCreateWorktree, undefined);
   assert.equal(typeof render().onCreateSession, 'function');
-  target = record;
-
   const surfaceContentProps = (tree) =>
     findAll(tree, (item) => item.type === 'SurfaceContent')[0].props.props;
+  target = record;
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
+  sourceState.sessions.phase = 'ready';
+  renderTree(false);
+  assert.deepEqual(selected, selection);
+
+  const switchingTarget = { ...record, worktreeId: 'wt-switch', branch: 'feat/payment-refactor-switch' };
+  additionalTargets = [record];
+  target = switchingTarget;
+  sourceState.sessions.ids = ['head-switch'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(switchingTarget);
+  assert.deepEqual(calls, [['nativeOpen', 'head-switch']]);
+  sourceState.currentSessionId = 'head-switch';
+  sourceState.sessions.current = 'head-switch';
+  renderTree(false);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-switch',
+    sessionId: 'head-switch',
+  });
+
   const targetB = { ...record, worktreeId: 'wt-b', branch: 'feat/payment-refactor-b' };
   target = targetB;
   selected = undefined;
@@ -1076,7 +1150,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   sourceState.sessions.ids = [];
   calls.splice(0);
   surfaceContentProps(renderTree(false)).openDashboard(targetC);
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, [['closeRightSidebar']]);
   assert.deepEqual(selected, {
     workspaceId: 'repo',
     worktreeId: 'wt-c',
@@ -1086,6 +1160,36 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
     1,
   );
+
+  // Repeat the cross-Worktree transition through the production external dashboard store.
+  // The old stale-cleanup path must not write undefined over the pending target selection.
+  surfaceInput.dashboardStore = dashboardStore;
+  dashboardStore.snapshot = selection;
+  target = record;
+  additionalTargets = [record];
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
+  sourceState.sessions.phase = 'ready';
+  renderTree(false);
+  assert.deepEqual(dashboardStore.snapshot, selection);
+
+  const externalTarget = { ...record, worktreeId: 'wt-external', branch: 'feat/payment-refactor-external' };
+  target = externalTarget;
+  sourceState.sessions.ids = ['head-external'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(externalTarget);
+  assert.deepEqual(calls, [['nativeOpen', 'head-external']]);
+  sourceState.currentSessionId = 'head-external';
+  sourceState.sessions.current = 'head-external';
+  renderTree(false);
+  assert.deepEqual(dashboardStore.snapshot, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-external',
+    sessionId: 'head-external',
+  });
+  surfaceInput.dashboardStore = undefined;
 
   calls.splice(0);
   target = record;

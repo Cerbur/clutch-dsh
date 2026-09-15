@@ -118,16 +118,19 @@ Dashboard is open.
 
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
-already-open native right sidebar remains visible. The AppFrame column order (Sidebar, center, rightbar,
-overlay) is an explicit upstream layout seam: bounds follow the live Sidebar and rightbar widths, and
-missing/replaced anchors produce zero coverage and restore the native columns. Only the native center is
-concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden attributes are
-restored on close or disposal. Opening a Worktree Dashboard first navigates to that Worktree's retained
-head Session when one exists; an initial pending list defers that decision until the list is ready, while
-an empty ready list leaves navigation unchanged and does not create a Session. Later Session identity changes
-close only a Session-bound Dashboard; a sessionless empty-list Dashboard remains a page-level target. Explicit
-Sidebar Session opens (including the same Session), mode exit, and removal of the selected identity close the
-dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
+already-open native right sidebar remains visible for a Session-bound Dashboard. The AppFrame column order
+(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow the live Sidebar and
+rightbar widths, and missing/replaced anchors produce zero coverage and restore the native columns. Only the
+native center is concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden
+attributes are restored on close or disposal. A ready page-level Dashboard for a Worktree with no retained
+Session collapses the native rightbar first, because that page has no Session-scoped rightbar to preserve; when
+a current Session can host the rightbar, the Dashboard header exposes a native-style expand button. Opening a
+Worktree Dashboard first navigates to that Worktree's retained head Session when one exists; an initial pending
+list defers that decision until the list is ready, while an empty ready list leaves navigation unchanged and does
+not create a Session. Later Session identity changes close only a Session-bound Dashboard; a sessionless empty-list
+Dashboard remains a page-level target. Its top-right navigation action becomes New Session when the target has no
+Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
+identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
 
 The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires

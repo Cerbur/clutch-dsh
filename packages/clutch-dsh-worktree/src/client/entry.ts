@@ -94,6 +94,16 @@ interface ForkableSessions {
   fork?: (input: WorktreeForkInput) => Promise<string>;
 }
 
+interface SidebarRightControllerLike {
+  isExpanded?: () => boolean;
+  toggleExpanded?: () => void;
+  openResource?: (address: string, options?: { params?: { line?: number } }) => void;
+}
+
+function sidebarRightController(ctx: Context): SidebarRightControllerLike | undefined {
+  return (ctx as unknown as { sidebarRight?: SidebarRightControllerLike }).sidebarRight;
+}
+
 function forkRelatedSessionIds(
   snapshot: SessionLineageSnapshot,
 ): ReadonlySet<string> | undefined {
@@ -471,9 +481,7 @@ export function apply(ctx: Context): void {
         inject: () => ({
           available: true,
           openResource: (address: string, options?: { line?: number }) => {
-            const sidebar = (ctx as unknown as Record<string, unknown>).sidebarRight as
-              | { openResource: (address: string, options?: { params?: { line?: number } }) => void }
-              | undefined;
+            const sidebar = sidebarRightController(ctx);
             if (sidebar && typeof sidebar.openResource === 'function') {
               sidebar.openResource(
                 address,
@@ -482,6 +490,14 @@ export function apply(ctx: Context): void {
               return true;
             }
             return false;
+          },
+          closeRightSidebar: () => {
+            const sidebar = sidebarRightController(ctx);
+            if (sidebar?.isExpanded?.() === true) sidebar.toggleExpanded?.();
+          },
+          openRightSidebar: () => {
+            const sidebar = sidebarRightController(ctx);
+            if (sidebar?.isExpanded?.() === false) sidebar.toggleExpanded?.();
           },
           expandState,
           sessionOrder,

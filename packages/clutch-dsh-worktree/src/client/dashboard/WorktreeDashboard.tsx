@@ -6,6 +6,7 @@ import {
   IconCheckOutline16,
   IconCopyOutline16,
   IconEditOutline16,
+  IconPanelLeftOutline16,
   IconSearchOutline16,
   Input,
   Modal,
@@ -44,6 +45,7 @@ export interface WorktreeDashboardProps {
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
+  readonly onOpenSidebar?: () => void;
   readonly sessions: SessionListLike;
   readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly sessionIds: readonly string[];
@@ -415,6 +417,7 @@ export function WorktreeDashboard({
   workspaceTitle,
   t,
   onClose,
+  onOpenSidebar,
   sessions,
   sessionPresentations,
   sessionIds,
@@ -623,6 +626,7 @@ export function WorktreeDashboard({
         })}
       </ul>
     );
+  const topActionIsCreateSession = sessionIds.length === 0 && onCreateSession !== undefined;
   return (
     <section
       ref={surface}
@@ -646,9 +650,32 @@ export function WorktreeDashboard({
             <span aria-hidden="true"> / </span>
             {t('dashboard.preview')}
           </span>
-          <button type="button" className={styles.dashboardButton} onClick={onClose}>
-            ← {t('dashboard.back')}
-          </button>
+          <div className={styles.dashboardToplineActions}>
+            <button
+              type="button"
+              className={styles.dashboardButton}
+              aria-label={t(topActionIsCreateSession ? 'dashboard.newSession' : 'dashboard.back')}
+              onClick={() => {
+                if (topActionIsCreateSession) onCreateSession?.();
+                else onClose();
+              }}
+            >
+              {topActionIsCreateSession ? t('dashboard.newSession') : <>← {t('dashboard.back')}</>}
+            </button>
+            {onOpenSidebar !== undefined && (
+              <Tooltip label={t('dashboard.openSidebar')} side="bottom" delayMs={500}>
+                <button
+                  type="button"
+                  className={styles.dashboardSidebarButton}
+                  aria-label={t('dashboard.openSidebar')}
+                  title={t('dashboard.openSidebar')}
+                  onClick={onOpenSidebar}
+                >
+                  <IconPanelLeftOutline16 />
+                </button>
+              </Tooltip>
+            )}
+          </div>
         </div>
         <header className={styles.dashboardHeader}>
           <div className={styles.dashboardIdentity}>

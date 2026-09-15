@@ -115,14 +115,17 @@ or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon
 beside the native Session-header actions. The Dashboard is a peer page to the native Session content: it
-occupies the center area beside the Sidebar while leaving an already-open right sidebar visible. When the
-target Worktree has Sessions, opening its Dashboard waits for an initial pending Session list to become
-ready, then switches to the retained head Session so both views stay aligned. A ready empty Session list opens
-a page-level Dashboard without changing the current Session and does not create a Session automatically.
+occupies the center area beside the Sidebar while leaving an already-open right sidebar visible for a
+session-bound target. When the target Worktree has Sessions, opening its Dashboard waits for an initial pending
+Session list to become ready, then switches to the retained head Session so both views stay aligned. A ready
+empty Session list opens a page-level Dashboard without changing the current Session, collapses any currently
+open native right sidebar because there is no target Session, and does not create a Session automatically. The
+Dashboard header keeps the native right-sidebar button available whenever a current Session can host it.
 
-Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. The connected
-MVP surface can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit
-instructions, copy a path, open the recorded directory in VS Code, and inspect Git & Changes.
+Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
+Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
+can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
+path, open the recorded directory in VS Code, and inspect Git & Changes.
 Derived Worktrees, Settings, and other marked quick actions remain placeholders. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.

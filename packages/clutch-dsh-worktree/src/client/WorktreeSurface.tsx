@@ -119,8 +119,13 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     dashboardMainRecord,
   );
   useEffect(() => {
-    if (dashboard !== undefined && dashboardRecord === undefined) closeDashboard();
-  }, [dashboard, dashboardRecord, closeDashboard]);
+    if (dashboard !== undefined && dashboardRecord === undefined) {
+      // A target Session switch can invalidate the old Dashboard in the same
+      // commit that settles a new Worktree navigation. Do not cancel that
+      // pending navigation while dismissing the stale page.
+      setDashboard(undefined);
+    }
+  }, [dashboard, dashboardRecord, setDashboard]);
   const mutation = useSurfaceMutation({ read });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
@@ -164,9 +169,11 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         return;
       }
       pendingDashboard.current = undefined;
+      if (navigation.selection.sessionId === undefined) inputProps.closeRightSidebar?.();
       setDashboard(navigation.selection);
     },
     [
+      inputProps.closeRightSidebar,
       inputProps.openSession,
       ordering.orderedSessionIdsByAccount,
       read.viewByWorkspace,
@@ -459,6 +466,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           }
           t={t}
           onClose={closeDashboard}
+          onOpenSidebar={source.currentSessionId === undefined ? undefined : props.openRightSidebar}
         />
       )}
     </>

@@ -115,6 +115,34 @@
   margin: 0 8px;
   opacity: 0.5;
 }
+.dashboardToplineActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.dashboardSidebarButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #677080);
+  cursor: pointer;
+}
+.dashboardSidebarButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+}
+.dashboardSidebarButton svg {
+  width: 15px;
+  height: 15px;
+  transform: scaleX(-1);
+}
 .dashboardHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 225px;

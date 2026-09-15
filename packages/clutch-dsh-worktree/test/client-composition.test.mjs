@@ -835,6 +835,31 @@ test('routes native Workspace creation through uiWorkspace and workspaces comman
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
+test('bridges Dashboard header actions to the native rightbar controller', async () => {
+  let expanded = true;
+  let toggles = 0;
+  const sidebarRight = {
+    isExpanded: () => expanded,
+    toggleExpanded: () => {
+      expanded = !expanded;
+      toggles += 1;
+    },
+  };
+  const fixture = await loadClientEntry({ sidebarRight });
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+
+  overlay.closeRightSidebar();
+  assert.equal(expanded, false);
+  assert.equal(toggles, 1);
+  overlay.openRightSidebar();
+  assert.equal(expanded, true);
+  assert.equal(toggles, 2);
+  overlay.openRightSidebar();
+  assert.equal(toggles, 2);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
 test('initializes against the rc.1 read-only WorkspaceSource without requiring set', async () => {
   let fixture;
   await assert.doesNotReject(async () => {

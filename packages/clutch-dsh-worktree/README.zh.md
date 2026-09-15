@@ -112,16 +112,18 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 ### 打开 Worktree Dashboard
 
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
-图标打开。Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域，同时保留已经
-打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果目标 Worktree 已有
-Session，随后会先切换到该 Worktree 保留顺序中排在最前的 Session，让两侧视图保持一致。ready 的空
-Session list 会打开不绑定当前 Session 的 page-level Dashboard，不会自动创建 Session。
+图标打开。Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
+的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
+目标 Worktree 已有 Session，随后会先切换到该 Worktree 保留顺序中排在最前的 Session，让两侧视图保持
+一致。ready 的空 Session list 会打开不绑定当前 Session 的 page-level Dashboard；因为没有目标 Session，
+它会收起当前打开的原生右侧栏，也不会自动创建 Session。只要当前 Session 可以承载右侧栏，Dashboard
+右上角会保留原生的右侧栏按钮。
 
-使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。当前 MVP 已
-连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、
-复制路径、在 VS Code 中打开记录的目录以及查看 Git 与变更。派生 Worktree、设置和其他标记的
-快捷操作仍是占位内容。VS Code 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证
-应用是否成功启动。
+使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
+Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
+包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
+中打开记录的目录以及查看 Git 与变更。派生 Worktree、设置和其他标记的快捷操作仍是占位内容。VS Code
+必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
 
 ### 使用 Git 与变更
 

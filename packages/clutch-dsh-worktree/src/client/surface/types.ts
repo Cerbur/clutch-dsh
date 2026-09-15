@@ -68,6 +68,10 @@ export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
   readonly openResource?: (address: string, options?: { line?: number }) => boolean;
+  /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
+  readonly closeRightSidebar?: () => void;
+  /** Reveal the native session-scoped rightbar from the Dashboard header. */
+  readonly openRightSidebar?: () => void;
   readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
     set(selection: DashboardSelection | undefined): void;
   };
