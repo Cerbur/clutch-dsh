@@ -423,8 +423,9 @@
 }
 .dashboardFacts > div {
   display: grid;
-  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr);
+  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr) 29px;
   gap: 12px;
+  align-items: center;
   padding: 11px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l3, #eef0f5);
 }
@@ -432,12 +433,25 @@
   border: 0;
 }
 .dashboardFacts dt {
+  grid-column: 1;
+  min-width: 0;
   color: var(--dsw-alias-label-secondary, #788191);
+  overflow-wrap: anywhere;
 }
 .dashboardFacts dd {
-  text-align: right;
+  grid-column: 2;
+  min-width: 0;
   margin: 0;
+  text-align: right;
   overflow-wrap: anywhere;
+}
+.dashboardFactAction {
+  display: flex;
+  grid-column: 3;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 29px;
+  min-height: 29px;
 }
 .dashboardHeaderAside .dashboardFacts > div {
   padding: 4px 0;
@@ -445,17 +459,6 @@
 }
 .dashboardHistorical {
   color: var(--dsw-alias-label-secondary, #788191);
-}
-.dashboardFacts dd[data-dashboard-baseline] {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  text-align: right;
-}
-.dashboardFacts dd[data-dashboard-baseline] > [data-dashboard-baseline-value] {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 .dashboardIconButton:disabled {
   color: var(--dsw-alias-label-secondary, #788191);

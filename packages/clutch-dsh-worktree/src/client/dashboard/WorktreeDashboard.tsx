@@ -100,6 +100,26 @@ function Card({
   );
 }
 
+function DashboardFactRow({
+  label,
+  children,
+  action,
+  baseline = false,
+}: {
+  readonly label: ReactNode;
+  readonly children: ReactNode;
+  readonly action?: ReactNode;
+  readonly baseline?: boolean;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd data-dashboard-baseline={baseline ? true : undefined}>{children}</dd>
+      <span className={styles.dashboardFactAction}>{action}</span>
+    </div>
+  );
+}
+
 function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTranslate }) {
   return (
     <button type="button" className={styles.dashboardButton} disabled title={t('dashboard.soon')}>
@@ -161,7 +181,7 @@ function WorktreeBaselineEditor({
     expected.current = saved;
     setDraft(saved ?? '');
     setSearch('');
-    setMenuOpen(true);
+    setMenuOpen(false);
     setError(false);
   };
   const query = search.trim().toLowerCase();
@@ -204,35 +224,42 @@ function WorktreeBaselineEditor({
   };
 
   return (
-    <dd data-dashboard-baseline>
-      {saved === undefined ? (
-        <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
-      ) : (
-        <span data-dashboard-baseline-value>{saved}</span>
-      )}
-      {onSave !== undefined && (
-        <Tooltip
-          label={t('dashboard.editBase')}
-          side="bottom"
-          delayMs={500}
-          disabled={disabled || options.length === 0}
-        >
-          <button
-            type="button"
-            ref={trigger}
-            className={styles.dashboardIconButton}
-            data-dashboard-baseline-edit
-            aria-label={t('dashboard.editBase')}
-            title={t('dashboard.editBase')}
-            aria-haspopup="dialog"
-            aria-expanded={draft !== undefined}
-            disabled={disabled || options.length === 0}
-            onClick={openEditor}
-          >
-            <IconEditOutline16 />
-          </button>
-        </Tooltip>
-      )}
+    <>
+      <DashboardFactRow
+        label={t('dashboard.base')}
+        baseline
+        action={
+          onSave !== undefined ? (
+            <Tooltip
+              label={t('dashboard.editBase')}
+              side="bottom"
+              delayMs={500}
+              disabled={disabled || options.length === 0}
+            >
+              <button
+                type="button"
+                ref={trigger}
+                className={styles.dashboardIconButton}
+                data-dashboard-baseline-edit
+                aria-label={t('dashboard.editBase')}
+                title={t('dashboard.editBase')}
+                aria-haspopup="dialog"
+                aria-expanded={draft !== undefined}
+                disabled={disabled || options.length === 0}
+                onClick={openEditor}
+              >
+                <IconEditOutline16 />
+              </button>
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        {saved === undefined ? (
+          <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+        ) : (
+          <span data-dashboard-baseline-value>{saved}</span>
+        )}
+      </DashboardFactRow>
       <Modal
         open={draft !== undefined}
         onClose={closeEditor}
@@ -267,7 +294,6 @@ function WorktreeBaselineEditor({
                 className={styles.dashboardBaselineSearch}
                 aria-label={t('dashboard.searchBranches')}
                 data-dashboard-baseline-search
-                autoFocus
                 disabled={pending || disabled}
                 placeholder={t('dashboard.searchBranches')}
                 value={search}
@@ -308,7 +334,7 @@ function WorktreeBaselineEditor({
           )}
         </div>
       </Modal>
-    </dd>
+    </>
   );
 }
 
@@ -621,43 +647,40 @@ export function WorktreeDashboard({
           <div className={styles.dashboardHeaderAside}>
             <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
-              <div>
-                <dt>{t(acquisitionLabel)}</dt>
-                <dd>{acquisitionFacts.timestamp
-                  ? <time dateTime={acquisitionFacts.timestamp}>
+              <DashboardFactRow label={t(acquisitionLabel)}>
+                {acquisitionFacts.timestamp ? (
+                  <time dateTime={acquisitionFacts.timestamp}>
                     {new Date(acquisitionFacts.timestamp).toLocaleString()}
                   </time>
-                  : <span className={styles.dashboardHistorical}>
-                    {t('dashboard.historicalUnavailable')}
-                  </span>}</dd>
-              </div>
-              <div>
-                <dt>{t('dashboard.base')}</dt>
-                {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
-                  <WorktreeBaselineEditor
-                    value={baselineBranch}
-                    branches={branches}
-                    currentBranch={baselineCurrentBranch}
-                    onSave={persistBaseline}
-                    t={t}
-                    disabled={record.status !== 'active' || record.health === 'recovery-needed'}
-                  />
                 ) : (
-                  <dd>{displayedBaseline ?? (
+                  <span className={styles.dashboardHistorical}>
+                    {t('dashboard.historicalUnavailable')}
+                  </span>
+                )}
+              </DashboardFactRow>
+              {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
+                <WorktreeBaselineEditor
+                  value={baselineBranch}
+                  branches={branches}
+                  currentBranch={baselineCurrentBranch}
+                  onSave={persistBaseline}
+                  t={t}
+                  disabled={record.status !== 'active' || record.health === 'recovery-needed'}
+                />
+              ) : (
+                <DashboardFactRow label={t('dashboard.base')} baseline>
+                  {displayedBaseline ?? (
                     <span className={styles.dashboardHistorical}>
                       {t('dashboard.historicalUnavailable')}
                     </span>
-                  )}</dd>
-                )}
-              </div>
-              <div>
-                <dt>{t('dashboard.source')}</dt>
-                <dd>
-                  {isMainWorktreeId(record.worktreeId)
-                    ? t('worktree.main')
-                    : t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
-                </dd>
-              </div>
+                  )}
+                </DashboardFactRow>
+              )}
+              <DashboardFactRow label={t('dashboard.source')}>
+                {isMainWorktreeId(record.worktreeId)
+                  ? t('worktree.main')
+                  : t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
+              </DashboardFactRow>
             </dl>
           </div>
         </header>
@@ -759,30 +782,25 @@ export function WorktreeDashboard({
                 <Card title={t('dashboard.status')} icon={<DashboardIcon kind="git" />}>
                   <p>{t('dashboard.statusHint')}</p>
                   <dl className={styles.dashboardFacts}>
-                    <div>
-                      <dt>{t('dashboard.health')}</dt>
-                      <dd>{t(healthKey)}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.branch')}</dt>
-                      <dd>{liveBranch}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.base')}</dt>
-                      <dd>{displayedBaseline ?? (
+                    <DashboardFactRow label={t('dashboard.health')}>
+                      {t(healthKey)}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.branch')}>
+                      {liveBranch}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.base')}>
+                      {displayedBaseline ?? (
                         <span className={styles.dashboardHistorical}>
                           {t('dashboard.historicalUnavailable')}
                         </span>
-                      )}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.aheadBehind')}</dt>
-                      <dd>{t('dashboard.notConnected')}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.workingTree')}</dt>
-                      <dd>{t('dashboard.notConnected')}</dd>
-                    </div>
+                      )}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.aheadBehind')}>
+                      {t('dashboard.notConnected')}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.workingTree')}>
+                      {t('dashboard.notConnected')}
+                    </DashboardFactRow>
                   </dl>
                   {tabLink('git', t('dashboard.viewDetails'))}
                 </Card>

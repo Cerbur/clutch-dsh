@@ -346,7 +346,23 @@ test('dashboardFacts uses a native searchable baseline modal and feeds it to Git
   assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
   const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
   assert.ok(search);
+  assert.equal(search.props.autoFocus, undefined);
+  const baselineRow = findAll(
+    node,
+    (item) =>
+      item.type === 'div' &&
+      Array.isArray(item.props?.children) &&
+      item.props.children.some((child) => child?.props?.['data-dashboard-baseline'] !== undefined),
+  )[0];
+  assert.equal(baselineRow.props.children[0].type, 'dt');
+  assert.equal(baselineRow.props.children[1].type, 'dd');
+  assert.equal(baselineRow.props.children[2].type, 'span');
   let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.deepEqual(options, []);
+
+  search.props.onFocus();
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
   assert.deepEqual(
     options.map((option) => option.props['data-dashboard-baseline-option']),
     ['main', 'develop'],

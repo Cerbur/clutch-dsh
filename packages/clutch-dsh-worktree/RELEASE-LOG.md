@@ -14,7 +14,7 @@
 
 - Sidecar schema 升级至 v5，严格保留可选 `baseCommit`，同时兼容读取 v1–v4 历史记录。
 - Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
-- 将 Overview 中的基线编辑改为铅笔图标入口和 DSH 原生弹窗，支持搜索过滤本地 branch 后保存。
+- 将 Overview 中的基线编辑改为铅笔图标入口和 DSH 原生弹窗；弹窗打开时先保持选择列表关闭，点击第一行搜索框后再展开并过滤本地 branch。
 
 ### English
 
@@ -28,7 +28,7 @@
 
 - Upgrade the sidecar schema to v5 with strict optional `baseCommit` support while continuing to read v1–v4 historical records.
 - Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
-- Replace the Overview baseline editor with a pencil-icon trigger and a native DSH dialog that filters local branches as you search before saving.
+- Replace the Overview baseline editor with a pencil-icon trigger and a native DSH dialog whose branch list stays closed until the first-row search field is clicked, then filters local branches before saving.
 
 ## 0.1.12 — 2026-09-14
 
