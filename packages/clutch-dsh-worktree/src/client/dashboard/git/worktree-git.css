@@ -455,6 +455,21 @@
 .gitFileStatus[data-status='deleted'] { color: var(--dsw-alias-state-error-secondary, #bd5d55); }
 .gitFileStatus[data-status='renamed'] { color: var(--dsw-alias-state-warn-label, #99712b); }
 
+.gitFileIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary, #6f7887);
+}
+
+.gitFileIconGlyph {
+  width: 16px;
+  height: 16px;
+}
+
 .gitFilePath {
   min-width: max-content;
   flex: 0 0 auto;
@@ -463,6 +478,31 @@
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
+}
+
+.gitOpenFileAction {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-tertiary, #8a94a3);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.gitChangedFileList li:hover .gitOpenFileAction,
+.gitChangedFileList li:focus-within .gitOpenFileAction {
+  opacity: 1;
+}
+
+.gitOpenFileAction:hover {
+  color: var(--dsw-alias-label-primary, #273142);
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
 }
 
 .gitFileStatusLabel {
@@ -501,6 +541,62 @@
 .gitLineRemoved {
   color: var(--dsw-alias-state-error-secondary, #bd5d55);
   font-weight: 620;
+}
+
+.gitDiffContainer {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gitDiffToolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #edf0f4);
+  background: var(--dsw-alias-bg-base, #ffffff);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 11px;
+}
+
+.gitDiffPath {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--dsw-alias-label-primary, #263342);
+  font-weight: 560;
+}
+
+.gitDiffOpenInSidebar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-base, #ffffff);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gitDiffOpenInSidebar:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+  color: var(--dsw-alias-label-primary, #263342);
+  border-color: var(--dsw-alias-border-l2, #cbd2dc);
 }
 
 .gitDiff {

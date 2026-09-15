@@ -59,6 +59,34 @@ test('retains both nodes when malformed input has a file-directory prefix collis
   );
 });
 
+test('sorts file and folder names with natural numeric order', () => {
+  const tree = buildGitFileTree([
+    file('file10.ts'),
+    file('file2.ts'),
+    file('file1.ts'),
+    file('folder10/sub.ts'),
+    file('folder2/sub.ts'),
+  ]);
+
+  assert.deepEqual(simplify(tree), [
+    {
+      kind: 'folder',
+      name: 'folder2',
+      path: 'folder2',
+      children: [{ kind: 'file', name: 'sub.ts', path: 'folder2/sub.ts', oldPath: undefined }],
+    },
+    {
+      kind: 'folder',
+      name: 'folder10',
+      path: 'folder10',
+      children: [{ kind: 'file', name: 'sub.ts', path: 'folder10/sub.ts', oldPath: undefined }],
+    },
+    { kind: 'file', name: 'file1.ts', path: 'file1.ts', oldPath: undefined },
+    { kind: 'file', name: 'file2.ts', path: 'file2.ts', oldPath: undefined },
+    { kind: 'file', name: 'file10.ts', path: 'file10.ts', oldPath: undefined },
+  ]);
+});
+
 test('returns an empty tree for an empty file response', () => {
   assert.deepEqual(buildGitFileTree([]), []);
 });

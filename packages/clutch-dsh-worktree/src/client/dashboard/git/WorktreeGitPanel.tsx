@@ -38,6 +38,7 @@ export interface WorktreeGitPanelProps {
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
   readonly currentBranch?: string;
+  readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
 
@@ -76,6 +77,7 @@ export function WorktreeGitPanel({
   worktreeId,
   defaultBaselineBranch,
   currentBranch,
+  onOpenFile,
   t,
 }: WorktreeGitPanelProps) {
   const isMain = worktreeId === 'main' || worktreeId.startsWith('main:');
@@ -334,7 +336,7 @@ export function WorktreeGitPanel({
                       : t('dashboard.git.noFiles')}
                   </div>
                 ) : (
-                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
                 )}
               </>
             )}
@@ -349,7 +351,7 @@ export function WorktreeGitPanel({
             ) : state.diff.status === 'error' ? (
               <div className={styles.gitError} role="alert">{errorText(state.diff.error)}</div>
             ) : (
-              <GitDiffView diff={diff} t={t} />
+              <GitDiffView diff={diff} onOpenFile={onOpenFile} t={t} />
             )}
           </section>
         </div>

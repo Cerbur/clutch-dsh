@@ -470,6 +470,19 @@ export function apply(ctx: Context): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          openResource: (address: string, options?: { line?: number }) => {
+            const sidebar = (ctx as unknown as Record<string, unknown>).sidebarRight as
+              | { openResource: (address: string, options?: { params?: { line?: number } }) => void }
+              | undefined;
+            if (sidebar && typeof sidebar.openResource === 'function') {
+              sidebar.openResource(
+                address,
+                options?.line !== undefined ? { params: { line: options.line } } : undefined,
+              );
+              return true;
+            }
+            return false;
+          },
           expandState,
           sessionOrder,
           dashboardStore,

@@ -67,6 +67,7 @@ export interface WorktreePermissionNotice {
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
+  readonly openResource?: (address: string, options?: { line?: number }) => boolean;
   readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
     set(selection: DashboardSelection | undefined): void;
   };

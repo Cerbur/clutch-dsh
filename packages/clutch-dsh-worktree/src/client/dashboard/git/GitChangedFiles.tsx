@@ -1,9 +1,10 @@
-import { IconFolderClose16, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconFolderClose16, IconFolderOpen16, IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { buildGitFileTree, type GitFileTreeNode } from './git-file-tree.js';
+import { GitFileTypeIcon } from './GitFileTypeIcon.js';
 import { GitLineStats } from './GitLineStats.js';
 import styles from './worktree-git.css';
 
@@ -11,6 +12,7 @@ export interface GitChangedFilesProps {
   readonly files: readonly WorktreeGitChangedFile[];
   readonly selectedPath?: string;
   readonly onSelect: (path: string) => void;
+  readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
 
@@ -55,6 +57,7 @@ interface RenderTreeNodesInput {
   readonly toggleFolder: (path: string) => void;
   readonly selectedPath?: string;
   readonly onSelect: (path: string) => void;
+  readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
 
@@ -66,6 +69,7 @@ function renderTreeNodes({
   toggleFolder,
   selectedPath,
   onSelect,
+  onOpenFile,
   t,
 }: RenderTreeNodesInput): ReactNode[] {
   return nodes.map((node, index) => {
@@ -123,6 +127,7 @@ function renderTreeNodes({
               toggleFolder,
               selectedPath,
               onSelect,
+              onOpenFile,
               t,
             })}
           </ul>
@@ -162,6 +167,9 @@ function renderTreeNodes({
                       ? 'C'
                       : 'T'}
           </span>
+          <span className={styles.gitFileIcon} aria-hidden="true">
+            <GitFileTypeIcon path={file.path} className={styles.gitFileIconGlyph} />
+          </span>
           <span className={styles.gitFilePath} title={fileTitle(file)}>
             {fileLabel(file)}
           </span>
@@ -178,6 +186,29 @@ function renderTreeNodes({
               {file.commits.map(shortCommit).join(', ')}
             </code>
           )}
+          {onOpenFile !== undefined && file.status !== 'deleted' && (
+            <span
+              role="button"
+              tabIndex={0}
+              className={styles.gitOpenFileAction}
+              title={t('dashboard.git.openInSidebar')}
+              aria-label={t('dashboard.git.openInSidebar')}
+              data-dashboard-git-open-file={file.path}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenFile(file.path);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenFile(file.path);
+                }
+              }}
+            >
+              <IconRightUpOutline14 />
+            </span>
+          )}
         </button>
       </li>
     );
@@ -185,7 +216,7 @@ function renderTreeNodes({
 }
 
 /** Changed-file tree; only paths returned by Host are selectable. */
-export function GitChangedFiles({ files, selectedPath, onSelect, t }: GitChangedFilesProps) {
+export function GitChangedFiles({ files, selectedPath, onSelect, onOpenFile, t }: GitChangedFilesProps) {
   const treeInstanceId = useId().replaceAll(':', '');
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -215,6 +246,7 @@ export function GitChangedFiles({ files, selectedPath, onSelect, t }: GitChanged
         toggleFolder,
         selectedPath,
         onSelect,
+        onOpenFile,
         t,
       })}
     </ul>

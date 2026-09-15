@@ -29,6 +29,7 @@ import {
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
 import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
+import { buildSessionFileAddress } from './dashboard/git/file-address.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
@@ -152,6 +153,46 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     dashboardRecord !== undefined && isManagedDashboardRecord(dashboardRecord)
       ? dashboardRecord
       : undefined;
+  const onOpenFile = useCallback(
+    (filePath: string, options?: { line?: number }) => {
+      if (typeof props.openResource !== 'function' || dashboardRecord === undefined) return;
+      const worktreeSessions = dashboardSessionIds(
+        dashboardRecord,
+        source.sessions,
+        dashboardView?.bindings ?? [],
+        source.archivedSessionIds,
+        isMainWorktreeId(dashboardRecord.worktreeId)
+          ? ordering.orderedSessionIdsByAccount.get(`main:${dashboardRecord.workspaceId}`)
+          : ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+        dashboardWorkspace === undefined
+          ? []
+          : workspaceSessionIds(
+              source.workspaces,
+              dashboardWorkspace.workspaceId,
+              source.sessions.ids,
+            ),
+      );
+      const targetSessionId =
+        worktreeSessions[0] ??
+        source.currentSessionId ??
+        dashboardWorkspace?.sessionIds[0] ??
+        source.sessions.ids[0];
+      if (targetSessionId === undefined) return;
+      const address = buildSessionFileAddress(targetSessionId, filePath);
+      props.openResource(address, options);
+    },
+    [
+      props.openResource,
+      dashboardRecord,
+      source.sessions,
+      source.currentSessionId,
+      source.archivedSessionIds,
+      source.workspaces,
+      dashboardView?.bindings,
+      ordering.orderedSessionIdsByAccount,
+      dashboardWorkspace,
+    ],
+  );
   if (source.mode !== 'worktree') return null;
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
@@ -285,6 +326,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 ),
           )}
           actionPending={mutation.actionPending}
+          onOpenFile={typeof props.openResource === 'function' ? onOpenFile : undefined}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
           }

@@ -52,6 +52,7 @@ export interface WorktreeDashboardProps {
   readonly onCreateSession?: () => void;
   readonly onCreateWorktree?: () => void;
   readonly onArchiveWorktree?: () => void;
+  readonly onOpenFile?: (path: string) => void;
 }
 
 function DashboardIcon({ kind }: { kind: DashboardTab | 'instructions' | 'actions' }) {
@@ -422,6 +423,7 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onOpenFile,
   onSaveInstructions,
   onSaveBaseline,
   branches = [],
@@ -922,6 +924,7 @@ export function WorktreeDashboard({
               worktreeId={record.worktreeId}
               defaultBaselineBranch={displayedBaseline}
               currentBranch={baselineCurrentBranch}
+              onOpenFile={onOpenFile}
               t={t}
             />
           ) : tab === 'sessions' ? (

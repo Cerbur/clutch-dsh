@@ -24,9 +24,11 @@ type MutableNode =
       readonly children: Map<string, MutableNode>;
     };
 
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 function compareNodes(left: MutableNode, right: MutableNode): number {
   if (left.kind !== right.kind) return left.kind === 'folder' ? -1 : 1;
-  return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+  return byName.compare(left.name, right.name);
 }
 
 function materialize(nodes: Map<string, MutableNode>): readonly GitFileTreeNode[] {
