@@ -29,10 +29,14 @@ function isMainWorktreeId(worktreeId: string): boolean {
   return worktreeId === 'main' || worktreeId.startsWith('main:');
 }
 
-function unavailableHistory(reason: 'baseline-unselected' | 'baseline-unknown' | 'main'): WorktreeGitHistory {
+function unavailableHistory(
+  reason: 'baseline-unselected' | 'baseline-unknown' | 'main',
+  divergence?: { readonly ahead: number; readonly behind: number },
+): WorktreeGitHistory {
   return {
     commits: [],
     truncated: false,
+    ...(divergence ?? {}),
     unavailableReason: reason,
   };
 }
@@ -342,14 +346,37 @@ async function isCommitAncestor(
   );
 }
 
+async function baselineHeadCommit(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+): Promise<string | undefined> {
+  return resolved.live.headCommit ?? (context.git.resolveCommit
+    ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
+    : undefined);
+}
+
+async function readCommitDivergence(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  baseline: WorktreeGitBaseline,
+): Promise<{ readonly ahead: number; readonly behind: number } | undefined> {
+  if (context.git.getCommitDivergence === undefined) return undefined;
+  const head = await baselineHeadCommit(context, resolved);
+  if (head === undefined) return undefined;
+  return context.git.getCommitDivergence(
+    resolved.record.absolutePath,
+    baseline.commit,
+    head,
+    { signal: context.signal },
+  );
+}
+
 async function baselineIsCurrentAncestor(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   baseline: WorktreeGitBaseline,
 ): Promise<boolean> {
-  const head = resolved.live.headCommit ?? (context.git.resolveCommit
-    ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
-    : undefined);
+  const head = await baselineHeadCommit(context, resolved);
   if (head === undefined) return false;
   return isCommitAncestor(context, resolved, baseline.commit, head);
 }
@@ -439,8 +466,9 @@ export async function listWorktreeCommits(
         : 'baseline-unknown',
     );
   }
+  const divergence = await readCommitDivergence(context, resolved.value, baseline);
   if (!(await baselineIsCurrentAncestor(context, resolved.value, baseline))) {
-    return unavailableHistory('baseline-unknown');
+    return unavailableHistory('baseline-unknown', divergence);
   }
   if (context.git.listCommits === undefined) {
     throw providerError('GIT_OPERATION_FAILED', 'Git commit history is unavailable', {
@@ -458,8 +486,17 @@ export async function listWorktreeCommits(
       { signal: context.signal },
     ) ?? Promise.resolve([]),
   ]);
+  const resolvedDivergence = divergence ?? (history.headCommit === undefined || context.git.getCommitDivergence === undefined
+    ? undefined
+    : await context.git.getCommitDivergence(
+        resolved.value.record.absolutePath,
+        baseline.commit,
+        history.headCommit,
+        { signal: context.signal },
+      ));
   return {
     ...history,
+    ...(resolvedDivergence ?? {}),
     commits: workingTreeFiles.length > 0
       ? [workingTreeCommit(history.headCommit), ...history.commits]
       : history.commits,
@@ -579,6 +616,11 @@ async function selectedCommitFiles(
   })));
 }
 
+function mergeLineCount(left: number | undefined, right: number | undefined): number | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  return left + right;
+}
+
 function mergeSelectedFiles(groups: readonly CommitFileGroup[]): readonly WorktreeGitChangedFile[] {
   const files = new Map<string, WorktreeGitChangedFile>();
   for (const group of groups) {
@@ -588,8 +630,20 @@ function mergeSelectedFiles(groups: readonly CommitFileGroup[]): readonly Worktr
         files.set(file.path, { ...file, commits: [group.commit] });
         continue;
       }
+      const countsUnknown =
+        previous.additions === undefined ||
+        file.additions === undefined ||
+        previous.deletions === undefined ||
+        file.deletions === undefined;
+      const additions = countsUnknown ? undefined : mergeLineCount(previous.additions, file.additions);
+      const deletions = countsUnknown ? undefined : mergeLineCount(previous.deletions, file.deletions);
+      const { additions: _previousAdditions, deletions: _previousDeletions, ...metadata } = previous;
+      void _previousAdditions;
+      void _previousDeletions;
       files.set(file.path, {
-        ...previous,
+        ...metadata,
+        ...(additions === undefined ? {} : { additions }),
+        ...(deletions === undefined ? {} : { deletions }),
         commits: [...new Set([...(previous.commits ?? []), group.commit])],
       });
     }

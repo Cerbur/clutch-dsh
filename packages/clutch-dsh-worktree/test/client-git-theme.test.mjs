@@ -100,3 +100,24 @@ test('changed-file folders use the native DSH folder icons', async () => {
   assert.match(source, /IconFolderOpen16/);
   assert.match(source, /collapsed \? <IconFolderClose16 \/> : <IconFolderOpen16 \/>/);
 });
+
+test('changed-file stats use explicit green additions and red deletions', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(changedFilesUrl, 'utf8');
+  const lineStats = await readFile(new URL('../src/client/dashboard/git/GitLineStats.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /<GitLineStats[\s\S]*additions=\{file\.additions\}[\s\S]*deletions=\{file\.deletions\}/u);
+  assert.match(lineStats, /data-dashboard-git-additions/);
+  assert.match(lineStats, /data-dashboard-git-deletions/);
+  assert.match(css, /\.gitLineAdded[\s\S]*state-success-primary/u);
+  assert.match(css, /\.gitLineRemoved[\s\S]*state-error-secondary/u);
+});
+
+test('Overview Git facts reuse existing history and working-tree reads', async () => {
+  const source = await readFile(new URL('../src/client/dashboard/git/WorktreeGitOverview.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /listWorktreeCommits/);
+  assert.match(source, /listWorktreeCommitFiles/);
+  assert.match(source, /metric: 'aheadBehind' \| 'workingTree'/u);
+  assert.match(source, /history\.unavailableReason/);
+});

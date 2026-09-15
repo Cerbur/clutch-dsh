@@ -176,6 +176,11 @@ function renderHarness(writeClipboard) {
           }),
         },
         './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
+        './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
+        './git/WorktreeGitOverview.js': {
+          useWorktreeGitOverview: () => ({ status: 'unavailable' }),
+          WorktreeGitOverviewValue: ({ metric }) => jsx('span', { 'data-dashboard-overview-metric': metric, children: metric === 'aheadBehind' ? '+3 / -1' : '+12 / -4' }),
+        },
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
@@ -226,6 +231,20 @@ const historicalHints = (node, t) =>
     node,
     (item) => item.type === 'span' && item.props.children === t['dashboard.historicalUnavailable'],
   );
+
+test('Dashboard renders separate ahead-behind and working-tree metric rows', () => {
+  const harness = renderHarness(async () => true);
+  const node = harness.render({ record: { ...record, baseBranch: 'main' } });
+  const metrics = findAll(node, (item) => item.props?.['data-dashboard-overview-metric']);
+  assert.deepEqual(
+    metrics.map((item) => [item.props['data-dashboard-overview-metric'], item.props.children]),
+    [
+      ['aheadBehind', '+3 / -1'],
+      ['workingTree', '+12 / -4'],
+    ],
+  );
+  harness.dispose();
+});
 
 test('dashboard renders real identity and explicit placeholders in both languages', () => {
   const harness = renderHarness(async () => true);

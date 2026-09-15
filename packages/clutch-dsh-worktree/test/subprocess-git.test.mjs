@@ -587,17 +587,21 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
       responses: [
         { stdout: 'M\0space file.txt\0' },
         { stdout: 'untracked.txt\0' },
+        { stdout: '1\t0\tspace file.txt\0' },
+        { stdout: '1\t0\tuntracked.txt\0' },
       ],
     });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
     assert.deepEqual(await git.listWorkingTreeFiles(workspaceRoot), [
-      { path: 'space file.txt', status: 'modified' },
-      { path: 'untracked.txt', status: 'added' },
+      { path: 'space file.txt', status: 'modified', additions: 1, deletions: 0 },
+      { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
     ]);
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+      ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', 'HEAD', '--'],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', 'untracked.txt'],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -613,18 +617,22 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
       responses: [
         { stdout: 'R100\0old name.txt\0new name.txt\0D\0deleted.txt\0M\0tracked.txt\0' },
         { stdout: `${filePath}\0` },
+        { stdout: '0\t0\t\x00old name.txt\x00new name.txt\x000\t1\tdeleted.txt\x001\t1\ttracked.txt\x00' },
+        { stdout: `1\t0\tb/${filePath}\0` },
       ],
     });
     const git = new LocalGitAdapter({ subprocess: listRuntime });
     assert.deepEqual(await git.listWorkingTreeDiffFiles(workspaceRoot, baseCommit), [
-      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
-      { path: 'deleted.txt', status: 'deleted' },
-      { path: 'tracked.txt', status: 'modified' },
-      { path: filePath, status: 'added' },
+      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed', additions: 0, deletions: 0 },
+      { path: 'deleted.txt', status: 'deleted', additions: 0, deletions: 1 },
+      { path: 'tracked.txt', status: 'modified', additions: 1, deletions: 1 },
+      { path: filePath, status: 'added', additions: 1, deletions: 0 },
     ]);
     assert.deepEqual(listRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+      ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
     ]);
 
     const diffRuntime = createFakeRuntime({
@@ -694,14 +702,15 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       responses: [
         { stdout: `${commit} ${parent}\n` },
         { stdout: 'R100\0old name.txt\0new name.txt\0C100\0source.txt\0copy.txt\0M\0space file.txt\0' },
+        { stdout: '0\t0\t\x00old name.txt\x00new name.txt\x000\t0\t\x00source.txt\x00copy.txt\x001\t1\tspace file.txt\x00' },
       ],
     });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
     assert.deepEqual(await git.listCommitFiles(workspaceRoot, commit), [
-      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
-      { path: 'copy.txt', oldPath: 'source.txt', status: 'copied' },
-      { path: 'space file.txt', status: 'modified' },
+      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed', additions: 0, deletions: 0 },
+      { path: 'copy.txt', oldPath: 'source.txt', status: 'copied', additions: 0, deletions: 0 },
+      { path: 'space file.txt', status: 'modified', additions: 1, deletions: 1 },
     ]);
     assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
       '--literal-pathspecs',
@@ -715,17 +724,30 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       parent,
       commit,
     ]);
+    assert.deepEqual(runtime.spawnCalls[2].argv.slice(1), [
+      '--literal-pathspecs',
+      'diff-tree',
+      '--no-commit-id',
+      '--numstat',
+      '-z',
+      '-r',
+      '-M',
+      '-C',
+      parent,
+      commit,
+    ]);
 
     const rootCommit = 'c'.repeat(40);
     const rootRuntime = createFakeRuntime({
       responses: [
         { stdout: `${rootCommit}\n` },
         { stdout: 'A\0README.md\0' },
+        { stdout: '1\t0\tREADME.md\0' },
       ],
     });
     const rootGit = new LocalGitAdapter({ subprocess: rootRuntime });
     assert.deepEqual(await rootGit.listCommitFiles(workspaceRoot, rootCommit), [
-      { path: 'README.md', status: 'added' },
+      { path: 'README.md', status: 'added', additions: 1, deletions: 0 },
     ]);
     assert.deepEqual(rootRuntime.spawnCalls[1].argv.slice(1), [
       '--literal-pathspecs',
@@ -733,6 +755,18 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       '--root',
       '--no-commit-id',
       '--name-status',
+      '-z',
+      '-r',
+      '-M',
+      '-C',
+      rootCommit,
+    ]);
+    assert.deepEqual(rootRuntime.spawnCalls[2].argv.slice(1), [
+      '--literal-pathspecs',
+      'diff-tree',
+      '--root',
+      '--no-commit-id',
+      '--numstat',
       '-z',
       '-r',
       '-M',

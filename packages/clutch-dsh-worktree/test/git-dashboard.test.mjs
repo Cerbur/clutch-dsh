@@ -154,7 +154,7 @@ test('captures an immutable baseline and serves commit history, files, and a fil
       commit: firstCommit,
       baseBranch: 'dashboard-baseline',
     });
-    assert.deepEqual(selectedFiles.files, [{ path: 'change.txt', status: 'added' }]);
+    assert.deepEqual(selectedFiles.files, [{ path: 'change.txt', status: 'added', additions: 1, deletions: 0 }]);
     const selectedDiff = await fixture.manager.getWorktreeCommitFileDiff({
       workspaceId: 'ws_dashboard',
       worktreeId: record.worktreeId,
@@ -170,7 +170,7 @@ test('captures an immutable baseline and serves commit history, files, and a fil
       worktreeId: record.worktreeId,
       commit: firstCommit,
     });
-    assert.deepEqual(files.files, [{ path: 'change.txt', status: 'added' }]);
+    assert.deepEqual(files.files, [{ path: 'change.txt', status: 'added', additions: 1, deletions: 0 }]);
 
     const diff = await fixture.manager.getWorktreeCommitFileDiff({
       workspaceId: 'ws_dashboard',
@@ -180,6 +180,61 @@ test('captures an immutable baseline and serves commit history, files, and a fil
     });
     assert.equal(diff.binary, false);
     assert.match(diff.patch, /\+second/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('reports ahead-behind status and line counts for changed files', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/line-stats',
+    });
+    const targetPath = record.absolutePath;
+    await writeFile(path.join(targetPath, 'change.txt'), 'first\n');
+    await runGit(targetPath, ['add', 'change.txt']);
+    await runGit(targetPath, ['commit', '-m', 'add line stats file']);
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+    });
+    assert.equal(history.ahead, 1);
+    assert.equal(history.behind, 0);
+
+    const commit = history.commits.find((candidate) => candidate.sha !== WORKTREE_GIT_WORKING_TREE);
+    assert.ok(commit);
+    assert.equal(commit.kind, undefined);
+    const committedFiles = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: commit.sha,
+    });
+    assert.deepEqual(committedFiles.files, [{
+      path: 'change.txt',
+      status: 'added',
+      additions: 1,
+      deletions: 0,
+    }]);
+
+    await writeFile(path.join(targetPath, 'change.txt'), 'first\nsecond\n');
+    await writeFile(path.join(targetPath, 'untracked.txt'), 'new\n');
+    const workingTreeFiles = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      commit: WORKTREE_GIT_WORKING_TREE,
+    });
+    assert.deepEqual(
+      workingTreeFiles.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'change.txt', status: 'modified', additions: 1, deletions: 0 },
+        { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
+      ],
+    );
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });
@@ -217,9 +272,9 @@ test('puts staged, unstaged, and untracked changes at the top of history', async
     assert.deepEqual(
       files.files.toSorted((left, right) => left.path.localeCompare(right.path)),
       [
-        { path: 'README.md', status: 'modified' },
-        { path: 'staged.txt', status: 'added' },
-        { path: 'untracked.txt', status: 'added' },
+        { path: 'README.md', status: 'modified', additions: 1, deletions: 0 },
+        { path: 'staged.txt', status: 'added', additions: 1, deletions: 0 },
+        { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
       ],
     );
 
@@ -329,7 +384,7 @@ test('keeps the captured baseline stable when the source branch moves and compar
       worktreeId: record.worktreeId,
       commit: mergeCommit.sha,
     });
-    assert.deepEqual(files.files, [{ path: 'side.txt', status: 'added' }]);
+    assert.deepEqual(files.files, [{ path: 'side.txt', status: 'added', additions: 1, deletions: 0 }]);
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });
@@ -357,6 +412,8 @@ test('returns an unavailable projection when a captured baseline is no longer an
     assert.deepEqual(capturedHistory, {
       commits: [],
       truncated: false,
+      behind: 1,
+      ahead: 1,
       unavailableReason: 'baseline-unknown',
     });
 
@@ -994,11 +1051,11 @@ test('serves a true baseline-to-live summary with staged, unstaged, untracked, d
     assert.deepEqual(
       live.files.toSorted((left, right) => left.path.localeCompare(right.path)),
       [
-        { path: 'delete-me.txt', status: 'deleted' },
-        { path: 'README.md', status: 'modified' },
-        { path: 'rename-target.txt', oldPath: 'rename-source.txt', status: 'renamed' },
-        { path: 'staged.txt', status: 'added' },
-        { path: 'untracked.txt', status: 'added' },
+        { path: 'delete-me.txt', status: 'deleted', additions: 0, deletions: 1 },
+        { path: 'README.md', status: 'modified', additions: 1, deletions: 0 },
+        { path: 'rename-target.txt', oldPath: 'rename-source.txt', status: 'renamed', additions: 0, deletions: 0 },
+        { path: 'staged.txt', status: 'added', additions: 1, deletions: 0 },
+        { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
       ],
     );
 
@@ -1070,7 +1127,7 @@ test('normalizes staged deletion with an untracked restoration in live summaries
       worktreeId: record.worktreeId,
       selection: { kind: 'summary', includeWorkingTree: true },
     });
-    assert.deepEqual(unchanged.files, [{ path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied' }]);
+    assert.deepEqual(unchanged.files, [{ path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied', additions: 0, deletions: 0 }]);
 
     await writeFile(path.join(record.absolutePath, 'mixed.txt'), 'modified\n');
     const modified = await fixture.manager.listWorktreeCommitFiles({
@@ -1081,8 +1138,8 @@ test('normalizes staged deletion with an untracked restoration in live summaries
     assert.deepEqual(
       modified.files.toSorted((left, right) => left.path.localeCompare(right.path)),
       [
-        { path: 'mixed.txt', status: 'modified' },
-        { path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied' },
+        { path: 'mixed.txt', status: 'modified', additions: 1, deletions: 1 },
+        { path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied', additions: 0, deletions: 0 },
       ].toSorted((left, right) => left.path.localeCompare(right.path)),
     );
     const diff = await fixture.manager.getWorktreeCommitFileDiff({
@@ -1092,6 +1149,21 @@ test('normalizes staged deletion with an untracked restoration in live summaries
       path: 'mixed.txt',
     });
     assert.match(diff.patch, /\+modified/u);
+
+    await writeFile(path.join(record.absolutePath, 'copy-source.txt'), 'replacement one\nreplacement two\n');
+    const changedRestoration = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(
+      changedRestoration.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'copy-source.txt', status: 'modified', additions: 2, deletions: 1 },
+        { path: 'copy-target.txt', status: 'added', additions: 1, deletions: 0 },
+        { path: 'mixed.txt', status: 'modified', additions: 1, deletions: 1 },
+      ],
+    );
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });

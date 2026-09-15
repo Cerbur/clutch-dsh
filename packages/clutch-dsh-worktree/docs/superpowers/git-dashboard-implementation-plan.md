@@ -929,18 +929,19 @@ Do not accumulate all Git fetching and diff rendering logic inside it.
 
 # 22. Lazy Loading
 
-Opening the Dashboard MUST NOT issue a Git history request.
+Opening the Dashboard may issue one compact Git status read for a managed Worktree when a valid
+persisted `baseBranch` differs from its current branch. This read reuses the existing history projection
+and, when a working-tree entry exists, its changed-file projection; it does not load the branch list.
 
-Existing Dashboard behavior says opening it does not trigger additional reads.
-
-Preserve that behavior.
+Main, unavailable, or baseline-unselected views must not issue a Git read. Git-tab branch/history reads
+remain lazy and independent from this Overview status projection.
 
 Expected sequence:
 
 ```text
-open Dashboard / Overview
+open Dashboard / Overview with a valid persisted baseline
     ↓
-no Git request
+listWorktreeCommits + working-tree files when present (compact status projection)
 
 select Git tab
     ↓
@@ -1072,6 +1073,8 @@ Overview Dashboard facts:
 ```text
 Base  [Edit baseline]
 main
+Ahead / Behind   +3 / -1
+Working tree    +12 / -4
 ```
 
 Only local branches other than the current Worktree branch appear in the editor. Saving replaces
@@ -1382,7 +1385,7 @@ Test cancellation/disposal.
 Test:
 
 ```text
-opening Dashboard does not load Git
+opening Dashboard reads one compact Git status when a valid persisted baseline exists
 opening Git tab loads once
 refresh loads again
 ready content retained while refreshing
@@ -1660,7 +1663,7 @@ The task is complete when all of the following are true:
 * binary and oversized files degrade clearly;
 * arbitrary commit SHA access is rejected;
 * arbitrary path access is rejected;
-* Dashboard open alone makes no Git RPC;
+* Dashboard open performs only the compact Overview Git status read when a valid persisted baseline exists; Main, unavailable, and baseline-unselected views make no Git RPC;
 * switching Git tab triggers lazy loading;
 * refresh preserves ready content;
 * stale responses do not change active selection;

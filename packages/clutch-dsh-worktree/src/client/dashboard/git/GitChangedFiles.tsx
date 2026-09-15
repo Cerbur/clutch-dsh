@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { buildGitFileTree, type GitFileTreeNode } from './git-file-tree.js';
+import { GitLineStats } from './GitLineStats.js';
 import styles from './worktree-git.css';
 
 export interface GitChangedFilesProps {
@@ -165,6 +166,13 @@ function renderTreeNodes({
             {fileLabel(file)}
           </span>
           <span className={styles.gitFileStatusLabel}>{t(statusKey(file.status))}</span>
+          <GitLineStats
+            additions={file.additions}
+            deletions={file.deletions}
+            ariaLabel={file.additions === undefined || file.deletions === undefined
+              ? undefined
+              : t('dashboard.git.lineStats', { additions: file.additions, deletions: file.deletions })}
+          />
           {file.commits !== undefined && file.commits.length > 0 && (
             <code className={styles.gitFileContributors} title={file.commits.join(', ')}>
               {file.commits.map(shortCommit).join(', ')}

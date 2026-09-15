@@ -217,6 +217,13 @@ export interface GitWorktreeAdapter {
     descendant: string,
     options?: GitCommandOptions,
   ): Promise<boolean>;
+  /** Count commits unique to each side of a baseline/HEAD comparison. */
+  getCommitDivergence?(
+    worktreeRoot: string,
+    baselineCommit: string,
+    headCommit: string,
+    options?: GitCommandOptions,
+  ): Promise<{ readonly ahead: number; readonly behind: number }>;
   /** Read the bounded commit history after one already-resolved baseline. */
   listCommits?(
     worktreeRoot: string,

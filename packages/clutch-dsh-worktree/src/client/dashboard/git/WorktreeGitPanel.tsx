@@ -6,6 +6,7 @@ import type {
 } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { GitChangedFiles } from './GitChangedFiles.js';
+import { GitLineStats } from './GitLineStats.js';
 import { GitCommitList } from './GitCommitList.js';
 import { GitDiffView } from './GitDiffView.js';
 import { useWorktreeGitState } from './useWorktreeGitState.js';
@@ -141,6 +142,21 @@ export function WorktreeGitPanel({
                     <dt>{t('dashboard.git.commits')}</dt>
                     <dd>{commitCountLabel(historyValue, t)}</dd>
                   </div>
+                  {historyValue.ahead !== undefined && historyValue.behind !== undefined && (
+                    <div>
+                      <dt>{t('dashboard.aheadBehind')}</dt>
+                      <dd>
+                        <GitLineStats
+                          additions={historyValue.ahead}
+                          deletions={historyValue.behind}
+                          ariaLabel={t('dashboard.git.aheadBehindStats', {
+                            ahead: historyValue.ahead,
+                            behind: historyValue.behind,
+                          })}
+                        />
+                      </dd>
+                    </div>
+                  )}
                 </>
               )}
             </dl>

@@ -26,6 +26,10 @@ import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
+import {
+  useWorktreeGitOverview,
+  WorktreeGitOverviewValue,
+} from './git/WorktreeGitOverview.js';
 import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
@@ -403,7 +407,7 @@ function WorktreeBaselineEditor({
   );
 }
 
-/** A Worktree or browser Main projection with explicitly unconnected MVP cards. */
+/** A Worktree or browser Main projection with explicit unavailable states where Git is not applicable. */
 export function WorktreeDashboard({
   manager,
   record,
@@ -536,6 +540,13 @@ export function WorktreeDashboard({
           return result;
         };
   const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
+  const gitOverview = useWorktreeGitOverview({
+    manager,
+    workspaceId: record.workspaceId,
+    worktreeId: record.worktreeId,
+    defaultBaselineBranch: displayedBaseline,
+    currentBranch: baselineCurrentBranch,
+  });
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
@@ -861,10 +872,10 @@ export function WorktreeDashboard({
                       )}
                     </DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.aheadBehind')}>
-                      {t('dashboard.notConnected')}
+                      <WorktreeGitOverviewValue state={gitOverview} metric="aheadBehind" t={t} />
                     </DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.workingTree')}>
-                      {t('dashboard.notConnected')}
+                      <WorktreeGitOverviewValue state={gitOverview} metric="workingTree" t={t} />
                     </DashboardFactRow>
                   </dl>
                   {tabLink('git', t('dashboard.viewDetails'))}

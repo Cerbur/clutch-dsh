@@ -10,6 +10,7 @@
 - Dashboard facts 支持选择除当前 Worktree branch 之外的本地 branch 并保存，替换 Sidecar 中原先的 `baseBranch`；保存后的有效基线会成为 Git Tab 选择器的默认值，若基线缺失或等于当前 branch，Git Tab 会提示用户选择，同时保持 Dashboard 工作区信息正常展示。
 - 增加 commit/path 归属校验、首个 Git Tab lazy load、刷新 ready 内容保留、binary/超大 diff 降级以及旧请求结果隔离。
 - 基线汇总支持 **包含工作区改动**：以基线到当前工作区的真实净 projection 展示 committed、staged、unstaged、untracked、删除和重命名改动，并保持按需刷新。
+- 当已保存有效基线时，Overview 按需展示 ahead/behind 与工作区文件行数；变更文件使用绿色 `+N` 和红色 `-N`，这些 Git 数值保持为临时 projection，不写入 Sidecar。
 
 #### 优化
 
@@ -25,6 +26,7 @@
 - Let Dashboard facts save any local branch except the current Worktree branch, replacing the Sidecar's previous `baseBranch`; use a saved baseline as the Git-tab selector default only when it differs from the current branch, and prompt for a baseline when no valid fact exists while keeping Dashboard Workspace information visible.
 - Add commit/path membership checks, first-Git-tab lazy loading, ready-content-preserving refreshes, binary/oversized-diff degradation, and stale-result isolation.
 - Add an **Include working tree** option to the Baseline summary: show a true net baseline-to-live-tree projection with committed, staged, unstaged, untracked, deleted, and renamed changes, refreshed on demand.
+- When a valid persisted baseline exists, let Overview read and show ahead/behind plus working-tree line totals on demand; changed files use green `+N` additions and red `-N` deletions, with Git metrics kept ephemeral rather than persisted in the Sidecar.
 
 #### Improved
 

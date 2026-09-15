@@ -116,6 +116,10 @@ export interface WorktreeGitCommit {
 export interface WorktreeGitHistory {
   readonly headCommit?: string;
   readonly baseline?: WorktreeGitBaseline;
+  /** Number of commits reachable only from the Worktree HEAD. */
+  readonly ahead?: number;
+  /** Number of commits reachable only from the selected baseline. */
+  readonly behind?: number;
   readonly commits: readonly WorktreeGitCommit[];
   readonly truncated: boolean;
   readonly unavailableReason?: 'baseline-unselected' | 'baseline-unknown' | 'main';
@@ -133,6 +137,10 @@ export interface WorktreeGitChangedFile {
   readonly path: string;
   readonly oldPath?: string;
   readonly status: WorktreeGitFileStatus;
+  /** Added text lines; omitted when Git reports a binary file. */
+  readonly additions?: number;
+  /** Deleted text lines; omitted when Git reports a binary file. */
+  readonly deletions?: number;
   /** Selected commit contributors for an aggregate commit view. */
   readonly commits?: readonly string[];
 }

@@ -462,6 +462,24 @@
   white-space: nowrap;
 }
 
+.gitLineStats {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gitLineAdded {
+  color: var(--dsw-alias-state-success-primary, #23845f);
+  font-weight: 620;
+}
+
+.gitLineRemoved {
+  color: var(--dsw-alias-state-error-secondary, #bd5d55);
+  font-weight: 620;
+}
+
 .gitDiff {
   display: block;
   flex: 1 1 auto;

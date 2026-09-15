@@ -126,18 +126,22 @@ launch success.
 
 ### Use Git & Changes
 
-Open the **Git & Changes** tab from a managed Worktree Dashboard. Opening the Dashboard or its
-Overview tab does not query Git; the first Git tab activation loads the local branch list and, when a
-baseline is selected, commit history through the existing `/api` Connection. The Git selector defaults to the Worktree's
-persisted `baseBranch`, which is also shown in the Overview Dashboard facts, only when that value is
-present and different from the current Worktree branch. To replace that baseline, click the pencil icon beside the Base fact, click the first-row search field to open the responsive branch picker; its search stays at the top while the bounded branch list scrolls on compact windows. Filter the local branches,
-choose any local branch except the current Worktree branch, and save.
-The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default
-for the Git selector. Once the Git tab is open, changing its selector remains a transient view choice
-and reloads history, changed files, and diffs without another Worktree-record write. If no valid baseline
-is saved (including a value equal to the current Worktree branch), the Git tab leaves it unselected and
-prompts you to choose one. The Overview identity, path, and
-Session information remain available even when the Git baseline is not selected.
+Open the **Git & Changes** tab from a managed Worktree Dashboard. For a managed Worktree with a
+persisted `baseBranch` that differs from the current branch, the Overview performs one compact, on-demand
+Git status read through the existing `/api` Connection. It shows ahead/behind commit counts and current
+working-tree line totals; this is an ephemeral projection, not a watcher or a Worktree-record field. Main,
+unavailable, or baseline-unselected views honestly remain **Not connected**. Opening Overview does not
+load the branch list; the first Git tab activation loads local branches and, when a baseline is selected,
+commit history. To replace that baseline, click the pencil icon beside the Base fact, click the first-row
+search field to open the responsive branch picker; its search stays at the top while the bounded branch list
+scrolls on compact windows. Filter the local branches, choose any local branch except the current Worktree
+branch, and save.
+The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default for
+the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
+history, changed files, and diffs without another Worktree-record write. If no valid baseline is saved
+(including a value equal to the current Worktree branch), the Git tab leaves it unselected and prompts you
+to choose one. Ahead/behind counts remain available for a divergent baseline when Git can resolve it, while
+history and working-tree files remain unavailable until the baseline is safe for those reads.
 
 The comparison range is the selected branch's current tip to `HEAD`; the branch is resolved again for
 each read. The browser can choose only a local branch, not a raw commit SHA or arbitrary Git ref. The
@@ -159,8 +163,10 @@ exclusive with committed multi-selection.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
-both paths; binary or oversized diffs show an explicit display-safe state. The **Uncommitted changes**
-entry is an on-demand snapshot, is not persisted, and is not a Git watcher; refresh it to see later edits.
+both paths; binary or oversized diffs show an explicit display-safe state. Changed-file rows show text
+line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. The
+**Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a Git watcher;
+refresh it to see later edits.
 
 Git & Changes uses a viewport-bounded, fixed-size three-pane surface. Long commit and changed-file lists
 scroll inside their panes instead of expanding the Dashboard. The changed-file pane also scrolls

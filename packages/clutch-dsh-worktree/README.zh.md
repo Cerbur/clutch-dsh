@@ -123,15 +123,19 @@ Session。
 
 ### 使用 Git 与变更
 
-从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
-Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载本地 branch 列表，并在选择基线后加载
-commit history。Git 选择器仅在 Worktree 持久化的 `baseBranch` 存在且不同于当前 Worktree branch 时
-将其作为默认值；这个值也显示在 Overview 的 Dashboard facts 中。要替换基线，可以点击 Base fact 旁的铅笔图标，再点击第一行搜索框展开响应式 branch 选择器；搜索固定在顶部，较小窗口中较长的 branch 列表会在受限区域内滚动。然后过滤 branch，
-选择除当前 Worktree branch 之外的任一本地 branch，然后保存。保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器
-会以保存后的值作为默认值。Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载
-history、changed files 和 Diff，不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前
-Worktree branch），Git Tab 会保持未选择状态并提示用户选择。即使没有选择 Git 基线，Overview 中的
-身份、路径和 Session 信息仍然正常展示。
+从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。对于持久化 `baseBranch` 存在且不同于当前
+branch 的 managed Worktree，Overview 会通过现有 `/api` Connection 做一次轻量、按需的 Git 状态读取，
+展示 ahead/behind commit 数量和当前工作区的文件行数。这是临时 projection，不是 watcher，也不会写入
+Worktree 记录。Main、不可用或未选择基线时会诚实显示 **待接入**。打开 Overview 不会加载 branch 列表；
+第一次进入 Git Tab 时才加载本地 branch，并在选择基线后加载 commit history。要替换基线，可以点击
+Base fact 旁的铅笔图标，再点击第一行搜索框展开响应式 branch 选择器；搜索固定在顶部，较小窗口中较长的
+branch 列表会在受限区域内滚动。然后过滤 branch，选择除当前 Worktree branch 之外的任一本地 branch，
+再保存。
+保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器会以保存后的值作为默认值。
+Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载 history、changed files 和 Diff，
+不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前 Worktree branch），Git Tab 会保持
+未选择状态并提示用户选择。当 Git 可以解析出分叉基线时，ahead/behind 数量仍会显示；但在基线不安全时，
+history 和工作区文件会保持不可用。
 
 比较范围是所选 branch 当前指向的 commit 到 `HEAD`，每次读取都会重新解析 branch。浏览器不能直接
 选择 commit SHA 或任意 Git ref；所选 branch 必须是 Worktree `HEAD` 的 ancestor，互不相关或已 rewrite
@@ -148,7 +152,8 @@ commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式�
 commit。未提交改动 entry 与已提交的多选互斥。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
-commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。
+commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更
+文件行会用绿色 `+N` 表示新增、红色 `-N` 表示删除；binary 文件不显示这些数量。
 **未提交的改动**是按需读取的临时快照，不会持久化，也不会持续监视 Git；刷新后才能看到后续编辑。
 
 Git 与变更使用受页面 viewport 限制的固定尺寸三栏布局。较长的 commit list 和变更文件 list 会在各自
