@@ -15,8 +15,90 @@ import type { useSurfaceMutation } from './useSurfaceMutation.js';
 import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 import type { useSurfaceSources } from '../state/useSurfaceSources.js';
 
+export interface SessionOrderCommitInput {
+  readonly groupKey: string;
+  readonly workspaceId: string;
+  readonly sessionId: string;
+  readonly beforeSessionId?: string;
+  readonly nextOrder: readonly string[];
+  readonly insertSessionBefore?: WorktreeSurfaceProps['insertSessionBefore'];
+  readonly setOrder: (groupKey: string, order: readonly string[]) => void;
+}
+
+/**
+ * Persist one visual Session move without crossing the Worktree membership boundary.
+ * Worktree Sessions are plugin-local projections, while Main Sessions remain native DSH members.
+ */
+export async function commitSessionOrder(input: SessionOrderCommitInput): Promise<void> {
+  if (input.groupKey.startsWith('worktree:')) {
+    input.setOrder(input.groupKey, input.nextOrder);
+    return;
+  }
+  if (input.insertSessionBefore === undefined) {
+    throw new Error('Native Session ordering is unavailable');
+  }
+  await input.insertSessionBefore(
+    input.workspaceId,
+    input.sessionId,
+    input.beforeSessionId,
+  );
+  input.setOrder(input.groupKey, input.nextOrder);
+}
+
+export interface SessionDragOrderInput {
+  readonly visibleSessionIds: readonly string[];
+  readonly currentOrder: readonly string[];
+  readonly sessionId: string;
+  readonly over: {
+    readonly sessionId: string;
+    readonly half: 'before' | 'after';
+  };
+}
+
+export interface SessionDragOrderResult {
+  readonly beforeSessionId?: string;
+  readonly nextOrder: string[];
+}
+
+/** Resolve a visual drop against the full account order, retaining filtered IDs. */
+export function resolveSessionDragOrder(
+  input: SessionDragOrderInput,
+): SessionDragOrderResult | undefined {
+  const targetIndex = input.visibleSessionIds.indexOf(input.over.sessionId);
+  const sourceIndex = input.visibleSessionIds.indexOf(input.sessionId);
+  if (targetIndex === -1 || sourceIndex === -1) return undefined;
+
+  const currentOrder = [...input.currentOrder];
+  const knownIds = new Set(currentOrder);
+  for (const id of input.visibleSessionIds) {
+    if (!knownIds.has(id)) {
+      knownIds.add(id);
+      currentOrder.push(id);
+    }
+  }
+  const nextOrder = reorderSessionIds(
+    currentOrder,
+    input.sessionId,
+    input.over.sessionId,
+    input.over.half,
+  );
+  if (
+    nextOrder.length === currentOrder.length &&
+    nextOrder.every((id, index) => id === currentOrder[index])
+  ) {
+    return undefined;
+  }
+  const nextIndex = nextOrder.indexOf(input.sessionId);
+  if (nextIndex === -1) return undefined;
+  return {
+    beforeSessionId: nextOrder[nextIndex + 1],
+    nextOrder,
+  };
+}
+
 type Input = {
   source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces' | 'sessionOrderSnapshot'>;
+  orderedSessionIdsByAccount: ReadonlyMap<string, readonly string[]>;
   props: Pick<
     WorktreeSurfaceProps,
     'insertWorkspaceBefore' | 'insertSessionBefore' | 'sessionOrder' | 'insertWorktreeBefore'
@@ -25,7 +107,13 @@ type Input = {
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'refresh'>;
 };
 
-export function useDragActions({ source, props, mutation, read }: Input) {
+export function useDragActions({
+  source,
+  orderedSessionIdsByAccount,
+  props,
+  mutation,
+  read,
+}: Input) {
   const { workspaces, sessionOrderSnapshot } = source;
   const { insertWorkspaceBefore, insertSessionBefore, sessionOrder, insertWorktreeBefore } = props;
   const { setActionError } = mutation;
@@ -84,20 +172,19 @@ export function useDragActions({ source, props, mutation, read }: Input) {
     if (sessionDropCommitted.current) return;
     sessionDropCommitted.current = true;
     setSessionDrag(undefined);
-    const targetIndex = sessionIds.indexOf(over.sessionId);
-    const sourceIndex = sessionIds.indexOf(activeDrag.sessionId);
-    if (targetIndex === -1 || sourceIndex === -1) return;
-    const beforeSessionId = over.half === 'before' ? over.sessionId : sessionIds[targetIndex + 1];
-    const anchorIndex =
-      beforeSessionId === undefined ? sessionIds.length : sessionIds.indexOf(beforeSessionId);
-    if (
-      beforeSessionId === activeDrag.sessionId ||
-      anchorIndex === sourceIndex ||
-      anchorIndex === sourceIndex + 1
-    ) {
-      return;
-    }
-    if (insertSessionBefore === undefined) {
+    const currentOrder =
+      orderedSessionIdsByAccount.get(activeDrag.groupKey) ??
+      sessionOrderSnapshot.accounts[activeDrag.groupKey]?.order ??
+      sessionIds;
+    const move = resolveSessionDragOrder({
+      visibleSessionIds: sessionIds,
+      currentOrder,
+      sessionId: activeDrag.sessionId,
+      over,
+    });
+    if (move === undefined) return;
+    const isWorktreeSession = activeDrag.groupKey.startsWith('worktree:');
+    if (!isWorktreeSession && insertSessionBefore === undefined) {
       setActionError({
         code: 'SESSION_ORDER_UNAVAILABLE',
         message: '',
@@ -106,17 +193,17 @@ export function useDragActions({ source, props, mutation, read }: Input) {
       return;
     }
     setActionError(undefined);
-    const currentOrder = sessionOrderSnapshot.accounts[activeDrag.groupKey]?.order ?? sessionIds;
-    void insertSessionBefore(workspaceId, activeDrag.sessionId, beforeSessionId)
-      .then(() => {
-        sessionOrder.actions.setOrder(
-          activeDrag.groupKey,
-          reorderSessionIds(currentOrder, activeDrag.sessionId, over.sessionId, over.half),
-        );
-      })
-      .catch((error) => {
-        setActionError(toWorktreeViewError(error));
-      });
+    void commitSessionOrder({
+      groupKey: activeDrag.groupKey,
+      workspaceId,
+      sessionId: activeDrag.sessionId,
+      beforeSessionId: move.beforeSessionId,
+      nextOrder: move.nextOrder,
+      insertSessionBefore,
+      setOrder: sessionOrder.actions.setOrder,
+    }).catch((error) => {
+      setActionError(toWorktreeViewError(error));
+    });
   };
   const commitWorktreeDrag = (
     activeDrag: WorktreeDragState,

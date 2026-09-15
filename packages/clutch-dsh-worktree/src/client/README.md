@@ -375,11 +375,12 @@ The Worktree surface is additive:
   scroll loop while a group status remains active. Expansion, hover/focus, and menu-open state yield
   the rail to its existing actions without starting a competing scroll loop. Main and Worktree share
   the same parameterized group-row path.
-- A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
-  Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
-  observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates
-  DSH Workspace data for automatic promotion; manual drag updates the local order only after the
-  native DSH ordering call succeeds.
+- The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
+  `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.
+  The order store is browser-local and persists only group keys, Session IDs, and observed numeric
+  timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates DSH Workspace data
+  for automatic promotion. Manual Worktree drag updates the local order directly; manual Main drag
+  calls native DSH ordering first and updates the local projection only after success.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and
   exposes the shared options menu with Copy path and, when a current local branch exists, Create new

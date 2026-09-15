@@ -253,6 +253,22 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 - **Session 归属与 Projection**：
   Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
 
+### 浏览器本地 Session 顺序修订 (Browser-local Session Order Amendment)
+
+Worktree Session 不属于 DSH 原生 Workspace 成员列表，因此 Session 拖拽不能调用原生
+`insertSessionBefore` 来修改 Worktree 顺序。当前实现明确修订了 2026-08-28 历史设计中
+“首个 baseline 保持 incoming order”以及所有 Session 拖拽都先调用 DSH 的假设：
+
+- 每个 Main/Worktree group 都在浏览器本地保存 { groupKey, sessionId, updatedAt }；首次观察和新出现的
+  Session 按有效 `updatedAt` 降序排列，时间相同、缺失或非法时保持输入顺序；
+- 已存在的 account 保留用户手动顺序，只有严格更新的 `updatedAt` 才会把 Session 提升到队首；
+- Worktree 拖拽只更新浏览器本地 order projection，不写 Sidecar、不改 DSH；Main 拖拽仍先调用
+  DSH 原生排序，成功后才更新本地 projection；
+- 顺序计算在 search 过滤和五行折叠之前执行，拖拽重排保留被过滤隐藏的 Session ID。
+
+该修订保持 DSH/Sidecar 数据边界，同时让 Worktree 的虚拟 membership 不再触发原生 Workspace
+成员校验错误。
+
 ### 最小刷新作用域不变量 (Minimum-Scope Refresh Invariant)
 
 ```text

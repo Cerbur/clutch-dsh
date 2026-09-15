@@ -108,10 +108,26 @@ function sameAccount(
   );
 }
 
-/**
- * Native-style activity order transition. The first observation records timestamps
- * without turning an existing list into a recency sort.
- */
+function orderByUpdatedAt(
+  ids: readonly string[],
+  updatedAtById: Readonly<Record<string, number | undefined>>,
+): string[] {
+  return ids
+    .map((id, index) => ({ id, index, timestamp: updatedAtById[id] }))
+    .sort((left, right) => {
+      const leftValid = isValidTimestamp(left.timestamp);
+      const rightValid = isValidTimestamp(right.timestamp);
+      if (leftValid && rightValid) {
+        const difference = Number(right.timestamp) - Number(left.timestamp);
+        if (difference !== 0) return difference;
+      }
+      if (leftValid !== rightValid) return leftValid ? -1 : 1;
+      return left.index - right.index;
+    })
+    .map(({ id }) => id);
+}
+
+/** Native-style activity order transition driven by the latest Session timestamp. */
 export function nextSessionOrderAccount(input: {
   readonly baseIds: readonly string[];
   readonly updatedAtById: Readonly<Record<string, number | undefined>>;
@@ -125,7 +141,7 @@ export function nextSessionOrderAccount(input: {
       const timestamp = input.updatedAtById[id];
       if (isValidTimestamp(timestamp)) observedUpdatedAt[id] = timestamp;
     }
-    return { order: baseIds, observedUpdatedAt };
+    return { order: orderByUpdatedAt(baseIds, input.updatedAtById), observedUpdatedAt };
   }
 
   const available = new Set(baseIds);
@@ -163,14 +179,15 @@ export function nextSessionOrderAccount(input: {
     }
   }
 
+  const orderedNewlyObserved = orderByUpdatedAt(newlyObserved, input.updatedAtById);
   promoted.sort((left, right) => right.timestamp - left.timestamp || left.index - right.index);
   const promotedIds = new Set([
-    ...newlyObserved,
+    ...orderedNewlyObserved,
     ...promoted.map(({ id }) => id),
   ]);
   return {
     order: [
-      ...newlyObserved,
+      ...orderedNewlyObserved,
       ...promoted.map(({ id }) => id),
       ...order.filter((id) => !promotedIds.has(id)),
     ],
