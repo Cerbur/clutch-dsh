@@ -76,6 +76,23 @@ test('Git panes stay bounded and scroll their data independently', async () => {
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
 });
 
+test('changed-file lists scroll long names without ellipsis', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const filePath = cssBlock(css, '.gitFilePath {');
+  const folderName = cssBlock(css, '.gitFolderName {');
+  const fileButton = cssBlock(css, '.gitChangedFileList button {\n  display: flex;');
+
+  assert.match(css, /\.gitChangedFileList \{[\s\S]*overflow-x: auto;/);
+  assert.match(css, /\.gitChangedFileList > li,[\s\S]*width: max-content;/);
+  assert.match(fileButton, /width: max-content;/);
+  assert.match(fileButton, /min-width: 100%;/);
+  assert.match(filePath, /min-width: max-content;/);
+  assert.match(filePath, /overflow: visible;/);
+  assert.match(filePath, /text-overflow: clip;/);
+  assert.match(folderName, /min-width: max-content;/);
+  assert.match(folderName, /text-overflow: clip;/);
+});
+
 test('changed-file folders use the native DSH folder icons', async () => {
   const source = await readFile(changedFilesUrl, 'utf8');
 

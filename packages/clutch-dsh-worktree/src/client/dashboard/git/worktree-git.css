@@ -270,6 +270,17 @@
   margin: 0;
 }
 
+.gitChangedFileList {
+  overflow-x: auto;
+}
+
+.gitChangedFileList > li,
+.gitChangedFileList .gitFolderChildren,
+.gitChangedFileList .gitFolderChildren > li {
+  width: max-content;
+  min-width: 100%;
+}
+
 .gitFolderChildren {
   list-style: none;
   padding: 0 0 0 12px;
@@ -317,16 +328,15 @@
 }
 
 .gitFolderName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
 .gitCommitList button,
 .gitChangedFileList button {
   display: block;
-  width: 100%;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -337,6 +347,7 @@
 
 .gitCommitList button {
   display: grid;
+  width: 100%;
   grid-template-columns: 15px minmax(0, 1fr);
   padding: 9px 8px;
 }
@@ -403,6 +414,9 @@
 
 .gitChangedFileList button {
   display: flex;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
   align-items: flex-start;
   gap: 7px;
   padding: 8px;
@@ -423,10 +437,10 @@
 .gitFileStatus[data-status='renamed'] { color: var(--dsw-alias-state-warn-label, #99712b); }
 
 .gitFilePath {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: max-content;
+  flex: 0 0 auto;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
