@@ -302,6 +302,17 @@ test('dashboard renders source-aware acquisition facts and flags absent facts as
   harness.dispose();
 });
 
+test('Dashboard facts preserve words before emergency wrapping', () => {
+  const factStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardFacts dt {'),
+    dashboardCssSource.indexOf('.dashboardFactAction {'),
+  );
+
+  assert.match(factStyles, /\.dashboardFacts dt \{[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
+  assert.match(factStyles, /\.dashboardFacts dd \{[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
+  assert.doesNotMatch(factStyles, /overflow-wrap: anywhere;/);
+});
+
 test('dashboardFacts uses a responsive searchable baseline modal and feeds it to Git tab defaults', async () => {
   const harness = renderHarness(async () => true);
   const calls = [];
