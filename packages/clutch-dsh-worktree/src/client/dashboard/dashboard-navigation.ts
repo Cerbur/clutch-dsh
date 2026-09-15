@@ -10,6 +10,16 @@ export interface DashboardNavigation {
 
 export type DashboardSessionListPhase = 'pending' | 'ready';
 
+export interface PendingDashboardNavigation {
+  readonly selection: DashboardSelection;
+  readonly originSessionId: string | undefined;
+}
+
+export type PendingDashboardSettlement =
+  | { readonly kind: 'wait' }
+  | { readonly kind: 'open'; readonly selection: DashboardSelection }
+  | { readonly kind: 'clear' };
+
 /**
  * Keep Dashboard and the native Session sidebars on one Session identity.
  *
@@ -46,4 +56,19 @@ export function prepareDashboardNavigation(
         ? undefined
         : sessionIdToOpen,
   };
+}
+
+/**
+ * Settle a pending Session switch without resurrecting it after an unrelated switch.
+ */
+export function settlePendingDashboardNavigation(
+  pending: PendingDashboardNavigation | undefined,
+  currentSessionId: string | undefined,
+): PendingDashboardSettlement {
+  if (pending === undefined) return { kind: 'wait' };
+  if (currentSessionId === pending.selection.sessionId) {
+    return { kind: 'open', selection: pending.selection };
+  }
+  if (currentSessionId !== pending.originSessionId) return { kind: 'clear' };
+  return { kind: 'wait' };
 }

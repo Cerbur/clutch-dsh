@@ -15,7 +15,10 @@ import {
 } from '../lib/client/dashboard/dashboard-overlay.js';
 import { en, zh } from '../lib/client/locales.js';
 import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
-import { prepareDashboardNavigation } from '../lib/client/dashboard/dashboard-navigation.js';
+import {
+  prepareDashboardNavigation,
+  settlePendingDashboardNavigation,
+} from '../lib/client/dashboard/dashboard-navigation.js';
 import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
 import { selectWorktreeAcquisitionFacts } from '../lib/client/dashboard/worktree-acquisition-facts.js';
 import {
@@ -122,6 +125,28 @@ test('dashboard navigation follows the Worktree head Session without creating an
     selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
     sessionIdToOpen: undefined,
     waitForSessionList: true,
+  });
+  const pending = {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+    originSessionId: 'session-a',
+  };
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'session-a'), { kind: 'wait' });
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'worktree-head'), {
+    kind: 'open',
+    selection: pending.selection,
+  });
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'unrelated-session'), {
+    kind: 'clear',
+  });
+  const pendingWithoutOrigin = {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+    originSessionId: undefined,
+  };
+  assert.deepEqual(settlePendingDashboardNavigation(pendingWithoutOrigin, undefined), {
+    kind: 'wait',
+  });
+  assert.deepEqual(settlePendingDashboardNavigation(pendingWithoutOrigin, 'unrelated-session'), {
+    kind: 'clear',
   });
   assert.deepEqual(prepareDashboardNavigation(record, [], 'session-a'), {
     selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
@@ -835,6 +860,8 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     /if \(navigation\.waitForSessionList === true\) \{\s+pendingDashboard\.current = undefined;/,
   );
   assert.match(surfaceSource, /if \(source\.sessions\.phase === 'pending'\) return/);
+  assert.match(surfaceSource, /originSessionId: source\.currentSessionId/);
+  assert.match(surfaceSource, /settlePendingDashboardNavigation/);
   const compiled = ts.transpileModule(surfaceSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
@@ -881,7 +908,8 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
         isManagedDashboardRecord: (record) => !isMainWorktreeId(record.worktreeId),
       };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
-    if (name.endsWith('dashboard-navigation.js')) return { prepareDashboardNavigation };
+    if (name.endsWith('dashboard-navigation.js'))
+      return { prepareDashboardNavigation, settlePendingDashboardNavigation };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
     if (name.endsWith('view-mode.js')) return { workspaceSessionIds: (workspaces, workspaceId, ids) => ids ?? [] };
     if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };

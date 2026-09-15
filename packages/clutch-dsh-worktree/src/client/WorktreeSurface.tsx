@@ -30,7 +30,11 @@ import {
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
 import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
-import { prepareDashboardNavigation } from './dashboard/dashboard-navigation.js';
+import {
+  prepareDashboardNavigation,
+  settlePendingDashboardNavigation,
+  type PendingDashboardNavigation,
+} from './dashboard/dashboard-navigation.js';
 import { buildSessionFileAddress } from './dashboard/git/file-address.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
@@ -38,7 +42,7 @@ export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/ty
 /** Composes independent surface state/action domains into the sidebar overlay. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
-  const pendingDashboard = useRef<DashboardSelection>();
+  const pendingDashboard = useRef<PendingDashboardNavigation>();
   const pendingDashboardRecord = useRef<DashboardRecord>();
   const openDashboardRef = useRef<(record: DashboardRecord) => void>();
   const externalDashboard = inputProps.dashboardStore
@@ -152,7 +156,10 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       }
       pendingDashboardRecord.current = undefined;
       if (navigation.sessionIdToOpen !== undefined) {
-        pendingDashboard.current = navigation.selection;
+        pendingDashboard.current = {
+          selection: navigation.selection,
+          originSessionId: source.currentSessionId,
+        };
         inputProps.openSession(navigation.sessionIdToOpen);
         return;
       }
@@ -179,10 +186,16 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     openDashboard(pendingRecord);
   }, [openDashboard, source.sessions.phase]);
   useEffect(() => {
-    const pending = pendingDashboard.current;
-    if (pending === undefined || pending.sessionId !== source.currentSessionId) return;
-    pendingDashboard.current = undefined;
-    setDashboard(pending);
+    const settlement = settlePendingDashboardNavigation(
+      pendingDashboard.current,
+      source.currentSessionId,
+    );
+    if (settlement.kind === 'open') {
+      pendingDashboard.current = undefined;
+      setDashboard(settlement.selection);
+    } else if (settlement.kind === 'clear') {
+      pendingDashboard.current = undefined;
+    }
   }, [setDashboard, source.currentSessionId]);
   const expansion = useSessionExpansion({ read, source, props });
   const native = useNativeActions({ source, props, mutation });
