@@ -301,6 +301,21 @@
   text-align: center;
 }
 
+.gitFolderIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary, #6f7887);
+}
+
+.gitFolderIcon > svg {
+  width: 16px;
+  height: 16px;
+}
+
 .gitFolderName {
   min-width: 0;
   overflow: hidden;

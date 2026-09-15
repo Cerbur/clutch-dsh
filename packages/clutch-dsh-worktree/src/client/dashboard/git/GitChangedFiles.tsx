@@ -1,3 +1,4 @@
+import { IconFolderClose16, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
@@ -99,6 +100,9 @@ function renderTreeNodes({
           >
             <span className={styles.gitFolderDisclosure} aria-hidden="true">
               {collapsed ? '▸' : '▾'}
+            </span>
+            <span className={styles.gitFolderIcon} aria-hidden="true">
+              {collapsed ? <IconFolderClose16 /> : <IconFolderOpen16 />}
             </span>
             <span className={styles.gitFolderName} title={node.path}>
               {node.name}

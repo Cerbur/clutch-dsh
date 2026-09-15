@@ -4,6 +4,7 @@ import { URL } from 'node:url';
 import test from 'node:test';
 
 const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
+const changedFilesUrl = new URL('../src/client/dashboard/git/GitChangedFiles.tsx', import.meta.url);
 
 function cssBlock(source, selector) {
   const start = source.indexOf(selector);
@@ -73,4 +74,12 @@ test('Git panes stay bounded and scroll their data independently', async () => {
   assert.match(raw, /overflow: auto;/);
   assert.match(css, /@container \(max-width: 900px\)[\s\S]*grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
+});
+
+test('changed-file folders use the native DSH folder icons', async () => {
+  const source = await readFile(changedFilesUrl, 'utf8');
+
+  assert.match(source, /IconFolderClose16/);
+  assert.match(source, /IconFolderOpen16/);
+  assert.match(source, /collapsed \? <IconFolderClose16 \/> : <IconFolderOpen16 \/>/);
 });
