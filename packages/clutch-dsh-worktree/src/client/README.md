@@ -142,7 +142,9 @@ Manager path, accepts only local branches other than the current Worktree branch
 value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
 Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
-**Uncommitted changes** selection loads changed files and a file selection loads one diff. The Git state
+**Uncommitted changes** selection loads changed files and a file selection loads one diff. Changed-file names use
+green, red, and blue to distinguish additions, deletions, and other changes; folder icons show expansion state
+without separate status markers or labels. The Git state
 machine also exposes a separate Baseline summary target for the net committed baseline-to-captured-`HEAD`
 tree diff. Its **Include working tree** switch changes that target to one fresh net baseline-to-live-tree
 projection containing committed, staged, unstaged, untracked, deleted, and renamed changes; it never

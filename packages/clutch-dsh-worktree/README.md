@@ -170,9 +170,10 @@ exclusive with committed multi-selection.
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. Changed-file rows show text
-line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. The
-**Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a Git watcher;
-refresh it to see later edits.
+line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. File names use
+green for additions, red for deletions, and blue for other changes. Folder icons indicate whether each folder is
+expanded or collapsed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a
+Git watcher; refresh it to see later edits.
 
 Git & Changes uses a viewport-bounded, fixed-size three-pane surface. Long commit and changed-file lists
 scroll inside their panes instead of expanding the Dashboard. The changed-file pane also scrolls

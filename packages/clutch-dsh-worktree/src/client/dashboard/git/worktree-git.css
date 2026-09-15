@@ -322,15 +322,6 @@
   color: var(--dsw-alias-label-primary, #273142);
 }
 
-.gitFolderDisclosure {
-  flex: none;
-  width: 12px;
-  color: var(--dsw-alias-label-tertiary, #8a94a3);
-  font-size: 12px;
-  line-height: 1;
-  text-align: center;
-}
-
 .gitFolderIcon {
   display: inline-flex;
   flex: none;
@@ -441,20 +432,6 @@
   padding: 8px;
 }
 
-.gitFileStatus {
-  flex: none;
-  width: 15px;
-  color: var(--dsw-alias-label-tertiary, #65758d);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.gitFileStatus[data-status='added'] { color: var(--dsw-alias-state-success-primary, #23845f); }
-.gitFileStatus[data-status='deleted'] { color: var(--dsw-alias-state-error-secondary, #bd5d55); }
-.gitFileStatus[data-status='renamed'] { color: var(--dsw-alias-state-warn-label, #99712b); }
-
 .gitFileIcon {
   display: inline-flex;
   flex: none;
@@ -480,6 +457,21 @@
   font-size: 11px;
 }
 
+.gitFilePath[data-status='added'] {
+  color: var(--dsw-alias-state-success-primary, #23845f);
+}
+
+.gitFilePath[data-status='deleted'] {
+  color: var(--dsw-alias-state-error-secondary, #bd5d55);
+}
+
+.gitFilePath[data-status='modified'],
+.gitFilePath[data-status='renamed'],
+.gitFilePath[data-status='copied'],
+.gitFilePath[data-status='type-changed'] {
+  color: var(--dsw-alias-state-business-primary, #467bc8);
+}
+
 .gitOpenFileAction {
   display: inline-flex;
   flex: none;
@@ -503,12 +495,6 @@
 .gitOpenFileAction:hover {
   color: var(--dsw-alias-label-primary, #273142);
   background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
-}
-
-.gitFileStatusLabel {
-  flex: none;
-  color: var(--dsw-alias-label-secondary, #7f8794);
-  font-size: 10px;
 }
 
 .gitFileContributors {

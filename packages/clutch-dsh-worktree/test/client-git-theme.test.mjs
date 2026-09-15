@@ -100,6 +100,21 @@ test('changed-file folders use the native DSH folder icons', async () => {
   assert.match(source, /IconFolderClose16/);
   assert.match(source, /IconFolderOpen16/);
   assert.match(source, /collapsed \? <IconFolderClose16 \/> : <IconFolderOpen16 \/>/);
+  assert.doesNotMatch(source, /gitFolderDisclosure/);
+  assert.doesNotMatch(await readFile(cssUrl, 'utf8'), /\.gitFolderDisclosure/);
+});
+
+test('changed-file names carry the Git status color without status markers', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(changedFilesUrl, 'utf8');
+
+  assert.match(source, /<span className=\{styles\.gitFilePath\} data-status=\{file\.status\}/u);
+  assert.doesNotMatch(source, /gitFileStatus(?:Label)?/);
+  assert.doesNotMatch(css, /\.gitFileStatus(?:Label)?/);
+  assert.match(css, /\.gitFilePath\[data-status='added'\][\s\S]*state-success-primary/u);
+  assert.match(css, /\.gitFilePath\[data-status='deleted'\][\s\S]*state-error-secondary/u);
+  assert.match(css, /\.gitFilePath\[data-status='modified'\][\s\S]*state-business-primary/u);
+  assert.match(css, /\.gitFilePath\[data-status='renamed'\][\s\S]*state-business-primary/u);
 });
 
 test('changed-file stats use explicit green additions and red deletions', async () => {

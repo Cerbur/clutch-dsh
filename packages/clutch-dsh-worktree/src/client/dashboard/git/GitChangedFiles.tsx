@@ -1,7 +1,7 @@
 import { IconFolderClose16, IconFolderOpen16, IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
+import type { WorktreeGitChangedFile } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { buildGitFileTree, type GitFileTreeNode } from './git-file-tree.js';
 import { GitFileTypeIcon } from './GitFileTypeIcon.js';
@@ -14,10 +14,6 @@ export interface GitChangedFilesProps {
   readonly onSelect: (path: string) => void;
   readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
-}
-
-function statusKey(status: WorktreeGitFileStatus): Parameters<WorktreeTranslate>[0] {
-  return 'dashboard.git.status.' + (status === 'type-changed' ? 'typeChanged' : status) as Parameters<WorktreeTranslate>[0];
 }
 
 function shortCommit(commit: string): string {
@@ -103,9 +99,6 @@ function renderTreeNodes({
               }
             }}
           >
-            <span className={styles.gitFolderDisclosure} aria-hidden="true">
-              {collapsed ? '▸' : '▾'}
-            </span>
             <span className={styles.gitFolderIcon} aria-hidden="true">
               {collapsed ? <IconFolderClose16 /> : <IconFolderOpen16 />}
             </span>
@@ -154,26 +147,12 @@ function renderTreeNodes({
           title={fileTitle(file)}
           onClick={() => onSelect(file.path)}
         >
-          <span className={styles.gitFileStatus} data-status={file.status} aria-hidden="true">
-            {file.status === 'added'
-              ? 'A'
-              : file.status === 'modified'
-                ? 'M'
-                : file.status === 'deleted'
-                  ? 'D'
-                  : file.status === 'renamed'
-                    ? 'R'
-                    : file.status === 'copied'
-                      ? 'C'
-                      : 'T'}
-          </span>
           <span className={styles.gitFileIcon} aria-hidden="true">
             <GitFileTypeIcon path={file.path} className={styles.gitFileIconGlyph} />
           </span>
-          <span className={styles.gitFilePath} title={fileTitle(file)}>
+          <span className={styles.gitFilePath} data-status={file.status} title={fileTitle(file)}>
             {fileLabel(file)}
           </span>
-          <span className={styles.gitFileStatusLabel}>{t(statusKey(file.status))}</span>
           <GitLineStats
             additions={file.additions}
             deletions={file.deletions}
