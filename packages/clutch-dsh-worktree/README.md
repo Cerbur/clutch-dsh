@@ -143,6 +143,9 @@ history, changed files, and diffs without another Worktree-record write. If no v
 (including a value equal to the current Worktree branch), the Git tab leaves it unselected and prompts you
 to choose one. Ahead/behind counts remain available for a divergent baseline when Git can resolve it, while
 history and working-tree files remain unavailable until the baseline is safe for those reads.
+With a valid baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
+first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
+changes** when you need a narrower target.
 
 The comparison range is the selected branch's current tip to `HEAD`; the branch is resolved again for
 each read. The browser can choose only a local branch, not a raw commit SHA or arbitrary Git ref. The

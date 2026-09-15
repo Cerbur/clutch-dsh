@@ -240,7 +240,8 @@ Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktre
 Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排除当前 Worktree branch；保存通过
 `updateWorktreeBaseBranch` 沿 Contract → Remote → Host → Manage 传递，使用 expected branch
 执行乐观并发校验，只更新 Sidecar 的 `baseBranch`。`baseCommit` 不会被该操作修改。Git Tab
-自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
+在加载有效基线后默认选择 `summary`（基线汇总）而不是第一个 history commit；切换基线 branch 也会回到该
+汇总。自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
 暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。对于已保存且有效的基线，Overview
 会复用 listWorktreeCommits、committed summary 与工作区文件读取展示一次 compact ahead/behind、已提交
 和未提交 additions/deletions projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若基线已分叉，

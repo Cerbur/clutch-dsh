@@ -514,7 +514,7 @@ async function flush() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test('loads Git lazily, preserves ready refresh content, and ignores stale commit/file responses', async () => {
+test('defaults Git history to the Baseline summary, preserves ready refresh content, and ignores stale commit/file responses', async () => {
   const firstCommit = '1'.repeat(40);
   const secondCommit = '2'.repeat(40);
   const calls = [];
@@ -526,10 +526,11 @@ test('loads Git lazily, preserves ready refresh content, and ignores stale commi
       calls.push('history');
       return historyResponse.promise;
     },
-    listWorktreeCommitFiles({ commit }) {
-      calls.push(`files:${commit}`);
+    listWorktreeCommitFiles({ commit, selection }) {
+      const target = selection?.kind === 'summary' ? 'summary' : commit;
+      calls.push(`files:${target}`);
       const response = deferred();
-      fileResponses.set(commit, response);
+      fileResponses.set(target, response);
       return response.promise;
     },
     getWorktreeCommitFileDiff({ commit, path: filePath }) {
@@ -572,7 +573,14 @@ test('loads Git lazily, preserves ready refresh content, and ignores stale commi
   });
   await historyTask;
   await flush();
-  assert.equal(controller.getSnapshot().selectedCommit, secondCommit);
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.equal(controller.getSnapshot().selectedCommit, undefined);
+  assert.deepEqual(controller.getSnapshot().selectedCommits, []);
+  assert.equal(fileResponses.has('summary'), true);
+  fileResponses.get('summary').resolve({ commit: 'summary', selection: { kind: 'summary' }, files: [] });
+  await flush();
+
+  controller.selectCommit(secondCommit);
   assert.equal(fileResponses.has(secondCommit), true);
 
   const firstFiles = fileResponses.get(secondCommit);
@@ -626,7 +634,7 @@ test('loads Git lazily, preserves ready refresh content, and ignores stale commi
   controller.dispose();
 });
 
-test('selects the working-tree entry first and refreshes its live files', async () => {
+test('selects the working-tree entry explicitly and refreshes its live files', async () => {
   const committed = 'a'.repeat(40);
   let history = {
     headCommit: committed,
@@ -656,13 +664,18 @@ test('selects the working-tree entry first and refreshes its live files', async 
     listWorktreeCommits() {
       return Promise.resolve(history);
     },
-    listWorktreeCommitFiles({ commit }) {
-      fileCalls.push(commit);
-      const path = commit === WORKTREE_GIT_WORKING_TREE ? `working-${version}.txt` : 'committed.txt';
-      return Promise.resolve({ commit, files: [{ path, status: 'modified' }] });
+    listWorktreeCommitFiles({ commit, selection }) {
+      const target = selection?.kind === 'summary' ? 'summary' : commit;
+      fileCalls.push(target);
+      const path = target === WORKTREE_GIT_WORKING_TREE
+        ? `working-${version}.txt`
+        : target === 'summary'
+          ? 'summary.txt'
+          : 'committed.txt';
+      return Promise.resolve({ commit: target, selection, files: [{ path, status: 'modified' }] });
     },
-    getWorktreeCommitFileDiff({ commit, path }) {
-      return Promise.resolve({ commit, path, patch: `+${version}\n`, binary: false });
+    getWorktreeCommitFileDiff({ commit, selection, path }) {
+      return Promise.resolve({ commit, selection, path, patch: `+${version}\n`, binary: false });
     },
   };
   const controller = createWorktreeGitStateController({
@@ -674,8 +687,14 @@ test('selects the working-tree entry first and refreshes its live files', async 
 
   await controller.loadHistory();
   await flush();
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.equal(controller.getSnapshot().selectedCommit, undefined);
+  assert.deepEqual(fileCalls, ['summary']);
+
+  controller.selectCommit(WORKTREE_GIT_WORKING_TREE);
+  await flush();
   assert.equal(controller.getSnapshot().selectedCommit, WORKTREE_GIT_WORKING_TREE);
-  assert.deepEqual(fileCalls, [WORKTREE_GIT_WORKING_TREE]);
+  assert.deepEqual(fileCalls, ['summary', WORKTREE_GIT_WORKING_TREE]);
   assert.equal(controller.getSnapshot().selectedPath, 'working-1.txt');
 
   version = 2;
@@ -683,7 +702,7 @@ test('selects the working-tree entry first and refreshes its live files', async 
   await flush();
   assert.equal(controller.getSnapshot().selectedCommit, WORKTREE_GIT_WORKING_TREE);
   assert.equal(controller.getSnapshot().selectedPath, 'working-2.txt');
-  assert.deepEqual(fileCalls, [WORKTREE_GIT_WORKING_TREE, WORKTREE_GIT_WORKING_TREE]);
+  assert.deepEqual(fileCalls, ['summary', WORKTREE_GIT_WORKING_TREE, WORKTREE_GIT_WORKING_TREE]);
 
   history = { ...history, commits: [history.commits[1]] };
   await controller.refresh();
@@ -697,7 +716,8 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
   const commit = '3'.repeat(40);
   const parent = '2'.repeat(40);
   const historyResponse = deferred();
-  const filesResponse = deferred();
+  const summaryFilesResponse = deferred();
+  const commitFilesResponse = deferred();
   const diffResponse = deferred();
   let historyCalls = 0;
   let filesCalls = 0;
@@ -707,9 +727,9 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
       historyCalls += 1;
       return historyResponse.promise;
     },
-    listWorktreeCommitFiles() {
+    listWorktreeCommitFiles({ selection }) {
       filesCalls += 1;
-      return filesResponse.promise;
+      return (selection?.kind === 'summary' ? summaryFilesResponse : commitFilesResponse).promise;
     },
     getWorktreeCommitFileDiff() {
       diffCalls += 1;
@@ -739,13 +759,16 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
     truncated: false,
   });
   await firstHistoryTask;
-  controller.selectCommit(commit);
   assert.equal(filesCalls, 1);
+  controller.selectCommit(commit);
+  assert.equal(filesCalls, 2);
 
-  filesResponse.resolve({
+  summaryFilesResponse.resolve({ commit: 'summary', selection: { kind: 'summary' }, files: [] });
+  commitFilesResponse.resolve({
     commit,
     files: [{ path: 'shared.txt', status: 'modified' }],
   });
+  await flush();
   await flush();
   controller.selectPath('shared.txt');
   assert.equal(diffCalls, 1);
@@ -763,7 +786,7 @@ test('shares equivalent in-flight history, file, and diff reads', async () => {
   controller.dispose();
 });
 
-test('starts unselected without a creation branch and reloads history for a changed branch baseline', async () => {
+test('defaults to the Baseline summary and stays unselected without a creation branch', async () => {
   const branches = [
     { name: 'main', isCurrent: true, checkedOut: true },
     { name: 'develop', isCurrent: false, checkedOut: false },
@@ -798,6 +821,9 @@ test('starts unselected without a creation branch and reloads history for a chan
   });
   await defaultController.loadHistory();
   assert.deepEqual(historyBranches, ['main']);
+  assert.equal(defaultController.getSnapshot().view, 'summary');
+  assert.equal(defaultController.getSnapshot().selectedCommit, undefined);
+  assert.deepEqual(defaultController.getSnapshot().selectedCommits, []);
   defaultController.dispose();
   historyBranches.length = 0;
 
@@ -815,6 +841,7 @@ test('starts unselected without a creation branch and reloads history for a chan
   controller.selectBaselineBranch('main');
   await flush();
   assert.deepEqual(historyBranches, ['main']);
+  assert.equal(controller.getSnapshot().view, 'summary');
   assert.equal(controller.getSnapshot().history.status, 'ready');
 
   controller.selectBaselineBranch('develop');
@@ -840,14 +867,19 @@ test('supports aggregate state targets', async () => {
   const controller = createWorktreeGitStateController({ manager, workspaceId: 'ws_dashboard', worktreeId: 'wt_dashboard', defaultBaselineBranch: 'main' });
   await controller.loadHistory();
   await flush();
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.equal(controller.getSnapshot().selectedCommit, undefined);
+  controller.toggleCommit(second);
+  await flush();
   controller.toggleCommit(first);
   await flush();
   assert.deepEqual(calls[calls.length - 1].selection, { kind: 'commits', commits: [second, first] });
+  const callsBeforeSummary = calls.length;
   controller.selectSummary();
   await flush();
   assert.equal(controller.getSnapshot().view, 'summary');
   assert.deepEqual(controller.getSnapshot().selectedCommits, []);
-  assert.deepEqual(calls[calls.length - 1].selection, { kind: 'summary' });
+  assert.equal(calls.length, callsBeforeSummary);
   controller.setIncludeWorkingTree(true);
   await flush();
   assert.equal(controller.getSnapshot().includeWorkingTree, true);
@@ -894,7 +926,6 @@ test('retires pending live summary reads on refresh and target changes', async (
   await controller.loadHistory();
   await flush();
   controller.setIncludeWorkingTree(true);
-  controller.selectSummary();
   assert.equal(liveResponses.length, 1);
 
   const refreshTask = controller.refresh();

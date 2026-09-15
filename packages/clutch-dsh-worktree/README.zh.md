@@ -137,6 +137,8 @@ Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，
 不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前 Worktree branch），Git Tab 会保持
 未选择状态并提示用户选择。当 Git 可以解析出分叉基线时，ahead/behind 数量仍会显示；但在基线不安全时，
 history 和工作区文件会保持不可用。
+在有效基线加载后，Git 与变更 Tab 初始会选择**基线汇总**，而不是第一个 commit；切换基线 branch
+也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。
 
 比较范围是所选 branch 当前指向的 commit 到 `HEAD`，每次读取都会重新解析 branch。浏览器不能直接
 选择 commit SHA 或任意 Git ref；所选 branch 必须是 Worktree `HEAD` 的 ancestor，互不相关或已 rewrite

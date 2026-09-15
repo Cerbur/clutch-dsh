@@ -139,8 +139,9 @@ otherwise it prompts for a baseline. The Overview facts editor keeps
 its search field above an elevated, viewport-aware branch list; long rosters scroll inside the list so the
 dialog actions remain reachable on compact windows. It saves a replacement through the existing Worktree
 Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
-value back as the next Git selector default. Selecting or changing a local branch inside the Git tab
-reloads committed history and the current working-tree snapshot but remains transient. A commit or
+value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
+Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
+Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
 **Uncommitted changes** selection loads changed files and a file selection loads one diff. The Git state
 machine also exposes a separate Baseline summary target for the net committed baseline-to-captured-`HEAD`
 tree diff. Its **Include working tree** switch changes that target to one fresh net baseline-to-live-tree

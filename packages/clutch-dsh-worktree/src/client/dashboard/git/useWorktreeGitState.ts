@@ -88,7 +88,7 @@ function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState
     branches: { status: 'idle' },
     baselineBranch: normalizeBranch(defaultBaselineBranch),
     history: { status: 'idle' },
-    view: 'commits',
+    view: 'summary',
     includeWorkingTree: false,
     selectedCommits: [],
     files: { status: 'idle' },
@@ -443,7 +443,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       ...state,
       baselineBranch: nextBranch,
       history: { status: 'idle' },
-      view: 'commits',
+      view: 'summary',
       selectedCommit: undefined,
       selectedCommits: [],
       files: { status: 'idle' },
@@ -625,16 +625,24 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         });
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         historyLoaded = true;
-        const selectedCommits = canonicalizeCommits(value, state.selectedCommits);
-        const selectedCommitStillExists = state.selectedCommit !== undefined && value.commits.some((commit) => commit.sha === state.selectedCommit);
-        const nextSelectedCommit = selectedCommitStillExists
-          ? state.selectedCommit
-          : selectedCommits[0] ?? value.commits[0]?.sha;
-        const nextSelectedCommits = selectedCommits.length > 0
-          ? selectedCommits
-          : nextSelectedCommit !== undefined && nextSelectedCommit !== WORKTREE_GIT_WORKING_TREE
-            ? [nextSelectedCommit]
-            : [];
+        const selectedCommits = state.view === 'summary'
+          ? []
+          : canonicalizeCommits(value, state.selectedCommits);
+        const selectedCommitStillExists = state.view !== 'summary' &&
+          state.selectedCommit !== undefined &&
+          value.commits.some((commit) => commit.sha === state.selectedCommit);
+        const nextSelectedCommit = state.view === 'summary'
+          ? undefined
+          : selectedCommitStillExists
+            ? state.selectedCommit
+            : selectedCommits[0] ?? value.commits[0]?.sha;
+        const nextSelectedCommits = state.view === 'summary'
+          ? []
+          : selectedCommits.length > 0
+            ? selectedCommits
+            : nextSelectedCommit !== undefined && nextSelectedCommit !== WORKTREE_GIT_WORKING_TREE
+              ? [nextSelectedCommit]
+              : [];
         update({
           ...state,
           history: { status: 'ready', value },
