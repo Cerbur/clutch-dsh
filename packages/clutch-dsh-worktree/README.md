@@ -130,7 +130,7 @@ Open the **Git & Changes** tab from a managed Worktree Dashboard. Opening the Da
 Overview tab does not query Git; the first Git tab activation loads the local branch list and, when a
 baseline is selected, commit history through the existing `/api` Connection. The Git selector defaults to the Worktree's
 persisted `baseBranch`, which is also shown in the Overview Dashboard facts, only when that value is
-present and different from the current Worktree branch. To replace that baseline, click the pencil icon beside the Base fact, click the first-row search field to open the native picker, and filter the local branches,
+present and different from the current Worktree branch. To replace that baseline, click the pencil icon beside the Base fact, click the first-row search field to open the responsive branch picker; its search stays at the top while the bounded branch list scrolls on compact windows. Filter the local branches,
 choose any local branch except the current Worktree branch, and save.
 The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default
 for the Git selector. Once the Git tab is open, changing its selector remains a transient view choice

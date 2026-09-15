@@ -1,13 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import {
   Button,
   IconBranchOutline16,
+  IconCheckOutline16,
   IconCopyOutline16,
   IconEditOutline16,
   IconSearchOutline16,
   Input,
-  Menu,
   Modal,
   StateDot,
   Tooltip,
@@ -151,9 +151,12 @@ function WorktreeBaselineEditor({
   const [error, setError] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
+  const picker = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const trigger = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const expected = useRef(value);
+  const pickerId = useId();
   const options = branches.filter((branch) => branch.name !== currentBranch);
   useEffect(() => {
     alive.current = true;
@@ -189,11 +192,46 @@ function WorktreeBaselineEditor({
     query.length === 0
       ? options
       : options.filter((branch) => branch.name.toLowerCase().includes(query));
-  const menuItems = filteredOptions.map((branch) => ({
-    id: branch.name,
-    label: branch.name,
-    icon: <IconBranchOutline16 />,
-  }));
+  const activeIndex = filteredOptions.findIndex((branch) => branch.name === draft);
+  const pickerOpen = menuOpen && !pending;
+  const listOpen = pickerOpen && filteredOptions.length > 0;
+  useEffect(() => {
+    if (!menuOpen || typeof document === 'undefined') return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (picker.current?.contains(event.target as Node) === true) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [menuOpen]);
+
+  const selectOption = (index: number) => {
+    const branch = filteredOptions[index];
+    if (branch === undefined) return;
+    setDraft(branch.name);
+    setMenuOpen(true);
+  };
+  const moveOption = (offset: 1 | -1) => {
+    if (filteredOptions.length === 0) return;
+    const nextIndex =
+      activeIndex < 0
+        ? offset > 0
+          ? 0
+          : filteredOptions.length - 1
+        : (activeIndex + offset + filteredOptions.length) % filteredOptions.length;
+    selectOption(nextIndex);
+    optionRefs.current[nextIndex]?.scrollIntoView({ block: 'nearest' });
+  };
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setMenuOpen(true);
+      moveOption(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' && menuOpen && filteredOptions.length > 0) {
+      event.preventDefault();
+      selectOption(activeIndex < 0 ? 0 : activeIndex);
+    }
+  };
 
   const save = async () => {
     if (
@@ -267,6 +305,7 @@ function WorktreeBaselineEditor({
         title={t('dashboard.editBase')}
         description={t('dashboard.editBaseDescription')}
         className={styles.dashboardBaselineModal}
+        contentClassName={styles.dashboardBaselineModalContent}
         footer={
           <>
             <Button variant="outline" disabled={pending} onClick={closeEditor}>
@@ -285,39 +324,65 @@ function WorktreeBaselineEditor({
           </>
         }
       >
-        <div data-dashboard-baseline-modal>
-          <Menu
-            open={menuOpen && !pending && filteredOptions.length > 0}
-            anchor={
-              <Input
-                icon={<IconSearchOutline16 />}
-                className={styles.dashboardBaselineSearch}
-                aria-label={t('dashboard.searchBranches')}
-                data-dashboard-baseline-search
-                disabled={pending || disabled}
-                placeholder={t('dashboard.searchBranches')}
-                value={search}
-                onFocus={() => setMenuOpen(true)}
-                onChange={(event) => {
-                  setSearch(event.currentTarget.value);
-                  setMenuOpen(true);
-                }}
-              />
+        <div
+          ref={picker}
+          className={styles.dashboardBaselinePicker}
+          data-dashboard-baseline-modal
+        >
+          <Input
+            icon={<IconSearchOutline16 />}
+            className={styles.dashboardBaselineSearch}
+            aria-label={t('dashboard.searchBranches')}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls={listOpen ? `${pickerId}-options` : undefined}
+            aria-expanded={listOpen}
+            aria-haspopup="listbox"
+            aria-activedescendant={
+              listOpen && activeIndex >= 0 ? `${pickerId}-option-${activeIndex}` : undefined
             }
-            items={menuItems}
-            selectedId={draft}
-            onSelect={(id) => {
-              if (options.some((branch) => branch.name === id)) {
-                setDraft(id);
-                setMenuOpen(true);
-              }
+            data-dashboard-baseline-search
+            disabled={pending || disabled}
+            placeholder={t('dashboard.searchBranches')}
+            value={search}
+            onFocus={() => setMenuOpen(true)}
+            onKeyDown={onSearchKeyDown}
+            onChange={(event) => {
+              setSearch(event.currentTarget.value);
+              setMenuOpen(true);
             }}
-            onClose={() => setMenuOpen(false)}
-            dense
-            portal
-            className={styles.dashboardBaselineMenu}
           />
-          {filteredOptions.length === 0 && (
+          {listOpen && (
+            <div
+              id={`${pickerId}-options`}
+              className={styles.dashboardBaselineOptions}
+              data-dashboard-baseline-options
+              role="listbox"
+              aria-label={t('dashboard.searchBranches')}
+            >
+              {filteredOptions.map((branch, index) => (
+                <button
+                  type="button"
+                  key={branch.name}
+                  ref={(element) => {
+                    optionRefs.current[index] = element;
+                  }}
+                  id={`${pickerId}-option-${index}`}
+                  className={styles.dashboardBaselineOption}
+                  data-dashboard-baseline-option={branch.name}
+                  data-highlighted={activeIndex === index ? true : undefined}
+                  role="option"
+                  aria-selected={branch.name === draft}
+                  onClick={() => selectOption(index)}
+                >
+                  <IconBranchOutline16 />
+                  <span className={styles.dashboardBaselineOptionLabel}>{branch.name}</span>
+                  {branch.name === draft && <IconCheckOutline16 />}
+                </button>
+              ))}
+            </div>
+          )}
+          {pickerOpen && filteredOptions.length === 0 && (
             <div
               className={styles.dashboardBaselineEmpty}
               data-dashboard-baseline-empty
@@ -554,7 +619,7 @@ export function WorktreeDashboard({
       style={placement ?? { visibility: 'hidden', height: 0 }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
-          // Native menus own Escape even when focus remains elsewhere in the dashboard.
+          // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
           event.stopPropagation();
           onClose();

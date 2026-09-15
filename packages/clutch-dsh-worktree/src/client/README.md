@@ -130,8 +130,9 @@ results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected, so opening the
 Dashboard or its Overview tab does not issue a Git read. Its first mount loads local branches and uses
 the persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and
-different from the current Worktree branch; otherwise it prompts for a baseline. The Overview facts editor saves
-a replacement through the existing Worktree
+different from the current Worktree branch; otherwise it prompts for a baseline. The Overview facts editor keeps
+its search field above an elevated, viewport-aware branch list; long rosters scroll inside the list so the
+dialog actions remain reachable on compact windows. It saves a replacement through the existing Worktree
 Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
 value back as the next Git selector default. Selecting or changing a local branch inside the Git tab
 reloads committed history and the current working-tree snapshot but remains transient. A commit or

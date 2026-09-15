@@ -465,18 +465,95 @@
   cursor: not-allowed;
 }
 .dashboardBaselineModal {
-  width: min(440px, 100%);
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
 }
-.dashboardBaselineMenu {
-  display: block;
+.dashboardBaselineModalContent {
+  box-sizing: border-box;
+  min-height: 0;
+  overflow-y: auto;
+}
+.dashboardBaselinePicker {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  min-width: 0;
 }
 .dashboardBaselineSearch {
   display: flex;
   width: 100%;
 }
+.dashboardBaselineOptions {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: min(220px, 100%);
+  min-height: 0;
+  max-width: min(420px, calc(100vw - 32px));
+  /* Keep roughly eight rows visible on normal windows, but leave the modal's
+     header, description, and footer enough room on compact viewports. */
+  max-height: max(96px, min(320px, 42vh, calc(100vh - 260px)));
+  max-height: max(96px, min(320px, 42dvh, calc(100dvh - 260px)));
+  margin-top: 8px;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 20px;
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3, #fff));
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  box-shadow: var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
+}
+.dashboardBaselineOption {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #19212f);
+  text-align: left;
+  cursor: pointer;
+}
+.dashboardBaselineOption:hover,
+.dashboardBaselineOption[data-highlighted='true'],
+.dashboardBaselineOption[aria-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-hover, #f0f3f8);
+}
+.dashboardBaselineOption:focus-visible {
+  outline: 2px solid #497cd4;
+  outline-offset: -2px;
+}
+.dashboardBaselineOption > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary, #788191);
+}
+.dashboardBaselineOption[aria-selected='true'] > svg:last-child {
+  color: var(--dsw-alias-label-primary, #19212f);
+}
+.dashboardBaselineOptionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dashboardBaselineEmpty {
   display: block;
+  margin-top: 8px;
   padding: 8px 10px;
   color: var(--dsw-alias-label-secondary, #788191);
 }

@@ -101,6 +101,10 @@ const source = await readFile(
 const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
+const dashboardCssSource = await readFile(
+  new URL('../src/client/dashboard/dashboard.css', import.meta.url),
+  'utf8',
+);
 
 function renderHarness(writeClipboard) {
   const state = [];
@@ -143,29 +147,11 @@ function renderHarness(writeClipboard) {
         '@deepseek-ai/dsh-client-ui-primitives': {
           Button: ({ children, ...props }) => jsx('button', { ...props, children }),
           IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+          IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
           IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
           IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
           IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
           Input: ({ children, ...props }) => jsx('input', { ...props, children }),
-          Menu: ({ anchor, items, onSelect, open }) =>
-            jsx('div', {
-              'data-dashboard-baseline-menu': true,
-              children: [
-                anchor,
-                open
-                  ? items.map((item) =>
-                      jsx('button', {
-                        type: 'button',
-                        role: 'menuitem',
-                        'data-dashboard-baseline-option': item.id,
-                        disabled: item.disabled,
-                        onClick: item.disabled ? undefined : () => onSelect(item.id),
-                        children: item.label,
-                      }),
-                    )
-                  : null,
-              ],
-            }),
           Modal: ({ open, children, footer, ...props }) =>
             open
               ? jsx('div', {
@@ -316,7 +302,7 @@ test('dashboard renders source-aware acquisition facts and flags absent facts as
   harness.dispose();
 });
 
-test('dashboardFacts uses a native searchable baseline modal and feeds it to Git tab defaults', async () => {
+test('dashboardFacts uses a responsive searchable baseline modal and feeds it to Git tab defaults', async () => {
   const harness = renderHarness(async () => true);
   const calls = [];
   const branches = [
@@ -347,6 +333,9 @@ test('dashboardFacts uses a native searchable baseline modal and feeds it to Git
   const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
   assert.ok(search);
   assert.equal(search.props.autoFocus, undefined);
+  assert.equal(search.props.role, 'combobox');
+  assert.equal(search.props['aria-expanded'], false);
+  assert.equal(search.props['aria-controls'], undefined);
   const baselineRow = findAll(
     node,
     (item) =>
@@ -362,11 +351,33 @@ test('dashboardFacts uses a native searchable baseline modal and feeds it to Git
 
   search.props.onFocus();
   node = harness.render();
+  const focusedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  const listbox = byRole(node, 'listbox')[0];
+  assert.equal(focusedSearch.props['aria-expanded'], true);
+  assert.equal(focusedSearch.props['aria-controls'], 'dashboard-options');
+  assert.equal(focusedSearch.props['aria-activedescendant'], 'dashboard-option-0');
+  assert.equal(listbox.props['data-dashboard-baseline-options'], true);
+  assert.equal(byRole(listbox, 'option').length, 2);
   options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
   assert.deepEqual(
     options.map((option) => option.props['data-dashboard-baseline-option']),
     ['main', 'develop'],
   );
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['aria-selected'], false);
+  assert.equal(findAll(options[0], (item) => item.props?.['data-icon'] === 'check').length, 1);
+
+  focusedSearch.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], false);
+  assert.equal(options[1].props['aria-selected'], true);
+  const wrappedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  wrappedSearch.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['aria-selected'], false);
 
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
@@ -406,6 +417,50 @@ test('dashboardFacts uses a native searchable baseline modal and feeds it to Git
   assert.equal(gitPanel.props.defaultBaselineBranch, 'develop');
   assert.equal(gitPanel.props.currentBranch, record.currentBranch);
   harness.dispose();
+});
+
+test('baseline picker keeps a long branch roster in one scrollable list', () => {
+  const harness = renderHarness(async (branch) => branch);
+  const branches = Array.from({ length: 24 }, (_, index) => ({
+    name: 'branch-' + String(index).padStart(2, '0'),
+    isCurrent: false,
+    checkedOut: false,
+  }));
+  let node = harness.render({
+    branches,
+    record: { ...record, baseBranch: 'branch-00' },
+    onSaveBaseline: async (branch) => branch,
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0].props.onFocus();
+  node = harness.render();
+  const listbox = byRole(node, 'listbox')[0];
+  const options = byRole(listbox, 'option');
+  assert.equal(options.length, 24);
+  assert.equal(options[0].props['data-dashboard-baseline-option'], 'branch-00');
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options.at(-1).props['data-dashboard-baseline-option'], 'branch-23');
+  harness.dispose();
+});
+
+test('baseline picker uses an elevated viewport-aware scroll surface', () => {
+  assert.match(
+    dashboardCssSource,
+    /\.dashboardBaselineModal \{[\s\S]*?width: min\(440px, calc\(100vw - 48px\)\);[\s\S]*?max-height: calc\(100dvh - 48px\);/,
+  );
+  assert.match(
+    dashboardCssSource,
+    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?42dvh[\s\S]*?overflow-y: auto;/,
+  );
+  assert.match(dashboardCssSource, /min-height: 0;\n\s+overflow-y: auto;/);
+  assert.match(dashboardCssSource, /background: var\(--dsw-specific-menu/);
+  assert.match(dashboardCssSource, /border-radius: 20px;/);
+  assert.match(
+    dashboardCssSource,
+    /\.dashboardBaselineOption \{[\s\S]*?min-height: 40px;[\s\S]*?border-radius: 10px;/,
+  );
+  assert.match(source, /scrollIntoView\(\{ block: 'nearest' \}\)/);
 });
 
 test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {
