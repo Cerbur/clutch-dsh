@@ -867,6 +867,8 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   }).outputText;
   const { createNumberedWorktreeName } = await import('../lib/client/view/worktree-view.js');
   const calls = [];
+  const refs = [];
+  let refCursor = 0;
   let selected = selection;
   let target = record;
   const workspace = { workspaceId: 'repo', title: 'Repo' };
@@ -875,7 +877,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     currentSessionId: 'current',
     workspaceIds: ['repo'],
     workspaces: { items: [workspace] },
-    sessions: { ids: ['current'], current: 'current', byId: {} },
+    sessions: { ids: ['current'], current: 'current', byId: {}, phase: 'ready' },
     sessionPresentations: { current: { status: { state: 'done', labelKey: 'idle', runningSubagentCount: 0 } } },
     archivedSessionIds: [],
     bounds: { ready: false },
@@ -896,8 +898,12 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
           },
         ],
         useCallback: (fn) => fn,
-        useEffect() {},
-        useRef: (initial) => ({ current: initial }),
+        useEffect: (effect) => effect(),
+        useRef: (initial) => {
+          const index = refCursor++;
+          refs[index] ??= { current: initial };
+          return refs[index];
+        },
       };
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name.endsWith('dashboard-selection.js'))
@@ -913,6 +919,7 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
     if (name.endsWith('view-mode.js')) return { workspaceSessionIds: (workspaces, workspaceId, ids) => ids ?? [] };
     if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };
+    if (name.endsWith('SurfaceContent.js')) return { SurfaceContent: 'SurfaceContent' };
     if (name.endsWith('.css')) return { default: {} };
     const hook = name.match(/\/(use\w+)\.js$/)?.[1];
     if (hook)
@@ -928,7 +935,13 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
                   {
                     worktrees: [target],
                     branches: [{ name: record.branch }],
-                    bindings: [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }],
+                    bindings: [
+                      {
+                        workspaceId: 'repo',
+                        worktreeId: target.worktreeId,
+                        sessionId: sourceState.sessions.ids[0] ?? 'current',
+                      },
+                    ],
                   },
                 ],
               ]),
@@ -952,18 +965,19 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
       };
     return {};
   }, exports);
-  const render = () => {
-    selected = selection;
-    return findAll(
-      exports.WorktreeSurface({
-        t: (key) => en[key],
-        manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
-        createSessionForWorktree() {},
-        openSession: (id) => calls.push(['nativeOpen', id]),
-      }),
-      (item) => item.type === 'Dashboard',
-    )[0].props;
+  const surfaceInput = {
+    t: (key) => en[key],
+    manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
+    createSessionForWorktree() {},
+    openSession: (id) => calls.push(['nativeOpen', id]),
   };
+  const renderTree = (resetSelected = true) => {
+    if (resetSelected) selected = selection;
+    refCursor = 0;
+    return exports.WorktreeSurface(surfaceInput);
+  };
+  const render = () =>
+    findAll(renderTree(), (item) => item.type === 'Dashboard')[0].props;
   let props = render();
   assert.equal(await props.onSaveInstructions('Use tests', ''), 'Use tests');
   assert.deepEqual(calls.splice(0), [
@@ -1010,6 +1024,75 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   assert.equal(render().onCreateWorktree, undefined);
   assert.equal(typeof render().onCreateSession, 'function');
   target = record;
+
+  const surfaceContentProps = (tree) =>
+    findAll(tree, (item) => item.type === 'SurfaceContent')[0].props.props;
+  const targetB = { ...record, worktreeId: 'wt-b', branch: 'feat/payment-refactor-b' };
+  target = targetB;
+  selected = undefined;
+  sourceState.currentSessionId = undefined;
+  sourceState.sessions.current = undefined;
+  sourceState.sessions.ids = [];
+  sourceState.sessions.phase = 'pending';
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetB);
+  assert.deepEqual(calls, []);
+
+  sourceState.sessions.phase = 'ready';
+  sourceState.sessions.ids = ['head-b'];
+  renderTree(false);
+  assert.deepEqual(calls.splice(0), [['nativeOpen', 'head-b']]);
+
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['head-b', 'unrelated'];
+  renderTree(false);
+  sourceState.currentSessionId = 'head-b';
+  sourceState.sessions.current = 'head-b';
+  renderTree(false);
+  assert.equal(selected, undefined);
+
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['head-b'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetB);
+  assert.deepEqual(calls, [['nativeOpen', 'head-b']]);
+  sourceState.currentSessionId = 'head-b';
+  sourceState.sessions.current = 'head-b';
+  renderTree(false);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-b',
+    sessionId: 'head-b',
+  });
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
+  const targetC = { ...record, worktreeId: 'wt-c', branch: 'feat/payment-refactor-c' };
+  target = targetC;
+  sourceState.sessions.ids = [];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetC);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-c',
+    sessionId: undefined,
+  });
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
+  calls.splice(0);
+  target = record;
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
   mutation.actionPending = true;
   props = render();
   props.onCreateSession();
