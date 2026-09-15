@@ -137,12 +137,15 @@ value back as the next Git selector default. Selecting or changing a local branc
 reloads committed history and the current working-tree snapshot but remains transient. A commit or
 **Uncommitted changes** selection loads changed files and a file selection loads one diff. The Git state
 machine also exposes a separate Baseline summary target for the net committed baseline-to-captured-`HEAD`
-tree diff. Committed rows can be toggled into an exact multi-commit union; the client sends the selected
-SHAs as a selection rather than constructing a range, and renders the returned per-commit segments.
-Working-tree selection stays single-select and cannot be combined with committed rows. The Git state
-machine keeps bounded baseline-scoped per-entry/per-file caches, retains ready content during refresh,
-and uses request generations to ignore late results after a newer selection or disposal. Working-tree
-paths are authorized against a fresh Host projection because the files can change between reads. Main
+tree diff. Its **Include working tree** switch changes that target to one fresh net baseline-to-live-tree
+projection containing committed, staged, unstaged, untracked, deleted, and renamed changes; it never
+concatenates two diffs and bypasses the committed-summary cache. Committed rows can be toggled into an
+exact multi-commit union; the client sends the selected SHAs as a selection rather than constructing a
+range, and renders the returned per-commit segments. Working-tree selection stays single-select and
+cannot be combined with committed rows. The Git state machine keeps bounded baseline-scoped per-entry/
+per-file caches, retains ready content during refresh, and uses request generations to ignore late results
+after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
+Host projection because the files can change between reads. Main
 remains explicitly unavailable, while an unselected or unrelated branch baseline prompts or renders an
 honest unavailable state without hiding the Dashboard’s Workspace information. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.

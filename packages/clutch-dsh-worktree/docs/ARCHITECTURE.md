@@ -256,16 +256,18 @@ object、ref、文件或命令读取能力。正常 commit 使用 first-parent�
 diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
 输出上限、超时、cleanup deadline 和 AbortSignal。
 
-Git projection 还提供两个 aggregate target，而不增加新的 RPC transport：`summary` 使用同一次
+Git projection 还提供两个 aggregate target，而不增加新的 RPC transport：`summary` 默认使用同一次
 授权中解析并固定的 baseline SHA 与 `HEAD` SHA，读取真正的 baseline-to-HEAD 净 committed tree
-diff；它不把 working tree 变化混入 summary。`commits` selection 逐个授权所选 SHA，并按
+diff；它不把 working tree 变化混入默认 summary。打开 `includeWorkingTree` 后，`summary` 改为
+读取从同一 baseline 到当前 live working tree 的一次净 projection，包含 committed、staged、unstaged、
+untracked、删除和重命名改动，而不是拼接两个 Diff。`commits` selection 逐个授权所选 SHA，并按
 请求顺序读取每个 commit 的 first-parent changed-file/diff projection。Manage 返回文件并集以及
 每个 commit 的独立 diff segment，绝不把任意多选静默解释为连续 range，因此未选择的中间 commit
 不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。所有
 aggregate 请求都必须满足 commit/selection 二选一，且继续经过 baseline、HEAD、commit、path
-授权。`summary` 使用 `--literal-pathspecs` 与 tree-to-tree diff；文件路径不会成为 Git magic
-pathspec。`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移
-复用旧结果。
+授权。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
+Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
+当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 
 没有选择 branch 的旧 managed/imported Worktree 返回明确的 `baseline-unselected` projection，
 而不是用移动的 ref 猜测比较点；选择无效、无法解析或不再是 ancestor 时返回 honest unavailable

@@ -1618,16 +1618,22 @@ The implemented dashboard adds two aggregate targets through the existing Git me
 second transport or generic Git reader:
 
 - `selection: { kind: 'summary' }` is a net committed tree diff from one request-scoped resolved baseline
-  SHA to one request-scoped captured `HEAD` SHA. It excludes staged, unstaged, and untracked changes.
+  SHA to one request-scoped captured `HEAD` SHA. It excludes staged, unstaged, and untracked changes
+  by default.
+- `selection: { kind: 'summary', includeWorkingTree: true }` is a fresh net diff from the same resolved
+  baseline SHA to the current live working tree. It includes committed, staged, unstaged, untracked,
+  deleted, and renamed changes; it is not a concatenation of baseline-to-`HEAD` and `HEAD`-to-tree
+  segments. The browser does not cache this live projection as a committed summary.
 - `selection: { kind: 'commits', commits }` is an exact union of the listed commits' first-parent deltas.
   The server authorizes every SHA against the same pinned baseline/HEAD projection, returns a changed-file
   union with contributor SHAs, and returns per-commit diff segments. It is deliberately not a range, so
   unselected commits between two selected commits are not silently included.
 - The working-tree marker remains a legacy single target and is mutually exclusive with committed aggregate
   selection. Requests enforce commit XOR selection at the contract and runtime seams.
-- Browser cache keys include the resolved baseline and captured HEAD projection, and aggregate state keeps
-  the same stale-response, ready-content, bounded-output, and path-authorization guarantees as single
-  commit reads.
+- Browser cache keys include the resolved baseline, captured HEAD projection, and summary mode. Live
+  summary reads bypass completed-summary caches so staged, unstaged, and untracked changes are observed
+  on demand. Aggregate state keeps the same stale-response, ready-content, bounded-output, and
+  path-authorization guarantees as single commit reads.
 
 This amendment supersedes any wording above that describes only single-commit Git targets.
 
@@ -1645,6 +1651,8 @@ The task is complete when all of the following are true:
 * the saved `baseBranch` becomes the Git-tab default while direct selector changes stay transient;
 * Worktree commits B and C appear as two Dashboard commits;
 * the Baseline summary shows the net baseline-to-captured-HEAD committed diff;
+* enabling Include working tree shows the true net baseline-to-live-tree diff, including staged, unstaged,
+  untracked, deleted, and renamed changes;
 * selecting B/C shows the exact selected-commit file union;
 * selecting a changed file shows per-selected-commit diff segments;
 * unselected commits are not silently included in a multi-selection;

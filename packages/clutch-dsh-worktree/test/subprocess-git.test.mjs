@@ -604,6 +604,56 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
   }
 });
 
+test('reads an arbitrary-base live tree diff and its untracked file patch', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const baseCommit = 'b'.repeat(40);
+  const filePath = 'untracked name.txt';
+  try {
+    const listRuntime = createFakeRuntime({
+      responses: [
+        { stdout: 'R100\0old name.txt\0new name.txt\0D\0deleted.txt\0M\0tracked.txt\0' },
+        { stdout: `${filePath}\0` },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: listRuntime });
+    assert.deepEqual(await git.listWorkingTreeDiffFiles(workspaceRoot, baseCommit), [
+      { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
+      { path: 'deleted.txt', status: 'deleted' },
+      { path: 'tracked.txt', status: 'modified' },
+      { path: filePath, status: 'added' },
+    ]);
+    assert.deepEqual(listRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, '--'],
+      ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+    ]);
+
+    const diffRuntime = createFakeRuntime({
+      responses: [
+        { outcome: { exitCode: 1, signal: null } },
+        { stdout: '' },
+        {
+          outcome: { exitCode: 1, signal: null },
+          stdout: `diff --no-index /dev/null b/${filePath}\n@@ -0,0 +1 @@\n+untracked\n`,
+        },
+      ],
+    });
+    const diffGit = new LocalGitAdapter({ subprocess: diffRuntime });
+    const diff = await diffGit.readWorkingTreeDiffFileDiff(workspaceRoot, baseCommit, filePath);
+    assert.deepEqual(diff, {
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: filePath,
+      patch: `diff --no-index /dev/null b/${filePath}\n@@ -0,0 +1 @@\n+untracked\n`,
+      binary: false,
+    });
+    assert.deepEqual(diffRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['ls-files', '--error-unmatch', '--', filePath],
+      ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', baseCommit, '--', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
 test('reads an untracked working-tree diff after handling no-index exit 1', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   const filePath = '-untracked name.txt';
@@ -611,6 +661,7 @@ test('reads an untracked working-tree diff after handling no-index exit 1', asyn
     const runtime = createFakeRuntime({
       responses: [
         { outcome: { exitCode: 1, signal: null } },
+        { stdout: '' },
         {
           outcome: { exitCode: 1, signal: null },
           stdout: `diff --no-index /dev/null b/${filePath}\n@@ -0,0 +1 @@\n+new\n`,
@@ -626,6 +677,7 @@ test('reads an untracked working-tree diff after handling no-index exit 1', asyn
     assert.match(diff.patch, /\+new/u);
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
+      ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', filePath],
       ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
     ]);
   } finally {

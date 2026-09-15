@@ -226,6 +226,20 @@ export function WorktreeGitPanel({
               <span>{t('dashboard.git.baselineSummary')}</span>
               <small>{t('dashboard.git.baselineSummaryDescription')}</small>
             </button>
+            {state.view === 'summary' && (
+              <label className={styles.gitSummaryToggle} data-dashboard-git-include-working-tree>
+                <input
+                  type="checkbox"
+                  checked={state.includeWorkingTree}
+                  disabled={state.files.status === 'loading'}
+                  onChange={(event) => state.setIncludeWorkingTree(event.currentTarget.checked)}
+                />
+                <span>
+                  <strong>{t('dashboard.git.includeWorkingTree')}</strong>
+                  <small>{t('dashboard.git.includeWorkingTreeDescription')}</small>
+                </span>
+              </label>
+            )}
             <span id="dashboard-git-commit-selection-hint" className={styles.gitSrOnly}>{t('dashboard.git.commitSelectionHint')}</span>
             {historyValue.commits.length === 0 && <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>}
             <GitCommitList
@@ -256,10 +270,23 @@ export function WorktreeGitPanel({
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
             ) : state.files.status === 'error' ? (
               <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
-            ) : files.length === 0 ? (
-              <div className={styles.gitEmpty}>{state.view === 'summary' ? t('dashboard.git.noBaselineChanges') : t('dashboard.git.noFiles')}</div>
             ) : (
-              <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+              <>
+                {state.files.status === 'ready' && state.files.error !== undefined && (
+                  <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+                )}
+                {files.length === 0 ? (
+                  <div className={styles.gitEmpty}>
+                    {state.view === 'summary'
+                      ? state.includeWorkingTree
+                        ? t('dashboard.git.noLiveBaselineChanges')
+                        : t('dashboard.git.noBaselineChanges')
+                      : t('dashboard.git.noFiles')}
+                  </div>
+                ) : (
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+                )}
+              </>
             )}
           </section>
           <section className={styles.gitColumn} aria-label={t('dashboard.git.diff')} aria-busy={state.diff.status === 'loading'}>

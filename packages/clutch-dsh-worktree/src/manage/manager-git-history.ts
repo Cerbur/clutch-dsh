@@ -497,6 +497,10 @@ function requestedDiff(input: {
     (selection.kind !== 'summary' && selection.kind !== 'commits')) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The Git diff selection is invalid', { worktreeId });
   }
+  if (selection.kind === 'summary' && selection.includeWorkingTree !== undefined &&
+    typeof selection.includeWorkingTree !== 'boolean') {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The summary working-tree option is invalid', { worktreeId });
+  }
   return { kind: 'aggregate', selection };
 }
 
@@ -507,6 +511,11 @@ async function authorizeAggregate(
   requestedBaseBranch?: string,
 ): Promise<AuthorizedAggregate> {
   const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
+  const normalizedSelection: WorktreeGitDiffSelection = selection.kind === 'summary'
+    ? selection.includeWorkingTree === undefined
+      ? { kind: 'summary' }
+      : { kind: 'summary', includeWorkingTree: selection.includeWorkingTree }
+    : selection;
   const headCommit = resolved.live.headCommit ?? (context.git.resolveCommit
     ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
     : undefined);
@@ -520,15 +529,15 @@ async function authorizeAggregate(
       worktreeId: resolved.record.worktreeId,
     });
   }
-  if (selection.kind === 'summary') {
-    return { selection, baseline, headCommit };
+  if (normalizedSelection.kind === 'summary') {
+    return { selection: normalizedSelection, baseline, headCommit };
   }
-  if (!Array.isArray(selection.commits) || selection.commits.length === 0 || selection.commits.length > MAX_AGGREGATE_COMMITS) {
+  if (!Array.isArray(normalizedSelection.commits) || normalizedSelection.commits.length === 0 || normalizedSelection.commits.length > MAX_AGGREGATE_COMMITS) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'Select between 1 and ' + MAX_AGGREGATE_COMMITS + ' commits', {
       worktreeId: resolved.record.worktreeId,
     });
   }
-  const authorized = await Promise.all(selection.commits.map((commit) =>
+  const authorized = await Promise.all(normalizedSelection.commits.map((commit) =>
     authorizeCommitAt(context, resolved, commit, baseline, headCommit),
   ));
   const commits = authorized;
@@ -588,6 +597,95 @@ function mergeSelectedFiles(groups: readonly CommitFileGroup[]): readonly Worktr
   return [...files.values()];
 }
 
+type SummarySelection = Extract<WorktreeGitDiffSelection, { readonly kind: 'summary' }>;
+
+async function authorizeLiveSummaryBaseline(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  baseline: WorktreeGitBaseline,
+): Promise<void> {
+  if (context.git.resolveCommit === undefined || context.git.isCommitAncestor === undefined) return;
+  const currentHead = await context.git.resolveCommit(
+    resolved.record.absolutePath,
+    'HEAD',
+    { signal: context.signal },
+  );
+  if (!COMMIT_PATTERN.test(currentHead) || !(await isCommitAncestor(context, resolved, baseline.commit, currentHead))) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is no longer an ancestor of the live Worktree', {
+      worktreeId: resolved.record.worktreeId,
+    });
+  }
+}
+
+async function listSummaryFiles(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  selection: SummarySelection,
+  baseline: WorktreeGitBaseline,
+  headCommit: string,
+): Promise<readonly WorktreeGitChangedFile[]> {
+  if (selection.includeWorkingTree === true) {
+    if (context.git.listWorkingTreeDiffFiles === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree summary is unavailable', {
+        worktreeId: resolved.record.worktreeId,
+      });
+    }
+    await authorizeLiveSummaryBaseline(context, resolved, baseline);
+    return context.git.listWorkingTreeDiffFiles(
+      resolved.record.absolutePath,
+      baseline.commit,
+      { signal: context.signal },
+    );
+  }
+  if (context.git.listDiffFiles === undefined) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git summary diff is unavailable', {
+      worktreeId: resolved.record.worktreeId,
+    });
+  }
+  return context.git.listDiffFiles(
+    resolved.record.absolutePath,
+    baseline.commit,
+    headCommit,
+    { signal: context.signal },
+  );
+}
+
+async function readSummaryFileDiff(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  selection: SummarySelection,
+  baseline: WorktreeGitBaseline,
+  headCommit: string,
+  filePath: string,
+): Promise<WorktreeGitFileDiff> {
+  if (selection.includeWorkingTree === true) {
+    if (context.git.readWorkingTreeDiffFileDiff === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree file summary is unavailable', {
+        worktreeId: resolved.record.worktreeId,
+      });
+    }
+    await authorizeLiveSummaryBaseline(context, resolved, baseline);
+    return context.git.readWorkingTreeDiffFileDiff(
+      resolved.record.absolutePath,
+      baseline.commit,
+      filePath,
+      { signal: context.signal },
+    );
+  }
+  if (context.git.readDiffFileDiff === undefined) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git summary file diff is unavailable', {
+      worktreeId: resolved.record.worktreeId,
+    });
+  }
+  return context.git.readDiffFileDiff(
+    resolved.record.absolutePath,
+    baseline.commit,
+    headCommit,
+    filePath,
+    { signal: context.signal },
+  );
+}
+
 async function listAggregateFiles(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
@@ -596,20 +694,17 @@ async function listAggregateFiles(
 ): Promise<WorktreeGitCommitFiles> {
   const authorized = await authorizeAggregate(context, resolved, selection, requestedBaseBranch);
   if (authorized.selection.kind === 'summary') {
-    if (context.git.listDiffFiles === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git summary diff is unavailable', {
-        worktreeId: resolved.record.worktreeId,
-      });
-    }
+    const files = await listSummaryFiles(
+      context,
+      resolved,
+      authorized.selection,
+      authorized.baseline,
+      authorized.headCommit,
+    );
     return {
       commit: WORKTREE_GIT_SUMMARY,
       selection: authorized.selection,
-      files: await context.git.listDiffFiles(
-        resolved.record.absolutePath,
-        authorized.baseline.commit,
-        authorized.headCommit,
-        { signal: context.signal },
-      ),
+      files,
     };
   }
   const groups = await selectedCommitFiles(context, resolved, authorized.commits!);
@@ -634,16 +729,12 @@ async function aggregateFileDiff(
   }
   const authorized = await authorizeAggregate(context, resolved, selection, requestedBaseBranch);
   if (authorized.selection.kind === 'summary') {
-    if (context.git.listDiffFiles === undefined || context.git.readDiffFileDiff === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git summary file diff is unavailable', {
-        worktreeId: resolved.record.worktreeId,
-      });
-    }
-    const files = await context.git.listDiffFiles(
-      resolved.record.absolutePath,
-      authorized.baseline.commit,
+    const files = await listSummaryFiles(
+      context,
+      resolved,
+      authorized.selection,
+      authorized.baseline,
       authorized.headCommit,
-      { signal: context.signal },
     );
     const changedFile = files.find((file) => file.path === requestedPath || file.oldPath === requestedPath);
     if (changedFile === undefined) {
@@ -652,12 +743,13 @@ async function aggregateFileDiff(
         path: requestedPath,
       });
     }
-    const diff = await context.git.readDiffFileDiff(
-      resolved.record.absolutePath,
-      authorized.baseline.commit,
+    const diff = await readSummaryFileDiff(
+      context,
+      resolved,
+      authorized.selection,
+      authorized.baseline,
       authorized.headCommit,
       changedFile.path,
-      { signal: context.signal },
     );
     return {
       ...diff,

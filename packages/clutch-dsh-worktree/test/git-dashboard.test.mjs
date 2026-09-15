@@ -791,9 +791,82 @@ test('supports aggregate state targets', async () => {
   assert.equal(controller.getSnapshot().view, 'summary');
   assert.deepEqual(controller.getSnapshot().selectedCommits, []);
   assert.deepEqual(calls[calls.length - 1].selection, { kind: 'summary' });
+  controller.setIncludeWorkingTree(true);
+  await flush();
+  assert.equal(controller.getSnapshot().includeWorkingTree, true);
+  assert.deepEqual(calls[calls.length - 1].selection, { kind: 'summary', includeWorkingTree: true });
+  const liveCallsBeforeRepeat = calls.length;
+  controller.selectSummary();
+  await flush();
+  assert.equal(calls.length, liveCallsBeforeRepeat + 1);
+  const callsBeforeDisable = calls.length;
+  controller.setIncludeWorkingTree(false);
+  await flush();
+  assert.equal(controller.getSnapshot().includeWorkingTree, false);
+  assert.equal(calls.length, callsBeforeDisable);
   controller.dispose();
 });
 
+test('retires pending live summary reads on refresh and target changes', async () => {
+  const commit = 'c'.repeat(40);
+  const history = {
+    headCommit: commit,
+    baseline: { commit: '0'.repeat(40), source: 'captured' },
+    commits: [{ sha: commit, parents: ['0'.repeat(40)], subject: 'commit', authorName: 'Test', authoredAt: '2026-09-14T00:00:00Z' }],
+    truncated: false,
+  };
+  const liveResponses = [];
+  const manager = {
+    listWorktreeCommits: () => Promise.resolve(history),
+    listWorktreeCommitFiles: (input) => {
+      if (input.selection?.kind === 'summary' && input.selection.includeWorkingTree === true) {
+        const response = deferred();
+        liveResponses.push(response);
+        return response.promise;
+      }
+      return Promise.resolve({ commit: input.commit ?? 'summary', files: [] });
+    },
+    getWorktreeCommitFileDiff: (input) => Promise.resolve({ commit: 'summary', path: input.path, patch: '', binary: false }),
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+    defaultBaselineBranch: 'main',
+  });
+  await controller.loadHistory();
+  await flush();
+  controller.setIncludeWorkingTree(true);
+  controller.selectSummary();
+  assert.equal(liveResponses.length, 1);
+
+  const refreshTask = controller.refresh();
+  await refreshTask;
+  await flush();
+  assert.equal(liveResponses.length, 2);
+  liveResponses[0].resolve({ commit: 'summary', files: [{ path: 'stale.txt', status: 'modified' }] });
+  liveResponses[1].resolve({ commit: 'summary', files: [{ path: 'fresh.txt', status: 'modified' }] });
+  await flush();
+  await flush();
+  assert.equal(controller.getSnapshot().files.status, 'ready');
+  assert.deepEqual(controller.getSnapshot().files.value.files, [{ path: 'fresh.txt', status: 'modified' }]);
+
+  controller.selectSummary();
+  await flush();
+  assert.equal(liveResponses.length, 3);
+  controller.selectCommit(commit);
+  await flush();
+  controller.setIncludeWorkingTree(true);
+  controller.selectSummary();
+  await flush();
+  assert.equal(liveResponses.length, 4);
+  liveResponses[2].resolve({ commit: 'summary', files: [{ path: 'stale-again.txt', status: 'modified' }] });
+  liveResponses[3].resolve({ commit: 'summary', files: [{ path: 'fresh-again.txt', status: 'modified' }] });
+  await flush();
+  await flush();
+  assert.deepEqual(controller.getSnapshot().files.value.files, [{ path: 'fresh-again.txt', status: 'modified' }]);
+  controller.dispose();
+});
 test('serves baseline summary and exact selected-commit sections', async () => {
   const fixture = await createFixture();
   try {
@@ -865,6 +938,160 @@ test('serves baseline summary and exact selected-commit sections', async () => {
       }),
       { code: 'WORKTREE_STATE_CONFLICT' },
     );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('serves a true baseline-to-live summary with staged, unstaged, untracked, deleted, and renamed files', async () => {
+  const fixture = await createFixture();
+  try {
+    await writeFile(path.join(fixture.workspaceRoot, 'rename-source.txt'), 'rename me\n');
+    await writeFile(path.join(fixture.workspaceRoot, 'delete-me.txt'), 'delete me\n');
+    await runGit(fixture.workspaceRoot, ['add', 'rename-source.txt', 'delete-me.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'add working summary baseline files']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/live-summary',
+    });
+    const clean = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(clean.selection, { kind: 'summary', includeWorkingTree: true });
+    assert.deepEqual(clean.files, []);
+
+    const targetPath = record.absolutePath;
+    await runGit(targetPath, ['mv', 'rename-source.txt', 'rename-target.txt']);
+    await runGit(targetPath, ['rm', 'delete-me.txt']);
+    await writeFile(path.join(targetPath, 'README.md'), '# baseline\nunstaged\n');
+    await writeFile(path.join(targetPath, 'staged.txt'), 'staged\n');
+    await runGit(targetPath, ['add', 'staged.txt']);
+    await writeFile(path.join(targetPath, 'untracked.txt'), 'untracked\n');
+
+    const committedOnly = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary' },
+    });
+    assert.deepEqual(committedOnly.files, []);
+    const explicitCommittedOnly = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: false },
+    });
+    assert.deepEqual(explicitCommittedOnly.selection, { kind: 'summary', includeWorkingTree: false });
+    assert.deepEqual(explicitCommittedOnly.files, []);
+
+    const live = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(
+      live.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'delete-me.txt', status: 'deleted' },
+        { path: 'README.md', status: 'modified' },
+        { path: 'rename-target.txt', oldPath: 'rename-source.txt', status: 'renamed' },
+        { path: 'staged.txt', status: 'added' },
+        { path: 'untracked.txt', status: 'added' },
+      ],
+    );
+
+    const unstagedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'README.md',
+    });
+    assert.equal(unstagedDiff.commit, 'summary');
+    assert.equal(unstagedDiff.selection.includeWorkingTree, true);
+    assert.match(unstagedDiff.patch, /\+unstaged/u);
+
+    const renamedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'rename-target.txt',
+    });
+    assert.equal(renamedDiff.binary, false);
+    assert.match(renamedDiff.patch, /rename from|rename to|rename me/u);
+
+    const deletedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'delete-me.txt',
+    });
+    assert.match(deletedDiff.patch, /-delete me/u);
+
+    const stagedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'staged.txt',
+    });
+    assert.match(stagedDiff.patch, /\+staged/u);
+
+    const untrackedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'untracked.txt',
+    });
+    assert.match(untrackedDiff.patch, /\+untracked/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('normalizes staged deletion with an untracked restoration in live summaries', async () => {
+  const fixture = await createFixture();
+  try {
+    await writeFile(path.join(fixture.workspaceRoot, 'mixed.txt'), 'original\n');
+    await writeFile(path.join(fixture.workspaceRoot, 'copy-source.txt'), 'copy me\n');
+    await runGit(fixture.workspaceRoot, ['add', 'mixed.txt', 'copy-source.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'add mixed-state file']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/mixed-state',
+    });
+    await runGit(record.absolutePath, ['rm', '--cached', 'mixed.txt']);
+    await runGit(record.absolutePath, ['mv', 'copy-source.txt', 'copy-target.txt']);
+    await writeFile(path.join(record.absolutePath, 'copy-source.txt'), 'copy me\n');
+    const unchanged = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(unchanged.files, [{ path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied' }]);
+
+    await writeFile(path.join(record.absolutePath, 'mixed.txt'), 'modified\n');
+    const modified = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(
+      modified.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'mixed.txt', status: 'modified' },
+        { path: 'copy-target.txt', oldPath: 'copy-source.txt', status: 'copied' },
+      ].toSorted((left, right) => left.path.localeCompare(right.path)),
+    );
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary', includeWorkingTree: true },
+      path: 'mixed.txt',
+    });
+    assert.match(diff.patch, /\+modified/u);
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });

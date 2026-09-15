@@ -75,10 +75,15 @@ export type WorktreeGitCommitKind = 'commit' | 'working-tree';
 
 /**
  * Read-only aggregate diff scopes. `summary` is the net baseline-to-HEAD tree
- * diff; `commits` is the exact union of the selected first-parent commit deltas.
+ * diff and can optionally include the live working tree; `commits` is the exact
+ * union of the selected first-parent commit deltas.
  */
 export type WorktreeGitDiffSelection =
-  | { readonly kind: 'summary' }
+  | {
+      readonly kind: 'summary';
+      /** Include staged, unstaged, and untracked files in the net summary. */
+      readonly includeWorkingTree?: boolean;
+    }
   | { readonly kind: 'commits'; readonly commits: readonly string[] };
 
 export type WorktreeGitDiffRequest =

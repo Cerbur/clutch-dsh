@@ -9,6 +9,7 @@
 - 为已管理 Worktree 增加只读“Git 与变更”Dashboard：用户可选择并修改本地 branch 基线，查看 commit 历史、changed files 和 unified diff。
 - Dashboard facts 支持选择除当前 Worktree branch 之外的本地 branch 并保存，替换 Sidecar 中原先的 `baseBranch`；保存后的有效基线会成为 Git Tab 选择器的默认值，若基线缺失或等于当前 branch，Git Tab 会提示用户选择，同时保持 Dashboard 工作区信息正常展示。
 - 增加 commit/path 归属校验、首个 Git Tab lazy load、刷新 ready 内容保留、binary/超大 diff 降级以及旧请求结果隔离。
+- 基线汇总支持 **包含工作区改动**：以基线到当前工作区的真实净 projection 展示 committed、staged、unstaged、untracked、删除和重命名改动，并保持按需刷新。
 
 #### 优化
 
@@ -23,6 +24,7 @@
 - Add a read-only Git & Changes Dashboard for managed Worktrees where users can select and change a local branch baseline for commit history, changed files, and unified diffs.
 - Let Dashboard facts save any local branch except the current Worktree branch, replacing the Sidecar's previous `baseBranch`; use a saved baseline as the Git-tab selector default only when it differs from the current branch, and prompt for a baseline when no valid fact exists while keeping Dashboard Workspace information visible.
 - Add commit/path membership checks, first-Git-tab lazy loading, ready-content-preserving refreshes, binary/oversized-diff degradation, and stale-result isolation.
+- Add an **Include working tree** option to the Baseline summary: show a true net baseline-to-live-tree projection with committed, staged, unstaged, untracked, deleted, and renamed changes, refreshed on demand.
 
 #### Improved
 

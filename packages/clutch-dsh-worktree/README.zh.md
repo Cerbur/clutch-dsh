@@ -139,11 +139,13 @@ Worktree branch），Git Tab 会保持未选择状态并提示用户选择。即
 作为用户可选择的基线。当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入
 **未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
 
-**基线汇总**是一个独立的目标，展示从解析出的基线 commit 到本次请求捕获的 `HEAD` 的净已提交
-树差异，不包含工作区未提交改动。在 commit 列表中可以同时选择多个已提交行，查看这些 commit
-各自 first-parent delta 的精确并集。变更文件会记录贡献它的 commit；每个所选 commit 会作为独立
-Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的 commit。未提交改动 entry 与已提交
-的多选互斥。
+**基线汇总**是一个独立的目标，默认展示从解析出的基线 commit 到本次请求捕获的 `HEAD` 的净已
+提交树差异，不包含工作区未提交改动。打开 **包含工作区改动** 后，该目标会改为展示从基线
+commit 到当前工作区的一次净差异，其中包含已提交、staged、unstaged、untracked、删除和重命名
+改动。这是按需读取的新鲜 projection，而不是简单拼接两段 Diff。在 commit 列表中可以同时选择
+多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。变更文件会记录贡献它的
+commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
+commit。未提交改动 entry 与已提交的多选互斥。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。
@@ -193,12 +195,11 @@ commit，并依据最新状态重新读取和授权工作区 path，因此这些
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
 - Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
-  sidecar 或 `.git`，也不会提供 working-tree mutation 控件。文件 diff 会禁用 external diff 和
-  text conversion，并限制输出大小以保证安全展示。
-- Git Dashboard 只实现 commit history、顶部的只读**未提交的改动**快照、changed files 和一次一个
-  unified diff。快照合并 staged、unstaged 和 untracked 文件，但不会写回 Git。Dashboard 不提供
-  commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull request、graph lanes、
-  pagination 或 syntax highlighting。
+- Git Dashboard 只实现 commit history、只读的**基线汇总**（可选包含一次从基线到工作区的
+  新鲜 projection）、顶部的只读**未提交的改动**快照、changed files 和一次一个 unified diff。
+  按请求启用时，这些 projection 会合并 staged、unstaged 和 untracked 文件，但不会写回 Git。
+  Dashboard 不提供 commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull request、
+  graph lanes、pagination 或 syntax highlighting。
 - Session 行使用 DSH 原生的状态和相对时间展示。折叠的 Workspace、Main 和 Worktree 分组会
   从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
@@ -210,8 +211,6 @@ commit，并依据最新状态重新读取和授权工作区 path，因此这些
   DSH 宿主设置的 sandbox 上限。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
-- 如果插件外部索引不可用或损坏，原生 DSH Workspace 和 Session 视图仍可读取，插件会进入
-  degraded read-only 状态；它不会用空索引覆盖原生数据。
 
 ## 要求
 

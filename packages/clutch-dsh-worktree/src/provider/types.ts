@@ -254,11 +254,24 @@ export interface GitWorktreeAdapter {
     targetCommit: string,
     options?: GitCommandOptions,
   ): Promise<readonly WorktreeGitChangedFile[]>;
+  /** Read tracked and untracked changes in the live tree relative to an arbitrary committed base. */
+  listWorkingTreeDiffFiles?(
+    worktreeRoot: string,
+    baseCommit: string,
+    options?: GitCommandOptions,
+  ): Promise<readonly WorktreeGitChangedFile[]>;
   /** Read one file from a baseline-wide tree-to-tree diff. */
   readDiffFileDiff?(
     worktreeRoot: string,
     baseCommit: string,
     targetCommit: string,
+    filePath: string,
+    options?: GitCommandOptions,
+  ): Promise<WorktreeGitFileDiff>;
+  /** Read one live working-tree file from an arbitrary committed base. */
+  readWorkingTreeDiffFileDiff?(
+    worktreeRoot: string,
+    baseCommit: string,
     filePath: string,
     options?: GitCommandOptions,
   ): Promise<WorktreeGitFileDiff>;

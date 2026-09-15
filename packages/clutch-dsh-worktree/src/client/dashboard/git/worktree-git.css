@@ -187,6 +187,44 @@
   font-size: 10px;
 }
 
+.gitSummaryToggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: calc(100% - 20px);
+  margin: 3px 10px 8px;
+  color: var(--dsw-alias-label-primary, #273142);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.gitSummaryToggle input {
+  flex: none;
+  margin: 2px 0 0;
+}
+
+.gitSummaryToggle span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gitSummaryToggle strong {
+  font-weight: 560;
+}
+
+.gitSummaryToggle small {
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 10px;
+}
+
+.gitSummaryToggle input:disabled,
+.gitSummaryToggle:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .gitSelectionToolbar {
   display: flex;
   align-items: center;

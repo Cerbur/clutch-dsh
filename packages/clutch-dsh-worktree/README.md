@@ -148,11 +148,14 @@ the list prepends an **Uncommitted changes** entry; selecting it compares the li
 `HEAD` and uses the same changed-file and diff views.
 
 The **Baseline summary** is a separate target that shows the net committed tree diff from the resolved
-baseline commit to the request's captured `HEAD`; it excludes working-tree changes. In the commit list,
-select more than one committed row to view the exact union of those commits' first-parent deltas. The
-changed-file list records the contributing commits, and each selected commit is rendered as its own diff
-segment; this is not an implicit range and does not include unselected commits. The working-tree entry
-remains mutually exclusive with committed multi-selection.
+baseline commit to the request's captured `HEAD`; it excludes working-tree changes by default. Turn on
+**Include working tree** to replace that target with one net diff from the baseline commit to the current
+working tree, including committed, staged, unstaged, untracked, deleted, and renamed changes. This is a
+fresh on-demand projection rather than a concatenation of two diffs. In the commit list, select more than
+one committed row to view the exact union of those commits' first-parent deltas. The changed-file list
+records the contributing commits, and each selected commit is rendered as its own diff segment; this is
+not an implicit range and does not include unselected commits. The working-tree entry remains mutually
+exclusive with committed multi-selection.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
@@ -214,9 +217,10 @@ injection; unchanged instruction text is not repeatedly added while its message 
 - Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
   not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File
   diffs disable external diff and text conversion and are bounded for safe display.
-- The Git Dashboard is intentionally limited to committed history, one read-only **Uncommitted
-  changes** snapshot, changed files, and one unified diff at a time. The snapshot combines staged,
-  unstaged, and untracked files but is never written back to Git. The Dashboard does not provide
+- The Git Dashboard is intentionally limited to committed history, a read-only **Baseline summary**
+  (optionally including one fresh baseline-to-working-tree projection), one **Uncommitted changes**
+  snapshot, changed files, and one unified diff at a time. These projections combine staged, unstaged,
+  and untracked files when requested but are never written back to Git. The Dashboard does not provide
   commit, staging, reset, revert, cherry-pick, fetch, push, pull, pull requests, graph lanes, pagination,
   or syntax highlighting.
 - Session rows use DSH's native status and relative-time presentation. Collapsed Workspace, Main,
