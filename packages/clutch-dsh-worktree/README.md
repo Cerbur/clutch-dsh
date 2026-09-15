@@ -161,6 +161,12 @@ The history is capped at 200 commits and marks longer histories as truncated. Co
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. The **Uncommitted changes**
 entry is an on-demand snapshot, is not persisted, and is not a Git watcher; refresh it to see later edits.
+
+Git & Changes uses a viewport-bounded, fixed-size three-pane surface. Long commit and changed-file lists
+scroll inside their panes instead of expanding the Dashboard. Changed files are grouped by folders;
+folders start expanded and can be opened or collapsed independently. Diff content also scrolls inside
+its bounded pane, while the read-only selection and refresh behavior remains unchanged.
+
 The view is read-only and does not provide commit or staging controls. The plugin validates committed
 entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh
 status projection, so these endpoints are not generic Git object or file readers. Refresh keeps ready

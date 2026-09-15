@@ -1,5 +1,6 @@
 .gitPanel {
   min-width: 0;
+  min-height: 0;
 }
 
 .gitPanelHeader {
@@ -112,16 +113,26 @@
 }
 
 .gitColumns {
+  /* Keep the Git surface bounded by the viewport, never by its data volume. */
+  --git-columns-height: clamp(360px, calc(100vh - 300px), 560px);
+  --git-columns-height: clamp(360px, calc(100dvh - 300px), 560px);
   display: grid;
   grid-template-columns: minmax(190px, 0.75fr) minmax(210px, 0.9fr) minmax(0, 1.8fr);
-  min-height: 430px;
+  grid-template-rows: minmax(0, 1fr);
+  height: var(--git-columns-height);
+  min-height: 0;
   border: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
   border-radius: 10px;
   overflow: hidden;
+  resize: none;
 }
 
 .gitColumn {
+  display: flex;
   min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
   background: var(--dsw-alias-bg-base, #fff);
 }
@@ -132,6 +143,7 @@
 
 .gitColumnHeader {
   display: flex;
+  flex: none;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
@@ -245,11 +257,55 @@
 }
 
 .gitCommitList,
-
 .gitChangedFileList {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   list-style: none;
   padding: 5px;
   margin: 0;
+}
+
+.gitFolderChildren {
+  list-style: none;
+  padding: 0 0 0 12px;
+  margin: 0;
+}
+
+.gitChangedFileList .gitFolderButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.gitChangedFileList .gitFolderButton:hover,
+.gitChangedFileList .gitFolderButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+  color: var(--dsw-alias-label-primary, #273142);
+}
+
+.gitFolderDisclosure {
+  flex: none;
+  width: 12px;
+  color: var(--dsw-alias-label-tertiary, #8a94a3);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.gitFolderName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gitCommitList button,
@@ -354,7 +410,9 @@
 .gitFilePath {
   min-width: 0;
   flex: 1;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
 }
@@ -376,7 +434,10 @@
 }
 
 .gitDiff {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 7px 0 12px;
   background: var(--dsw-alias-markdown-code-block, #fafbfc);
@@ -518,7 +579,10 @@
 }
 
 .gitRawDiff {
-  max-height: 430px;
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   padding: 12px;
   margin: 0;
@@ -531,6 +595,7 @@
 @container (max-width: 900px) {
   .gitColumns {
     grid-template-columns: minmax(170px, 0.8fr) minmax(190px, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
   .gitColumn:nth-child(3) {
     grid-column: 1 / -1;
@@ -549,9 +614,13 @@
   }
   .gitColumns {
     display: block;
+    height: auto;
     min-height: 0;
   }
   .gitColumn {
+    height: clamp(260px, calc(100vh - 360px), 360px);
+    height: clamp(260px, calc(100dvh - 360px), 360px);
+    min-height: 260px;
     border-right: 0;
     border-bottom: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
   }

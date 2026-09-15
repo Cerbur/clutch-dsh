@@ -49,3 +49,28 @@ test('Git diff surfaces use DSH theme tokens for dark mode', async () => {
     assert.equal(raw.includes('color: ' + lightOnlyColor), false);
   }
 });
+
+test('Git panes stay bounded and scroll their data independently', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const columns = cssBlock(css, '.gitColumns {');
+  const column = cssBlock(css, '.gitColumn {');
+  const lists = cssBlock(css, '.gitCommitList,');
+  const diff = cssBlock(css, '.gitDiff {');
+  const raw = cssBlock(css, '.gitRawDiff {');
+
+  assert.match(columns, /height: var\(--git-columns-height\);/);
+  assert.match(columns, /min-height: 0;/);
+  assert.match(columns, /resize: none;/);
+  assert.match(column, /display: flex;/);
+  assert.match(column, /min-height: 0;/);
+  assert.match(column, /overflow: hidden;/);
+  assert.match(lists, /flex: 1 1 auto;/);
+  assert.match(lists, /min-height: 0;/);
+  assert.match(lists, /overflow-y: auto;/);
+  assert.match(diff, /flex: 1 1 auto;/);
+  assert.match(diff, /min-height: 0;/);
+  assert.match(diff, /overflow: auto;/);
+  assert.match(raw, /overflow: auto;/);
+  assert.match(css, /@container \(max-width: 900px\)[\s\S]*grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
+});
