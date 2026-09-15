@@ -141,7 +141,41 @@ function renderHarness(writeClipboard) {
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
         '@deepseek-ai/dsh-client-ui-primitives': {
+          Button: ({ children, ...props }) => jsx('button', { ...props, children }),
+          IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+          IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
+          IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
+          IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+          Input: ({ children, ...props }) => jsx('input', { ...props, children }),
+          Menu: ({ anchor, items, onSelect, open }) =>
+            jsx('div', {
+              'data-dashboard-baseline-menu': true,
+              children: [
+                anchor,
+                open
+                  ? items.map((item) =>
+                      jsx('button', {
+                        type: 'button',
+                        role: 'menuitem',
+                        'data-dashboard-baseline-option': item.id,
+                        disabled: item.disabled,
+                        onClick: item.disabled ? undefined : () => onSelect(item.id),
+                        children: item.label,
+                      }),
+                    )
+                  : null,
+              ],
+            }),
+          Modal: ({ open, children, footer, ...props }) =>
+            open
+              ? jsx('div', {
+                  ...props,
+                  role: 'dialog',
+                  children: [children, footer],
+                })
+              : null,
           StateDot: ({ state }) => jsx('span', { 'data-state-dot': state }),
+          Tooltip: ({ children }) => children,
           writeClipboard,
         },
         './dashboard-overlay.js': {},
@@ -282,7 +316,7 @@ test('dashboard renders source-aware acquisition facts and flags absent facts as
   harness.dispose();
 });
 
-test('dashboardFacts saves a non-current baseline and feeds it to Git tab defaults', async () => {
+test('dashboardFacts uses a native searchable baseline modal and feeds it to Git tab defaults', async () => {
   const harness = renderHarness(async () => true);
   const calls = [];
   const branches = [
@@ -300,14 +334,45 @@ test('dashboardFacts saves a non-current baseline and feeds it to Git tab defaul
   });
   const editButton = findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0];
   assert.equal(editButton.props.disabled, false);
+  assert.equal(editButton.props['aria-label'], en['dashboard.editBase']);
+  assert.equal(findAll(node, (item) => item.type === 'select').length, 0);
   editButton.props.onClick();
   node = harness.render();
-  const select = findAll(node, (item) => item.props?.['data-dashboard-baseline-select'])[0];
+
+  const dialog = byRole(node, 'dialog')[0];
+  assert.equal(dialog.props.title, en['dashboard.editBase']);
+  assert.equal(dialog.props.description, en['dashboard.editBaseDescription']);
+  assert.equal(dialog.props.closeLabel, en['dialog.closeBaseline']);
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
+  const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  assert.ok(search);
+  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
   assert.deepEqual(
-    select.props.children.flat(Infinity).slice(1).map((option) => option.props.value),
+    options.map((option) => option.props['data-dashboard-baseline-option']),
     ['main', 'develop'],
   );
-  select.props.onChange({ currentTarget: { value: 'develop' } });
+
+  search.props.onChange({ currentTarget: { value: 'dev' } });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.deepEqual(
+    options.map((option) => option.props['data-dashboard-baseline-option']),
+    ['develop'],
+  );
+  search.props.onChange({ currentTarget: { value: 'missing' } });
+  node = harness.render();
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-empty'])[0].props.children,
+    en['dashboard.noMatchingBranches'],
+  );
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined).length,
+    0,
+  );
+  search.props.onChange({ currentTarget: { value: 'dev' } });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options[0].props.onClick();
   node = harness.render();
   findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
   await tick();

@@ -1,9 +1,16 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
+  Button,
   IconBranchOutline16,
   IconCopyOutline16,
+  IconEditOutline16,
+  IconSearchOutline16,
+  Input,
+  Menu,
+  Modal,
   StateDot,
+  Tooltip,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DashboardRecord } from './dashboard-selection.js';
@@ -118,10 +125,14 @@ function WorktreeBaselineEditor({
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
+  const [search, setSearch] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
   const expected = useRef(value);
   const options = branches.filter((branch) => branch.name !== currentBranch);
   useEffect(() => {
@@ -132,7 +143,37 @@ function WorktreeBaselineEditor({
   }, []);
   useEffect(() => {
     setSaved(value);
+    expected.current = value;
   }, [value]);
+  useEffect(() => {
+    if (wasOpen.current && draft === undefined) trigger.current?.focus();
+    wasOpen.current = draft !== undefined;
+  }, [draft]);
+
+  const closeEditor = () => {
+    if (pending) return;
+    setDraft(undefined);
+    setSearch('');
+    setMenuOpen(false);
+    setError(false);
+  };
+  const openEditor = () => {
+    expected.current = saved;
+    setDraft(saved ?? '');
+    setSearch('');
+    setMenuOpen(true);
+    setError(false);
+  };
+  const query = search.trim().toLowerCase();
+  const filteredOptions =
+    query.length === 0
+      ? options
+      : options.filter((branch) => branch.name.toLowerCase().includes(query));
+  const menuItems = filteredOptions.map((branch) => ({
+    id: branch.name,
+    label: branch.name,
+    icon: <IconBranchOutline16 />,
+  }));
 
   const save = async () => {
     if (
@@ -151,6 +192,8 @@ function WorktreeBaselineEditor({
         setSaved(result);
         expected.current = result;
         setDraft(undefined);
+        setSearch('');
+        setMenuOpen(false);
       }
     } catch {
       if (alive.current) setError(true);
@@ -160,76 +203,111 @@ function WorktreeBaselineEditor({
     }
   };
 
-  if (draft === undefined) {
-    return (
-      <dd data-dashboard-baseline>
-        {saved === undefined ? (
-          <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
-        ) : (
-          <span data-dashboard-baseline-value>{saved}</span>
-        )}
-        {onSave !== undefined && (
-          <button
-            type="button"
-            className={styles.dashboardButton}
-            data-dashboard-baseline-edit
-            disabled={disabled || options.length === 0}
-            onClick={() => {
-              expected.current = saved;
-              setDraft(saved ?? '');
-              setError(false);
-            }}
-          >
-            {t('dashboard.editBase')}
-          </button>
-        )}
-      </dd>
-    );
-  }
-
   return (
     <dd data-dashboard-baseline>
-      <label className={styles.dashboardBaselineEditor}>
-        <span className={styles.dashboardVisuallyHidden}>{t('dashboard.base')}</span>
-        <select
-          aria-label={t('dashboard.base')}
-          data-dashboard-baseline-select
-          value={draft}
-          disabled={pending || disabled}
-          onChange={(event) => setDraft(event.currentTarget.value)}
+      {saved === undefined ? (
+        <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+      ) : (
+        <span data-dashboard-baseline-value>{saved}</span>
+      )}
+      {onSave !== undefined && (
+        <Tooltip
+          label={t('dashboard.editBase')}
+          side="bottom"
+          delayMs={500}
+          disabled={disabled || options.length === 0}
         >
-          <option value="">{t('dashboard.selectBaseBranch')}</option>
-          {options.map((branch) => (
-            <option key={branch.name} value={branch.name}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <span className={styles.dashboardBaselineActions}>
-        <button
-          type="button"
-          className={styles.dashboardButton}
-          data-dashboard-baseline-save
-          disabled={pending || disabled || !options.some((branch) => branch.name === draft)}
-          onClick={() => void save()}
-        >
-          {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
-        </button>
-        <button
-          type="button"
-          className={styles.dashboardButton}
-          data-dashboard-baseline-cancel
-          disabled={pending}
-          onClick={() => {
-            setDraft(undefined);
-            setError(false);
-          }}
-        >
-          {t('dashboard.cancelBase')}
-        </button>
-      </span>
-      {error && <span role="alert">{t('dashboard.baseSaveFailed')}</span>}
+          <button
+            type="button"
+            ref={trigger}
+            className={styles.dashboardIconButton}
+            data-dashboard-baseline-edit
+            aria-label={t('dashboard.editBase')}
+            title={t('dashboard.editBase')}
+            aria-haspopup="dialog"
+            aria-expanded={draft !== undefined}
+            disabled={disabled || options.length === 0}
+            onClick={openEditor}
+          >
+            <IconEditOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      <Modal
+        open={draft !== undefined}
+        onClose={closeEditor}
+        closeLabel={t('dialog.closeBaseline')}
+        title={t('dashboard.editBase')}
+        description={t('dashboard.editBaseDescription')}
+        className={styles.dashboardBaselineModal}
+        footer={
+          <>
+            <Button variant="outline" disabled={pending} onClick={closeEditor}>
+              {t('dashboard.cancelBase')}
+            </Button>
+            <Button
+              variant="primary"
+              data-dashboard-baseline-save
+              disabled={
+                pending || disabled || !options.some((branch) => branch.name === draft)
+              }
+              onClick={() => void save()}
+            >
+              {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
+            </Button>
+          </>
+        }
+      >
+        <div data-dashboard-baseline-modal>
+          <Menu
+            open={menuOpen && !pending && filteredOptions.length > 0}
+            anchor={
+              <Input
+                icon={<IconSearchOutline16 />}
+                className={styles.dashboardBaselineSearch}
+                aria-label={t('dashboard.searchBranches')}
+                data-dashboard-baseline-search
+                autoFocus
+                disabled={pending || disabled}
+                placeholder={t('dashboard.searchBranches')}
+                value={search}
+                onFocus={() => setMenuOpen(true)}
+                onChange={(event) => {
+                  setSearch(event.currentTarget.value);
+                  setMenuOpen(true);
+                }}
+              />
+            }
+            items={menuItems}
+            selectedId={draft}
+            onSelect={(id) => {
+              if (options.some((branch) => branch.name === id)) {
+                setDraft(id);
+                setMenuOpen(true);
+              }
+            }}
+            onClose={() => setMenuOpen(false)}
+            dense
+            portal
+            className={styles.dashboardBaselineMenu}
+          />
+          {filteredOptions.length === 0 && (
+            <div
+              className={styles.dashboardBaselineEmpty}
+              data-dashboard-baseline-empty
+              role="status"
+              aria-live="polite"
+            >
+              {t('dashboard.noMatchingBranches')}
+            </div>
+          )}
+          {error && (
+            <div className={styles.dashboardBaselineError} role="alert">
+              {t('dashboard.baseSaveFailed')}
+            </div>
+          )}
+        </div>
+      </Modal>
     </dd>
   );
 }

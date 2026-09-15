@@ -126,7 +126,7 @@ Session。
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。打开 Dashboard 或 Overview 不会请求
 Git；第一次进入 Git Tab 时才通过现有 `/api` Connection 加载本地 branch 列表，并在选择基线后加载
 commit history。Git 选择器仅在 Worktree 持久化的 `baseBranch` 存在且不同于当前 Worktree branch 时
-将其作为默认值；这个值也显示在 Overview 的 Dashboard facts 中。要替换基线，可以编辑 Base fact，
+将其作为默认值；这个值也显示在 Overview 的 Dashboard facts 中。要替换基线，可以点击 Base fact 旁的铅笔图标，在原生选择器中搜索过滤 branch，
 选择除当前 Worktree branch 之外的任一本地 branch，然后保存。保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器
 会以保存后的值作为默认值。Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载
 history、changed files 和 Diff，不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前
