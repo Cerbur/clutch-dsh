@@ -643,7 +643,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     try {
       const [tracked, untracked] = await Promise.all([
         this.run(
-          ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
+          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
           worktreeRoot,
           options,
         ),
@@ -678,6 +678,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     const tracked = await this.isTrackedWorkingTreeFile(worktreeRoot, filePath, options);
     const args = tracked
       ? [
+          '--literal-pathspecs',
           'diff',
           '--no-color',
           '--no-ext-diff',
@@ -688,6 +689,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           filePath,
         ]
       : [
+          '--literal-pathspecs',
           'diff',
           '--no-index',
           '--no-color',
@@ -751,6 +753,28 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
+  /** Read one net baseline-to-HEAD tree diff using NUL-safe output. */
+  async listDiffFiles(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<readonly WorktreeGitChangedFile[]> {
+    assertCommitArgument(baseCommit, 'list diff files', worktreeRoot);
+    assertCommitArgument(targetCommit, 'list diff files', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
+        worktreeRoot,
+        options,
+      );
+      return parseChangedFiles(result.stdout, worktreeRoot);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('list diff files', worktreeRoot, undefined, `${baseCommit}..${targetCommit}`, error);
+    }
+  }
+
   /** Read first-parent (or root) changed-file metadata using NUL-safe output. */
   async listCommitFiles(
     worktreeRoot: string,
@@ -759,14 +783,59 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   ): Promise<readonly WorktreeGitChangedFile[]> {
     const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
     const args = parents.length > 0
-      ? ['diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', parents[0]!, commit]
-      : ['diff-tree', '--root', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', commit];
+      ? ['--literal-pathspecs', 'diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', parents[0]!, commit]
+      : ['--literal-pathspecs', 'diff-tree', '--root', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', commit];
     try {
       const result = await this.run(args, worktreeRoot, options);
       return parseChangedFiles(result.stdout, worktreeRoot);
     } catch (error) {
       if (error instanceof WorktreeProviderError) throw error;
       throw operationError('list commit files', worktreeRoot, undefined, commit, error);
+    }
+  }
+
+  /** Read one file from a net baseline-to-HEAD tree diff. */
+  async readDiffFileDiff(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    if (filePath.length === 0) {
+      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
+        workspaceRoot: worktreeRoot,
+        operation: 'read diff file diff',
+      });
+    }
+    assertCommitArgument(baseCommit, 'read diff file diff', worktreeRoot);
+    assertCommitArgument(targetCommit, 'read diff file diff', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '-M', '-C', baseCommit, targetCommit, '--', filePath],
+        worktreeRoot,
+        options,
+      );
+      const binary = /^Binary files .* differ$/mu.test(result.stdout) ||
+        /^GIT binary patch$/mu.test(result.stdout);
+      return {
+        commit: targetCommit,
+        path: filePath,
+        patch: binary ? '' : result.stdout,
+        binary,
+      };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.outputTruncated) {
+        return {
+          commit: targetCommit,
+          path: filePath,
+          patch: '',
+          binary: false,
+          truncated: true,
+        };
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('read diff file diff', worktreeRoot, filePath, `${baseCommit}..${targetCommit}`, error);
     }
   }
 
@@ -786,6 +855,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
     const args = parents.length > 0
       ? [
+          '--literal-pathspecs',
           'diff',
           '--no-color',
           '--no-ext-diff',
@@ -797,6 +867,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           filePath,
         ]
       : [
+          '--literal-pathspecs',
           'diff-tree',
           '--root',
           '--no-commit-id',

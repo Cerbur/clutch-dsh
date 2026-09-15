@@ -1612,6 +1612,25 @@ This amendment supersedes any wording above that treats `baseBranch` as immutabl
 metadata or says that an explicit baseline choice cannot be persisted. Runtime-derived/captured
 compatibility baselines still are not written automatically.
 
+## Aggregate diff projection amendment
+
+The implemented dashboard adds two aggregate targets through the existing Git methods; it does not add a
+second transport or generic Git reader:
+
+- `selection: { kind: 'summary' }` is a net committed tree diff from one request-scoped resolved baseline
+  SHA to one request-scoped captured `HEAD` SHA. It excludes staged, unstaged, and untracked changes.
+- `selection: { kind: 'commits', commits }` is an exact union of the listed commits' first-parent deltas.
+  The server authorizes every SHA against the same pinned baseline/HEAD projection, returns a changed-file
+  union with contributor SHAs, and returns per-commit diff segments. It is deliberately not a range, so
+  unselected commits between two selected commits are not silently included.
+- The working-tree marker remains a legacy single target and is mutually exclusive with committed aggregate
+  selection. Requests enforce commit XOR selection at the contract and runtime seams.
+- Browser cache keys include the resolved baseline and captured HEAD projection, and aggregate state keeps
+  the same stale-response, ready-content, bounded-output, and path-authorization guarantees as single
+  commit reads.
+
+This amendment supersedes any wording above that describes only single-commit Git targets.
+
 Prefer tests around observable behavior instead of private implementation details.
 
 ---
@@ -1625,8 +1644,10 @@ The task is complete when all of the following are true:
 * a stale expected `baseBranch` save is rejected without losing the draft;
 * the saved `baseBranch` becomes the Git-tab default while direct selector changes stay transient;
 * Worktree commits B and C appear as two Dashboard commits;
-* selecting B/C shows its changed files;
-* selecting a changed file shows its unified diff;
+* the Baseline summary shows the net baseline-to-captured-HEAD committed diff;
+* selecting B/C shows the exact selected-commit file union;
+* selecting a changed file shows per-selected-commit diff segments;
+* unselected commits are not silently included in a multi-selection;
 * merge commits use first-parent semantics;
 * binary and oversized files degrade clearly;
 * arbitrary commit SHA access is rejected;

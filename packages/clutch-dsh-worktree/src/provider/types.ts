@@ -247,6 +247,21 @@ export interface GitWorktreeAdapter {
     filePath: string,
     options?: GitCommandOptions,
   ): Promise<WorktreeGitFileDiff>;
+  /** Read one net tree-to-tree diff for a baseline-wide summary. */
+  listDiffFiles?(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    options?: GitCommandOptions,
+  ): Promise<readonly WorktreeGitChangedFile[]>;
+  /** Read one file from a baseline-wide tree-to-tree diff. */
+  readDiffFileDiff?(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    filePath: string,
+    options?: GitCommandOptions,
+  ): Promise<WorktreeGitFileDiff>;
   createWorktree(
     workspaceRoot: string,
     targetPath: string,

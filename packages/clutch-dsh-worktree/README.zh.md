@@ -139,6 +139,12 @@ Worktree branch），Git Tab 会保持未选择状态并提示用户选择。即
 作为用户可选择的基线。当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入
 **未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
 
+**基线汇总**是一个独立的目标，展示从解析出的基线 commit 到本次请求捕获的 `HEAD` 的净已提交
+树差异，不包含工作区未提交改动。在 commit 列表中可以同时选择多个已提交行，查看这些 commit
+各自 first-parent delta 的精确并集。变更文件会记录贡献它的 commit；每个所选 commit 会作为独立
+Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的 commit。未提交改动 entry 与已提交
+的多选互斥。
+
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。
 **未提交的改动**是按需读取的临时快照，不会持久化，也不会持续监视 Git；刷新后才能看到后续编辑。

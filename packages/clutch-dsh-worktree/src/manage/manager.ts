@@ -8,7 +8,9 @@ import type {
   WorktreeId,
   WorktreeImportCandidate,
   WorktreeGitCommitFiles,
+  WorktreeGitCommitFilesRequest,
   WorktreeGitFileDiff,
+  WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
   WorktreeRecord,
   WorkspaceId,
@@ -181,22 +183,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => listWorktreeCommits(this.context, input));
   }
 
-  listWorktreeCommitFiles(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: string;
-    readonly commit: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitCommitFiles> {
+  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeGitCommitFiles> {
     return this.afterRecovery(() => listWorktreeCommitFiles(this.context, input));
   }
 
-  getWorktreeCommitFileDiff(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: string;
-    readonly commit: string;
-    readonly path: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitFileDiff> {
+  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeGitFileDiff> {
     return this.afterRecovery(() => getWorktreeCommitFileDiff(this.context, input));
   }
 

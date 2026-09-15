@@ -6,7 +6,9 @@ import type {
   BranchRecord,
   SessionBinding,
   WorktreeGitCommitFiles,
+  WorktreeGitCommitFilesRequest,
   WorktreeGitFileDiff,
+  WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
   WorktreeId,
   WorktreeRecord,
@@ -169,23 +171,12 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  listWorktreeCommitFiles(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly commit: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
+  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
     return this.remote.listWorktreeCommitFiles(input);
   }
 
   @Remote
-  getWorktreeCommitFileDiff(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly commit: string;
-    readonly path: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
+  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
     return this.remote.getWorktreeCommitFileDiff(input);
   }
 

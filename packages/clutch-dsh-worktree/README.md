@@ -147,6 +147,13 @@ but it is not the user-selectable baseline. When the Worktree has staged, unstag
 the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
 `HEAD` and uses the same changed-file and diff views.
 
+The **Baseline summary** is a separate target that shows the net committed tree diff from the resolved
+baseline commit to the request's captured `HEAD`; it excludes working-tree changes. In the commit list,
+select more than one committed row to view the exact union of those commits' first-parent deltas. The
+changed-file list records the contributing commits, and each selected commit is rendered as its own diff
+segment; this is not an implicit range and does not include unselected commits. The working-tree entry
+remains mutually exclusive with committed multi-selection.
+
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. The **Uncommitted changes**

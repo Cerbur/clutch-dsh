@@ -136,6 +136,10 @@ Manager path, accepts only local branches other than the current Worktree branch
 value back as the next Git selector default. Selecting or changing a local branch inside the Git tab
 reloads committed history and the current working-tree snapshot but remains transient. A commit or
 **Uncommitted changes** selection loads changed files and a file selection loads one diff. The Git state
+machine also exposes a separate Baseline summary target for the net committed baseline-to-captured-`HEAD`
+tree diff. Committed rows can be toggled into an exact multi-commit union; the client sends the selected
+SHAs as a selection rather than constructing a range, and renders the returned per-commit segments.
+Working-tree selection stays single-select and cannot be combined with committed rows. The Git state
 machine keeps bounded baseline-scoped per-entry/per-file caches, retains ready content during refresh,
 and uses request generations to ignore late results after a newer selection or disposal. Working-tree
 paths are authorized against a fresh Host projection because the files can change between reads. Main

@@ -13,6 +13,10 @@ function statusKey(status: WorktreeGitFileStatus): Parameters<WorktreeTranslate>
   return `dashboard.git.status.${status === 'type-changed' ? 'typeChanged' : status}` as Parameters<WorktreeTranslate>[0];
 }
 
+function shortCommit(commit: string): string {
+  return commit.slice(0, 7);
+}
+
 /** Changed-file authorization projection; only paths returned by Host are selectable. */
 export function GitChangedFiles({ files, selectedPath, onSelect, t }: GitChangedFilesProps) {
   return (
@@ -37,6 +41,11 @@ export function GitChangedFiles({ files, selectedPath, onSelect, t }: GitChanged
               ) : file.path}
             </span>
             <span className={styles.gitFileStatusLabel}>{t(statusKey(file.status))}</span>
+            {file.commits !== undefined && file.commits.length > 0 && (
+              <code className={styles.gitFileContributors} title={file.commits.join(', ')}>
+                {file.commits.map(shortCommit).join(', ')}
+              </code>
+            )}
           </button>
         </li>
       ))}

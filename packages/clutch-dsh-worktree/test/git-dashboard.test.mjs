@@ -771,6 +771,106 @@ test('starts unselected without a creation branch and reloads history for a chan
   controller.dispose();
 });
 
+test('supports aggregate state targets', async () => {
+  const first = '1'.repeat(40);
+  const second = '2'.repeat(40);
+  const calls = [];
+  const manager = {
+    listWorktreeCommits: () => Promise.resolve({ headCommit: second, baseline: { commit: '0'.repeat(40), source: 'captured' }, commits: [{ sha: second, parents: [first], subject: 'second', authorName: 'Test', authoredAt: '2026-09-14T00:00:00Z' }, { sha: first, parents: ['0'.repeat(40)], subject: 'first', authorName: 'Test', authoredAt: '2026-09-13T00:00:00Z' }], truncated: false }),
+    listWorktreeCommitFiles: (input) => { calls.push(input); return Promise.resolve({ commit: input.commit || 'summary', selection: input.selection, files: [] }); },
+    getWorktreeCommitFileDiff: (input) => Promise.resolve({ commit: input.commit || 'summary', selection: input.selection, path: input.path, patch: '', binary: false }),
+  };
+  const controller = createWorktreeGitStateController({ manager, workspaceId: 'ws_dashboard', worktreeId: 'wt_dashboard', defaultBaselineBranch: 'main' });
+  await controller.loadHistory();
+  await flush();
+  controller.toggleCommit(first);
+  await flush();
+  assert.deepEqual(calls[calls.length - 1].selection, { kind: 'commits', commits: [second, first] });
+  controller.selectSummary();
+  await flush();
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.deepEqual(controller.getSnapshot().selectedCommits, []);
+  assert.deepEqual(calls[calls.length - 1].selection, { kind: 'summary' });
+  controller.dispose();
+});
+
+test('serves baseline summary and exact selected-commit sections', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/aggregate',
+    });
+    await writeFile(path.join(record.absolutePath, 'aggregate.txt'), 'first\n');
+    await runGit(record.absolutePath, ['add', 'aggregate.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'add aggregate file']);
+    const firstCommit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    await writeFile(path.join(record.absolutePath, 'aggregate.txt'), 'first\nsecond\n');
+    await writeFile(path.join(record.absolutePath, 'other.txt'), 'other\n');
+    await runGit(record.absolutePath, ['add', 'aggregate.txt', 'other.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'update aggregate files']);
+    const secondCommit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+
+    const summary = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary' },
+    });
+    assert.equal(summary.commit, 'summary');
+    assert.deepEqual(summary.selection, { kind: 'summary' });
+    assert.deepEqual(summary.files.map((file) => file.path).toSorted(), ['aggregate.txt', 'other.txt']);
+    const summaryDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary' },
+      path: 'aggregate.txt',
+    });
+    assert.equal(summaryDiff.selection.kind, 'summary');
+    assert.match(summaryDiff.patch, /[+]second/u);
+
+    const aggregate = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+    });
+    assert.deepEqual(aggregate.selection, { kind: 'commits', commits: [firstCommit, secondCommit] });
+    const aggregateFile = aggregate.files.find((file) => file.path === 'aggregate.txt');
+    assert.deepEqual(aggregateFile.commits, [firstCommit, secondCommit]);
+    const aggregateDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+      path: 'aggregate.txt',
+    });
+    assert.equal(aggregateDiff.segments.length, 2);
+    assert.deepEqual(aggregateDiff.segments.map((segment) => segment.commit), [firstCommit, secondCommit]);
+    assert.match(aggregateDiff.segments[0].patch, /[+]first/u);
+    assert.match(aggregateDiff.segments[1].patch, /[+]second/u);
+
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        selection: { kind: 'commits', commits: [firstCommit, firstCommit] },
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: record.worktreeId,
+        commit: firstCommit,
+        selection: { kind: 'summary' },
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('reads binary commit files without returning patch bytes', async () => {
   const fixture = await createFixture();
   try {

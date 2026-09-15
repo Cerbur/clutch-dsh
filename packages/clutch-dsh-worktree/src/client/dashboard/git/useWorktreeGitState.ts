@@ -4,6 +4,7 @@ import type {
   BranchRecord,
   WorktreeGitChangedFile,
   WorktreeGitCommitFiles,
+  WorktreeGitDiffSelection,
   WorktreeGitFileDiff,
   WorktreeGitHistory,
   WorktreeManager,
@@ -20,12 +21,22 @@ export type GitLoadable<Value> =
     }
   | { readonly status: 'error'; readonly error: Error; readonly previous?: Value };
 
+export type WorktreeGitView = 'commits' | 'summary';
+
+type GitTarget =
+  | { readonly kind: 'commit'; readonly commit: string }
+  | { readonly kind: 'selection'; readonly selection: WorktreeGitDiffSelection };
+
 export interface WorktreeGitState {
   readonly branches: GitLoadable<readonly BranchRecord[]>;
   /** The currently selected local branch; undefined keeps the Git tab unselected. */
   readonly baselineBranch?: string;
   readonly history: GitLoadable<WorktreeGitHistory>;
+  readonly view: WorktreeGitView;
+  /** The focused/primary commit; aggregate selections are in selectedCommits. */
   readonly selectedCommit?: string;
+  /** Selected committed SHAs; the live working tree is intentionally excluded. */
+  readonly selectedCommits: readonly string[];
   readonly files: GitLoadable<WorktreeGitCommitFiles>;
   readonly selectedPath?: string;
   readonly diff: GitLoadable<WorktreeGitFileDiff>;
@@ -38,7 +49,11 @@ export interface WorktreeGitStateController {
   readonly loadHistory: () => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly selectBaselineBranch: (branch: string | undefined) => void;
+  readonly selectView: (view: WorktreeGitView) => void;
+  readonly selectSummary: () => void;
   readonly selectCommit: (commit: string) => void;
+  readonly toggleCommit: (commit: string) => void;
+  readonly clearCommitSelection: () => void;
   readonly selectPath: (path: string) => void;
   readonly dispose: () => void;
 }
@@ -70,6 +85,8 @@ function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState
     branches: { status: 'idle' },
     baselineBranch: normalizeBranch(defaultBaselineBranch),
     history: { status: 'idle' },
+    view: 'commits',
+    selectedCommits: [],
     files: { status: 'idle' },
     diff: { status: 'idle' },
   };
@@ -82,12 +99,32 @@ function fileForPath(
   return files.files.find((file) => file.path === selectedPath || file.oldPath === selectedPath);
 }
 
-function gitCacheKey(baseBranch: string, commit: string): string {
-  return `${baseBranch}\u0000${commit}`;
+function historyProjectionKey(history: GitLoadable<WorktreeGitHistory>): string {
+  if (history.status !== 'ready') return 'unknown';
+  return (history.value.baseline?.commit ?? 'unknown') + '\u0000' + (history.value.headCommit ?? 'unknown');
 }
 
-function diffCacheKey(baseBranch: string, commit: string, filePath: string): string {
-  return `${baseBranch}\u0000${commit}\u0000${filePath}`;
+function targetKey(target: GitTarget): string {
+  if (target.kind === 'commit') return 'commit\u0000' + target.commit;
+  if (target.selection.kind === 'summary') return 'summary';
+  return 'commits\u0000' + target.selection.commits.join('\u0000');
+}
+
+function gitCacheKey(
+  baseBranch: string,
+  history: GitLoadable<WorktreeGitHistory>,
+  target: GitTarget,
+): string {
+  return baseBranch + '\u0000' + historyProjectionKey(history) + '\u0000' + targetKey(target);
+}
+
+function diffCacheKey(
+  baseBranch: string,
+  history: GitLoadable<WorktreeGitHistory>,
+  target: GitTarget,
+  filePath: string,
+): string {
+  return gitCacheKey(baseBranch, history, target) + '\u0000' + filePath;
 }
 
 function trimCache<Value>(cache: Map<string, Value>, maxSize: number): void {
@@ -96,6 +133,21 @@ function trimCache<Value>(cache: Map<string, Value>, maxSize: number): void {
     if (oldest === undefined) return;
     cache.delete(oldest);
   }
+}
+
+function isCommittedSha(commit: string): boolean {
+  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(commit);
+}
+
+function canonicalizeCommits(
+  history: WorktreeGitHistory | undefined,
+  commits: readonly string[],
+): readonly string[] {
+  if (history === undefined) return [];
+  const requested = new Set(commits.filter((commit) => isCommittedSha(commit)));
+  return history.commits
+    .filter((commit) => commit.sha !== WORKTREE_GIT_WORKING_TREE && requested.has(commit.sha))
+    .map((commit) => commit.sha);
 }
 
 /**
@@ -119,16 +171,6 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const filesCache = new Map<string, WorktreeGitCommitFiles>();
   const diffCache = new Map<string, WorktreeGitFileDiff>();
 
-  const invalidateWorkingTreeCache = (): void => {
-    const marker = `\u0000${WORKTREE_GIT_WORKING_TREE}`;
-    for (const key of filesCache.keys()) {
-      if (key === WORKTREE_GIT_WORKING_TREE || key.endsWith(marker)) filesCache.delete(key);
-    }
-    for (const key of diffCache.keys()) {
-      if (key.includes(`${marker}\u0000`)) diffCache.delete(key);
-    }
-  };
-
   const emit = (): void => {
     if (disposed) return;
     for (const listener of listeners) listener();
@@ -139,18 +181,43 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     emit();
   };
 
-  const requestFiles = (baseBranch: string, commit: string): Promise<WorktreeGitCommitFiles> => {
-    const key = gitCacheKey(baseBranch, commit);
+  const invalidateWorkingTreeCache = (): void => {
+    const marker = '\u0000' + WORKTREE_GIT_WORKING_TREE;
+    for (const key of filesCache.keys()) {
+      if (key === WORKTREE_GIT_WORKING_TREE || key.includes(marker)) filesCache.delete(key);
+    }
+    for (const key of diffCache.keys()) {
+      if (key.includes(marker + '\u0000')) diffCache.delete(key);
+    }
+  };
+
+  const currentTarget = (): GitTarget | undefined => {
+    if (state.view === 'summary') return { kind: 'selection', selection: { kind: 'summary' } };
+    if (state.selectedCommit === undefined) return undefined;
+    if (
+      state.selectedCommit !== WORKTREE_GIT_WORKING_TREE &&
+      state.selectedCommits.length > 1
+    ) {
+      return { kind: 'selection', selection: { kind: 'commits', commits: state.selectedCommits } };
+    }
+    return { kind: 'commit', commit: state.selectedCommit };
+  };
+
+  const requestFiles = (baseBranch: string, history: GitLoadable<WorktreeGitHistory>, target: GitTarget): Promise<WorktreeGitCommitFiles> => {
+    const key = gitCacheKey(baseBranch, history, target);
     const existing = filesInFlight.get(key);
     if (existing !== undefined) return existing;
     if (input.manager === undefined) return Promise.reject(new Error('Git manager unavailable'));
 
+    const request = target.kind === 'commit'
+      ? { commit: target.commit }
+      : { selection: target.selection };
     let promise: Promise<WorktreeGitCommitFiles>;
     try {
       promise = input.manager.listWorktreeCommitFiles({
         workspaceId: input.workspaceId,
         worktreeId: input.worktreeId,
-        commit,
+        ...request,
         baseBranch,
       });
     } catch (error) {
@@ -168,18 +235,21 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     return promise;
   };
 
-  const requestDiff = (baseBranch: string, commit: string, diffPath: string): Promise<WorktreeGitFileDiff> => {
-    const key = diffCacheKey(baseBranch, commit, diffPath);
+  const requestDiff = (baseBranch: string, history: GitLoadable<WorktreeGitHistory>, target: GitTarget, diffPath: string): Promise<WorktreeGitFileDiff> => {
+    const key = diffCacheKey(baseBranch, history, target, diffPath);
     const existing = diffInFlight.get(key);
     if (existing !== undefined) return existing;
     if (input.manager === undefined) return Promise.reject(new Error('Git manager unavailable'));
 
+    const request = target.kind === 'commit'
+      ? { commit: target.commit }
+      : { selection: target.selection };
     let promise: Promise<WorktreeGitFileDiff>;
     try {
       promise = input.manager.getWorktreeCommitFileDiff({
         workspaceId: input.workspaceId,
         worktreeId: input.worktreeId,
-        commit,
+        ...request,
         path: diffPath,
         baseBranch,
       });
@@ -199,14 +269,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const loadDiff = async (
-    commit: string,
+    target: GitTarget,
     selectedPath: string,
     diffPath: string,
   ): Promise<void> => {
     const baselineBranch = state.baselineBranch;
     if (baselineBranch === undefined) return;
     const request = ++diffRequest;
-    const key = diffCacheKey(baselineBranch, commit, diffPath);
+    const key = diffCacheKey(baselineBranch, state.history, target, diffPath);
     const cached = diffCache.get(key);
     if (cached !== undefined) {
       update({ ...state, selectedPath, diff: { status: 'ready', value: cached } });
@@ -214,30 +284,34 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     }
     update({ ...state, selectedPath, diff: { status: 'loading' } });
     try {
-      const value = await requestDiff(baselineBranch, commit, diffPath);
+      const value = await requestDiff(baselineBranch, state.history, target, diffPath);
       diffCache.set(key, value);
       trimCache(diffCache, MAX_DIFF_CACHE);
+      const active = currentTarget();
       if (
         disposed ||
         request !== diffRequest ||
         state.baselineBranch !== baselineBranch ||
-        state.selectedCommit !== commit ||
+        active === undefined ||
+        targetKey(active) !== targetKey(target) ||
         state.selectedPath !== selectedPath
       ) return;
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
+      const active = currentTarget();
       if (
         disposed ||
         request !== diffRequest ||
         state.baselineBranch !== baselineBranch ||
-        state.selectedCommit !== commit ||
+        active === undefined ||
+        targetKey(active) !== targetKey(target) ||
         state.selectedPath !== selectedPath
       ) return;
       update({ ...state, diff: { status: 'error', error: asError(error) } });
     }
   };
 
-  const applyFiles = (commit: string, value: WorktreeGitCommitFiles): void => {
+  const applyFiles = (target: GitTarget, value: WorktreeGitCommitFiles): void => {
     const selectedPath = value.files[0]?.path;
     update({
       ...state,
@@ -245,18 +319,18 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       selectedPath,
       diff: { status: 'idle' },
     });
-    if (selectedPath !== undefined) void loadDiff(commit, selectedPath, selectedPath);
+    if (selectedPath !== undefined) void loadDiff(target, selectedPath, selectedPath);
   };
 
-  const loadFiles = async (commit: string, preserveReady = false): Promise<void> => {
+  const loadFiles = async (target: GitTarget, preserveReady = false): Promise<void> => {
     const baselineBranch = state.baselineBranch;
     if (baselineBranch === undefined) return;
     const request = ++filesRequest;
     ++diffRequest;
-    const key = gitCacheKey(baselineBranch, commit);
+    const key = gitCacheKey(baselineBranch, state.history, target);
     const cached = filesCache.get(key);
     if (cached !== undefined) {
-      applyFiles(commit, cached);
+      applyFiles(target, cached);
       return;
     }
     const previousFiles = state.files.status === 'ready' ? state.files : undefined;
@@ -266,22 +340,26 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       update({ ...state, files: { ...previousFiles, refreshing: true } });
     }
     try {
-      const value = await requestFiles(baselineBranch, commit);
+      const value = await requestFiles(baselineBranch, state.history, target);
       filesCache.set(key, value);
       trimCache(filesCache, MAX_FILE_CACHE);
+      const active = currentTarget();
       if (
         disposed ||
         request !== filesRequest ||
         state.baselineBranch !== baselineBranch ||
-        state.selectedCommit !== commit
+        active === undefined ||
+        targetKey(active) !== targetKey(target)
       ) return;
-      applyFiles(commit, value);
+      applyFiles(target, value);
     } catch (error) {
+      const active = currentTarget();
       if (
         disposed ||
         request !== filesRequest ||
         state.baselineBranch !== baselineBranch ||
-        state.selectedCommit !== commit
+        active === undefined ||
+        targetKey(active) !== targetKey(target)
       ) return;
       if (preserveReady && previousFiles !== undefined) {
         update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error) } });
@@ -289,6 +367,18 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         update({ ...state, files: { status: 'error', error: asError(error) }, selectedPath: undefined, diff: { status: 'idle' } });
       }
     }
+  };
+
+  const resetTarget = (next: Partial<WorktreeGitState>): void => {
+    ++filesRequest;
+    ++diffRequest;
+    update({
+      ...state,
+      ...next,
+      files: { status: 'idle' },
+      selectedPath: undefined,
+      diff: { status: 'idle' },
+    });
   };
 
   const selectBaselineBranch = (branch: string | undefined): void => {
@@ -308,7 +398,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       ...state,
       baselineBranch: nextBranch,
       history: { status: 'idle' },
+      view: 'commits',
       selectedCommit: undefined,
+      selectedCommits: [],
       files: { status: 'idle' },
       selectedPath: undefined,
       diff: { status: 'idle' },
@@ -316,29 +408,74 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     if (nextBranch !== undefined) void loadHistory();
   };
 
+  const selectSummary = (): void => {
+    if (disposed || state.baselineBranch === undefined) return;
+    const target: GitTarget = { kind: 'selection', selection: { kind: 'summary' } };
+    resetTarget({ view: 'summary', selectedCommit: undefined, selectedCommits: [] });
+    void loadFiles(target);
+  };
+
+  const selectView = (view: WorktreeGitView): void => {
+    if (view === 'summary') {
+      selectSummary();
+      return;
+    }
+    if (disposed || state.baselineBranch === undefined) return;
+    const selectedCommit = state.selectedCommit;
+    const selectedCommits = state.selectedCommits;
+    if (state.view === 'commits' && state.files.status === 'ready') return;
+    resetTarget({ view: 'commits' });
+    if (selectedCommit === undefined) return;
+    const target: GitTarget = selectedCommit !== WORKTREE_GIT_WORKING_TREE && selectedCommits.length > 1
+      ? { kind: 'selection', selection: { kind: 'commits', commits: selectedCommits } }
+      : { kind: 'commit', commit: selectedCommit };
+    void loadFiles(target);
+  };
+
   const selectCommit = (commit: string): void => {
     if (disposed || state.baselineBranch === undefined) return;
     const history = state.history.status === 'ready' ? state.history.value : undefined;
     if (history !== undefined && !history.commits.some((candidate) => candidate.sha === commit)) return;
-    if (state.selectedCommit === commit && state.files.status === 'ready') return;
-    ++filesRequest;
-    ++diffRequest;
-    update({
-      ...state,
-      selectedCommit: commit,
-      files: { status: 'idle' },
-      selectedPath: undefined,
-      diff: { status: 'idle' },
-    });
-    void loadFiles(commit);
+    const target: GitTarget = { kind: 'commit', commit };
+    const selectedCommits = commit === WORKTREE_GIT_WORKING_TREE ? [] : [commit];
+    if (state.view === 'commits' && state.selectedCommit === commit && state.files.status === 'ready' && state.selectedCommits.length <= 1) return;
+    resetTarget({ view: 'commits', selectedCommit: commit, selectedCommits });
+    void loadFiles(target);
+  };
+
+  const toggleCommit = (commit: string): void => {
+    if (disposed || state.baselineBranch === undefined || commit === WORKTREE_GIT_WORKING_TREE) return;
+    const history = state.history.status === 'ready' ? state.history.value : undefined;
+    if (history === undefined || !history.commits.some((candidate) => candidate.sha === commit && candidate.sha !== WORKTREE_GIT_WORKING_TREE)) return;
+    const selected = state.selectedCommits.includes(commit)
+      ? state.selectedCommits.filter((candidate) => candidate !== commit)
+      : [...state.selectedCommits, commit];
+    const canonical = canonicalizeCommits(history, selected);
+    if (canonical.length === 0) {
+      resetTarget({ view: 'commits', selectedCommit: undefined, selectedCommits: [] });
+      return;
+    }
+    const selectedCommit = canonical.includes(commit) ? commit : canonical[canonical.length - 1];
+    const target: GitTarget = canonical.length > 1
+      ? { kind: 'selection', selection: { kind: 'commits', commits: canonical } }
+      : { kind: 'commit', commit: selectedCommit };
+    resetTarget({ view: 'commits', selectedCommit, selectedCommits: canonical });
+    void loadFiles(target);
+  };
+
+  const clearCommitSelection = (): void => {
+    if (disposed || state.baselineBranch === undefined) return;
+    resetTarget({ view: 'commits', selectedCommit: undefined, selectedCommits: [] });
   };
 
   const selectPath = (selectedPath: string): void => {
-    if (disposed || state.selectedCommit === undefined || state.files.status !== 'ready') return;
+    if (disposed || state.files.status !== 'ready') return;
+    const target = currentTarget();
+    if (target === undefined) return;
     const changedFile = fileForPath(state.files.value, selectedPath);
     if (changedFile === undefined) return;
     ++diffRequest;
-    void loadDiff(state.selectedCommit, selectedPath, changedFile.path);
+    void loadDiff(target, selectedPath, changedFile.path);
   };
 
   const loadBranches = (refresh = false): Promise<void> => {
@@ -420,18 +557,31 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         });
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         historyLoaded = true;
-        update({ ...state, history: { status: 'ready', value } });
-        const selectedStillExists = state.selectedCommit !== undefined &&
-          value.commits.some((commit) => commit.sha === state.selectedCommit);
-        if (!selectedStillExists) {
-          const nextCommit = value.commits[0]?.sha;
-          if (nextCommit === undefined) {
-            update({ ...state, selectedCommit: undefined, files: { status: 'idle' }, selectedPath: undefined, diff: { status: 'idle' } });
-          } else {
-            selectCommit(nextCommit);
-          }
-        } else if (refreshesWorkingTree && state.selectedCommit === WORKTREE_GIT_WORKING_TREE) {
-          void loadFiles(WORKTREE_GIT_WORKING_TREE, true);
+        const selectedCommits = canonicalizeCommits(value, state.selectedCommits);
+        const selectedCommitStillExists = state.selectedCommit !== undefined && value.commits.some((commit) => commit.sha === state.selectedCommit);
+        const nextSelectedCommit = selectedCommitStillExists
+          ? state.selectedCommit
+          : selectedCommits[0] ?? value.commits[0]?.sha;
+        const nextSelectedCommits = selectedCommits.length > 0
+          ? selectedCommits
+          : nextSelectedCommit !== undefined && nextSelectedCommit !== WORKTREE_GIT_WORKING_TREE
+            ? [nextSelectedCommit]
+            : [];
+        update({
+          ...state,
+          history: { status: 'ready', value },
+          selectedCommits: nextSelectedCommits,
+          selectedCommit: nextSelectedCommit,
+        });
+        if (state.view === 'summary') {
+          void loadFiles({ kind: 'selection', selection: { kind: 'summary' } }, true);
+        } else if (nextSelectedCommit === undefined) {
+          resetTarget({ selectedCommit: undefined, selectedCommits: [] });
+        } else if (!selectedCommitStillExists || selectedCommits.length !== state.selectedCommits.length || refreshesWorkingTree) {
+          const target: GitTarget = nextSelectedCommit !== WORKTREE_GIT_WORKING_TREE && selectedCommits.length > 1
+            ? { kind: 'selection', selection: { kind: 'commits', commits: selectedCommits } }
+            : { kind: 'commit', commit: nextSelectedCommit };
+          void loadFiles(target, refreshesWorkingTree);
         }
       } catch (error) {
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
@@ -467,7 +617,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       return Promise.all([branchesTask, historyTask]).then(() => undefined);
     },
     selectBaselineBranch,
+    selectView,
+    selectSummary,
     selectCommit,
+    toggleCommit,
+    clearCommitSelection,
     selectPath,
     dispose: () => {
       if (disposed) return;
@@ -502,7 +656,11 @@ export function useWorktreeGitState(input: UseWorktreeGitStateInput): WorktreeGi
     loadHistory: controller.loadHistory,
     refresh: controller.refresh,
     selectBaselineBranch: controller.selectBaselineBranch,
+    selectView: controller.selectView,
+    selectSummary: controller.selectSummary,
     selectCommit: controller.selectCommit,
+    toggleCommit: controller.toggleCommit,
+    clearCommitSelection: controller.clearCommitSelection,
     selectPath: controller.selectPath,
     dispose: controller.dispose,
   };

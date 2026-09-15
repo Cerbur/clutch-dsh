@@ -596,7 +596,7 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
       { path: 'untracked.txt', status: 'added' },
     ]);
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
-      ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
+      ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
     ]);
   } finally {
@@ -626,7 +626,7 @@ test('reads an untracked working-tree diff after handling no-index exit 1', asyn
     assert.match(diff.patch, /\+new/u);
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
-      ['diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -652,6 +652,7 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       { path: 'space file.txt', status: 'modified' },
     ]);
     assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      '--literal-pathspecs',
       'diff-tree',
       '--no-commit-id',
       '--name-status',
@@ -675,6 +676,7 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       { path: 'README.md', status: 'added' },
     ]);
     assert.deepEqual(rootRuntime.spawnCalls[1].argv.slice(1), [
+      '--literal-pathspecs',
       'diff-tree',
       '--root',
       '--no-commit-id',
@@ -709,6 +711,7 @@ test('reads one file diff with the mandatory safe-diff flags and an argv path bo
     assert.equal(diff.binary, false);
     assert.match(diff.patch, /\+new/u);
     assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      '--literal-pathspecs',
       'diff',
       '--no-color',
       '--no-ext-diff',

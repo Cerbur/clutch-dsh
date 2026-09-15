@@ -156,7 +156,58 @@
   font-size: 10px;
 }
 
+.gitSummaryButton {
+  display: flex;
+  width: calc(100% - 10px);
+  flex-direction: column;
+  gap: 3px;
+  margin: 5px;
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #273142);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gitSummaryButton:hover,
+.gitSummaryButton[aria-pressed='true'] {
+  border-color: var(--dsw-alias-state-business-primary, #467bc8);
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+}
+
+.gitSummaryButton span {
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.gitSummaryButton small {
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 10px;
+}
+
+.gitSelectionToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #edf0f4);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 10px;
+}
+
+.gitSelectionToolbar button {
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary, #467bc8);
+  cursor: pointer;
+  font: inherit;
+}
+
 .gitCommitList,
+
 .gitChangedFileList {
   list-style: none;
   padding: 5px;
@@ -176,7 +227,15 @@
 }
 
 .gitCommitList button {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr);
   padding: 9px 8px;
+}
+
+.gitCommitSelectionMark {
+  grid-row: 1 / span 2;
+  color: var(--dsw-alias-state-business-primary, #467bc8);
+  font-size: 11px;
 }
 
 .gitCommitList button:hover,
@@ -199,6 +258,7 @@
 }
 
 .gitCommitSubject {
+  grid-column: 2;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -207,6 +267,7 @@
 }
 
 .gitCommitMeta {
+  grid-column: 2;
   display: flex;
   gap: 7px;
   margin-top: 4px;
@@ -266,6 +327,16 @@
   font-size: 10px;
 }
 
+.gitFileContributors {
+  flex: none;
+  max-width: 9em;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary, #65758d);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gitDiff {
   min-width: 0;
   overflow: auto;
@@ -273,6 +344,23 @@
   background: var(--dsw-alias-markdown-code-block, #fafbfc);
   color: var(--dsw-alias-label-primary, #263342);
   font: 11px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.gitDiffSegment {
+  margin-bottom: 12px;
+}
+
+.gitDiffSegmentHeader {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.gitDiffSegmentHeader code {
+  color: var(--dsw-alias-label-primary, #273142);
 }
 
 .gitDiffHunk {
@@ -322,6 +410,18 @@
 .gitDiffLine code {
   min-width: 0;
   color: inherit;
+}
+
+.gitSrOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .gitDiffEmpty,

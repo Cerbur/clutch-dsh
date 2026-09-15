@@ -68,7 +68,34 @@ export interface WorktreeGitBaseline {
 /** Stable synthetic commit id used for the current uncommitted working tree entry. */
 export const WORKTREE_GIT_WORKING_TREE = 'working-tree' as const;
 
+/** Stable synthetic id used by the Dashboard's baseline-wide summary view. */
+export const WORKTREE_GIT_SUMMARY = 'summary' as const;
+
 export type WorktreeGitCommitKind = 'commit' | 'working-tree';
+
+/**
+ * Read-only aggregate diff scopes. `summary` is the net baseline-to-HEAD tree
+ * diff; `commits` is the exact union of the selected first-parent commit deltas.
+ */
+export type WorktreeGitDiffSelection =
+  | { readonly kind: 'summary' }
+  | { readonly kind: 'commits'; readonly commits: readonly string[] };
+
+export type WorktreeGitDiffRequest =
+  | { readonly commit: string }
+  | { readonly selection: WorktreeGitDiffSelection };
+
+export interface WorktreeGitRequestContext {
+  readonly workspaceId: WorkspaceId;
+  readonly worktreeId: WorktreeId;
+  /** Optional local branch selected as the comparison baseline. */
+  readonly baseBranch?: string;
+}
+
+export type WorktreeGitCommitFilesRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest;
+export type WorktreeGitFileDiffRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest & {
+  readonly path: string;
+};
 
 export interface WorktreeGitCommit {
   /** A Git SHA for commits, or WORKTREE_GIT_WORKING_TREE for the live working tree entry. */
@@ -101,19 +128,35 @@ export interface WorktreeGitChangedFile {
   readonly path: string;
   readonly oldPath?: string;
   readonly status: WorktreeGitFileStatus;
+  /** Selected commit contributors for an aggregate commit view. */
+  readonly commits?: readonly string[];
 }
 
 export interface WorktreeGitCommitFiles {
+  /** The requested commit for legacy reads, or the synthetic summary/first selected commit id. */
   readonly commit: string;
+  /** Present when this response came from an aggregate diff request. */
+  readonly selection?: WorktreeGitDiffSelection;
   readonly files: readonly WorktreeGitChangedFile[];
 }
 
+export interface WorktreeGitDiffSegment {
+  readonly commit: string;
+  readonly patch: string;
+  readonly binary: boolean;
+  readonly truncated?: boolean;
+}
+
 export interface WorktreeGitFileDiff {
+  /** The requested commit for legacy reads, or the synthetic summary/first selected commit id. */
   readonly commit: string;
   readonly path: string;
   readonly patch: string;
   readonly binary: boolean;
   readonly truncated?: boolean;
+  /** Per-commit patches for an exact multi-commit selection. */
+  readonly selection?: WorktreeGitDiffSelection;
+  readonly segments?: readonly WorktreeGitDiffSegment[];
 }
 
 export * from './worktree-permission.js';
@@ -262,22 +305,9 @@ export interface WorktreeManager {
     readonly baseBranch?: string;
   }): Promise<WorktreeGitHistory>;
 
-  listWorktreeCommitFiles(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly commit: string;
-    /** Optional local branch selected as the comparison baseline. */
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitCommitFiles>;
+  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeGitCommitFiles>;
 
-  getWorktreeCommitFileDiff(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly commit: string;
-    readonly path: string;
-    /** Optional local branch selected as the comparison baseline. */
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitFileDiff>;
+  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeGitFileDiff>;
 
   listImportCandidates(input: {
     readonly workspaceId: string;
@@ -426,22 +456,9 @@ export interface WorktreeRemoteManager {
     baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitHistory>>;
 
-  listWorktreeCommitFiles(input: {
-    workspaceId: WorkspaceId;
-    worktreeId: WorktreeId;
-    commit: string;
-    /** Optional local branch selected as the comparison baseline. */
-    baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>>;
+  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>>;
 
-  getWorktreeCommitFileDiff(input: {
-    workspaceId: WorkspaceId;
-    worktreeId: WorktreeId;
-    commit: string;
-    path: string;
-    /** Optional local branch selected as the comparison baseline. */
-    baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>>;
+  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>>;
 
   listImportCandidates(input: {
     workspaceId: WorkspaceId;

@@ -27,10 +27,6 @@ function shortCommit(commit: string | undefined): string {
   return commit === undefined ? '—' : commit.slice(0, 7);
 }
 
-function errorText(error: Error): string {
-  return error.message || 'Unknown error';
-}
-
 function selectedCommit(
   history: WorktreeGitHistory | undefined,
   sha: string | undefined,
@@ -55,7 +51,7 @@ function readyFiles(value: WorktreeGitCommitFiles | undefined): readonly Worktre
   return value?.files ?? [];
 }
 
-/** Git & Changes tab: read-only, on-demand history → files → one-file diff. */
+/** Git & Changes tab: read-only, on-demand history -> target files -> one-file diff. */
 export function WorktreeGitPanel({
   manager,
   workspaceId,
@@ -88,6 +84,14 @@ export function WorktreeGitPanel({
       : undefined;
   const baselineCommit = historyValue?.baseline?.commit;
   const baselineRef = state.baselineBranch ?? historyValue?.baseline?.ref;
+  const targetLabel = state.view === 'summary'
+    ? t('dashboard.git.baselineSummary')
+    : state.selectedCommits.length > 1
+      ? t('dashboard.git.selectedCommitCount', { n: state.selectedCommits.length })
+      : commit === undefined
+        ? undefined
+        : commitLabel(commit, t);
+  const hasTarget = state.view === 'summary' || commit !== undefined;
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
@@ -190,7 +194,7 @@ export function WorktreeGitPanel({
         </div>
       )}
 
-      {state.history.status === 'ready' && unavailable !== undefined && (
+      {state.history.status === 'ready' && historyValue !== undefined && unavailable !== undefined && (
         <div className={styles.gitUnavailable} data-dashboard-git-unavailable>
           <strong>{unavailable === 'main'
             ? t('dashboard.git.mainUnavailableTitle')
@@ -206,59 +210,77 @@ export function WorktreeGitPanel({
       )}
 
       {state.history.status === 'ready' && historyValue !== undefined && unavailable === undefined && (
-        <>
-          {historyValue.commits.length === 0 ? (
-            <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>
-          ) : (
-            <div className={styles.gitColumns}>
-              <section className={styles.gitColumn} aria-label={t('dashboard.git.commits')}>
-                <div className={styles.gitColumnHeader}>
-                  <h3>{t('dashboard.git.commits')}</h3>
-                  {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
-                </div>
-                <GitCommitList
-                  commits={historyValue.commits}
-                  selectedCommit={state.selectedCommit}
-                  onSelect={state.selectCommit}
-                  t={t}
-                />
-              </section>
-              <section className={styles.gitColumn} aria-label={t('dashboard.git.changedFiles')}>
-                <div className={styles.gitColumnHeader}>
-                  <h3>{t('dashboard.git.changedFiles')}</h3>
-                  {commit !== undefined && (commit.kind === 'working-tree'
-                    ? <span>{commitLabel(commit, t)}</span>
-                    : <code>{commitLabel(commit, t)}</code>)}
-                </div>
-                {commit === undefined ? (
-                  <div className={styles.gitEmpty}>{t('dashboard.git.selectCommit')}</div>
-                ) : state.files.status === 'loading' ? (
-                  <div className={styles.gitLoading} role="status">{t('dashboard.git.loadingFiles')}</div>
-                ) : state.files.status === 'error' ? (
-                  <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
-                ) : files.length === 0 ? (
-                  <div className={styles.gitEmpty}>{t('dashboard.git.noFiles')}</div>
-                ) : (
-                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
-                )}
-              </section>
-              <section className={styles.gitColumn} aria-label={t('dashboard.git.diff')}>
-                <div className={styles.gitColumnHeader}>
-                  <h3>{t('dashboard.git.diff')}</h3>
-                  {state.selectedPath !== undefined && <code title={state.selectedPath}>{state.selectedPath}</code>}
-                </div>
-                {state.diff.status === 'loading' ? (
-                  <div className={styles.gitLoading} role="status">{t('dashboard.git.loadingDiff')}</div>
-                ) : state.diff.status === 'error' ? (
-                  <div className={styles.gitError} role="alert">{errorText(state.diff.error)}</div>
-                ) : (
-                  <GitDiffView diff={diff} t={t} />
-                )}
-              </section>
+        <div className={styles.gitColumns}>
+          <section className={styles.gitColumn} aria-label={t('dashboard.git.commits')}>
+            <div className={styles.gitColumnHeader}>
+              <h3>{t('dashboard.git.commits')}</h3>
+              {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
             </div>
-          )}
-        </>
+            <button
+              type="button"
+              className={styles.gitSummaryButton}
+              data-dashboard-git-summary
+              aria-pressed={state.view === 'summary'}
+              onClick={state.selectSummary}
+            >
+              <span>{t('dashboard.git.baselineSummary')}</span>
+              <small>{t('dashboard.git.baselineSummaryDescription')}</small>
+            </button>
+            <span id="dashboard-git-commit-selection-hint" className={styles.gitSrOnly}>{t('dashboard.git.commitSelectionHint')}</span>
+            {historyValue.commits.length === 0 && <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>}
+            <GitCommitList
+              commits={historyValue.commits}
+              selectedCommit={state.selectedCommit}
+              selectedCommits={state.selectedCommits}
+              onSelect={state.selectCommit}
+              onToggle={state.toggleCommit}
+              t={t}
+            />
+          </section>
+          <section className={styles.gitColumn} aria-label={t('dashboard.git.changedFiles')} aria-busy={state.files.status === 'loading'}>
+            <div className={styles.gitColumnHeader}>
+              <h3>{t('dashboard.git.changedFiles')}</h3>
+              {targetLabel !== undefined && (state.selectedCommits.length > 1 || state.view === 'summary'
+                ? <span>{targetLabel}</span>
+                : <code>{targetLabel}</code>)}
+            </div>
+            {state.selectedCommits.length > 0 && state.view === 'commits' && (
+              <div className={styles.gitSelectionToolbar}>
+                <span>{t('dashboard.git.selectedCommitCount', { n: state.selectedCommits.length })}</span>
+                <button type="button" onClick={state.clearCommitSelection}>{t('dashboard.git.clearCommitSelection')}</button>
+              </div>
+            )}
+            {!hasTarget ? (
+              <div className={styles.gitEmpty}>{t('dashboard.git.selectCommit')}</div>
+            ) : state.files.status === 'loading' ? (
+              <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
+            ) : state.files.status === 'error' ? (
+              <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+            ) : files.length === 0 ? (
+              <div className={styles.gitEmpty}>{state.view === 'summary' ? t('dashboard.git.noBaselineChanges') : t('dashboard.git.noFiles')}</div>
+            ) : (
+              <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+            )}
+          </section>
+          <section className={styles.gitColumn} aria-label={t('dashboard.git.diff')} aria-busy={state.diff.status === 'loading'}>
+            <div className={styles.gitColumnHeader}>
+              <h3>{state.view === 'summary' ? t('dashboard.git.summaryDiff') : t('dashboard.git.diff')}</h3>
+              {state.selectedPath !== undefined && <code title={state.selectedPath}>{state.selectedPath}</code>}
+            </div>
+            {state.diff.status === 'loading' ? (
+              <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryDiff') : t('dashboard.git.loadingDiff')}</div>
+            ) : state.diff.status === 'error' ? (
+              <div className={styles.gitError} role="alert">{errorText(state.diff.error)}</div>
+            ) : (
+              <GitDiffView diff={diff} t={t} />
+            )}
+          </section>
+        </div>
       )}
     </section>
   );
+}
+
+function errorText(error: Error): string {
+  return error.message || 'Unknown error';
 }
