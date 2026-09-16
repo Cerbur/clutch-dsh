@@ -187,16 +187,18 @@ green for additions, red for deletions, and blue for other changes. Folder icons
 expanded or collapsed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a
 Git watcher; refresh it to see later edits.
 
-Git & Changes uses a viewport-bounded, fixed-size surface. On wide layouts the commits and changed-file
-panes stack in the left column above and below a draggable divider, while the diff keeps the full height on
-the right; drag the divider, or focus it and press the arrow keys, to trade height between both panes, and
-double-click it to restore the default split. Narrow layouts keep the original two rows: commits and
-changed files side by side, with the summary diff underneath. Long commit and changed-file lists
-scroll inside their panes instead of expanding the Dashboard. The changed-file pane also scrolls
-horizontally when paths are wider than the pane, keeping file and folder names untruncated. Changed
-files are grouped by folders; folders start expanded and can be opened or collapsed independently. Diff
-content also scrolls inside its bounded pane, while the read-only selection and refresh behavior remains
-unchanged.
+Git & Changes uses a viewport-bounded, fixed-size surface. Wide layouts show two columns: commits and
+changed files stack in the narrower left column around a draggable divider, while the diff keeps the full
+height on the right. Narrow layouts keep two rows: commits and changed files side by side on the first row,
+with the summary diff underneath. Both dividers stay draggable in either layout — the vertical one trades
+width between the columns, or between commits and changed files inside the first row, and the horizontal one
+trades height between the commits and changed-file panes, or between the first row and the diff. Drag a
+divider, or focus it and press the arrow keys, to move it, and double-click it to restore the default split.
+Long commit and changed-file lists scroll inside their panes instead of expanding the Dashboard. The
+changed-file pane also scrolls horizontally when paths are wider than the pane, keeping file and folder
+names untruncated. Changed files are grouped by folders; folders start expanded and can be opened or
+collapsed independently. Diff content also scrolls inside its bounded pane, while the read-only selection
+and refresh behavior remains unchanged.
 
 The view is read-only and does not provide commit or staging controls. The plugin validates committed
 entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh

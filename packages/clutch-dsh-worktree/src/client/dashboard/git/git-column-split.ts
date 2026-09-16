@@ -1,26 +1,34 @@
 /**
- * Geometry for the stacked Git column: the commits pane, a draggable divider, and
- * the changed-files pane share one bounded column. These helpers stay free of DOM
- * and React APIs so the drag math is unit-testable and the panel only wires events.
+ * Geometry for the two draggable Git dividers. Each divider splits one grid axis
+ * of the panel into a leading pane, the divider itself, and a trailing pane.
+ * These helpers stay free of DOM and React APIs so the drag math is testable.
  */
 
-/** Share of the stacked column, in percent, given to the commits pane by default. */
-export const GIT_COLUMN_SPLIT_DEFAULT_PERCENT = 45;
+/** Share of the stacked axis, in percent, given to the commits pane by default. */
+export const GIT_SPLIT_DEFAULT_ROW_PERCENT = 45;
 
-/** Smallest rendered height, in CSS pixels, kept usable for either stacked pane. */
-export const GIT_COLUMN_SPLIT_MIN_PANE_PX = 140;
+/** Share of the side-by-side axis, in percent, given to the left column by default. */
+export const GIT_SPLIT_DEFAULT_COLUMN_PERCENT = 38;
+
+/** Smallest rendered height, in CSS pixels, kept usable for a stacked pane. */
+export const GIT_SPLIT_MIN_ROW_PX = 140;
+
+/** Smallest rendered width, in CSS pixels, kept usable for a side-by-side pane. */
+export const GIT_SPLIT_MIN_COLUMN_PX = 240;
 
 /** Percentage points moved by one arrow-key press (Shift multiplies the step). */
-export const GIT_COLUMN_SPLIT_KEY_STEP = 4;
+export const GIT_SPLIT_KEY_STEP = 4;
 
-/** Rendered box of the stacked column, measured once per interaction. */
-export interface GitColumnStackGeometry {
-  /** Viewport-relative top edge of the stacked column. */
-  readonly top: number;
-  /** Rendered height of the stacked column, in CSS pixels. */
-  readonly height: number;
-  /** Rendered height of the draggable divider, in CSS pixels. */
+/** Rendered box of the grid one divider splits, measured once per interaction. */
+export interface GitSplitGeometry {
+  /** Viewport-relative leading edge: the top for row splits, the left for column splits. */
+  readonly start: number;
+  /** Rendered container size along the split axis, in CSS pixels. */
+  readonly size: number;
+  /** Rendered divider thickness, in CSS pixels. */
   readonly divider: number;
+  /** Smallest pane size along the split axis, in CSS pixels. */
+  readonly minimum: number;
 }
 
 function roundPercent(percent: number): number {
@@ -28,29 +36,28 @@ function roundPercent(percent: number): number {
 }
 
 /**
- * Keep the divider inside the range that leaves both stacked panes usable.
- * Degenerate geometry (unmounted or zero-height layouts) falls back to the default.
+ * Clamp a leading-pane share to the range that keeps both panes usable, or
+ * undefined when the measured geometry cannot express a usable split at all.
  */
-export function clampGitColumnSplitPercent(
+export function clampGitSplitPercent(
   percent: number,
-  geometry: GitColumnStackGeometry,
-): number {
-  if (!Number.isFinite(percent)) return GIT_COLUMN_SPLIT_DEFAULT_PERCENT;
-  const { height, divider } = geometry;
-  if (!Number.isFinite(height) || height <= 0) return GIT_COLUMN_SPLIT_DEFAULT_PERCENT;
-  const minimum = (GIT_COLUMN_SPLIT_MIN_PANE_PX / height) * 100;
-  const maximum =
-    100 - ((GIT_COLUMN_SPLIT_MIN_PANE_PX + Math.max(divider, 0)) / height) * 100;
-  if (maximum <= minimum) return GIT_COLUMN_SPLIT_DEFAULT_PERCENT;
-  return roundPercent(Math.min(Math.max(percent, minimum), maximum));
+  geometry: GitSplitGeometry,
+): number | undefined {
+  if (!Number.isFinite(percent)) return undefined;
+  const { size, divider, minimum } = geometry;
+  if (!Number.isFinite(size) || size <= 0) return undefined;
+  const lower = (minimum / size) * 100;
+  const upper = 100 - ((minimum + Math.max(divider, 0)) / size) * 100;
+  if (upper <= lower) return undefined;
+  return roundPercent(Math.min(Math.max(percent, lower), upper));
 }
 
-/** Resolve the commits-pane share that keeps the divider centered under a pointer. */
-export function gitColumnSplitPercentFromPointer(
-  pointerY: number,
-  geometry: GitColumnStackGeometry,
-): number {
+/** Resolve the share that keeps the divider centered under a pointer. */
+export function gitSplitPercentFromPointer(
+  pointer: number,
+  geometry: GitSplitGeometry,
+): number | undefined {
   const halfDivider = Math.max(geometry.divider, 0) / 2;
-  const topPanePx = pointerY - geometry.top - halfDivider;
-  return clampGitColumnSplitPercent((topPanePx / geometry.height) * 100, geometry);
+  const leadingPx = pointer - geometry.start - halfDivider;
+  return clampGitSplitPercent((leadingPx / geometry.size) * 100, geometry);
 }

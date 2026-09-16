@@ -39,6 +39,12 @@ function jsxElementChildren(node) {
   );
 }
 
+function jsxTagName(node, ast) {
+  return ts.isJsxElement(node)
+    ? node.openingElement.tagName.getText(ast)
+    : node.tagName.getText(ast);
+}
+
 function classNameText(node, ast) {
   return jsxAttributeText(node, ast, 'className');
 }
@@ -109,7 +115,7 @@ test('Git panes stay bounded and scroll their data independently', async () => {
   assert.match(diff, /min-height: 0;/);
   assert.match(diff, /overflow: auto;/);
   assert.match(raw, /overflow: auto;/);
-  assert.match(css, /@container \(max-width: 900px\)[\s\S]*grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /@container \(max-width: 900px\) \{/);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
 });
 
@@ -117,21 +123,38 @@ test('wide Git layout stacks commits over changed files beside the diff', async 
   const css = await readFile(cssUrl, 'utf8');
   const panel = await readFile(gitPanelUrl, 'utf8');
   const columns = cssBlock(css, '.gitColumns {');
-  const stack = cssBlock(css, '.gitColumnsStack {');
   const splitter = cssBlock(css, '.gitColumnSplitter {');
   const wide = css.slice(css.indexOf('@container (min-width: 901px)'), css.indexOf('@container (max-width: 900px)'));
 
   // Two columns instead of three, with a taller bounded surface for the stacked panes.
-  assert.match(columns, /grid-template-columns: minmax\(280px, 1fr\) minmax\(0, 1.25fr\);/);
+  assert.match(columns, /--git-rows-top: 45%;/);
+  assert.match(columns, /--git-columns-left: 38%;/);
   assert.match(wide, /--git-columns-height: clamp\(440px, calc\(100dvh - 300px\), 720px\);/);
 
-  // The stacked column mirrors the drag math: 140px pane minimums and a 7px divider.
-  assert.match(stack, /grid-template-rows: minmax\(140px, min\(var\(--git-stack-top\), calc\(100% - 147px\)\)\) auto minmax\(140px, 1fr\);/);
-  assert.match(splitter, /height: 7px;/);
-  assert.match(splitter, /cursor: row-resize;/);
+  // Both axes mirror the drag math: 240px columns, 140px rows, and 7px dividers.
+  assert.match(
+    columns,
+    /grid-template-columns: minmax\(240px, min\(var\(--git-columns-left\), calc\(100% - 247px\)\)\) 7px minmax\(240px, 1fr\);/,
+  );
+  assert.match(
+    columns,
+    /grid-template-rows: minmax\(140px, min\(var\(--git-rows-top\), calc\(100% - 147px\)\)\) 7px minmax\(140px, 1fr\);/,
+  );
   assert.match(splitter, /touch-action: none;/);
+  assert.match(css, /\[data-dashboard-git-splitter='rows'\] \{\s*height: 7px;\s*cursor: row-resize;/);
+  assert.match(css, /\[data-dashboard-git-splitter='columns'\] \{\s*width: 7px;\s*cursor: col-resize;/);
 
-  // Markup contract: the stack owns commits + divider + changed files; the diff is its sibling.
+  // Wide placement: the row divider only splits the left column, the column divider spans it.
+  const base = css.slice(0, css.indexOf('@container (min-width: 901px)'));
+  assert.match(base, /\[data-dashboard-git-pane='commits'\] \{\s*grid-area: 1 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-splitter='rows'\] \{\s*grid-area: 2 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-pane='changed-files'\] \{\s*grid-area: 3 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-splitter='columns'\] \{\s*grid-area: 1 \/ 2 \/ -1 \/ 3;/);
+  assert.match(base, /\[data-dashboard-git-pane='diff'\] \{\s*grid-area: 1 \/ 3 \/ -1 \/ -1;/);
+});
+
+test('Git markup routes both dividers through one splitter component', async () => {
+  const panel = await readFile(gitPanelUrl, 'utf8');
   const ast = ts.createSourceFile('WorktreeGitPanel.tsx', panel, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const columnsElement = findJsxElement(
     ast,
@@ -139,40 +162,59 @@ test('wide Git layout stacks commits over changed files beside the diff', async 
     (node, file) => classNameText(node, file) === '{styles.gitColumns}',
   );
   assert.ok(columnsElement !== undefined, 'the panel renders a gitColumns grid');
-  const [stackElement, diffElement] = jsxElementChildren(columnsElement);
-  assert.equal(classNameText(stackElement, ast), '{styles.gitColumnsStack}');
-  assert.equal(jsxAttributeText(stackElement, ast, 'ref'), '{split.stackRef}');
-  assert.equal(jsxAttributeText(stackElement, ast, 'data-dashboard-git-splitting'), "{split.dragging ? 'true' : undefined}");
-  assert.match(classNameText(diffElement, ast), /styles\.gitDiffColumn/);
+  assert.equal(jsxAttributeText(columnsElement, ast, 'ref'), '{gridRef}');
 
-  const [commitsElement, splitterElement, changedFilesElement] = jsxElementChildren(stackElement);
-  assert.equal(jsxAttributeText(commitsElement, ast, 'aria-label'), "{t('dashboard.git.commits')}");
-  assert.equal(jsxAttributeText(changedFilesElement, ast, 'aria-label'), "{t('dashboard.git.changedFiles')}");
-  assert.ok(hasJsxAttribute(splitterElement, ast, 'data-dashboard-git-splitter'));
-  assert.equal(jsxAttributeText(splitterElement, ast, 'role'), '"separator"');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'aria-orientation'), '"horizontal"');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'aria-valuenow'), '{Math.round(split.percent)}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'tabIndex'), '{0}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'ref'), '{split.splitterRef}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerDown'), '{split.startDrag}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerMove'), '{split.drag}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerUp'), '{split.endDrag}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onLostPointerCapture'), '{split.endDrag}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onDoubleClick'), '{split.reset}');
-  assert.equal(jsxAttributeText(splitterElement, ast, 'onKeyDown'), '{split.onKeyDown}');
-  assert.match(panel, /const split = useGitColumnSplit\(\);/);
+  const children = jsxElementChildren(columnsElement);
+  assert.deepEqual(
+    children.map((child) => jsxTagName(child, ast)),
+    ['section', 'GitSplitter', 'section', 'GitSplitter', 'section'],
+  );
+  assert.deepEqual(
+    children.map((child) => jsxAttributeText(child, ast, 'data-dashboard-git-pane')),
+    ['"commits"', undefined, '"changed-files"', undefined, '"diff"'],
+  );
+  assert.equal(jsxAttributeText(children[0], ast, 'aria-label'), "{t('dashboard.git.commits')}");
+  assert.equal(jsxAttributeText(children[2], ast, 'aria-label'), "{t('dashboard.git.changedFiles')}");
+  assert.equal(jsxAttributeText(children[4], ast, 'aria-label'), "{t('dashboard.git.diff')}");
+
+  // Both dividers share one component, so its a11y and pointer contract covers both axes.
+  const splitterFunction = findJsxElement(
+    ast,
+    ast,
+    (node, file) => classNameText(node, file) === '{styles.gitColumnSplitter}',
+  );
+  assert.ok(splitterFunction !== undefined, 'GitSplitter renders the divider element');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'data-dashboard-git-splitter'), '{axis}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'data-dashboard-git-splitting'), "{split.dragging ? 'true' : undefined}");
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'role'), '"separator"');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'aria-orientation'), '{orientation}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'aria-valuenow'), '{Math.round(split.percent)}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'tabIndex'), '{0}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'ref'), '{split.splitterRef}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerDown'), '{split.startDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerMove'), '{split.drag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerUp'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onLostPointerCapture'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onDoubleClick'), '{split.reset}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onKeyDown'), '{split.onKeyDown}');
+
+  // One grid ref feeds both split hooks, one per axis.
+  assert.match(panel, /const gridRef = useRef<HTMLDivElement \| null>\(null\);/);
+  assert.match(panel, /orientation: 'horizontal',\s*property: '--git-rows-top'/);
+  assert.match(panel, /orientation: 'vertical',\s*property: '--git-columns-left'/);
 });
 
-test('narrow Git layout keeps the two-row arrangement', async () => {
+test('narrow Git layout keeps the two-row arrangement with both dividers', async () => {
   const css = await readFile(cssUrl, 'utf8');
   const narrow = css.slice(css.indexOf('@container (max-width: 900px)'));
 
-  // The stack wrapper disappears so the three panes rejoin the original two-row grid.
-  assert.match(narrow, /\.gitColumnsStack \{\s*display: contents;/);
-  assert.match(narrow, /\.gitColumnSplitter \{\s*display: none;/);
-  assert.match(narrow, /\.gitDiffColumn \{\s*grid-column: 1 \/ -1;/);
-  assert.match(narrow, /border-top: 1px solid var\(--dsw-alias-border-l3, #e5e8ef\);/);
-  assert.match(css, /\.gitColumns > \.gitColumn:last-child \{\s*border-right: 0;/);
+  // Row 1 keeps commits and changed files side by side, split by the column divider.
+  assert.match(narrow, /\[data-dashboard-git-pane='commits'\] \{\s*grid-area: 1 \/ 1;/);
+  assert.match(narrow, /\[data-dashboard-git-splitter='columns'\] \{\s*grid-area: 1 \/ 2;/);
+  assert.match(narrow, /\[data-dashboard-git-pane='changed-files'\] \{\s*grid-area: 1 \/ 3;/);
+  // Row 2 is the row divider across the full width, and the diff spans row 3.
+  assert.match(narrow, /\[data-dashboard-git-splitter='rows'\] \{\s*grid-area: 2 \/ 1 \/ 3 \/ -1;/);
+  assert.match(narrow, /\[data-dashboard-git-pane='diff'\] \{\s*grid-area: 3 \/ 1 \/ -1 \/ -1;/);
 });
 
 test('changed-file lists scroll long names without ellipsis', async () => {

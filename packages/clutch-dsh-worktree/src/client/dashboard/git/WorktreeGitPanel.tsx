@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type {
   WorktreeGitChangedFile,
   WorktreeGitCommit,
@@ -10,7 +11,14 @@ import { GitChangedFiles } from './GitChangedFiles.js';
 import { GitLineStats } from './GitLineStats.js';
 import { GitCommitList } from './GitCommitList.js';
 import { GitDiffView } from './GitDiffView.js';
-import { useGitColumnSplit } from './useGitColumnSplit.js';
+import {
+  GIT_SPLIT_DEFAULT_COLUMN_PERCENT,
+  GIT_SPLIT_DEFAULT_ROW_PERCENT,
+  GIT_SPLIT_MIN_COLUMN_PX,
+  GIT_SPLIT_MIN_ROW_PX,
+} from './git-column-split.js';
+import { useGitPaneSplit } from './useGitPaneSplit.js';
+import type { GitPaneSplit, GitSplitOrientation } from './useGitPaneSplit.js';
 import { useWorktreeGitState } from './useWorktreeGitState.js';
 import styles from './worktree-git.css';
 
@@ -90,7 +98,22 @@ export function WorktreeGitPanel({
     worktreeId,
     defaultBaselineBranch: isMain ? undefined : selectedDefaultBaseline,
   });
-  const split = useGitColumnSplit();
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  // Both dividers share the grid: one splits rows, one splits columns, in either layout.
+  const rows = useGitPaneSplit({
+    containerRef: gridRef,
+    orientation: 'horizontal',
+    property: '--git-rows-top',
+    minimum: GIT_SPLIT_MIN_ROW_PX,
+    fallback: GIT_SPLIT_DEFAULT_ROW_PERCENT,
+  });
+  const columns = useGitPaneSplit({
+    containerRef: gridRef,
+    orientation: 'vertical',
+    property: '--git-columns-left',
+    minimum: GIT_SPLIT_MIN_COLUMN_PX,
+    fallback: GIT_SPLIT_DEFAULT_COLUMN_PERCENT,
+  });
   const historyValue = state.history.status === 'ready' ? state.history.value : undefined;
   const commit = selectedCommit(historyValue, state.selectedCommit);
   const files = state.files.status === 'ready' ? readyFiles(state.files.value) : [];
@@ -248,129 +271,125 @@ export function WorktreeGitPanel({
       )}
 
       {state.history.status === 'ready' && historyValue !== undefined && unavailable === undefined && (
-        <div className={styles.gitColumns}>
-          <div
-            className={styles.gitColumnsStack}
-            ref={split.stackRef}
-            data-dashboard-git-splitting={split.dragging ? 'true' : undefined}
-          >
-            <section className={styles.gitColumn} aria-label={t('dashboard.git.commits')}>
-              <div className={styles.gitColumnHeader}>
-                <h3>{t('dashboard.git.commits')}</h3>
-                {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
-              </div>
-              <button
-                type="button"
-                className={styles.gitSummaryButton}
-                data-dashboard-git-summary
-                aria-pressed={state.view === 'summary'}
-                onClick={state.selectSummary}
-              >
-                <span>{t('dashboard.git.baselineSummary')}</span>
-                <small>{t('dashboard.git.baselineSummaryDescription')}</small>
-              </button>
-              {state.view === 'summary' && (
-                <label className={styles.gitSummaryToggle} data-dashboard-git-include-working-tree>
-                  <input
-                    type="checkbox"
-                    checked={state.includeWorkingTree}
-                    disabled={state.files.status === 'loading'}
-                    onChange={(event) => state.setIncludeWorkingTree(event.currentTarget.checked)}
-                  />
-                  <span>
-                    <strong>{t('dashboard.git.includeWorkingTree')}</strong>
-                    <small>{t('dashboard.git.includeWorkingTreeDescription')}</small>
-                  </span>
-                </label>
-              )}
-              <span id="dashboard-git-commit-selection-hint" className={styles.gitSrOnly}>{t('dashboard.git.commitSelectionHint')}</span>
-              {historyValue.commits.length === 0 && <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>}
-              <GitCommitList
-                commits={historyValue.commits}
-                selectedCommit={state.selectedCommit}
-                selectedCommits={state.selectedCommits}
-                onSelect={state.selectCommit}
-                onToggle={state.toggleCommit}
-                t={t}
-              />
-            </section>
-            <div
-              className={styles.gitColumnSplitter}
-              data-dashboard-git-splitter
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label={t('dashboard.git.resizePanes')}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(split.percent)}
-              title={t('dashboard.git.resizePanes')}
-              tabIndex={0}
-              ref={split.splitterRef}
-              onPointerDown={split.startDrag}
-              onPointerMove={split.drag}
-              onPointerUp={split.endDrag}
-              onPointerCancel={split.endDrag}
-              onLostPointerCapture={split.endDrag}
-              onDoubleClick={split.reset}
-              onKeyDown={split.onKeyDown}
-            />
-            <section className={styles.gitColumn} aria-label={t('dashboard.git.changedFiles')} aria-busy={state.files.status === 'loading'}>
-              <div className={styles.gitColumnHeader}>
-                <h3>{t('dashboard.git.changedFiles')}</h3>
-                <div className={styles.gitColumnHeaderMeta}>
-                  {targetLabel !== undefined && (state.selectedCommits.length > 1 || state.view === 'summary'
-                    ? <span>{targetLabel}</span>
-                    : <code>{targetLabel}</code>)}
-                  {state.files.status === 'ready' && hasTarget && (
-                    lineTotals === undefined ? (
-                      <span className={styles.gitColumnHeaderUnknown}>{t('dashboard.unknown')}</span>
-                    ) : (
-                      <GitLineStats
-                        additions={lineTotals.additions}
-                        deletions={lineTotals.deletions}
-                        ariaLabel={t('dashboard.git.lineStats', {
-                          additions: lineTotals.additions,
-                          deletions: lineTotals.deletions,
-                        })}
-                      />
-                    )
-                  )}
-                </div>
-              </div>
-              {state.selectedCommits.length > 0 && state.view === 'commits' && (
-                <div className={styles.gitSelectionToolbar}>
-                  <span>{t('dashboard.git.selectedCommitCount', { n: state.selectedCommits.length })}</span>
-                  <button type="button" onClick={state.clearCommitSelection}>{t('dashboard.git.clearCommitSelection')}</button>
-                </div>
-              )}
-              {!hasTarget ? (
-                <div className={styles.gitEmpty}>{t('dashboard.git.selectCommit')}</div>
-              ) : state.files.status === 'loading' ? (
-                <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
-              ) : state.files.status === 'error' ? (
-                <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
-              ) : (
-                <>
-                  {state.files.status === 'ready' && state.files.error !== undefined && (
-                    <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
-                  )}
-                  {files.length === 0 ? (
-                    <div className={styles.gitEmpty}>
-                      {state.view === 'summary'
-                        ? state.includeWorkingTree
-                          ? t('dashboard.git.noLiveBaselineChanges')
-                          : t('dashboard.git.noBaselineChanges')
-                        : t('dashboard.git.noFiles')}
-                    </div>
-                  ) : (
-                    <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
-                  )}
-                </>
-              )}
-            </section>
-          </div>
+        <div className={styles.gitColumns} ref={gridRef}>
           <section
-            className={`${styles.gitColumn} ${styles.gitDiffColumn}`}
+            className={styles.gitColumn}
+            data-dashboard-git-pane="commits"
+            aria-label={t('dashboard.git.commits')}
+          >
+            <div className={styles.gitColumnHeader}>
+              <h3>{t('dashboard.git.commits')}</h3>
+              {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
+            </div>
+            <button
+              type="button"
+              className={styles.gitSummaryButton}
+              data-dashboard-git-summary
+              aria-pressed={state.view === 'summary'}
+              onClick={state.selectSummary}
+            >
+              <span>{t('dashboard.git.baselineSummary')}</span>
+              <small>{t('dashboard.git.baselineSummaryDescription')}</small>
+            </button>
+            {state.view === 'summary' && (
+              <label className={styles.gitSummaryToggle} data-dashboard-git-include-working-tree>
+                <input
+                  type="checkbox"
+                  checked={state.includeWorkingTree}
+                  disabled={state.files.status === 'loading'}
+                  onChange={(event) => state.setIncludeWorkingTree(event.currentTarget.checked)}
+                />
+                <span>
+                  <strong>{t('dashboard.git.includeWorkingTree')}</strong>
+                  <small>{t('dashboard.git.includeWorkingTreeDescription')}</small>
+                </span>
+              </label>
+            )}
+            <span id="dashboard-git-commit-selection-hint" className={styles.gitSrOnly}>{t('dashboard.git.commitSelectionHint')}</span>
+            {historyValue.commits.length === 0 && <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>}
+            <GitCommitList
+              commits={historyValue.commits}
+              selectedCommit={state.selectedCommit}
+              selectedCommits={state.selectedCommits}
+              onSelect={state.selectCommit}
+              onToggle={state.toggleCommit}
+              t={t}
+            />
+          </section>
+          <GitSplitter
+            split={rows}
+            orientation="horizontal"
+            axis="rows"
+            label={t('dashboard.git.resizeRows')}
+          />
+          <section
+            className={styles.gitColumn}
+            data-dashboard-git-pane="changed-files"
+            aria-label={t('dashboard.git.changedFiles')}
+            aria-busy={state.files.status === 'loading'}
+          >
+            <div className={styles.gitColumnHeader}>
+              <h3>{t('dashboard.git.changedFiles')}</h3>
+              <div className={styles.gitColumnHeaderMeta}>
+                {targetLabel !== undefined && (state.selectedCommits.length > 1 || state.view === 'summary'
+                  ? <span>{targetLabel}</span>
+                  : <code>{targetLabel}</code>)}
+                {state.files.status === 'ready' && hasTarget && (
+                  lineTotals === undefined ? (
+                    <span className={styles.gitColumnHeaderUnknown}>{t('dashboard.unknown')}</span>
+                  ) : (
+                    <GitLineStats
+                      additions={lineTotals.additions}
+                      deletions={lineTotals.deletions}
+                      ariaLabel={t('dashboard.git.lineStats', {
+                        additions: lineTotals.additions,
+                        deletions: lineTotals.deletions,
+                      })}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+            {state.selectedCommits.length > 0 && state.view === 'commits' && (
+              <div className={styles.gitSelectionToolbar}>
+                <span>{t('dashboard.git.selectedCommitCount', { n: state.selectedCommits.length })}</span>
+                <button type="button" onClick={state.clearCommitSelection}>{t('dashboard.git.clearCommitSelection')}</button>
+              </div>
+            )}
+            {!hasTarget ? (
+              <div className={styles.gitEmpty}>{t('dashboard.git.selectCommit')}</div>
+            ) : state.files.status === 'loading' ? (
+              <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
+            ) : state.files.status === 'error' ? (
+              <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+            ) : (
+              <>
+                {state.files.status === 'ready' && state.files.error !== undefined && (
+                  <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+                )}
+                {files.length === 0 ? (
+                  <div className={styles.gitEmpty}>
+                    {state.view === 'summary'
+                      ? state.includeWorkingTree
+                        ? t('dashboard.git.noLiveBaselineChanges')
+                        : t('dashboard.git.noBaselineChanges')
+                      : t('dashboard.git.noFiles')}
+                  </div>
+                ) : (
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
+                )}
+              </>
+            )}
+          </section>
+          <GitSplitter
+            split={columns}
+            orientation="vertical"
+            axis="columns"
+            label={t('dashboard.git.resizeColumns')}
+          />
+          <section
+            className={styles.gitColumn}
+            data-dashboard-git-pane="diff"
             aria-label={t('dashboard.git.diff')}
             aria-busy={state.diff.status === 'loading'}
           >
@@ -389,6 +408,47 @@ export function WorktreeGitPanel({
         </div>
       )}
     </section>
+  );
+}
+
+interface GitSplitterProps {
+  /** Divider state, handlers, and ref published by useGitPaneSplit. */
+  readonly split: GitPaneSplit;
+  /** Axis the divider resizes: rows by height, columns by width. */
+  readonly orientation: GitSplitOrientation;
+  /** Stable hook used by the layout CSS to place this divider per breakpoint. */
+  readonly axis: 'rows' | 'columns';
+  readonly label: string;
+}
+
+/**
+ * Draggable divider that resizes one axis of the Git grid. The wide layout puts
+ * the row divider inside the left column and the column divider beside it; the
+ * narrow layout keeps both, between the top panes and above the diff.
+ */
+function GitSplitter({ split, orientation, axis, label }: GitSplitterProps) {
+  return (
+    <div
+      className={styles.gitColumnSplitter}
+      data-dashboard-git-splitter={axis}
+      data-dashboard-git-splitting={split.dragging ? 'true' : undefined}
+      role="separator"
+      aria-orientation={orientation}
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(split.percent)}
+      title={label}
+      tabIndex={0}
+      ref={split.splitterRef}
+      onPointerDown={split.startDrag}
+      onPointerMove={split.drag}
+      onPointerUp={split.endDrag}
+      onPointerCancel={split.endDrag}
+      onLostPointerCapture={split.endDrag}
+      onDoubleClick={split.reset}
+      onKeyDown={split.onKeyDown}
+    />
   );
 }
 
