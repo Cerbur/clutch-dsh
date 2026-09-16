@@ -73,6 +73,21 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
 });
 
+test('documents Worktree health icon presentation in bilingual READMEs', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
+  const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
+
+  assert.match(readme, /Worktree health is shown by tinting the branch icon/);
+  assert.match(readmeZh, /Worktree 健康状态通过 branch icon 的颜色显示/);
+  assert.match(clientReadme, /Worktree health is shown by tinting the branch icon/);
+  assert.match(readme, /ready uses the success \(green\) color/);
+  assert.match(readmeZh, /ready 使用 success（绿色）状态色/);
+  assert.match(clientReadme, /ready uses the success \(green\) color/);
+  assert.match(readme, /assistive technology even when hover replaces the icon/);
+  assert.match(readmeZh, /即使 hover 时 icon 被 disclosure control 替换/);
+});
+
 function manager(overrides = {}) {
   return {
     async listWorktrees() {
@@ -1265,14 +1280,22 @@ test('keeps targeted refresh errors local and retryable', async () => {
   assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
 });
 
-test('renders transient Worktree health with the public StateDot primitive', async () => {
-  const source = (await readSurfaceSources()).combined;
+test('renders transient Worktree health through semantic icon colors', async () => {
+  const { rows, combined } = await readSurfaceSources();
 
-  assert.match(source, /StateDot/);
-  assert.match(source, /health/);
-  assert.match(source, /['"]warning['"]/);
-  assert.match(source, /['"]error['"]/);
-  assert.doesNotMatch(source, /worktreeStatus\(record\)/);
+  assert.match(rows, /data-worktree-state=\{state\}/);
+  assert.match(rows, /const worktreeStateVisible = stateLabel !== undefined;/);
+  assert.match(
+    rows,
+    /<span className=\{styles\.worktreeStateLabel\}>\{stateLabel\}<\/span>/,
+  );
+  assert.doesNotMatch(rows, /worktreeStateVisible = state !== undefined/);
+  assert.doesNotMatch(rows, /title=\{stateLabel\}/);
+  assert.match(combined, /['"]warning['"]/);
+  assert.match(combined, /['"]error['"]/);
+  assert.doesNotMatch(rows, /styles\.worktreeState(?!Label)/);
+  assert.doesNotMatch(rows, /<StateDot state=\{state\}/);
+  assert.doesNotMatch(rows, /worktreeStatus\(record\)/);
 });
 
 test('keeps the final surface bounded, scrollable, and action-aligned', async () => {
@@ -1701,6 +1724,14 @@ test('polishes Main and Worktree row hover presentation', async () => {
     /content=\{[\s\S]*<div className=\{styles\.worktreeHoverTitle\}>\{label\}<\/div>/,
   );
   assert.match(source, /disabled=\{menu\?\.open === true \|\| drag\?\.active === true\}/);
+  assert.match(
+    source,
+    /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}\s*aria-label=\{t\(expanded \? 'worktree\.collapse' : 'worktree\.expand'/,
+  );
+  assert.match(
+    source,
+    /\{stateLabel !== undefined && state !== 'done' && \(\s*<p className=\{styles\.worktreeHoverTitle\}>\{stateLabel\}<\/p>\s*\)\}/,
+  );
   assert.match(source, /repairGuidance !== undefined/);
   assert.match(source, /<p className=\{styles\.worktreeHoverTitle\}>\{repairGuidance\}<\/p>/);
 
@@ -1716,7 +1747,20 @@ test('polishes Main and Worktree row hover presentation', async () => {
     styles,
     /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*text-transform: uppercase;/,
   );
-  assert.match(styles, /\.worktreeState\s*\{[\s\S]*width: 12px;[\s\S]*margin-right: 0;/);
+  assert.doesNotMatch(styles, /\.worktreeState\s*\{/);
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='done'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-success-primary\);/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='warning'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-warn-primary\);/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='error'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-error-primary\);/,
+  );
+  assert.match(styles, /\.worktreeStateLabel\s*\{[\s\S]*position: absolute;[\s\S]*clip: rect/);
   assert.match(
     styles,
     /\.worktreeHoverTitle\s*\{[\s\S]*color: var\(--dsw-static-neutral-bluish-00\);/,
