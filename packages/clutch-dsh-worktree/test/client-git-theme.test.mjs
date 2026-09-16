@@ -2,10 +2,46 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import test from 'node:test';
+import ts from 'typescript';
 
 const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
 const changedFilesUrl = new URL('../src/client/dashboard/git/GitChangedFiles.tsx', import.meta.url);
 const gitPanelUrl = new URL('../src/client/dashboard/git/WorktreeGitPanel.tsx', import.meta.url);
+
+function jsxAttribute(node, ast, name) {
+  const attributes = ts.isJsxElement(node)
+    ? node.openingElement.attributes.properties
+    : node.attributes.properties;
+  return attributes.find(
+    (property) => ts.isJsxAttribute(property) && property.name.getText(ast) === name,
+  );
+}
+
+function hasJsxAttribute(node, ast, name) {
+  return jsxAttribute(node, ast, name) !== undefined;
+}
+
+function jsxAttributeText(node, ast, name) {
+  const attribute = jsxAttribute(node, ast, name);
+  return attribute?.initializer === undefined ? undefined : attribute.initializer.getText(ast);
+}
+
+function findJsxElement(node, ast, predicate) {
+  if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && predicate(node, ast)) {
+    return node;
+  }
+  return ts.forEachChild(node, (child) => findJsxElement(child, ast, predicate));
+}
+
+function jsxElementChildren(node) {
+  return node.children.filter(
+    (child) => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child),
+  );
+}
+
+function classNameText(node, ast) {
+  return jsxAttributeText(node, ast, 'className');
+}
 
 function cssBlock(source, selector) {
   const start = source.indexOf(selector);
@@ -75,6 +111,68 @@ test('Git panes stay bounded and scroll their data independently', async () => {
   assert.match(raw, /overflow: auto;/);
   assert.match(css, /@container \(max-width: 900px\)[\s\S]*grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
+});
+
+test('wide Git layout stacks commits over changed files beside the diff', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const panel = await readFile(gitPanelUrl, 'utf8');
+  const columns = cssBlock(css, '.gitColumns {');
+  const stack = cssBlock(css, '.gitColumnsStack {');
+  const splitter = cssBlock(css, '.gitColumnSplitter {');
+  const wide = css.slice(css.indexOf('@container (min-width: 901px)'), css.indexOf('@container (max-width: 900px)'));
+
+  // Two columns instead of three, with a taller bounded surface for the stacked panes.
+  assert.match(columns, /grid-template-columns: minmax\(280px, 1fr\) minmax\(0, 1.25fr\);/);
+  assert.match(wide, /--git-columns-height: clamp\(440px, calc\(100dvh - 300px\), 720px\);/);
+
+  // The stacked column mirrors the drag math: 140px pane minimums and a 7px divider.
+  assert.match(stack, /grid-template-rows: minmax\(140px, min\(var\(--git-stack-top\), calc\(100% - 147px\)\)\) auto minmax\(140px, 1fr\);/);
+  assert.match(splitter, /height: 7px;/);
+  assert.match(splitter, /cursor: row-resize;/);
+  assert.match(splitter, /touch-action: none;/);
+
+  // Markup contract: the stack owns commits + divider + changed files; the diff is its sibling.
+  const ast = ts.createSourceFile('WorktreeGitPanel.tsx', panel, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const columnsElement = findJsxElement(
+    ast,
+    ast,
+    (node, file) => classNameText(node, file) === '{styles.gitColumns}',
+  );
+  assert.ok(columnsElement !== undefined, 'the panel renders a gitColumns grid');
+  const [stackElement, diffElement] = jsxElementChildren(columnsElement);
+  assert.equal(classNameText(stackElement, ast), '{styles.gitColumnsStack}');
+  assert.equal(jsxAttributeText(stackElement, ast, 'ref'), '{split.stackRef}');
+  assert.equal(jsxAttributeText(stackElement, ast, 'data-dashboard-git-splitting'), "{split.dragging ? 'true' : undefined}");
+  assert.match(classNameText(diffElement, ast), /styles\.gitDiffColumn/);
+
+  const [commitsElement, splitterElement, changedFilesElement] = jsxElementChildren(stackElement);
+  assert.equal(jsxAttributeText(commitsElement, ast, 'aria-label'), "{t('dashboard.git.commits')}");
+  assert.equal(jsxAttributeText(changedFilesElement, ast, 'aria-label'), "{t('dashboard.git.changedFiles')}");
+  assert.ok(hasJsxAttribute(splitterElement, ast, 'data-dashboard-git-splitter'));
+  assert.equal(jsxAttributeText(splitterElement, ast, 'role'), '"separator"');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'aria-orientation'), '"horizontal"');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'aria-valuenow'), '{Math.round(split.percent)}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'tabIndex'), '{0}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'ref'), '{split.splitterRef}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerDown'), '{split.startDrag}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerMove'), '{split.drag}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onPointerUp'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onLostPointerCapture'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onDoubleClick'), '{split.reset}');
+  assert.equal(jsxAttributeText(splitterElement, ast, 'onKeyDown'), '{split.onKeyDown}');
+  assert.match(panel, /const split = useGitColumnSplit\(\);/);
+});
+
+test('narrow Git layout keeps the two-row arrangement', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const narrow = css.slice(css.indexOf('@container (max-width: 900px)'));
+
+  // The stack wrapper disappears so the three panes rejoin the original two-row grid.
+  assert.match(narrow, /\.gitColumnsStack \{\s*display: contents;/);
+  assert.match(narrow, /\.gitColumnSplitter \{\s*display: none;/);
+  assert.match(narrow, /\.gitDiffColumn \{\s*grid-column: 1 \/ -1;/);
+  assert.match(narrow, /border-top: 1px solid var\(--dsw-alias-border-l3, #e5e8ef\);/);
+  assert.match(css, /\.gitColumns > \.gitColumn:last-child \{\s*border-right: 0;/);
 });
 
 test('changed-file lists scroll long names without ellipsis', async () => {

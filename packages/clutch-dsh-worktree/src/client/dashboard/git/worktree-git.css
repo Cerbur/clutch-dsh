@@ -116,8 +116,10 @@
   /* Keep the Git surface bounded by the viewport, never by its data volume. */
   --git-columns-height: clamp(360px, calc(100vh - 300px), 560px);
   --git-columns-height: clamp(360px, calc(100dvh - 300px), 560px);
+  /* Share of the stacked left column given to the commits pane; the divider drags it. */
+  --git-stack-top: 45%;
   display: grid;
-  grid-template-columns: minmax(190px, 0.75fr) minmax(210px, 0.9fr) minmax(0, 1.8fr);
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 1.25fr);
   grid-template-rows: minmax(0, 1fr);
   height: var(--git-columns-height);
   min-height: 0;
@@ -125,6 +127,62 @@
   border-radius: 10px;
   overflow: hidden;
   resize: none;
+}
+
+/*
+ * Wide layout: commits and changed files stack inside the left column while the
+ * diff keeps the full height on the right. The changed-file pane takes whatever
+ * the divider leaves, and both panes keep a usable minimum.
+ */
+.gitColumnsStack {
+  display: grid;
+  grid-template-rows:
+    minmax(140px, min(var(--git-stack-top), calc(100% - 147px)))
+    auto
+    minmax(140px, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gitColumnSplitter {
+  position: relative;
+  display: flex;
+  height: 7px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
+  background: var(--dsw-alias-bg-base, #fff);
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.gitColumnSplitter::before {
+  content: '';
+  width: 30px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-l2, #cbd2dc);
+  transition: background 0.15s ease;
+}
+
+/* Widen the grab area without moving the visible divider line. */
+.gitColumnSplitter::after {
+  content: '';
+  position: absolute;
+  inset: -3px 0;
+}
+
+.gitColumnSplitter:hover::before,
+.gitColumnSplitter:focus-visible::before,
+.gitColumnsStack[data-dashboard-git-splitting='true'] .gitColumnSplitter::before {
+  background: var(--dsw-alias-state-business-primary, #467bc8);
+}
+
+.gitColumnSplitter:focus-visible {
+  outline: 2px solid #497cd4;
+  outline-offset: -2px;
 }
 
 .gitColumn {
@@ -137,7 +195,7 @@
   background: var(--dsw-alias-bg-base, #fff);
 }
 
-.gitColumn:last-child {
+.gitColumns > .gitColumn:last-child {
   border-right: 0;
 }
 
@@ -744,12 +802,28 @@
   font: 11px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
+@container (min-width: 901px) {
+  .gitColumns {
+    /* Two stacked panes need more vertical room than three side-by-side panes. */
+    --git-columns-height: clamp(440px, calc(100vh - 300px), 720px);
+    --git-columns-height: clamp(440px, calc(100dvh - 300px), 720px);
+  }
+}
+
 @container (max-width: 900px) {
+  /* Narrow layout keeps the original two-row arrangement: commits and changed files
+     side by side on the first row, and the summary diff across the second row. */
   .gitColumns {
     grid-template-columns: minmax(170px, 0.8fr) minmax(190px, 1fr);
     grid-template-rows: repeat(2, minmax(0, 1fr));
   }
-  .gitColumn:nth-child(3) {
+  .gitColumnsStack {
+    display: contents;
+  }
+  .gitColumnSplitter {
+    display: none;
+  }
+  .gitDiffColumn {
     grid-column: 1 / -1;
     border-top: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
     border-right: 0;
@@ -776,7 +850,7 @@
     border-right: 0;
     border-bottom: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
   }
-  .gitColumn:last-child {
+  .gitColumns > .gitColumn:last-child {
     border-bottom: 0;
   }
 }

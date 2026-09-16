@@ -158,7 +158,11 @@ Baseline summary instead of the first history commit; changing the baseline bran
 Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
 **Uncommitted changes** selection loads changed files and a file selection loads one diff. Changed-file names use
 green, red, and blue to distinguish additions, deletions, and other changes; folder icons show expansion state
-without separate status markers or labels. The Git state
+without separate status markers or labels. The pane layout is responsive: wide Dashboards stack the commit and
+changed-file panes in the left column around a draggable divider beside a full-height diff pane, while narrow
+Dashboards keep the original two rows of commits/changed files followed by the diff. The divider accepts pointer
+drags, Arrow keys, and a double-click reset; it publishes the split as the `--git-stack-top` custom property, and
+the CSS pane minimums mirror the drag clamp. The Git state
 machine also exposes a separate Baseline summary target for the net committed comparison-boundary-to-captured-`HEAD`
 tree diff. For a connected selected branch, the Host uses the two branch heads' common ancestor as that
 boundary and reports the Worktree-side commits as ahead and base-branch-only commits as behind. If the
