@@ -22,7 +22,7 @@
 ### 1. 数据所有权边界 (Data Ownership Boundary)
 
 - **DSH 是唯一原始数据源**：插件绝不写入、复制或篡改 Project 原始目录、Session 身份与元数据、原始列表、消息、提示词与会话历史。
-- **Sidecar 存储范围**：插件仅在 host 数据目录维护外部关系索引（`projectId`、`worktreeId`、`sessionId`、Worktree 路径、branch、source、生命周期状态及指令）。
+- **Sidecar 存储范围**：插件仅在 host 数据目录维护外部关系索引（`projectId`、`worktreeId`、`sessionId`、Worktree 路径、branch、source、生命周期状态、指令，以及获取事实 `createdAt`/`importedAt`、不可变获取 commit `baseCommit` 和用户可改写的 Dashboard 基线 `baseBranch`）。Git ahead/behind、changed-file 行数与 working-tree 快照属于运行时 projection，只读且绝不写入 Sidecar。
 - **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。
 - **降级容灾**：Sidecar 损坏或不可用时，原生 Project/Session 视图必须完全可读；插件进入降级只读状态，严禁使用空索引覆盖 DSH 原始数据。
 
@@ -82,6 +82,7 @@ Refresh scope is determined by the smallest affected identity.
 - ❌ 严禁通过 shell 执行任何 Git 命令；
 - ❌ 严禁从 feature worktree 执行 `npm publish`（发布必须在 release worktree 进行）；
 - ❌ 严禁在未经确信或未经用户二次确认时执行破坏性清理；
+- ❌ 严禁把运行时 Git projection（ahead/behind、行数、working-tree 快照）写入 Sidecar，或让 Git Dashboard 成为第二数据源（唯一例外是用户显式保存的 Dashboard `baseBranch`）；
 - ❌ 严禁破坏双语 README 的结构同步性（中英文 README 标题级别序列必须完全一致）。
 
 ---

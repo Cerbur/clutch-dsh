@@ -228,6 +228,15 @@ injection; unchanged instruction text is not repeatedly added while its message 
 - **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
   the disk files and native DSH Sessions, and does not require a Session activity check.
 
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| DSH Client | `>=0.1.5-rc.1`, including the Session and Workspace Controllers and Client Store |
+| DSH Host | `>=0.1.5-rc.1`, including the Typert Gateway `/api` connection and subprocess capability |
+| Git | `>=2.20.0`, installed and available on `PATH` |
+| Node.js | `>=20.0.0` for the DSH host runtime |
+
 ## Behavior and limitations
 
 - DSH owns Workspace identity and root paths, Session identity and metadata, native lists,
@@ -279,15 +288,6 @@ injection; unchanged instruction text is not repeatedly added while its message 
 - If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
   remain readable and the plugin enters a degraded read-only state. It never replaces native data
   with an empty index.
-
-## Requirements
-
-| Component | Requirement |
-| --- | --- |
-| DSH Client | `>=0.1.5-rc.1`, including the Session and Workspace Controllers and Client Store |
-| DSH Host | `>=0.1.5-rc.1`, including the Typert Gateway `/api` connection and subprocess capability |
-| Git | `>=2.20.0`, installed and available on `PATH` |
-| Node.js | `>=20.0.0` for the DSH host runtime |
 
 ## Language behavior
 

@@ -1693,3 +1693,49 @@ After implementation, provide:
 7. known remaining limitations.
 
 Do not only say “implemented successfully”.
+
+---
+
+# 40. Implementation Amendments (recorded after implementation)
+
+These deliberate deviations were implemented and reviewed after this plan was written. The package
+documentation (`README.md`, `docs/ARCHITECTURE.md`, `src/client/README.md`) and the code are the
+current source of truth; this section keeps the plan honest instead of rewriting its history.
+
+1. **Baseline tree boundary uses the merge base (§8, §38).** For an explicitly selected local
+   branch, the branch tip still defines ahead/behind and the DTO `baseline.commit`, but the tree
+   diff and the Baseline summary run from the two heads' merge base so a diverged baseline still
+   yields a Worktree-relative change set. When the heads share no ancestor, the tree diff degrades
+   to the two tips. Documented in `README.md` and `docs/ARCHITECTURE.md`.
+2. **The Dashboard is a peer page, not an overlay (§21).** Opening the Dashboard keeps or switches
+   the current Session, may collapse the native rightbar for a sessionless target, and reuses the
+   native `openResource` path for file preview. `src/client/README.md` documents the seam.
+3. **Changed-file rows show A/M/D/R/C/T markers (§28).** Each row renders a status letter and puts
+   the localized status wording in its title and accessible label, so status is not conveyed by
+   color alone.
+4. **Git panes use two draggable dividers (§30).** Both axes are resizable by pointer, keyboard, and
+   double-click reset, with the split remembered for the session.
+5. **Commit authorization uses one pinned projection (§12, §13).** Membership is proved by the
+   bounded `listCommits` projection (at most 201 commits, 200 visible) instead of per-SHA ancestry
+   walks, so the visible history is the authorization boundary and a wide multi-selection costs one
+   projection read.
+6. **Working-tree reads are split by need (§22, §37).** Presence and path authorization use a
+   paths-only projection; line statistics for untracked files are bounded to the first 50 files and
+   report the remainder as unknown. A binary baseline blob is never re-encoded into a temporary
+   text file: the live projection treats it as changed and reports unknown statistics.
+7. **Diff rendering is budgeted (§29).** Parsing is memoized per patch and hunks past 2000 rendered
+   lines fold behind a localized reveal action; the provider output bound remains the hard limit.
+8. **Main issues no Git read (§22).** A Main target never requests branches or history.
+9. **Supported sidecar versions are explicit (§6).** Optional Worktree keys are resolved from an
+   explicit supported-version list, so a future schema bump still reads v5 records with
+   `baseCommit`.
+
+## Known limitation
+
+A multi-commit selection re-reads the union of the selected commits' first-parent deltas on every
+request (`diff-tree` per selected commit). Toggling N commits in sequence therefore still costs
+O(N²) file listings across the whole interaction, even though each request now authorizes against a
+single pinned projection. The browser caches completed selections (8 entries), so revisiting a
+recent selection is free; a future change could batch the union read or request only the newly
+selected commit.
+

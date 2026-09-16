@@ -18,6 +18,8 @@
 - Sidecar schema 升级至 v5，严格保留可选 `baseCommit`，同时兼容读取 v1–v4 历史记录。
 - Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
 - 将 Overview 中的基线编辑改为铅笔图标入口和 DSH 弹窗；弹窗打开时先保持选择列表关闭，点击第一行搜索框后再展开响应式、可滚动的 branch 选择器并过滤本地 branch。
+- 收窄 Git 读取成本：working-tree 的存在性与路径授权改用仅路径 projection，未跟踪文件的行数统计限定为前 50 个（其余显示“未知”），多选 commit 的归属校验改为基于一次固定的 history projection，二进制基线不再写入文本临时文件比较。
+- changed-file 行增加 A/M/D/R/C/T 状态标记，并在行标题与无障碍标签中给出本地化状态，状态不再只靠颜色区分；超过 2000 行的 Diff 会先折叠并可手动展开；Main 的“Git 与变更”视图不再发起任何 Git 读取。
 
 ### English
 
@@ -35,6 +37,8 @@
 - Upgrade the sidecar schema to v5 with strict optional `baseCommit` support while continuing to read v1–v4 historical records.
 - Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
 - Replace the Overview baseline editor with a pencil-icon trigger and a DSH dialog whose responsive branch picker stays closed until the first-row search field is clicked, keeps search above a scrollable list, and filters local branches before saving.
+- Tighten Git read cost: working-tree presence and path authorization use a paths-only projection, untracked line statistics are bounded to the first 50 files (the rest report Unknown), multi-commit membership is authorized against one pinned history projection, and binary baselines are no longer compared through a text temporary file.
+- Show A/M/D/R/C/T status markers on changed-file rows with a localized status in the row title and accessible label so status no longer depends on color alone; fold diffs past 2000 rendered lines behind a reveal action; and issue no Git read at all for the Main Git & Changes view.
 
 ## 0.1.12 — 2026-09-14
 

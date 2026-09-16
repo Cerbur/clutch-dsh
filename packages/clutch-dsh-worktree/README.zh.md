@@ -199,6 +199,15 @@ commit，并依据最新状态重新读取和授权工作区 path，因此这些
 - **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
   DSH Session，也不要求检查 Session 活动状态。
 
+## 要求
+
+| 组件 | 要求 |
+| --- | --- |
+| DSH Client | `>=0.1.5-rc.1`，需要 Session/Workspace Controller 和 Client Store |
+| DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
+| Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
+| Node.js | `>=20.0.0`，用于 DSH host runtime |
+
 ## 行为与限制
 
 - DSH 拥有 Workspace 身份与根目录、Session 身份与元数据、原生列表、消息、prompt、transcript
@@ -237,15 +246,6 @@ commit，并依据最新状态重新读取和授权工作区 path，因此这些
   DSH 宿主设置的 sandbox 上限。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
-
-## 要求
-
-| 组件 | 要求 |
-| --- | --- |
-| DSH Client | `>=0.1.5-rc.1`，需要 Session/Workspace Controller 和 Client Store |
-| DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
-| Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
-| Node.js | `>=20.0.0`，用于 DSH host runtime |
 
 ## 界面语言
 
