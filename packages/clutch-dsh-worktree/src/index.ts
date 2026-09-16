@@ -72,6 +72,7 @@ export {
   createRepositoryFingerprint,
 } from './provider/index.js';
 export {
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,
   migrateSidecarSnapshot,
   validateSidecarSnapshot,

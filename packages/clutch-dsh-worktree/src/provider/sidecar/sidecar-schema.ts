@@ -18,6 +18,35 @@ const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceI
 // Preserve known development-build metadata without accepting arbitrary fields.
 const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
 const V5_OPTIONAL_WORKTREE_KEYS = [...V4_OPTIONAL_WORKTREE_KEYS, 'baseCommit'];
+
+/**
+ * Every on-disk schema version this build still reads, oldest first. Listing the
+ * versions explicitly keeps legacy reads working when `SIDECAR_SCHEMA_VERSION`
+ * advances, instead of silently dropping the previous version's optional keys.
+ */
+export const SUPPORTED_SIDECAR_SCHEMA_VERSIONS: readonly number[] = [
+  LEGACY_SIDECAR_SCHEMA_VERSION,
+  2,
+  3,
+  4,
+  5,
+];
+
+/** Versions that persist the acquisition metadata group. */
+const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5]);
+/** Versions that persist the immutable acquisition commit. */
+const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5]);
+
+function isSupportedSchemaVersion(schemaVersion: number): boolean {
+  return SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(schemaVersion);
+}
+
+/** Optional Worktree keys for one on-disk schema version. */
+function optionalWorktreeKeys(schemaVersion: number): readonly string[] {
+  if (BASE_COMMIT_SCHEMA_VERSIONS.has(schemaVersion)) return V5_OPTIONAL_WORKTREE_KEYS;
+  if (ACQUISITION_METADATA_SCHEMA_VERSIONS.has(schemaVersion)) return V4_OPTIONAL_WORKTREE_KEYS;
+  return [];
+}
 const BINDING_KEYS = ['sessionId', 'status', 'workspaceId', 'worktreeId'];
 const LEGACY_SNAPSHOT_KEYS = ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_REQUIRED_SNAPSHOT_KEYS = ['bindings', 'revision', 'schemaVersion', 'workspaceId', 'worktrees'];
@@ -58,15 +87,13 @@ function assertWorktreeRecord(
   schemaVersion: number,
 ): asserts value is WorktreeRecord {
   const legacy = schemaVersion === LEGACY_SIDECAR_SCHEMA_VERSION;
-  const isV4 = schemaVersion === 4;
-  const isV5 = schemaVersion === SIDECAR_SCHEMA_VERSION;
-  const supportsAcquisitionMetadata = isV4 || isV5;
+  const supportsAcquisitionMetadata = ACQUISITION_METADATA_SCHEMA_VERSIONS.has(schemaVersion);
   if (!isObject(value)) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
   const keys = legacy ? LEGACY_WORKTREE_KEYS : WORKTREE_KEYS;
   if (
-    !hasAllowedKeys(value, keys, isV5 ? V5_OPTIONAL_WORKTREE_KEYS : supportsAcquisitionMetadata ? V4_OPTIONAL_WORKTREE_KEYS : []) ||
+    !hasAllowedKeys(value, keys, optionalWorktreeKeys(schemaVersion)) ||
     (value.instructions !== undefined &&
       (typeof value.instructions !== 'string' || value.instructions.length > 32_000)) ||
     (value.baseBranch !== undefined &&
@@ -168,7 +195,7 @@ function assertPendingOperation(
   if (value.type === 'create-worktree') {
     if (
       !hasAllowedKeys(value, commonKeys, [
-        ...(schemaVersion === SIDECAR_SCHEMA_VERSION ? ['baseCommit'] : []),
+        ...(BASE_COMMIT_SCHEMA_VERSIONS.has(schemaVersion) ? ['baseCommit'] : []),
         'baseRef',
         'branch',
         'repository',
@@ -289,13 +316,7 @@ export function validateSidecarSnapshot(
   generatedWorktreeRoot?: string,
   targetVersion: number = SIDECAR_SCHEMA_VERSION,
 ): SidecarSnapshot {
-  if (
-    targetVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
-    targetVersion !== 2 &&
-    targetVersion !== 3 &&
-    targetVersion !== 4 &&
-    targetVersion !== SIDECAR_SCHEMA_VERSION
-  ) {
+  if (!isSupportedSchemaVersion(targetVersion)) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion: targetVersion });
   }
 
@@ -308,18 +329,12 @@ export function validateSidecarSnapshot(
     ? hasExactKeys(value, LEGACY_SNAPSHOT_KEYS)
     : schemaVersion === 2
       ? hasExactKeys(value, ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'])
-      : (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+      : schemaVersion >= 3 && isSupportedSchemaVersion(schemaVersion) &&
         hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, V3_OPTIONAL_SNAPSHOT_KEYS);
   if (!validShape || !Array.isArray(value.worktrees) || !Array.isArray(value.bindings)) {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
-  if (
-    schemaVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
-    schemaVersion !== 2 &&
-    schemaVersion !== 3 &&
-    schemaVersion !== 4 &&
-    schemaVersion !== SIDECAR_SCHEMA_VERSION
-  ) {
+  if (!isSupportedSchemaVersion(schemaVersion)) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion });
   }
   if (schemaVersion > targetVersion) {
@@ -438,11 +453,16 @@ export function validateSidecarSnapshot(
   };
 }
 
+/**
+ * Migration entry point for tools and tests. The parameter order and the
+ * required diagnostic `pathname` match `validateSidecarSnapshot` so callers
+ * cannot pass the schema version where a path is expected.
+ */
 export function migrateSidecarSnapshot(
   value: unknown,
-  targetVersion: number = SIDECAR_SCHEMA_VERSION,
-  pathname: string = '/tmp/sidecar.json',
+  pathname: string,
   generatedWorktreeRoot?: string,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
 ): SidecarSnapshot {
   return validateSidecarSnapshot(value, pathname, generatedWorktreeRoot, targetVersion);
 }

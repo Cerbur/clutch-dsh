@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,
   createRepositoryFingerprint,
   migrateSidecarSnapshot,
@@ -316,6 +317,35 @@ test('migration v1 -> v4: normalizes legacy removed records to diskCleanup "comp
   assert.deepEqual(revalidated, v4);
 });
 
+test('keeps every supported schema version readable when the current version advances', () => {
+  // A future v6 must still read v5 records, including their baseCommit, so the
+  // supported-version list is explicit instead of tracking the live constant.
+  assert.deepEqual(SUPPORTED_SIDECAR_SCHEMA_VERSIONS, [1, 2, 3, 4, 5]);
+  assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(SIDECAR_SCHEMA_VERSION), true);
+  assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.at(-1), SIDECAR_SCHEMA_VERSION);
+
+  const v5Record = {
+    schemaVersion: 5,
+    workspaceId: 'ws_mig',
+    revision: '0',
+    worktrees: [{
+      worktreeId: 'wt_mig',
+      workspaceId: 'ws_mig',
+      absolutePath: '/tmp/generated/wt_mig',
+      branch: 'feature/v5',
+      baseBranch: 'main',
+      baseCommit: 'a'.repeat(40),
+      createdAt: '2026-09-01T00:00:00.000Z',
+      source: 'plugin',
+      status: 'active',
+    }],
+    bindings: [],
+  };
+  const revalidated = validateSidecarSnapshot(v5Record, '/tmp/ws.json', undefined, 5);
+  assert.equal(revalidated.worktrees[0].baseCommit, 'a'.repeat(40));
+  assert.equal(revalidated.schemaVersion, 5);
+});
+
 test('migration v1 -> v5: migrates legacy v1 directly to current schema version v5', () => {
   const v1 = createV1Fixture();
   const v5 = validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 5);
@@ -327,8 +357,9 @@ test('migration v1 -> v5: migrates legacy v1 directly to current schema version 
   assert.equal(v5.worktrees[1].diskCleanup, 'completed');
   assert.deepEqual(v5.bindings, v1.bindings);
 
-  // migrateSidecarSnapshot helper behaves identically
-  const migratedViaHelper = migrateSidecarSnapshot(v1, 5, '/tmp/ws.json');
+  // migrateSidecarSnapshot helper behaves identically and shares the
+  // validateSidecarSnapshot parameter order.
+  const migratedViaHelper = migrateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 5);
   assert.deepEqual(migratedViaHelper, v5);
 
   // Default targetVersion is 5

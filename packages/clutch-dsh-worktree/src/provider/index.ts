@@ -8,6 +8,7 @@
  */
 export { LocalGitAdapter } from './git/adapter.js';
 export {
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,
   migrateSidecarSnapshot,
   validateSidecarSnapshot,
