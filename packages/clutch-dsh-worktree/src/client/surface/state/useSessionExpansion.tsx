@@ -20,19 +20,20 @@ type Input = {
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'readState' | 'viewByWorkspace'>;
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
-    'currentSessionId' | 'workspaces' | 'mode' | 'ref' | 'expandSnapshot' | 'workspaceIds'
+    'currentSessionId' | 'workspaces' | 'mode' | 'expandSnapshot' | 'workspaceIds'
   >;
   props: Pick<WorktreeSurfaceProps, 'expandState'>;
 };
 
 export function useSessionExpansion({ read, source, props }: Input) {
   const { readState, viewByWorkspace } = read;
-  const { currentSessionId, workspaces, mode, ref, expandSnapshot, workspaceIds } = source;
+  const { currentSessionId, workspaces, mode, expandSnapshot, workspaceIds } = source;
   const { expandState } = props;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchRoot = useRef<HTMLDivElement | null>(null);
   const searchInput = useRef<HTMLInputElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
@@ -109,7 +110,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
     let cancelled = false;
     const frame = requestAnimationFrame(() => {
       if (cancelled || generation !== locateGenerationRef.current) return;
-      if (!scrollCurrentSessionIntoView(ref.current, currentSessionId)) return;
+      if (!scrollCurrentSessionIntoView(contentRef.current, currentSessionId)) return;
       positionedLocateGenerationRef.current = generation;
     });
     return () => {
@@ -241,6 +242,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
     setSearchExpanded,
     searchRoot,
     searchInput,
+    contentRef,
     currentSessionReveal,
     setCurrentSessionReveal,
     searchQueryRef,

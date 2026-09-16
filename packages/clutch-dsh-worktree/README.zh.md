@@ -162,7 +162,7 @@ MVP 已连接的操作包括查看 Overview 和 Sessions、新建 Session 或 Wo
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会保留当前 Session 所在的 Worktree 展开。
-- 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；且不改变已保存的展开选择。
+- 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
 - Session 行使用 DSH 原生的状态和相对时间展示。折叠的 Workspace、Main 和 Worktree 分组会
   从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍

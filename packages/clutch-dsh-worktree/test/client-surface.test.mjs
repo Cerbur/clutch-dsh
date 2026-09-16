@@ -70,6 +70,9 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(readmeZh, /临时.*展开|临时.*定位/);
   assert.match(readmeZh, /不改变.*展开选择|展开选择.*不改变/);
   assert.match(clientReadme, /current Session.*browser-local|当前 Session.*浏览器本地/i);
+  assert.match(readme, /already visible.*navigation scroll|navigation scroll.*already visible/i);
+  assert.match(readmeZh, /已在可见区域内.*导航滚动位置/);
+  assert.match(clientReadme, /keeps the navigation position.*already visible/i);
   assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
 });
 
@@ -1931,7 +1934,10 @@ test('positions the current Worktree Session after commit and cancels stale work
   assert.match(source, /scrollCurrentSessionIntoView/);
   assert.match(source, /generation !== locateGenerationRef\.current/);
   assert.match(positionSource, /querySelectorAll<HTMLElement>\('\[data-session-id\]'\)/);
-  assert.match(positionSource, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.match(positionSource, /getBoundingClientRect/);
+  assert.doesNotMatch(positionSource, /scrollIntoView/);
+  assert.match(source, /contentRef/);
+  assert.match(source, /ref=\{expansion\.contentRef\}/);
   assert.doesNotMatch(source, /document\.querySelector/);
 });
 

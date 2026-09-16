@@ -68,6 +68,7 @@ type Input = {
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'refresh' | 'readState' | 'viewByWorkspace'>;
   expansion: Pick<
     ReturnType<typeof useSessionExpansion>,
+    | 'contentRef'
     | 'isCurrentSessionReveal'
     | 'query'
     | 'expandedSessionGroups'
@@ -178,7 +179,7 @@ export function SurfaceContent({
   }
 
   return (
-    <div className={styles.content} tabIndex={0}>
+    <div ref={expansion.contentRef} className={styles.content} tabIndex={0}>
       <NotificationToasts notices={notices} detailsLabel={t('notice.details')} />
       {notices.length > 0 && (
         <details className={styles.notificationDetails}>

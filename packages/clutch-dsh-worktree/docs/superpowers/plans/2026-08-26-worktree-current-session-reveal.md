@@ -1157,3 +1157,14 @@ at the account head, that rule expanded the whole Worktree unnecessarily after
 creation. The implementation now expands Session overflow only when the current
 Session is outside the first five rows; structural ancestor reveal and
 overlay-scoped positioning remain unchanged.
+
+## Regression follow-up — 2026-09-16
+
+The initial positioning helper used `row.scrollIntoView({ block: 'nearest' })`. On
+long navigation lists, that browser algorithm can move an outer scroll context even
+when the selected row is already visible, which makes selecting a lower Session jump
+the Worktree list to its end. Positioning now receives the actual `.content` scroll
+container, compares the row and container rectangles, leaves an already-visible row
+alone, and changes `scrollTop` only by the minimum amount needed for an off-screen row.
+The current Session reveal, generation guard, and Collapse All behavior are otherwise
+unchanged.

@@ -327,7 +327,7 @@ Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cl
 browser-local fork recovery, membership projections, and permission notices for the affected
 Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending
 mutations and recovery health disable these actions. Cleanup requires explicit user confirmation.
-Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
+Positioning is scoped to the Worktree content scroll container. It keeps the navigation position when the current row is already visible and adjusts only the minimum vertical distance when the row is outside the viewport.
 
 The current Session reveal and suppression are browser-local, in-memory
 presentation state. Automatic reveal never mutates clutch-dsh-worktree.expand-state,
