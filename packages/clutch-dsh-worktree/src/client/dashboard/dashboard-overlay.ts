@@ -33,7 +33,7 @@ export function concealDashboardBackground(element: HTMLElement): () => void {
   };
 }
 
-/** Layout seam shared with the existing Sidebar overlay; fail closed on anchor loss. */
+/** Layout seam shared with the existing Sidebar overlay; fail closed on frame/center loss. */
 export function mountDashboardOverlay(
   surface: HTMLElement,
   onPlacement: (placement: DashboardPlacement | undefined) => void,
@@ -62,19 +62,29 @@ export function mountDashboardOverlay(
   const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(schedule);
   const update = () => {
     if (disposed) return;
-    // AppFrame owns Sidebar | CenterColumn | RightbarColumn | shell.overlay.
+    // AppFrame owns Sidebar | CenterColumn | [RightbarColumn] | shell.overlay.
+    // The native rightbar is absent on a page with no current Session, but the
+    // Dashboard still needs the same center-to-frame placement in that layout.
     // Do not depend on generated CSS class names or mutate slot registrations.
     const sidebar = frame.firstElementChild;
     const center = sidebar?.nextElementSibling;
-    const right = center?.nextElementSibling;
+    const rightbar = center?.nextElementSibling;
+    const hasRightbar =
+      rightbar instanceof HTMLElement &&
+      rightbar !== overlay &&
+      rightbar.nextElementSibling === overlay;
+    const hasNoRightbar = rightbar === overlay;
     const valid =
       overlay.isConnected &&
       overlay.parentElement === frame &&
       sidebar instanceof HTMLElement &&
       center instanceof HTMLElement &&
-      right instanceof HTMLElement &&
-      right.nextElementSibling === overlay;
-    const nextObserved: Element[] = valid ? [overlay, sidebar, center, right] : [frame];
+      (hasRightbar || hasNoRightbar);
+    const nextObserved: Element[] = valid
+      ? hasRightbar
+        ? [overlay, sidebar, center, rightbar]
+        : [overlay, sidebar, center]
+      : [frame];
     for (const old of observed) if (!nextObserved.includes(old)) resize?.unobserve(old);
     for (const next of nextObserved) if (!observed.includes(next)) resize?.observe(next);
     observed = nextObserved;
@@ -85,9 +95,10 @@ export function mountDashboardOverlay(
     }
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
-    const rightBoundary = right.getBoundingClientRect();
+    const rightBoundary =
+      hasRightbar && rightbar instanceof HTMLElement ? rightbar.getBoundingClientRect().left : box.right;
     const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
-    const rightEdge = Math.min(box.right, rightBoundary.left);
+    const rightEdge = Math.min(box.right, rightBoundary);
     const width = rightEdge - box.left - left;
     if (width <= 0 || box.height <= 0) {
       restore();

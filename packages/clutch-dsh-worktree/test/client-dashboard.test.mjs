@@ -1161,6 +1161,26 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     1,
   );
 
+  const targetD = { ...record, worktreeId: 'wt-d', branch: 'feat/payment-refactor-d' };
+  target = targetD;
+  sourceState.currentSessionId = undefined;
+  sourceState.sessions.current = undefined;
+  sourceState.sessions.ids = [];
+  selected = undefined;
+  calls.splice(0);
+  renderTree(false);
+  surfaceContentProps(renderTree(false)).openDashboard(targetD);
+  assert.deepEqual(calls, [['closeRightSidebar']]);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-d',
+    sessionId: undefined,
+  });
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
   // Repeat the cross-Worktree transition through the production external dashboard store.
   // The old stale-cleanup path must not write undefined over the pending target selection.
   surfaceInput.dashboardStore = dashboardStore;
@@ -1321,6 +1341,38 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     dispose();
     assert.equal(center.getAttribute('inert'), null);
     assert.ok(observers.every((observer) => observer.disconnected));
+  } finally {
+    Object.assign(globalThis, saved);
+  }
+});
+
+test('page-level Dashboard mounts when the native rightbar is absent', () => {
+  const globals = ['HTMLElement', 'ResizeObserver', 'MutationObserver'];
+  const saved = Object.fromEntries(globals.map((key) => [key, globalThis[key]]));
+  Object.assign(globalThis, {
+    HTMLElement: FakeElement,
+    ResizeObserver: undefined,
+    MutationObserver: undefined,
+  });
+  try {
+    const [frame, sidebar, center, overlay, surface] = Array.from(
+      { length: 5 },
+      () => new FakeElement(),
+    );
+    frame.firstElementChild = sidebar;
+    sidebar.nextElementSibling = center;
+    center.nextElementSibling = overlay;
+    overlay.parentElement = frame;
+    surface.closest = () => overlay;
+    sidebar.rect.right = 280;
+    let placement;
+    const dispose = mountDashboardOverlay(surface, (next) => {
+      placement = next;
+    });
+    assert.deepEqual(placement, { left: 284, top: 0, width: 916, height: 800 });
+    assert.equal(center.getAttribute('inert'), '');
+    dispose();
+    assert.equal(center.getAttribute('inert'), null);
   } finally {
     Object.assign(globalThis, saved);
   }
