@@ -340,6 +340,7 @@ export function WorktreeGroupRow({
   const groupActivityVisible = !expanded && groupActivityStatus !== undefined;
   const groupActivityLabel =
     groupActivityStatus === undefined ? undefined : sessionStatusLabel(t, groupActivityStatus);
+  const worktreeStateVisible = stateLabel !== undefined;
   const dashboardActionVisible =
     showDashboardAction === true && menu?.onDashboard !== undefined;
   const worktreeLabelRef = useRef<HTMLSpanElement>(null);
@@ -478,18 +479,11 @@ export function WorktreeGroupRow({
           <IconChevronRightOutline14 size={18} />
         )}
       </button>
-      <span className={styles.worktreeIcon} aria-hidden="true">
+      <span className={styles.worktreeIcon} data-worktree-state={state} aria-hidden="true">
         {icon}
       </span>
-      {state !== undefined && stateLabel !== undefined && (
-        <span
-          className={styles.worktreeState}
-          role="img"
-          aria-label={stateLabel}
-          title={stateLabel}
-        >
-          <StateDot state={state} />
-        </span>
+      {worktreeStateVisible && (
+        <span className={styles.worktreeStateLabel}>{stateLabel}</span>
       )}
       <span ref={worktreeLabelRef} className={styles.worktreeLabel}>
         {label}
@@ -673,9 +667,11 @@ export function WorktreeGroupRow({
       content={
         <div className={styles.worktreeHoverDetails}>
           <div className={styles.worktreeHoverTitle}>{label}</div>
+          {stateLabel !== undefined && state !== 'done' && (
+            <p className={styles.worktreeHoverTitle}>{stateLabel}</p>
+          )}
           {repairGuidance !== undefined && (
             <>
-              <p className={styles.worktreeHoverTitle}>{stateLabel}</p>
               <p className={styles.worktreeHoverTitle}>{menu?.copyPath}</p>
               <p className={styles.worktreeHoverTitle}>{repairGuidance}</p>
             </>

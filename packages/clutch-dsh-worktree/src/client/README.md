@@ -350,6 +350,7 @@ The Worktree surface is additive:
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
+- Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
 - Session rows derive one native-compatible status presentation from the DSH Session snapshot.

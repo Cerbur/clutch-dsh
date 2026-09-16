@@ -164,6 +164,10 @@ injection; an unchanged instruction is not repeatedly added while its message re
 - Git is read on refresh and when relevant menus open; the plugin does not watch Git continuously.
   An external branch change is shown as branch drift and requires explicit **Adopt current branch**
   before disk cleanup. Detached HEAD and recovery-needed states remain visible and retryable.
+- Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
+- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
+- Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.
+- When the current Session is outside the visible tree, the matching row is highlighted and temporarily revealed; this does not change persisted expansion choices.
 - Session rows use DSH's native status and relative-time presentation. Collapsed Workspace, Main,
   and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
   approval (and other pending-interaction warnings) takes priority over running, and running
