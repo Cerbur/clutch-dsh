@@ -16,12 +16,21 @@ import type {
   GitWorktreeInfo,
 } from '../types.js';
 import { WorktreeProviderError, providerError } from '../types.js';
-import { WORKTREE_GIT_WORKING_TREE } from '../../contract/index.js';
+import { WORKTREE_GIT_COMMIT_PATTERN, WORKTREE_GIT_WORKING_TREE } from '../../contract/index.js';
 import type { WorktreeGitChangedFile, WorktreeGitFileDiff } from '../../contract/index.js';
 
-const COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu;
+/** Shared with Contract/Manage/Client so commit-SHA validation cannot drift. */
+const COMMIT_PATTERN = WORKTREE_GIT_COMMIT_PATTERN;
 const HISTORY_REQUEST_LIMIT = 201;
 const HISTORY_VISIBLE_LIMIT = 200;
+/**
+ * Line statistics for untracked files cost one `git diff --no-index` process per
+ * file. A large untracked tree therefore reports unknown counts beyond this
+ * bound instead of spawning an unbounded number of Git processes.
+ */
+const MAX_UNTRACKED_STAT_FILES = 50;
+/** Keeps the bounded per-file statistics fan-out from exhausting process limits. */
+const STAT_READ_CONCURRENCY = 8;
 
 function parseCommitHash(stdout: string, operation: string, workspaceRoot: string): string {
   const commit = stdout.trim();
@@ -260,6 +269,78 @@ function omitRestoredStats(
 
 function isBinaryDiff(stdout: string): boolean {
   return /^Binary files .* differ$/mu.test(stdout) || /^GIT binary patch$/mu.test(stdout);
+}
+
+/**
+ * True when decoded stdout cannot represent the blob bytes exactly. Binary blobs
+ * (NUL bytes) or lossy UTF-8 decoding make a temporary text baseline unreliable.
+ */
+function isLossyBlob(stdout: string): boolean {
+  return stdout.includes('\u0000') || stdout.includes('\ufffd');
+}
+
+/** Reject missing or empty paths before they reach a Git invocation. */
+function requireFilePath(filePath: string, operation: string, worktreeRoot: string): void {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
+      workspaceRoot: worktreeRoot,
+      operation,
+    });
+  }
+}
+
+/** Run a bounded number of Git reads in parallel without an unbounded fan-out. */
+async function mapInChunks<Value, Result>(
+  values: readonly Value[],
+  concurrency: number,
+  map: (value: Value) => Promise<Result>,
+): Promise<readonly Result[]> {
+  const results: Result[] = [];
+  for (let index = 0; index < values.length; index += concurrency) {
+    results.push(...await Promise.all(values.slice(index, index + concurrency).map(map)));
+  }
+  return results;
+}
+
+interface FileDiffIdentity {
+  readonly commit: string;
+  readonly path: string;
+  readonly operation: string;
+  readonly worktreeRoot: string;
+  readonly detail?: string;
+}
+
+/**
+ * Normalize one file-diff invocation: binary patches are emptied, exceeded output
+ * bounds become an explicit truncated state, and Git failures keep the existing
+ * provider error plumbing.
+ */
+async function shapeFileDiff(
+  run: () => Promise<GitCommandResult>,
+  identity: FileDiffIdentity,
+): Promise<WorktreeGitFileDiff> {
+  try {
+    const result = await run();
+    const binary = isBinaryDiff(result.stdout);
+    return {
+      commit: identity.commit,
+      path: identity.path,
+      patch: binary ? '' : result.stdout,
+      binary,
+    };
+  } catch (error) {
+    if (error instanceof GitCommandError && error.outputTruncated) {
+      return {
+        commit: identity.commit,
+        path: identity.path,
+        patch: '',
+        binary: false,
+        truncated: true,
+      };
+    }
+    if (error instanceof WorktreeProviderError) throw error;
+    throw operationError(identity.operation, identity.worktreeRoot, identity.path, identity.detail, error);
+  }
 }
 
 export interface LocalGitAdapterOptions extends GitCommandOptions {
@@ -819,7 +900,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     baseCommit: string,
     filePath: string,
     options: GitCommandOptions,
-  ): Promise<GitCommandResult> {
+  ): Promise<GitCommandResult | undefined> {
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-live-diff-'));
     const baselinePath = path.join(temporaryDirectory, 'baseline');
     try {
@@ -828,6 +909,9 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         worktreeRoot,
         options,
       );
+      // A re-encoded binary baseline would produce a false comparison result, so
+      // the caller falls back to the untracked projection instead.
+      if (isLossyBlob(baseline.stdout)) return undefined;
       await writeFile(baselinePath, baseline.stdout);
       const result = await this.runDiffAllowingChanges(
         [
@@ -867,6 +951,9 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         worktreeRoot,
         options,
       );
+      // Binary line counts cannot be derived from a re-encoded baseline; report
+      // them as explicitly unknown rather than as an approximate number.
+      if (isLossyBlob(baseline.stdout)) return [{ path: filePath, unknown: true }];
       await writeFile(baselinePath, baseline.stdout);
       const result = await this.runDiffAllowingChanges(
         [
@@ -922,7 +1009,9 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       if (restoredPath === undefined || !untrackedPaths.has(restoredPath) || restoredPaths.has(restoredPath)) continue;
       const result = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, baseCommit, restoredPath, options);
       restoredPaths.add(restoredPath);
-      const differs = isBinaryDiff(result.stdout) || result.stdout.length > 0;
+      // An unrepresentable binary baseline counts as changed so the live
+      // projection never hides a real difference.
+      const differs = result === undefined || isBinaryDiff(result.stdout) || result.stdout.length > 0;
       if (file.status === 'deleted') {
         replacements.set(index, differs ? [{ path: file.path, status: 'modified' }] : []);
       } else if (differs) {
@@ -961,7 +1050,8 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     operation: string,
     options: GitCommandOptions,
   ): Promise<readonly GitDiffStat[]> {
-    const stats = await Promise.all(files.map(async (file) => {
+    const bounded = files.slice(0, MAX_UNTRACKED_STAT_FILES);
+    const stats = await mapInChunks(bounded, STAT_READ_CONCURRENCY, async (file) => {
       const result = await this.runDiffAllowingChanges(
         [
           '--literal-pathspecs',
@@ -984,7 +1074,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         path: file.path,
         oldPath: undefined,
       }));
-    }));
+    });
     return stats.flat();
   }
 
@@ -1010,26 +1100,58 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
+  /** Read the tracked and untracked changed-path projection for one revision. */
+  private async readChangedFiles(
+    worktreeRoot: string,
+    revision: string,
+    options: GitCommandOptions,
+  ): Promise<{
+    readonly tracked: readonly WorktreeGitChangedFile[];
+    readonly untracked: readonly WorktreeGitChangedFile[];
+  }> {
+    const [tracked, untracked] = await Promise.all([
+      this.run(
+        ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', revision, '--'],
+        worktreeRoot,
+        options,
+      ),
+      this.run(
+        ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+        worktreeRoot,
+        options,
+      ),
+    ]);
+    return {
+      tracked: parseChangedFiles(tracked.stdout, worktreeRoot),
+      untracked: parseUntrackedFiles(untracked.stdout),
+    };
+  }
+
+  /**
+   * Read the live working-tree changed paths without line statistics. Path
+   * authorization only needs the projection, so callers that must confirm one
+   * path avoid the per-untracked-file statistics probe.
+   */
+  async listWorkingTreeChangedPaths(
+    worktreeRoot: string,
+    options: GitCommandOptions = {},
+  ): Promise<readonly WorktreeGitChangedFile[]> {
+    try {
+      const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
+      return [...tracked, ...untracked];
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('list working tree changed paths', worktreeRoot, undefined, 'HEAD', error);
+    }
+  }
+
   /** Read tracked and untracked changes relative to the current HEAD. */
   async listWorkingTreeFiles(
     worktreeRoot: string,
     options: GitCommandOptions = {},
   ): Promise<readonly WorktreeGitChangedFile[]> {
     try {
-      const [tracked, untracked] = await Promise.all([
-        this.run(
-          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
-          worktreeRoot,
-          options,
-        ),
-        this.run(
-          ['ls-files', '--others', '--exclude-standard', '-z', '--'],
-          worktreeRoot,
-          options,
-        ),
-      ]);
-      const trackedFiles = parseChangedFiles(tracked.stdout, worktreeRoot);
-      const untrackedFiles = parseUntrackedFiles(untracked.stdout);
+      const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
       const [trackedStats, untrackedStats] = await Promise.all([
         this.readNumstat(
           ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', 'HEAD', '--'],
@@ -1037,10 +1159,10 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           'list working tree files',
           options,
         ),
-        this.listUntrackedFileStats(worktreeRoot, untrackedFiles, 'list working tree files', options),
+        this.listUntrackedFileStats(worktreeRoot, untracked, 'list working tree files', options),
       ]);
       return decorateChangedFiles(
-        [...trackedFiles, ...untrackedFiles],
+        [...tracked, ...untracked],
         [...trackedStats, ...untrackedStats],
       );
     } catch (error) {
@@ -1055,65 +1177,48 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     filePath: string,
     options: GitCommandOptions = {},
   ): Promise<WorktreeGitFileDiff> {
-    if (filePath.length === 0) {
-      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
-        workspaceRoot: worktreeRoot,
-        operation: 'read working tree file diff',
-      });
-    }
+    const operation = 'read working tree file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
     const tracked = await this.isTrackedWorkingTreeFile(worktreeRoot, filePath, options);
     const presentInBase = !tracked && await this.isPresentInCommit(worktreeRoot, 'HEAD', filePath, options);
     const restoredUntracked = presentInBase && await this.isPresentOnDisk(worktreeRoot, filePath);
     const compareAsTracked = tracked || (presentInBase && !restoredUntracked);
-    const args = compareAsTracked
-      ? [
-          '--literal-pathspecs',
-          'diff',
-          '--no-color',
-          '--no-ext-diff',
-          '--no-textconv',
-          '-M',
-          'HEAD',
-          '--',
-          filePath,
-        ]
-      : [
-          '--literal-pathspecs',
-          'diff',
-          '--no-index',
-          '--no-color',
-          '--no-ext-diff',
-          '--no-textconv',
-          '--',
-          '/dev/null',
-          filePath,
-        ];
-    try {
-      const result = restoredUntracked
-        ? await this.readRestoredWorkingTreeFileDiff(worktreeRoot, 'HEAD', filePath, options)
-        : compareAsTracked
-          ? await this.run(args, worktreeRoot, options)
-          : await this.runDiffAllowingChanges(args, worktreeRoot, options);
-      const binary = isBinaryDiff(result.stdout);
-      return {
-        commit: WORKTREE_GIT_WORKING_TREE,
-        path: filePath,
-        patch: binary ? '' : result.stdout,
-        binary,
-      };
-    } catch (error) {
-      if (error instanceof GitCommandError && error.outputTruncated) {
-        return {
-          commit: WORKTREE_GIT_WORKING_TREE,
-          path: filePath,
-          patch: '',
-          binary: false,
-          truncated: true,
-        };
-      }
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('read working tree file diff', worktreeRoot, filePath, 'HEAD', error);
-    }
+    const trackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '-M',
+      'HEAD',
+      '--',
+      filePath,
+    ];
+    const untrackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-index',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--',
+      '/dev/null',
+      filePath,
+    ];
+    return shapeFileDiff(
+      async () => {
+        if (!restoredUntracked) {
+          return compareAsTracked
+            ? this.run(trackedArgs, worktreeRoot, options)
+            : this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+        }
+        // A binary baseline blob cannot round-trip through decoded stdout: fall
+        // back to the untracked projection instead of claiming equality.
+        const restored = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, 'HEAD', filePath, options);
+        return restored ?? this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+      },
+      { commit: WORKTREE_GIT_WORKING_TREE, path: filePath, operation, worktreeRoot, detail: 'HEAD' },
+    );
   }
 
   private async resolveCommitParents(
@@ -1181,20 +1286,11 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   ): Promise<readonly WorktreeGitChangedFile[]> {
     assertCommitArgument(baseCommit, 'list working-tree diff files', worktreeRoot);
     try {
-      const [tracked, untracked] = await Promise.all([
-        this.run(
-          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, '--'],
-          worktreeRoot,
-          options,
-        ),
-        this.run(
-          ['ls-files', '--others', '--exclude-standard', '-z', '--'],
-          worktreeRoot,
-          options,
-        ),
-      ]);
-      const trackedFiles = parseChangedFiles(tracked.stdout, worktreeRoot);
-      const untrackedFiles = parseUntrackedFiles(untracked.stdout);
+      const { tracked: trackedFiles, untracked: untrackedFiles } = await this.readChangedFiles(
+        worktreeRoot,
+        baseCommit,
+        options,
+      );
       const [trackedStats, untrackedStats] = await Promise.all([
         this.readNumstat(
           ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
@@ -1261,67 +1357,48 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     filePath: string,
     options: GitCommandOptions = {},
   ): Promise<WorktreeGitFileDiff> {
-    if (filePath.length === 0) {
-      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
-        workspaceRoot: worktreeRoot,
-        operation: 'read working-tree diff file',
-      });
-    }
-    assertCommitArgument(baseCommit, 'read working-tree diff file', worktreeRoot);
+    const operation = 'read working-tree diff file';
+    requireFilePath(filePath, operation, worktreeRoot);
+    assertCommitArgument(baseCommit, operation, worktreeRoot);
     const tracked = await this.isTrackedWorkingTreeFile(worktreeRoot, filePath, options);
     const presentInBase = !tracked && await this.isPresentInCommit(worktreeRoot, baseCommit, filePath, options);
     const restoredUntracked = presentInBase && await this.isPresentOnDisk(worktreeRoot, filePath);
     const compareAsTracked = tracked || (presentInBase && !restoredUntracked);
-    const args = compareAsTracked
-      ? [
-          '--literal-pathspecs',
-          'diff',
-          '--no-color',
-          '--no-ext-diff',
-          '--no-textconv',
-          '-M',
-          '-C',
-          baseCommit,
-          '--',
-          filePath,
-        ]
-      : [
-          '--literal-pathspecs',
-          'diff',
-          '--no-index',
-          '--no-color',
-          '--no-ext-diff',
-          '--no-textconv',
-          '--',
-          '/dev/null',
-          filePath,
-        ];
-    try {
-      const result = restoredUntracked
-        ? await this.readRestoredWorkingTreeFileDiff(worktreeRoot, baseCommit, filePath, options)
-        : compareAsTracked
-          ? await this.run(args, worktreeRoot, options)
-          : await this.runDiffAllowingChanges(args, worktreeRoot, options);
-      const binary = isBinaryDiff(result.stdout);
-      return {
-        commit: WORKTREE_GIT_WORKING_TREE,
-        path: filePath,
-        patch: binary ? '' : result.stdout,
-        binary,
-      };
-    } catch (error) {
-      if (error instanceof GitCommandError && error.outputTruncated) {
-        return {
-          commit: WORKTREE_GIT_WORKING_TREE,
-          path: filePath,
-          patch: '',
-          binary: false,
-          truncated: true,
-        };
-      }
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('read working-tree diff file', worktreeRoot, filePath, baseCommit, error);
-    }
+    const trackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '-M',
+      '-C',
+      baseCommit,
+      '--',
+      filePath,
+    ];
+    const untrackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-index',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--',
+      '/dev/null',
+      filePath,
+    ];
+    return shapeFileDiff(
+      async () => {
+        if (!restoredUntracked) {
+          return compareAsTracked
+            ? this.run(trackedArgs, worktreeRoot, options)
+            : this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+        }
+        const restored = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, baseCommit, filePath, options);
+        return restored ?? this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+      },
+      { commit: WORKTREE_GIT_WORKING_TREE, path: filePath, operation, worktreeRoot, detail: baseCommit },
+    );
   }
 
   /** Read one file from a net baseline-to-HEAD tree diff. */
@@ -1332,40 +1409,24 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     filePath: string,
     options: GitCommandOptions = {},
   ): Promise<WorktreeGitFileDiff> {
-    if (filePath.length === 0) {
-      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
-        workspaceRoot: worktreeRoot,
-        operation: 'read diff file diff',
-      });
-    }
-    assertCommitArgument(baseCommit, 'read diff file diff', worktreeRoot);
-    assertCommitArgument(targetCommit, 'read diff file diff', worktreeRoot);
-    try {
-      const result = await this.run(
+    const operation = 'read diff file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
+    assertCommitArgument(baseCommit, operation, worktreeRoot);
+    assertCommitArgument(targetCommit, operation, worktreeRoot);
+    return shapeFileDiff(
+      () => this.run(
         ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '-M', '-C', baseCommit, targetCommit, '--', filePath],
         worktreeRoot,
         options,
-      );
-      const binary = isBinaryDiff(result.stdout);
-      return {
+      ),
+      {
         commit: targetCommit,
         path: filePath,
-        patch: binary ? '' : result.stdout,
-        binary,
-      };
-    } catch (error) {
-      if (error instanceof GitCommandError && error.outputTruncated) {
-        return {
-          commit: targetCommit,
-          path: filePath,
-          patch: '',
-          binary: false,
-          truncated: true,
-        };
-      }
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('read diff file diff', worktreeRoot, filePath, `${baseCommit}..${targetCommit}`, error);
-    }
+        operation,
+        worktreeRoot,
+        detail: baseCommit + '..' + targetCommit,
+      },
+    );
   }
 
   /** Read one authorized file patch with external diff and textconv disabled. */
@@ -1375,12 +1436,8 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     filePath: string,
     options: GitCommandOptions = {},
   ): Promise<WorktreeGitFileDiff> {
-    if (filePath.length === 0) {
-      throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
-        workspaceRoot: worktreeRoot,
-        operation: 'read commit file diff',
-      });
-    }
+    const operation = 'read commit file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
     const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
     const args = parents.length > 0
       ? [
@@ -1409,28 +1466,10 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           '--',
           filePath,
         ];
-    try {
-      const result = await this.run(args, worktreeRoot, options);
-      const binary = isBinaryDiff(result.stdout);
-      return {
-        commit,
-        path: filePath,
-        patch: binary ? '' : result.stdout,
-        binary,
-      };
-    } catch (error) {
-      if (error instanceof GitCommandError && error.outputTruncated) {
-        return {
-          commit,
-          path: filePath,
-          patch: '',
-          binary: false,
-          truncated: true,
-        };
-      }
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('read commit file diff', worktreeRoot, filePath, commit, error);
-    }
+    return shapeFileDiff(
+      () => this.run(args, worktreeRoot, options),
+      { commit, path: filePath, operation, worktreeRoot, detail: commit },
+    );
   }
 
   /**

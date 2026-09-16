@@ -20,7 +20,21 @@ async function runGit(cwd, args) {
   return execFile('git', args, { cwd, encoding: 'utf8' });
 }
 
-async function createFixture() {
+/** Record every Manager-visible Git call by adapter method name. */
+function recordGitCalls(adapter, calls) {
+  return new Proxy(adapter, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      if (typeof value !== 'function') return value;
+      return (...args) => {
+        calls.push(String(property));
+        return value.apply(target, args);
+      };
+    },
+  });
+}
+
+async function createFixture(options = {}) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-dashboard-'));
   const dshHome = path.join(tempRoot, 'dsh-home');
   const workspaceRoot = path.join(tempRoot, 'workspace');
@@ -48,7 +62,7 @@ async function createFixture() {
     },
   };
   const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
-  const manager = createWorktreeManager({ dsh, dshHome, sidecar });
+  const manager = createWorktreeManager({ dsh, dshHome, sidecar, git: options.git });
   return { tempRoot, dshHome, workspaceRoot, sidecar, manager };
 }
 
@@ -1378,3 +1392,127 @@ test('reads binary commit files without returning patch bytes', async () => {
     await rm(fixture.tempRoot, { recursive: true, force: true });
   }
 });
+
+test('authorizes working-tree reads from the changed-path projection, not per-file statistics', async () => {
+  const calls = [];
+  const fixture = await createFixture({ git: recordGitCalls(new LocalGitAdapter(), calls) });
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/paths-only',
+    });
+    await writeFile(path.join(record.absolutePath, 'untracked.txt'), 'untracked\n');
+
+    calls.length = 0;
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+    });
+    assert.equal(history.commits[0].sha, WORKTREE_GIT_WORKING_TREE);
+    assert.ok(calls.includes('listWorkingTreeChangedPaths'));
+    assert.equal(
+      calls.includes('listWorkingTreeFiles'),
+      false,
+      'a history read must not compute per-file working-tree statistics',
+    );
+
+    calls.length = 0;
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: 'untracked.txt',
+    });
+    assert.match(diff.patch, /\+untracked/u);
+    assert.ok(calls.includes('listWorkingTreeChangedPaths'));
+    assert.equal(
+      calls.includes('listWorkingTreeFiles'),
+      false,
+      'authorizing one working-tree path must not compute every untracked file statistic',
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('bounds untracked line statistics and reports the remainder as unknown', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/stat-bound',
+    });
+    for (let index = 0; index < 55; index += 1) {
+      await writeFile(
+        path.join(record.absolutePath, `untracked-${String(index).padStart(2, '0')}.txt`),
+        `content ${index}\n`,
+      );
+    }
+    const listing = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      commit: WORKTREE_GIT_WORKING_TREE,
+    });
+    assert.equal(listing.files.length, 55);
+    assert.equal(listing.files.filter((file) => file.additions !== undefined).length, 50);
+    assert.ok(listing.files.some((file) => file.additions === undefined && file.deletions === undefined));
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects aggregate selections that repeat or fall outside the pinned projection', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/aggregate-guard',
+    });
+    await writeFile(path.join(record.absolutePath, 'one.txt'), 'one\n');
+    await runGit(record.absolutePath, ['add', 'one.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'one']);
+    await writeFile(path.join(record.absolutePath, 'two.txt'), 'two\n');
+    await runGit(record.absolutePath, ['add', 'two.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'two']);
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+    });
+    const [two, one] = history.commits;
+    const selectionInput = (commits) => ({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'commits', commits },
+    });
+
+    const union = await fixture.manager.listWorktreeCommitFiles(selectionInput([two.sha, one.sha]));
+    assert.deepEqual(
+      union.files.map((file) => file.path).toSorted(),
+      ['one.txt', 'two.txt'],
+    );
+    assert.deepEqual(union.files.find((file) => file.path === 'one.txt').commits, [one.sha]);
+
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles(selectionInput([one.sha, one.sha])),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles(selectionInput([record.baseCommit])),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+

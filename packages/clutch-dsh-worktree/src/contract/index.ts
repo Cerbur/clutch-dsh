@@ -72,6 +72,18 @@ export const WORKTREE_GIT_WORKING_TREE = 'working-tree' as const;
 /** Stable synthetic id used by the Dashboard's baseline-wide summary view. */
 export const WORKTREE_GIT_SUMMARY = 'summary' as const;
 
+/**
+ * Git object-name guard shared by the Contract, Provider, Manage and Client
+ * seams so commit-SHA validation cannot drift between layers. SHA-1 and SHA-256
+ * repository formats are both accepted.
+ */
+export const WORKTREE_GIT_COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu;
+
+/** True when the value is a full-length Git commit SHA. */
+export function isWorktreeGitCommit(value: unknown): value is string {
+  return typeof value === 'string' && WORKTREE_GIT_COMMIT_PATTERN.test(value);
+}
+
 export type WorktreeGitCommitKind = 'commit' | 'working-tree';
 
 /**

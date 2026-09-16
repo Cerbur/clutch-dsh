@@ -235,6 +235,14 @@ export interface GitWorktreeAdapter {
     worktreeRoot: string,
     options?: GitCommandOptions,
   ): Promise<readonly WorktreeGitChangedFile[]>;
+  /**
+   * Read only the live working-tree changed paths. Path authorization does not
+   * need line statistics, so this avoids the per-untracked-file statistics probe.
+   */
+  listWorkingTreeChangedPaths?(
+    worktreeRoot: string,
+    options?: GitCommandOptions,
+  ): Promise<readonly WorktreeGitChangedFile[]>;
   /** Read one live working-tree file diff against HEAD or the empty tree. */
   readWorkingTreeFileDiff?(
     worktreeRoot: string,

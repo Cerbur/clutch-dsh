@@ -1,4 +1,5 @@
 import {
+  WORKTREE_GIT_COMMIT_PATTERN,
   WORKTREE_GIT_SUMMARY,
   WORKTREE_GIT_WORKING_TREE,
   type WorktreeGitBaseline,
@@ -12,15 +13,72 @@ import {
   type WorktreeGitHistory,
   type WorktreeRecord,
 } from '../contract/index.js';
-import type { GitWorktreeInfo } from '../provider/types.js';
+import type { GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
 
-const COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu;
+/** Shared with Contract/Provider/Client so commit-SHA validation cannot drift. */
+const COMMIT_PATTERN = WORKTREE_GIT_COMMIT_PATTERN;
+
+/** Read-only adapter capabilities the Git Dashboard consumes. */
+type GitReadMethod =
+  | 'listBranches'
+  | 'resolveCommit'
+  | 'findMergeBase'
+  | 'getCommitDivergence'
+  | 'listCommits'
+  | 'listCommitFiles'
+  | 'readCommitFileDiff'
+  | 'listDiffFiles'
+  | 'readDiffFileDiff'
+  | 'listWorkingTreeFiles'
+  | 'listWorkingTreeChangedPaths'
+  | 'readWorkingTreeFileDiff'
+  | 'listWorkingTreeDiffFiles'
+  | 'readWorkingTreeDiffFileDiff';
+
+type GitRead<Name extends GitReadMethod> = NonNullable<GitWorktreeAdapter[Name]>;
+
+/**
+ * Resolve an optional adapter read once, with its adapter receiver preserved.
+ * Centralizing the capability check keeps the Manage layer free of repeated
+ * `=== undefined` guards and reports one stable provider error.
+ */
+function gitRead<Name extends GitReadMethod>(
+  context: WorktreeManagerContext,
+  name: Name,
+  worktreeId: string,
+): GitRead<Name> {
+  const method = gitReadOptional(context, name);
+  if (method === undefined) {
+    throw providerError('GIT_OPERATION_FAILED', `Git ${name} is unavailable`, { worktreeId });
+  }
+  return method;
+}
+
+/** Resolve an optional adapter read, or undefined when the adapter omits it. */
+function gitReadOptional<Name extends GitReadMethod>(
+  context: WorktreeManagerContext,
+  name: Name,
+): GitRead<Name> | undefined {
+  const method = context.git[name];
+  if (method === undefined) return undefined;
+  return method.bind(context.git) as GitRead<Name>;
+}
+
+/** Find one changed file by its new or previous path. */
+function findChangedFile(
+  files: readonly WorktreeGitChangedFile[],
+  requestedPath: string,
+): WorktreeGitChangedFile | undefined {
+  return files.find((file) => file.path === requestedPath || file.oldPath === requestedPath);
+}
 
 interface ResolvedWorktree {
   readonly workspaceRoot: string;
+  /** Repository root resolved once per request and reused by baseline resolution. */
+  readonly repositoryRoot: string;
   readonly record: WorktreeRecord;
   readonly live: GitWorktreeInfo;
 }
@@ -112,11 +170,11 @@ async function resolveWorktree(
     });
   }
 
-  const gitRoot = context.git.resolveRepositoryRoot
+  const repositoryRoot = context.git.resolveRepositoryRoot
     ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
     : workspace.rootPath;
   const live = await findLiveWorktree(
-    await context.git.listWorktrees(gitRoot, { signal: context.signal }),
+    await context.git.listWorktrees(repositoryRoot, { signal: context.signal }),
     record.absolutePath,
   );
   if (!live) {
@@ -130,10 +188,54 @@ async function resolveWorktree(
     main: false,
     value: {
       workspaceRoot: workspace.rootPath,
+      repositoryRoot,
       record,
       live,
     },
   };
+}
+
+/** True when a branch name can be safely handed to Git as a ref argument. */
+function isSafeBranchName(branch: string): boolean {
+  if (branch.length === 0 || branch.startsWith('-')) return false;
+  for (const character of branch) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
+
+/**
+ * Resolve one local branch tip for the Dashboard baseline. The branch must exist
+ * under `refs/heads/`, so tags, remote-tracking branches, and arbitrary refs are
+ * rejected even though the browser may send any string.
+ */
+async function resolveLocalBranchCommit(
+  context: WorktreeManagerContext,
+  resolved: ResolvedWorktree,
+  baseBranch: string,
+): Promise<string> {
+  const unavailable = (): never => {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  };
+  if (!isSafeBranchName(baseBranch)) unavailable();
+  const listBranches = gitRead(context, 'listBranches', resolved.record.worktreeId);
+  const resolveCommit = gitRead(context, 'resolveCommit', resolved.record.worktreeId);
+  const branches = await listBranches(resolved.repositoryRoot, { signal: context.signal });
+  if (!branches.includes(baseBranch)) unavailable();
+  const commit = await resolveCommit(resolved.record.absolutePath, baseBranch, {
+    signal: context.signal,
+  });
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid selected baseline commit', {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  }
+  return commit;
 }
 
 async function resolveSelectedBaseline(
@@ -143,38 +245,15 @@ async function resolveSelectedBaseline(
 ): Promise<ResolvedBaseline | undefined> {
   const baseBranch = rawBranch.trim();
   if (baseBranch.length === 0) return undefined;
-  const repositoryRoot = context.git.resolveRepositoryRoot
-    ? await context.git.resolveRepositoryRoot(resolved.workspaceRoot, { signal: context.signal })
-    : resolved.workspaceRoot;
-  const branches = await context.git.listBranches(repositoryRoot, { signal: context.signal });
-  if (!branches.includes(baseBranch)) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
-      worktreeId: resolved.record.worktreeId,
-      baseBranch,
-    });
-  }
-  if (context.git.resolveCommit === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git baseline branch resolution is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-      baseBranch,
-    });
-  }
-  const commit = await context.git.resolveCommit(resolved.record.absolutePath, baseBranch, {
-    signal: context.signal,
-  });
-  if (!COMMIT_PATTERN.test(commit)) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid selected baseline commit', {
-      worktreeId: resolved.record.worktreeId,
-      baseBranch,
-    });
-  }
+  const commit = await resolveLocalBranchCommit(context, resolved, baseBranch);
 
   // A selected branch can move after the Worktree was created. Match GitHub's
   // pull-request range by diffing from the two heads' merge base to Worktree
   // HEAD, while retaining the selected branch tip for ahead/behind counts.
   const headCommit = await baselineHeadCommit(context, resolved);
-  const mergeBase = headCommit !== undefined && context.git.findMergeBase !== undefined
-    ? await context.git.findMergeBase(
+  const findMergeBase = gitReadOptional(context, 'findMergeBase');
+  const mergeBase = headCommit !== undefined && findMergeBase !== undefined
+    ? await findMergeBase(
         resolved.record.absolutePath,
         commit,
         headCommit,
@@ -238,16 +317,9 @@ export async function updateWorktreeBaseBranch(
       baseBranch,
     });
   }
-  const repositoryRoot = context.git.resolveRepositoryRoot
-    ? await context.git.resolveRepositoryRoot(resolved.value.workspaceRoot, { signal: context.signal })
-    : resolved.value.workspaceRoot;
-  const branches = await context.git.listBranches(repositoryRoot, { signal: context.signal });
-  if (!branches.includes(baseBranch)) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
-      worktreeId: input.worktreeId,
-      baseBranch,
-    });
-  }
+  // Resolve the replacement branch against the pinned repository root before the
+  // sidecar mutation, so an unavailable branch fails closed without a write.
+  await resolveLocalBranchCommit(context, resolved.value, baseBranch);
 
   return context.sidecar.mutate(input.workspaceId, (snapshot) => {
     if (snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0) {
@@ -374,43 +446,30 @@ async function requireBaseline(
   return baseline;
 }
 
-async function isCommitAncestor(
-  context: WorktreeManagerContext,
-  resolved: ResolvedWorktree,
-  ancestor: string,
-  descendant: string,
-): Promise<boolean> {
-  if (ancestor === descendant) return true;
-  if (context.git.isCommitAncestor === undefined) return false;
-  return context.git.isCommitAncestor(
-    resolved.record.absolutePath,
-    ancestor,
-    descendant,
-    { signal: context.signal },
-  );
-}
-
 async function baselineHeadCommit(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
 ): Promise<string | undefined> {
-  return resolved.live.headCommit ?? (context.git.resolveCommit
-    ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
-    : undefined);
+  if (resolved.live.headCommit !== undefined) return resolved.live.headCommit;
+  const resolveCommit = gitReadOptional(context, 'resolveCommit');
+  return resolveCommit === undefined
+    ? undefined
+    : await resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal });
 }
 
+/** Count commits unique to each head for one resolved comparison boundary. */
 async function readCommitDivergence(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   comparison: ResolvedBaseline,
+  head: string | undefined,
 ): Promise<{ readonly ahead: number; readonly behind: number } | undefined> {
-  if (context.git.getCommitDivergence === undefined) return undefined;
-  const head = await baselineHeadCommit(context, resolved);
-  if (head === undefined) return undefined;
+  const getCommitDivergence = gitReadOptional(context, 'getCommitDivergence');
+  if (getCommitDivergence === undefined || head === undefined) return undefined;
 
   // Count each branch from its current tip. The tree boundary may be the
   // merge base, but ahead/behind must include commits unique to both heads.
-  return context.git.getCommitDivergence(
+  return getCommitDivergence(
     resolved.record.absolutePath,
     comparison.baseHeadCommit,
     head,
@@ -418,43 +477,46 @@ async function readCommitDivergence(
   );
 }
 
-async function authorizeCommitAt(
+/**
+ * Authorize commit SHAs against one pinned comparison projection.
+ *
+ * One bounded `listCommits` read yields exactly the authorized set: commits
+ * reachable from the Worktree HEAD and not reachable from the resolved baseline
+ * head. That is the same membership the previous per-SHA ancestry walks proved,
+ * but a wide multi-commit selection now costs one projection read instead of
+ * several Git processes per candidate SHA. The visible projection is therefore
+ * the authorization boundary, matching the truncated 200-commit history the
+ * browser can actually select from.
+ */
+async function authorizeCommits(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
-  commitInput: string,
   comparison: ResolvedBaseline,
-  head: string,
-  baseIsReachableFromHead: boolean,
-): Promise<string> {
-  if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
-  if (context.git.resolveCommit === undefined || context.git.isCommitAncestor === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git commit authorization is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
-  const commit = await context.git.resolveCommit(resolved.record.absolutePath, commitInput, {
+  candidates: readonly string[],
+): Promise<readonly string[]> {
+  const worktreeId = resolved.record.worktreeId;
+  const requested = candidates.map((candidate) => {
+    if (typeof candidate !== 'string' || !COMMIT_PATTERN.test(candidate)) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
+        worktreeId,
+      });
+    }
+    return candidate;
+  });
+  const listCommits = gitRead(context, 'listCommits', worktreeId);
+  const history = await listCommits(resolved.record.absolutePath, comparison.baseHeadCommit, {
     signal: context.signal,
   });
-  // A selected branch tip defines the PR-style commit membership. When the
-  // base tip is already in HEAD, commits must come after it. For diverged or
-  // unrelated heads, accept only commits that are not reachable from the base.
-  const afterBaseHead = commit !== comparison.baseHeadCommit && (
-    baseIsReachableFromHead
-      ? await isCommitAncestor(context, resolved, comparison.baseHeadCommit, commit)
-      : !(await isCommitAncestor(context, resolved, commit, comparison.baseHeadCommit))
-  );
-  const reachableFromHead = await isCommitAncestor(context, resolved, commit, head);
-  if (!afterBaseHead || !reachableFromHead) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
-      worktreeId: resolved.record.worktreeId,
-      commit,
-    });
+  const members = new Set(history.commits.map((commit) => commit.sha));
+  for (const commit of requested) {
+    if (!members.has(commit)) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
+        worktreeId,
+        commit,
+      });
+    }
   }
-  return commit;
+  return requested;
 }
 
 async function authorizeCommit(
@@ -464,31 +526,8 @@ async function authorizeCommit(
   requestedBaseBranch?: string,
 ): Promise<{ readonly commit: string; readonly baseline: WorktreeGitBaseline }> {
   const comparison = await requireBaseline(context, resolved, requestedBaseBranch);
-  const head = resolved.live.headCommit ?? (context.git.resolveCommit
-    ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
-    : undefined);
-  if (head === undefined || !COMMIT_PATTERN.test(head)) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git HEAD resolution is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
-  const baseIsReachableFromHead = await isCommitAncestor(
-    context,
-    resolved,
-    comparison.baseHeadCommit,
-    head,
-  );
-  return {
-    commit: await authorizeCommitAt(
-      context,
-      resolved,
-      commitInput,
-      comparison,
-      head,
-      baseIsReachableFromHead,
-    ),
-    baseline: comparison.baseline,
-  };
+  const [commit] = await authorizeCommits(context, resolved, comparison, [commitInput]);
+  return { commit: commit!, baseline: comparison.baseline };
 }
 
 async function authorizeWorkingTree(
@@ -517,34 +556,28 @@ export async function listWorktreeCommits(
         : 'baseline-unknown',
     );
   }
-  const divergence = await readCommitDivergence(context, resolved.value, baseline);
-  if (context.git.listCommits === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git commit history is unavailable', {
-      worktreeId: input.worktreeId,
-    });
-  }
+  const listCommits = gitRead(context, 'listCommits', input.worktreeId);
+  // The working-tree entry only needs the changed-path projection here; its file
+  // list and line counts are read on demand when the entry is selected.
+  const readWorkingTreePaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
+    ?? gitReadOptional(context, 'listWorkingTreeFiles');
   const [history, workingTreeFiles] = await Promise.all([
-    context.git.listCommits(
+    listCommits(
       resolved.value.record.absolutePath,
       baseline.baseHeadCommit,
       { signal: context.signal },
     ),
-    context.git.listWorkingTreeFiles?.(
-      resolved.value.record.absolutePath,
-      { signal: context.signal },
-    ) ?? Promise.resolve([]),
+    readWorkingTreePaths === undefined
+      ? Promise.resolve([] as readonly WorktreeGitChangedFile[])
+      : readWorkingTreePaths(
+          resolved.value.record.absolutePath,
+          { signal: context.signal },
+        ),
   ]);
-  const resolvedDivergence = divergence ?? (history.headCommit === undefined || context.git.getCommitDivergence === undefined
-    ? undefined
-    : await context.git.getCommitDivergence(
-        resolved.value.record.absolutePath,
-        baseline.baseHeadCommit,
-        history.headCommit,
-        { signal: context.signal },
-      ));
+  const divergence = await readCommitDivergence(context, resolved.value, baseline, history.headCommit);
   return {
     ...history,
-    ...(resolvedDivergence ?? {}),
+    ...(divergence ?? {}),
     commits: workingTreeFiles.length > 0
       ? [workingTreeCommit(history.headCommit), ...history.commits]
       : history.commits,
@@ -603,9 +636,7 @@ async function authorizeAggregate(
       ? { kind: 'summary' }
       : { kind: 'summary', includeWorkingTree: selection.includeWorkingTree }
     : selection;
-  const headCommit = resolved.live.headCommit ?? (context.git.resolveCommit
-    ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
-    : undefined);
+  const headCommit = await baselineHeadCommit(context, resolved);
   if (headCommit === undefined || !COMMIT_PATTERN.test(headCommit)) {
     throw providerError('GIT_OPERATION_FAILED', 'Git HEAD resolution is unavailable', {
       worktreeId: resolved.record.worktreeId,
@@ -619,16 +650,7 @@ async function authorizeAggregate(
       worktreeId: resolved.record.worktreeId,
     });
   }
-  const baseIsReachableFromHead = await isCommitAncestor(
-    context,
-    resolved,
-    comparison.baseHeadCommit,
-    headCommit,
-  );
-  const authorized = await Promise.all(normalizedSelection.commits.map((commit) =>
-    authorizeCommitAt(context, resolved, commit, comparison, headCommit, baseIsReachableFromHead),
-  ));
-  const commits = authorized;
+  const commits = await authorizeCommits(context, resolved, comparison, normalizedSelection.commits);
   if (new Set(commits).size !== commits.length) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'A Git diff selection cannot contain duplicate commits', {
       worktreeId: resolved.record.worktreeId,
@@ -653,14 +675,10 @@ async function selectedCommitFiles(
   resolved: ResolvedWorktree,
   commits: readonly string[],
 ): Promise<readonly CommitFileGroup[]> {
-  if (context.git.listCommitFiles === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git changed-file history is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
+  const listCommitFiles = gitRead(context, 'listCommitFiles', resolved.record.worktreeId);
   return Promise.all(commits.map(async (commit) => ({
     commit,
-    files: await context.git.listCommitFiles!(
+    files: await listCommitFiles(
       resolved.record.absolutePath,
       commit,
       { signal: context.signal },
@@ -709,8 +727,9 @@ async function authorizeLiveSummaryHead(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
 ): Promise<void> {
-  if (context.git.resolveCommit === undefined) return;
-  const currentHead = await context.git.resolveCommit(
+  const resolveCommit = gitReadOptional(context, 'resolveCommit');
+  if (resolveCommit === undefined) return;
+  const currentHead = await resolveCommit(
     resolved.record.absolutePath,
     'HEAD',
     { signal: context.signal },
@@ -730,24 +749,16 @@ async function listSummaryFiles(
   headCommit: string,
 ): Promise<readonly WorktreeGitChangedFile[]> {
   if (selection.includeWorkingTree === true) {
-    if (context.git.listWorkingTreeDiffFiles === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree summary is unavailable', {
-        worktreeId: resolved.record.worktreeId,
-      });
-    }
+    const listWorkingTreeDiffFiles = gitRead(context, 'listWorkingTreeDiffFiles', resolved.record.worktreeId);
     await authorizeLiveSummaryHead(context, resolved);
-    return context.git.listWorkingTreeDiffFiles(
+    return listWorkingTreeDiffFiles(
       resolved.record.absolutePath,
       baseCommit,
       { signal: context.signal },
     );
   }
-  if (context.git.listDiffFiles === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git summary diff is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
-  return context.git.listDiffFiles(
+  const listDiffFiles = gitRead(context, 'listDiffFiles', resolved.record.worktreeId);
+  return listDiffFiles(
     resolved.record.absolutePath,
     baseCommit,
     headCommit,
@@ -764,25 +775,17 @@ async function readSummaryFileDiff(
   filePath: string,
 ): Promise<WorktreeGitFileDiff> {
   if (selection.includeWorkingTree === true) {
-    if (context.git.readWorkingTreeDiffFileDiff === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree file summary is unavailable', {
-        worktreeId: resolved.record.worktreeId,
-      });
-    }
+    const readWorkingTreeDiffFileDiff = gitRead(context, 'readWorkingTreeDiffFileDiff', resolved.record.worktreeId);
     await authorizeLiveSummaryHead(context, resolved);
-    return context.git.readWorkingTreeDiffFileDiff(
+    return readWorkingTreeDiffFileDiff(
       resolved.record.absolutePath,
       baseCommit,
       filePath,
       { signal: context.signal },
     );
   }
-  if (context.git.readDiffFileDiff === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git summary file diff is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
-  return context.git.readDiffFileDiff(
+  const readDiffFileDiff = gitRead(context, 'readDiffFileDiff', resolved.record.worktreeId);
+  return readDiffFileDiff(
     resolved.record.absolutePath,
     baseCommit,
     headCommit,
@@ -841,7 +844,7 @@ async function aggregateFileDiff(
       authorized.treeBaseCommit,
       authorized.headCommit,
     );
-    const changedFile = files.find((file) => file.path === requestedPath || file.oldPath === requestedPath);
+    const changedFile = findChangedFile(files, requestedPath);
     if (changedFile === undefined) {
       throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the summary', {
         worktreeId: resolved.record.worktreeId,
@@ -865,16 +868,12 @@ async function aggregateFileDiff(
   }
 
   const groups = await selectedCommitFiles(context, resolved, authorized.commits!);
-  if (context.git.readCommitFileDiff === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git file diff is unavailable', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
+  const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', resolved.record.worktreeId);
   const segments: Array<{ readonly commit: string; readonly patch: string; readonly binary: boolean; readonly truncated?: boolean }> = [];
   for (const group of groups) {
-    const changedFile = group.files.find((file) => file.path === requestedPath || file.oldPath === requestedPath);
+    const changedFile = findChangedFile(group.files, requestedPath);
     if (changedFile === undefined) continue;
-    const diff = await context.git.readCommitFileDiff(
+    const diff = await readCommitFileDiff(
       resolved.record.absolutePath,
       group.commit,
       changedFile.path,
@@ -921,28 +920,20 @@ export async function listWorktreeCommitFiles(
   const commit = requested.commit;
   if (commit === WORKTREE_GIT_WORKING_TREE) {
     await authorizeWorkingTree(context, resolved.value, input.baseBranch);
-    if (context.git.listWorkingTreeFiles === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree history is unavailable', {
-        worktreeId: input.worktreeId,
-      });
-    }
+    const listWorkingTreeFiles = gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
     return {
       commit: WORKTREE_GIT_WORKING_TREE,
-      files: await context.git.listWorkingTreeFiles(
+      files: await listWorkingTreeFiles(
         resolved.value.record.absolutePath,
         { signal: context.signal },
       ),
     };
   }
   const authorized = await authorizeCommit(context, resolved.value, commit, input.baseBranch);
-  if (context.git.listCommitFiles === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git changed-file history is unavailable', {
-      worktreeId: input.worktreeId,
-    });
-  }
+  const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
   return {
     commit: authorized.commit,
-    files: await context.git.listCommitFiles(
+    files: await listCommitFiles(
       resolved.value.record.absolutePath,
       authorized.commit,
       { signal: context.signal },
@@ -972,16 +963,17 @@ export async function getWorktreeCommitFileDiff(
   }
   if (commit === WORKTREE_GIT_WORKING_TREE) {
     await authorizeWorkingTree(context, resolved.value, input.baseBranch);
-    if (context.git.listWorkingTreeFiles === undefined || context.git.readWorkingTreeFileDiff === undefined) {
-      throw providerError('GIT_OPERATION_FAILED', 'Git working-tree file diff is unavailable', {
-        worktreeId: input.worktreeId,
-      });
-    }
-    const files = await context.git.listWorkingTreeFiles(
+    const readWorkingTreeFileDiff = gitRead(context, 'readWorkingTreeFileDiff', input.worktreeId);
+    // Path authorization only needs the changed-path projection: reading line
+    // statistics for every untracked file here would re-run one Git process per
+    // untracked file on each file click.
+    const readChangedPaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
+      ?? gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
+    const files = await readChangedPaths(
       resolved.value.record.absolutePath,
       { signal: context.signal },
     );
-    const changedFile = files.find((file) => file.path === input.path || file.oldPath === input.path);
+    const changedFile = findChangedFile(files, input.path);
     if (changedFile === undefined) {
       throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the working tree', {
         worktreeId: input.worktreeId,
@@ -989,7 +981,7 @@ export async function getWorktreeCommitFileDiff(
         path: input.path,
       });
     }
-    const diff = await context.git.readWorkingTreeFileDiff(
+    const diff = await readWorkingTreeFileDiff(
       resolved.value.record.absolutePath,
       changedFile.path,
       { signal: context.signal },
@@ -1001,17 +993,16 @@ export async function getWorktreeCommitFileDiff(
     };
   }
   const authorized = await authorizeCommit(context, resolved.value, commit, input.baseBranch);
-  if (context.git.listCommitFiles === undefined || context.git.readCommitFileDiff === undefined) {
-    throw providerError('GIT_OPERATION_FAILED', 'Git file diff is unavailable', {
-      worktreeId: input.worktreeId,
-    });
-  }
-  const files = await context.git.listCommitFiles(
+  const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', input.worktreeId);
+  const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
+  // The changed-file projection is the authorization boundary for the path, so
+  // the diff is only read for an exact member of that projection.
+  const files = await listCommitFiles(
     resolved.value.record.absolutePath,
     authorized.commit,
     { signal: context.signal },
   );
-  const changedFile = files.find((file) => file.path === input.path || file.oldPath === input.path);
+  const changedFile = findChangedFile(files, input.path);
   if (changedFile === undefined) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by this commit', {
       worktreeId: input.worktreeId,
@@ -1019,7 +1010,7 @@ export async function getWorktreeCommitFileDiff(
       path: input.path,
     });
   }
-  const diff = await context.git.readCommitFileDiff(
+  const diff = await readCommitFileDiff(
     resolved.value.record.absolutePath,
     authorized.commit,
     changedFile.path,
