@@ -278,7 +278,9 @@ and runtime cycles inside the new implementation directories.
 The Client persists Workspace, Main, and Worktree expansion exceptions under
 clutch-dsh-worktree.expand-state in browser-local storage. Missing IDs are
 expanded by default. The five-row Session overflow control remains transient,
-and parent collapse clears its affected temporary group state. Storage failure
+and parent collapse clears its affected temporary group state. The header's
+Collapse All action targets every Workspace and Worktree except the Workspace
+and Worktree containing the current Session, which remain expanded. Storage failure
 falls back to in-memory behavior and does not change DSH or sidecar data.
 
 ### Current Session reveal and positioning
@@ -324,7 +326,7 @@ Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cl
 browser-local fork recovery, membership projections, and permission notices for the affected
 Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending
 mutations and recovery health disable these actions. Cleanup requires explicit user confirmation.
-Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
+Positioning is scoped to the Worktree content scroll container. It keeps the navigation position when the current row is already visible and adjusts only the minimum vertical distance when the row is outside the viewport.
 
 The current Session reveal and suppression are browser-local, in-memory
 presentation state. Automatic reveal never mutates clutch-dsh-worktree.expand-state,

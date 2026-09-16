@@ -25,6 +25,7 @@ type Input = {
     | 'setExpandedArchivedWorkspaces'
     | 'setExpandedSessionGroups'
     | 'setCurrentSessionReveal'
+    | 'currentSessionLocation'
   >;
   props: Pick<WorktreeSurfaceProps, 't' | 'expandState' | 'createWorkspace' | 'actions'>;
   source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaceIds'>;
@@ -43,11 +44,19 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
     setExpandedArchivedWorkspaces,
     setExpandedSessionGroups,
     setCurrentSessionReveal,
+    currentSessionLocation,
   } = expansion;
   const { t, expandState, createWorkspace, actions } = props;
   const { workspaceIds } = source;
   const { readState } = read;
   const { runMutation } = mutation;
+  const currentWorkspaceId = currentSessionLocation?.workspaceId;
+  const currentWorktreeId =
+    currentSessionLocation?.kind === 'worktree' ? currentSessionLocation.worktreeId : undefined;
+  const targetWorkspaceIds = workspaceIds.filter((id) => id !== currentWorkspaceId);
+  const worktreeIds = readState.views
+    .flatMap((view) => view.worktrees.map((record) => record.worktreeId))
+    .filter((worktreeId) => worktreeId !== currentWorktreeId);
 
   return (
     <>
@@ -126,13 +135,10 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
               className={styles.iconButton}
               aria-label={t('workspace.collapseAll')}
               onClick={() => {
-                setCurrentSessionReveal(undefined);
-                expandState.actions.collapseAll(
-                  workspaceIds,
-                  readState.views.flatMap((view) =>
-                    view.worktrees.map((record) => record.worktreeId),
-                  ),
-                );
+                // Keep the current Session's workspace and worktree expanded in state,
+                // while collapsing all other unrelated workspaces and worktrees.
+                if (currentSessionLocation === undefined) setCurrentSessionReveal(undefined);
+                expandState.actions.collapseAll(targetWorkspaceIds, worktreeIds);
                 setExpandedArchivedWorkspaces({});
                 setExpandedSessionGroups({});
               }}
