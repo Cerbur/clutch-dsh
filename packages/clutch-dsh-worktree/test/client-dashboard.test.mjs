@@ -911,6 +911,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   let selected = selection;
   let target = record;
   let additionalTargets = [];
+  let bindings = [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }];
   const workspace = { workspaceId: 'repo', title: 'Repo' };
   const sourceState = {
     mode: 'worktree',
@@ -976,13 +977,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
                   {
                     worktrees: [target, ...additionalTargets],
                     branches: [{ name: record.branch }],
-                    bindings: [
-                      {
-                        workspaceId: 'repo',
-                        worktreeId: target.worktreeId,
-                        sessionId: sourceState.sessions.ids[0] ?? 'current',
-                      },
-                    ],
+                    bindings,
                   },
                 ],
               ]),
@@ -1088,6 +1083,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   const switchingTarget = { ...record, worktreeId: 'wt-switch', branch: 'feat/payment-refactor-switch' };
   additionalTargets = [record];
   target = switchingTarget;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-switch', sessionId: 'head-switch' }];
   sourceState.sessions.ids = ['head-switch'];
   calls.splice(0);
   surfaceContentProps(renderTree(false)).openDashboard(switchingTarget);
@@ -1103,6 +1099,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
 
   const targetB = { ...record, worktreeId: 'wt-b', branch: 'feat/payment-refactor-b' };
   target = targetB;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-b', sessionId: 'head-b' }];
   selected = undefined;
   sourceState.currentSessionId = undefined;
   sourceState.sessions.current = undefined;
@@ -1147,6 +1144,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
 
   const targetC = { ...record, worktreeId: 'wt-c', branch: 'feat/payment-refactor-c' };
   target = targetC;
+  bindings = [];
   sourceState.sessions.ids = [];
   calls.splice(0);
   surfaceContentProps(renderTree(false)).openDashboard(targetC);
@@ -1163,9 +1161,9 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
 
   const targetD = { ...record, worktreeId: 'wt-d', branch: 'feat/payment-refactor-d' };
   target = targetD;
-  sourceState.currentSessionId = undefined;
-  sourceState.sessions.current = undefined;
-  sourceState.sessions.ids = [];
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['unrelated'];
   selected = undefined;
   calls.splice(0);
   renderTree(false);
@@ -1197,6 +1195,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
 
   const externalTarget = { ...record, worktreeId: 'wt-external', branch: 'feat/payment-refactor-external' };
   target = externalTarget;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-external', sessionId: 'head-external' }];
   sourceState.sessions.ids = ['head-external'];
   calls.splice(0);
   surfaceContentProps(renderTree(false)).openDashboard(externalTarget);
@@ -1213,6 +1212,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
 
   calls.splice(0);
   target = record;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }];
   selected = selection;
   sourceState.currentSessionId = 'current';
   sourceState.sessions.current = 'current';

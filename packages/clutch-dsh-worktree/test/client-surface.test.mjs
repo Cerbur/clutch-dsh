@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
+import ts from 'typescript';
 
 import {
   createNumberedWorktreeName,
@@ -1565,6 +1566,112 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
   assert.match(archivedCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
   assert.match(activeCall, /onDashboard:/);
   assert.match(archivedCall, /onDashboard:/);
+});
+
+test('dispatches Dashboard from an empty Worktree row button and menu', async () => {
+  const source = await readFile(
+    new URL('../src/client/surface/components/rows.tsx', import.meta.url),
+    'utf8',
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const jsx = (type, props) => ({ type, props: props ?? {} });
+  const jsxs = jsx;
+  const primitives = Object.fromEntries(
+    [
+      'HoverCard',
+      'IconArchiveOutline20',
+      'IconBranchOutline16',
+      'IconChevronDownOutline14',
+      'IconChevronRightOutline14',
+      'IconCopyOutline16',
+      'IconEditOutline16',
+      'IconEllipsisOutline16',
+      'IconFolderClose16',
+      'IconFolderOpen16',
+      'IconPlusOutline16',
+      'IconRefreshOutline16',
+      'IconTrashOutline16',
+      'Menu',
+      'StateDot',
+    ].map((name) => [name, function Primitive() {}]),
+  );
+  const styles = new Proxy(
+    {},
+    { get: (_target, key) => String(key) },
+  );
+  const react = {
+    useEffect: () => {},
+    useRef: (current) => ({ current }),
+    useState: (value) => [value, () => {}],
+  };
+  const module = { exports: {} };
+  new Function('require', 'exports', 'module', compiled)(
+    (name) => {
+      if (name === 'react') return react;
+      if (name === 'react/jsx-runtime') return { jsx, jsxs, Fragment: 'Fragment' };
+      if (name === '@deepseek-ai/dsh-client-ui-primitives')
+        return { ...primitives, writeClipboard: () => {} };
+      if (name === '../../dashboard/dashboard-icon.js')
+        return { IconDashboard: function IconDashboard() {} };
+      if (name === '../../session/session-view.js')
+        return { isBlankSession: () => false, relativeTime: () => '' };
+      if (name === '../selectors.js') return { sessionLabel: () => '' };
+      if (name === '../../worktree.css') return styles;
+      throw new Error('Unexpected rows.tsx import: ' + name);
+    },
+    module.exports,
+    module,
+  );
+
+  const record = { workspaceId: 'repo', worktreeId: 'wt-empty' };
+  const calls = [];
+  const tree = module.exports.WorktreeGroupRow({
+    t: (key) => key,
+    kind: 'worktree',
+    label: 'empty',
+    worktreeId: record.worktreeId,
+    expanded: false,
+    hasOngoingSession: false,
+    icon: jsx(function BranchIcon() {}, {}),
+    workspaceTitle: 'Repo',
+    state: undefined,
+    stateLabel: undefined,
+    onToggle: () => {},
+    showDashboardAction: true,
+    menu: {
+      onDashboard: () => calls.push(record),
+      open: false,
+      onOpenChange: () => {},
+      label: 'empty',
+      copyPath: '/tmp/empty',
+      disabled: false,
+    },
+  });
+
+  const nodes = [];
+  const seen = new Set();
+  const visit = (value) => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    nodes.push(value);
+    for (const child of Object.values(value)) visit(child);
+  };
+  visit(tree);
+
+  const dashboardButton = nodes.find((node) => node.props?.['data-dashboard-action'] !== undefined);
+  const menu = nodes.find((node) => node.type === primitives.Menu);
+  assert.ok(dashboardButton, 'empty Worktree renders a Dashboard action button');
+  assert.ok(menu, 'empty Worktree renders its action menu');
+
+  dashboardButton.props.onClick({ stopPropagation() {} });
+  menu.props.onSelect('dashboard');
+  assert.deepEqual(calls, [record, record]);
 });
 
 test('separates collapsed running activity and coordinates it with hover scrolling', async () => {
