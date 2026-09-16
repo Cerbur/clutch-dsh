@@ -502,6 +502,10 @@ export function apply(ctx: Context): void {
             const sidebar = sidebarRightController(ctx);
             if (sidebar?.isExpanded?.() === false) sidebar.toggleExpanded?.();
           },
+          isRightSidebarExpanded: () => {
+            const sidebar = sidebarRightController(ctx);
+            return sidebar?.isExpanded?.() === true;
+          },
           expandState,
           sessionOrder,
           dashboardStore,

@@ -471,6 +471,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           t={t}
           onClose={closeDashboard}
           onOpenSidebar={source.currentSessionId === undefined ? undefined : props.openRightSidebar}
+          isRightSidebarExpanded={props.isRightSidebarExpanded}
         />
       )}
     </>

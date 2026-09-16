@@ -116,8 +116,8 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
 当前 Session 已属于目标 Worktree，就保持当前 Session；否则切换到目标 Worktree 保留顺序中排在最前的
 Session，让两侧视图保持一致。ready 的空 Session list 会打开不绑定当前 Session 的 page-level Dashboard；因为没有目标 Session，
-它会收起当前打开的原生右侧栏，也不会自动创建 Session。只要当前 Session 可以承载右侧栏，Dashboard
-右上角会保留原生的右侧栏按钮。
+它会收起当前打开的原生右侧栏，也不会自动创建 Session。只要当前 Session 可以承载右侧栏且右侧栏处于收起状态，
+Dashboard 右上角会保留原生的右侧栏按钮；右侧栏打开后，该按钮按原生行为自动隐藏。
 
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作

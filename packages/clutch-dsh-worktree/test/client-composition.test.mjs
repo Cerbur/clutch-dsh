@@ -1169,17 +1169,23 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, workspaceSnapshot.items);
     const overlay = ctx.slots.entries('shell.overlay')[0];
     const injected = overlay.inject();
+    assert.equal(injected.isRightSidebarExpanded(), true);
     injected.closeRightSidebar();
     assert.equal(rightExpanded, false);
+    assert.equal(injected.isRightSidebarExpanded(), false);
     injected.openRightSidebar();
     assert.equal(rightExpanded, true);
+    assert.equal(injected.isRightSidebarExpanded(), true);
     injected.closeRightSidebar();
+    assert.equal(injected.isRightSidebarExpanded(), false);
     injected.openResource('dsh-resource://file/session/s_virtual/src/index.ts', { line: 7 });
     assert.equal(rightExpanded, true);
+    assert.equal(injected.isRightSidebarExpanded(), true);
     assert.deepEqual(openedResources, [
       ['dsh-resource://file/session/s_virtual/src/index.ts', { params: { line: 7 } }],
     ]);
     await rightbarFiber.dispose();
+    assert.equal(injected.isRightSidebarExpanded(), false);
     assert.doesNotThrow(() => injected.closeRightSidebar());
     assert.doesNotThrow(() => injected.openRightSidebar());
     assert.equal(injected.openResource('dsh-resource://file/session/s_virtual/README.md'), false);

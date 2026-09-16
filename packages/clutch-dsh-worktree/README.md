@@ -121,7 +121,8 @@ Session list to become ready, then keeps the current Session if it belongs to th
 switches to the retained head Session so both views stay aligned. A ready
 empty Session list opens a page-level Dashboard without changing the current Session, collapses any currently
 open native right sidebar because there is no target Session, and does not create a Session automatically. The
-Dashboard header keeps the native right-sidebar button available whenever a current Session can host it.
+Dashboard header keeps the native right-sidebar button available whenever a current Session can host it and the
+sidebar is collapsed; once opened, the button is hidden following native behavior.
 
 Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface

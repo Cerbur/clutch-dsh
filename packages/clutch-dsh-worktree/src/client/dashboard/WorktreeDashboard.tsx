@@ -46,6 +46,7 @@ export interface WorktreeDashboardProps {
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
   readonly onOpenSidebar?: () => void;
+  readonly isRightSidebarExpanded?: () => boolean;
   readonly sessions: SessionListLike;
   readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly sessionIds: readonly string[];
@@ -418,6 +419,7 @@ export function WorktreeDashboard({
   t,
   onClose,
   onOpenSidebar,
+  isRightSidebarExpanded,
   sessions,
   sessionPresentations,
   sessionIds,
@@ -434,6 +436,9 @@ export function WorktreeDashboard({
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(
+    Boolean(isRightSidebarExpanded?.()),
+  );
   const [tab, setTab] = useState<DashboardTab>('overview');
   const [baselineBranch, setBaselineBranch] = useState(record.baseBranch);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
@@ -449,12 +454,18 @@ export function WorktreeDashboard({
   useLayoutEffect(() => {
     const element = surface.current;
     if (!element) return;
-    return mountDashboardOverlay(element, (next) =>
-      setPlacement((previous) =>
-        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
-      ),
+    return mountDashboardOverlay(
+      element,
+      (next) =>
+        setPlacement((previous) =>
+          JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+        ),
+      {
+        onRightSidebarChange: (open) => setRightSidebarOpen(open),
+        isRightSidebarExpanded,
+      },
     );
-  }, []);
+  }, [isRightSidebarExpanded]);
   useLayoutEffect(() => {
     if (!placement) return;
     const previous = document.activeElement;
@@ -662,14 +673,18 @@ export function WorktreeDashboard({
             >
               {topActionIsCreateSession ? t('dashboard.newSession') : <>← {t('dashboard.back')}</>}
             </button>
-            {onOpenSidebar !== undefined && (
+            {!rightSidebarOpen && onOpenSidebar !== undefined && (
               <Tooltip label={t('dashboard.openSidebar')} side="bottom" delayMs={500}>
                 <button
                   type="button"
                   className={styles.dashboardSidebarButton}
                   aria-label={t('dashboard.openSidebar')}
                   title={t('dashboard.openSidebar')}
-                  onClick={onOpenSidebar}
+                  data-sidebar-right-expand
+                  onClick={() => {
+                    onOpenSidebar();
+                    setRightSidebarOpen(true);
+                  }}
                 >
                   <IconPanelLeftOutline16 />
                 </button>
@@ -951,7 +966,10 @@ export function WorktreeDashboard({
               worktreeId={record.worktreeId}
               defaultBaselineBranch={displayedBaseline}
               currentBranch={baselineCurrentBranch}
-              onOpenFile={onOpenFile}
+              onOpenFile={(filePath) => {
+                onOpenFile?.(filePath);
+                setRightSidebarOpen(true);
+              }}
               t={t}
             />
           ) : tab === 'sessions' ? (

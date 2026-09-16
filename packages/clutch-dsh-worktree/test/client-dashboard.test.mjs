@@ -868,9 +868,40 @@ test('empty Dashboard offers new Session and the native rightbar button', () => 
     (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
   )[0];
   assert.ok(sidebarButton);
+  assert.equal(sidebarButton.props['data-sidebar-right-expand'], true);
   assert.equal(findAll(sidebarButton, (item) => item.props?.['data-icon'] === 'sidebar').length, 1);
   sidebarButton.props.onClick();
   assert.equal(opened, 1);
+
+  // After clicking openSidebar, the button is hidden
+  const nodeAfterOpen = harness.render({
+    sessionIds: [],
+    onCreateSession: () => { created += 1; },
+    onOpenSidebar: () => { opened += 1; },
+  });
+  assert.equal(
+    findAll(
+      nodeAfterOpen,
+      (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+    ).length,
+    0,
+  );
+
+  // When rendered with isRightSidebarExpanded returning true, the button is hidden initially
+  const harnessAlreadyOpen = renderHarness(async () => true);
+  const nodeAlreadyOpen = harnessAlreadyOpen.render({
+    sessionIds: [],
+    onOpenSidebar: () => {},
+    isRightSidebarExpanded: () => true,
+  });
+  assert.equal(
+    findAll(
+      nodeAlreadyOpen,
+      (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+    ).length,
+    0,
+  );
+  harnessAlreadyOpen.dispose();
   assert.match(dashboardCssSource, /\.dashboardSidebarButton[\s\S]*?width: 28px;[\s\S]*?height: 28px;/);
   assert.match(dashboardCssSource, /\.dashboardSidebarButton svg[\s\S]*?transform: scaleX\(-1\);/);
 
@@ -1328,11 +1359,29 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     sidebar.rect.right = 280;
     right.rect.left = 960;
     let placement;
-    const dispose = mountDashboardOverlay(surface, (next) => {
-      placement = next;
-    });
+    let rightSidebarOpen = false;
+    const dispose = mountDashboardOverlay(
+      surface,
+      (next) => {
+        placement = next;
+      },
+      {
+        onRightSidebarChange: (open) => {
+          rightSidebarOpen = open;
+        },
+      },
+    );
     assert.equal(placement.left, 284);
     assert.equal(placement.width, 676);
+    assert.equal(rightSidebarOpen, false);
+    right.setAttribute('data-sidebar-right-open', '');
+    observers[1].callback();
+    pending();
+    assert.equal(rightSidebarOpen, true);
+    right.removeAttribute('data-sidebar-right-open');
+    observers[1].callback();
+    pending();
+    assert.equal(rightSidebarOpen, false);
     assert.equal(center.getAttribute('inert'), '');
     assert.equal(right.getAttribute('inert'), null);
     assert.equal(right.style.getPropertyValue('visibility'), '');

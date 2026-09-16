@@ -72,6 +72,8 @@ export interface WorktreeSurfaceInjected {
   readonly closeRightSidebar?: () => void;
   /** Reveal the native session-scoped rightbar from the Dashboard header. */
   readonly openRightSidebar?: () => void;
+  /** Whether the native session-scoped rightbar is currently expanded. */
+  readonly isRightSidebarExpanded?: () => boolean;
   readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
     set(selection: DashboardSelection | undefined): void;
   };

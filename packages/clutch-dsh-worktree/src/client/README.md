@@ -124,7 +124,7 @@ rightbar widths, and missing/replaced anchors produce zero coverage and restore 
 native center is concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden
 attributes are restored on close or disposal. A ready page-level Dashboard for a Worktree with no retained
 Session collapses the native rightbar first, because that page has no Session-scoped rightbar to preserve; when
-a current Session can host the rightbar, the Dashboard header exposes a native-style expand button. Opening a
+a current Session can host the rightbar and the rightbar is collapsed, the Dashboard header exposes a native-style expand button, hiding it when the rightbar is open. Opening a
 Worktree Dashboard keeps the current Session if it belongs to the target, otherwise navigates to that
 Worktree's retained head Session when one exists; an initial pending
 list defers that decision until the list is ready, while an empty ready list leaves navigation unchanged and does
