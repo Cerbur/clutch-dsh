@@ -23,7 +23,8 @@ export type PendingDashboardSettlement =
 /**
  * Keep Dashboard and the native Session sidebars on one Session identity.
  *
- * The first visible id is the Worktree's retained head order. An empty list is
+ * Keep the current Session when it belongs to the target; otherwise use the
+ * first visible id in the Worktree's retained head order. An empty list is
  * still a valid page-level dashboard target: it carries no native Session identity
  * and leaves Session creation to the explicit Dashboard action.
  */
@@ -44,7 +45,9 @@ export function prepareDashboardNavigation(
       waitForSessionList: true,
     };
   }
-  const sessionIdToOpen = sessionIds[0];
+  const sessionIdToOpen = currentSessionId !== undefined && sessionIds.includes(currentSessionId)
+    ? currentSessionId
+    : sessionIds[0];
   return {
     selection: {
       workspaceId: record.workspaceId,

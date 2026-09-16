@@ -261,7 +261,10 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       );
       // A file opened from Git must stay inside the Dashboard Worktree.
       // Never fall back to the current or another Workspace Session.
-      const targetSessionId = worktreeSessions[0];
+      const targetSessionId = source.currentSessionId !== undefined &&
+        worktreeSessions.includes(source.currentSessionId)
+        ? source.currentSessionId
+        : undefined;
       if (targetSessionId === undefined) return;
       const address = buildSessionFileAddress(targetSessionId, filePath);
       props.openResource(address, options);
@@ -269,6 +272,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     [
       props.openResource,
       dashboardRecord,
+      source.currentSessionId,
       source.sessions,
       source.archivedSessionIds,
       source.workspaces,

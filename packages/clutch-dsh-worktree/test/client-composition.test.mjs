@@ -1090,6 +1090,14 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   });
 
   const ctx = new Context();
+  let rightExpanded = true;
+  const openedResources = [];
+  const rightbarFiber = ctx.plugin((provider) => provider.provide('sidebarRight', {
+    isExpanded: () => rightExpanded,
+    toggleExpanded: () => { rightExpanded = !rightExpanded; },
+    openResource: (...args) => { openedResources.push(args); rightExpanded = true; },
+  }));
+  await rightbarFiber.await();
   ctx.provide('connection', {
     rpc: {
       call: async () => ({ ok: true, value: { ok: true, value: [] } }),
@@ -1161,6 +1169,20 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, workspaceSnapshot.items);
     const overlay = ctx.slots.entries('shell.overlay')[0];
     const injected = overlay.inject();
+    injected.closeRightSidebar();
+    assert.equal(rightExpanded, false);
+    injected.openRightSidebar();
+    assert.equal(rightExpanded, true);
+    injected.closeRightSidebar();
+    injected.openResource('dsh-resource://file/session/s_virtual/src/index.ts', { line: 7 });
+    assert.equal(rightExpanded, true);
+    assert.deepEqual(openedResources, [
+      ['dsh-resource://file/session/s_virtual/src/index.ts', { params: { line: 7 } }],
+    ]);
+    await rightbarFiber.dispose();
+    assert.doesNotThrow(() => injected.closeRightSidebar());
+    assert.doesNotThrow(() => injected.openRightSidebar());
+    assert.equal(injected.openResource('dsh-resource://file/session/s_virtual/README.md'), false);
     injected.syncSessionWorkspaces([{ workspaceId: 'ws_native', sessionId: 's_virtual' }]);
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, [
       { workspaceId: 'ws_native', sessionIds: ['s_virtual'] },

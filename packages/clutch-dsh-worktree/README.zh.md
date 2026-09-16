@@ -114,8 +114,8 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
 图标打开。Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
 的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
-目标 Worktree 已有 Session，随后会先切换到该 Worktree 保留顺序中排在最前的 Session，让两侧视图保持
-一致。ready 的空 Session list 会打开不绑定当前 Session 的 page-level Dashboard；因为没有目标 Session，
+当前 Session 已属于目标 Worktree，就保持当前 Session；否则切换到目标 Worktree 保留顺序中排在最前的
+Session，让两侧视图保持一致。ready 的空 Session list 会打开不绑定当前 Session 的 page-level Dashboard；因为没有目标 Session，
 它会收起当前打开的原生右侧栏，也不会自动创建 Session。只要当前 Session 可以承载右侧栏，Dashboard
 右上角会保留原生的右侧栏按钮。
 
@@ -159,7 +159,8 @@ staged、unstaged、untracked、删除和重命名改动。这是按需读取的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
 `-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。打开变更文件时会使用
-Dashboard 对应 Worktree 的第一个现有 Session；如果 list 为空，不会回退到无关的当前 Session。
+当前 Session 在原生右侧栏中显示文件，但前提是该 Session 属于 Dashboard 对应的 Worktree。
+空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更

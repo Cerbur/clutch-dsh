@@ -115,7 +115,7 @@ test('dashboard navigation follows the Worktree head Session without creating an
     },
   );
   assert.deepEqual(
-    prepareDashboardNavigation(record, ['session-a'], 'session-a'),
+    prepareDashboardNavigation(record, ['worktree-head', 'session-a'], 'session-a'),
     {
       selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'session-a' },
       sessionIdToOpen: undefined,
@@ -890,7 +890,6 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   );
   assert.match(surfaceSource, /if \(source\.mode !== 'worktree'\) closeDashboard\(\)/);
   assert.match(surfaceSource, /inputProps\.dashboardStore\?\.set\(undefined\)/);
-  assert.match(surfaceSource, /const targetSessionId = worktreeSessions\[0\]/);
   assert.doesNotMatch(surfaceSource, /worktreeSessions\[0\] \?\? source\.currentSessionId/);
   assert.match(surfaceSource, /source\.sessions\.phase \?\? 'ready'/);
   assert.match(surfaceSource, /pendingDashboardRecord\.current = record/);
@@ -905,6 +904,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const { createNumberedWorktreeName } = await import('../lib/client/view/worktree-view.js');
+  const { buildSessionFileAddress } = await import('../lib/client/dashboard/git/file-address.js');
   const calls = [];
   const refs = [];
   let refCursor = 0;
@@ -956,6 +956,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
         isManagedDashboardRecord: (record) => !isMainWorktreeId(record.worktreeId),
       };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
+    if (name.endsWith('file-address.js')) return { buildSessionFileAddress };
     if (name.endsWith('dashboard-navigation.js'))
       return { prepareDashboardNavigation, settlePendingDashboardNavigation };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
@@ -1015,6 +1016,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     createSessionForWorktree() {},
     openSession: (id) => calls.push(['nativeOpen', id]),
     closeRightSidebar: () => calls.push(['closeRightSidebar']),
+    openResource: (...args) => calls.push(['resource', ...args]),
     dashboardStore: undefined,
   };
   const renderTree = (resetSelected = true) => {
@@ -1033,6 +1035,15 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   assert.equal(selected, selection);
   assert.deepEqual(props.sessionIds, ['current']);
   assert.equal(props.sessionPresentations, sourceState.sessionPresentations);
+  // A non-head current Session owns both the Dashboard and native file preview.
+  bindings.unshift({ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'head' });
+  sourceState.sessions.ids = ['head', 'current'];
+  render().onOpenFile('src/index.ts', { line: 7 });
+  assert.deepEqual(calls.splice(0), [
+    ['resource', 'dsh-resource://file/session/current/src/index.ts', { line: 7 }],
+  ]);
+  bindings.shift();
+  sourceState.sessions.ids = ['current'];
   props.onCreateWorktree();
   assert.deepEqual(calls.shift(), [
     'creator',
@@ -1174,6 +1185,8 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     worktreeId: 'wt-d',
     sessionId: undefined,
   });
+  findAll(renderTree(false), (item) => item.type === 'Dashboard')[0].props.onOpenFile('README.md');
+  assert.deepEqual(calls, [['closeRightSidebar']]);
   assert.equal(
     findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
     1,

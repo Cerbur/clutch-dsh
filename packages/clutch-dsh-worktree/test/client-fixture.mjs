@@ -233,6 +233,7 @@ export async function loadClientEntry({
   const nativeFork = fakeSessions.fork;
 
   const fakeContext = {
+    get(name) { return name === 'sidebarRight' ? sidebarRight : undefined; },
     connection: { rpc: connectionRpc },
     locale,
     localeRegistrations,

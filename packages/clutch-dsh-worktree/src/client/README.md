@@ -125,12 +125,19 @@ native center is concealed and made inert while the Dashboard is open; its visib
 attributes are restored on close or disposal. A ready page-level Dashboard for a Worktree with no retained
 Session collapses the native rightbar first, because that page has no Session-scoped rightbar to preserve; when
 a current Session can host the rightbar, the Dashboard header exposes a native-style expand button. Opening a
-Worktree Dashboard first navigates to that Worktree's retained head Session when one exists; an initial pending
+Worktree Dashboard keeps the current Session if it belongs to the target, otherwise navigates to that
+Worktree's retained head Session when one exists; an initial pending
 list defers that decision until the list is ready, while an empty ready list leaves navigation unchanged and does
 not create a Session. Later Session identity changes close only a Session-bound Dashboard; a sessionless empty-list
 Dashboard remains a page-level target. Its top-right navigation action becomes New Session when the target has no
 Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
 identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
+
+Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
+time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
+including while opening an empty Dashboard. File preview uses the current Session only after checking
+its membership in the target Worktree, and native `openResource` reveals the rightbar. An unavailable
+rightbar service does not prevent page-level navigation.
 
 The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires

@@ -101,7 +101,10 @@ interface SidebarRightControllerLike {
 }
 
 function sidebarRightController(ctx: Context): SidebarRightControllerLike | undefined {
-  return (ctx as unknown as { sidebarRight?: SidebarRightControllerLike }).sidebarRight;
+  // Optional sibling service: property access requires a declared Cordis injection.
+  // Resolve at action time so late registration/disposal is reflected without
+  // making the whole Worktree navigation depend on the rightbar plugin.
+  return ctx.get('sidebarRight') as SidebarRightControllerLike | undefined;
 }
 
 function forkRelatedSessionIds(
