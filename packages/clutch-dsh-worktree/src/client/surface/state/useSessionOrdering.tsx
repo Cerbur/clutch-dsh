@@ -6,7 +6,7 @@ import {
   type SessionOrderAccountState,
 } from '../../session/worktree-session-order.js';
 import { filterArchivedSessionIds } from '../../view/worktree-view.js';
-import { bindingIdsFor } from '../selectors.js';
+import { bindingIdsFor, isCompleteWorktreeWorkspaceSnapshot } from '../selectors.js';
 import { SessionOrderInput, updatedAtById } from '../shared.js';
 import type { WorktreeSurfaceProps } from '../types.js';
 import type { useSurfaceRefresh } from './useSurfaceRefresh.js';
@@ -16,17 +16,24 @@ type Input = {
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'readState' | 'viewByWorkspace'>;
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
-    'workspaces' | 'sessions' | 'archivedSessionIds' | 'sessionOrderSnapshot' | 'mode'
+    'workspaces' | 'sessions' | 'archivedSessionIds' | 'sessionOrderSnapshot' | 'mode' | 'workspaceIds'
   >;
   props: Pick<WorktreeSurfaceProps, 'sessionOrder'>;
 };
 
 export function useSessionOrdering({ read, source, props }: Input) {
   const { readState, viewByWorkspace } = read;
-  const { workspaces, sessions, archivedSessionIds, sessionOrderSnapshot, mode } = source;
+  const { workspaces, sessions, archivedSessionIds, sessionOrderSnapshot, mode, workspaceIds } = source;
   const { sessionOrder } = props;
+
+  const isReady =
+    readState.status === 'ready' &&
+    (sessions.phase === undefined || sessions.phase === 'ready') &&
+    (workspaces.phase === undefined || workspaces.phase === 'ready') &&
+    isCompleteWorktreeWorkspaceSnapshot(workspaceIds, readState.views);
+
   const sessionOrderInputs = useMemo<readonly SessionOrderInput[]>(() => {
-    if (readState.status !== 'ready') return [];
+    if (!isReady) return [];
     const inputs: SessionOrderInput[] = [];
     for (const workspace of workspaces.items) {
       const view = viewByWorkspace.get(workspace.workspaceId);
@@ -65,7 +72,7 @@ export function useSessionOrdering({ read, source, props }: Input) {
     return inputs;
   }, [
     archivedSessionIds,
-    readState.status,
+    isReady,
     sessions.byId,
     sessions.ids,
     viewByWorkspace,
@@ -89,11 +96,11 @@ export function useSessionOrdering({ read, source, props }: Input) {
     return ordered;
   }, [sessionOrderInputs, sessionOrderSnapshot]);
   useEffect(() => {
-    if (mode !== 'worktree' || readState.status !== 'ready') return;
+    if (mode !== 'worktree' || !isReady || sessionOrderInputs.length === 0) return;
     for (const input of sessionOrderInputs) {
       sessionOrder.actions.reconcile(input.accountKey, input.sessionIds, input.updatedAtById);
     }
     sessionOrder.actions.retain(sessionOrderInputs.map((input) => input.accountKey));
-  }, [mode, readState.status, sessionOrder, sessionOrderInputs]);
+  }, [isReady, mode, sessionOrder, sessionOrderInputs]);
   return { sessionOrderInputs, orderedSessionIdsByAccount };
 }

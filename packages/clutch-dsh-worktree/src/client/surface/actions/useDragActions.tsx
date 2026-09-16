@@ -5,6 +5,7 @@ import {
   toRetryableWorktreeOrderError,
   toWorktreeViewError,
 } from '../../view/worktree-view.js';
+import { updatedAtById } from '../shared.js';
 import type {
   SessionDragState,
   WorkspaceDragState,
@@ -22,7 +23,12 @@ export interface SessionOrderCommitInput {
   readonly beforeSessionId?: string;
   readonly nextOrder: readonly string[];
   readonly insertSessionBefore?: WorktreeSurfaceProps['insertSessionBefore'];
-  readonly setOrder: (groupKey: string, order: readonly string[]) => void;
+  readonly setOrder: (
+    groupKey: string,
+    order: readonly string[],
+    updatedAtById?: Readonly<Record<string, number | undefined>>,
+  ) => void;
+  readonly updatedAtById?: Readonly<Record<string, number | undefined>>;
 }
 
 /**
@@ -31,7 +37,7 @@ export interface SessionOrderCommitInput {
  */
 export async function commitSessionOrder(input: SessionOrderCommitInput): Promise<void> {
   if (input.groupKey.startsWith('worktree:')) {
-    input.setOrder(input.groupKey, input.nextOrder);
+    input.setOrder(input.groupKey, input.nextOrder, input.updatedAtById);
     return;
   }
   if (input.insertSessionBefore === undefined) {
@@ -42,7 +48,7 @@ export async function commitSessionOrder(input: SessionOrderCommitInput): Promis
     input.sessionId,
     input.beforeSessionId,
   );
-  input.setOrder(input.groupKey, input.nextOrder);
+  input.setOrder(input.groupKey, input.nextOrder, input.updatedAtById);
 }
 
 export interface SessionDragOrderInput {
@@ -97,7 +103,7 @@ export function resolveSessionDragOrder(
 }
 
 type Input = {
-  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces' | 'sessionOrderSnapshot'>;
+  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces' | 'sessions' | 'sessionOrderSnapshot'>;
   orderedSessionIdsByAccount: ReadonlyMap<string, readonly string[]>;
   props: Pick<
     WorktreeSurfaceProps,
@@ -201,6 +207,7 @@ export function useDragActions({
       nextOrder: move.nextOrder,
       insertSessionBefore,
       setOrder: sessionOrder.actions.setOrder,
+      updatedAtById: updatedAtById(sessionIds, source.sessions),
     }).catch((error) => {
       setActionError(toWorktreeViewError(error));
     });

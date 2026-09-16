@@ -252,3 +252,46 @@ test('store reconciles activity without invoking external mutation APIs', () => 
   unsubscribe();
   store.dispose();
 });
+
+test('setOrder incorporates current timestamps into observedUpdatedAt', () => {
+  const store = createWorktreeSessionOrderStore(fakeSnapshotStoreFactory());
+  store.actions.setOrder(
+    'worktree:wt-1',
+    ['s2', 's1'],
+    timestamps([
+      ['s1', 100],
+      ['s2', 200],
+    ]),
+  );
+  assert.deepEqual(store.getSnapshot().accounts['worktree:wt-1'], {
+    order: ['s2', 's1'],
+    observedUpdatedAt: { s1: 100, s2: 200 },
+  });
+
+  // Reconcile with identical timestamps preserves the set order
+  store.actions.reconcile(
+    'worktree:wt-1',
+    ['s1', 's2'],
+    timestamps([
+      ['s1', 100],
+      ['s2', 200],
+    ]),
+  );
+  assert.deepEqual(store.getSnapshot().accounts['worktree:wt-1'].order, ['s2', 's1']);
+  store.dispose();
+});
+
+test('retain ignores empty account list and preserves existing accounts', () => {
+  const store = createWorktreeSessionOrderStore(fakeSnapshotStoreFactory());
+  store.actions.setOrder('worktree:wt-1', ['s1']);
+  store.actions.setOrder('worktree:wt-2', ['s2']);
+
+  store.actions.retain([]);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-1']);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-2']);
+
+  store.actions.retain(['worktree:wt-1']);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-1']);
+  assert.equal(store.getSnapshot().accounts['worktree:wt-2'], undefined);
+  store.dispose();
+});

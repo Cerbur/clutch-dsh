@@ -21,7 +21,11 @@ export interface WorktreeSessionOrderActions {
     baseIds: readonly string[],
     updatedAtById: Readonly<Record<string, number | undefined>>,
   ) => void;
-  setOrder: (accountKey: string, order: readonly string[]) => void;
+  setOrder: (
+    accountKey: string,
+    order: readonly string[],
+    updatedAtById?: Readonly<Record<string, number | undefined>>,
+  ) => void;
   retain: (accountKeys: readonly string[]) => void;
 }
 
@@ -244,16 +248,24 @@ export function createWorktreeSessionOrderStore(
         draft.accounts[accountKey] = cloneAccount(next);
       });
     },
-    setOrder: (accountKey, order) => {
+    setOrder: (accountKey, order, updatedAtById) => {
       if (disposed || accountKey.length === 0) return;
       store.update((draft) => {
         const current = draft.accounts[accountKey] ?? {
           order: [],
           observedUpdatedAt: {},
         };
+        const observedUpdatedAt = { ...current.observedUpdatedAt };
+        if (updatedAtById !== undefined) {
+          for (const [id, timestamp] of Object.entries(updatedAtById)) {
+            if (isValidTimestamp(timestamp)) {
+              observedUpdatedAt[id] = Math.max(observedUpdatedAt[id] ?? timestamp, timestamp);
+            }
+          }
+        }
         const next = {
           order: validIds(order),
-          observedUpdatedAt: { ...current.observedUpdatedAt },
+          observedUpdatedAt,
         };
         if (sameAccount(current, next)) return;
         draft.accounts[accountKey] = next;
@@ -261,8 +273,9 @@ export function createWorktreeSessionOrderStore(
     },
     retain: (accountKeys) => {
       if (disposed) return;
+      const allowed = new Set(accountKeys);
+      if (allowed.size === 0) return;
       store.update((draft) => {
-        const allowed = new Set(accountKeys);
         for (const accountKey of Object.keys(draft.accounts)) {
           if (!allowed.has(accountKey)) delete draft.accounts[accountKey];
         }
