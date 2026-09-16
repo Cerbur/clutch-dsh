@@ -130,7 +130,7 @@ for (const kind of ['main', 'active', 'archived']) {
     assert.ok(button, 'find the actual Collapse All button');
     button.props.onClick();
     expansion = render();
-    assert.deepEqual(calls, [[['other'], kind === 'main' ? [] : ['other-wt']]]);
+    assert.deepEqual(calls, [[['other'], kind === 'main' ? [] : ['other-wt'], ['repo', 'other']]]);
     assert.equal(
       keys.every((key) => expansion.isCurrentSessionReveal(key)),
       true,

@@ -197,3 +197,16 @@ test('collapseAll collapses all specified workspaces and worktrees', () => {
     collapsedWorktreeIds: { wt1: true, wt2: true, wt3: true },
   });
 });
+
+test('collapseAll accepts separate mainWorkspaceIds to collapse Main independently', () => {
+  storage.clear();
+  const store = createWorktreeExpandStateStore(createSnapshotStore);
+
+  store.actions.collapseAll(['ws1'], ['wt1'], ['ws1', 'ws2']);
+
+  assert.deepEqual(store.getSnapshot(), {
+    collapsedWorkspaceIds: { ws1: true },
+    collapsedMainWorkspaceIds: { ws1: true, ws2: true },
+    collapsedWorktreeIds: { wt1: true },
+  });
+});

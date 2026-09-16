@@ -136,9 +136,9 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
               aria-label={t('workspace.collapseAll')}
               onClick={() => {
                 // Keep the current Session's workspace and worktree expanded in state,
-                // while collapsing all other unrelated workspaces and worktrees.
+                // while collapsing all other unrelated workspaces and worktrees, and collapsing all Main groups.
                 if (currentSessionLocation === undefined) setCurrentSessionReveal(undefined);
-                expandState.actions.collapseAll(targetWorkspaceIds, worktreeIds);
+                expandState.actions.collapseAll(targetWorkspaceIds, worktreeIds, workspaceIds);
                 setExpandedArchivedWorkspaces({});
                 setExpandedSessionGroups({});
               }}
