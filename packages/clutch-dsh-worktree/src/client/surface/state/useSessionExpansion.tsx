@@ -35,6 +35,20 @@ export function useSessionExpansion({ read, source, props }: Input) {
   const searchInput = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
+  const revealSessionIdRef = useRef<string | undefined>(Symbol('initial') as unknown as string);
+  const revealModeRef = useRef<typeof mode | undefined>(Symbol('initial') as unknown as typeof mode);
+
+  let activeReveal = currentSessionReveal;
+  if (currentSessionId !== revealSessionIdRef.current || mode !== revealModeRef.current) {
+    revealSessionIdRef.current = currentSessionId;
+    revealModeRef.current = mode;
+    activeReveal =
+      currentSessionId === undefined || mode !== 'worktree'
+        ? undefined
+        : { sessionId: currentSessionId, suppressedKeys: {} };
+    setCurrentSessionReveal(activeReveal);
+  }
+
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
   useEffect(() => {
@@ -75,15 +89,14 @@ export function useSessionExpansion({ read, source, props }: Input) {
     [currentSessionLocation],
   );
   const isCurrentSessionReveal = (key: string): boolean =>
-    currentSessionReveal !== undefined &&
-    currentSessionReveal.sessionId === currentSessionId &&
+    activeReveal !== undefined &&
+    activeReveal.sessionId === currentSessionId &&
     currentRevealKeys.has(key) &&
-    currentSessionReveal.suppressedKeys[key] !== true;
+    activeReveal.suppressedKeys[key] !== true;
   useLayoutEffect(() => {
     locateGenerationRef.current += 1;
     positionedLocateGenerationRef.current = undefined;
     if (mode !== 'worktree') {
-      setCurrentSessionReveal(undefined);
       setSearchExpanded(false);
       return;
     }
@@ -91,11 +104,6 @@ export function useSessionExpansion({ read, source, props }: Input) {
       setSearchQuery('');
       setSearchExpanded(false);
     }
-    setCurrentSessionReveal(
-      currentSessionId === undefined
-        ? undefined
-        : { sessionId: currentSessionId, suppressedKeys: {} },
-    );
   }, [currentSessionId, mode]);
   useLayoutEffect(() => {
     if (
@@ -120,7 +128,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
   }, [
     currentSessionId,
     currentSessionLocation,
-    currentSessionReveal,
+    activeReveal,
     expandSnapshot,
     mode,
     query,
@@ -243,7 +251,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
     searchRoot,
     searchInput,
     contentRef,
-    currentSessionReveal,
+    currentSessionReveal: activeReveal,
     setCurrentSessionReveal,
     searchQueryRef,
     locateGenerationRef,

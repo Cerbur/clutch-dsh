@@ -145,7 +145,10 @@ for (const kind of ['main', 'active', 'archived']) {
       kind !== 'main',
     );
     source.currentSessionId = 'next';
-    render();
+    // The active reveal must synchronize immediately during render without collapsing for a frame.
+    expansion = render();
+    assert.equal(expansion.currentSessionReveal?.sessionId, 'next');
+    assert.ok(keys.every(expansion.isCurrentSessionReveal));
     pending[0]();
     expansion = render();
     assert.equal(expansion.currentSessionReveal?.sessionId, 'next');
