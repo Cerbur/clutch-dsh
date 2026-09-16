@@ -147,24 +147,26 @@ The save replaces the persisted `baseBranch` in the plugin sidecar; the saved va
 the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
 history, changed files, and diffs without another Worktree-record write. If no valid baseline is saved
 (including a value equal to the current Worktree branch), the Git tab leaves it unselected and prompts you
-to choose one. Ahead/behind counts remain available for a divergent baseline when Git can resolve it, while
-history and working-tree files remain unavailable until the baseline is safe for those reads.
+to choose one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
+Git & Changes view reports Worktree commits after that ancestor as `+N` ahead and base-branch commits after it
+as `-N` behind; history and file reads remain available. If the two heads have no common ancestor, the
+committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
+history uses the Worktree commits not reachable from that base tip.
 With a valid baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
 first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
 changes** when you need a narrower target.
 
-The comparison range is the selected branch's current tip to `HEAD`; the branch is resolved again for
-each read. The browser can choose only a local branch, not a raw commit SHA or arbitrary Git ref. The
-selected branch must be an ancestor of the Worktree `HEAD`; an unrelated or rewritten baseline renders
-an explicit unavailable state. `baseCommit` remains acquisition metadata for compatibility and recovery,
-but it is not the user-selectable baseline. When the Worktree has staged, unstaged, or untracked files,
-the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
+The selected local branch is resolved again for each read. The browser can choose only a local branch, not
+a raw commit SHA or arbitrary Git ref. `baseCommit` remains acquisition metadata for compatibility and
+recovery, but it is not the user-selectable baseline. When the Worktree has staged, unstaged, or untracked
+files, the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
 `HEAD` and uses the same changed-file and diff views.
 
 The **Baseline summary** is a separate target that shows the net committed tree diff from the resolved
-baseline commit to the request's captured `HEAD`; it excludes working-tree changes by default. Turn on
-**Include working tree** to replace that target with one net diff from the baseline commit to the current
-working tree, including committed, staged, unstaged, untracked, deleted, and renamed changes. This is a
+common ancestor to the request's captured `HEAD` (or the two branch tips when no common ancestor exists);
+it excludes working-tree changes by default. Turn on **Include working tree** to replace that target with
+one net diff from the same comparison boundary to the current working tree, including committed, staged,
+unstaged, untracked, deleted, and renamed changes. This is a
 fresh on-demand projection rather than a concatenation of two diffs. In the commit list, select more than
 one committed row to view the exact union of those commits' first-parent deltas. The changed-file list
 records the contributing commits, and each selected commit is rendered as its own diff segment; this is

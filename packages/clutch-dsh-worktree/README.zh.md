@@ -139,21 +139,22 @@ branch 列表会在受限区域内滚动。然后过滤 branch，选择除当前
 保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器会以保存后的值作为默认值。
 Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载 history、changed files 和 Diff，
 不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前 Worktree branch），Git Tab 会保持
-未选择状态并提示用户选择。当 Git 可以解析出分叉基线时，ahead/behind 数量仍会显示；但在基线不安全时，
-history 和工作区文件会保持不可用。
+未选择状态并提示用户选择。当所选 branch 已分叉时，Git 会解析两个 branch head 的共同先祖；
+Worktree 在共同先祖之后的 commit 计为 `+N` 领先，base branch 在共同先祖之后的 commit 计为 `-N` 落后，
+history 和文件读取仍然可用。如果两个 head 没有共同先祖，则基线汇总退化为 base branch head 与
+Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base head 独有的 commit。
 在有效基线加载后，Git 与变更 Tab 初始会选择**基线汇总**，而不是第一个 commit；切换基线 branch
 也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。
 
-比较范围是所选 branch 当前指向的 commit 到 `HEAD`，每次读取都会重新解析 branch。浏览器不能直接
-选择 commit SHA 或任意 Git ref；所选 branch 必须是 Worktree `HEAD` 的 ancestor，互不相关或已 rewrite
-的基线会显示明确的不可用状态。`baseCommit` 仍作为兼容和恢复用的 acquisition 元数据保留，但不再
-作为用户可选择的基线。当 Worktree 存在 staged、unstaged 或 untracked 文件时，列表顶部会加入
-**未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
+所选 branch 每次读取都会重新解析。浏览器不能直接选择 commit SHA 或任意 Git ref；`baseCommit`
+仍作为兼容和恢复用的 acquisition 元数据保留，但不再作为用户可选择的基线。当 Worktree 存在 staged、
+unstaged 或 untracked 文件时，列表顶部会加入**未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，
+并使用相同的变更文件和 Diff 视图。
 
-**基线汇总**是一个独立的目标，默认展示从解析出的基线 commit 到本次请求捕获的 `HEAD` 的净已
-提交树差异，不包含工作区未提交改动。打开 **包含工作区改动** 后，该目标会改为展示从基线
-commit 到当前工作区的一次净差异，其中包含已提交、staged、unstaged、untracked、删除和重命名
-改动。这是按需读取的新鲜 projection，而不是简单拼接两段 Diff。在 commit 列表中可以同时选择
+**基线汇总**是一个独立的目标，默认展示从所选 branch 与 Worktree `HEAD` 的共同先祖到本次请求
+捕获的 `HEAD` 的净已提交树差异（无共同先祖时改用两个 branch head）；不包含工作区未提交改动。
+打开 **包含工作区改动** 后，该目标会改为展示从同一比较边界到当前工作区的一次净差异，其中包含已提交、
+staged、unstaged、untracked、删除和重命名改动。这是按需读取的新鲜 projection，而不是简单拼接两段 Diff。在 commit 列表中可以同时选择
 多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色

@@ -631,7 +631,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Resolve a common ancestor for an explicitly selected legacy baseline. */
+  /** Resolve a common ancestor for two branch heads. */
   async findMergeBase(
     workspaceRoot: string,
     left: string,
@@ -684,7 +684,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Count commits that exist only on either side of a baseline/HEAD comparison. */
+  /** Count commits that exist only on either branch head. */
   async getCommitDivergence(
     worktreeRoot: string,
     baselineCommit: string,
@@ -721,7 +721,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Read at most 201 commits after a resolved immutable baseline. */
+  /** Read at most 201 Worktree commits after a resolved base branch tip. */
   async listCommits(
     worktreeRoot: string,
     baseCommit: string,

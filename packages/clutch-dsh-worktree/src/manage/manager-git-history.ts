@@ -25,6 +25,15 @@ interface ResolvedWorktree {
   readonly live: GitWorktreeInfo;
 }
 
+interface ResolvedBaseline {
+  /** The public baseline/ref value retained for the existing Dashboard contract. */
+  readonly baseline: WorktreeGitBaseline;
+  /** The selected base branch (or captured baseline) tip used for history and counts. */
+  readonly baseHeadCommit: string;
+  /** The merge base used for the Worktree-side tree diff, or baseHeadCommit as fallback. */
+  readonly treeBaseCommit: string;
+}
+
 function isMainWorktreeId(worktreeId: string): boolean {
   return worktreeId === 'main' || worktreeId.startsWith('main:');
 }
@@ -131,7 +140,7 @@ async function resolveSelectedBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   rawBranch: string,
-): Promise<WorktreeGitBaseline | undefined> {
+): Promise<ResolvedBaseline | undefined> {
   const baseBranch = rawBranch.trim();
   if (baseBranch.length === 0) return undefined;
   const repositoryRoot = context.git.resolveRepositoryRoot
@@ -159,7 +168,34 @@ async function resolveSelectedBaseline(
       baseBranch,
     });
   }
-  return { commit, ref: baseBranch, source: 'branch' };
+
+  // A selected branch can move after the Worktree was created. Match GitHub's
+  // pull-request range by diffing from the two heads' merge base to Worktree
+  // HEAD, while retaining the selected branch tip for ahead/behind counts.
+  const headCommit = await baselineHeadCommit(context, resolved);
+  const mergeBase = headCommit !== undefined && context.git.findMergeBase !== undefined
+    ? await context.git.findMergeBase(
+        resolved.record.absolutePath,
+        commit,
+        headCommit,
+        { signal: context.signal },
+      )
+    : undefined;
+  if (mergeBase !== undefined && !COMMIT_PATTERN.test(mergeBase)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid selected branch merge base', {
+      worktreeId: resolved.record.worktreeId,
+      baseBranch,
+    });
+  }
+  return {
+    baseline: {
+      commit,
+      ref: baseBranch,
+      source: 'branch',
+    },
+    baseHeadCommit: commit,
+    treeBaseCommit: mergeBase ?? commit,
+  };
 }
 
 /** Persist a user-selected local branch as the Worktree's Dashboard baseline. */
@@ -260,7 +296,7 @@ async function resolveBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   requestedBaseBranch?: string,
-): Promise<WorktreeGitBaseline | undefined> {
+): Promise<ResolvedBaseline | undefined> {
   const { record } = resolved;
   if (requestedBaseBranch !== undefined) {
     if (typeof requestedBaseBranch !== 'string') {
@@ -280,9 +316,13 @@ async function resolveBaseline(
       ? await context.git.resolveCommit(record.absolutePath, record.baseCommit, { signal: context.signal })
       : record.baseCommit;
     return {
-      commit,
-      ...(record.baseBranch !== undefined ? { ref: record.baseBranch } : {}),
-      source: 'captured',
+      baseline: {
+        commit,
+        ...(record.baseBranch !== undefined ? { ref: record.baseBranch } : {}),
+        source: 'captured',
+      },
+      baseHeadCommit: commit,
+      treeBaseCommit: commit,
     };
   }
 
@@ -308,9 +348,13 @@ async function resolveBaseline(
     });
   }
   return {
-    commit,
-    ref: record.baseBranch,
-    source: 'derived',
+    baseline: {
+      commit,
+      ref: record.baseBranch,
+      source: 'derived',
+    },
+    baseHeadCommit: commit,
+    treeBaseCommit: commit,
   };
 }
 
@@ -318,7 +362,7 @@ async function requireBaseline(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   requestedBaseBranch?: string,
-): Promise<WorktreeGitBaseline> {
+): Promise<ResolvedBaseline> {
   const baseline = await resolveBaseline(context, resolved, requestedBaseBranch);
   if (baseline === undefined) {
     throw providerError(
@@ -358,35 +402,29 @@ async function baselineHeadCommit(
 async function readCommitDivergence(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
-  baseline: WorktreeGitBaseline,
+  comparison: ResolvedBaseline,
 ): Promise<{ readonly ahead: number; readonly behind: number } | undefined> {
   if (context.git.getCommitDivergence === undefined) return undefined;
   const head = await baselineHeadCommit(context, resolved);
   if (head === undefined) return undefined;
+
+  // Count each branch from its current tip. The tree boundary may be the
+  // merge base, but ahead/behind must include commits unique to both heads.
   return context.git.getCommitDivergence(
     resolved.record.absolutePath,
-    baseline.commit,
+    comparison.baseHeadCommit,
     head,
     { signal: context.signal },
   );
-}
-
-async function baselineIsCurrentAncestor(
-  context: WorktreeManagerContext,
-  resolved: ResolvedWorktree,
-  baseline: WorktreeGitBaseline,
-): Promise<boolean> {
-  const head = await baselineHeadCommit(context, resolved);
-  if (head === undefined) return false;
-  return isCommitAncestor(context, resolved, baseline.commit, head);
 }
 
 async function authorizeCommitAt(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   commitInput: string,
-  baseline: WorktreeGitBaseline,
+  comparison: ResolvedBaseline,
   head: string,
+  baseIsReachableFromHead: boolean,
 ): Promise<string> {
   if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
@@ -401,14 +439,16 @@ async function authorizeCommitAt(
   const commit = await context.git.resolveCommit(resolved.record.absolutePath, commitInput, {
     signal: context.signal,
   });
-  const afterBaseline = commit !== baseline.commit && await isCommitAncestor(
-    context,
-    resolved,
-    baseline.commit,
-    commit,
+  // A selected branch tip defines the PR-style commit membership. When the
+  // base tip is already in HEAD, commits must come after it. For diverged or
+  // unrelated heads, accept only commits that are not reachable from the base.
+  const afterBaseHead = commit !== comparison.baseHeadCommit && (
+    baseIsReachableFromHead
+      ? await isCommitAncestor(context, resolved, comparison.baseHeadCommit, commit)
+      : !(await isCommitAncestor(context, resolved, commit, comparison.baseHeadCommit))
   );
   const reachableFromHead = await isCommitAncestor(context, resolved, commit, head);
-  if (!afterBaseline || !reachableFromHead) {
+  if (!afterBaseHead || !reachableFromHead) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
       worktreeId: resolved.record.worktreeId,
       commit,
@@ -423,18 +463,31 @@ async function authorizeCommit(
   commitInput: string,
   requestedBaseBranch?: string,
 ): Promise<{ readonly commit: string; readonly baseline: WorktreeGitBaseline }> {
-  const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
+  const comparison = await requireBaseline(context, resolved, requestedBaseBranch);
   const head = resolved.live.headCommit ?? (context.git.resolveCommit
     ? await context.git.resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal })
     : undefined);
-  if (head === undefined || !(await isCommitAncestor(context, resolved, baseline.commit, head))) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is not an ancestor of the Worktree', {
+  if (head === undefined || !COMMIT_PATTERN.test(head)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git HEAD resolution is unavailable', {
       worktreeId: resolved.record.worktreeId,
     });
   }
+  const baseIsReachableFromHead = await isCommitAncestor(
+    context,
+    resolved,
+    comparison.baseHeadCommit,
+    head,
+  );
   return {
-    commit: await authorizeCommitAt(context, resolved, commitInput, baseline, head),
-    baseline,
+    commit: await authorizeCommitAt(
+      context,
+      resolved,
+      commitInput,
+      comparison,
+      head,
+      baseIsReachableFromHead,
+    ),
+    baseline: comparison.baseline,
   };
 }
 
@@ -443,12 +496,10 @@ async function authorizeWorkingTree(
   resolved: ResolvedWorktree,
   requestedBaseBranch?: string,
 ): Promise<void> {
-  const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
-  if (!(await baselineIsCurrentAncestor(context, resolved, baseline))) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is not an ancestor of the Worktree', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
+  // The selected branch may be unrelated to the Worktree history. The Git
+  // provider can still compare two arbitrary committed trees, so only require
+  // a valid resolved baseline here.
+  await requireBaseline(context, resolved, requestedBaseBranch);
 }
 
 export async function listWorktreeCommits(
@@ -467,9 +518,6 @@ export async function listWorktreeCommits(
     );
   }
   const divergence = await readCommitDivergence(context, resolved.value, baseline);
-  if (!(await baselineIsCurrentAncestor(context, resolved.value, baseline))) {
-    return unavailableHistory('baseline-unknown', divergence);
-  }
   if (context.git.listCommits === undefined) {
     throw providerError('GIT_OPERATION_FAILED', 'Git commit history is unavailable', {
       worktreeId: input.worktreeId,
@@ -478,7 +526,7 @@ export async function listWorktreeCommits(
   const [history, workingTreeFiles] = await Promise.all([
     context.git.listCommits(
       resolved.value.record.absolutePath,
-      baseline.commit,
+      baseline.baseHeadCommit,
       { signal: context.signal },
     ),
     context.git.listWorkingTreeFiles?.(
@@ -490,7 +538,7 @@ export async function listWorktreeCommits(
     ? undefined
     : await context.git.getCommitDivergence(
         resolved.value.record.absolutePath,
-        baseline.commit,
+        baseline.baseHeadCommit,
         history.headCommit,
         { signal: context.signal },
       ));
@@ -500,7 +548,7 @@ export async function listWorktreeCommits(
     commits: workingTreeFiles.length > 0
       ? [workingTreeCommit(history.headCommit), ...history.commits]
       : history.commits,
-    baseline,
+    baseline: baseline.baseline,
   };
 }
 
@@ -513,6 +561,7 @@ type RequestedDiff =
 interface AuthorizedAggregate {
   readonly selection: WorktreeGitDiffSelection;
   readonly baseline: WorktreeGitBaseline;
+  readonly treeBaseCommit: string;
   readonly headCommit: string;
   readonly commits?: readonly string[];
 }
@@ -547,7 +596,8 @@ async function authorizeAggregate(
   selection: WorktreeGitDiffSelection,
   requestedBaseBranch?: string,
 ): Promise<AuthorizedAggregate> {
-  const baseline = await requireBaseline(context, resolved, requestedBaseBranch);
+  const comparison = await requireBaseline(context, resolved, requestedBaseBranch);
+  const baseline = comparison.baseline;
   const normalizedSelection: WorktreeGitDiffSelection = selection.kind === 'summary'
     ? selection.includeWorkingTree === undefined
       ? { kind: 'summary' }
@@ -561,21 +611,22 @@ async function authorizeAggregate(
       worktreeId: resolved.record.worktreeId,
     });
   }
-  if (!(await isCommitAncestor(context, resolved, baseline.commit, headCommit))) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is not an ancestor of the Worktree', {
-      worktreeId: resolved.record.worktreeId,
-    });
-  }
   if (normalizedSelection.kind === 'summary') {
-    return { selection: normalizedSelection, baseline, headCommit };
+    return { selection: normalizedSelection, baseline, treeBaseCommit: comparison.treeBaseCommit, headCommit };
   }
   if (!Array.isArray(normalizedSelection.commits) || normalizedSelection.commits.length === 0 || normalizedSelection.commits.length > MAX_AGGREGATE_COMMITS) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'Select between 1 and ' + MAX_AGGREGATE_COMMITS + ' commits', {
       worktreeId: resolved.record.worktreeId,
     });
   }
+  const baseIsReachableFromHead = await isCommitAncestor(
+    context,
+    resolved,
+    comparison.baseHeadCommit,
+    headCommit,
+  );
   const authorized = await Promise.all(normalizedSelection.commits.map((commit) =>
-    authorizeCommitAt(context, resolved, commit, baseline, headCommit),
+    authorizeCommitAt(context, resolved, commit, comparison, headCommit, baseIsReachableFromHead),
   ));
   const commits = authorized;
   if (new Set(commits).size !== commits.length) {
@@ -586,6 +637,7 @@ async function authorizeAggregate(
   return {
     selection: { kind: 'commits', commits },
     baseline,
+    treeBaseCommit: comparison.treeBaseCommit,
     headCommit,
     commits,
   };
@@ -653,19 +705,18 @@ function mergeSelectedFiles(groups: readonly CommitFileGroup[]): readonly Worktr
 
 type SummarySelection = Extract<WorktreeGitDiffSelection, { readonly kind: 'summary' }>;
 
-async function authorizeLiveSummaryBaseline(
+async function authorizeLiveSummaryHead(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
-  baseline: WorktreeGitBaseline,
 ): Promise<void> {
-  if (context.git.resolveCommit === undefined || context.git.isCommitAncestor === undefined) return;
+  if (context.git.resolveCommit === undefined) return;
   const currentHead = await context.git.resolveCommit(
     resolved.record.absolutePath,
     'HEAD',
     { signal: context.signal },
   );
-  if (!COMMIT_PATTERN.test(currentHead) || !(await isCommitAncestor(context, resolved, baseline.commit, currentHead))) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The selected baseline is no longer an ancestor of the live Worktree', {
+  if (!COMMIT_PATTERN.test(currentHead)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid live Worktree HEAD', {
       worktreeId: resolved.record.worktreeId,
     });
   }
@@ -675,7 +726,7 @@ async function listSummaryFiles(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   selection: SummarySelection,
-  baseline: WorktreeGitBaseline,
+  baseCommit: string,
   headCommit: string,
 ): Promise<readonly WorktreeGitChangedFile[]> {
   if (selection.includeWorkingTree === true) {
@@ -684,10 +735,10 @@ async function listSummaryFiles(
         worktreeId: resolved.record.worktreeId,
       });
     }
-    await authorizeLiveSummaryBaseline(context, resolved, baseline);
+    await authorizeLiveSummaryHead(context, resolved);
     return context.git.listWorkingTreeDiffFiles(
       resolved.record.absolutePath,
-      baseline.commit,
+      baseCommit,
       { signal: context.signal },
     );
   }
@@ -698,7 +749,7 @@ async function listSummaryFiles(
   }
   return context.git.listDiffFiles(
     resolved.record.absolutePath,
-    baseline.commit,
+    baseCommit,
     headCommit,
     { signal: context.signal },
   );
@@ -708,7 +759,7 @@ async function readSummaryFileDiff(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   selection: SummarySelection,
-  baseline: WorktreeGitBaseline,
+  baseCommit: string,
   headCommit: string,
   filePath: string,
 ): Promise<WorktreeGitFileDiff> {
@@ -718,10 +769,10 @@ async function readSummaryFileDiff(
         worktreeId: resolved.record.worktreeId,
       });
     }
-    await authorizeLiveSummaryBaseline(context, resolved, baseline);
+    await authorizeLiveSummaryHead(context, resolved);
     return context.git.readWorkingTreeDiffFileDiff(
       resolved.record.absolutePath,
-      baseline.commit,
+      baseCommit,
       filePath,
       { signal: context.signal },
     );
@@ -733,7 +784,7 @@ async function readSummaryFileDiff(
   }
   return context.git.readDiffFileDiff(
     resolved.record.absolutePath,
-    baseline.commit,
+    baseCommit,
     headCommit,
     filePath,
     { signal: context.signal },
@@ -752,7 +803,7 @@ async function listAggregateFiles(
       context,
       resolved,
       authorized.selection,
-      authorized.baseline,
+      authorized.treeBaseCommit,
       authorized.headCommit,
     );
     return {
@@ -787,7 +838,7 @@ async function aggregateFileDiff(
       context,
       resolved,
       authorized.selection,
-      authorized.baseline,
+      authorized.treeBaseCommit,
       authorized.headCommit,
     );
     const changedFile = files.find((file) => file.path === requestedPath || file.oldPath === requestedPath);
@@ -801,7 +852,7 @@ async function aggregateFileDiff(
       context,
       resolved,
       authorized.selection,
-      authorized.baseline,
+      authorized.treeBaseCommit,
       authorized.headCommit,
       changedFile.path,
     );

@@ -58,6 +58,7 @@ export type WorktreeSource = 'plugin' | 'external';
 
 /** Branch-selected comparison boundary and read-only Git projections used by the Dashboard. */
 export interface WorktreeGitBaseline {
+  /** The selected branch tip (or captured/derived baseline identity); tree diffs may use its merge base. */
   readonly commit: string;
   /** The local branch selected as the baseline, when the projection was branch-selected. */
   readonly ref?: string;

@@ -391,7 +391,137 @@ test('keeps the captured baseline stable when the source branch moves and compar
   }
 });
 
-test('returns an unavailable projection when a captured baseline is no longer an ancestor', async () => {
+test('uses the merge base when the selected base branch advances', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/merge-base',
+    });
+    await writeFile(path.join(fixture.workspaceRoot, 'base-only.txt'), 'base branch change\n');
+    await runGit(fixture.workspaceRoot, ['add', 'base-only.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'advance selected base']);
+    await writeFile(path.join(fixture.workspaceRoot, 'base-only-2.txt'), 'second base branch change\n');
+    await runGit(fixture.workspaceRoot, ['add', 'base-only-2.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'advance selected base again']);
+
+    await writeFile(path.join(record.absolutePath, 'feature-only.txt'), 'feature branch change\n');
+    await runGit(record.absolutePath, ['add', 'feature-only.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'add feature change']);
+    const featureHead = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    const commonAncestor = (await runGit(record.absolutePath, ['merge-base', 'main', 'HEAD'])).stdout.trim();
+    const selectedBaseHead = (await runGit(fixture.workspaceRoot, ['rev-parse', 'main'])).stdout.trim();
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+    });
+    assert.equal(history.baseline.ref, 'main');
+    assert.equal(history.baseline.commit, selectedBaseHead);
+    assert.notEqual(history.baseline.commit, commonAncestor);
+    assert.equal(history.headCommit, featureHead);
+    assert.equal(history.ahead, 1);
+    assert.equal(history.behind, 2);
+    assert.deepEqual(history.commits.map((commit) => commit.sha), [featureHead]);
+
+    const summary = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'summary' },
+    });
+    assert.deepEqual(summary.files, [{
+      path: 'feature-only.txt',
+      status: 'added',
+      additions: 1,
+      deletions: 0,
+    }]);
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'summary' },
+      path: 'feature-only.txt',
+    });
+    assert.match(diff.patch, /\+feature branch change/u);
+
+    await writeFile(path.join(record.absolutePath, 'feature-only.txt'), 'feature branch change\nworking tree change\n');
+    const liveSummary = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'summary', includeWorkingTree: true },
+    });
+    assert.deepEqual(liveSummary.files, [{
+      path: 'feature-only.txt',
+      status: 'added',
+      additions: 2,
+      deletions: 0,
+    }]);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('falls back to a full two-branch diff when no common ancestor exists', async () => {
+  const fixture = await createFixture();
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard',
+      branch: 'main',
+      newBranch: 'feature/unrelated-history',
+    });
+    await runGit(record.absolutePath, ['checkout', '--orphan', 'unrelated-dashboard']);
+    await runGit(record.absolutePath, ['rm', '-r', '-f', '--ignore-unmatch', '.']);
+    await writeFile(path.join(record.absolutePath, 'unrelated.txt'), 'unrelated\n');
+    await runGit(record.absolutePath, ['add', 'unrelated.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'unrelated history']);
+    const headCommit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    const baseHead = (await runGit(fixture.workspaceRoot, ['rev-parse', 'main'])).stdout.trim();
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+    });
+    assert.equal(history.baseline.ref, 'main');
+    assert.equal(history.baseline.commit, baseHead);
+    assert.equal(history.headCommit, headCommit);
+    assert.equal(history.ahead, 1);
+    assert.equal(history.behind, 1);
+    assert.deepEqual(history.commits.map((commit) => commit.sha), [headCommit]);
+
+    const summary = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'summary' },
+    });
+    assert.deepEqual(
+      summary.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'README.md', status: 'deleted', additions: 0, deletions: 1 },
+        { path: 'unrelated.txt', status: 'added', additions: 1, deletions: 0 },
+      ],
+    );
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'main',
+      selection: { kind: 'summary' },
+      path: 'unrelated.txt',
+    });
+    assert.match(diff.patch, /\+unrelated/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('falls back to a full tree diff when a captured baseline has no common ancestor', async () => {
   const fixture = await createFixture();
   try {
     const record = await fixture.manager.createWorktree({
@@ -404,18 +534,37 @@ test('returns an unavailable projection when a captured baseline is no longer an
     await writeFile(path.join(record.absolutePath, 'unrelated.txt'), 'unrelated\n');
     await runGit(record.absolutePath, ['add', 'unrelated.txt']);
     await runGit(record.absolutePath, ['commit', '-m', 'unrelated history']);
+    const unrelatedCommit = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
 
     const capturedHistory = await fixture.manager.listWorktreeCommits({
       workspaceId: 'ws_dashboard',
       worktreeId: record.worktreeId,
     });
-    assert.deepEqual(capturedHistory, {
-      commits: [],
-      truncated: false,
-      behind: 1,
-      ahead: 1,
-      unavailableReason: 'baseline-unknown',
+    assert.equal(capturedHistory.baseline.commit, record.baseCommit);
+    assert.equal(capturedHistory.baseline.source, 'captured');
+    assert.equal(capturedHistory.ahead, 1);
+    assert.equal(capturedHistory.behind, 1);
+    assert.deepEqual(capturedHistory.commits.map((commit) => commit.sha), [unrelatedCommit]);
+
+    const capturedSummary = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary' },
     });
+    assert.deepEqual(
+      capturedSummary.files.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: 'README.md', status: 'deleted', additions: 0, deletions: 1 },
+        { path: 'unrelated.txt', status: 'added', additions: 1, deletions: 0 },
+      ],
+    );
+    const capturedDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      selection: { kind: 'summary' },
+      path: 'unrelated.txt',
+    });
+    assert.match(capturedDiff.patch, /\+unrelated/u);
 
     await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({
       result: undefined,

@@ -203,7 +203,7 @@ export interface GitWorktreeAdapter {
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
   /** Resolve one commit object without exposing a generic object reader. */
   resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;
-  /** Resolve a common ancestor for legacy baseline projection. */
+  /** Resolve a common ancestor for the selected branch comparison boundary. */
   findMergeBase?(
     workspaceRoot: string,
     left: string,
@@ -217,14 +217,14 @@ export interface GitWorktreeAdapter {
     descendant: string,
     options?: GitCommandOptions,
   ): Promise<boolean>;
-  /** Count commits unique to each side of a baseline/HEAD comparison. */
+  /** Count commits unique to the selected base branch tip and Worktree HEAD. */
   getCommitDivergence?(
     worktreeRoot: string,
     baselineCommit: string,
     headCommit: string,
     options?: GitCommandOptions,
   ): Promise<{ readonly ahead: number; readonly behind: number }>;
-  /** Read the bounded commit history after one already-resolved baseline. */
+  /** Read the bounded Worktree commit history after one resolved comparison boundary. */
   listCommits?(
     worktreeRoot: string,
     baseCommit: string,
