@@ -42,7 +42,7 @@ async function loadRuntimeClientExports() {
   return handoffs[0].factory((specifier) => {
     if (specifier === '@deepseek-ai/cordis') return cordis;
     if (specifier === 'react') return react;
-    if (specifier === 'react-dom') return {};
+    if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === 'react-dom/client') return {};
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
@@ -1058,6 +1058,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     if (specifier === '@deepseek-ai/dsh-client-ui-renderer/client') return runtime;
     if (specifier === 'react') return react;
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
+    if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
     throw new Error(`unexpected browser module request: ${specifier}`);

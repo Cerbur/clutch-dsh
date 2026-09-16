@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   InjectFace,
   PropsLocale,
@@ -98,9 +99,16 @@ function contextAriaLabel(state: WorktreeContextState, t: WorktreeTranslate): st
   return undefined;
 }
 
+function heroContainer(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  const el = document.querySelector<HTMLElement>('[data-phase="hero"]');
+  return el && el.isConnected ? el : null;
+}
+
 /**
- * Browser-local Hero suffix. It intentionally uses the frame overlay because
- * The current upstream DSH exposes no additive slot beside the native Hero headline.
+ * Browser-local Hero suffix. Portaled directly into the native Hero container
+ * so its stacking context stays within the conversation column instead of
+ * floating above overlays, menus, and dropdowns.
  */
 export function WorktreeHeroContext({
   useWorktreeContext,
@@ -109,6 +117,7 @@ export function WorktreeHeroContext({
   const state = useWorktreeContext((snapshot) => snapshot);
   const label = labelFor(state);
   const [placement, setPlacement] = useState<HeroPlacement | null>(null);
+  const [heroTarget, setHeroTarget] = useState<HTMLElement | null>(() => heroContainer());
 
   const measure = useCallback((element: HTMLElement | null): void => {
     if (element === null) {
@@ -120,15 +129,20 @@ export function WorktreeHeroContext({
 
   useLayoutEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
-    const element = document.querySelector<HTMLElement>('[data-worktree-hero-context]');
-    if (element === null) return undefined;
 
     let frameRequest: number | undefined;
     const schedule = (): void => {
       if (frameRequest !== undefined) window.cancelAnimationFrame(frameRequest);
       frameRequest = window.requestAnimationFrame(() => {
         frameRequest = undefined;
-        measure(element);
+        const currentHero = heroContainer();
+        setHeroTarget((prev) => (prev === currentHero ? prev : currentHero));
+        const element = document.querySelector<HTMLElement>('[data-worktree-hero-context]');
+        if (element !== null) {
+          measure(element);
+        } else {
+          setPlacement(null);
+        }
       });
     };
 
@@ -141,10 +155,15 @@ export function WorktreeHeroContext({
       attributes: true,
       attributeFilter: ['class', 'data-phase'],
     });
+
+    const element = document.querySelector<HTMLElement>('[data-worktree-hero-context]');
+    const observedAncestor = element !== null ? (overlayFor(element) ?? element) : (heroTarget ?? document.body);
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? undefined
       : new ResizeObserver(schedule);
-    resizeObserver?.observe(overlayFor(element) ?? element);
+    if (observedAncestor !== null) {
+      resizeObserver?.observe(observedAncestor);
+    }
     window.addEventListener('resize', schedule);
     schedule();
 
@@ -154,12 +173,12 @@ export function WorktreeHeroContext({
       resizeObserver?.disconnect();
       window.removeEventListener('resize', schedule);
     };
-  }, [label, measure]);
+  }, [label, measure, heroTarget]);
 
   const ariaLabel = contextAriaLabel(state, t);
-  if (label === undefined) return null;
+  if (label === undefined || heroTarget === null) return null;
 
-  return (
+  return createPortal(
     <span
       className={styles.heroContextHost}
       data-worktree-hero-host
@@ -185,6 +204,7 @@ export function WorktreeHeroContext({
         copyLabel={t('copy')}
         copiedLabel={t('hover.copied')}
       />
-    </span>
+    </span>,
+    heroTarget,
   );
 }

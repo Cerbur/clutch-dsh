@@ -38,7 +38,7 @@
 
 .heroContextHost {
   position: absolute;
-  z-index: 1;
+  z-index: 0;
   display: block;
   width: max-content;
   max-width: 260px;
