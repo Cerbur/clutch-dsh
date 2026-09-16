@@ -50,8 +50,10 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
   const { workspaceIds } = source;
   const { readState } = read;
   const { runMutation } = mutation;
+  const currentWorkspaceId = currentSessionLocation?.workspaceId;
   const currentWorktreeId =
     currentSessionLocation?.kind === 'worktree' ? currentSessionLocation.worktreeId : undefined;
+  const targetWorkspaceIds = workspaceIds.filter((id) => id !== currentWorkspaceId);
   const worktreeIds = readState.views
     .flatMap((view) => view.worktrees.map((record) => record.worktreeId))
     .filter((worktreeId) => worktreeId !== currentWorktreeId);
@@ -133,10 +135,10 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
               className={styles.iconButton}
               aria-label={t('workspace.collapseAll')}
               onClick={() => {
-                // Keep the current Worktree's automatic reveal active so its path
-                // remains visible while every other Worktree is collapsed.
-                if (currentWorktreeId === undefined) setCurrentSessionReveal(undefined);
-                expandState.actions.collapseAll(workspaceIds, worktreeIds);
+                // Keep the current Session's workspace and worktree expanded in state,
+                // while collapsing all other unrelated workspaces and worktrees.
+                if (currentSessionLocation === undefined) setCurrentSessionReveal(undefined);
+                expandState.actions.collapseAll(targetWorkspaceIds, worktreeIds);
                 setExpandedArchivedWorkspaces({});
                 setExpandedSessionGroups({});
               }}

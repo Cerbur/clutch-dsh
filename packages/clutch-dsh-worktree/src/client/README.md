@@ -279,9 +279,8 @@ The Client persists Workspace, Main, and Worktree expansion exceptions under
 clutch-dsh-worktree.expand-state in browser-local storage. Missing IDs are
 expanded by default. The five-row Session overflow control remains transient,
 and parent collapse clears its affected temporary group state. The header's
-Collapse All action targets every Workspace and Worktree except the Worktree
-containing the current Session; its current-session reveal remains active so that
-Worktree stays visible. Main Sessions use the normal all-collapse behavior. Storage failure
+Collapse All action targets every Workspace and Worktree except the Workspace
+and Worktree containing the current Session, which remain expanded. Storage failure
 falls back to in-memory behavior and does not change DSH or sidecar data.
 
 ### Current Session reveal and positioning

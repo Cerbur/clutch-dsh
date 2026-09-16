@@ -130,10 +130,10 @@ for (const kind of ['main', 'active', 'archived']) {
     assert.ok(button, 'find the actual Collapse All button');
     button.props.onClick();
     expansion = render();
-    assert.deepEqual(calls, [[['repo', 'other'], kind === 'main' ? [] : ['other-wt']]]);
+    assert.deepEqual(calls, [[['other'], kind === 'main' ? [] : ['other-wt']]]);
     assert.equal(
       keys.every((key) => expansion.isCurrentSessionReveal(key)),
-      kind !== 'main',
+      true,
     );
     assert.deepEqual(expansion.expandedArchivedWorkspaces, {});
     assert.deepEqual(expansion.expandedSessionGroups, {});
@@ -142,7 +142,7 @@ for (const kind of ['main', 'active', 'archived']) {
     expansion = render();
     assert.equal(
       keys.every((key) => expansion.isCurrentSessionReveal(key)),
-      kind !== 'main',
+      true,
     );
     source.currentSessionId = 'next';
     // The active reveal must synchronize immediately during render without collapsing for a frame.
