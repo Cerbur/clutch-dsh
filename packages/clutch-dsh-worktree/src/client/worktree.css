@@ -851,7 +851,8 @@
 }
 
 .workspaceRow:hover .menuAction,
-.workspaceRow[data-menu-open='true'] .menuAction {
+.workspaceRow[data-menu-open='true'] .menuAction,
+.workspaceRow:focus-within .menuAction {
   visibility: visible;
 }
 

@@ -176,7 +176,7 @@ export function WorktreeWorkspaceRow({
   t,
   workspace,
   expanded,
-  hasOngoingSession,
+  groupActivityStatus,
   actionPending,
   menuOpen,
   drag,
@@ -203,12 +203,15 @@ export function WorktreeWorkspaceRow({
   ];
   const markerClass =
     drag.marker === 'before' ? styles.dropBefore : drag.marker === 'after' ? styles.dropAfter : '';
+  const groupActivityVisible = !expanded && groupActivityStatus !== undefined;
+  const groupActivityLabel =
+    groupActivityStatus === undefined ? undefined : sessionStatusLabel(t, groupActivityStatus);
 
   return (
     <div
       className={`${styles.workspaceRow} ${markerClass}`}
       data-workspace-drag={drag.active ? 'active' : undefined}
-      data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
+      data-group-activity={groupActivityVisible ? 'true' : undefined}
       data-menu-open={menuOpen || undefined}
       draggable
       onClick={() => {
@@ -258,12 +261,14 @@ export function WorktreeWorkspaceRow({
       <span className={`${styles.treeActionSlot} ${styles.workspaceActions}`}>
         <span
           className={styles.groupActivity}
-          data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
-          role={hasOngoingSession && !expanded ? 'img' : undefined}
-          aria-label={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
-          title={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+          data-group-activity={groupActivityVisible ? 'true' : undefined}
+          role={groupActivityVisible ? 'img' : undefined}
+          aria-label={groupActivityVisible ? groupActivityLabel : undefined}
+          title={groupActivityVisible ? groupActivityLabel : undefined}
         >
-          {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
+          {groupActivityVisible && groupActivityStatus !== undefined && (
+            <StateDot state={groupActivityStatus.state} />
+          )}
         </span>
         <span className={styles.menuAction}>
           <Menu
@@ -319,7 +324,7 @@ export function WorktreeGroupRow({
   label,
   worktreeId,
   expanded,
-  hasOngoingSession,
+  groupActivityStatus,
   icon,
   workspaceTitle,
   state,
@@ -332,6 +337,9 @@ export function WorktreeGroupRow({
   drag,
 }: WorktreeGroupRowProps) {
   const main = kind === 'main';
+  const groupActivityVisible = !expanded && groupActivityStatus !== undefined;
+  const groupActivityLabel =
+    groupActivityStatus === undefined ? undefined : sessionStatusLabel(t, groupActivityStatus);
   const dashboardActionVisible =
     showDashboardAction === true && menu?.onDashboard !== undefined;
   const worktreeLabelRef = useRef<HTMLSpanElement>(null);
@@ -385,7 +393,7 @@ export function WorktreeGroupRow({
   };
 
   const syncWorktreeLabelScroll = () => {
-    if (worktreeLabelPointerInsideRef.current || (!expanded && hasOngoingSession)) {
+    if (worktreeLabelPointerInsideRef.current || groupActivityVisible) {
       startWorktreeLabelScroll();
     } else {
       stopWorktreeLabelScroll();
@@ -394,7 +402,7 @@ export function WorktreeGroupRow({
 
   useEffect(() => {
     syncWorktreeLabelScroll();
-  }, [expanded, hasOngoingSession, label]);
+  }, [groupActivityVisible, label]);
 
   useEffect(() => {
     return () => {
@@ -440,7 +448,7 @@ export function WorktreeGroupRow({
       className={`${styles.worktreeRow} ${markerClass}`}
       data-main-group={main ? 'true' : undefined}
       data-main-expanded={main ? String(expanded) : undefined}
-      data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
+      data-group-activity={groupActivityVisible ? 'true' : undefined}
       data-menu-open={menu?.open ? 'true' : undefined}
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
@@ -491,12 +499,14 @@ export function WorktreeGroupRow({
       >
         <span
           className={styles.groupActivity}
-          data-group-activity={hasOngoingSession && !expanded ? 'true' : undefined}
-          role={hasOngoingSession && !expanded ? 'img' : undefined}
-          aria-label={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
-          title={hasOngoingSession && !expanded ? t('session.status.running') : undefined}
+          data-group-activity={groupActivityVisible ? 'true' : undefined}
+          role={groupActivityVisible ? 'img' : undefined}
+          aria-label={groupActivityVisible ? groupActivityLabel : undefined}
+          title={groupActivityVisible ? groupActivityLabel : undefined}
         >
-          {hasOngoingSession && !expanded && <StateDot state={'ongoing'} />}
+          {groupActivityVisible && groupActivityStatus !== undefined && (
+            <StateDot state={groupActivityStatus.state} />
+          )}
         </span>
         {dashboardActionVisible && (
           <span className={styles.dashboardAction}>

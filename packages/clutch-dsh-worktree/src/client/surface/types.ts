@@ -22,7 +22,11 @@ import type {
 import type { DashboardRecord, DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
 import { WORKTREE_NS } from '../locales.js';
-import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
+import type {
+  SessionListLike,
+  SessionPresentation,
+  SessionStatusPresentation,
+} from '../session/session-view.js';
 import type { createWorktreeViewStore } from '../view/view-mode-store.js';
 import type { WorktreeExpandStateStore } from '../view/worktree-expand-state.js';
 import type { WorktreeFullAccessConfirmationController } from '../permission/worktree-permission.js';
@@ -234,7 +238,8 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
-  readonly hasOngoingSession: boolean;
+  /** One selected Session status shown when the Workspace row is collapsed. */
+  readonly groupActivityStatus?: SessionStatusPresentation;
   readonly actionPending: boolean;
   readonly menuOpen: boolean;
   readonly drag: WorkspaceDragProps;
@@ -280,7 +285,8 @@ export interface WorktreeGroupRowProps {
   readonly label: string;
   readonly worktreeId?: string;
   readonly expanded: boolean;
-  readonly hasOngoingSession: boolean;
+  /** One selected Session status shown when this group row is collapsed. */
+  readonly groupActivityStatus?: SessionStatusPresentation;
   readonly icon: ReactNode;
   readonly workspaceTitle: string;
   readonly state?: 'done' | 'warning' | 'error';

@@ -1526,6 +1526,10 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
     styles,
     /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeLabel,[\s\S]*\.worktreeRow:focus-within \.worktreeLabel[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
   );
+  assert.match(
+    styles,
+    /\.workspaceRow:hover \.menuAction,[\s\S]*\.workspaceRow\[data-menu-open='true'\] \.menuAction,[\s\S]*\.workspaceRow:focus-within \.menuAction/,
+  );
 
   const mainCall = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
   const activeCall = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
@@ -1548,10 +1552,10 @@ test('separates collapsed running activity and coordinates it with hover scrolli
 
   assert.match(rowSource, /const worktreeLabelPointerInsideRef = useRef<boolean>\(false\)/);
   assert.match(rowSource, /const syncWorktreeLabelScroll = \(\) =>/);
-  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| \(!expanded && hasOngoingSession\)/);
+  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| groupActivityVisible/);
   assert.match(
     rowSource,
-    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[expanded, hasOngoingSession, label\]\)/,
+    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[groupActivityVisible, label\]\)/,
   );
   assert.match(
     rowSource,
