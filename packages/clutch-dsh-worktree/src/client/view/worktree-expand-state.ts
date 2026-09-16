@@ -132,6 +132,10 @@ export function createWorktreeExpandStateStore(
       });
     },
     retain: (workspaceIds, worktreeIds) => {
+      // No Workspace IDs means the Workspace list has not arrived yet. Pruning from that
+      // read would delete every stored preference, so refuse it outright: only a caller
+      // holding a complete, non-empty snapshot may prune.
+      if (workspaceIds.length === 0) return;
       store.update((draft) => {
         retain(draft.collapsedWorkspaceIds, workspaceIds);
         retain(draft.collapsedMainWorkspaceIds, workspaceIds);

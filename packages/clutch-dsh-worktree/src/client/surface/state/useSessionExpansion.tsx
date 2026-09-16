@@ -9,6 +9,7 @@ import {
   clearSessionGroupExpansion,
   currentSessionRevealKeys,
   isCompleteWorktreeWorkspaceSnapshot,
+  isPendingListPhase,
   resolveCurrentSessionLocation,
 } from '../selectors.js';
 import { CurrentSessionRevealState, ExpandedSessionGroups } from '../shared.js';
@@ -135,8 +136,11 @@ export function useSessionExpansion({ read, source, props }: Input) {
     readState.status,
   ]);
   useEffect(() => {
+    // Pruning is destructive: require a confirmed Workspace list whose projections all
+    // arrived. A pending or partial read means "nothing arrived yet", not "nothing exists".
     if (
       readState.status !== 'ready' ||
+      isPendingListPhase(workspaces.phase) ||
       !isCompleteWorktreeWorkspaceSnapshot(workspaceIds, readState.views)
     )
       return;
@@ -144,7 +148,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
       workspaceIds,
       readState.views.flatMap((view) => view.worktrees.map((record) => record.worktreeId)),
     );
-  }, [expandState, readState.status, readState.views, workspaceIds]);
+  }, [expandState, readState.status, readState.views, workspaceIds, workspaces.phase]);
   const clearSessionGroups = (groupKeys: readonly string[]): void => {
     if (groupKeys.length === 0) return;
     setExpandedSessionGroups((current) => clearSessionGroupExpansion(current, groupKeys));

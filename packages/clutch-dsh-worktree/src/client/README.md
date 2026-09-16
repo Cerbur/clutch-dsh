@@ -281,7 +281,10 @@ expanded by default. The five-row Session overflow control remains transient,
 and parent collapse clears its affected temporary group state. The header's
 Collapse All action targets every Workspace, Main group, and Worktree except the Workspace
 and Worktree containing the current Session, which remain expanded. Storage failure
-falls back to in-memory behavior and does not change DSH or sidecar data.
+falls back to in-memory behavior and does not change DSH or sidecar data. Stored choices are
+pruned only after a refresh confirms the complete Workspace list and every Workspace
+projection; a ready read that is still empty or partial means nothing has arrived yet, so it
+never clears a stored choice.
 
 ### Current Session reveal and positioning
 
@@ -380,7 +383,11 @@ The Worktree surface is additive:
   The order store is browser-local and persists only group keys, Session IDs, and observed numeric
   timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates DSH Workspace data
   for automatic promotion. Manual Worktree drag updates the local order directly; manual Main drag
-  calls native DSH ordering first and updates the local projection only after success.
+  calls native DSH ordering first and updates the local projection only after success. A successful
+  drag re-baselines the observed `updatedAt` of its group, so reopening or refreshing the page keeps
+  the manual order until a Session receives strictly newer activity. Accounts are derived only from
+  Workspace projections that already arrived, and are pruned only from a complete snapshot, so a
+  pending or partial refresh never resets the stored order.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and
   exposes the shared options menu with Copy path and, when a current local branch exists, Create new

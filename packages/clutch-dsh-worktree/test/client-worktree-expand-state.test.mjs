@@ -185,6 +185,26 @@ test('retains only IDs present in the ready Workspace and Worktree snapshots', (
   });
 });
 
+test('refuses to prune from an empty Workspace list', () => {
+  storage.clear();
+  const store = createWorktreeExpandStateStore(createSnapshotStore);
+  store.actions.toggleWorkspace('ws-kept');
+  store.actions.toggleMain('ws-kept');
+  store.actions.toggleWorktree('wt-kept');
+
+  // A refresh reads ready with no Workspace list before the native list lands. Pruning
+  // from that read would silently expand every Workspace, Main and Worktree.
+  store.actions.retain([], []);
+
+  const kept = {
+    collapsedWorkspaceIds: { 'ws-kept': true },
+    collapsedMainWorkspaceIds: { 'ws-kept': true },
+    collapsedWorktreeIds: { 'wt-kept': true },
+  };
+  assert.deepEqual(store.getSnapshot(), kept);
+  assert.deepEqual(JSON.parse(storage.getItem(WORKTREE_EXPAND_STATE_STORAGE_KEY)), kept);
+});
+
 test('collapseAll collapses all specified workspaces and worktrees', () => {
   storage.clear();
   const store = createWorktreeExpandStateStore(createSnapshotStore);

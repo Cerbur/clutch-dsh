@@ -1991,6 +1991,19 @@ test('clears transient groups on parent collapse and prunes only ready snapshots
   assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
 });
 
+test('keeps stored Session order and expansion while the native lists are pending', async () => {
+  const source = await readSurfaceSource();
+
+  // A refresh reaches "ready with nothing read yet" before the native lists land. Both
+  // hooks must wait for the reported arrival phase and for a complete projection, because
+  // deriving accounts or pruning from that empty read deletes stored browser-local state.
+  assert.match(source, /isPendingListPhase\(workspaces\.phase\)/);
+  assert.match(source, /isPendingListPhase\(sessions\.phase\)/);
+  assert.match(source, /if \(!canRetainAccounts\) return;/);
+  assert.match(source, /if \(view === undefined\) continue;/);
+  assert.match(source, /isCompleteWorktreeWorkspaceSnapshot\(workspaceIds, readState\.views\)/);
+});
+
 test('repair worktrees expose archive while recovery-needed worktrees remain blocked', async () => {
   const source = (await readSurfaceSources()).combined;
   const condition = source.match(/showRemove: (record\.status[^,\n]+)/)?.[1];

@@ -269,6 +269,24 @@ Worktree Session 不属于 DSH 原生 Workspace 成员列表，因此 Session �
 该修订保持 DSH/Sidecar 数据边界，同时让 Worktree 的虚拟 membership 不再触发原生 Workspace
 成员校验错误。
 
+拖拽成功时必须同时记录当时各 Session 的 `updatedAt` 作为新的观察基线，否则刷新后的首次
+reconcile 会把用户刚移动的 Session 当作“有更新活动”再次提升到队首。
+
+### 浏览器本地视图状态刷新不变量 (Browser-local View State Refresh Invariant)
+
+展开状态（`clutch-dsh-worktree.expand-state`）与 Session 顺序
+（`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的
+完整读取之上做破坏性收敛：
+
+- DSH 的 Session/Workspace 列表带单调的 `pending → ready` 到达相位；相位未 ready 时列表为空
+  表示“尚未到达”，不表示“不存在”，此时不得据此推导 account 顺序或清理记录；
+- 只有 `readState.status === 'ready'`、Workspace 列表已确认且每个 Workspace 的 projection 都已
+  读取时，才允许清理已不存在的实体 ID（`retain`）；空列表与部分读取永远不算完整快照，
+  否则一次刷新早期的空读取就会抹掉全部折叠记录或全部排序记录；
+- Session 顺序的 reconcile 从第一个就绪的 Workspace projection 起即可生效，但删除 account 必须
+  等到完整快照，避免单个 Workspace 读取失败时整个视图失去已保存顺序；
+- 存储层自身拒绝空 ID 集合的清理请求，作为最后一道防线。
+
 ### 最小刷新作用域不变量 (Minimum-Scope Refresh Invariant)
 
 ```text

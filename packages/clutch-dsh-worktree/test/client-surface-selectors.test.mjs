@@ -28,6 +28,7 @@ const {
   bindingIdsFor,
   clearSessionGroupExpansion,
   isCompleteWorktreeWorkspaceSnapshot,
+  isPendingListPhase,
   sessionLabel,
   workspaceMatches,
 } = selectors;
@@ -141,6 +142,9 @@ test('requires the ready Worktree snapshot to cover the current Workspace ids', 
     ),
     false,
   );
+  // A refresh reaches "ready with nothing read yet" before the Workspace list arrives.
+  // Treating that empty read as complete would authorize pruning every stored preference.
+  assert.equal(isCompleteWorktreeWorkspaceSnapshot([], []), false);
   assert.equal(
     isCompleteWorktreeWorkspaceSnapshot(
       ['workspace-one', 'workspace-two'],
@@ -157,6 +161,12 @@ test('requires the ready Worktree snapshot to cover the current Workspace ids', 
   );
 });
 
+test('treats only an absent or confirmed-ready list phase as usable', () => {
+  // Hosts without the published arrival phase stay permissive; a reported phase must be ready.
+  assert.equal(isPendingListPhase(undefined), false);
+  assert.equal(isPendingListPhase('ready'), false);
+  assert.equal(isPendingListPhase('pending'), true);
+});
 
 test('archived current Session reveals its archive ancestor', () => {
   assert.deepEqual(
