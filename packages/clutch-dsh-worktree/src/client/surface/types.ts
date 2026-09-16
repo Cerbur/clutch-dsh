@@ -53,6 +53,7 @@ export interface WorkspaceLike {
 export interface WorkspaceListLike {
   readonly items: readonly WorkspaceLike[];
   readonly archivedSessionIds?: readonly string[];
+  readonly phase?: string;
 }
 
 export interface WorktreePermissionNotice {

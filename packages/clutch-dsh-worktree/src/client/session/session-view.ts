@@ -49,6 +49,7 @@ export interface SessionListLike {
   readonly ids: readonly string[];
   readonly current?: string;
   readonly byId: Record<string, SessionSummaryLike>;
+  readonly phase?: string;
 }
 
 function isPendingInteractionStatus(value: unknown): value is PendingInteractionStatus {

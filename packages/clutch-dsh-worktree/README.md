@@ -174,8 +174,9 @@ injection; an unchanged instruction is not repeatedly added while its message re
   and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
   approval (and other pending-interaction warnings) takes priority over running, and running
   takes priority over completed. Idle Sessions do not contribute a group dot; Worktree health
-  remains a separate leading indicator. Visual Session ordering is browser-local; these views do not
-  rewrite native Workspace order.
+  remains a separate leading indicator. Visual Session ordering initially follows the newest `updatedAt` values and
+  remains browser-local; Main remains fixed first, Worktree drag updates only this local order projection,
+  and Main drag updates native Workspace order only after DSH accepts it.
 - Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
   confirmation. It combines DSH `danger-full-access` with `ask`, keeps approval prompts enabled,
   and does not change network or process policy. If unavailable, the plugin falls back to

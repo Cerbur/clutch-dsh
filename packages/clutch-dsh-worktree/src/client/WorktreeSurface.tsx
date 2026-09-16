@@ -118,7 +118,13 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const ordering = useSessionOrdering({ read, source, props });
   const expansion = useSessionExpansion({ read, source, props });
   const native = useNativeActions({ source, props, mutation });
-  const drag = useDragActions({ source, props, mutation, read });
+  const drag = useDragActions({
+    source,
+    orderedSessionIdsByAccount: ordering.orderedSessionIdsByAccount,
+    props,
+    mutation,
+    read,
+  });
   const session = useSessionActions({ source, props, mutation, read });
   const registration = useWorktreeRegistration({
     source,

@@ -36,7 +36,7 @@ function fakeSnapshotStoreFactory() {
   };
 }
 
-test('keeps the incoming order on the first observation and records timestamps', () => {
+test('sorts the first observation by newest updatedAt and records timestamps', () => {
   assert.deepEqual(
     nextSessionOrderAccount({
       baseIds: ['a', 'b'],
@@ -46,8 +46,27 @@ test('keeps the incoming order on the first observation and records timestamps',
       ]),
     }),
     {
-      order: ['a', 'b'],
+      order: ['b', 'a'],
       observedUpdatedAt: { a: 10, b: 20 },
+    },
+  );
+});
+
+test('keeps input order for equal, missing, and invalid timestamps', () => {
+  assert.deepEqual(
+    nextSessionOrderAccount({
+      baseIds: ['tie', 'missing', 'invalid', 'zero', 'newest'],
+      updatedAtById: timestamps([
+        ['tie', 10],
+        ['missing', undefined],
+        ['invalid', Number.NaN],
+        ['zero', 0],
+        ['newest', 20],
+      ]),
+    }),
+    {
+      order: ['newest', 'tie', 'zero', 'missing', 'invalid'],
+      observedUpdatedAt: { tie: 10, zero: 0, newest: 20 },
     },
   );
 });
@@ -112,6 +131,27 @@ test('promotes a newly observed Session to the head while pruning removed IDs', 
     {
       order: ['new', 'b'],
       observedUpdatedAt: { new: 40, b: 20 },
+    },
+  );
+});
+
+test('orders multiple newly observed Sessions by newest timestamp', () => {
+  assert.deepEqual(
+    nextSessionOrderAccount({
+      baseIds: ['older', 'existing', 'newer'],
+      updatedAtById: timestamps([
+        ['older', 20],
+        ['existing', 10],
+        ['newer', 30],
+      ]),
+      previous: {
+        order: ['existing'],
+        observedUpdatedAt: { existing: 10 },
+      },
+    }),
+    {
+      order: ['newer', 'older', 'existing'],
+      observedUpdatedAt: { older: 20, existing: 10, newer: 30 },
     },
   );
 });
@@ -210,5 +250,48 @@ test('store reconciles activity without invoking external mutation APIs', () => 
   assert.deepEqual(store.getSnapshot().accounts['worktree:worktree-a'].order, ['x']);
 
   unsubscribe();
+  store.dispose();
+});
+
+test('setOrder incorporates current timestamps into observedUpdatedAt', () => {
+  const store = createWorktreeSessionOrderStore(fakeSnapshotStoreFactory());
+  store.actions.setOrder(
+    'worktree:wt-1',
+    ['s2', 's1'],
+    timestamps([
+      ['s1', 100],
+      ['s2', 200],
+    ]),
+  );
+  assert.deepEqual(store.getSnapshot().accounts['worktree:wt-1'], {
+    order: ['s2', 's1'],
+    observedUpdatedAt: { s1: 100, s2: 200 },
+  });
+
+  // Reconcile with identical timestamps preserves the set order
+  store.actions.reconcile(
+    'worktree:wt-1',
+    ['s1', 's2'],
+    timestamps([
+      ['s1', 100],
+      ['s2', 200],
+    ]),
+  );
+  assert.deepEqual(store.getSnapshot().accounts['worktree:wt-1'].order, ['s2', 's1']);
+  store.dispose();
+});
+
+test('retain ignores empty account list and preserves existing accounts', () => {
+  const store = createWorktreeSessionOrderStore(fakeSnapshotStoreFactory());
+  store.actions.setOrder('worktree:wt-1', ['s1']);
+  store.actions.setOrder('worktree:wt-2', ['s2']);
+
+  store.actions.retain([]);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-1']);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-2']);
+
+  store.actions.retain(['worktree:wt-1']);
+  assert.ok(store.getSnapshot().accounts['worktree:wt-1']);
+  assert.equal(store.getSnapshot().accounts['worktree:wt-2'], undefined);
   store.dispose();
 });
