@@ -567,6 +567,33 @@
   color: var(--dsw-alias-state-business-primary, #467bc8);
 }
 
+.gitStatusMarker {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gitStatusMarker[data-status='added'] {
+  color: var(--dsw-alias-state-success-primary, #23845f);
+}
+
+.gitStatusMarker[data-status='deleted'] {
+  color: var(--dsw-alias-state-error-secondary, #bd5d55);
+}
+
+.gitStatusMarker[data-status='modified'],
+.gitStatusMarker[data-status='renamed'],
+.gitStatusMarker[data-status='copied'],
+.gitStatusMarker[data-status='type-changed'] {
+  color: var(--dsw-alias-state-business-primary, #467bc8);
+}
+
 .gitOpenFileAction {
   display: inline-flex;
   flex: none;
@@ -823,6 +850,29 @@
   cursor: pointer;
   font-size: 11px;
   padding: 3px 8px;
+}
+
+.gitDiffFolded {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px dashed var(--dsw-alias-border-l3, #dfe3ea);
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-secondary, #6f7887);
+  font-size: 12px;
+}
+
+.gitDiffShowAll {
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #273142);
+  cursor: pointer;
+  font: inherit;
 }
 
 .gitRawDiff {

@@ -1,12 +1,13 @@
 import { useRef } from 'react';
 import type {
-  WorktreeGitChangedFile,
   WorktreeGitCommit,
   WorktreeGitCommitFiles,
   WorktreeGitHistory,
   WorktreeManager,
 } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
+import type { WorktreeLocaleKey } from '../../locales.js';
+import { isMainWorktreeId, normalizeBaselineBranch, sumLineTotals } from './git-facts.js';
 import { GitChangedFiles } from './GitChangedFiles.js';
 import { GitLineStats } from './GitLineStats.js';
 import { GitCommitList } from './GitCommitList.js';
@@ -21,22 +22,6 @@ import { useGitPaneSplit } from './useGitPaneSplit.js';
 import type { GitPaneSplit, GitSplitOrientation } from './useGitPaneSplit.js';
 import { useWorktreeGitState } from './useWorktreeGitState.js';
 import styles from './worktree-git.css';
-
-interface GitLineTotals {
-  readonly additions: number;
-  readonly deletions: number;
-}
-
-function sumLineStats(files: readonly WorktreeGitChangedFile[]): GitLineTotals | undefined {
-  let additions = 0;
-  let deletions = 0;
-  for (const file of files) {
-    if (file.additions === undefined || file.deletions === undefined) return undefined;
-    additions += file.additions;
-    deletions += file.deletions;
-  }
-  return { additions, deletions };
-}
 
 export interface WorktreeGitPanelProps {
   readonly manager?: Pick<
@@ -79,6 +64,40 @@ function readyFiles(value: WorktreeGitCommitFiles | undefined): readonly Worktre
   return value?.files ?? [];
 }
 
+/** Empty-state copy per honest unavailable reason; one definition for both blocks. */
+const UNAVAILABLE_COPY = {
+  main: {
+    title: 'dashboard.git.mainUnavailableTitle',
+    description: 'dashboard.git.mainUnavailableDescription',
+  },
+  'baseline-unselected': {
+    title: 'dashboard.git.selectBaselineTitle',
+    description: 'dashboard.git.selectBaselineDescription',
+  },
+  'baseline-unknown': {
+    title: 'dashboard.git.baselineUnknownTitle',
+    description: 'dashboard.git.baselineUnknownDescription',
+  },
+} as const satisfies Record<
+  NonNullable<WorktreeGitHistory['unavailableReason']>,
+  { readonly title: WorktreeLocaleKey; readonly description: WorktreeLocaleKey }
+>;
+
+function UnavailableNotice({
+  reason,
+  t,
+}: {
+  readonly reason: NonNullable<WorktreeGitHistory['unavailableReason']>;
+  readonly t: WorktreeTranslate;
+}) {
+  return (
+    <div className={styles.gitUnavailable} data-dashboard-git-unavailable>
+      <strong>{t(UNAVAILABLE_COPY[reason].title)}</strong>
+      <p>{t(UNAVAILABLE_COPY[reason].description)}</p>
+    </div>
+  );
+}
+
 /** Git & Changes tab: read-only, on-demand history -> target files -> one-file diff. */
 export function WorktreeGitPanel({
   manager,
@@ -89,9 +108,8 @@ export function WorktreeGitPanel({
   onOpenFile,
   t,
 }: WorktreeGitPanelProps) {
-  const isMain = worktreeId === 'main' || worktreeId.startsWith('main:');
-  const selectedDefaultBaseline =
-    defaultBaselineBranch !== currentBranch ? defaultBaselineBranch : undefined;
+  const isMain = isMainWorktreeId(worktreeId);
+  const selectedDefaultBaseline = normalizeBaselineBranch(defaultBaselineBranch, currentBranch);
   const state = useWorktreeGitState({
     manager,
     workspaceId,
@@ -137,7 +155,7 @@ export function WorktreeGitPanel({
         ? undefined
         : commitLabel(commit, t);
   const hasTarget = state.view === 'summary' || commit !== undefined;
-  const lineTotals = state.files.status === 'ready' && hasTarget ? sumLineStats(files) : undefined;
+  const lineTotals = state.files.status === 'ready' && hasTarget ? sumLineTotals(files) : undefined;
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
@@ -221,17 +239,12 @@ export function WorktreeGitPanel({
 
       {branchError !== undefined && (
         <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(branchError) })}</p>
+          <p>{t('dashboard.git.loadFailed', { reason: errorText(branchError, t) })}</p>
           <button type="button" onClick={() => void state.loadBranches()}>{t('dashboard.git.retry')}</button>
         </div>
       )}
 
-      {isMain && (
-        <div className={styles.gitUnavailable} data-dashboard-git-unavailable>
-          <strong>{t('dashboard.git.mainUnavailableTitle')}</strong>
-          <p>{t('dashboard.git.mainUnavailableDescription')}</p>
-        </div>
-      )}
+      {isMain && <UnavailableNotice reason="main" t={t} />}
       {!isMain && state.baselineBranch === undefined && (
         <div className={styles.gitBaselinePrompt} data-dashboard-git-baseline-prompt>
           <strong>{t('dashboard.git.selectBaselineTitle')}</strong>
@@ -244,30 +257,19 @@ export function WorktreeGitPanel({
       )}
       {state.history.status === 'error' && (
         <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(state.history.error) })}</p>
+          <p>{t('dashboard.git.loadFailed', { reason: errorText(state.history.error, t) })}</p>
           <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
         </div>
       )}
       {state.history.status === 'ready' && state.history.error !== undefined && (
         <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.refreshFailed', { reason: errorText(state.history.error) })}</p>
+          <p>{t('dashboard.git.refreshFailed', { reason: errorText(state.history.error, t) })}</p>
           <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
         </div>
       )}
 
       {state.history.status === 'ready' && historyValue !== undefined && unavailable !== undefined && (
-        <div className={styles.gitUnavailable} data-dashboard-git-unavailable>
-          <strong>{unavailable === 'main'
-            ? t('dashboard.git.mainUnavailableTitle')
-            : unavailable === 'baseline-unselected'
-              ? t('dashboard.git.selectBaselineTitle')
-              : t('dashboard.git.baselineUnknownTitle')}</strong>
-          <p>{unavailable === 'main'
-            ? t('dashboard.git.mainUnavailableDescription')
-            : unavailable === 'baseline-unselected'
-              ? t('dashboard.git.selectBaselineDescription')
-              : t('dashboard.git.baselineUnknownDescription')}</p>
-        </div>
+        <UnavailableNotice reason={unavailable} t={t} />
       )}
 
       {state.history.status === 'ready' && historyValue !== undefined && unavailable === undefined && (
@@ -361,11 +363,11 @@ export function WorktreeGitPanel({
             ) : state.files.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
             ) : state.files.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+              <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
             ) : (
               <>
                 {state.files.status === 'ready' && state.files.error !== undefined && (
-                  <div className={styles.gitError} role="alert">{errorText(state.files.error)}</div>
+                  <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
                 )}
                 {files.length === 0 ? (
                   <div className={styles.gitEmpty}>
@@ -400,7 +402,7 @@ export function WorktreeGitPanel({
             {state.diff.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryDiff') : t('dashboard.git.loadingDiff')}</div>
             ) : state.diff.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.diff.error)}</div>
+              <div className={styles.gitError} role="alert">{errorText(state.diff.error, t)}</div>
             ) : (
               <GitDiffView diff={diff} onOpenFile={onOpenFile} t={t} />
             )}
@@ -452,6 +454,6 @@ function GitSplitter({ split, orientation, axis, label }: GitSplitterProps) {
   );
 }
 
-function errorText(error: Error): string {
-  return error.message || 'Unknown error';
+function errorText(error: Error, t: WorktreeTranslate): string {
+  return error.message || t('dashboard.unknownError');
 }

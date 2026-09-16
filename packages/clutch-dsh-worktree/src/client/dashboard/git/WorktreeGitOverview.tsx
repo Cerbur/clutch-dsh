@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
 import type {
   WorktreeGitChangedFile,
   WorktreeGitHistory,
   WorktreeManager,
 } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
+import { isMainWorktreeId, normalizeBaselineBranch, sumLineTotals } from './git-facts.js';
 import { GitLineStats } from './GitLineStats.js';
 import styles from '../dashboard.css';
 
@@ -27,39 +29,20 @@ export type WorktreeGitOverviewState =
     }
   | { readonly status: 'error' };
 
-function normalizeBaseline(value: string | undefined, currentBranch: string | undefined): string | undefined {
-  const baseline = value?.trim();
-  return baseline !== undefined && baseline.length > 0 && baseline !== currentBranch ? baseline : undefined;
-}
-
 function isWorkingTreeCommit(commit: WorktreeGitHistory['commits'][number]): boolean {
-  return commit.kind === 'working-tree' || commit.sha === 'working-tree';
-}
-
-function sumMetrics(files: readonly WorktreeGitChangedFile[]):
-  | { readonly additions: number; readonly deletions: number }
-  | undefined {
-  let additions = 0;
-  let deletions = 0;
-  for (const file of files) {
-    if (file.additions === undefined || file.deletions === undefined) return undefined;
-    additions += file.additions;
-    deletions += file.deletions;
-  }
-  return { additions, deletions };
+  return commit.kind === 'working-tree' || commit.sha === WORKTREE_GIT_WORKING_TREE;
 }
 
 /** Read the compact Git projections needed by the Overview status facts. */
 export function useWorktreeGitOverview(
   input: WorktreeGitOverviewInput,
 ): WorktreeGitOverviewState {
-  const baselineBranch = normalizeBaseline(input.defaultBaselineBranch, input.currentBranch);
+  const baselineBranch = normalizeBaselineBranch(input.defaultBaselineBranch, input.currentBranch);
   const [state, setState] = useState<WorktreeGitOverviewState>({ status: 'unavailable' });
   useEffect(() => {
     if (
       input.manager === undefined ||
-      input.worktreeId === 'main' ||
-      input.worktreeId.startsWith('main:') ||
+      isMainWorktreeId(input.worktreeId) ||
       baselineBranch === undefined
     ) {
       setState({ status: 'unavailable' });
@@ -136,7 +119,7 @@ export function WorktreeGitOverviewValue({
     return <span className={styles.dashboardHistorical}>{t('dashboard.notConnected')}</span>;
   }
   const files = metric === 'committed' ? state.committedFiles : state.workingTreeFiles;
-  const totals = sumMetrics(files);
+  const totals = sumLineTotals(files);
   if (totals === undefined) {
     return <span className={styles.dashboardHistorical}>{t('dashboard.unknown')}</span>;
   }

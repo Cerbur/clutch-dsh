@@ -1,8 +1,9 @@
 import { IconFolderClose16, IconFolderOpen16, IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { WorktreeGitChangedFile } from '../../../contract/index.js';
+import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
+import type { WorktreeLocaleKey } from '../../locales.js';
 import { buildGitFileTree, type GitFileTreeNode } from './git-file-tree.js';
 import { GitFileTypeIcon } from './GitFileTypeIcon.js';
 import { GitLineStats } from './GitLineStats.js';
@@ -15,6 +16,26 @@ export interface GitChangedFilesProps {
   readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
+
+/** Git status letter shown for each row; the plan's A/M/D/R/C/T markers. */
+const STATUS_MARKERS: Record<WorktreeGitFileStatus, string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D',
+  renamed: 'R',
+  copied: 'C',
+  'type-changed': 'T',
+};
+
+/** Localized status wording, so status is never conveyed by color alone. */
+const STATUS_LABELS = {
+  added: 'dashboard.git.status.added',
+  modified: 'dashboard.git.status.modified',
+  deleted: 'dashboard.git.status.deleted',
+  renamed: 'dashboard.git.status.renamed',
+  copied: 'dashboard.git.status.copied',
+  'type-changed': 'dashboard.git.status.typeChanged',
+} as const satisfies Record<WorktreeGitFileStatus, WorktreeLocaleKey>;
 
 function shortCommit(commit: string): string {
   return commit.slice(0, 7);
@@ -130,6 +151,9 @@ function renderTreeNodes({
 
     const { file } = node;
     const isSelected = selectedPath === file.path || selectedPath === file.oldPath;
+    // Status is carried by a letter marker and a localized label, not by color
+    // alone, so the row stays readable without color perception.
+    const statusText = fileTitle(file) + ' · ' + t(STATUS_LABELS[file.status]);
     return (
       <li
         key={'file:' + (file.oldPath ?? '') + '\u0000' + file.path}
@@ -143,14 +167,22 @@ function renderTreeNodes({
           type="button"
           aria-selected={isSelected}
           data-dashboard-git-file={file.path}
-          aria-label={fileTitle(file)}
-          title={fileTitle(file)}
+          aria-label={statusText}
+          title={statusText}
           onClick={() => onSelect(file.path)}
         >
           <span className={styles.gitFileIcon} aria-hidden="true">
             <GitFileTypeIcon path={file.path} className={styles.gitFileIconGlyph} />
           </span>
-          <span className={styles.gitFilePath} data-status={file.status} title={fileTitle(file)}>
+          <span
+            className={styles.gitStatusMarker}
+            data-status={file.status}
+            data-dashboard-git-status={file.status}
+            aria-hidden="true"
+          >
+            {STATUS_MARKERS[file.status]}
+          </span>
+          <span className={styles.gitFilePath} data-status={file.status} title={statusText}>
             {fileLabel(file)}
           </span>
           <GitLineStats
@@ -200,7 +232,9 @@ export function GitChangedFiles({ files, selectedPath, onSelect, onOpenFile, t }
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const tree = buildGitFileTree(files);
+  // Building the tree sorts every folder, so it is derived once per file list
+  // instead of on each render of the surrounding panel.
+  const tree = useMemo(() => buildGitFileTree(files), [files]);
   const toggleFolder = (path: string): void => {
     setCollapsedFolders((previous) => {
       const next = new Set(previous);

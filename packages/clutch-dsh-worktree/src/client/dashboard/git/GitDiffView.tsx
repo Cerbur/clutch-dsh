@@ -1,9 +1,18 @@
 import { IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { useEffect, useMemo, useState } from 'react';
 import type { WorktreeGitDiffSegment, WorktreeGitFileDiff } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { parseUnifiedDiff } from './git-diff-parser.js';
+import type { DiffHunk } from './git-diff-parser.js';
 import { GitFileTypeIcon } from './GitFileTypeIcon.js';
 import styles from './worktree-git.css';
+
+/**
+ * Rendering budget for one patch. The provider already bounds patch bytes, but a
+ * large summary can still hold thousands of lines, so the panel folds hunks
+ * beyond this budget and offers to render the rest on request.
+ */
+const MAX_RENDERED_DIFF_LINES = 2000;
 
 export interface GitDiffViewProps {
   readonly diff?: WorktreeGitFileDiff;
@@ -11,7 +20,7 @@ export interface GitDiffViewProps {
   readonly t: WorktreeTranslate;
 }
 
-function hunkLabel(hunk: ReturnType<typeof parseUnifiedDiff>[number]): string {
+function hunkLabel(hunk: DiffHunk): string {
   return '@@ -' + hunk.oldStart + ',' + hunk.oldLines + ' +' + hunk.newStart + ',' + hunk.newLines + ' @@';
 }
 
@@ -19,26 +28,40 @@ function shortCommit(commit: string): string {
   return commit.slice(0, 7);
 }
 
-function renderSegment(segment: WorktreeGitDiffSegment, t: WorktreeTranslate, key: string) {
-  if (segment.binary) {
-    return <section className={styles.gitDiffSegment} key={key}>
-      <div className={styles.gitDiffSegmentHeader}>{t('dashboard.git.commitDiffSection')} <code>{shortCommit(segment.commit)}</code></div>
-      <div className={styles.gitDiffMessage}>{t('dashboard.git.binary')}</div>
-    </section>;
+/** Fold whole hunks once the render budget is reached. */
+function limitHunks(
+  hunks: readonly DiffHunk[],
+  maxLines: number,
+): { readonly hunks: readonly DiffHunk[]; readonly hiddenLines: number } {
+  const visible: DiffHunk[] = [];
+  let rendered = 0;
+  let hiddenLines = 0;
+  for (const hunk of hunks) {
+    const cost = hunk.lines.length + 1;
+    if (rendered < maxLines) {
+      visible.push(hunk);
+      rendered += cost;
+      continue;
+    }
+    hiddenLines += cost;
   }
-  if (segment.truncated) {
-    return <section className={styles.gitDiffSegment} key={key}>
-      <div className={styles.gitDiffSegmentHeader}>{t('dashboard.git.commitDiffSection')} <code>{shortCommit(segment.commit)}</code></div>
-      <div className={styles.gitDiffMessage}>{t('dashboard.git.diffTruncated')}</div>
-    </section>;
+  return { hunks: visible, hiddenLines };
+}
+
+/** Render one unified patch as escaped plain text with lightweight line numbers. */
+function DiffHunks({ patch, t }: { readonly patch: string; readonly t: WorktreeTranslate }) {
+  const hunks = useMemo(() => parseUnifiedDiff(patch), [patch]);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    setExpanded(false);
+  }, [patch]);
+  if (hunks.length === 0) {
+    return <pre className={styles.gitRawDiff}>{patch || t('dashboard.git.emptyDiff')}</pre>;
   }
-  const hunks = parseUnifiedDiff(segment.patch);
+  const limited = expanded ? { hunks, hiddenLines: 0 } : limitHunks(hunks, MAX_RENDERED_DIFF_LINES);
   return (
-    <section className={styles.gitDiffSegment} key={key}>
-      <div className={styles.gitDiffSegmentHeader}>{t('dashboard.git.commitDiffSection')} <code>{shortCommit(segment.commit)}</code></div>
-      {hunks.length === 0 ? (
-        <pre className={styles.gitRawDiff}>{segment.patch || t('dashboard.git.emptyDiff')}</pre>
-      ) : hunks.map((hunk, hunkIndex) => (
+    <>
+      {limited.hunks.map((hunk, hunkIndex) => (
         <section className={styles.gitDiffHunk} key={hunk.oldStart + '-' + hunk.newStart + '-' + hunkIndex}>
           <div className={styles.gitDiffHunkHeader}>{hunkLabel(hunk)}</div>
           {hunk.lines.map((line, lineIndex) => (
@@ -50,6 +73,36 @@ function renderSegment(segment: WorktreeGitDiffSegment, t: WorktreeTranslate, ke
           ))}
         </section>
       ))}
+      {limited.hiddenLines > 0 && (
+        <div className={styles.gitDiffFolded}>
+          <span>{t('dashboard.git.diffLinesHidden', { n: limited.hiddenLines })}</span>
+          <button
+            type="button"
+            className={styles.gitDiffShowAll}
+            data-dashboard-git-show-full-diff
+            onClick={() => setExpanded(true)}
+          >
+            {t('dashboard.git.showFullDiff')}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function DiffSegment({ segment, t }: { readonly segment: WorktreeGitDiffSegment; readonly t: WorktreeTranslate }) {
+  return (
+    <section className={styles.gitDiffSegment}>
+      <div className={styles.gitDiffSegmentHeader}>
+        {t('dashboard.git.commitDiffSection')} <code>{shortCommit(segment.commit)}</code>
+      </div>
+      {segment.binary ? (
+        <div className={styles.gitDiffMessage}>{t('dashboard.git.binary')}</div>
+      ) : segment.truncated ? (
+        <div className={styles.gitDiffMessage}>{t('dashboard.git.diffTruncated')}</div>
+      ) : (
+        <DiffHunks patch={segment.patch} t={t} />
+      )}
     </section>
   );
 }
@@ -84,33 +137,20 @@ export function GitDiffView({ diff, onOpenFile, t }: GitDiffViewProps) {
       <div className={styles.gitDiffContainer}>
         {toolbar}
         <div className={styles.gitDiff} role="document" aria-label={t('dashboard.git.diff')}>
-          {diff.segments.map((segment, index) => renderSegment(segment, t, segment.commit + '-' + index))}
+          {diff.segments.map((segment, index) => (
+            <DiffSegment key={segment.commit + '-' + index} segment={segment} t={t} />
+          ))}
         </div>
       </div>
     );
   }
-  if (diff.binary) {
+  if (diff.binary || diff.truncated) {
     return (
       <div className={styles.gitDiffContainer}>
         {toolbar}
-        <div className={styles.gitDiffMessage}>{t('dashboard.git.binary')}</div>
-      </div>
-    );
-  }
-  if (diff.truncated) {
-    return (
-      <div className={styles.gitDiffContainer}>
-        {toolbar}
-        <div className={styles.gitDiffMessage}>{t('dashboard.git.diffTruncated')}</div>
-      </div>
-    );
-  }
-  const hunks = parseUnifiedDiff(diff.patch);
-  if (hunks.length === 0) {
-    return (
-      <div className={styles.gitDiffContainer}>
-        {toolbar}
-        <pre className={styles.gitRawDiff}>{diff.patch || t('dashboard.git.emptyDiff')}</pre>
+        <div className={styles.gitDiffMessage}>
+          {diff.binary ? t('dashboard.git.binary') : t('dashboard.git.diffTruncated')}
+        </div>
       </div>
     );
   }
@@ -118,18 +158,7 @@ export function GitDiffView({ diff, onOpenFile, t }: GitDiffViewProps) {
     <div className={styles.gitDiffContainer}>
       {toolbar}
       <div className={styles.gitDiff} role="document" aria-label={t('dashboard.git.diff')}>
-        {hunks.map((hunk, hunkIndex) => (
-          <section className={styles.gitDiffHunk} key={hunk.oldStart + '-' + hunk.newStart + '-' + hunkIndex}>
-            <div className={styles.gitDiffHunkHeader}>{hunkLabel(hunk)}</div>
-            {hunk.lines.map((line, lineIndex) => (
-              <div className={styles.gitDiffLine + ' ' + styles['gitDiffLine' + line.type]} key={line.type + '-' + lineIndex}>
-                <span className={styles.gitDiffLineNumber}>{line.type === 'add' ? '' : line.oldLine}</span>
-                <span className={styles.gitDiffLineNumber}>{line.type === 'delete' ? '' : line.newLine}</span>
-                <code><span aria-hidden="true">{line.type === 'context' ? ' ' : line.type === 'add' ? '+' : '-'}</span>{line.text}</code>
-              </div>
-            ))}
-          </section>
-        ))}
+        <DiffHunks patch={diff.patch} t={t} />
       </div>
     </div>
   );

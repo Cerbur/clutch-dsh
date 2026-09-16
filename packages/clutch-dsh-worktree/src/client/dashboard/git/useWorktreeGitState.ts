@@ -2,30 +2,30 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
 import type {
   BranchRecord,
-  WorktreeGitChangedFile,
   WorktreeGitCommitFiles,
-  WorktreeGitDiffSelection,
   WorktreeGitFileDiff,
   WorktreeGitHistory,
   WorktreeManager,
 } from '../../../contract/index.js';
+import { isMainWorktreeId } from './git-facts.js';
+import {
+  MAX_DIFF_CACHE,
+  MAX_FILE_CACHE,
+  canonicalizeCommits,
+  diffCacheKey,
+  fileForPath,
+  gitCacheKey,
+  isLiveCacheKey,
+  isLiveTarget,
+  sameTarget,
+  summarySelection,
+  trimCache,
+} from './git-state-cache.js';
+import type { GitLoadable, GitTarget } from './git-state-cache.js';
 
-export type GitLoadable<Value> =
-  | { readonly status: 'idle' }
-  | { readonly status: 'loading' }
-  | {
-      readonly status: 'ready';
-      readonly value: Value;
-      readonly refreshing?: boolean;
-      readonly error?: Error;
-    }
-  | { readonly status: 'error'; readonly error: Error; readonly previous?: Value };
+export type { GitLoadable } from './git-state-cache.js';
 
 export type WorktreeGitView = 'commits' | 'summary';
-
-type GitTarget =
-  | { readonly kind: 'commit'; readonly commit: string }
-  | { readonly kind: 'selection'; readonly selection: WorktreeGitDiffSelection };
 
 export interface WorktreeGitState {
   readonly branches: GitLoadable<readonly BranchRecord[]>;
@@ -71,9 +71,6 @@ interface ControllerInput {
   readonly defaultBaselineBranch?: string;
 }
 
-const MAX_FILE_CACHE = 8;
-const MAX_DIFF_CACHE = 24;
-
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -96,86 +93,14 @@ function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState
   };
 }
 
-function fileForPath(
-  files: WorktreeGitCommitFiles,
-  selectedPath: string,
-): WorktreeGitChangedFile | undefined {
-  return files.files.find((file) => file.path === selectedPath || file.oldPath === selectedPath);
-}
-
-function historyProjectionKey(history: GitLoadable<WorktreeGitHistory>): string {
-  if (history.status !== 'ready') return 'unknown';
-  return (history.value.baseline?.commit ?? 'unknown') + '\u0000' + (history.value.headCommit ?? 'unknown');
-}
-
-function targetKey(target: GitTarget): string {
-  if (target.kind === 'commit') return 'commit\u0000' + target.commit;
-  if (target.selection.kind === 'summary') {
-    return target.selection.includeWorkingTree === true ? 'summary\u0000working-tree' : 'summary';
-  }
-  return 'commits\u0000' + target.selection.commits.join('\u0000');
-}
-
-function summarySelection(includeWorkingTree: boolean): Extract<WorktreeGitDiffSelection, { readonly kind: 'summary' }> {
-  return includeWorkingTree ? { kind: 'summary', includeWorkingTree: true } : { kind: 'summary' };
-}
-
-function isLiveWorkingTreeTarget(target: GitTarget): boolean {
-  return target.kind === 'commit'
-    ? target.commit === WORKTREE_GIT_WORKING_TREE
-    : target.selection.kind === 'summary' && target.selection.includeWorkingTree === true;
-}
-
-function isLiveTargetKey(key: string): boolean {
-  return key.includes('\u0000commit\u0000' + WORKTREE_GIT_WORKING_TREE) ||
-    key.includes('\u0000summary\u0000working-tree');
-}
-
-function gitCacheKey(
-  baseBranch: string,
-  history: GitLoadable<WorktreeGitHistory>,
-  target: GitTarget,
-): string {
-  return baseBranch + '\u0000' + historyProjectionKey(history) + '\u0000' + targetKey(target);
-}
-
-function diffCacheKey(
-  baseBranch: string,
-  history: GitLoadable<WorktreeGitHistory>,
-  target: GitTarget,
-  filePath: string,
-): string {
-  return gitCacheKey(baseBranch, history, target) + '\u0000' + filePath;
-}
-
-function trimCache<Value>(cache: Map<string, Value>, maxSize: number): void {
-  while (cache.size > maxSize) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) return;
-    cache.delete(oldest);
-  }
-}
-
-function isCommittedSha(commit: string): boolean {
-  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(commit);
-}
-
-function canonicalizeCommits(
-  history: WorktreeGitHistory | undefined,
-  commits: readonly string[],
-): readonly string[] {
-  if (history === undefined) return [];
-  const requested = new Set(commits.filter((commit) => isCommittedSha(commit)));
-  return history.commits
-    .filter((commit) => commit.sha !== WORKTREE_GIT_WORKING_TREE && requested.has(commit.sha))
-    .map((commit) => commit.sha);
-}
-
 /**
  * Create the browser-safe Git Dashboard state machine. Construction is inert;
  * the caller explicitly starts history loading on first Git-tab activation.
  */
 export function createWorktreeGitStateController(input: ControllerInput): WorktreeGitStateController {
+  // Main (Local) has no Worktree-relative Git projection, so it never issues a
+  // Git read even when a panel mounts for it.
+  const main = isMainWorktreeId(input.worktreeId);
   let state = emptyState(input.defaultBaselineBranch);
   let disposed = false;
   let branchesLoaded = false;
@@ -203,25 +128,24 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const invalidateWorkingTreeCache = (): void => {
-    const marker = '\u0000' + WORKTREE_GIT_WORKING_TREE;
     for (const key of filesCache.keys()) {
-      if (key === WORKTREE_GIT_WORKING_TREE || key.includes(marker)) filesCache.delete(key);
+      if (isLiveCacheKey(key)) filesCache.delete(key);
     }
     for (const key of diffCache.keys()) {
-      if (key.includes(marker + '\u0000')) diffCache.delete(key);
+      if (isLiveCacheKey(key)) diffCache.delete(key);
     }
   };
 
   const retireLiveInFlight = (): boolean => {
     let retired = false;
     for (const key of filesInFlight.keys()) {
-      if (isLiveTargetKey(key)) {
+      if (isLiveCacheKey(key)) {
         filesInFlight.delete(key);
         retired = true;
       }
     }
     for (const key of diffInFlight.keys()) {
-      if (isLiveTargetKey(key)) {
+      if (isLiveCacheKey(key)) {
         diffInFlight.delete(key);
         retired = true;
       }
@@ -241,6 +165,23 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       return { kind: 'selection', selection: { kind: 'commits', commits: state.selectedCommits } };
     }
     return { kind: 'commit', commit: state.selectedCommit };
+  };
+
+  /**
+   * Stale-response guard. A completion only publishes while it is still the
+   * newest request for the same baseline, projection, and selected path.
+   */
+  const isCurrentRequest = (
+    request: number,
+    latestRequest: number,
+    baselineBranch: string,
+    target: GitTarget,
+    selectedPath?: string,
+  ): boolean => {
+    if (disposed || request !== latestRequest || state.baselineBranch !== baselineBranch) return false;
+    const active = currentTarget();
+    if (active === undefined || !sameTarget(active, target)) return false;
+    return selectedPath === undefined || state.selectedPath === selectedPath;
   };
 
   const requestFiles = (baseBranch: string, history: GitLoadable<WorktreeGitHistory>, target: GitTarget): Promise<WorktreeGitCommitFiles> => {
@@ -317,7 +258,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     if (baselineBranch === undefined) return;
     const request = ++diffRequest;
     const key = diffCacheKey(baselineBranch, state.history, target, diffPath);
-    const cached = isLiveWorkingTreeTarget(target) ? undefined : diffCache.get(key);
+    const cached = isLiveTarget(target) ? undefined : diffCache.get(key);
     if (cached !== undefined) {
       update({ ...state, selectedPath, diff: { status: 'ready', value: cached } });
       return;
@@ -325,30 +266,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     update({ ...state, selectedPath, diff: { status: 'loading' } });
     try {
       const value = await requestDiff(baselineBranch, state.history, target, diffPath);
-      if (!isLiveWorkingTreeTarget(target)) {
+      if (!isLiveTarget(target)) {
         diffCache.set(key, value);
         trimCache(diffCache, MAX_DIFF_CACHE);
       }
-      const active = currentTarget();
-      if (
-        disposed ||
-        request !== diffRequest ||
-        state.baselineBranch !== baselineBranch ||
-        active === undefined ||
-        targetKey(active) !== targetKey(target) ||
-        state.selectedPath !== selectedPath
-      ) return;
+      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
-      const active = currentTarget();
-      if (
-        disposed ||
-        request !== diffRequest ||
-        state.baselineBranch !== baselineBranch ||
-        active === undefined ||
-        targetKey(active) !== targetKey(target) ||
-        state.selectedPath !== selectedPath
-      ) return;
+      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       update({ ...state, diff: { status: 'error', error: asError(error) } });
     }
   };
@@ -370,7 +295,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     const request = ++filesRequest;
     ++diffRequest;
     const key = gitCacheKey(baselineBranch, state.history, target);
-    const cached = isLiveWorkingTreeTarget(target) ? undefined : filesCache.get(key);
+    const cached = isLiveTarget(target) ? undefined : filesCache.get(key);
     if (cached !== undefined) {
       applyFiles(target, cached);
       return;
@@ -383,28 +308,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     }
     try {
       const value = await requestFiles(baselineBranch, state.history, target);
-      if (!isLiveWorkingTreeTarget(target)) {
+      if (!isLiveTarget(target)) {
         filesCache.set(key, value);
         trimCache(filesCache, MAX_FILE_CACHE);
       }
-      const active = currentTarget();
-      if (
-        disposed ||
-        request !== filesRequest ||
-        state.baselineBranch !== baselineBranch ||
-        active === undefined ||
-        targetKey(active) !== targetKey(target)
-      ) return;
+      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       applyFiles(target, value);
     } catch (error) {
-      const active = currentTarget();
-      if (
-        disposed ||
-        request !== filesRequest ||
-        state.baselineBranch !== baselineBranch ||
-        active === undefined ||
-        targetKey(active) !== targetKey(target)
-      ) return;
+      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       if (preserveReady && previousFiles !== undefined) {
         update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error) } });
       } else {
@@ -535,7 +446,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const loadBranches = (refresh = false): Promise<void> => {
-    if (disposed) return Promise.resolve();
+    if (disposed || main) return Promise.resolve();
     if (branchesInFlight !== undefined) return branchesInFlight;
     if (!refresh && branchesLoaded) return Promise.resolve();
     const request = ++branchesRequest;
@@ -581,7 +492,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const loadHistory = (refresh = false): Promise<void> => {
-    if (disposed || state.baselineBranch === undefined) return Promise.resolve();
+    if (disposed || main || state.baselineBranch === undefined) return Promise.resolve();
     if (historyInFlight !== undefined) return historyInFlight;
     if (!refresh && historyLoaded) return Promise.resolve();
     const baselineBranch = state.baselineBranch;

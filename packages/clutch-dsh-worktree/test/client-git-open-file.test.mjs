@@ -22,6 +22,8 @@ function createMockHarness(sourceCode) {
   const react = {
     useId: () => 'test-id',
     useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useMemo: (factory) => factory(),
+    useEffect: () => {},
   };
 
   const primitivesMock = {

@@ -32,17 +32,21 @@ function FallbackFileIcon({ className, size = 16 }: { className?: string; size?:
  * Uses FileTypeIcon from @deepseek-ai/dsh-client-ui-primitives when available,
  * and falls back to a clean SVG file glyph in older runtimes.
  */
-export function GitFileTypeIcon({ path, className, size = 16 }: GitFileTypeIconProps): ReactNode {
-  const FileTypeIcon = (primitives as Record<string, unknown>).FileTypeIcon as
-    | ((props: { kind: string; size?: number; className?: string }) => ReactNode)
-    | undefined;
-  const classifyFileType = (primitives as Record<string, unknown>).classifyFileType as
-    | ((targetPath: string) => string)
-    | undefined;
+/**
+ * Optional native primitives, resolved once at module scope instead of on every
+ * rendered changed-file row.
+ */
+const primitivesRecord = primitives as Record<string, unknown>;
+const FileTypeIcon = primitivesRecord.FileTypeIcon as
+  | ((props: { kind: string; size?: number; className?: string }) => ReactNode)
+  | undefined;
+const classifyFileType = primitivesRecord.classifyFileType as
+  | ((targetPath: string) => string)
+  | undefined;
 
+export function GitFileTypeIcon({ path, className, size = 16 }: GitFileTypeIconProps): ReactNode {
   if (typeof FileTypeIcon === 'function' && typeof classifyFileType === 'function') {
-    const kind = classifyFileType(path);
-    return <FileTypeIcon kind={kind} size={size} className={className} />;
+    return <FileTypeIcon kind={classifyFileType(path)} size={size} className={className} />;
   }
 
   return <FallbackFileIcon className={className} size={size} />;

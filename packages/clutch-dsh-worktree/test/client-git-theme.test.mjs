@@ -244,13 +244,23 @@ test('changed-file folders use the native DSH folder icons', async () => {
   assert.doesNotMatch(await readFile(cssUrl, 'utf8'), /\.gitFolderDisclosure/);
 });
 
-test('changed-file names carry the Git status color without status markers', async () => {
+test('changed-file rows carry a Git status marker, a localized status, and the status color', async () => {
   const css = await readFile(cssUrl, 'utf8');
   const source = await readFile(changedFilesUrl, 'utf8');
 
-  assert.match(source, /<span className=\{styles\.gitFilePath\} data-status=\{file\.status\}/u);
-  assert.doesNotMatch(source, /gitFileStatus(?:Label)?/);
-  assert.doesNotMatch(css, /\.gitFileStatus(?:Label)?/);
+  // Plan §28: the A/M/D/R/C/T markers are rendered, and status is never carried
+  // by color alone because the row label and title include the status wording.
+  assert.match(source, /const STATUS_MARKERS: Record<WorktreeGitFileStatus, string> = \{[\s\S]*added: 'A'[\s\S]*deleted: 'D'/u);
+  assert.match(source, /data-dashboard-git-status=\{file\.status\}/u);
+  assert.match(source, /\{STATUS_MARKERS\[file\.status\]\}/u);
+  assert.match(source, /aria-label=\{statusText\}/u);
+  assert.match(source, /const statusText = fileTitle\(file\) \+ ' · ' \+ t\(STATUS_LABELS\[file\.status\]\)/u);
+  assert.match(source, /'type-changed': 'dashboard\.git\.status\.typeChanged'/u);
+
+  assert.match(css, /\.gitStatusMarker \{[\s\S]*font-weight: 600/u);
+  assert.match(css, /\.gitStatusMarker\[data-status='added'\][\s\S]*state-success-primary/u);
+  assert.match(css, /\.gitStatusMarker\[data-status='deleted'\][\s\S]*state-error-secondary/u);
+  assert.match(css, /\.gitStatusMarker\[data-status='modified'\][\s\S]*state-business-primary/u);
   assert.match(css, /\.gitFilePath\[data-status='added'\][\s\S]*state-success-primary/u);
   assert.match(css, /\.gitFilePath\[data-status='deleted'\][\s\S]*state-error-secondary/u);
   assert.match(css, /\.gitFilePath\[data-status='modified'\][\s\S]*state-business-primary/u);
@@ -286,3 +296,29 @@ test('Overview Git facts reuse history, committed summary, and working-tree read
   assert.match(source, /metric: 'aheadBehind' \| 'committed' \| 'workingTree'/u);
   assert.match(source, /history\.unavailableReason/);
 });
+
+test('GitDiffView folds large patches behind a localized reveal action', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(new URL('../src/client/dashboard/git/GitDiffView.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /const MAX_RENDERED_DIFF_LINES = 2000;/u);
+  assert.match(source, /function limitHunks\(/u);
+  assert.match(source, /useMemo\(\(\) => parseUnifiedDiff\(patch\), \[patch\]\)/u);
+  assert.match(source, /t\('dashboard\.git\.diffLinesHidden', \{ n: limited\.hiddenLines \}\)/u);
+  assert.match(source, /data-dashboard-git-show-full-diff/u);
+  assert.match(source, /t\('dashboard\.git\.showFullDiff'\)/u);
+  assert.match(css, /\.gitDiffFolded \{[\s\S]*border-top: 1px dashed/u);
+  assert.match(css, /\.gitDiffShowAll \{[\s\S]*cursor: pointer/u);
+});
+
+test('Git tab state shares one live-target predicate across cache keys', async () => {
+  const cache = await readFile(new URL('../src/client/dashboard/git/git-state-cache.ts', import.meta.url), 'utf8');
+  const state = await readFile(new URL('../src/client/dashboard/git/useWorktreeGitState.ts', import.meta.url), 'utf8');
+
+  assert.match(cache, /export function isLiveCacheKey\(key: string\): boolean/u);
+  assert.match(cache, /const LIVE_KEY_MARKERS = \[/u);
+  assert.match(state, /isLiveCacheKey\(key\)/u);
+  assert.doesNotMatch(state, /isLiveTargetKey/u);
+  assert.match(state, /const isCurrentRequest = \(/u);
+});
+

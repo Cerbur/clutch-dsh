@@ -1516,3 +1516,39 @@ test('rejects aggregate selections that repeat or fall outside the pinned projec
   }
 });
 
+test('issues no Git read for a Main Dashboard target', async () => {
+  const calls = [];
+  const manager = {
+    listBranches() {
+      calls.push('branches');
+      return Promise.resolve([]);
+    },
+    listWorktreeCommits() {
+      calls.push('history');
+      return Promise.resolve({ commits: [], truncated: false });
+    },
+    listWorktreeCommitFiles() {
+      calls.push('files');
+      return Promise.resolve({ commit: 'summary', files: [] });
+    },
+    getWorktreeCommitFileDiff() {
+      calls.push('diff');
+      return Promise.resolve({ commit: 'summary', path: '', patch: '', binary: false });
+    },
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'main:ws_dashboard',
+    defaultBaselineBranch: 'main',
+  });
+  await controller.loadBranches();
+  await controller.loadHistory();
+  await controller.refresh();
+  assert.deepEqual(calls, []);
+  assert.equal(controller.getSnapshot().branches.status, 'idle');
+  assert.equal(controller.getSnapshot().history.status, 'idle');
+  controller.dispose();
+});
+
+
