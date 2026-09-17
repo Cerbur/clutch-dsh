@@ -29,7 +29,7 @@ function createMockHarness(sourceCode) {
   const primitivesMock = {
     IconFolderClose16: () => jsx('svg', { 'data-icon': 'folder-close' }),
     IconFolderOpen16: () => jsx('svg', { 'data-icon': 'folder-open' }),
-    IconRightUpOutline14: () => jsx('svg', { 'data-icon': 'right-up' }),
+    IconRightUpOutline16: (props) => jsx('svg', { 'data-icon': 'right-up', ...props }),
   };
 
   const exports = {};
@@ -65,7 +65,7 @@ function findAll(node, predicate) {
 
 const t = (key) => en[key] ?? key;
 
-test('GitChangedFiles renders open-in-sidebar action button for non-deleted files', async () => {
+test('GitChangedFiles stays a plain selectable tree without row actions or status markers', async () => {
   const source = await readFile(changedFilesUrl, 'utf8');
   const { GitChangedFiles } = createMockHarness(source);
 
@@ -74,22 +74,24 @@ test('GitChangedFiles renders open-in-sidebar action button for non-deleted file
     { path: 'deleted.ts', status: 'deleted', additions: 0, deletions: 5 },
   ];
 
-  let openedPath;
+  let selectedPath;
   const node = GitChangedFiles({
     files,
     selectedPath: 'src/index.ts',
-    onSelect: () => {},
-    onOpenFile: (path) => { openedPath = path; },
+    onSelect: (path) => { selectedPath = path; },
     t,
   });
 
-  const openButtons = findAll(node, (item) => item.props?.['data-dashboard-git-open-file']);
-  assert.equal(openButtons.length, 1);
-  assert.equal(openButtons[0].props['data-dashboard-git-open-file'], 'src/index.ts');
-  assert.equal(openButtons[0].props['title'], 'Open in Sidebar');
+  // Opening a changed file is now the summary diff toolbar's action only, and the
+  // row status is carried by color, so no marker element is rendered.
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-git-open-file']).length, 0);
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-git-status']).length, 0);
 
-  openButtons[0].props.onClick({ stopPropagation() {} });
-  assert.equal(openedPath, 'src/index.ts');
+  const rows = findAll(node, (item) => item.props?.['data-dashboard-git-file']);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].props['aria-label'], 'src/index.ts · Modified');
+  rows[0].props.onClick();
+  assert.equal(selectedPath, 'src/index.ts');
 
   const fileIcons = findAll(node, (item) => item.props?.['data-file-icon']);
   assert.equal(fileIcons.length, 2);

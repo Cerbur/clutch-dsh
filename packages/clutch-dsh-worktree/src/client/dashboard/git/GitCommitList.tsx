@@ -7,6 +7,8 @@ export interface GitCommitListProps {
   readonly commits: readonly WorktreeGitCommit[];
   readonly selectedCommit?: string;
   readonly selectedCommits?: readonly string[];
+  /** When off, a click replaces the selection instead of toggling one commit. */
+  readonly multiSelect?: boolean;
   readonly onSelect: (commit: string) => void;
   readonly onToggle?: (commit: string) => void;
   readonly t: WorktreeTranslate;
@@ -17,8 +19,8 @@ function commitDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-/** Keyboard-navigable, multi-selectable, graph-free commit list for the Dashboard. */
-export function GitCommitList({ commits, selectedCommit, selectedCommits = [], onSelect, onToggle, t }: GitCommitListProps) {
+/** Keyboard-navigable, optionally multi-selectable, graph-free commit list for the Dashboard. */
+export function GitCommitList({ commits, selectedCommit, selectedCommits = [], multiSelect = false, onSelect, onToggle, t }: GitCommitListProps) {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const move = (index: number, direction: -1 | 1 | 'first' | 'last'): void => {
     const nextIndex = direction === 'first'
@@ -28,13 +30,21 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], o
         : Math.max(0, Math.min(commits.length - 1, index + direction));
     itemRefs.current[nextIndex]?.focus();
   };
-  const toggle = (commit: WorktreeGitCommit): void => {
-    if (commit.kind === 'working-tree' || onToggle === undefined) onSelect(commit.sha);
+  const pick = (commit: WorktreeGitCommit): void => {
+    // The working tree is a single live target, so it always replaces the selection.
+    if (!multiSelect || commit.kind === 'working-tree' || onToggle === undefined) onSelect(commit.sha);
     else onToggle(commit.sha);
   };
 
   return (
-    <ul className={styles.gitCommitList} role="listbox" aria-multiselectable="true" aria-label={t('dashboard.git.commits')} aria-describedby="dashboard-git-commit-selection-hint">
+    <ul
+      className={styles.gitCommitList}
+      role="listbox"
+      aria-multiselectable={multiSelect}
+      data-dashboard-git-commit-multiselect={multiSelect ? 'on' : 'off'}
+      aria-label={t('dashboard.git.commits')}
+      aria-describedby={multiSelect ? 'dashboard-git-commit-selection-hint' : undefined}
+    >
       {commits.map((commit, index) => {
         const isWorkingTree = commit.kind === 'working-tree';
         const isSelected = isWorkingTree
@@ -51,7 +61,7 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], o
               aria-setsize={commits.length}
               data-dashboard-git-commit={commit.sha}
               data-dashboard-git-commit-kind={commit.kind ?? 'commit'}
-              onClick={() => toggle(commit)}
+              onClick={() => pick(commit)}
               onKeyDown={(event) => {
                 if (event.key === 'ArrowUp') {
                   event.preventDefault();
@@ -67,11 +77,13 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], o
                   move(index, 'last');
                 } else if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  toggle(commit);
+                  pick(commit);
                 }
               }}
             >
-              <span className={styles.gitCommitSelectionMark} aria-hidden="true">{isSelected ? '✓' : '○'}</span>
+              {multiSelect && (
+                <span className={styles.gitCommitSelectionMark} aria-hidden="true">{isSelected ? '✓' : '○'}</span>
+              )}
               <span className={styles.gitCommitSubject}>
                 {isWorkingTree ? t('dashboard.git.uncommittedChanges') : commit.subject || t('dashboard.git.untitledCommit')}
               </span>

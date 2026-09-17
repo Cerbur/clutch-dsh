@@ -1,4 +1,4 @@
-import { IconFolderClose16, IconFolderOpen16, IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconFolderClose16, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';
@@ -13,21 +13,10 @@ export interface GitChangedFilesProps {
   readonly files: readonly WorktreeGitChangedFile[];
   readonly selectedPath?: string;
   readonly onSelect: (path: string) => void;
-  readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
 
-/** Git status letter shown for each row; the plan's A/M/D/R/C/T markers. */
-const STATUS_MARKERS: Record<WorktreeGitFileStatus, string> = {
-  added: 'A',
-  modified: 'M',
-  deleted: 'D',
-  renamed: 'R',
-  copied: 'C',
-  'type-changed': 'T',
-};
-
-/** Localized status wording, so status is never conveyed by color alone. */
+/** Localized status wording for the row title and accessible label, so the color cue is still announced. */
 const STATUS_LABELS = {
   added: 'dashboard.git.status.added',
   modified: 'dashboard.git.status.modified',
@@ -74,7 +63,6 @@ interface RenderTreeNodesInput {
   readonly toggleFolder: (path: string) => void;
   readonly selectedPath?: string;
   readonly onSelect: (path: string) => void;
-  readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
 
@@ -86,7 +74,6 @@ function renderTreeNodes({
   toggleFolder,
   selectedPath,
   onSelect,
-  onOpenFile,
   t,
 }: RenderTreeNodesInput): ReactNode[] {
   return nodes.map((node, index) => {
@@ -141,7 +128,6 @@ function renderTreeNodes({
               toggleFolder,
               selectedPath,
               onSelect,
-              onOpenFile,
               t,
             })}
           </ul>
@@ -151,8 +137,8 @@ function renderTreeNodes({
 
     const { file } = node;
     const isSelected = selectedPath === file.path || selectedPath === file.oldPath;
-    // Status is carried by a letter marker and a localized label, not by color
-    // alone, so the row stays readable without color perception.
+    // The row color carries the status visually; the localized wording stays in the
+    // title and accessible label so the row remains readable without color.
     const statusText = fileTitle(file) + ' · ' + t(STATUS_LABELS[file.status]);
     return (
       <li
@@ -174,14 +160,6 @@ function renderTreeNodes({
           <span className={styles.gitFileIcon} aria-hidden="true">
             <GitFileTypeIcon path={file.path} className={styles.gitFileIconGlyph} />
           </span>
-          <span
-            className={styles.gitStatusMarker}
-            data-status={file.status}
-            data-dashboard-git-status={file.status}
-            aria-hidden="true"
-          >
-            {STATUS_MARKERS[file.status]}
-          </span>
           <span className={styles.gitFilePath} data-status={file.status} title={statusText}>
             {fileLabel(file)}
           </span>
@@ -197,29 +175,6 @@ function renderTreeNodes({
               {file.commits.map(shortCommit).join(', ')}
             </code>
           )}
-          {onOpenFile !== undefined && file.status !== 'deleted' && (
-            <span
-              role="button"
-              tabIndex={0}
-              className={styles.gitOpenFileAction}
-              title={t('dashboard.git.openInSidebar')}
-              aria-label={t('dashboard.git.openInSidebar')}
-              data-dashboard-git-open-file={file.path}
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpenFile(file.path);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onOpenFile(file.path);
-                }
-              }}
-            >
-              <IconRightUpOutline14 />
-            </span>
-          )}
         </button>
       </li>
     );
@@ -227,7 +182,7 @@ function renderTreeNodes({
 }
 
 /** Changed-file tree; only paths returned by Host are selectable. */
-export function GitChangedFiles({ files, selectedPath, onSelect, onOpenFile, t }: GitChangedFilesProps) {
+export function GitChangedFiles({ files, selectedPath, onSelect, t }: GitChangedFilesProps) {
   const treeInstanceId = useId().replaceAll(':', '');
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -259,7 +214,6 @@ export function GitChangedFiles({ files, selectedPath, onSelect, onOpenFile, t }
         toggleFolder,
         selectedPath,
         onSelect,
-        onOpenFile,
         t,
       })}
     </ul>

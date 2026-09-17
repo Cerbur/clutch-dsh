@@ -1059,6 +1059,45 @@ test('supports aggregate state targets', async () => {
   controller.dispose();
 });
 
+test('the multi-select switch decides whether a commit click replaces or adds', async () => {
+  const first = '1'.repeat(40);
+  const second = '2'.repeat(40);
+  const calls = [];
+  const manager = {
+    listWorktreeCommits: () => Promise.resolve({ headCommit: second, baseline: { commit: '0'.repeat(40), source: 'captured' }, commits: [{ sha: second, parents: [first], subject: 'second', authorName: 'Test', authoredAt: '2026-09-14T00:00:00Z' }, { sha: first, parents: ['0'.repeat(40)], subject: 'first', authorName: 'Test', authoredAt: '2026-09-13T00:00:00Z' }], truncated: false }),
+    listWorktreeCommitFiles: (input) => { calls.push(input); return Promise.resolve({ commit: input.commit || 'summary', selection: input.selection, files: [] }); },
+    getWorktreeCommitFileDiff: (input) => Promise.resolve({ commit: input.commit || 'summary', selection: input.selection, path: input.path, patch: '', binary: false }),
+  };
+  const controller = createWorktreeGitStateController({ manager, workspaceId: 'ws_dashboard', worktreeId: 'wt_dashboard', defaultBaselineBranch: 'main' });
+  await controller.loadHistory();
+  await flush();
+  // Replace-on-click is the default; the additive path is opt-in.
+  assert.equal(controller.getSnapshot().commitMultiSelect, false);
+
+  controller.selectCommit(second);
+  await flush();
+  assert.deepEqual(controller.getSnapshot().selectedCommits, [second]);
+  assert.equal(calls[calls.length - 1].commit, second);
+
+  controller.setCommitMultiSelect(true);
+  assert.equal(controller.getSnapshot().commitMultiSelect, true);
+  controller.toggleCommit(first);
+  await flush();
+  assert.deepEqual(controller.getSnapshot().selectedCommits, [second, first]);
+  assert.equal(calls[calls.length - 1].selection.kind, 'commits');
+  assert.deepEqual(calls[calls.length - 1].selection.commits, [second, first]);
+
+  // Turning the switch off collapses the aggregate to the focused commit and
+  // re-reads that single commit instead of leaving the union files in place.
+  controller.setCommitMultiSelect(false);
+  await flush();
+  assert.equal(controller.getSnapshot().commitMultiSelect, false);
+  assert.deepEqual(controller.getSnapshot().selectedCommits, [first]);
+  assert.equal(calls[calls.length - 1].commit, first);
+  assert.equal(calls[calls.length - 1].selection, undefined);
+  controller.dispose();
+});
+
 test('retires pending live summary reads on refresh and target changes', async () => {
   const commit = 'c'.repeat(40);
   const history = {

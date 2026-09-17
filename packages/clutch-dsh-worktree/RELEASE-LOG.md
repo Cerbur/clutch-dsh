@@ -19,7 +19,10 @@
 - Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
 - 将 Overview 中的基线编辑改为铅笔图标入口和 DSH 弹窗；弹窗打开时先保持选择列表关闭，点击第一行搜索框后再展开响应式、可滚动的 branch 选择器并过滤本地 branch。
 - 收窄 Git 读取成本：working-tree 的存在性与路径授权改用仅路径 projection，未跟踪文件的行数统计限定为前 50 个（其余显示“未知”），多选 commit 的归属校验改为基于一次固定的 history projection，二进制基线不再写入文本临时文件比较。
-- changed-file 行增加 A/M/D/R/C/T 状态标记，并在行标题与无障碍标签中给出本地化状态，状态不再只靠颜色区分；超过 2000 行的 Diff 会先折叠并可手动展开；Main 的“Git 与变更”视图不再发起任何 Git 读取。
+- changed-file 行改用文件名的颜色区分增删改，并在行标题与无障碍标签中给出本地化状态；超过 2000 行的 Diff 会先折叠并可手动展开；Main 的“Git 与变更”视图不再发起任何 Git 读取。
+- 在提交栏标题增加默认关闭的**多选提交**开关：关闭时点击 commit 直接查看该 commit 自己的 Diff，打开后才启用多选提交；关闭开关时会把多选收敛回当前聚焦的 commit。
+- 移除变更文件中每行的“在侧栏打开”入口，打开文件统一由汇总 Diff 工具栏的**在侧栏打开**提供；该按钮改用方形右上箭头图标，修正原先 icon 被压缩、与文字基线不对齐的问题。
+- 可拖动分割线补齐两侧边线：上下分割线同时绘制上边和下边，左右分割线同时绘制左边和右边，两侧面板的边界更清晰。
 
 ### English
 
@@ -38,7 +41,10 @@
 - Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
 - Replace the Overview baseline editor with a pencil-icon trigger and a DSH dialog whose responsive branch picker stays closed until the first-row search field is clicked, keeps search above a scrollable list, and filters local branches before saving.
 - Tighten Git read cost: working-tree presence and path authorization use a paths-only projection, untracked line statistics are bounded to the first 50 files (the rest report Unknown), multi-commit membership is authorized against one pinned history projection, and binary baselines are no longer compared through a text temporary file.
-- Show A/M/D/R/C/T status markers on changed-file rows with a localized status in the row title and accessible label so status no longer depends on color alone; fold diffs past 2000 rendered lines behind a reveal action; and issue no Git read at all for the Main Git & Changes view.
+- Mark changed-file rows with the filename color while keeping a localized status in the row title and accessible label; fold diffs past 2000 rendered lines behind a reveal action; and issue no Git read at all for the Main Git & Changes view.
+- Add an off-by-default **Multi-select commits** switch to the commits header: clicking a commit shows that commit's own diff, the switch enables additive multi-selection, and turning it off collapses the selection back to the focused commit.
+- Remove the per-row open-in-sidebar action from changed files so the summary diff toolbar's **Open in Sidebar** is the only file reveal action, and swap its icon for the square right-up arrow so it keeps its aspect ratio and centers with the label.
+- Draw both edges of each draggable divider: the row divider now draws its top and bottom lines and the column divider draws its left and right lines, so the panes on either side each get their own edge.
 
 ## 0.1.12 — 2026-09-14
 

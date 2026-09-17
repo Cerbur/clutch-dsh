@@ -169,21 +169,25 @@ common ancestor to the request's captured `HEAD` (or the two branch tips when no
 it excludes working-tree changes by default. Turn on **Include working tree** to replace that target with
 one net diff from the same comparison boundary to the current working tree, including committed, staged,
 unstaged, untracked, deleted, and renamed changes. This is a
-fresh on-demand projection rather than a concatenation of two diffs. In the commit list, select more than
-one committed row to view the exact union of those commits' first-parent deltas. The changed-file list
+fresh on-demand projection rather than a concatenation of two diffs. Clicking a commit shows that
+commit's own diff. Turn on **Multi-select commits** in the commits header to pick several committed rows
+and view the exact union of their first-parent deltas; the switch is off by default, and turning it off
+collapses the selection back to the focused commit. The changed-file list
 records the contributing commits, and each selected commit is rendered as its own diff segment; this is
 not an implicit range and does not include unselected commits. The changed-files column header shows the
 aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
 commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
-exclusive with committed multi-selection. Opening a changed file reveals it in the native right sidebar
-using the current Session, only when that Session belongs to the Dashboard Worktree. An empty Worktree
+exclusive with committed multi-selection. The **Open in Sidebar** action in the summary diff toolbar
+reveals the current file in the native right sidebar using the current Session, only when that Session
+belongs to the Dashboard Worktree. An empty Worktree
 or an unrelated current Session cannot open a file through this action.
 
 The history is capped at 200 commits and marks longer histories as truncated. Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. Changed-file rows show text
 line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. File names use
-green for additions, red for deletions, and blue for other changes. Folder icons indicate whether each folder is
+green for additions, red for deletions, and blue for other changes, and each row's title and accessible
+label spells the status out. Folder icons indicate whether each folder is
 expanded or collapsed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a
 Git watcher; refresh it to see later edits.
 

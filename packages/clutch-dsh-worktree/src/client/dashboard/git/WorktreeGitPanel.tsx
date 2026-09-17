@@ -281,7 +281,28 @@ export function WorktreeGitPanel({
           >
             <div className={styles.gitColumnHeader}>
               <h3>{t('dashboard.git.commits')}</h3>
-              {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
+              <div className={styles.gitColumnHeaderControls}>
+                {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
+                <label
+                  className={styles.gitCommitMultiSelect}
+                  title={t('dashboard.git.multiSelectCommitsDescription')}
+                >
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    data-dashboard-git-multi-select
+                    aria-describedby="dashboard-git-commit-selection-hint"
+                    checked={state.commitMultiSelect}
+                    onChange={(event) => state.setCommitMultiSelect(event.currentTarget.checked)}
+                  />
+                  <span className={styles.gitCommitMultiSelectTrack} aria-hidden="true">
+                    <span className={styles.gitCommitMultiSelectThumb} />
+                  </span>
+                  <span className={styles.gitCommitMultiSelectLabel}>
+                    {t('dashboard.git.multiSelectCommits')}
+                  </span>
+                </label>
+              </div>
             </div>
             <button
               type="button"
@@ -313,6 +334,7 @@ export function WorktreeGitPanel({
               commits={historyValue.commits}
               selectedCommit={state.selectedCommit}
               selectedCommits={state.selectedCommits}
+              multiSelect={state.commitMultiSelect}
               onSelect={state.selectCommit}
               onToggle={state.toggleCommit}
               t={t}
@@ -352,7 +374,7 @@ export function WorktreeGitPanel({
                 )}
               </div>
             </div>
-            {state.selectedCommits.length > 0 && state.view === 'commits' && (
+            {state.commitMultiSelect && state.selectedCommits.length > 0 && state.view === 'commits' && (
               <div className={styles.gitSelectionToolbar}>
                 <span>{t('dashboard.git.selectedCommitCount', { n: state.selectedCommits.length })}</span>
                 <button type="button" onClick={state.clearCommitSelection}>{t('dashboard.git.clearCommitSelection')}</button>
@@ -378,7 +400,7 @@ export function WorktreeGitPanel({
                       : t('dashboard.git.noFiles')}
                   </div>
                 ) : (
-                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
                 )}
               </>
             )}

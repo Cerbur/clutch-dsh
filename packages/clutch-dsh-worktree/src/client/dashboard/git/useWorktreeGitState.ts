@@ -39,6 +39,8 @@ export interface WorktreeGitState {
   readonly selectedCommit?: string;
   /** Selected committed SHAs; the live working tree is intentionally excluded. */
   readonly selectedCommits: readonly string[];
+  /** Whether picking a commit adds to the selection instead of replacing it. */
+  readonly commitMultiSelect: boolean;
   readonly files: GitLoadable<WorktreeGitCommitFiles>;
   readonly selectedPath?: string;
   readonly diff: GitLoadable<WorktreeGitFileDiff>;
@@ -56,6 +58,7 @@ export interface WorktreeGitStateController {
   readonly setIncludeWorkingTree: (include: boolean) => void;
   readonly selectCommit: (commit: string) => void;
   readonly toggleCommit: (commit: string) => void;
+  readonly setCommitMultiSelect: (enabled: boolean) => void;
   readonly clearCommitSelection: () => void;
   readonly selectPath: (path: string) => void;
   readonly dispose: () => void;
@@ -88,6 +91,7 @@ function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState
     view: 'summary',
     includeWorkingTree: false,
     selectedCommits: [],
+    commitMultiSelect: false,
     files: { status: 'idle' },
     diff: { status: 'idle' },
   };
@@ -430,6 +434,34 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     void loadFiles(target);
   };
 
+  /**
+   * Switch between replace-on-click and additive selection. Turning multi-select
+   * off collapses an aggregate target back to its primary commit so the files and
+   * diff panes keep matching the visible selection.
+   */
+  const setCommitMultiSelect = (enabled: boolean): void => {
+    if (disposed || state.commitMultiSelect === enabled) return;
+    if (enabled) {
+      update({ ...state, commitMultiSelect: true });
+      return;
+    }
+    const primary = state.selectedCommit;
+    const aggregated =
+      state.view === 'commits' && primary !== undefined && state.selectedCommits.length > 1;
+    if (!aggregated) {
+      update({
+        ...state,
+        commitMultiSelect: false,
+        selectedCommits: primary === undefined ? [] : [primary],
+      });
+      return;
+    }
+    // selectCommit must still observe the aggregate selection; collapsing it first
+    // would trip the "already showing this commit" guard and keep the union files.
+    update({ ...state, commitMultiSelect: false });
+    selectCommit(primary);
+  };
+
   const clearCommitSelection = (): void => {
     if (disposed || state.baselineBranch === undefined) return;
     resetTarget({ view: 'commits', selectedCommit: undefined, selectedCommits: [] });
@@ -612,6 +644,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     setIncludeWorkingTree,
     selectCommit,
     toggleCommit,
+    setCommitMultiSelect,
     clearCommitSelection,
     selectPath,
     dispose: () => {
@@ -652,6 +685,7 @@ export function useWorktreeGitState(input: UseWorktreeGitStateInput): WorktreeGi
     setIncludeWorkingTree: controller.setIncludeWorkingTree,
     selectCommit: controller.selectCommit,
     toggleCommit: controller.toggleCommit,
+    setCommitMultiSelect: controller.setCommitMultiSelect,
     clearCommitSelection: controller.clearCommitSelection,
     selectPath: controller.selectPath,
     dispose: controller.dispose,

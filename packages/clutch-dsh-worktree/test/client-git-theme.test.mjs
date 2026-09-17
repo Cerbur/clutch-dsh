@@ -7,6 +7,9 @@ import ts from 'typescript';
 const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
 const changedFilesUrl = new URL('../src/client/dashboard/git/GitChangedFiles.tsx', import.meta.url);
 const gitPanelUrl = new URL('../src/client/dashboard/git/WorktreeGitPanel.tsx', import.meta.url);
+const diffViewUrl = new URL('../src/client/dashboard/git/GitDiffView.tsx', import.meta.url);
+const commitListUrl = new URL('../src/client/dashboard/git/GitCommitList.tsx', import.meta.url);
+const gitStateUrl = new URL('../src/client/dashboard/git/useWorktreeGitState.ts', import.meta.url);
 
 function jsxAttribute(node, ast, name) {
   const attributes = ts.isJsxElement(node)
@@ -141,8 +144,8 @@ test('wide Git layout stacks commits over changed files beside the diff', async 
     /grid-template-rows: minmax\(140px, min\(var\(--git-rows-top\), calc\(100% - 147px\)\)\) 7px minmax\(140px, 1fr\);/,
   );
   assert.match(splitter, /touch-action: none;/);
-  assert.match(css, /\[data-dashboard-git-splitter='rows'\] \{\s*height: 7px;\s*cursor: row-resize;/);
-  assert.match(css, /\[data-dashboard-git-splitter='columns'\] \{\s*width: 7px;\s*cursor: col-resize;/);
+  assert.match(css, /\[data-dashboard-git-splitter='rows'\] \{\s*box-sizing: border-box;\s*height: 7px;\s*cursor: row-resize;/);
+  assert.match(css, /\[data-dashboard-git-splitter='columns'\] \{\s*box-sizing: border-box;\s*width: 7px;\s*cursor: col-resize;/);
 
   // Wide placement: the row divider only splits the left column, the column divider spans it.
   const base = css.slice(0, css.indexOf('@container (min-width: 901px)'));
@@ -244,27 +247,80 @@ test('changed-file folders use the native DSH folder icons', async () => {
   assert.doesNotMatch(await readFile(cssUrl, 'utf8'), /\.gitFolderDisclosure/);
 });
 
-test('changed-file rows carry a Git status marker, a localized status, and the status color', async () => {
+test('changed-file rows use color only while the localized status stays announced', async () => {
   const css = await readFile(cssUrl, 'utf8');
   const source = await readFile(changedFilesUrl, 'utf8');
 
-  // Plan §28: the A/M/D/R/C/T markers are rendered, and status is never carried
-  // by color alone because the row label and title include the status wording.
-  assert.match(source, /const STATUS_MARKERS: Record<WorktreeGitFileStatus, string> = \{[\s\S]*added: 'A'[\s\S]*deleted: 'D'/u);
-  assert.match(source, /data-dashboard-git-status=\{file\.status\}/u);
-  assert.match(source, /\{STATUS_MARKERS\[file\.status\]\}/u);
+  // The row status is now the filename color alone; the localized wording remains
+  // in the row title and accessible label, and the A/M/D/R/C/T marker is gone.
+  assert.doesNotMatch(source, /STATUS_MARKERS/u);
+  assert.doesNotMatch(source, /gitStatusMarker/u);
+  assert.doesNotMatch(css, /\.gitStatusMarker/u);
+  assert.match(source, /data-status=\{file\.status\}/u);
   assert.match(source, /aria-label=\{statusText\}/u);
   assert.match(source, /const statusText = fileTitle\(file\) \+ ' · ' \+ t\(STATUS_LABELS\[file\.status\]\)/u);
   assert.match(source, /'type-changed': 'dashboard\.git\.status\.typeChanged'/u);
 
-  assert.match(css, /\.gitStatusMarker \{[\s\S]*font-weight: 600/u);
-  assert.match(css, /\.gitStatusMarker\[data-status='added'\][\s\S]*state-success-primary/u);
-  assert.match(css, /\.gitStatusMarker\[data-status='deleted'\][\s\S]*state-error-secondary/u);
-  assert.match(css, /\.gitStatusMarker\[data-status='modified'\][\s\S]*state-business-primary/u);
   assert.match(css, /\.gitFilePath\[data-status='added'\][\s\S]*state-success-primary/u);
   assert.match(css, /\.gitFilePath\[data-status='deleted'\][\s\S]*state-error-secondary/u);
   assert.match(css, /\.gitFilePath\[data-status='modified'\][\s\S]*state-business-primary/u);
   assert.match(css, /\.gitFilePath\[data-status='renamed'\][\s\S]*state-business-primary/u);
+});
+
+test('the commits column header owns a native multi-select switch', async () => {
+  const panel = await readFile(gitPanelUrl, 'utf8');
+  const commitList = await readFile(commitListUrl, 'utf8');
+  const state = await readFile(gitStateUrl, 'utf8');
+  const css = await readFile(cssUrl, 'utf8');
+  const header = panel.slice(panel.indexOf('data-dashboard-git-pane="commits"'));
+
+  // A native checkbox carries the switch semantics and owns focus/keyboard behavior.
+  assert.match(header, /role="switch"/u);
+  assert.match(header, /data-dashboard-git-multi-select/u);
+  assert.match(header, /checked=\{state\.commitMultiSelect\}/u);
+  assert.match(header, /state\.setCommitMultiSelect\(event\.currentTarget\.checked\)/u);
+  assert.match(header, /multiSelect=\{state\.commitMultiSelect\}/u);
+  assert.match(state, /commitMultiSelect: false,/u);
+  assert.match(state, /const setCommitMultiSelect = \(enabled: boolean\): void => \{/u);
+
+  // The switch only changes whether a click replaces or adds to the selection.
+  assert.match(
+    commitList,
+    /if \(!multiSelect \|\| commit\.kind === 'working-tree' \|\| onToggle === undefined\) onSelect\(commit\.sha\);/u,
+  );
+  assert.match(commitList, /aria-multiselectable=\{multiSelect\}/u);
+  assert.match(commitList, /\{multiSelect && \(/u);
+
+  assert.match(css, /\.gitColumnHeaderControls \{[\s\S]*align-items: center;/u);
+  assert.match(css, /\.gitCommitMultiSelect input:checked \+ \.gitCommitMultiSelectTrack/u);
+  assert.match(css, /\.gitCommitMultiSelect input:focus-visible \+ \.gitCommitMultiSelectTrack/u);
+});
+
+test('Git dividers close both edges of the panes they separate', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  // The grid-placement rules share the selector, so anchor on the styled block.
+  const rows = cssBlock(css, ".gitColumns > [data-dashboard-git-splitter='rows'] {\n  box-sizing: border-box;");
+  const columns = cssBlock(css, ".gitColumns > [data-dashboard-git-splitter='columns'] {\n  box-sizing: border-box;");
+
+  assert.match(rows, /box-sizing: border-box;/u);
+  assert.match(rows, /border-top: 1px solid/u);
+  assert.match(rows, /border-bottom: 1px solid/u);
+  assert.match(columns, /box-sizing: border-box;/u);
+  assert.match(columns, /border-left: 1px solid/u);
+  assert.match(columns, /border-right: 1px solid/u);
+});
+
+test('the diff toolbar open action uses the square right-up arrow', async () => {
+  const source = await readFile(diffViewUrl, 'utf8');
+  const css = await readFile(cssUrl, 'utf8');
+
+  // IconRightUpOutline14 has an 8x14 viewBox that squashes it inside an 8px box;
+  // the 16px icon keeps its aspect ratio at the label's optical size.
+  assert.match(source, /import \{ IconRightUpOutline16 \} from '@deepseek-ai\/dsh-client-ui-primitives';/u);
+  assert.doesNotMatch(source, /IconRightUpOutline14/u);
+  assert.match(source, /<IconRightUpOutline16 size=\{14\} className=\{styles\.gitDiffOpenIcon\} \/>/u);
+  assert.match(css, /\.gitDiffOpenIcon \{[\s\S]*width: 14px;[\s\S]*height: 14px;/u);
+  assert.match(css, /\.gitDiffOpenInSidebar \{[\s\S]*align-items: center;[\s\S]*line-height: 16px;/u);
 });
 
 test('changed-file stats use explicit green additions and red deletions', async () => {

@@ -1,4 +1,4 @@
-import { IconRightUpOutline14 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconRightUpOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useEffect, useMemo, useState } from 'react';
 import type { WorktreeGitDiffSegment, WorktreeGitFileDiff } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';
@@ -126,7 +126,7 @@ export function GitDiffView({ diff, onOpenFile, t }: GitDiffViewProps) {
           title={t('dashboard.git.openInSidebar')}
           data-dashboard-git-open-file={diff.path}
         >
-          <IconRightUpOutline14 />
+          <IconRightUpOutline16 size={14} className={styles.gitDiffOpenIcon} />
           <span>{t('dashboard.git.openInSidebar')}</span>
         </button>
       )}

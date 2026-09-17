@@ -156,13 +156,17 @@ Manager path, accepts only local branches other than the current Worktree branch
 value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
 Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
-**Uncommitted changes** selection loads changed files and a file selection loads one diff. Changed-file names use
-green, red, and blue to distinguish additions, deletions, and other changes; folder icons show expansion state
-without separate status markers or labels. The pane layout is responsive: wide Dashboards stack the commit and
+**Uncommitted changes** selection loads changed files and a file selection loads one diff. The commits header owns an
+off-by-default **Multi-select commits** switch: while it is off a commit click replaces the selection, and while it
+is on clicks toggle rows into the aggregate target. Changed-file names use
+green, red, and blue to distinguish additions, deletions, and other changes, with the localized status kept in the
+row title and accessible label; folder icons show expansion state. Opening a file is a diff-toolbar action only.
+The pane layout is responsive: wide Dashboards stack the commit and
 changed-file panes in the narrower left column beside a full-height diff, while narrow Dashboards keep two rows of
 commits/changed files followed by the diff. Both layouts share one 3x3 grid and keep two draggable dividers, one per
 axis; container queries move the same panes and dividers between placements. Each divider accepts pointer drags,
-Arrow keys, and a double-click reset, publishes its share as `--git-rows-top` or `--git-columns-left`, and keeps the
+Arrow keys, and a double-click reset, publishes its share as `--git-rows-top` or `--git-columns-left`, draws both of
+its edges so each neighbouring pane is closed by its own line, and keeps the
 panes above the minimum size the CSS tracks declare. The Git state
 machine also exposes a separate Baseline summary target for the net committed comparison-boundary-to-captured-`HEAD`
 tree diff. For a connected selected branch, the Host uses the two branch heads' common ancestor as that
@@ -170,8 +174,10 @@ boundary and reports the Worktree-side commits as ahead and base-branch-only com
 heads have no common ancestor, the summary falls back to a full two-head tree diff. Its **Include working tree**
 switch changes that target to one fresh net baseline-to-live-tree projection containing committed, staged,
 unstaged, untracked, deleted, and renamed changes; it never concatenates two diffs and bypasses the committed-summary cache.
-Committed rows can be toggled into an exact multi-commit union; the client sends the selected SHAs as a selection rather than constructing a
-range, and renders the returned per-commit segments. Working-tree selection stays single-select and
+With **Multi-select commits** on, committed rows toggle into an exact multi-commit union; the client sends the
+selected SHAs as a selection rather than constructing a
+range, and renders the returned per-commit segments; turning the switch off collapses the union back to the focused
+commit. Working-tree selection stays single-select and
 cannot be combined with committed rows. The Git state machine keeps bounded baseline-scoped per-entry/
 per-file caches, retains ready content during refresh, and uses request generations to ignore late results
 after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh

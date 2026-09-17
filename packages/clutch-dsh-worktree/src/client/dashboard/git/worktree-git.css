@@ -186,10 +186,14 @@
   position: absolute;
 }
 
+/* Both divider panes draw a full border box, so the pane above and the pane below
+   (or the pane left and the pane right) are each closed by their own edge. */
 .gitColumns > [data-dashboard-git-splitter='rows'] {
+  box-sizing: border-box;
   height: 7px;
   cursor: row-resize;
   border-top: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
 }
 
 .gitColumns > [data-dashboard-git-splitter='rows']::before {
@@ -202,9 +206,11 @@
 }
 
 .gitColumns > [data-dashboard-git-splitter='columns'] {
+  box-sizing: border-box;
   width: 7px;
   cursor: col-resize;
   border-left: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
+  border-right: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
 }
 
 .gitColumns > [data-dashboard-git-splitter='columns']::before {
@@ -280,6 +286,77 @@
 
 .gitColumnHeaderUnknown {
   color: var(--dsw-alias-label-tertiary, #8a94a3);
+}
+
+/* Right side of the commits header: the truncation note and the multi-select switch. */
+.gitColumnHeaderControls {
+  display: flex;
+  min-width: 0;
+  align-self: center;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/*
+ * A native checkbox owns the state, focus and keyboard behavior; the track and
+ * thumb below are presentational and follow :checked through the sibling selector.
+ */
+.gitCommitMultiSelect {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gitCommitMultiSelect input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+}
+
+.gitCommitMultiSelectTrack {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-l2, #cbd2dc);
+  transition: background 0.15s ease;
+}
+
+.gitCommitMultiSelectThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-base, #fff);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 25%);
+  transition: transform 0.15s ease;
+}
+
+.gitCommitMultiSelect input:checked + .gitCommitMultiSelectTrack {
+  background: var(--dsw-alias-state-business-primary, #467bc8);
+}
+
+.gitCommitMultiSelect input:checked + .gitCommitMultiSelectTrack .gitCommitMultiSelectThumb {
+  transform: translateX(10px);
+}
+
+.gitCommitMultiSelect input:focus-visible + .gitCommitMultiSelectTrack {
+  outline: 2px solid #497cd4;
+  outline-offset: 2px;
 }
 
 .gitSummaryButton {
@@ -457,6 +534,16 @@
   padding: 9px 8px;
 }
 
+/* Without the multi-select marks a row has a single column, so the subject and meta align with it. */
+.gitCommitList[data-dashboard-git-commit-multiselect='off'] button {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gitCommitList[data-dashboard-git-commit-multiselect='off'] .gitCommitSubject,
+.gitCommitList[data-dashboard-git-commit-multiselect='off'] .gitCommitMeta {
+  grid-column: 1;
+}
+
 .gitCommitSelectionMark {
   grid-row: 1 / span 2;
   color: var(--dsw-alias-state-business-primary, #467bc8);
@@ -567,58 +654,6 @@
   color: var(--dsw-alias-state-business-primary, #467bc8);
 }
 
-.gitStatusMarker {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  color: var(--dsw-alias-label-secondary, #6f7887);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.gitStatusMarker[data-status='added'] {
-  color: var(--dsw-alias-state-success-primary, #23845f);
-}
-
-.gitStatusMarker[data-status='deleted'] {
-  color: var(--dsw-alias-state-error-secondary, #bd5d55);
-}
-
-.gitStatusMarker[data-status='modified'],
-.gitStatusMarker[data-status='renamed'],
-.gitStatusMarker[data-status='copied'],
-.gitStatusMarker[data-status='type-changed'] {
-  color: var(--dsw-alias-state-business-primary, #467bc8);
-}
-
-.gitOpenFileAction {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-left: 6px;
-  border-radius: 4px;
-  color: var(--dsw-alias-label-tertiary, #8a94a3);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.gitChangedFileList li:hover .gitOpenFileAction,
-.gitChangedFileList li:focus-within .gitOpenFileAction {
-  opacity: 1;
-}
-
-.gitOpenFileAction:hover {
-  color: var(--dsw-alias-label-primary, #273142);
-  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
-}
-
 .gitFileContributors {
   flex: none;
   max-width: 9em;
@@ -690,21 +725,35 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 3px 8px;
   border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
   border-radius: 4px;
   background: var(--dsw-alias-bg-base, #ffffff);
   color: var(--dsw-alias-label-secondary, #6f7887);
   font-size: 11px;
+  line-height: 16px;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+/* The square 16px arrow keeps its aspect ratio; pin the box so it centers on the label. */
+.gitDiffOpenIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary, #8a94a3);
+  transition: color 0.15s ease;
 }
 
 .gitDiffOpenInSidebar:hover {
   background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
   color: var(--dsw-alias-label-primary, #263342);
   border-color: var(--dsw-alias-border-l2, #cbd2dc);
+}
+
+.gitDiffOpenInSidebar:hover .gitDiffOpenIcon {
+  color: var(--dsw-alias-label-primary, #263342);
 }
 
 .gitDiff {

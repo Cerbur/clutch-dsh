@@ -1710,11 +1710,13 @@ current source of truth; this section keeps the plan honest instead of rewriting
 2. **The Dashboard is a peer page, not an overlay (§21).** Opening the Dashboard keeps or switches
    the current Session, may collapse the native rightbar for a sessionless target, and reuses the
    native `openResource` path for file preview. `src/client/README.md` documents the seam.
-3. **Changed-file rows show A/M/D/R/C/T markers (§28).** Each row renders a status letter and puts
-   the localized status wording in its title and accessible label, so status is not conveyed by
-   color alone.
+3. **Changed-file rows show status by color only (§28).** The A/M/D/R/C/T letter was removed after
+   review: the row filename color alone marks add/modify/delete, while the localized status wording
+   stays in the row's title and accessible label so assistive technology still announces it.
 4. **Git panes use two draggable dividers (§30).** Both axes are resizable by pointer, keyboard, and
-   double-click reset, with the split remembered for the session.
+   double-click reset, with the split remembered for the session; each divider now draws both of its
+   edges (top and bottom for the row divider, left and right for the column divider) so the panes on
+   either side are each closed by their own line.
 5. **Commit authorization uses one pinned projection (§12, §13).** Membership is proved by the
    bounded `listCommits` projection (at most 201 commits, 200 visible) instead of per-SHA ancestry
    walks, so the visible history is the authorization boundary and a wide multi-selection costs one
@@ -1729,6 +1731,13 @@ current source of truth; this section keeps the plan honest instead of rewriting
 9. **Supported sidecar versions are explicit (§6).** Optional Worktree keys are resolved from an
    explicit supported-version list, so a future schema bump still reads v5 records with
    `baseCommit`.
+10. **Commit picking is replace-by-default behind a multi-select switch (§27).** The commits column
+    header owns a native checkbox with switch semantics ("Multi-select commits", off by default).
+    While it is off, clicking a row replaces the selection and shows that commit's own diff; while it
+    is on, rows toggle additively and the existing aggregate selection applies. Turning the switch
+    off collapses an aggregate target back to the focused commit. The changed-file row's
+    open-in-sidebar action was removed, so the diff toolbar's "Open in Sidebar" is the only file
+    reveal action.
 
 ## Known limitation
 

@@ -154,17 +154,19 @@ unstaged 或 untracked 文件时，列表顶部会加入**未提交的改动**�
 **基线汇总**是一个独立的目标，默认展示从所选 branch 与 Worktree `HEAD` 的共同先祖到本次请求
 捕获的 `HEAD` 的净已提交树差异（无共同先祖时改用两个 branch head）；不包含工作区未提交改动。
 打开 **包含工作区改动** 后，该目标会改为展示从同一比较边界到当前工作区的一次净差异，其中包含已提交、
-staged、unstaged、untracked、删除和重命名改动。这是按需读取的新鲜 projection，而不是简单拼接两段 Diff。在 commit 列表中可以同时选择
-多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。变更文件会记录贡献它的
+staged、unstaged、untracked、删除和重命名改动。这是按需读取的新鲜 projection，而不是简单拼接两段
+Diff。点击 commit 会展示该 commit 自己的 Diff；打开提交栏标题中的**多选提交**开关后，可以同时选择
+多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。该开关默认关闭，关闭时会把已选
+集合收敛回当前聚焦的 commit。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
-`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。打开变更文件时会使用
-当前 Session 在原生右侧栏中显示文件，但前提是该 Session 属于 Dashboard 对应的 Worktree。
-空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
+`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。汇总 Diff 工具栏中的
+**在侧栏打开**会使用当前 Session 在原生右侧栏中显示当前文件，但前提是该 Session 属于 Dashboard
+对应的 Worktree。空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
 
 历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更
-文件行会用绿色 `+N` 表示新增、红色 `-N` 表示删除；binary 文件不显示这些数量。文件名会用绿色表示新增、红色表示删除、蓝色表示其他变更。文件夹 icon 会直接表示文件夹当前是展开还是折叠。
+文件行会用绿色 `+N` 表示新增、红色 `-N` 表示删除；binary 文件不显示这些数量。文件名会用绿色表示新增、红色表示删除、蓝色表示其他变更，每一行的标题与无障碍标签也会写出对应状态。文件夹 icon 会直接表示文件夹当前是展开还是折叠。
 **未提交的改动**是按需读取的临时快照，不会持久化，也不会持续监视 Git；刷新后才能看到后续编辑。
 
 Git 与变更使用受页面 viewport 限制的固定尺寸布局。宽度足够时是两列：提交与变更文件上下排列在较窄
