@@ -569,6 +569,12 @@ test('baseline picker renders one fixed, elevated, scrollable branch list', () =
   assert.doesNotMatch(pickerStyles, /max-height:/);
   assert.match(pickerStyles, /background: var\(--dsw-specific-menu/);
   assert.match(pickerStyles, /border-radius: 20px;/);
+  // The Input primitive's wrapper is content-box, so the search field opts into
+  // border-box to stay flush with the branch list below it.
+  assert.match(
+    pickerStyles,
+    /\.dashboardBaselineSearch \{[\s\S]*?box-sizing: border-box;[\s\S]*?width: 100%;/,
+  );
   assert.match(pickerStyles, /\.dashboardBaselineList \{[\s\S]*?flex-direction: column;/);
   // The error floats over the list instead of growing the frame.
   assert.match(

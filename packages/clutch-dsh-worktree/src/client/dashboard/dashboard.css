@@ -516,6 +516,7 @@
   min-width: 0;
 }
 .dashboardBaselineSearch {
+  box-sizing: border-box;
   flex: none;
   display: flex;
   width: 100%;
