@@ -115,6 +115,34 @@
   margin: 0 8px;
   opacity: 0.5;
 }
+.dashboardToplineActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.dashboardSidebarButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #677080);
+  cursor: pointer;
+}
+.dashboardSidebarButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+}
+.dashboardSidebarButton svg {
+  width: 15px;
+  height: 15px;
+  transform: scaleX(-1);
+}
 .dashboardHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 225px;
@@ -423,8 +451,9 @@
 }
 .dashboardFacts > div {
   display: grid;
-  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr);
+  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr) 29px;
   gap: 12px;
+  align-items: center;
   padding: 11px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l3, #eef0f5);
 }
@@ -432,12 +461,29 @@
   border: 0;
 }
 .dashboardFacts dt {
+  grid-column: 1;
+  min-width: 0;
   color: var(--dsw-alias-label-secondary, #788191);
+  /* Prefer normal break points (including trailing `/` and `-`) first. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .dashboardFacts dd {
-  text-align: right;
+  grid-column: 2;
+  min-width: 0;
   margin: 0;
-  overflow-wrap: anywhere;
+  text-align: right;
+  /* Only split an unbreakable value after natural opportunities are exhausted. */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.dashboardFactAction {
+  display: flex;
+  grid-column: 3;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 29px;
+  min-height: 29px;
 }
 .dashboardHeaderAside .dashboardFacts > div {
   padding: 4px 0;
@@ -445,6 +491,142 @@
 }
 .dashboardHistorical {
   color: var(--dsw-alias-label-secondary, #788191);
+}
+.dashboardIconButton:disabled {
+  color: var(--dsw-alias-label-secondary, #788191);
+  cursor: not-allowed;
+}
+.dashboardBaselineModal {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+}
+.dashboardBaselineModalContent {
+  box-sizing: border-box;
+  min-height: 0;
+  overflow-y: auto;
+}
+.dashboardBaselinePicker {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.dashboardBaselineSearch {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  width: 100%;
+}
+.dashboardBaselineOptions {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 100%;
+  min-width: min(220px, 100%);
+  max-width: min(420px, calc(100vw - 32px));
+  /* Constant frame: six rows on compact windows, seven on normal ones. Search
+     swaps the rows inside this fixed box, so the modal never resizes. */
+  height: clamp(258px, 48vh, 300px);
+  height: clamp(258px, 48dvh, 300px);
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 20px;
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3, #fff));
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  box-shadow: var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
+}
+.dashboardBaselineList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.dashboardBaselineOption {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #19212f);
+  text-align: left;
+  cursor: pointer;
+}
+.dashboardBaselineOption:hover,
+.dashboardBaselineOption[data-highlighted='true'],
+.dashboardBaselineOption[aria-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-hover, #f0f3f8);
+}
+.dashboardBaselineOption:focus-visible {
+  outline: 2px solid #497cd4;
+  outline-offset: -2px;
+}
+.dashboardBaselineOption > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary, #788191);
+}
+.dashboardBaselineOption[aria-selected='true'] > svg:last-child {
+  color: var(--dsw-alias-label-primary, #19212f);
+}
+.dashboardBaselineOptionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboardBaselineEmpty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-secondary, #788191);
+  text-align: center;
+}
+/* Zero-height anchor: the save error floats over the list instead of growing
+   the modal, so the frame keeps its size in every state. */
+.dashboardBaselineStatus {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 0;
+}
+.dashboardBaselineError {
+  position: absolute;
+  right: 4px;
+  bottom: 12px;
+  left: 4px;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2, #fff);
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-state-error-label, #bd5d43) 10%,
+    var(--dsw-alias-bg-layer-2, #fff)
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-error-label, #bd5d43) 32%, transparent),
+    var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
+  color: var(--dsw-alias-state-error-label, #bd5d43);
+  font-size: 12px;
+  line-height: 16px;
 }
 .dashboardLink {
   display: flex;

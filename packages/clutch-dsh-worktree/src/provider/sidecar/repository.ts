@@ -9,7 +9,11 @@ import {
 } from '../types.js';
 import { SidecarPersistence } from './sidecar-persistence.js';
 
-export { validateSidecarSnapshot } from './sidecar-schema.js';
+export {
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
+  migrateSidecarSnapshot,
+  validateSidecarSnapshot,
+} from './sidecar-schema.js';
 
 function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
   return (
@@ -23,7 +27,8 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
     left.instructions === right.instructions &&
     left.createdAt === right.createdAt &&
     left.importedAt === right.importedAt &&
-    left.baseBranch === right.baseBranch
+    left.baseBranch === right.baseBranch &&
+    left.baseCommit === right.baseCommit
   );
 }
 

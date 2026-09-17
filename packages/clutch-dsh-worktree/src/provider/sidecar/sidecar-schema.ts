@@ -17,6 +17,36 @@ const LEGACY_WORKTREE_KEYS = ['absolutePath', 'branch', 'status', 'workspaceId',
 const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceId', 'worktreeId'];
 // Preserve known development-build metadata without accepting arbitrary fields.
 const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
+const V5_OPTIONAL_WORKTREE_KEYS = [...V4_OPTIONAL_WORKTREE_KEYS, 'baseCommit'];
+
+/**
+ * Every on-disk schema version this build still reads, oldest first. Listing the
+ * versions explicitly keeps legacy reads working when `SIDECAR_SCHEMA_VERSION`
+ * advances, instead of silently dropping the previous version's optional keys.
+ */
+export const SUPPORTED_SIDECAR_SCHEMA_VERSIONS: readonly number[] = [
+  LEGACY_SIDECAR_SCHEMA_VERSION,
+  2,
+  3,
+  4,
+  5,
+];
+
+/** Versions that persist the acquisition metadata group. */
+const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5]);
+/** Versions that persist the immutable acquisition commit. */
+const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5]);
+
+function isSupportedSchemaVersion(schemaVersion: number): boolean {
+  return SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(schemaVersion);
+}
+
+/** Optional Worktree keys for one on-disk schema version. */
+function optionalWorktreeKeys(schemaVersion: number): readonly string[] {
+  if (BASE_COMMIT_SCHEMA_VERSIONS.has(schemaVersion)) return V5_OPTIONAL_WORKTREE_KEYS;
+  if (ACQUISITION_METADATA_SCHEMA_VERSIONS.has(schemaVersion)) return V4_OPTIONAL_WORKTREE_KEYS;
+  return [];
+}
 const BINDING_KEYS = ['sessionId', 'status', 'workspaceId', 'worktreeId'];
 const LEGACY_SNAPSHOT_KEYS = ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_REQUIRED_SNAPSHOT_KEYS = ['bindings', 'revision', 'schemaVersion', 'workspaceId', 'worktrees'];
@@ -57,17 +87,19 @@ function assertWorktreeRecord(
   schemaVersion: number,
 ): asserts value is WorktreeRecord {
   const legacy = schemaVersion === LEGACY_SIDECAR_SCHEMA_VERSION;
-  const isV4 = schemaVersion === SIDECAR_SCHEMA_VERSION;
+  const supportsAcquisitionMetadata = ACQUISITION_METADATA_SCHEMA_VERSIONS.has(schemaVersion);
   if (!isObject(value)) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
   const keys = legacy ? LEGACY_WORKTREE_KEYS : WORKTREE_KEYS;
   if (
-    !hasAllowedKeys(value, keys, isV4 ? V4_OPTIONAL_WORKTREE_KEYS : []) ||
+    !hasAllowedKeys(value, keys, optionalWorktreeKeys(schemaVersion)) ||
     (value.instructions !== undefined &&
       (typeof value.instructions !== 'string' || value.instructions.length > 32_000)) ||
     (value.baseBranch !== undefined &&
       (typeof value.baseBranch !== 'string' || value.baseBranch.length === 0)) ||
+    (value.baseCommit !== undefined &&
+      (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
     !isOptionalTimestamp(value.createdAt) ||
     !isOptionalTimestamp(value.importedAt) ||
     typeof value.worktreeId !== 'string' ||
@@ -80,7 +112,7 @@ function assertWorktreeRecord(
   ) {
     throw corrupt(pathname, 'invalid Worktree record');
   }
-  if (isV4 && value.diskCleanup !== undefined) {
+  if (supportsAcquisitionMetadata && value.diskCleanup !== undefined) {
     if (value.diskCleanup !== 'completed') {
       throw corrupt(pathname, 'invalid diskCleanup value');
     }
@@ -116,7 +148,11 @@ function assertRepositoryIdentity(value: unknown, pathname: string): asserts val
   }
 }
 
-function assertPendingOperation(value: unknown, pathname: string): asserts value is PendingOperation {
+function assertPendingOperation(
+  value: unknown,
+  pathname: string,
+  schemaVersion: number,
+): asserts value is PendingOperation {
   if (!isObject(value)) throw corrupt(pathname, 'invalid pending operation');
 
   const commonKeys = [
@@ -158,9 +194,16 @@ function assertPendingOperation(value: unknown, pathname: string): asserts value
 
   if (value.type === 'create-worktree') {
     if (
-      !hasAllowedKeys(value, commonKeys, ['baseCommit', 'baseRef', 'branch', 'repository', 'repositoryFingerprint']) ||
+      !hasAllowedKeys(value, commonKeys, [
+        ...(BASE_COMMIT_SCHEMA_VERSIONS.has(schemaVersion) ? ['baseCommit'] : []),
+        'baseRef',
+        'branch',
+        'repository',
+        'repositoryFingerprint',
+      ]) ||
       typeof value.branch !== 'string' ||
-      (value.baseCommit !== undefined && typeof value.baseCommit !== 'string') ||
+      (value.baseCommit !== undefined &&
+        (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
       (value.baseRef !== undefined && typeof value.baseRef !== 'string')
     ) {
       throw corrupt(pathname, 'invalid create pending operation');
@@ -211,14 +254,32 @@ function assertRecoveryIssue(value: unknown, pathname: string): asserts value is
   }
 }
 
-function normalizeWorktreeRecord(record: WorktreeRecord, schemaVersion: number): WorktreeRecord {
-  return {
+function normalizeWorktreeRecord(
+  record: WorktreeRecord,
+  schemaVersion: number,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
+): WorktreeRecord {
+  const normalized: Record<string, unknown> = {
     ...record,
     source: record.source ?? 'plugin',
-    ...(schemaVersion < 4 && record.status === 'removed'
-      ? { diskCleanup: 'completed' as const }
-      : {}),
   };
+  if (schemaVersion < 4 && targetVersion >= 4 && record.status === 'removed') {
+    normalized.diskCleanup = 'completed';
+  }
+  if (targetVersion < 5) {
+    delete normalized.baseCommit;
+  }
+  if (targetVersion < 4) {
+    delete normalized.diskCleanup;
+    delete normalized.instructions;
+    delete normalized.createdAt;
+    delete normalized.importedAt;
+    delete normalized.baseBranch;
+  }
+  if (targetVersion < 2) {
+    delete normalized.source;
+  }
+  return normalized as unknown as WorktreeRecord;
 }
 
 function assertGeneratedPluginPath(
@@ -236,12 +297,29 @@ function assertGeneratedPluginPath(
   }
 }
 
-/** Validate v1/v2/v3 on-disk data and return the current in-memory v3 projection. */
+/** Validate supported legacy/current on-disk data and return the projection migrated to targetVersion (defaults to SIDECAR_SCHEMA_VERSION). */
 export function validateSidecarSnapshot(
   value: unknown,
   pathname: string,
   generatedWorktreeRoot?: string,
+  targetVersion?: typeof SIDECAR_SCHEMA_VERSION,
+): SidecarSnapshot;
+export function validateSidecarSnapshot(
+  value: unknown,
+  pathname: string,
+  generatedWorktreeRoot: string | undefined,
+  targetVersion: number,
+): SidecarSnapshot;
+export function validateSidecarSnapshot(
+  value: unknown,
+  pathname: string,
+  generatedWorktreeRoot?: string,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
 ): SidecarSnapshot {
+  if (!isSupportedSchemaVersion(targetVersion)) {
+    throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion: targetVersion });
+  }
+
   if (!isObject(value) || typeof value.schemaVersion !== 'number' || typeof value.workspaceId !== 'string') {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
@@ -251,21 +329,19 @@ export function validateSidecarSnapshot(
     ? hasExactKeys(value, LEGACY_SNAPSHOT_KEYS)
     : schemaVersion === 2
       ? hasExactKeys(value, ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'])
-      : (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+      : schemaVersion >= 3 && isSupportedSchemaVersion(schemaVersion) &&
         hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, V3_OPTIONAL_SNAPSHOT_KEYS);
   if (!validShape || !Array.isArray(value.worktrees) || !Array.isArray(value.bindings)) {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
-  if (
-    schemaVersion !== LEGACY_SIDECAR_SCHEMA_VERSION &&
-    schemaVersion !== 2 &&
-    schemaVersion !== 3 &&
-    schemaVersion !== SIDECAR_SCHEMA_VERSION
-  ) {
+  if (!isSupportedSchemaVersion(schemaVersion)) {
     throw corrupt(pathname, 'unsupported sidecar schema version', { schemaVersion });
   }
+  if (schemaVersion > targetVersion) {
+    throw corrupt(pathname, 'cannot downgrade sidecar schema version', { schemaVersion, targetVersion });
+  }
   if (
-    (schemaVersion === 3 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+    (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
     (typeof value.revision !== 'string' || !/^\d+$/.test(value.revision))
   ) {
     throw corrupt(pathname, 'invalid sidecar revision');
@@ -280,14 +356,14 @@ export function validateSidecarSnapshot(
   for (const record of value.worktrees) assertWorktreeRecord(record, pathname, schemaVersion);
   for (const binding of value.bindings) assertBinding(binding, pathname);
   if (value.repository !== undefined) assertRepositoryIdentity(value.repository, pathname);
-  if (value.pendingOperation !== undefined) assertPendingOperation(value.pendingOperation, pathname);
+  if (value.pendingOperation !== undefined) assertPendingOperation(value.pendingOperation, pathname, schemaVersion);
   if (value.recoveryIssues !== undefined) {
     if (!Array.isArray(value.recoveryIssues)) throw corrupt(pathname, 'invalid recovery issues');
     for (const issue of value.recoveryIssues) assertRecoveryIssue(issue, pathname);
   }
 
   const workspaceId = value.workspaceId;
-  const worktrees = value.worktrees.map((record) => normalizeWorktreeRecord(record, schemaVersion));
+  const worktrees = value.worktrees.map((record) => normalizeWorktreeRecord(record, schemaVersion, targetVersion));
   const worktreeIds = new Set<string>();
   for (const record of worktrees) {
     if (record.workspaceId !== workspaceId) {
@@ -336,14 +412,37 @@ export function validateSidecarSnapshot(
     }
   }
 
-  const pendingOperation = value.pendingOperation === undefined
+  if (targetVersion === 1) {
+    return {
+      schemaVersion: 1,
+      workspaceId,
+      worktrees,
+      bindings: value.bindings,
+    } as unknown as SidecarSnapshot;
+  }
+
+  if (targetVersion === 2) {
+    return {
+      schemaVersion: 2,
+      workspaceId,
+      worktrees,
+      bindings: value.bindings,
+    } as unknown as SidecarSnapshot;
+  }
+
+  let pendingOperation = value.pendingOperation === undefined
     ? undefined
     : normalizePendingOperation(value.pendingOperation);
+  if (pendingOperation && targetVersion < 5 && 'baseCommit' in pendingOperation) {
+    const { baseCommit: _discarded, ...restOp } = pendingOperation as unknown as Record<string, unknown>;
+    void _discarded;
+    pendingOperation = restOp as unknown as PendingOperation;
+  }
   const repositoryFingerprint = value.repositoryFingerprint ??
     (value.repository === undefined ? undefined : createRepositoryFingerprint(value.repository));
 
   return {
-    schemaVersion: SIDECAR_SCHEMA_VERSION,
+    schemaVersion: targetVersion as typeof SIDECAR_SCHEMA_VERSION,
     workspaceId,
     revision: schemaVersion >= 3 ? (value.revision as string) : '0',
     ...(repositoryFingerprint !== undefined ? { repositoryFingerprint } : {}),
@@ -352,6 +451,20 @@ export function validateSidecarSnapshot(
     ...(pendingOperation !== undefined ? { pendingOperation } : {}),
     ...(value.recoveryIssues !== undefined ? { recoveryIssues: value.recoveryIssues } : {}),
   };
+}
+
+/**
+ * Migration entry point for tools and tests. The parameter order and the
+ * required diagnostic `pathname` match `validateSidecarSnapshot` so callers
+ * cannot pass the schema version where a path is expected.
+ */
+export function migrateSidecarSnapshot(
+  value: unknown,
+  pathname: string,
+  generatedWorktreeRoot?: string,
+  targetVersion: number = SIDECAR_SCHEMA_VERSION,
+): SidecarSnapshot {
+  return validateSidecarSnapshot(value, pathname, generatedWorktreeRoot, targetVersion);
 }
 
 export function emptySnapshot(workspaceId: string): SidecarSnapshot {

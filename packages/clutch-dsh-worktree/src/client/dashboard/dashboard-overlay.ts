@@ -33,21 +33,52 @@ export function concealDashboardBackground(element: HTMLElement): () => void {
   };
 }
 
-/** Layout seam shared with the existing Sidebar overlay; fail closed on anchor loss. */
+export interface MountDashboardOverlayOptions {
+  readonly onRightSidebarChange?: (open: boolean) => void;
+  readonly isRightSidebarExpanded?: () => boolean;
+}
+
+export function isRightSidebarOpenFromDom(
+  frame: HTMLElement,
+  rightbar: HTMLElement | undefined,
+): boolean {
+  if (typeof frame.querySelector === 'function') {
+    if (frame.querySelector('[data-sidebar-right-open]') !== null) {
+      return true;
+    }
+    if (frame.hasAttribute('data-rightbar-collapsed')) {
+      return false;
+    }
+  }
+  if (frame.getAttribute?.('data-rightbar-collapsed') !== null) {
+    return false;
+  }
+  if (rightbar instanceof HTMLElement) {
+    if (rightbar.getAttribute?.('data-sidebar-right-open') !== null) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Layout seam shared with the existing Sidebar overlay; fail closed on frame/center loss. */
 export function mountDashboardOverlay(
   surface: HTMLElement,
   onPlacement: (placement: DashboardPlacement | undefined) => void,
+  options?: MountDashboardOverlayOptions,
 ): () => void {
   const overlay = surface.closest<HTMLElement>('[data-shell-overlay]');
   const frame = overlay?.parentElement;
   if (!overlay || !frame) {
     onPlacement(undefined);
+    options?.onRightSidebarChange?.(false);
     return () => {};
   }
   const hidden = new Map<HTMLElement, () => void>();
   let observed: Element[] = [];
   let scheduled: number | undefined;
   let disposed = false;
+  let lastRightSidebarOpen: boolean | undefined;
   const restore = () => {
     for (const cleanup of hidden.values()) cleanup();
     hidden.clear();
@@ -62,52 +93,94 @@ export function mountDashboardOverlay(
   const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(schedule);
   const update = () => {
     if (disposed) return;
-    // AppFrame owns Sidebar | CenterColumn | RightbarColumn | shell.overlay.
+    // AppFrame owns Sidebar | CenterColumn | [RightbarColumn] | shell.overlay.
+    // The native rightbar is absent on a page with no current Session, but the
+    // Dashboard still needs the same center-to-frame placement in that layout.
     // Do not depend on generated CSS class names or mutate slot registrations.
     const sidebar = frame.firstElementChild;
     const center = sidebar?.nextElementSibling;
-    const right = center?.nextElementSibling;
+    const rightbar = center?.nextElementSibling;
+    const hasRightbar =
+      rightbar instanceof HTMLElement &&
+      rightbar !== overlay &&
+      rightbar.nextElementSibling === overlay;
+    const hasNoRightbar = rightbar === overlay;
     const valid =
       overlay.isConnected &&
       overlay.parentElement === frame &&
       sidebar instanceof HTMLElement &&
       center instanceof HTMLElement &&
-      right instanceof HTMLElement &&
-      right.nextElementSibling === overlay;
-    const nextObserved: Element[] = valid ? [overlay, sidebar, center, right] : [frame];
+      (hasRightbar || hasNoRightbar);
+    const nextObserved: Element[] = valid
+      ? hasRightbar
+        ? [overlay, sidebar, center, rightbar]
+        : [overlay, sidebar, center]
+      : [frame];
     for (const old of observed) if (!nextObserved.includes(old)) resize?.unobserve(old);
     for (const next of nextObserved) if (!observed.includes(next)) resize?.observe(next);
     observed = nextObserved;
     if (!valid) {
       restore();
       onPlacement(undefined);
+      if (lastRightSidebarOpen) {
+        lastRightSidebarOpen = false;
+        options?.onRightSidebarChange?.(false);
+      }
       return;
     }
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
+    const rightBoundary =
+      hasRightbar && rightbar instanceof HTMLElement ? rightbar.getBoundingClientRect().left : box.right;
     const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
-    const width = box.width - left;
+    const rightEdge = Math.min(box.right, rightBoundary);
+    const width = rightEdge - box.left - left;
     if (width <= 0 || box.height <= 0) {
       restore();
       onPlacement(undefined);
       return;
     }
     for (const [element, cleanup] of hidden) {
-      if (element !== center && element !== right) {
+      if (element !== center) {
         cleanup();
         hidden.delete(element);
       }
     }
-    for (const element of [center, right]) {
-      if (!hidden.has(element)) hidden.set(element, concealDashboardBackground(element));
-    }
+    if (!hidden.has(center)) hidden.set(center, concealDashboardBackground(center));
     onPlacement({ left, top: 0, width, height: box.height });
+    const isRightSidebarOpen =
+      options?.isRightSidebarExpanded !== undefined
+        ? options.isRightSidebarExpanded()
+        : isRightSidebarOpenFromDom(frame, hasRightbar ? rightbar : undefined);
+    if (lastRightSidebarOpen !== isRightSidebarOpen) {
+      lastRightSidebarOpen = isRightSidebarOpen;
+      options?.onRightSidebarChange?.(isRightSidebarOpen);
+    }
   };
   const mutation =
     typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(schedule);
-  mutation?.observe(frame, { childList: true });
+  try {
+    mutation?.observe(frame, {
+      childList: true,
+      attributes: true,
+      subtree: true,
+      attributeFilter: [
+        'data-rightbar-collapsed',
+        'data-sidebar-right-open',
+        'data-sidebar-right-panel',
+      ],
+    });
+  } catch {
+    mutation?.observe(frame, { childList: true });
+  }
   // Frame replacement may detach all original anchors at once.
-  if (frame.parentElement) mutation?.observe(frame.parentElement, { childList: true });
+  if (frame.parentElement) {
+    try {
+      mutation?.observe(frame.parentElement, { childList: true });
+    } catch {
+      // ignore
+    }
+  }
   update();
   return () => {
     disposed = true;
@@ -115,6 +188,10 @@ export function mountDashboardOverlay(
     mutation?.disconnect();
     if (scheduled !== undefined) cancelAnimationFrame(scheduled);
     restore();
+    if (lastRightSidebarOpen) {
+      lastRightSidebarOpen = false;
+      options?.onRightSidebarChange?.(false);
+    }
   };
 }
 

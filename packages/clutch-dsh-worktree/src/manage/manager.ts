@@ -7,6 +7,11 @@ import type {
   SessionBinding,
   WorktreeId,
   WorktreeImportCandidate,
+  WorktreeGitCommitFiles,
+  WorktreeGitCommitFilesRequest,
+  WorktreeGitFileDiff,
+  WorktreeGitFileDiffRequest,
+  WorktreeGitHistory,
   WorktreeRecord,
   WorkspaceId,
 } from '../contract/index.js';
@@ -33,6 +38,12 @@ import {
   unarchiveWorktree,
   recoverWorktrees,
 } from './manager-worktrees.js';
+import {
+  getWorktreeCommitFileDiff,
+  listWorktreeCommitFiles,
+  listWorktreeCommits,
+  updateWorktreeBaseBranch,
+} from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
 import { requireWorkspace } from './manager-support.js';
 
@@ -134,6 +145,15 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     });
   }
 
+  updateWorktreeBaseBranch(input: {
+    workspaceId: string;
+    worktreeId: string;
+    baseBranch: string;
+    expectedBaseBranch?: string;
+  }): Promise<string> {
+    return this.afterRecovery(() => updateWorktreeBaseBranch(this.context, input));
+  }
+
   resolveSessionInstructions(sessionId: string): Promise<string> {
     return this.afterRecovery(async () => {
       const workspaces = (await this.context.dsh.listWorkspaces?.()) ?? [];
@@ -153,6 +173,22 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
     return this.afterRecovery(() => listWorktrees(this.context, input));
+  }
+
+  listWorktreeCommits(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly worktreeId: string;
+    readonly baseBranch?: string;
+  }): Promise<WorktreeGitHistory> {
+    return this.afterRecovery(() => listWorktreeCommits(this.context, input));
+  }
+
+  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeGitCommitFiles> {
+    return this.afterRecovery(() => listWorktreeCommitFiles(this.context, input));
+  }
+
+  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeGitFileDiff> {
+    return this.afterRecovery(() => getWorktreeCommitFileDiff(this.context, input));
   }
 
   listImportCandidates(input: {

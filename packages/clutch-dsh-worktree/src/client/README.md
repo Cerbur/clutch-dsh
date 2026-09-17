@@ -6,7 +6,14 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
-- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, the nine `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and outer/inner error normalization. The import endpoints are `listImportCandidates` and `importWorktree`; no second transport is added.
+- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
+  `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
+  outer/inner error normalization. The Git endpoints are `listWorktreeCommits`,
+  `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; the Dashboard facts mutation uses
+  `updateWorktreeBaseBranch` on the same adapter, and no second transport is added. Overview reuses the
+  existing history, committed-summary, and working-tree-file reads for one compact status projection when a
+  valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
+  not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -110,20 +117,83 @@ Worktree and nested Session alignment slots are compacted to preserve the Sideba
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
 
-The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
-It does not register over the occupied `conversation` slot. The AppFrame column order
-(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow
-the live Sidebar width, and missing/replaced anchors produce zero coverage and restore
-the native columns. Native center/rightbar visibility, inert, and aria-hidden attributes
-are restored on close or disposal. Session identity changes, explicit Sidebar Session
-opens (including the same Session), mode exit, and removal of the selected identity
-close the dashboard. No native Session or Workspace state is changed.
+The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
+occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
+already-open native right sidebar remains visible for a Session-bound Dashboard. The AppFrame column order
+(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow the live Sidebar and
+rightbar widths, and missing/replaced anchors produce zero coverage and restore the native columns. Only the
+native center is concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden
+attributes are restored on close or disposal. A ready page-level Dashboard for a Worktree with no retained
+Session collapses the native rightbar first, because that page has no Session-scoped rightbar to preserve; when
+a current Session can host the rightbar and the rightbar is collapsed, the Dashboard header exposes a native-style expand button, hiding it when the rightbar is open. Opening a
+Worktree Dashboard keeps the current Session if it belongs to the target, otherwise navigates to that
+Worktree's retained head Session when one exists; an initial pending
+list defers that decision until the list is ready, while an empty ready list leaves navigation unchanged and does
+not create a Session. Later Session identity changes close only a Session-bound Dashboard; a sessionless empty-list
+Dashboard remains a page-level target. Its top-right navigation action becomes New Session when the target has no
+Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
+identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
+
+Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
+time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
+including while opening an empty Dashboard. File preview uses the current Session only after checking
+its membership in the target Worktree, and native `openResource` reveals the rightbar. An unavailable
+rightbar service does not prevent page-level navigation.
 
 The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
-Tabs implement roving keyboard focus. Git details, derived Worktrees, Settings, and other unconnected
+Tabs implement roving keyboard focus. The Git tab is mounted only while selected. For a managed Worktree
+with a valid persisted `baseBranch`, or with a captured acquisition commit it reads as the implicit baseline,
+Overview performs one compact status read for ahead/behind, committed baseline-to-HEAD line counts, and live
+working-tree line counts without loading the branch list; Main, genuinely unavailable, and
+baseline-unselected views remain disconnected. The Git tab's first mount loads local branches and uses the
+persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and different
+from the current Worktree branch; when no usable saved baseline exists but the record has a captured
+acquisition commit, it reads against that immutable commit and shows the resolved commit as the Base fact,
+and only otherwise does it prompt for a baseline. The Overview facts editor is a fixed-size dialog that keeps
+its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
+rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
+replacement through the existing Worktree
+Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
+value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
+Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
+Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
+**Uncommitted changes** selection loads changed files and a file selection loads one diff. The commits header owns an
+off-by-default **Multi-select commits** switch: while it is off a commit click replaces the selection, and while it
+is on clicks toggle rows into the aggregate target. Changed-file names use
+green, red, and blue to distinguish additions, deletions, and other changes, with the localized status kept in the
+row title and accessible label; folder icons show expansion state. An over-bound changed-file projection
+renders its explicit truncated notice instead of a generic error. Opening a file is a diff-toolbar action only.
+The pane layout is responsive: wide Dashboards stack the commit and
+changed-file panes in the narrower left column beside a full-height diff, while narrow Dashboards keep two rows of
+commits/changed files followed by the diff. Both layouts share one 3x3 grid and keep two draggable dividers, one per
+axis; container queries move the same panes and dividers between placements. Each divider accepts pointer drags,
+Arrow keys, and a double-click reset, publishes its share as `--git-rows-top` or `--git-columns-left`, draws both of
+its edges so each neighbouring pane is closed by its own line, and keeps the
+panes above the minimum size the CSS tracks declare. The Git state
+machine also exposes a separate Baseline summary target for the net committed comparison-boundary-to-captured-`HEAD`
+tree diff. For a connected selected branch, the Host uses the two branch heads' common ancestor as that
+boundary and reports the Worktree-side commits as ahead and base-branch-only commits as behind. If the
+heads have no common ancestor, the summary falls back to a full two-head tree diff. Its **Include working tree**
+switch changes that target to one fresh net baseline-to-live-tree projection containing committed, staged,
+unstaged, untracked, deleted, and renamed changes; it never concatenates two diffs and bypasses the committed-summary cache.
+With **Multi-select commits** on, committed rows toggle into an exact multi-commit union; the client sends the
+selected SHAs as a selection rather than constructing a
+range, and renders the returned per-commit segments; turning the switch off collapses the union back to the focused
+commit. Working-tree selection stays single-select and
+cannot be combined with committed rows. The Git state machine keeps bounded baseline-scoped per-entry/
+per-file caches, retains ready content during refresh, and uses request generations to ignore late results
+after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
+Host projection because the files can change between reads. Main
+remains explicitly unavailable. A selected local branch that no longer exists renders an honest unavailable
+state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or remote-tracking
+ref is rejected outright because only a plain local branch name can be selected; a Worktree with neither a
+usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
+sidecar files or `.git`, and it exposes no working-tree mutation controls.
+
+Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The connected Worktree
 instructions card persists plugin-owned text through the existing Manager path; active bindings receive
 that text through the Host's DSH `agent/pre-step` hook.
@@ -224,8 +294,12 @@ The Dashboard instructions card edits plugin-owned text through
 `updateWorktreeInstructions` on the existing Connection. Save carries the editor's
 `expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
-preserved. Main does not expose instruction editing. Creation/import time and base branch are
-optional recorded facts; missing values remain unknown. The open-editor control uses the
+preserved. Main does not expose instruction editing. The Dashboard Base fact for a managed Worktree
+can be replaced with a saved local branch other than the current Worktree branch through
+`updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
+owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
+remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
+never user-selectable directly. Missing creation/import facts remain unknown. The open-editor control uses the
 native split-button typography, padding, border, and hover colors, launching detected host
 applications or falling back to the encoded VS Code protocol link.
 

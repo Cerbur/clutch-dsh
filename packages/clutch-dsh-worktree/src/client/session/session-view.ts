@@ -49,7 +49,8 @@ export interface SessionListLike {
   readonly ids: readonly string[];
   readonly current?: string;
   readonly byId: Record<string, SessionSummaryLike>;
-  readonly phase?: string;
+  /** Native Session list arrival; an empty ready list is the true empty state. */
+  readonly phase?: 'pending' | 'ready';
 }
 
 function isPendingInteractionStatus(value: unknown): value is PendingInteractionStatus {

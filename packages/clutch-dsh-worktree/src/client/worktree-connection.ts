@@ -18,6 +18,9 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   listWorktrees: 'worktreeManager/listWorktrees',
+  listWorktreeCommits: 'worktreeManager/listWorktreeCommits',
+  listWorktreeCommitFiles: 'worktreeManager/listWorktreeCommitFiles',
+  getWorktreeCommitFileDiff: 'worktreeManager/getWorktreeCommitFileDiff',
   listImportCandidates: 'worktreeManager/listImportCandidates',
   listBranches: 'worktreeManager/listBranches',
   createWorktree: 'worktreeManager/createWorktree',
@@ -30,6 +33,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   forgetWorktree: 'worktreeManager/forgetWorktree',
   insertWorktreeBefore: 'worktreeManager/insertWorktreeBefore',
   updateWorktreeInstructions: 'worktreeManager/updateWorktreeInstructions',
+  updateWorktreeBaseBranch: 'worktreeManager/updateWorktreeBaseBranch',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
   ensureWorktreePermission: 'worktreeManager/ensureWorktreePermission',
@@ -180,6 +184,9 @@ export function createWorktreeConnectionAdapter(
 
   return {
     listWorktrees: (input) => invoke('listWorktrees', input),
+    listWorktreeCommits: (input) => invoke('listWorktreeCommits', input),
+    listWorktreeCommitFiles: (input) => invoke('listWorktreeCommitFiles', input),
+    getWorktreeCommitFileDiff: (input) => invoke('getWorktreeCommitFileDiff', input),
     listImportCandidates: (input) => invoke('listImportCandidates', input),
     listBranches: (input) => invoke('listBranches', input),
     createWorktree: (input) => invoke('createWorktree', input),
@@ -203,6 +210,9 @@ export function createWorktreeConnectionAdapter(
     },
     async updateWorktreeInstructions(input): Promise<string> {
       return invoke<string>('updateWorktreeInstructions', input);
+    },
+    async updateWorktreeBaseBranch(input): Promise<string> {
+      return invoke<string>('updateWorktreeBaseBranch', input);
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),

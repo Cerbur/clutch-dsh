@@ -1,9 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import {
+  Button,
   IconBranchOutline16,
+  IconCheckOutline16,
   IconCopyOutline16,
+  IconEditOutline16,
+  IconPanelLeftOutline16,
+  IconSearchOutline16,
+  Input,
+  Modal,
   StateDot,
+  Tooltip,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DashboardRecord } from './dashboard-selection.js';
@@ -18,16 +26,27 @@ import { selectWorktreeAcquisitionFacts } from './worktree-acquisition-facts.js'
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
+import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
+import {
+  useWorktreeGitOverview,
+  WorktreeGitOverviewValue,
+} from './git/WorktreeGitOverview.js';
+import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
 
 export interface WorktreeDashboardProps {
+  readonly manager?: WorktreeManager;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
+  readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly branches?: readonly BranchRecord[];
   readonly record: DashboardRecord;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
+  readonly onOpenSidebar?: () => void;
+  readonly isRightSidebarExpanded?: () => boolean;
   readonly sessions: SessionListLike;
   readonly sessionPresentations: Readonly<Record<string, SessionPresentation | undefined>>;
   readonly sessionIds: readonly string[];
@@ -36,6 +55,7 @@ export interface WorktreeDashboardProps {
   readonly onCreateSession?: () => void;
   readonly onCreateWorktree?: () => void;
   readonly onArchiveWorktree?: () => void;
+  readonly onOpenFile?: (path: string) => void;
 }
 
 function DashboardIcon({ kind }: { kind: DashboardTab | 'instructions' | 'actions' }) {
@@ -88,6 +108,26 @@ function Card({
   );
 }
 
+function DashboardFactRow({
+  label,
+  children,
+  action,
+  baseline = false,
+}: {
+  readonly label: ReactNode;
+  readonly children: ReactNode;
+  readonly action?: ReactNode;
+  readonly baseline?: boolean;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd data-dashboard-baseline={baseline ? true : undefined}>{children}</dd>
+      <span className={styles.dashboardFactAction}>{action}</span>
+    </div>
+  );
+}
+
 function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTranslate }) {
   return (
     <button type="button" className={styles.dashboardButton} disabled title={t('dashboard.soon')}>
@@ -96,12 +136,274 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
   );
 }
 
-/** A Worktree or browser Main projection with explicitly unconnected MVP cards. */
+function WorktreeBaselineEditor({
+  value,
+  branches,
+  currentBranch,
+  onSave,
+  t,
+  disabled,
+}: {
+  readonly value?: string;
+  readonly branches: readonly BranchRecord[];
+  readonly currentBranch?: string;
+  readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly t: WorktreeTranslate;
+  readonly disabled: boolean;
+}) {
+  const [saved, setSaved] = useState(value);
+  const [draft, setDraft] = useState<string>();
+  const [search, setSearch] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
+  const busy = useRef(false);
+  const alive = useRef(true);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  const expected = useRef(value);
+  const pickerId = useId();
+  const options = branches.filter((branch) => branch.name !== currentBranch);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    setSaved(value);
+    expected.current = value;
+  }, [value]);
+  useEffect(() => {
+    if (wasOpen.current && draft === undefined) trigger.current?.focus();
+    wasOpen.current = draft !== undefined;
+  }, [draft]);
+
+  const closeEditor = () => {
+    if (pending) return;
+    setDraft(undefined);
+    setSearch('');
+    setError(false);
+  };
+  const openEditor = () => {
+    expected.current = saved;
+    setDraft(saved ?? '');
+    setSearch('');
+    setError(false);
+  };
+  const query = search.trim().toLowerCase();
+  const filteredOptions =
+    query.length === 0
+      ? options
+      : options.filter((branch) => branch.name.toLowerCase().includes(query));
+  const activeIndex = filteredOptions.findIndex((branch) => branch.name === draft);
+  // The list is a permanent, fixed-height region: filtering swaps its rows but
+  // never changes its height, so the modal frame stays put.
+  const listOpen = filteredOptions.length > 0;
+
+  const selectOption = (index: number) => {
+    if (pending) return;
+    const branch = filteredOptions[index];
+    if (branch === undefined) return;
+    setDraft(branch.name);
+  };
+  const moveOption = (offset: 1 | -1) => {
+    if (filteredOptions.length === 0) return;
+    const nextIndex =
+      activeIndex < 0
+        ? offset > 0
+          ? 0
+          : filteredOptions.length - 1
+        : (activeIndex + offset + filteredOptions.length) % filteredOptions.length;
+    selectOption(nextIndex);
+    optionRefs.current[nextIndex]?.scrollIntoView({ block: 'nearest' });
+  };
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveOption(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' && filteredOptions.length > 0) {
+      event.preventDefault();
+      selectOption(activeIndex < 0 ? 0 : activeIndex);
+    }
+  };
+
+  const save = async () => {
+    if (
+      busy.current ||
+      draft === undefined ||
+      onSave === undefined ||
+      !options.some((branch) => branch.name === draft)
+    )
+      return;
+    busy.current = true;
+    setPending(true);
+    setError(false);
+    try {
+      const result = await onSave(draft, expected.current);
+      if (alive.current) {
+        setSaved(result);
+        expected.current = result;
+        setDraft(undefined);
+        setSearch('');
+      }
+    } catch {
+      if (alive.current) setError(true);
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(false);
+    }
+  };
+
+  return (
+    <>
+      <DashboardFactRow
+        label={t('dashboard.base')}
+        baseline
+        action={
+          onSave !== undefined ? (
+            <Tooltip
+              label={t('dashboard.editBase')}
+              side="bottom"
+              delayMs={500}
+              disabled={disabled || options.length === 0}
+            >
+              <button
+                type="button"
+                ref={trigger}
+                className={styles.dashboardIconButton}
+                data-dashboard-baseline-edit
+                aria-label={t('dashboard.editBase')}
+                title={t('dashboard.editBase')}
+                aria-haspopup="dialog"
+                aria-expanded={draft !== undefined}
+                disabled={disabled || options.length === 0}
+                onClick={openEditor}
+              >
+                <IconEditOutline16 />
+              </button>
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        {saved === undefined ? (
+          <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+        ) : (
+          <span data-dashboard-baseline-value>{saved}</span>
+        )}
+      </DashboardFactRow>
+      <Modal
+        open={draft !== undefined}
+        onClose={closeEditor}
+        closeLabel={t('dialog.closeBaseline')}
+        title={t('dashboard.editBase')}
+        description={t('dashboard.editBaseDescription')}
+        className={styles.dashboardBaselineModal}
+        contentClassName={styles.dashboardBaselineModalContent}
+        footer={
+          <>
+            <Button variant="outline" disabled={pending} onClick={closeEditor}>
+              {t('dashboard.cancelBase')}
+            </Button>
+            <Button
+              variant="primary"
+              data-dashboard-baseline-save
+              disabled={
+                pending || disabled || !options.some((branch) => branch.name === draft)
+              }
+              onClick={() => void save()}
+            >
+              {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.dashboardBaselinePicker} data-dashboard-baseline-modal>
+          <Input
+            icon={<IconSearchOutline16 />}
+            className={styles.dashboardBaselineSearch}
+            aria-label={t('dashboard.searchBranches')}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls={listOpen ? `${pickerId}-options` : undefined}
+            aria-expanded={listOpen}
+            aria-haspopup="listbox"
+            aria-activedescendant={
+              listOpen && activeIndex >= 0 ? `${pickerId}-option-${activeIndex}` : undefined
+            }
+            data-dashboard-baseline-search
+            disabled={pending || disabled}
+            placeholder={t('dashboard.searchBranches')}
+            value={search}
+            onKeyDown={onSearchKeyDown}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+          />
+          <div className={styles.dashboardBaselineOptions} data-dashboard-baseline-options>
+            {listOpen ? (
+              <div
+                id={`${pickerId}-options`}
+                className={styles.dashboardBaselineList}
+                role="listbox"
+                aria-label={t('dashboard.searchBranches')}
+              >
+                {filteredOptions.map((branch, index) => (
+                  <button
+                    type="button"
+                    key={branch.name}
+                    ref={(element) => {
+                      optionRefs.current[index] = element;
+                    }}
+                    id={`${pickerId}-option-${index}`}
+                    className={styles.dashboardBaselineOption}
+                    data-dashboard-baseline-option={branch.name}
+                    data-highlighted={activeIndex === index ? true : undefined}
+                    role="option"
+                    aria-selected={branch.name === draft}
+                    onClick={() => selectOption(index)}
+                  >
+                    <IconBranchOutline16 />
+                    <span className={styles.dashboardBaselineOptionLabel}>{branch.name}</span>
+                    {branch.name === draft && <IconCheckOutline16 />}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div
+                className={styles.dashboardBaselineEmpty}
+                data-dashboard-baseline-empty
+                role="status"
+                aria-live="polite"
+              >
+                {t('dashboard.noMatchingBranches')}
+              </div>
+            )}
+          </div>
+          <div className={styles.dashboardBaselineStatus} data-dashboard-baseline-status>
+            {error && (
+              <span
+                className={styles.dashboardBaselineError}
+                data-dashboard-baseline-error
+                role="alert"
+              >
+                {t('dashboard.baseSaveFailed')}
+              </span>
+            )}
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/** A Worktree or browser Main projection with explicit unavailable states where Git is not applicable. */
 export function WorktreeDashboard({
+  manager,
   record,
   workspaceTitle,
   t,
   onClose,
+  onOpenSidebar,
+  isRightSidebarExpanded,
   sessions,
   sessionPresentations,
   sessionIds,
@@ -110,12 +412,19 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onOpenFile,
   onSaveInstructions,
+  onSaveBaseline,
+  branches = [],
 }: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(
+    Boolean(isRightSidebarExpanded?.()),
+  );
   const [tab, setTab] = useState<DashboardTab>('overview');
+  const [baselineBranch, setBaselineBranch] = useState(record.baseBranch);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const copyGeneration = useRef(0);
@@ -123,15 +432,24 @@ export function WorktreeDashboard({
   const copyPending = useRef(false);
   const branchCopyPending = useRef(false);
   const id = useId();
+  useEffect(() => {
+    setBaselineBranch(record.baseBranch);
+  }, [record.baseBranch]);
   useLayoutEffect(() => {
     const element = surface.current;
     if (!element) return;
-    return mountDashboardOverlay(element, (next) =>
-      setPlacement((previous) =>
-        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
-      ),
+    return mountDashboardOverlay(
+      element,
+      (next) =>
+        setPlacement((previous) =>
+          JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+        ),
+      {
+        onRightSidebarChange: (open) => setRightSidebarOpen(open),
+        isRightSidebarExpanded,
+      },
     );
-  }, []);
+  }, [isRightSidebarExpanded]);
   useLayoutEffect(() => {
     if (!placement) return;
     const previous = document.activeElement;
@@ -211,6 +529,25 @@ export function WorktreeDashboard({
       ? t('dashboard.detached')
       : (record.currentBranch ??
         (branchAvailable ? record.branch : t('dashboard.branchUnavailable')));
+  const baselineCurrentBranch =
+    record.currentBranch === undefined ? record.branch : record.currentBranch ?? undefined;
+  const persistBaseline =
+    onSaveBaseline === undefined
+      ? undefined
+      : async (baseBranch: string, expectedBaseBranch?: string) => {
+          const result = await onSaveBaseline(baseBranch, expectedBaseBranch);
+          setBaselineBranch(result);
+          return result;
+        };
+  const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
+  const gitOverview = useWorktreeGitOverview({
+    manager,
+    workspaceId: record.workspaceId,
+    worktreeId: record.worktreeId,
+    defaultBaselineBranch: displayedBaseline,
+    currentBranch: baselineCurrentBranch,
+    capturedBaseline: record.baseCommit !== undefined,
+  });
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
@@ -285,6 +622,7 @@ export function WorktreeDashboard({
         })}
       </ul>
     );
+  const topActionIsCreateSession = sessionIds.length === 0 && onCreateSession !== undefined;
   return (
     <section
       ref={surface}
@@ -294,7 +632,7 @@ export function WorktreeDashboard({
       style={placement ?? { visibility: 'hidden', height: 0 }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
-          // Native menus own Escape even when focus remains elsewhere in the dashboard.
+          // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
           event.stopPropagation();
           onClose();
@@ -308,9 +646,36 @@ export function WorktreeDashboard({
             <span aria-hidden="true"> / </span>
             {t('dashboard.preview')}
           </span>
-          <button type="button" className={styles.dashboardButton} onClick={onClose}>
-            ← {t('dashboard.back')}
-          </button>
+          <div className={styles.dashboardToplineActions}>
+            <button
+              type="button"
+              className={styles.dashboardButton}
+              aria-label={t(topActionIsCreateSession ? 'dashboard.newSession' : 'dashboard.back')}
+              onClick={() => {
+                if (topActionIsCreateSession) onCreateSession?.();
+                else onClose();
+              }}
+            >
+              {topActionIsCreateSession ? t('dashboard.newSession') : <>← {t('dashboard.back')}</>}
+            </button>
+            {!rightSidebarOpen && onOpenSidebar !== undefined && (
+              <Tooltip label={t('dashboard.openSidebar')} side="bottom" delayMs={500}>
+                <button
+                  type="button"
+                  className={styles.dashboardSidebarButton}
+                  aria-label={t('dashboard.openSidebar')}
+                  title={t('dashboard.openSidebar')}
+                  data-sidebar-right-expand
+                  onClick={() => {
+                    onOpenSidebar();
+                    setRightSidebarOpen(true);
+                  }}
+                >
+                  <IconPanelLeftOutline16 />
+                </button>
+              </Tooltip>
+            )}
+          </div>
         </div>
         <header className={styles.dashboardHeader}>
           <div className={styles.dashboardIdentity}>
@@ -387,32 +752,40 @@ export function WorktreeDashboard({
           <div className={styles.dashboardHeaderAside}>
             <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
-              <div>
-                <dt>{t(acquisitionLabel)}</dt>
-                <dd>{acquisitionFacts.timestamp
-                  ? <time dateTime={acquisitionFacts.timestamp}>
+              <DashboardFactRow label={t(acquisitionLabel)}>
+                {acquisitionFacts.timestamp ? (
+                  <time dateTime={acquisitionFacts.timestamp}>
                     {new Date(acquisitionFacts.timestamp).toLocaleString()}
                   </time>
-                  : <span className={styles.dashboardHistorical}>
-                    {t('dashboard.historicalUnavailable')}
-                  </span>}</dd>
-              </div>
-              <div>
-                <dt>{t('dashboard.base')}</dt>
-                <dd>{acquisitionFacts.baseBranch ?? (
+                ) : (
                   <span className={styles.dashboardHistorical}>
                     {t('dashboard.historicalUnavailable')}
                   </span>
-                )}</dd>
-              </div>
-              <div>
-                <dt>{t('dashboard.source')}</dt>
-                <dd>
-                  {isMainWorktreeId(record.worktreeId)
-                    ? t('worktree.main')
-                    : t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
-                </dd>
-              </div>
+                )}
+              </DashboardFactRow>
+              {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
+                <WorktreeBaselineEditor
+                  value={baselineBranch}
+                  branches={branches}
+                  currentBranch={baselineCurrentBranch}
+                  onSave={persistBaseline}
+                  t={t}
+                  disabled={record.status !== 'active' || record.health === 'recovery-needed'}
+                />
+              ) : (
+                <DashboardFactRow label={t('dashboard.base')} baseline>
+                  {displayedBaseline ?? (
+                    <span className={styles.dashboardHistorical}>
+                      {t('dashboard.historicalUnavailable')}
+                    </span>
+                  )}
+                </DashboardFactRow>
+              )}
+              <DashboardFactRow label={t('dashboard.source')}>
+                {isMainWorktreeId(record.worktreeId)
+                  ? t('worktree.main')
+                  : t(record.source === 'external' ? 'dashboard.external' : 'dashboard.plugin')}
+              </DashboardFactRow>
             </dl>
           </div>
         </header>
@@ -514,30 +887,28 @@ export function WorktreeDashboard({
                 <Card title={t('dashboard.status')} icon={<DashboardIcon kind="git" />}>
                   <p>{t('dashboard.statusHint')}</p>
                   <dl className={styles.dashboardFacts}>
-                    <div>
-                      <dt>{t('dashboard.health')}</dt>
-                      <dd>{t(healthKey)}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.branch')}</dt>
-                      <dd>{liveBranch}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.base')}</dt>
-                      <dd>{record.baseBranch ?? (
+                    <DashboardFactRow label={t('dashboard.health')}>
+                      {t(healthKey)}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.branch')}>
+                      {liveBranch}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.base')}>
+                      {displayedBaseline ?? (
                         <span className={styles.dashboardHistorical}>
                           {t('dashboard.historicalUnavailable')}
                         </span>
-                      )}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.aheadBehind')}</dt>
-                      <dd>{t('dashboard.notConnected')}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('dashboard.workingTree')}</dt>
-                      <dd>{t('dashboard.notConnected')}</dd>
-                    </div>
+                      )}
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.aheadBehind')}>
+                      <WorktreeGitOverviewValue state={gitOverview} metric="aheadBehind" t={t} />
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.committedChanges')}>
+                      <WorktreeGitOverviewValue state={gitOverview} metric="committed" t={t} />
+                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.workingTree')}>
+                      <WorktreeGitOverviewValue state={gitOverview} metric="workingTree" t={t} />
+                    </DashboardFactRow>
                   </dl>
                   {tabLink('git', t('dashboard.viewDetails'))}
                 </Card>
@@ -573,6 +944,20 @@ export function WorktreeDashboard({
                 </Card>
               </div>
             </div>
+          ) : tab === 'git' ? (
+            <WorktreeGitPanel
+              manager={manager}
+              workspaceId={record.workspaceId}
+              worktreeId={record.worktreeId}
+              defaultBaselineBranch={displayedBaseline}
+              currentBranch={baselineCurrentBranch}
+              capturedBaseline={record.baseCommit !== undefined}
+              onOpenFile={(filePath) => {
+                onOpenFile?.(filePath);
+                setRightSidebarOpen(true);
+              }}
+              t={t}
+            />
           ) : tab === 'sessions' ? (
             <Card
               title={tabLabel('sessions')}

@@ -1,7 +1,6 @@
 import path from 'node:path';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import type { GitRepositoryInspection, GitWorktreeInfo, SidecarSnapshot } from '../../types.js';
-import type { CreateWorktreeTransactionInput } from '../types.js';
 import { canonicalPath, samePhysicalPath } from './paths.js';
 import type { TransactionDependencies } from '../dependencies.js';
 
@@ -71,12 +70,4 @@ export async function findSidecarWorktreeByPhysicalPath(
     if (await samePhysicalPath(worktree.absolutePath, targetPath)) return worktree;
   }
   return undefined;
-}
-
-export async function isExactCreatedWorktree(
-  worktrees: readonly GitWorktreeInfo[],
-  input: CreateWorktreeTransactionInput,
-): Promise<boolean> {
-  const exact = await findExactWorktree(worktrees, input.targetPath, input.targetBranch);
-  return exact !== undefined && exact.detached !== true;
 }

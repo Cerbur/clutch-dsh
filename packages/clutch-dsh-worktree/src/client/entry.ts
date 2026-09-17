@@ -94,6 +94,19 @@ interface ForkableSessions {
   fork?: (input: WorktreeForkInput) => Promise<string>;
 }
 
+interface SidebarRightControllerLike {
+  isExpanded?: () => boolean;
+  toggleExpanded?: () => void;
+  openResource?: (address: string, options?: { params?: { line?: number } }) => void;
+}
+
+function sidebarRightController(ctx: Context): SidebarRightControllerLike | undefined {
+  // Optional sibling service: property access requires a declared Cordis injection.
+  // Resolve at action time so late registration/disposal is reflected without
+  // making the whole Worktree navigation depend on the rightbar plugin.
+  return ctx.get('sidebarRight') as SidebarRightControllerLike | undefined;
+}
+
 function forkRelatedSessionIds(
   snapshot: SessionLineageSnapshot,
 ): ReadonlySet<string> | undefined {
@@ -470,6 +483,29 @@ export function apply(ctx: Context): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          openResource: (address: string, options?: { line?: number }) => {
+            const sidebar = sidebarRightController(ctx);
+            if (sidebar && typeof sidebar.openResource === 'function') {
+              sidebar.openResource(
+                address,
+                options?.line !== undefined ? { params: { line: options.line } } : undefined,
+              );
+              return true;
+            }
+            return false;
+          },
+          closeRightSidebar: () => {
+            const sidebar = sidebarRightController(ctx);
+            if (sidebar?.isExpanded?.() === true) sidebar.toggleExpanded?.();
+          },
+          openRightSidebar: () => {
+            const sidebar = sidebarRightController(ctx);
+            if (sidebar?.isExpanded?.() === false) sidebar.toggleExpanded?.();
+          },
+          isRightSidebarExpanded: () => {
+            const sidebar = sidebarRightController(ctx);
+            return sidebar?.isExpanded?.() === true;
+          },
           expandState,
           sessionOrder,
           dashboardStore,

@@ -12,7 +12,7 @@ import type {
 } from '../types.js';
 import { pathExists } from '../support/paths.js';
 import { recoveryError, normalizeGitError } from '../support/journal.js';
-import { findExactWorktree, isExactCreatedWorktree } from '../support/inspection.js';
+import { findExactWorktree } from '../support/inspection.js';
 import {
   publishCreated,
   publishCleaned,
@@ -46,15 +46,22 @@ export async function reconcileCreateFailure(
       cause: String(inspectionError),
     });
   }
-  if (await isExactCreatedWorktree(live, options.input)) {
+  const exact = await findExactWorktree(live, options.input.targetPath, options.input.targetBranch);
+  if (exact && exact.detached !== true) {
+    // A captured acquisition commit is never replaced. Only a record that could
+    // not capture one (adapter without resolveCommit) adopts the live HEAD from
+    // this same failure window.
+    const record = options.record.baseCommit !== undefined || exact.headCommit === undefined
+      ? options.record
+      : { ...options.record, baseCommit: exact.headCommit };
     await publishCreated(
       dependencies,
       options.locked,
       options.pending.id,
-      options.record,
+      record,
       options.repository,
     );
-    return options.record;
+    return record;
   }
   let branches: readonly string[];
   try {

@@ -1,4 +1,5 @@
-import { realpath } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
@@ -7,6 +8,8 @@ import {
 } from './subprocess.js';
 import type { GitCommandResult } from './subprocess.js';
 import type {
+  GitCommitHistoryRead,
+  GitChangedFileRead,
   GitCommandOptions,
   GitBranchWorktreeInfo,
   GitSubprocessRuntime,
@@ -14,6 +17,332 @@ import type {
   GitWorktreeInfo,
 } from '../types.js';
 import { WorktreeProviderError, providerError } from '../types.js';
+import { WORKTREE_GIT_COMMIT_PATTERN, WORKTREE_GIT_WORKING_TREE } from '../../contract/index.js';
+import type { WorktreeGitChangedFile, WorktreeGitFileDiff } from '../../contract/index.js';
+
+/** Shared with Contract/Manage/Client so commit-SHA validation cannot drift. */
+const COMMIT_PATTERN = WORKTREE_GIT_COMMIT_PATTERN;
+const HISTORY_REQUEST_LIMIT = 201;
+const HISTORY_VISIBLE_LIMIT = 200;
+/**
+ * Line statistics for untracked files cost one `git diff --no-index` process per
+ * file. A large untracked tree therefore reports unknown counts beyond this
+ * bound instead of spawning an unbounded number of Git processes.
+ */
+const MAX_UNTRACKED_STAT_FILES = 50;
+/** Keeps the bounded per-file statistics fan-out from exhausting process limits. */
+const STAT_READ_CONCURRENCY = 8;
+
+function parseCommitHash(stdout: string, operation: string, workspaceRoot: string): string {
+  const commit = stdout.trim();
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', `Git ${operation} returned an invalid commit`, {
+      workspaceRoot,
+      operation,
+    });
+  }
+  return commit;
+}
+
+function assertCommitArgument(commit: string, operation: string, workspaceRoot: string): void {
+  if (!COMMIT_PATTERN.test(commit)) {
+    throw providerError('GIT_OPERATION_FAILED', `Invalid commit supplied to Git ${operation}`, {
+      workspaceRoot,
+      operation,
+    });
+  }
+}
+
+function parseCommitRecord(record: string, workspaceRoot: string): GitCommitHistoryRead['commits'][number] {
+  const fields = record.split('\0');
+  if (fields.length !== 6) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed commit history data', {
+      workspaceRoot,
+      operation: 'list commits',
+    });
+  }
+  const [sha, parents, subject, authorName, authorEmail, authoredAt] = fields;
+  if (
+    !sha ||
+    !COMMIT_PATTERN.test(sha) ||
+    (parents !== '' && parents.split(/\s+/u).some((parent) => !COMMIT_PATTERN.test(parent))) ||
+    !authorName ||
+    !authoredAt
+  ) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned invalid commit history data', {
+      workspaceRoot,
+      operation: 'list commits',
+    });
+  }
+  return {
+    sha,
+    parents: parents === '' ? [] : parents.split(/\s+/u),
+    subject,
+    authorName,
+    ...(authorEmail ? { authorEmail } : {}),
+    authoredAt,
+  };
+}
+
+function parseChangedFiles(stdout: string, workspaceRoot: string): readonly WorktreeGitChangedFile[] {
+  const fields = stdout.split('\0');
+  const files: WorktreeGitChangedFile[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const statusField = (fields[index++] ?? '').replace(/^[\r\n]+/u, '');
+    if (statusField === '') continue;
+    const statusCode = statusField[0]?.toUpperCase();
+    const status = statusCode === 'A'
+      ? 'added'
+      : statusCode === 'M'
+        ? 'modified'
+        : statusCode === 'D'
+          ? 'deleted'
+          : statusCode === 'R'
+            ? 'renamed'
+            : statusCode === 'C'
+              ? 'copied'
+              : statusCode === 'T'
+                ? 'type-changed'
+                : undefined;
+    if (status === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned an unsupported changed-file status', {
+        workspaceRoot,
+        operation: 'list commit files',
+        status: statusField,
+      });
+    }
+    const firstPath = fields[index++];
+    if (!firstPath) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned a changed file without a path', {
+        workspaceRoot,
+        operation: 'list commit files',
+      });
+    }
+    if (status === 'renamed' || status === 'copied') {
+      const newPath = fields[index++];
+      if (!newPath) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned a rename/copy without two paths', {
+          workspaceRoot,
+          operation: 'list commit files',
+        });
+      }
+      files.push({ path: newPath, oldPath: firstPath, status });
+    } else {
+      files.push({ path: firstPath, status });
+    }
+  }
+  return files;
+}
+
+function parseUntrackedFiles(stdout: string): readonly WorktreeGitChangedFile[] {
+  return stdout
+    .split('\0')
+    .filter((filePath) => filePath.length > 0)
+    .map((filePath) => ({ path: filePath, status: 'added' as const }));
+}
+
+interface GitDiffStat {
+  readonly path: string;
+  readonly oldPath?: string;
+  readonly additions?: number;
+  readonly deletions?: number;
+  readonly unknown?: boolean;
+}
+
+function parseDiffCount(value: string, workspaceRoot: string, operation: string): number | undefined {
+  if (value === '-') return undefined;
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid line count', {
+      workspaceRoot,
+      operation,
+      value,
+    });
+  }
+  return count;
+}
+
+/** Parse Git's NUL-safe --numstat projection, including rename/copy pairs. */
+function parseNumstat(stdout: string, workspaceRoot: string, operation: string): readonly GitDiffStat[] {
+  const fields = stdout.split('\0');
+  const stats: GitDiffStat[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const record = fields[index++];
+    if (record === undefined || record.length === 0) continue;
+    const match = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/u.exec(record);
+    if (match === null) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed line-count data', {
+        workspaceRoot,
+        operation,
+        record,
+      });
+    }
+    const additions = parseDiffCount(match[1]!, workspaceRoot, operation);
+    const deletions = parseDiffCount(match[2]!, workspaceRoot, operation);
+    const pathName = match[3]!;
+    if (pathName.length > 0) {
+      stats.push({
+        path: pathName,
+        ...(additions === undefined ? {} : { additions }),
+        ...(deletions === undefined ? {} : { deletions }),
+        ...(additions === undefined || deletions === undefined ? { unknown: true } : {}),
+      });
+      continue;
+    }
+    const oldPath = fields[index++];
+    const newPath = fields[index++];
+    if (!oldPath || !newPath) {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned a rename/copy without two numstat paths', {
+        workspaceRoot,
+        operation,
+      });
+    }
+    stats.push({
+      path: newPath,
+      oldPath,
+      ...(additions === undefined ? {} : { additions }),
+      ...(deletions === undefined ? {} : { deletions }),
+      ...(additions === undefined || deletions === undefined ? { unknown: true } : {}),
+    });
+  }
+  return stats;
+}
+
+function mergeDiffStat(
+  current: GitDiffStat | undefined,
+  next: GitDiffStat,
+): GitDiffStat {
+  if (current === undefined) return next;
+  if (current.unknown === true || next.unknown === true) {
+    return {
+      path: current.path,
+      ...(current.oldPath === undefined ? {} : { oldPath: current.oldPath }),
+      unknown: true,
+    };
+  }
+  const additions = current.additions === undefined || next.additions === undefined
+    ? current.additions ?? next.additions
+    : current.additions + next.additions;
+  const deletions = current.deletions === undefined || next.deletions === undefined
+    ? current.deletions ?? next.deletions
+    : current.deletions + next.deletions;
+  return {
+    path: current.path,
+    ...(current.oldPath === undefined ? {} : { oldPath: current.oldPath }),
+    ...(additions === undefined ? {} : { additions }),
+    ...(deletions === undefined ? {} : { deletions }),
+  };
+}
+
+function decorateChangedFiles(
+  files: readonly WorktreeGitChangedFile[],
+  stats: readonly GitDiffStat[],
+): readonly WorktreeGitChangedFile[] {
+  const byPath = new Map<string, GitDiffStat>();
+  for (const stat of stats) {
+    byPath.set(stat.path, mergeDiffStat(byPath.get(stat.path), stat));
+    if (stat.oldPath !== undefined) byPath.set(stat.oldPath, mergeDiffStat(byPath.get(stat.oldPath), stat));
+  }
+  return files.map((file) => {
+    const stat = byPath.get(file.path) ?? (file.oldPath === undefined ? undefined : byPath.get(file.oldPath));
+    if (stat === undefined || stat.unknown === true || (stat.additions === undefined && stat.deletions === undefined)) return file;
+    return {
+      ...file,
+      ...(stat.additions === undefined ? {} : { additions: stat.additions }),
+      ...(stat.deletions === undefined ? {} : { deletions: stat.deletions }),
+    };
+  });
+}
+
+function omitRestoredStats(
+  stats: readonly GitDiffStat[],
+  restoredPaths: ReadonlySet<string>,
+): readonly GitDiffStat[] {
+  return stats.flatMap((stat) => {
+    if (restoredPaths.has(stat.path)) return [];
+    if (stat.oldPath !== undefined && restoredPaths.has(stat.oldPath)) return [];
+
+    return [stat];
+  });
+}
+
+function isBinaryDiff(stdout: string): boolean {
+  return /^Binary files .* differ$/mu.test(stdout) || /^GIT binary patch$/mu.test(stdout);
+}
+
+/**
+ * True when decoded stdout cannot represent the blob bytes exactly. Binary blobs
+ * (NUL bytes) or lossy UTF-8 decoding make a temporary text baseline unreliable.
+ */
+function isLossyBlob(stdout: string): boolean {
+  return stdout.includes('\u0000') || stdout.includes('\ufffd');
+}
+
+/** Reject missing or empty paths before they reach a Git invocation. */
+function requireFilePath(filePath: string, operation: string, worktreeRoot: string): void {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw providerError('GIT_OPERATION_FAILED', 'A changed file path is required', {
+      workspaceRoot: worktreeRoot,
+      operation,
+    });
+  }
+}
+
+/** Run a bounded number of Git reads in parallel without an unbounded fan-out. */
+async function mapInChunks<Value, Result>(
+  values: readonly Value[],
+  concurrency: number,
+  map: (value: Value) => Promise<Result>,
+): Promise<readonly Result[]> {
+  const results: Result[] = [];
+  for (let index = 0; index < values.length; index += concurrency) {
+    results.push(...await Promise.all(values.slice(index, index + concurrency).map(map)));
+  }
+  return results;
+}
+
+interface FileDiffIdentity {
+  readonly commit: string;
+  readonly path: string;
+  readonly operation: string;
+  readonly worktreeRoot: string;
+  readonly detail?: string;
+}
+
+/**
+ * Normalize one file-diff invocation: binary patches are emptied, exceeded output
+ * bounds become an explicit truncated state, and Git failures keep the existing
+ * provider error plumbing.
+ */
+async function shapeFileDiff(
+  run: () => Promise<GitCommandResult>,
+  identity: FileDiffIdentity,
+): Promise<WorktreeGitFileDiff> {
+  try {
+    const result = await run();
+    const binary = isBinaryDiff(result.stdout);
+    return {
+      commit: identity.commit,
+      path: identity.path,
+      patch: binary ? '' : result.stdout,
+      binary,
+    };
+  } catch (error) {
+    if (error instanceof GitCommandError && error.outputTruncated) {
+      return {
+        commit: identity.commit,
+        path: identity.path,
+        patch: '',
+        binary: false,
+        truncated: true,
+      };
+    }
+    if (error instanceof WorktreeProviderError) throw error;
+    throw operationError(identity.operation, identity.worktreeRoot, identity.path, identity.detail, error);
+  }
+}
 
 export interface LocalGitAdapterOptions extends GitCommandOptions {
   readonly executable?: string;
@@ -367,6 +696,776 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       if (error instanceof WorktreeProviderError) throw error;
       throw operationError('resolve repository identity', workspaceRoot, undefined, undefined, error);
     }
+  }
+
+  /** Resolve a ref to one canonical commit object for a bounded Manage operation. */
+  async resolveCommit(workspaceRoot: string, ref: string, options: GitCommandOptions = {}): Promise<string> {
+    try {
+      const result = await this.run(
+        ['rev-parse', '--verify', `${ref}^{commit}`],
+        workspaceRoot,
+        options,
+      );
+      return parseCommitHash(result.stdout, 'resolve commit', workspaceRoot);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('resolve commit', workspaceRoot, undefined, ref, error);
+    }
+  }
+
+  /** Resolve a common ancestor for two branch heads. */
+  async findMergeBase(
+    workspaceRoot: string,
+    left: string,
+    right: string,
+    options: GitCommandOptions = {},
+  ): Promise<string | undefined> {
+    try {
+      const result = await this.run(['merge-base', left, right], workspaceRoot, options);
+      return parseCommitHash(result.stdout, 'find merge base', workspaceRoot);
+    } catch (error) {
+      if (
+        error instanceof GitCommandError &&
+        error.exitCode === 1 &&
+        !error.timedOut &&
+        !error.aborted &&
+        !error.outputTruncated
+      ) {
+        return undefined;
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('find merge base', workspaceRoot, undefined, left, error);
+    }
+  }
+
+  /** Count commits that exist only on either branch head. */
+  async getCommitDivergence(
+    worktreeRoot: string,
+    baselineCommit: string,
+    headCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<{ readonly ahead: number; readonly behind: number }> {
+    assertCommitArgument(baselineCommit, 'count commit divergence', worktreeRoot);
+    assertCommitArgument(headCommit, 'count commit divergence', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['rev-list', '--left-right', '--count', baselineCommit + '...' + headCommit],
+        worktreeRoot,
+        options,
+      );
+      const fields = result.stdout.trim().split(/\s+/u);
+      if (fields.length !== 2 || fields.some((field) => !/^\d+$/u.test(field))) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed ahead-behind counts', {
+          workspaceRoot: worktreeRoot,
+          operation: 'count commit divergence',
+        });
+      }
+      const behind = parseDiffCount(fields[0]!, worktreeRoot, 'count commit divergence');
+      const ahead = parseDiffCount(fields[1]!, worktreeRoot, 'count commit divergence');
+      if (behind === undefined || ahead === undefined) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed ahead-behind counts', {
+          workspaceRoot: worktreeRoot,
+          operation: 'count commit divergence',
+        });
+      }
+      return { behind, ahead };
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('count commit divergence', worktreeRoot, undefined, headCommit, error);
+    }
+  }
+
+  /** Read at most 201 Worktree commits after a resolved base branch tip. */
+  async listCommits(
+    worktreeRoot: string,
+    baseCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitCommitHistoryRead> {
+    assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
+    const headCommit = await this.resolveCommit(worktreeRoot, 'HEAD', options);
+    try {
+      const result = await this.run(
+        [
+          'log',
+          '--no-color',
+          '--topo-order',
+          `--max-count=${HISTORY_REQUEST_LIMIT}`,
+          '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+          `${baseCommit}..HEAD`,
+        ],
+        worktreeRoot,
+        options,
+      );
+      const commits = result.stdout
+        .split('\x1e')
+        .map((record) => record.replace(/^[\r\n]+|[\r\n]+$/gu, ''))
+        .filter((record) => record.length > 0)
+        .map((record) => parseCommitRecord(record, worktreeRoot));
+      return {
+        headCommit,
+        commits: commits.slice(0, HISTORY_VISIBLE_LIMIT),
+        truncated: commits.length > HISTORY_VISIBLE_LIMIT,
+      };
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('list commits', worktreeRoot, undefined, baseCommit, error);
+    }
+  }
+
+  private async isTrackedWorkingTreeFile(
+    worktreeRoot: string,
+    filePath: string,
+    options: GitCommandOptions,
+  ): Promise<boolean> {
+    try {
+      await this.run(['ls-files', '--error-unmatch', '--', filePath], worktreeRoot, options);
+      return true;
+    } catch (error) {
+      if (
+        error instanceof GitCommandError &&
+        error.exitCode === 1 &&
+        !error.timedOut &&
+        !error.aborted &&
+        !error.outputTruncated
+      ) {
+        return false;
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('check working tree file', worktreeRoot, filePath, undefined, error);
+    }
+  }
+
+  private async isPresentInCommit(
+    worktreeRoot: string,
+    commit: string,
+    filePath: string,
+    options: GitCommandOptions,
+  ): Promise<boolean> {
+    if (commit !== 'HEAD') assertCommitArgument(commit, 'check committed working-tree file', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', commit, '--', filePath],
+        worktreeRoot,
+        options,
+      );
+      return result.stdout.split('\0').some((candidate) => candidate === filePath);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('check committed working-tree file', worktreeRoot, filePath, commit, error);
+    }
+  }
+
+  private async isPresentOnDisk(
+    worktreeRoot: string,
+    filePath: string,
+  ): Promise<boolean> {
+    try {
+      await lstat(path.resolve(worktreeRoot, filePath));
+      return true;
+    } catch (error) {
+      if ((error as { readonly code?: string }).code === 'ENOENT') return false;
+      throw operationError('check working tree path', worktreeRoot, filePath, undefined, error);
+    }
+  }
+
+  private async readRestoredWorkingTreeFileDiff(
+    worktreeRoot: string,
+    baseCommit: string,
+    filePath: string,
+    options: GitCommandOptions,
+  ): Promise<GitCommandResult | undefined> {
+    const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-live-diff-'));
+    const baselinePath = path.join(temporaryDirectory, 'baseline');
+    try {
+      const baseline = await this.run(
+        ['--literal-pathspecs', 'cat-file', 'blob', `${baseCommit}:${filePath}`],
+        worktreeRoot,
+        options,
+      );
+      // A re-encoded binary baseline would produce a false comparison result, so
+      // the caller falls back to the untracked projection instead.
+      if (isLossyBlob(baseline.stdout)) return undefined;
+      await writeFile(baselinePath, baseline.stdout);
+      const result = await this.runDiffAllowingChanges(
+        [
+          '--literal-pathspecs',
+          'diff',
+          '--no-index',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--',
+          baselinePath,
+          filePath,
+        ],
+        worktreeRoot,
+        options,
+      );
+      return {
+        ...result,
+        stdout: result.stdout.replaceAll(baselinePath, filePath),
+      };
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  }
+
+  private async readRestoredWorkingTreeFileStats(
+    worktreeRoot: string,
+    baseCommit: string,
+    filePath: string,
+    options: GitCommandOptions,
+  ): Promise<readonly GitDiffStat[]> {
+    const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-live-numstat-'));
+    const baselinePath = path.join(temporaryDirectory, 'baseline');
+    try {
+      const baseline = await this.run(
+        ['--literal-pathspecs', 'cat-file', 'blob', baseCommit + ':' + filePath],
+        worktreeRoot,
+        options,
+      );
+      // Binary line counts cannot be derived from a re-encoded baseline; report
+      // them as explicitly unknown rather than as an approximate number.
+      if (isLossyBlob(baseline.stdout)) return [{ path: filePath, unknown: true }];
+      await writeFile(baselinePath, baseline.stdout);
+      const result = await this.runDiffAllowingChanges(
+        [
+          '--literal-pathspecs',
+          'diff',
+          '--no-index',
+          '--numstat',
+          '-z',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--',
+          baselinePath,
+          filePath,
+        ],
+        worktreeRoot,
+        options,
+      );
+      const stats = parseNumstat(result.stdout, worktreeRoot, 'list working-tree diff files');
+      return stats.length === 0
+        ? [{ path: filePath, additions: 0, deletions: 0 }]
+        : stats.map((stat) => ({
+            ...stat,
+            path: filePath,
+            oldPath: undefined,
+          }));
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  }
+
+  private async normalizeWorkingTreeDiffFiles(
+    worktreeRoot: string,
+    baseCommit: string,
+    tracked: readonly WorktreeGitChangedFile[],
+    untracked: readonly WorktreeGitChangedFile[],
+    options: GitCommandOptions,
+  ): Promise<{
+    readonly files: readonly WorktreeGitChangedFile[];
+    readonly restoredPaths: readonly string[];
+    readonly addedPaths: readonly string[];
+  }> {
+    const untrackedPaths = new Set(untracked.map((file) => file.path));
+    const restoredPaths = new Set<string>();
+    const addedPaths = new Set<string>();
+    const replacements = new Map<number, readonly WorktreeGitChangedFile[]>();
+    for (const [index, file] of tracked.entries()) {
+      const restoredPath = file.status === 'deleted'
+        ? file.path
+        : (file.status === 'renamed' || file.status === 'copied')
+          ? file.oldPath
+          : undefined;
+      if (restoredPath === undefined || !untrackedPaths.has(restoredPath) || restoredPaths.has(restoredPath)) continue;
+      const result = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, baseCommit, restoredPath, options);
+      restoredPaths.add(restoredPath);
+      // An unrepresentable binary baseline counts as changed so the live
+      // projection never hides a real difference.
+      const differs = result === undefined || isBinaryDiff(result.stdout) || result.stdout.length > 0;
+      if (file.status === 'deleted') {
+        replacements.set(index, differs ? [{ path: file.path, status: 'modified' }] : []);
+      } else if (differs) {
+        replacements.set(index, [
+          { path: restoredPath, status: 'modified' },
+          { path: file.path, status: 'added' },
+        ]);
+        addedPaths.add(file.path);
+      } else {
+        replacements.set(index, [{ ...file, status: 'copied' }]);
+      }
+    }
+    return {
+      files: [
+        ...tracked.flatMap((file, index) => replacements.get(index) ?? [file]),
+        ...untracked.filter((file) => !restoredPaths.has(file.path)),
+      ],
+      restoredPaths: [...restoredPaths],
+      addedPaths: [...addedPaths],
+    };
+  }
+
+  private async readNumstat(
+    args: readonly string[],
+    worktreeRoot: string,
+    operation: string,
+    options: GitCommandOptions,
+  ): Promise<readonly GitDiffStat[]> {
+    const result = await this.run(args, worktreeRoot, options);
+    return parseNumstat(result.stdout, worktreeRoot, operation);
+  }
+
+  private async listUntrackedFileStats(
+    worktreeRoot: string,
+    files: readonly WorktreeGitChangedFile[],
+    operation: string,
+    options: GitCommandOptions,
+  ): Promise<readonly GitDiffStat[]> {
+    const bounded = files.slice(0, MAX_UNTRACKED_STAT_FILES);
+    const stats = await mapInChunks(bounded, STAT_READ_CONCURRENCY, async (file) => {
+      const result = await this.runDiffAllowingChanges(
+        [
+          '--literal-pathspecs',
+          'diff',
+          '--no-index',
+          '--numstat',
+          '-z',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--',
+          '/dev/null',
+          file.path,
+        ],
+        worktreeRoot,
+        options,
+      );
+      return parseNumstat(result.stdout, worktreeRoot, operation).map((stat) => ({
+        ...stat,
+        path: file.path,
+        oldPath: undefined,
+      }));
+    });
+    return stats.flat();
+  }
+
+  /**
+   * Bound one changed-file projection. Output past the adapter's byte limit is
+   * reported as an explicit truncated read rather than an unbounded payload or a
+   * generic Git failure, and path authorization over a truncated read fails
+   * closed because the authorized set is empty.
+   */
+  private async boundedChangedFileRead(
+    operation: string,
+    worktreeRoot: string,
+    detail: string | undefined,
+    read: () => Promise<readonly WorktreeGitChangedFile[]>,
+  ): Promise<GitChangedFileRead> {
+    try {
+      return { files: await read(), truncated: false };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.outputTruncated) {
+        return { files: [], truncated: true };
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError(operation, worktreeRoot, undefined, detail, error);
+    }
+  }
+
+  private async runDiffAllowingChanges(
+    args: readonly string[],
+    worktreeRoot: string,
+    options: GitCommandOptions,
+  ): Promise<GitCommandResult> {
+    try {
+      return await this.run(args, worktreeRoot, options);
+    } catch (error) {
+      // `git diff --no-index` exits with 1 when it finds a difference.
+      if (
+        error instanceof GitCommandError &&
+        error.exitCode === 1 &&
+        !error.timedOut &&
+        !error.aborted &&
+        !error.outputTruncated
+      ) {
+        return { stdout: error.stdout, stderr: error.stderr };
+      }
+      throw error;
+    }
+  }
+
+  /** Read the tracked and untracked changed-path projection for one revision. */
+  private async readChangedFiles(
+    worktreeRoot: string,
+    revision: string,
+    options: GitCommandOptions,
+  ): Promise<{
+    readonly tracked: readonly WorktreeGitChangedFile[];
+    readonly untracked: readonly WorktreeGitChangedFile[];
+  }> {
+    const [tracked, untracked] = await Promise.all([
+      this.run(
+        ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', revision, '--'],
+        worktreeRoot,
+        options,
+      ),
+      this.run(
+        ['ls-files', '--others', '--exclude-standard', '-z', '--'],
+        worktreeRoot,
+        options,
+      ),
+    ]);
+    return {
+      tracked: parseChangedFiles(tracked.stdout, worktreeRoot),
+      untracked: parseUntrackedFiles(untracked.stdout),
+    };
+  }
+
+  /**
+   * Read the live working-tree changed paths without line statistics. Path
+   * authorization only needs the projection, so callers that must confirm one
+   * path avoid the per-untracked-file statistics probe.
+   */
+  async listWorkingTreeChangedPaths(
+    worktreeRoot: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitChangedFileRead> {
+    return this.boundedChangedFileRead(
+      'list working tree changed paths',
+      worktreeRoot,
+      'HEAD',
+      async () => {
+        const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
+        return [...tracked, ...untracked];
+      },
+    );
+  }
+
+  /** Read tracked and untracked changes relative to the current HEAD. */
+  async listWorkingTreeFiles(
+    worktreeRoot: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitChangedFileRead> {
+    return this.boundedChangedFileRead('list working tree files', worktreeRoot, 'HEAD', async () => {
+      const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
+      const [trackedStats, untrackedStats] = await Promise.all([
+        this.readNumstat(
+          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', 'HEAD', '--'],
+          worktreeRoot,
+          'list working tree files',
+          options,
+        ),
+        this.listUntrackedFileStats(worktreeRoot, untracked, 'list working tree files', options),
+      ]);
+      return decorateChangedFiles(
+        [...tracked, ...untracked],
+        [...trackedStats, ...untrackedStats],
+      );
+    });
+  }
+
+  /** Read one tracked or untracked working-tree file diff against HEAD. */
+  async readWorkingTreeFileDiff(
+    worktreeRoot: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    const operation = 'read working tree file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
+    const tracked = await this.isTrackedWorkingTreeFile(worktreeRoot, filePath, options);
+    const presentInBase = !tracked && await this.isPresentInCommit(worktreeRoot, 'HEAD', filePath, options);
+    const restoredUntracked = presentInBase && await this.isPresentOnDisk(worktreeRoot, filePath);
+    const compareAsTracked = tracked || (presentInBase && !restoredUntracked);
+    const trackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '-M',
+      'HEAD',
+      '--',
+      filePath,
+    ];
+    const untrackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-index',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--',
+      '/dev/null',
+      filePath,
+    ];
+    return shapeFileDiff(
+      async () => {
+        if (!restoredUntracked) {
+          return compareAsTracked
+            ? this.run(trackedArgs, worktreeRoot, options)
+            : this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+        }
+        // A binary baseline blob cannot round-trip through decoded stdout: fall
+        // back to the untracked projection instead of claiming equality.
+        const restored = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, 'HEAD', filePath, options);
+        return restored ?? this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+      },
+      { commit: WORKTREE_GIT_WORKING_TREE, path: filePath, operation, worktreeRoot, detail: 'HEAD' },
+    );
+  }
+
+  private async resolveCommitParents(
+    worktreeRoot: string,
+    commit: string,
+    options: GitCommandOptions,
+  ): Promise<readonly string[]> {
+    assertCommitArgument(commit, 'read commit parents', worktreeRoot);
+    try {
+      const result = await this.run(
+        ['rev-list', '--parents', '-n', '1', commit],
+        worktreeRoot,
+        options,
+      );
+      const fields = result.stdout.trim().split(/\s+/u).filter((field) => field.length > 0);
+      if (fields.length === 0 || !COMMIT_PATTERN.test(fields[0] ?? '') ||
+        fields.slice(1).some((parent) => !COMMIT_PATTERN.test(parent))) {
+        throw providerError('GIT_OPERATION_FAILED', 'Git returned malformed commit parent data', {
+          workspaceRoot: worktreeRoot,
+          operation: 'read commit parents',
+        });
+      }
+      return fields.slice(1);
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('read commit parents', worktreeRoot, undefined, commit, error);
+    }
+  }
+
+  /** Read one net baseline-to-HEAD tree diff using NUL-safe output. */
+  async listDiffFiles(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitChangedFileRead> {
+    assertCommitArgument(baseCommit, 'list diff files', worktreeRoot);
+    assertCommitArgument(targetCommit, 'list diff files', worktreeRoot);
+    return this.boundedChangedFileRead(
+      'list diff files',
+      worktreeRoot,
+      `${baseCommit}..${targetCommit}`,
+      async () => {
+        const [result, stats] = await Promise.all([
+          this.run(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
+            worktreeRoot,
+            options,
+          ),
+          this.readNumstat(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
+            worktreeRoot,
+            'list diff files',
+            options,
+          ),
+        ]);
+        return decorateChangedFiles(parseChangedFiles(result.stdout, worktreeRoot), stats);
+      },
+    );
+  }
+
+  /** Read net tracked and untracked changes from an arbitrary committed base to the live tree. */
+  async listWorkingTreeDiffFiles(
+    worktreeRoot: string,
+    baseCommit: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitChangedFileRead> {
+    assertCommitArgument(baseCommit, 'list working-tree diff files', worktreeRoot);
+    return this.boundedChangedFileRead(
+      'list working-tree diff files',
+      worktreeRoot,
+      baseCommit,
+      async () => {
+        const { tracked: trackedFiles, untracked: untrackedFiles } = await this.readChangedFiles(
+          worktreeRoot,
+          baseCommit,
+          options,
+        );
+        const [trackedStats, untrackedStats] = await Promise.all([
+          this.readNumstat(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
+            worktreeRoot,
+            'list working-tree diff files',
+            options,
+          ),
+          this.listUntrackedFileStats(worktreeRoot, untrackedFiles, 'list working-tree diff files', options),
+        ]);
+        const normalized = await this.normalizeWorkingTreeDiffFiles(
+          worktreeRoot,
+          baseCommit,
+          trackedFiles,
+          untrackedFiles,
+          options,
+        );
+        const restoredPaths = new Set(normalized.restoredPaths);
+        const restoredStats = await Promise.all(normalized.restoredPaths.map((filePath) =>
+          this.readRestoredWorkingTreeFileStats(worktreeRoot, baseCommit, filePath, options),
+        ));
+        const restoredAddedStats = await this.listUntrackedFileStats(
+          worktreeRoot,
+          normalized.addedPaths.map((filePath) => ({ path: filePath, status: 'added' as const })),
+          'list working-tree diff files',
+          options,
+        );
+        const baseStats = omitRestoredStats([...trackedStats, ...untrackedStats], restoredPaths);
+        return decorateChangedFiles(normalized.files, [...baseStats, ...restoredStats.flat(), ...restoredAddedStats]);
+      },
+    );
+  }
+
+  /** Read first-parent (or root) changed-file metadata using NUL-safe output. */
+  async listCommitFiles(
+    worktreeRoot: string,
+    commit: string,
+    options: GitCommandOptions = {},
+  ): Promise<GitChangedFileRead> {
+    const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
+    const args = parents.length > 0
+      ? ['--literal-pathspecs', 'diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', parents[0]!, commit]
+      : ['--literal-pathspecs', 'diff-tree', '--root', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', commit];
+    const numstatArgs = parents.length > 0
+      ? ['--literal-pathspecs', 'diff-tree', '--no-commit-id', '--numstat', '-z', '-r', '-M', '-C', parents[0]!, commit]
+      : ['--literal-pathspecs', 'diff-tree', '--root', '--no-commit-id', '--numstat', '-z', '-r', '-M', '-C', commit];
+    return this.boundedChangedFileRead('list commit files', worktreeRoot, commit, async () => {
+      const [result, stats] = await Promise.all([
+        this.run(args, worktreeRoot, options),
+        this.readNumstat(numstatArgs, worktreeRoot, 'list commit files', options),
+      ]);
+      return decorateChangedFiles(parseChangedFiles(result.stdout, worktreeRoot), stats);
+    });
+  }
+
+  /** Read one live working-tree file from an arbitrary committed base. */
+  async readWorkingTreeDiffFileDiff(
+    worktreeRoot: string,
+    baseCommit: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    const operation = 'read working-tree diff file';
+    requireFilePath(filePath, operation, worktreeRoot);
+    assertCommitArgument(baseCommit, operation, worktreeRoot);
+    const tracked = await this.isTrackedWorkingTreeFile(worktreeRoot, filePath, options);
+    const presentInBase = !tracked && await this.isPresentInCommit(worktreeRoot, baseCommit, filePath, options);
+    const restoredUntracked = presentInBase && await this.isPresentOnDisk(worktreeRoot, filePath);
+    const compareAsTracked = tracked || (presentInBase && !restoredUntracked);
+    const trackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '-M',
+      '-C',
+      baseCommit,
+      '--',
+      filePath,
+    ];
+    const untrackedArgs = [
+      '--literal-pathspecs',
+      'diff',
+      '--no-index',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--',
+      '/dev/null',
+      filePath,
+    ];
+    return shapeFileDiff(
+      async () => {
+        if (!restoredUntracked) {
+          return compareAsTracked
+            ? this.run(trackedArgs, worktreeRoot, options)
+            : this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+        }
+        const restored = await this.readRestoredWorkingTreeFileDiff(worktreeRoot, baseCommit, filePath, options);
+        return restored ?? this.runDiffAllowingChanges(untrackedArgs, worktreeRoot, options);
+      },
+      { commit: WORKTREE_GIT_WORKING_TREE, path: filePath, operation, worktreeRoot, detail: baseCommit },
+    );
+  }
+
+  /** Read one file from a net baseline-to-HEAD tree diff. */
+  async readDiffFileDiff(
+    worktreeRoot: string,
+    baseCommit: string,
+    targetCommit: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    const operation = 'read diff file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
+    assertCommitArgument(baseCommit, operation, worktreeRoot);
+    assertCommitArgument(targetCommit, operation, worktreeRoot);
+    return shapeFileDiff(
+      () => this.run(
+        ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '-M', '-C', baseCommit, targetCommit, '--', filePath],
+        worktreeRoot,
+        options,
+      ),
+      {
+        commit: targetCommit,
+        path: filePath,
+        operation,
+        worktreeRoot,
+        detail: baseCommit + '..' + targetCommit,
+      },
+    );
+  }
+
+  /** Read one authorized file patch with external diff and textconv disabled. */
+  async readCommitFileDiff(
+    worktreeRoot: string,
+    commit: string,
+    filePath: string,
+    options: GitCommandOptions = {},
+  ): Promise<WorktreeGitFileDiff> {
+    const operation = 'read commit file diff';
+    requireFilePath(filePath, operation, worktreeRoot);
+    const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
+    const args = parents.length > 0
+      ? [
+          '--literal-pathspecs',
+          'diff',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '-M',
+          parents[0]!,
+          commit,
+          '--',
+          filePath,
+        ]
+      : [
+          '--literal-pathspecs',
+          'diff-tree',
+          '--root',
+          '--no-commit-id',
+          '--no-color',
+          '--no-ext-diff',
+          '--no-textconv',
+          '-p',
+          '-M',
+          commit,
+          '--',
+          filePath,
+        ];
+    return shapeFileDiff(
+      () => this.run(args, worktreeRoot, options),
+      { commit, path: filePath, operation, worktreeRoot, detail: commit },
+    );
   }
 
   /**

@@ -14,6 +14,7 @@ export async function loadClientEntry({
   sessionListSnapshot,
   workspaceSnapshot: initialWorkspaceSnapshot,
   fork,
+  sidebarRight,
 } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
@@ -232,10 +233,12 @@ export async function loadClientEntry({
   const nativeFork = fakeSessions.fork;
 
   const fakeContext = {
+    get(name) { return name === 'sidebarRight' ? sidebarRight : undefined; },
     connection: { rpc: connectionRpc },
     locale,
     localeRegistrations,
     remote,
+    sidebarRight,
     sessions: fakeSessions,
     workspaces: {
       list: workspaceList,

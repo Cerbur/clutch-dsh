@@ -9,7 +9,7 @@ import { withShardLock } from '../support/locking.js';
 import {
   resolveRepository,
   findActiveBranchConflict,
-  isExactCreatedWorktree,
+  findExactWorktree,
 } from '../support/inspection.js';
 import {
   cleanLegacyObservations,
@@ -141,8 +141,19 @@ export async function createWorktreeTransaction(
           );
         }
 
-        const record = recordForCreate(input);
-        const pending = pendingCreate(input, repository.identity);
+        // Capture the branch's current commit before Git creates the linked
+        // Worktree. The capture is authoritative: the post-create inspection below
+        // only fills the acquisition commit when the adapter could not resolve it,
+        // so a Worktree that already advanced past its creation point is never
+        // recorded as its own baseline.
+        const capturedBaseCommit = dependencies.git.resolveCommit
+          ? await dependencies.git.resolveCommit(gitRoot, input.baseBranch)
+          : undefined;
+        const transactionInput = capturedBaseCommit === undefined
+          ? input
+          : { ...input, baseCommit: capturedBaseCommit };
+        const record = recordForCreate(transactionInput);
+        const pending = pendingCreate(transactionInput, repository.identity);
         await locked.mutate((snapshot) => {
           const { repository: _repository, ...withoutRepository } = snapshot;
           void _repository;
@@ -188,7 +199,8 @@ export async function createWorktreeTransaction(
             cause: String(inspectionError),
           });
         }
-        if (!(await isExactCreatedWorktree(live, input))) {
+        const exact = await findExactWorktree(live, input.targetPath, input.targetBranch);
+        if (!exact || exact.detached === true) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
           throw recoveryError(
             `Git create completed without the expected Worktree: ${input.targetPath}`,
@@ -199,8 +211,11 @@ export async function createWorktreeTransaction(
             },
           );
         }
-        await publishCreated(dependencies, locked, pending.id, record, repository.identity);
-        return record;
+        const publishedRecord = record.baseCommit !== undefined || exact.headCommit === undefined
+          ? record
+          : { ...record, baseCommit: exact.headCommit };
+        await publishCreated(dependencies, locked, pending.id, publishedRecord, repository.identity);
+        return publishedRecord;
       },
     );
   }) as Promise<WorktreeRecord>;

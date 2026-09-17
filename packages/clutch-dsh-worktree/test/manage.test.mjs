@@ -364,7 +364,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalized = await sidecar.read('ws_one');
-    assert.equal(normalized.schemaVersion, 4);
+    assert.equal(normalized.schemaVersion, 5);
     assert.equal(normalized.revision, '0');
     assert.equal(normalized.worktrees[0].source, 'plugin');
 
@@ -375,7 +375,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       source: 'plugin',
     });
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 4);
+    assert.equal(persisted.schemaVersion, 5);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal('pendingOperation' in persisted, false);
 
@@ -393,7 +393,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalizedV2 = await sidecar.read('ws_one');
-    assert.equal(normalizedV2.schemaVersion, 4);
+    assert.equal(normalizedV2.schemaVersion, 5);
     assert.equal(normalizedV2.revision, '0');
     assert.deepEqual(normalizedV2.worktrees, [v2Record]);
 
@@ -403,7 +403,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_legacy_v2_new'),
     });
     const persistedV2 = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persistedV2.schemaVersion, 4);
+    assert.equal(persistedV2.schemaVersion, 5);
     assert.equal(typeof persistedV2.revision, 'string');
     assert.equal('pendingOperation' in persistedV2, false);
   });
@@ -448,6 +448,7 @@ test('finalizes a pending create when recovery finds the exact Git Worktree', as
     const targetPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId);
     await mkdir(path.dirname(targetPath), { recursive: true });
     await git.createWorktree(workspaceRoot, targetPath, 'main', 'feature/recover-create');
+    const baseCommit = await git.resolveCommit(targetPath, 'HEAD');
 
     const shardPath = sidecar.getShardPath('ws_one');
     await mkdir(path.dirname(shardPath), { recursive: true });
@@ -483,6 +484,7 @@ test('finalizes a pending create when recovery finds the exact Git Worktree', as
       source: 'plugin',
       createdAt: snapshot.worktrees[0].createdAt,
       baseBranch: 'main',
+      baseCommit,
       status: 'active',
     }]);
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
@@ -1944,7 +1946,7 @@ test('rejects import validation failures and managed physical paths', async () =
   });
 });
 
-test('normalizes v1 reads and writes source-aware schema v4 on mutation', async () => {
+test('normalizes v1 reads and writes source-aware schema v5 on mutation', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const worktreeRoot = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
     const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
@@ -1966,7 +1968,7 @@ test('normalizes v1 reads and writes source-aware schema v4 on mutation', async 
 
     await sidecar.mutate('ws_one', (snapshot) => ({ result: undefined, snapshot }));
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 4);
+    assert.equal(persisted.schemaVersion, 5);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal(persisted.worktrees[0].source, 'plugin');
   });
@@ -2026,6 +2028,46 @@ test('returns sync-required when cleanup after sidecar failure also fails', asyn
 
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/cleanup-failure' }), 'SIDECAR_SYNC_REQUIRED');
     assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_cleanup_failure')), true);
+  });
+});
+
+test('compatibility creation persists the created Worktree HEAD after the base branch moves', async () => {
+  await withGitFixture(async ({ dsh, dshHome, workspaceRoot, sidecar }) => {
+    await runGit(workspaceRoot, ['branch', 'feature/compat-baseline']);
+    const baseGit = new LocalGitAdapter();
+    const legacySidecar = {
+      read: (...args) => sidecar.read(...args),
+      mutate: (...args) => sidecar.mutate(...args),
+      insertWorktreeBefore: (...args) => sidecar.insertWorktreeBefore(...args),
+    };
+    const git = {
+      validateRepository: (...args) => baseGit.validateRepository(...args),
+      listBranches: (...args) => baseGit.listBranches(...args),
+      listWorktrees: (...args) => baseGit.listWorktrees(...args),
+      resolveCommit: (...args) => baseGit.resolveCommit(...args),
+      async createWorktree(root, targetPath, baseBranch, newBranch) {
+        const previous = (await runGit(root, ['rev-parse', baseBranch])).stdout.trim();
+        const tree = (await runGit(root, ['rev-parse', `${previous}^{tree}`])).stdout.trim();
+        const moved = (await runGit(root, ['commit-tree', tree, '-p', previous, '-m', 'move base branch during create'])).stdout.trim();
+        await runGit(root, ['update-ref', `refs/heads/${baseBranch}`, moved]);
+        return baseGit.createWorktree(root, targetPath, baseBranch, newBranch);
+      },
+      removeWorktree: (...args) => baseGit.removeWorktree(...args),
+    };
+    const provider = createWorktreeManager({
+      dsh,
+      dshHome,
+      git,
+      sidecar: legacySidecar,
+      idFactory: () => 'wt_compat_baseline',
+    });
+    const created = await provider.createWorktree({
+      workspaceId: 'ws_one',
+      branch: 'feature/compat-baseline',
+    });
+    const actualHead = (await runGit(created.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    assert.match(actualHead, /^[0-9a-f]{40}$/u);
+    assert.equal(created.baseCommit, actualHead);
   });
 });
 

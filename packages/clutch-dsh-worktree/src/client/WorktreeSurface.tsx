@@ -19,22 +19,32 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
 import {
   createMainWorktreeRecord,
   isMainWorktreeId,
   isManagedDashboardRecord,
   resolveDashboardRecord,
+  type DashboardRecord,
   type DashboardSelection,
 } from './dashboard/dashboard-selection.js';
 import { dashboardSessionIds } from './dashboard/dashboard-sessions.js';
+import {
+  prepareDashboardNavigation,
+  settlePendingDashboardNavigation,
+  type PendingDashboardNavigation,
+} from './dashboard/dashboard-navigation.js';
+import { buildSessionFileAddress } from './dashboard/git/file-address.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Composes independent surface state/action domains into the sidebar overlay. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
+  const pendingDashboard = useRef<PendingDashboardNavigation>();
+  const pendingDashboardRecord = useRef<DashboardRecord>();
+  const openDashboardRef = useRef<(record: DashboardRecord) => void>();
   const externalDashboard = inputProps.dashboardStore
     ? useSyncExternalStore(
         inputProps.dashboardStore.subscribe,
@@ -52,11 +62,15 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     },
     [inputProps.dashboardStore],
   );
-  const closeDashboard = useCallback(() => setDashboard(undefined), [setDashboard]);
+  const closeDashboard = useCallback(() => {
+    pendingDashboard.current = undefined;
+    pendingDashboardRecord.current = undefined;
+    setDashboard(undefined);
+  }, [setDashboard]);
   const source = useSurfaceSources({ props: inputProps });
   useEffect(() => {
-    if (source.mode !== 'worktree') setDashboard(undefined);
-  }, [source.mode, setDashboard]);
+    if (source.mode !== 'worktree') closeDashboard();
+  }, [source.mode, closeDashboard]);
   useEffect(
     () => () => {
       inputProps.dashboardStore?.set(undefined);
@@ -65,12 +79,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   );
   const props: WorktreeSurfaceProps = {
     ...inputProps,
-    openDashboard: (record) =>
-      setDashboard({
-        workspaceId: record.workspaceId,
-        worktreeId: record.worktreeId,
-        sessionId: source.currentSessionId,
-      }),
+    openDashboard: (record) => openDashboardRef.current?.(record),
     openSession: (sessionId) => {
       closeDashboard();
       inputProps.openSession(sessionId);
@@ -110,12 +119,91 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     dashboardMainRecord,
   );
   useEffect(() => {
-    if (dashboard !== undefined && dashboardRecord === undefined) closeDashboard();
-  }, [dashboard, dashboardRecord, closeDashboard]);
+    if (dashboard !== undefined && dashboardRecord === undefined) {
+      // A target Session switch can invalidate the old Dashboard in the same
+      // commit that settles a new Worktree navigation. Do not cancel that
+      // pending navigation while dismissing the stale page.
+      setDashboard(undefined);
+    }
+  }, [dashboard, dashboardRecord, setDashboard]);
   const mutation = useSurfaceMutation({ read });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
   const ordering = useSessionOrdering({ read, source, props });
+  const openDashboard = useCallback(
+    (record: DashboardRecord) => {
+      const workspace = source.workspaces.items.find(
+        (candidate) => candidate.workspaceId === record.workspaceId,
+      );
+      const view = read.viewByWorkspace.get(record.workspaceId);
+      const sessionIds = dashboardSessionIds(
+        record,
+        source.sessions,
+        view?.bindings ?? [],
+        source.archivedSessionIds,
+        isMainWorktreeId(record.worktreeId)
+          ? ordering.orderedSessionIdsByAccount.get(`main:${record.workspaceId}`)
+          : ordering.orderedSessionIdsByAccount.get(`worktree:${record.worktreeId}`),
+        workspace === undefined
+          ? []
+          : workspaceSessionIds(source.workspaces, workspace.workspaceId, source.sessions.ids),
+      );
+      const navigation = prepareDashboardNavigation(
+        record,
+        sessionIds,
+        source.currentSessionId,
+        source.sessions.phase ?? 'ready',
+      );
+      if (navigation.waitForSessionList === true) {
+        pendingDashboard.current = undefined;
+        pendingDashboardRecord.current = record;
+        return;
+      }
+      pendingDashboardRecord.current = undefined;
+      if (navigation.sessionIdToOpen !== undefined) {
+        pendingDashboard.current = {
+          selection: navigation.selection,
+          originSessionId: source.currentSessionId,
+        };
+        inputProps.openSession(navigation.sessionIdToOpen);
+        return;
+      }
+      pendingDashboard.current = undefined;
+      if (navigation.selection.sessionId === undefined) inputProps.closeRightSidebar?.();
+      setDashboard(navigation.selection);
+    },
+    [
+      inputProps.closeRightSidebar,
+      inputProps.openSession,
+      ordering.orderedSessionIdsByAccount,
+      read.viewByWorkspace,
+      setDashboard,
+      source.archivedSessionIds,
+      source.currentSessionId,
+      source.sessions,
+      source.workspaces,
+    ],
+  );
+  openDashboardRef.current = openDashboard;
+  useEffect(() => {
+    if (source.sessions.phase === 'pending') return;
+    const pendingRecord = pendingDashboardRecord.current;
+    if (pendingRecord === undefined) return;
+    pendingDashboardRecord.current = undefined;
+    openDashboard(pendingRecord);
+  }, [openDashboard, source.sessions.phase]);
+  useEffect(() => {
+    const settlement = settlePendingDashboardNavigation(
+      pendingDashboard.current,
+      source.currentSessionId,
+    );
+    if (settlement.kind === 'open') {
+      pendingDashboard.current = undefined;
+      setDashboard(settlement.selection);
+    } else if (settlement.kind === 'clear') {
+      pendingDashboard.current = undefined;
+    }
+  }, [setDashboard, source.currentSessionId]);
   const expansion = useSessionExpansion({ read, source, props });
   const native = useNativeActions({ source, props, mutation });
   const drag = useDragActions({
@@ -152,6 +240,47 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     dashboardRecord !== undefined && isManagedDashboardRecord(dashboardRecord)
       ? dashboardRecord
       : undefined;
+  const onOpenFile = useCallback(
+    (filePath: string, options?: { line?: number }) => {
+      if (typeof props.openResource !== 'function' || dashboardRecord === undefined) return;
+      const worktreeSessions = dashboardSessionIds(
+        dashboardRecord,
+        source.sessions,
+        dashboardView?.bindings ?? [],
+        source.archivedSessionIds,
+        isMainWorktreeId(dashboardRecord.worktreeId)
+          ? ordering.orderedSessionIdsByAccount.get(`main:${dashboardRecord.workspaceId}`)
+          : ordering.orderedSessionIdsByAccount.get(`worktree:${dashboardRecord.worktreeId}`),
+        dashboardWorkspace === undefined
+          ? []
+          : workspaceSessionIds(
+              source.workspaces,
+              dashboardWorkspace.workspaceId,
+              source.sessions.ids,
+            ),
+      );
+      // A file opened from Git must stay inside the Dashboard Worktree.
+      // Never fall back to the current or another Workspace Session.
+      const targetSessionId = source.currentSessionId !== undefined &&
+        worktreeSessions.includes(source.currentSessionId)
+        ? source.currentSessionId
+        : undefined;
+      if (targetSessionId === undefined) return;
+      const address = buildSessionFileAddress(targetSessionId, filePath);
+      props.openResource(address, options);
+    },
+    [
+      props.openResource,
+      dashboardRecord,
+      source.currentSessionId,
+      source.sessions,
+      source.archivedSessionIds,
+      source.workspaces,
+      dashboardView?.bindings,
+      ordering.orderedSessionIdsByAccount,
+      dashboardWorkspace,
+    ],
+  );
   if (source.mode !== 'worktree') return null;
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
@@ -221,6 +350,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       {dashboardRecord !== undefined && (
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
+          manager={props.manager}
           record={dashboardRecord}
           onSaveInstructions={
             props.manager && !isMainWorktreeId(dashboardRecord.worktreeId)
@@ -241,6 +371,29 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 }
               : undefined
           }
+          onSaveBaseline={
+            props.manager &&
+            typeof props.manager.updateWorktreeBaseBranch === 'function' &&
+            dashboardManagedRecord !== undefined &&
+            dashboardCanCreate
+              ? async (baseBranch, expectedBaseBranch) => {
+                  try {
+                    return await props.manager!.updateWorktreeBaseBranch({
+                      workspaceId: dashboardRecord.workspaceId,
+                      worktreeId: dashboardRecord.worktreeId,
+                      baseBranch,
+                      expectedBaseBranch,
+                    });
+                  } finally {
+                    void read.refresh({
+                      preserveCurrent: true,
+                      scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId },
+                    });
+                  }
+                }
+              : undefined
+          }
+          branches={dashboardView?.branches ?? []}
           workspaceTitle={dashboardWorkspace?.title ?? ''}
           sessions={source.sessions}
           sessionPresentations={source.sessionPresentations}
@@ -261,6 +414,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 ),
           )}
           actionPending={mutation.actionPending}
+          onOpenFile={typeof props.openResource === 'function' ? onOpenFile : undefined}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
           }
@@ -316,6 +470,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           }
           t={t}
           onClose={closeDashboard}
+          onOpenSidebar={source.currentSessionId === undefined ? undefined : props.openRightSidebar}
+          isRightSidebarExpanded={props.isRightSidebarExpanded}
         />
       )}
     </>
