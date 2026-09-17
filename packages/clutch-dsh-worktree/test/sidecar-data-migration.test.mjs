@@ -5,7 +5,6 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
-  LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
   SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,

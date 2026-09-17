@@ -70,7 +70,7 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
 - 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
-  新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据。
+  新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据：创建恢复和创建后检查只会填充最初未能捕获的获取 commit，绝不会用后续的实时 HEAD 覆盖它。
 - Git ahead/behind、已提交/未提交 changed-file additions/deletions 以及工作区行数都属于运行时 Git projection，仅通过 contract/Manager 读取，不写入 `WorktreeRecord` 或 Sidecar；不可安全读取时必须返回显式 unavailable，而不是持久化猜测值。
 
 ### 共享指令（Instructions）注入机制
@@ -235,20 +235,23 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
 Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktree 记录存在持久化的
-`baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择，否则保持未选择并提示
-用户。受管理 Worktree 的 Overview
+`baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择；否则在记录带有不可变获取
+commit（`baseCommit`）时，以该 commit 作为隐式基线读取并把解析出的 commit 显示为 Base fact。
+只有既无可用已保存基线、也无获取 commit 的 Worktree 才保持未选择并提示用户。受管理 Worktree 的 Overview
 Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排除当前 Worktree branch；保存通过
 `updateWorktreeBaseBranch` 沿 Contract → Remote → Host → Manage 传递，使用 expected branch
 执行乐观并发校验，只更新 Sidecar 的 `baseBranch`。`baseCommit` 不会被该操作修改。Git Tab
 在加载有效基线后默认选择 `summary`（基线汇总）而不是第一个 history commit；切换基线 branch 也会回到该
-汇总。自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。没有选择基线时只
-暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。对于已保存且有效的基线，Overview
+汇总。自身的选择器仍是临时查看选择，修改它会重新加载投影但不会写回 Worktree 记录。既无已保存基线、
+也无获取 commit 时才暂停 Git projection，Dashboard 的 Workspace/Worktree 信息仍正常展示。对于已保存且
+有效的基线，或由获取 commit 提供的隐式基线，Overview
 会复用 listWorktreeCommits、committed summary 与工作区文件读取展示一次 compact ahead/behind、已提交
 和未提交 additions/deletions projection；它不加载 branch 列表，也不把这些运行时事实写入 Sidecar。若所选基线
 branch 已分叉，Manage 会分别统计两个 branch head 的独有 commit，并以两者的共同先祖作为 Worktree
 增量 diff 边界；因此分叉不会再让 history 或文件读取变为 unavailable。若两个 head 没有共同先祖，则
 退化为两个 head 之间的完整 tree diff。Git changed-file column header 根据当前目标（基线汇总、已提交选择或未提交
-entry）展示变更文件的 additions/deletions 总数；binary-only 统计保持显式 unknown。
+entry）展示变更文件的 additions/deletions 总数；binary-only 统计保持显式 unknown。changed-file
+projection 超过 adapter 既有输出上限时返回显式的 truncated 结果，而不是无界 payload 或泛化 Git 失败。
 
 commit history 使用所选 branch 当前 tip 到 Worktree `HEAD` 的范围，只展示 Worktree 独有的 commit；
 基线汇总与文件 tree diff 使用两者共同先祖到 Worktree `HEAD` 的范围。若没有共同先祖，tree diff
@@ -279,8 +282,11 @@ aggregate 请求都必须满足 commit/selection 二选一，且继续经过 bas
 Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
 当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 
-没有选择 branch 的旧 managed/imported Worktree 返回明确的 `baseline-unselected` projection，
-而不是用移动的 ref 猜测比较点；选择无效、无法解析或 Worktree HEAD 不可用时返回 honest
+既没有可用已保存基线、也没有获取 commit 的旧 managed/imported Worktree 返回明确的
+`baseline-unselected` projection，而不是用移动的 ref 猜测比较点；带有获取 commit 的记录以该不可变
+commit 作为隐式比较点，不再返回 `baseline-unselected`。已选本地 branch 不复存在时降级为 honest
+unavailable projection，而不是泛化 Git 失败；完整 ref 路径、tag 或 remote-tracking ref 仍被直接
+拒绝，只有普通本地 branch 名可以被选择。选择无效、无法解析或 Worktree HEAD 不可用时同样返回 honest
 unavailable projection。运行时 derived/captured 兼容结果不会自动写回 Sidecar；只有用户明确保存 Dashboard
 facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar 损坏或恢复未完成时，Git
 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。

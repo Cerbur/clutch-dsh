@@ -142,9 +142,10 @@ export async function createWorktreeTransaction(
         }
 
         // Capture the branch's current commit before Git creates the linked
-        // Worktree. The post-create inspection below replaces this with the
-        // Worktree's actual HEAD when the adapter reports it, closing the
-        // branch-movement ambiguity without introducing another sidecar write.
+        // Worktree. The capture is authoritative: the post-create inspection below
+        // only fills the acquisition commit when the adapter could not resolve it,
+        // so a Worktree that already advanced past its creation point is never
+        // recorded as its own baseline.
         const capturedBaseCommit = dependencies.git.resolveCommit
           ? await dependencies.git.resolveCommit(gitRoot, input.baseBranch)
           : undefined;
@@ -210,7 +211,7 @@ export async function createWorktreeTransaction(
             },
           );
         }
-        const publishedRecord = exact.headCommit === undefined
+        const publishedRecord = record.baseCommit !== undefined || exact.headCommit === undefined
           ? record
           : { ...record, baseCommit: exact.headCommit };
         await publishCreated(dependencies, locked, pending.id, publishedRecord, repository.identity);

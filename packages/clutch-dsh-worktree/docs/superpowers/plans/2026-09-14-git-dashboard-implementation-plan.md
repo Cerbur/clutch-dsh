@@ -1739,7 +1739,44 @@ current source of truth; this section keeps the plan honest instead of rewriting
     open-in-sidebar action was removed, so the diff toolbar's "Open in Sidebar" is the only file
     reveal action.
 
+11. **The acquisition `baseCommit` stays immutable through recovery (§5, §7).** Creation captures the
+    selected branch tip before `git worktree add`. Post-create inspection and create-failure
+    reconciliation only fill that value when the adapter could not resolve it, and pending-create
+    recovery prefers the journaled capture (which wins) over the live Worktree HEAD. A Worktree that
+    advanced after an interrupted create is therefore never recorded as its own baseline.
+12. **The captured acquisition commit is the implicit baseline (§4, §5, §8, §22, §38).** When a managed
+    Worktree has no saved `baseBranch`, or the saved value equals the current Worktree branch, the
+    browser reads with no explicit branch and the Manager resolves `source: 'captured'` from
+    `baseCommit`; the Base fact shows that resolved commit when there is no branch ref. Only a record
+    with neither a usable saved baseline nor a captured commit stays `baseline-unselected`; Main and
+    genuinely baseline-less records still make no Git read. This resolves the §22/§32 wording that
+    described the captured path as unreachable from the Dashboard.
+13. **A vanished selected baseline degrades to an unavailable projection (§32).** A plain local branch
+    name that is no longer present in `listBranches` resolves to `undefined` for reads, so history and
+    Overview return `{ unavailableReason: 'baseline-unknown', commits: [], truncated: false }` instead
+    of a generic `WORKTREE_STATE_CONFLICT`. Full ref paths (`refs/...`), tags, remote-tracking refs,
+    and revision expressions remain hard rejections, and the `updateWorktreeBaseBranch` write path
+    stays strict.
+14. **Changed-file projections report their own truncation (§17).** The provider's changed-file reads
+    return `{ files, truncated }`. Output past the adapter bound becomes an explicit truncated
+    projection (empty list plus `truncated: true`) instead of a generic Git failure, and
+    `WorktreeGitCommitFiles` carries the flag to the browser, which shows a localized notice.
+    Commit-history truncation keeps its separate 200-commit meaning, single-file diff truncation is
+    unchanged, and a truncated `listWorkingTreeChangedPaths` read fails path authorization closed.
+15. **Dead provider surfaces removed (§37).** `isCommitAncestor` (declared port plus adapter
+    implementation) and `isExactCreatedWorktree` had no callers after commit membership moved to one
+    pinned `listCommits` projection, so both were deleted instead of kept as speculative abstraction.
+16. **The Dashboard-wide surface is in scope for this branch (§21, §30).** The Git & Changes tab ships
+    together with the peer-page Dashboard surface it needs: keeping or switching the current Session,
+    collapsing the native rightbar for a sessionless target, and reusing the native `openResource`
+    path. Recorded here as an accepted scope decision rather than a Git-tab-only change.
+
 ## Known limitation
+
+A truncated changed-file projection reports an empty list with `truncated: true` rather than a
+partial list, so an over-bound commit shows its files as unavailable instead of incompletely
+enumerated. Rendering the safe prefix of the NUL-delimited (`-z`) stream would be a future
+improvement.
 
 A multi-commit selection re-reads the union of the selected commits' first-parent deltas on every
 request (`diff-tree` per selected commit). Toggling N commits in sequence therefore still costs

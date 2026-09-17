@@ -593,10 +593,13 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
     });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
-    assert.deepEqual(await git.listWorkingTreeFiles(workspaceRoot), [
-      { path: 'space file.txt', status: 'modified', additions: 1, deletions: 0 },
-      { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
-    ]);
+    assert.deepEqual(await git.listWorkingTreeFiles(workspaceRoot), {
+      files: [
+        { path: 'space file.txt', status: 'modified', additions: 1, deletions: 0 },
+        { path: 'untracked.txt', status: 'added', additions: 1, deletions: 0 },
+      ],
+      truncated: false,
+    });
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
@@ -622,7 +625,7 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
       ],
     });
     const git = new LocalGitAdapter({ subprocess: listRuntime });
-    assert.deepEqual(await git.listWorkingTreeDiffFiles(workspaceRoot, baseCommit), [
+    assert.deepEqual((await git.listWorkingTreeDiffFiles(workspaceRoot, baseCommit)).files, [
       { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed', additions: 0, deletions: 0 },
       { path: 'deleted.txt', status: 'deleted', additions: 0, deletions: 1 },
       { path: 'tracked.txt', status: 'modified', additions: 1, deletions: 1 },
@@ -707,7 +710,7 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
     });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
-    assert.deepEqual(await git.listCommitFiles(workspaceRoot, commit), [
+    assert.deepEqual((await git.listCommitFiles(workspaceRoot, commit)).files, [
       { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed', additions: 0, deletions: 0 },
       { path: 'copy.txt', oldPath: 'source.txt', status: 'copied', additions: 0, deletions: 0 },
       { path: 'space file.txt', status: 'modified', additions: 1, deletions: 1 },
@@ -746,7 +749,7 @@ test('projects rename/copy statuses and uses root or first-parent file compariso
       ],
     });
     const rootGit = new LocalGitAdapter({ subprocess: rootRuntime });
-    assert.deepEqual(await rootGit.listCommitFiles(workspaceRoot, rootCommit), [
+    assert.deepEqual((await rootGit.listCommitFiles(workspaceRoot, rootCommit)).files, [
       { path: 'README.md', status: 'added', additions: 1, deletions: 0 },
     ]);
     assert.deepEqual(rootRuntime.spawnCalls[1].argv.slice(1), [
@@ -809,6 +812,29 @@ test('reads one file diff with the mandatory safe-diff flags and an argv path bo
       filePath,
     ]);
     assert.equal('shell' in runtime.spawnCalls[1], false);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('reports a truncated changed-file projection instead of a Git failure', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const commit = 'a'.repeat(40);
+  const parent = 'b'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stdout: `${commit} ${parent}\n` },
+        { stdout: 'M\0partial.txt\0', lossy: true },
+        { stdout: '1\t1\tpartial.txt\0' },
+      ],
+    });
+    const git = new LocalGitAdapter({ subprocess: runtime, maxOutputBytes: 1024 });
+
+    assert.deepEqual(await git.listCommitFiles(workspaceRoot, commit), {
+      files: [],
+      truncated: true,
+    });
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

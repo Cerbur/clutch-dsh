@@ -48,7 +48,10 @@ export async function reconcileCreateFailure(
   }
   const exact = await findExactWorktree(live, options.input.targetPath, options.input.targetBranch);
   if (exact && exact.detached !== true) {
-    const record = exact.headCommit === undefined
+    // A captured acquisition commit is never replaced. Only a record that could
+    // not capture one (adapter without resolveCommit) adopts the live HEAD from
+    // this same failure window.
+    const record = options.record.baseCommit !== undefined || exact.headCommit === undefined
       ? options.record
       : { ...options.record, baseCommit: exact.headCommit };
     await publishCreated(

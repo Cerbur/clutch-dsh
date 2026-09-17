@@ -72,6 +72,12 @@ interface ControllerInput {
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
+  /**
+   * True when the Worktree record carries a captured acquisition commit the
+   * Manager resolves as the implicit baseline. It lets the Git tab read the
+   * captured baseline instead of staying blank until a branch is picked.
+   */
+  readonly capturedBaseline?: boolean;
 }
 
 function asError(error: unknown): Error {
@@ -105,6 +111,13 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   // Main (Local) has no Worktree-relative Git projection, so it never issues a
   // Git read even when a panel mounts for it.
   const main = isMainWorktreeId(input.worktreeId);
+  // A Worktree with a captured acquisition commit is readable without naming a
+  // baseline branch: the Manager resolves that immutable commit as the implicit
+  // boundary. Main never reads Git, and a Worktree with neither a selectable
+  // branch nor a captured commit stays unselected until the user picks one.
+  const capturedBaseline = input.capturedBaseline === true;
+  const canRead = (baselineBranch: string | undefined): boolean =>
+    !main && (capturedBaseline || baselineBranch !== undefined);
   let state = emptyState(input.defaultBaselineBranch);
   let disposed = false;
   let branchesLoaded = false;
@@ -178,7 +191,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const isCurrentRequest = (
     request: number,
     latestRequest: number,
-    baselineBranch: string,
+    baselineBranch: string | undefined,
     target: GitTarget,
     selectedPath?: string,
   ): boolean => {
@@ -188,7 +201,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     return selectedPath === undefined || state.selectedPath === selectedPath;
   };
 
-  const requestFiles = (baseBranch: string, history: GitLoadable<WorktreeGitHistory>, target: GitTarget): Promise<WorktreeGitCommitFiles> => {
+  const requestFiles = (baseBranch: string | undefined, history: GitLoadable<WorktreeGitHistory>, target: GitTarget): Promise<WorktreeGitCommitFiles> => {
     const key = gitCacheKey(baseBranch, history, target);
     const existing = filesInFlight.get(key);
     if (existing !== undefined) return existing;
@@ -220,7 +233,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     return promise;
   };
 
-  const requestDiff = (baseBranch: string, history: GitLoadable<WorktreeGitHistory>, target: GitTarget, diffPath: string): Promise<WorktreeGitFileDiff> => {
+  const requestDiff = (baseBranch: string | undefined, history: GitLoadable<WorktreeGitHistory>, target: GitTarget, diffPath: string): Promise<WorktreeGitFileDiff> => {
     const key = diffCacheKey(baseBranch, history, target, diffPath);
     const existing = diffInFlight.get(key);
     if (existing !== undefined) return existing;
@@ -259,7 +272,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     diffPath: string,
   ): Promise<void> => {
     const baselineBranch = state.baselineBranch;
-    if (baselineBranch === undefined) return;
+    if (!canRead(baselineBranch)) return;
     const request = ++diffRequest;
     const key = diffCacheKey(baselineBranch, state.history, target, diffPath);
     const cached = isLiveTarget(target) ? undefined : diffCache.get(key);
@@ -295,7 +308,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
 
   const loadFiles = async (target: GitTarget, preserveReady = false): Promise<void> => {
     const baselineBranch = state.baselineBranch;
-    if (baselineBranch === undefined) return;
+    if (!canRead(baselineBranch)) return;
     const request = ++filesRequest;
     ++diffRequest;
     const key = gitCacheKey(baselineBranch, state.history, target);
@@ -365,11 +378,13 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       selectedPath: undefined,
       diff: { status: 'idle' },
     });
-    if (nextBranch !== undefined) void loadHistory();
+    // Clearing an explicit selection falls back to the captured baseline, so it
+    // must re-read rather than leave the previous branch projection on screen.
+    if (nextBranch !== undefined || capturedBaseline) void loadHistory();
   };
 
   const selectSummary = (): void => {
-    if (disposed || state.baselineBranch === undefined) return;
+    if (disposed || !canRead(state.baselineBranch)) return;
     const target: GitTarget = { kind: 'selection', selection: summarySelection(state.includeWorkingTree) };
     resetTarget({ view: 'summary', selectedCommit: undefined, selectedCommits: [] });
     void loadFiles(target);
@@ -377,7 +392,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
 
   const setIncludeWorkingTree = (includeWorkingTree: boolean): void => {
     if (disposed || state.includeWorkingTree === includeWorkingTree) return;
-    if (state.view !== 'summary' || state.baselineBranch === undefined) {
+    if (state.view !== 'summary' || !canRead(state.baselineBranch)) {
       update({ ...state, includeWorkingTree });
       return;
     }
@@ -391,7 +406,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       selectSummary();
       return;
     }
-    if (disposed || state.baselineBranch === undefined) return;
+    if (disposed || !canRead(state.baselineBranch)) return;
     const selectedCommit = state.selectedCommit;
     const selectedCommits = state.selectedCommits;
     if (state.view === 'commits' && state.files.status === 'ready') return;
@@ -404,7 +419,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const selectCommit = (commit: string): void => {
-    if (disposed || state.baselineBranch === undefined) return;
+    if (disposed || !canRead(state.baselineBranch)) return;
     const history = state.history.status === 'ready' ? state.history.value : undefined;
     if (history !== undefined && !history.commits.some((candidate) => candidate.sha === commit)) return;
     const target: GitTarget = { kind: 'commit', commit };
@@ -415,7 +430,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const toggleCommit = (commit: string): void => {
-    if (disposed || state.baselineBranch === undefined || commit === WORKTREE_GIT_WORKING_TREE) return;
+    if (disposed || !canRead(state.baselineBranch) || commit === WORKTREE_GIT_WORKING_TREE) return;
     const history = state.history.status === 'ready' ? state.history.value : undefined;
     if (history === undefined || !history.commits.some((candidate) => candidate.sha === commit && candidate.sha !== WORKTREE_GIT_WORKING_TREE)) return;
     const selected = state.selectedCommits.includes(commit)
@@ -463,7 +478,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const clearCommitSelection = (): void => {
-    if (disposed || state.baselineBranch === undefined) return;
+    if (disposed || !canRead(state.baselineBranch)) return;
     resetTarget({ view: 'commits', selectedCommit: undefined, selectedCommits: [] });
   };
 
@@ -524,7 +539,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const loadHistory = (refresh = false): Promise<void> => {
-    if (disposed || main || state.baselineBranch === undefined) return Promise.resolve();
+    if (disposed || !canRead(state.baselineBranch)) return Promise.resolve();
     if (historyInFlight !== undefined) return historyInFlight;
     if (!refresh && historyLoaded) return Promise.resolve();
     const baselineBranch = state.baselineBranch;
@@ -666,7 +681,13 @@ export type UseWorktreeGitStateInput = ControllerInput;
 export function useWorktreeGitState(input: UseWorktreeGitStateInput): WorktreeGitState & Omit<WorktreeGitStateController, 'getSnapshot' | 'subscribe'> {
   const controller = useMemo(
     () => createWorktreeGitStateController(input),
-    [input.manager, input.workspaceId, input.worktreeId, input.defaultBaselineBranch],
+    [
+      input.manager,
+      input.workspaceId,
+      input.worktreeId,
+      input.defaultBaselineBranch,
+      input.capturedBaseline,
+    ],
   );
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   useEffect(() => {

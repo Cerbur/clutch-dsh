@@ -22,6 +22,7 @@ export interface MainDashboardRecord {
   readonly createdAt?: never;
   readonly importedAt?: never;
   readonly baseBranch?: never;
+  readonly baseCommit?: never;
 }
 
 export type DashboardRecord = WorktreeRecord | MainDashboardRecord;

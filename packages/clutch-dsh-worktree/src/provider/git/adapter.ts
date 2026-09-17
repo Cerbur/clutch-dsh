@@ -9,6 +9,7 @@ import {
 import type { GitCommandResult } from './subprocess.js';
 import type {
   GitCommitHistoryRead,
+  GitChangedFileRead,
   GitCommandOptions,
   GitBranchWorktreeInfo,
   GitSubprocessRuntime,
@@ -737,34 +738,6 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Check ancestry without exposing a general-purpose commit/object endpoint. */
-  async isCommitAncestor(
-    workspaceRoot: string,
-    ancestor: string,
-    descendant: string,
-    options: GitCommandOptions = {},
-  ): Promise<boolean> {
-    try {
-      await this.run(
-        ['merge-base', '--is-ancestor', ancestor, descendant],
-        workspaceRoot,
-        options,
-      );
-      return true;
-    } catch (error) {
-      if (
-        error instanceof GitCommandError &&
-        error.exitCode === 1 &&
-        !error.timedOut &&
-        !error.aborted &&
-        !error.outputTruncated
-      ) {
-        return false;
-      }
-      throw operationError('check commit ancestry', workspaceRoot, undefined, descendant, error);
-    }
-  }
-
   /** Count commits that exist only on either branch head. */
   async getCommitDivergence(
     worktreeRoot: string,
@@ -1078,6 +1051,29 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     return stats.flat();
   }
 
+  /**
+   * Bound one changed-file projection. Output past the adapter's byte limit is
+   * reported as an explicit truncated read rather than an unbounded payload or a
+   * generic Git failure, and path authorization over a truncated read fails
+   * closed because the authorized set is empty.
+   */
+  private async boundedChangedFileRead(
+    operation: string,
+    worktreeRoot: string,
+    detail: string | undefined,
+    read: () => Promise<readonly WorktreeGitChangedFile[]>,
+  ): Promise<GitChangedFileRead> {
+    try {
+      return { files: await read(), truncated: false };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.outputTruncated) {
+        return { files: [], truncated: true };
+      }
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError(operation, worktreeRoot, undefined, detail, error);
+    }
+  }
+
   private async runDiffAllowingChanges(
     args: readonly string[],
     worktreeRoot: string,
@@ -1135,22 +1131,24 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   async listWorkingTreeChangedPaths(
     worktreeRoot: string,
     options: GitCommandOptions = {},
-  ): Promise<readonly WorktreeGitChangedFile[]> {
-    try {
-      const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
-      return [...tracked, ...untracked];
-    } catch (error) {
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('list working tree changed paths', worktreeRoot, undefined, 'HEAD', error);
-    }
+  ): Promise<GitChangedFileRead> {
+    return this.boundedChangedFileRead(
+      'list working tree changed paths',
+      worktreeRoot,
+      'HEAD',
+      async () => {
+        const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
+        return [...tracked, ...untracked];
+      },
+    );
   }
 
   /** Read tracked and untracked changes relative to the current HEAD. */
   async listWorkingTreeFiles(
     worktreeRoot: string,
     options: GitCommandOptions = {},
-  ): Promise<readonly WorktreeGitChangedFile[]> {
-    try {
+  ): Promise<GitChangedFileRead> {
+    return this.boundedChangedFileRead('list working tree files', worktreeRoot, 'HEAD', async () => {
       const { tracked, untracked } = await this.readChangedFiles(worktreeRoot, 'HEAD', options);
       const [trackedStats, untrackedStats] = await Promise.all([
         this.readNumstat(
@@ -1165,10 +1163,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         [...tracked, ...untracked],
         [...trackedStats, ...untrackedStats],
       );
-    } catch (error) {
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('list working tree files', worktreeRoot, undefined, 'HEAD', error);
-    }
+    });
   }
 
   /** Read one tracked or untracked working-tree file diff against HEAD. */
@@ -1254,28 +1249,30 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     baseCommit: string,
     targetCommit: string,
     options: GitCommandOptions = {},
-  ): Promise<readonly WorktreeGitChangedFile[]> {
+  ): Promise<GitChangedFileRead> {
     assertCommitArgument(baseCommit, 'list diff files', worktreeRoot);
     assertCommitArgument(targetCommit, 'list diff files', worktreeRoot);
-    try {
-      const [result, stats] = await Promise.all([
-        this.run(
-          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
-          worktreeRoot,
-          options,
-        ),
-        this.readNumstat(
-          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
-          worktreeRoot,
-          'list diff files',
-          options,
-        ),
-      ]);
-      return decorateChangedFiles(parseChangedFiles(result.stdout, worktreeRoot), stats);
-    } catch (error) {
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('list diff files', worktreeRoot, undefined, `${baseCommit}..${targetCommit}`, error);
-    }
+    return this.boundedChangedFileRead(
+      'list diff files',
+      worktreeRoot,
+      `${baseCommit}..${targetCommit}`,
+      async () => {
+        const [result, stats] = await Promise.all([
+          this.run(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
+            worktreeRoot,
+            options,
+          ),
+          this.readNumstat(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, targetCommit, '--'],
+            worktreeRoot,
+            'list diff files',
+            options,
+          ),
+        ]);
+        return decorateChangedFiles(parseChangedFiles(result.stdout, worktreeRoot), stats);
+      },
+    );
   }
 
   /** Read net tracked and untracked changes from an arbitrary committed base to the live tree. */
@@ -1283,46 +1280,48 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     worktreeRoot: string,
     baseCommit: string,
     options: GitCommandOptions = {},
-  ): Promise<readonly WorktreeGitChangedFile[]> {
+  ): Promise<GitChangedFileRead> {
     assertCommitArgument(baseCommit, 'list working-tree diff files', worktreeRoot);
-    try {
-      const { tracked: trackedFiles, untracked: untrackedFiles } = await this.readChangedFiles(
-        worktreeRoot,
-        baseCommit,
-        options,
-      );
-      const [trackedStats, untrackedStats] = await Promise.all([
-        this.readNumstat(
-          ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
+    return this.boundedChangedFileRead(
+      'list working-tree diff files',
+      worktreeRoot,
+      baseCommit,
+      async () => {
+        const { tracked: trackedFiles, untracked: untrackedFiles } = await this.readChangedFiles(
           worktreeRoot,
+          baseCommit,
+          options,
+        );
+        const [trackedStats, untrackedStats] = await Promise.all([
+          this.readNumstat(
+            ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
+            worktreeRoot,
+            'list working-tree diff files',
+            options,
+          ),
+          this.listUntrackedFileStats(worktreeRoot, untrackedFiles, 'list working-tree diff files', options),
+        ]);
+        const normalized = await this.normalizeWorkingTreeDiffFiles(
+          worktreeRoot,
+          baseCommit,
+          trackedFiles,
+          untrackedFiles,
+          options,
+        );
+        const restoredPaths = new Set(normalized.restoredPaths);
+        const restoredStats = await Promise.all(normalized.restoredPaths.map((filePath) =>
+          this.readRestoredWorkingTreeFileStats(worktreeRoot, baseCommit, filePath, options),
+        ));
+        const restoredAddedStats = await this.listUntrackedFileStats(
+          worktreeRoot,
+          normalized.addedPaths.map((filePath) => ({ path: filePath, status: 'added' as const })),
           'list working-tree diff files',
           options,
-        ),
-        this.listUntrackedFileStats(worktreeRoot, untrackedFiles, 'list working-tree diff files', options),
-      ]);
-      const normalized = await this.normalizeWorkingTreeDiffFiles(
-        worktreeRoot,
-        baseCommit,
-        trackedFiles,
-        untrackedFiles,
-        options,
-      );
-      const restoredPaths = new Set(normalized.restoredPaths);
-      const restoredStats = await Promise.all(normalized.restoredPaths.map((filePath) =>
-        this.readRestoredWorkingTreeFileStats(worktreeRoot, baseCommit, filePath, options),
-      ));
-      const restoredAddedStats = await this.listUntrackedFileStats(
-        worktreeRoot,
-        normalized.addedPaths.map((filePath) => ({ path: filePath, status: 'added' as const })),
-        'list working-tree diff files',
-        options,
-      );
-      const baseStats = omitRestoredStats([...trackedStats, ...untrackedStats], restoredPaths);
-      return decorateChangedFiles(normalized.files, [...baseStats, ...restoredStats.flat(), ...restoredAddedStats]);
-    } catch (error) {
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('list working-tree diff files', worktreeRoot, undefined, baseCommit, error);
-    }
+        );
+        const baseStats = omitRestoredStats([...trackedStats, ...untrackedStats], restoredPaths);
+        return decorateChangedFiles(normalized.files, [...baseStats, ...restoredStats.flat(), ...restoredAddedStats]);
+      },
+    );
   }
 
   /** Read first-parent (or root) changed-file metadata using NUL-safe output. */
@@ -1330,7 +1329,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     worktreeRoot: string,
     commit: string,
     options: GitCommandOptions = {},
-  ): Promise<readonly WorktreeGitChangedFile[]> {
+  ): Promise<GitChangedFileRead> {
     const parents = await this.resolveCommitParents(worktreeRoot, commit, options);
     const args = parents.length > 0
       ? ['--literal-pathspecs', 'diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '-C', parents[0]!, commit]
@@ -1338,16 +1337,13 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     const numstatArgs = parents.length > 0
       ? ['--literal-pathspecs', 'diff-tree', '--no-commit-id', '--numstat', '-z', '-r', '-M', '-C', parents[0]!, commit]
       : ['--literal-pathspecs', 'diff-tree', '--root', '--no-commit-id', '--numstat', '-z', '-r', '-M', '-C', commit];
-    try {
+    return this.boundedChangedFileRead('list commit files', worktreeRoot, commit, async () => {
       const [result, stats] = await Promise.all([
         this.run(args, worktreeRoot, options),
         this.readNumstat(numstatArgs, worktreeRoot, 'list commit files', options),
       ]);
       return decorateChangedFiles(parseChangedFiles(result.stdout, worktreeRoot), stats);
-    } catch (error) {
-      if (error instanceof WorktreeProviderError) throw error;
-      throw operationError('list commit files', worktreeRoot, undefined, commit, error);
-    }
+    });
   }
 
   /** Read one live working-tree file from an arbitrary committed base. */

@@ -12,7 +12,8 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; the Dashboard facts mutation uses
   `updateWorktreeBaseBranch` on the same adapter, and no second transport is added. Overview reuses the
   existing history, committed-summary, and working-tree-file reads for one compact status projection when a
-  valid persisted baseline exists; it does not add a Git-specific endpoint or branch-list read.
+  valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
+  not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -144,12 +145,14 @@ branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success 
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. For a managed Worktree
-with a valid persisted `baseBranch`, Overview performs one compact status read for ahead/behind, committed
-baseline-to-HEAD line counts, and live working-tree line counts without loading the branch list; Main, unavailable,
-and baseline-unselected views
-remain disconnected. The Git tab's first mount loads local branches and uses the persisted `baseBranch` shown
-in Dashboard facts as the initial selection when it is present and different from the current Worktree branch;
-otherwise it prompts for a baseline. The Overview facts editor is a fixed-size dialog that keeps
+with a valid persisted `baseBranch`, or with a captured acquisition commit it reads as the implicit baseline,
+Overview performs one compact status read for ahead/behind, committed baseline-to-HEAD line counts, and live
+working-tree line counts without loading the branch list; Main, genuinely unavailable, and
+baseline-unselected views remain disconnected. The Git tab's first mount loads local branches and uses the
+persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and different
+from the current Worktree branch; when no usable saved baseline exists but the record has a captured
+acquisition commit, it reads against that immutable commit and shows the resolved commit as the Base fact,
+and only otherwise does it prompt for a baseline. The Overview facts editor is a fixed-size dialog that keeps
 its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
 rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
 replacement through the existing Worktree
@@ -161,7 +164,8 @@ Selecting or changing a local branch inside the Git tab reloads committed histor
 off-by-default **Multi-select commits** switch: while it is off a commit click replaces the selection, and while it
 is on clicks toggle rows into the aggregate target. Changed-file names use
 green, red, and blue to distinguish additions, deletions, and other changes, with the localized status kept in the
-row title and accessible label; folder icons show expansion state. Opening a file is a diff-toolbar action only.
+row title and accessible label; folder icons show expansion state. An over-bound changed-file projection
+renders its explicit truncated notice instead of a generic error. Opening a file is a diff-toolbar action only.
 The pane layout is responsive: wide Dashboards stack the commit and
 changed-file panes in the narrower left column beside a full-height diff, while narrow Dashboards keep two rows of
 commits/changed files followed by the diff. Both layouts share one 3x3 grid and keep two draggable dividers, one per
@@ -183,8 +187,10 @@ cannot be combined with committed rows. The Git state machine keeps bounded base
 per-file caches, retains ready content during refresh, and uses request generations to ignore late results
 after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
 Host projection because the files can change between reads. Main
-remains explicitly unavailable, while an unselected branch baseline prompts or renders an honest unavailable
-state without hiding the Dashboard’s Workspace information. The Git tab never reads
+remains explicitly unavailable. A selected local branch that no longer exists renders an honest unavailable
+state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or remote-tracking
+ref is rejected outright because only a plain local branch name can be selected; a Worktree with neither a
+usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
 Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
@@ -292,7 +298,8 @@ preserved. Main does not expose instruction editing. The Dashboard Base fact for
 can be replaced with a saved local branch other than the current Worktree branch through
 `updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
 owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
-remains untouched. Missing creation/import facts remain unknown. The open-editor control uses the
+remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
+never user-selectable directly. Missing creation/import facts remain unknown. The open-editor control uses the
 native split-button typography, padding, border, and hover colors, launching detected host
 applications or falling back to the encoded VS Code protocol link.
 

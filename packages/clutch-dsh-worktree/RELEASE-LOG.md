@@ -18,11 +18,19 @@
 - Sidecar schema 升级至 v5，严格保留可选 `baseCommit`，同时兼容读取 v1–v4 历史记录。
 - Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
 - 将 Overview 中的基线编辑改为铅笔图标入口和固定尺寸的 DSH 弹窗：搜索框常驻顶部，下方是有固定高度、可滚动的 branch 列表（默认展示约七条），过滤 branch 只替换列表内容而不改变弹窗尺寸。
-- 收窄 Git 读取成本：working-tree 的存在性与路径授权改用仅路径 projection，未跟踪文件的行数统计限定为前 50 个（其余显示“未知”），多选 commit 的归属校验改为基于一次固定的 history projection，二进制基线不再写入文本临时文件比较。
+- 收窄 Git 读取成本：working-tree 的存在性与路径授权改用仅路径 projection，未跟踪文件的行数统计限定为前 50 个（其余显示“未知”），多选 commit 的归属校验改为基于一次固定的 history projection，二进制基线不再经过文本临时文件比较（文本基线仍使用临时文件执行 `--no-index` 比较）。
 - changed-file 行改用文件名的颜色区分增删改，并在行标题与无障碍标签中给出本地化状态；超过 2000 行的 Diff 会先折叠并可手动展开；Main 的“Git 与变更”视图不再发起任何 Git 读取。
 - 在提交栏标题增加默认关闭的**多选提交**开关：关闭时点击 commit 直接查看该 commit 自己的 Diff，打开后才启用多选提交；关闭开关时会把多选收敛回当前聚焦的 commit。
 - 移除变更文件中每行的“在侧栏打开”入口，打开文件统一由汇总 Diff 工具栏的**在侧栏打开**提供；该按钮改用方形右上箭头图标，修正原先 icon 被压缩、与文字基线不对齐的问题。
 - 可拖动分割线补齐两侧边线：上下分割线同时绘制上边和下边，左右分割线同时绘制左边和右边，两侧面板的边界更清晰。
+
+#### 修复
+
+- 修复创建恢复可能用 Worktree 实时 HEAD 覆盖不可变获取 commit `baseCommit` 的问题：创建后校验与崩溃恢复只在适配器无法捕获时补齐该值，被中断创建后已继续提交的 Worktree 不再把自己记录为基线。
+- 修复未保存基线（或基线等于当前 branch）时 Git 与变更 Tab 无法读取的问题：Git Tab 与 Overview 现在以不可变 `baseCommit` 作为隐式基线读取，并在 Base fact 展示解析出的 commit；仅当记录既无可用基线也无捕获值时才保持未选择并提示选择分支。
+- 已保存的基线 branch 被删除后，history 与 Overview 返回 `baseline-unknown` 的显式不可用状态，而不是通用 Git 失败；完整 ref 路径（如 `refs/heads/...`）、tag、远端引用与 revision 表达式仍被直接拒绝。
+- 超过 Provider 输出上限的 changed-file 列表改为返回显式截断 projection 并在浏览器给出本地化提示，不再表现为通用 Git 错误。
+- 移除没有调用方的 `isCommitAncestor` 与 `isExactCreatedWorktree`，并修正本分支新增测试文件中的 lint 错误，使 `pnpm run lint` 通过。
 
 ### English
 
@@ -40,11 +48,19 @@
 - Upgrade the sidecar schema to v5 with strict optional `baseCommit` support while continuing to read v1–v4 historical records.
 - Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
 - Replace the Overview baseline editor with a pencil-icon trigger and a fixed-size DSH dialog whose search field stays above a fixed-height, scrollable branch list (about seven rows by default); filtering local branches swaps the rows without resizing the dialog.
-- Tighten Git read cost: working-tree presence and path authorization use a paths-only projection, untracked line statistics are bounded to the first 50 files (the rest report Unknown), multi-commit membership is authorized against one pinned history projection, and binary baselines are no longer compared through a text temporary file.
+- Tighten Git read cost: working-tree presence and path authorization use a paths-only projection, untracked line statistics are bounded to the first 50 files (the rest report Unknown), multi-commit membership is authorized against one pinned history projection, and binary baselines are no longer compared through a text temporary file (text baselines still use one for the `--no-index` comparison).
 - Mark changed-file rows with the filename color while keeping a localized status in the row title and accessible label; fold diffs past 2000 rendered lines behind a reveal action; and issue no Git read at all for the Main Git & Changes view.
 - Add an off-by-default **Multi-select commits** switch to the commits header: clicking a commit shows that commit's own diff, the switch enables additive multi-selection, and turning it off collapses the selection back to the focused commit.
 - Remove the per-row open-in-sidebar action from changed files so the summary diff toolbar's **Open in Sidebar** is the only file reveal action, and swap its icon for the square right-up arrow so it keeps its aspect ratio and centers with the label.
 - Draw both edges of each draggable divider: the row divider now draws its top and bottom lines and the column divider draws its left and right lines, so the panes on either side each get their own edge.
+
+#### Fixed
+
+- Stop creation recovery from overwriting the immutable acquisition commit `baseCommit` with the live Worktree HEAD: post-create inspection and crash recovery now only fill that value when the adapter could not capture it, so a Worktree that kept committing after an interrupted create is no longer recorded as its own baseline.
+- Let the Git & Changes tab read a Worktree whose saved baseline is absent or equal to the current branch: the Git tab and the Overview now read against the immutable `baseCommit` as the implicit baseline and show the resolved commit in the Base fact; only a record with neither a usable baseline nor a captured value stays unselected and prompts for a branch.
+- Report an explicit `baseline-unknown` unavailable state for history and Overview when a saved baseline branch no longer exists, instead of a generic Git failure; full ref paths such as `refs/heads/...`, tags, remote-tracking refs, and revision expressions are still rejected outright.
+- Return an explicit truncated changed-file projection with a localized browser notice when a list exceeds the Provider output bound, instead of a generic Git error.
+- Remove the unused `isCommitAncestor` and `isExactCreatedWorktree` surfaces, and fix lint errors in the branch's new test files so `pnpm run lint` passes.
 
 ## 0.1.12 — 2026-09-14
 

@@ -546,6 +546,7 @@ export function WorktreeDashboard({
     worktreeId: record.worktreeId,
     defaultBaselineBranch: displayedBaseline,
     currentBranch: baselineCurrentBranch,
+    capturedBaseline: record.baseCommit !== undefined,
   });
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
@@ -950,6 +951,7 @@ export function WorktreeDashboard({
               worktreeId={record.worktreeId}
               defaultBaselineBranch={displayedBaseline}
               currentBranch={baselineCurrentBranch}
+              capturedBaseline={record.baseCommit !== undefined}
               onOpenFile={(filePath) => {
                 onOpenFile?.(filePath);
                 setRightSidebarOpen(true);

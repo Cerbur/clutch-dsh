@@ -73,16 +73,27 @@ export function isLiveCacheKey(key: string): boolean {
   return LIVE_KEY_MARKERS.some((marker) => key.includes(marker));
 }
 
+/**
+ * Key token for a read that names no baseline branch and therefore asks the
+ * Manager to resolve the Worktree's captured acquisition commit. The leading NUL
+ * cannot appear in a local branch name, so the token can never collide with one.
+ */
+const CAPTURED_BASELINE_KEY = '\u0000captured';
+
+function baselineKey(baseBranch: string | undefined): string {
+  return baseBranch ?? CAPTURED_BASELINE_KEY;
+}
+
 export function gitCacheKey(
-  baseBranch: string,
+  baseBranch: string | undefined,
   history: GitLoadable<WorktreeGitHistory>,
   target: GitTarget,
 ): string {
-  return baseBranch + '\u0000' + historyProjectionKey(history) + '\u0000' + targetKey(target);
+  return baselineKey(baseBranch) + '\u0000' + historyProjectionKey(history) + '\u0000' + targetKey(target);
 }
 
 export function diffCacheKey(
-  baseBranch: string,
+  baseBranch: string | undefined,
   history: GitLoadable<WorktreeGitHistory>,
   target: GitTarget,
   filePath: string,

@@ -164,6 +164,8 @@ export interface WorktreeGitCommitFiles {
   /** Present when this response came from an aggregate diff request. */
   readonly selection?: WorktreeGitDiffSelection;
   readonly files: readonly WorktreeGitChangedFile[];
+  /** Git output exceeded the adapter bound, so this list is explicitly incomplete. */
+  readonly truncated?: boolean;
 }
 
 export interface WorktreeGitDiffSegment {

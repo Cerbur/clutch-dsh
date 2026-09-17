@@ -82,7 +82,7 @@ Refresh scope is determined by the smallest affected identity.
 - ❌ 严禁通过 shell 执行任何 Git 命令；
 - ❌ 严禁从 feature worktree 执行 `npm publish`（发布必须在 release worktree 进行）；
 - ❌ 严禁在未经确信或未经用户二次确认时执行破坏性清理；
-- ❌ 严禁把运行时 Git projection（ahead/behind、行数、working-tree 快照）写入 Sidecar，或让 Git Dashboard 成为第二数据源（唯一例外是用户显式保存的 Dashboard `baseBranch`）；
+- ❌ 严禁把运行时 Git projection（ahead/behind、行数、working-tree 快照）写入 Sidecar，或让 Git Dashboard 成为第二数据源；Sidecar 只允许 §1 列出的持久事实，其中 Git 相关项仅为用户显式保存的 Dashboard `baseBranch` 与不可变获取事实 `baseCommit`；
 - ❌ 严禁破坏双语 README 的结构同步性（中英文 README 标题级别序列必须完全一致）。
 
 ---

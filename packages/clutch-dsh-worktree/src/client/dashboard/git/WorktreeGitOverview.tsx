@@ -16,6 +16,8 @@ export interface WorktreeGitOverviewInput {
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
   readonly currentBranch?: string;
+  /** The record captured an acquisition commit the Manager can use implicitly. */
+  readonly capturedBaseline?: boolean;
 }
 
 export type WorktreeGitOverviewState =
@@ -38,13 +40,12 @@ export function useWorktreeGitOverview(
   input: WorktreeGitOverviewInput,
 ): WorktreeGitOverviewState {
   const baselineBranch = normalizeBaselineBranch(input.defaultBaselineBranch, input.currentBranch);
+  // A captured acquisition commit keeps the Overview readable without a selected
+  // branch; Main and genuinely baseline-less records still make no Git request.
+  const readable = input.capturedBaseline === true || baselineBranch !== undefined;
   const [state, setState] = useState<WorktreeGitOverviewState>({ status: 'unavailable' });
   useEffect(() => {
-    if (
-      input.manager === undefined ||
-      isMainWorktreeId(input.worktreeId) ||
-      baselineBranch === undefined
-    ) {
+    if (input.manager === undefined || isMainWorktreeId(input.worktreeId) || !readable) {
       setState({ status: 'unavailable' });
       return;
     }
@@ -86,7 +87,7 @@ export function useWorktreeGitOverview(
     return () => {
       active = false;
     };
-  }, [baselineBranch, input.manager, input.workspaceId, input.worktreeId]);
+  }, [baselineBranch, readable, input.manager, input.workspaceId, input.worktreeId]);
   return state;
 }
 

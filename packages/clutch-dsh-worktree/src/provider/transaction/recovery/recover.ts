@@ -83,8 +83,11 @@ export async function recoverWorktreeTransaction(
               branch: pending.branch,
               createdAt: pending.startedAt,
               baseBranch: pending.baseRef ?? pending.branch,
-              ...(exact.headCommit ?? pending.baseCommit
-                ? { baseCommit: exact.headCommit ?? pending.baseCommit }
+              // The journaled acquisition commit is immutable and always wins.
+              // Recovery may run long after the interrupted create, so the live
+              // Worktree HEAD can already have advanced past the acquisition point.
+              ...(pending.baseCommit ?? exact.headCommit
+                ? { baseCommit: pending.baseCommit ?? exact.headCommit }
                 : {}),
               source: 'plugin',
               status: 'active',

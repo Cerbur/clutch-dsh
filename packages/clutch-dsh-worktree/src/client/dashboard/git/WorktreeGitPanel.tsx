@@ -32,6 +32,8 @@ export interface WorktreeGitPanelProps {
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
   readonly currentBranch?: string;
+  /** The record captured an acquisition commit the Manager can use implicitly. */
+  readonly capturedBaseline?: boolean;
   readonly onOpenFile?: (path: string) => void;
   readonly t: WorktreeTranslate;
 }
@@ -105,6 +107,7 @@ export function WorktreeGitPanel({
   worktreeId,
   defaultBaselineBranch,
   currentBranch,
+  capturedBaseline,
   onOpenFile,
   t,
 }: WorktreeGitPanelProps) {
@@ -115,6 +118,7 @@ export function WorktreeGitPanel({
     workspaceId,
     worktreeId,
     defaultBaselineBranch: isMain ? undefined : selectedDefaultBaseline,
+    capturedBaseline: isMain ? false : capturedBaseline,
   });
   const gridRef = useRef<HTMLDivElement | null>(null);
   // Both dividers share the grid: one splits rows, one splits columns, in either layout.
@@ -183,13 +187,19 @@ export function WorktreeGitPanel({
               </select>
             </label>
           )}
-          {baselineRef !== undefined && (
+          {baselineCommit !== undefined && (
             <dl className={styles.gitBaselineFacts}>
               <div>
                 <dt>{t('dashboard.git.base')}</dt>
                 <dd>
-                  {baselineRef}
-                  {baselineCommit !== undefined && <code>@ {shortCommit(baselineCommit)}</code>}
+                  {baselineRef !== undefined ? (
+                    <>
+                      {baselineRef}
+                      <code>@ {shortCommit(baselineCommit)}</code>
+                    </>
+                  ) : (
+                    <code>{shortCommit(baselineCommit)}</code>
+                  )}
                   {historyValue?.baseline?.source === 'derived' && (
                     <span className={styles.gitDerived}>{t('dashboard.git.derived')}</span>
                   )}
@@ -229,7 +239,7 @@ export function WorktreeGitPanel({
           type="button"
           className={styles.gitRefresh}
           data-dashboard-git-refresh
-          disabled={isMain || state.baselineBranch === undefined || refreshing || state.history.status === 'loading'}
+          disabled={isMain || refreshing || state.history.status === 'loading'}
           aria-busy={refreshing || state.history.status === 'loading'}
           onClick={() => void state.refresh()}
         >
@@ -245,7 +255,7 @@ export function WorktreeGitPanel({
       )}
 
       {isMain && <UnavailableNotice reason="main" t={t} />}
-      {!isMain && state.baselineBranch === undefined && (
+      {!isMain && unavailable === 'baseline-unselected' && (
         <div className={styles.gitBaselinePrompt} data-dashboard-git-baseline-prompt>
           <strong>{t('dashboard.git.selectBaselineTitle')}</strong>
           <p>{t('dashboard.git.selectBaselineDescription')}</p>
@@ -391,7 +401,12 @@ export function WorktreeGitPanel({
                 {state.files.status === 'ready' && state.files.error !== undefined && (
                   <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
                 )}
-                {files.length === 0 ? (
+                {state.files.status === 'ready' && state.files.value.truncated === true && (
+                  <div className={styles.gitEmpty} role="status" data-dashboard-git-files-truncated>
+                    {t('dashboard.git.truncatedFiles')}
+                  </div>
+                )}
+                {files.length === 0 && !(state.files.status === 'ready' && state.files.value.truncated === true) ? (
                   <div className={styles.gitEmpty}>
                     {state.view === 'summary'
                       ? state.includeWorkingTree

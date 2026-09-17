@@ -13,7 +13,7 @@ import {
   type WorktreeGitHistory,
   type WorktreeRecord,
 } from '../contract/index.js';
-import type { GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
+import type { GitChangedFileRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
@@ -198,6 +198,9 @@ async function resolveWorktree(
 /** True when a branch name can be safely handed to Git as a ref argument. */
 function isSafeBranchName(branch: string): boolean {
   if (branch.length === 0 || branch.startsWith('-')) return false;
+  // Only a local branch short name may be selected. A full ref path is an
+  // arbitrary-ref attempt and is rejected instead of degrading to unavailable.
+  if (branch.startsWith('refs/')) return false;
   for (const character of branch) {
     const code = character.codePointAt(0) ?? 0;
     if (code < 0x20 || code === 0x7f) return false;
@@ -214,18 +217,27 @@ async function resolveLocalBranchCommit(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   baseBranch: string,
-): Promise<string> {
+  options: { readonly allowUnavailable?: boolean } = {},
+): Promise<string | undefined> {
   const unavailable = (): never => {
     throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
       worktreeId: resolved.record.worktreeId,
       baseBranch,
     });
   };
+  // An unsafe ref is always a hard failure: arbitrary refs must never resolve,
+  // even for a read that is allowed to degrade to an unavailable projection.
   if (!isSafeBranchName(baseBranch)) unavailable();
   const listBranches = gitRead(context, 'listBranches', resolved.record.worktreeId);
   const resolveCommit = gitRead(context, 'resolveCommit', resolved.record.worktreeId);
   const branches = await listBranches(resolved.repositoryRoot, { signal: context.signal });
-  if (!branches.includes(baseBranch)) unavailable();
+  // A baseline branch that no longer exists is an expected unavailable state for
+  // reads, so the Dashboard can show an honest empty projection instead of a
+  // generic Git failure. Writes keep the strict behaviour.
+  if (!branches.includes(baseBranch)) {
+    if (options.allowUnavailable === true) return undefined;
+    unavailable();
+  }
   const commit = await resolveCommit(resolved.record.absolutePath, baseBranch, {
     signal: context.signal,
   });
@@ -245,7 +257,11 @@ async function resolveSelectedBaseline(
 ): Promise<ResolvedBaseline | undefined> {
   const baseBranch = rawBranch.trim();
   if (baseBranch.length === 0) return undefined;
-  const commit = await resolveLocalBranchCommit(context, resolved, baseBranch);
+  // A vanished baseline branch degrades to an unavailable projection for reads.
+  const commit = await resolveLocalBranchCommit(context, resolved, baseBranch, {
+    allowUnavailable: true,
+  });
+  if (commit === undefined) return undefined;
 
   // A selected branch can move after the Worktree was created. Match GitHub's
   // pull-request range by diffing from the two heads' merge base to Worktree
@@ -568,7 +584,7 @@ export async function listWorktreeCommits(
       { signal: context.signal },
     ),
     readWorkingTreePaths === undefined
-      ? Promise.resolve([] as readonly WorktreeGitChangedFile[])
+      ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
       : readWorkingTreePaths(
           resolved.value.record.absolutePath,
           { signal: context.signal },
@@ -578,7 +594,7 @@ export async function listWorktreeCommits(
   return {
     ...history,
     ...(divergence ?? {}),
-    commits: workingTreeFiles.length > 0
+    commits: workingTreeFiles.files.length > 0
       ? [workingTreeCommit(history.headCommit), ...history.commits]
       : history.commits,
     baseline: baseline.baseline,
@@ -668,6 +684,7 @@ async function authorizeAggregate(
 type CommitFileGroup = {
   readonly commit: string;
   readonly files: readonly WorktreeGitChangedFile[];
+  readonly truncated: boolean;
 };
 
 async function selectedCommitFiles(
@@ -676,14 +693,14 @@ async function selectedCommitFiles(
   commits: readonly string[],
 ): Promise<readonly CommitFileGroup[]> {
   const listCommitFiles = gitRead(context, 'listCommitFiles', resolved.record.worktreeId);
-  return Promise.all(commits.map(async (commit) => ({
-    commit,
-    files: await listCommitFiles(
+  return Promise.all(commits.map(async (commit) => {
+    const read = await listCommitFiles(
       resolved.record.absolutePath,
       commit,
       { signal: context.signal },
-    ),
-  })));
+    );
+    return { commit, files: read.files, truncated: read.truncated };
+  }));
 }
 
 function mergeLineCount(left: number | undefined, right: number | undefined): number | undefined {
@@ -747,7 +764,7 @@ async function listSummaryFiles(
   selection: SummarySelection,
   baseCommit: string,
   headCommit: string,
-): Promise<readonly WorktreeGitChangedFile[]> {
+): Promise<GitChangedFileRead> {
   if (selection.includeWorkingTree === true) {
     const listWorkingTreeDiffFiles = gitRead(context, 'listWorkingTreeDiffFiles', resolved.record.worktreeId);
     await authorizeLiveSummaryHead(context, resolved);
@@ -802,7 +819,7 @@ async function listAggregateFiles(
 ): Promise<WorktreeGitCommitFiles> {
   const authorized = await authorizeAggregate(context, resolved, selection, requestedBaseBranch);
   if (authorized.selection.kind === 'summary') {
-    const files = await listSummaryFiles(
+    const read = await listSummaryFiles(
       context,
       resolved,
       authorized.selection,
@@ -812,7 +829,8 @@ async function listAggregateFiles(
     return {
       commit: WORKTREE_GIT_SUMMARY,
       selection: authorized.selection,
-      files,
+      files: read.files,
+      ...(read.truncated ? { truncated: true } : {}),
     };
   }
   const groups = await selectedCommitFiles(context, resolved, authorized.commits!);
@@ -820,6 +838,7 @@ async function listAggregateFiles(
     commit: authorized.commits![0]!,
     selection: authorized.selection,
     files: mergeSelectedFiles(groups),
+    ...(groups.some((group) => group.truncated) ? { truncated: true } : {}),
   };
 }
 
@@ -837,14 +856,14 @@ async function aggregateFileDiff(
   }
   const authorized = await authorizeAggregate(context, resolved, selection, requestedBaseBranch);
   if (authorized.selection.kind === 'summary') {
-    const files = await listSummaryFiles(
+    const summaryRead = await listSummaryFiles(
       context,
       resolved,
       authorized.selection,
       authorized.treeBaseCommit,
       authorized.headCommit,
     );
-    const changedFile = findChangedFile(files, requestedPath);
+    const changedFile = findChangedFile(summaryRead.files, requestedPath);
     if (changedFile === undefined) {
       throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the summary', {
         worktreeId: resolved.record.worktreeId,
@@ -921,23 +940,27 @@ export async function listWorktreeCommitFiles(
   if (commit === WORKTREE_GIT_WORKING_TREE) {
     await authorizeWorkingTree(context, resolved.value, input.baseBranch);
     const listWorkingTreeFiles = gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
+    const read = await listWorkingTreeFiles(
+      resolved.value.record.absolutePath,
+      { signal: context.signal },
+    );
     return {
       commit: WORKTREE_GIT_WORKING_TREE,
-      files: await listWorkingTreeFiles(
-        resolved.value.record.absolutePath,
-        { signal: context.signal },
-      ),
+      files: read.files,
+      ...(read.truncated ? { truncated: true } : {}),
     };
   }
   const authorized = await authorizeCommit(context, resolved.value, commit, input.baseBranch);
   const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
+  const read = await listCommitFiles(
+    resolved.value.record.absolutePath,
+    authorized.commit,
+    { signal: context.signal },
+  );
   return {
     commit: authorized.commit,
-    files: await listCommitFiles(
-      resolved.value.record.absolutePath,
-      authorized.commit,
-      { signal: context.signal },
-    ),
+    files: read.files,
+    ...(read.truncated ? { truncated: true } : {}),
   };
 }
 
@@ -969,11 +992,11 @@ export async function getWorktreeCommitFileDiff(
     // untracked file on each file click.
     const readChangedPaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
       ?? gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
-    const files = await readChangedPaths(
+    const readPaths = await readChangedPaths(
       resolved.value.record.absolutePath,
       { signal: context.signal },
     );
-    const changedFile = findChangedFile(files, input.path);
+    const changedFile = findChangedFile(readPaths.files, input.path);
     if (changedFile === undefined) {
       throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the working tree', {
         worktreeId: input.worktreeId,
@@ -997,12 +1020,12 @@ export async function getWorktreeCommitFileDiff(
   const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
   // The changed-file projection is the authorization boundary for the path, so
   // the diff is only read for an exact member of that projection.
-  const files = await listCommitFiles(
+  const filesRead = await listCommitFiles(
     resolved.value.record.absolutePath,
     authorized.commit,
     { signal: context.signal },
   );
-  const changedFile = findChangedFile(files, input.path);
+  const changedFile = findChangedFile(filesRead.files, input.path);
   if (changedFile === undefined) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by this commit', {
       worktreeId: input.worktreeId,

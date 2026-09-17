@@ -20,10 +20,6 @@ function jsxAttribute(node, ast, name) {
   );
 }
 
-function hasJsxAttribute(node, ast, name) {
-  return jsxAttribute(node, ast, name) !== undefined;
-}
-
 function jsxAttributeText(node, ast, name) {
   const attribute = jsxAttribute(node, ast, name);
   return attribute?.initializer === undefined ? undefined : attribute.initializer.getText(ast);
@@ -124,7 +120,6 @@ test('Git panes stay bounded and scroll their data independently', async () => {
 
 test('wide Git layout stacks commits over changed files beside the diff', async () => {
   const css = await readFile(cssUrl, 'utf8');
-  const panel = await readFile(gitPanelUrl, 'utf8');
   const columns = cssBlock(css, '.gitColumns {');
   const splitter = cssBlock(css, '.gitColumnSplitter {');
   const wide = css.slice(css.indexOf('@container (min-width: 901px)'), css.indexOf('@container (max-width: 900px)'));

@@ -166,6 +166,16 @@ export interface GitCommitHistoryRead {
 }
 
 /**
+ * Provider-only changed-file projection. Git output past the adapter bound cannot
+ * be enumerated in full, so the read reports the explicit truncated state instead
+ * of letting an unbounded payload or a generic failure reach the browser.
+ */
+export interface GitChangedFileRead {
+  readonly files: readonly WorktreeGitChangedFile[];
+  readonly truncated: boolean;
+}
+
+/**
  * Git Provider 消费的最小 subprocess capability；具体 local implementation 由 DSH Host
  * composition 持有。
  *
@@ -210,13 +220,6 @@ export interface GitWorktreeAdapter {
     right: string,
     options?: GitCommandOptions,
   ): Promise<string | undefined>;
-  /** Check ancestry for Manage-side commit membership validation. */
-  isCommitAncestor?(
-    workspaceRoot: string,
-    ancestor: string,
-    descendant: string,
-    options?: GitCommandOptions,
-  ): Promise<boolean>;
   /** Count commits unique to the selected base branch tip and Worktree HEAD. */
   getCommitDivergence?(
     worktreeRoot: string,
@@ -234,7 +237,7 @@ export interface GitWorktreeAdapter {
   listWorkingTreeFiles?(
     worktreeRoot: string,
     options?: GitCommandOptions,
-  ): Promise<readonly WorktreeGitChangedFile[]>;
+  ): Promise<GitChangedFileRead>;
   /**
    * Read only the live working-tree changed paths. Path authorization does not
    * need line statistics, so this avoids the per-untracked-file statistics probe.
@@ -242,7 +245,7 @@ export interface GitWorktreeAdapter {
   listWorkingTreeChangedPaths?(
     worktreeRoot: string,
     options?: GitCommandOptions,
-  ): Promise<readonly WorktreeGitChangedFile[]>;
+  ): Promise<GitChangedFileRead>;
   /** Read one live working-tree file diff against HEAD or the empty tree. */
   readWorkingTreeFileDiff?(
     worktreeRoot: string,
@@ -254,7 +257,7 @@ export interface GitWorktreeAdapter {
     worktreeRoot: string,
     commit: string,
     options?: GitCommandOptions,
-  ): Promise<readonly WorktreeGitChangedFile[]>;
+  ): Promise<GitChangedFileRead>;
   /** Read one file patch after Manage has authorized both commit and path. */
   readCommitFileDiff?(
     worktreeRoot: string,
@@ -268,13 +271,13 @@ export interface GitWorktreeAdapter {
     baseCommit: string,
     targetCommit: string,
     options?: GitCommandOptions,
-  ): Promise<readonly WorktreeGitChangedFile[]>;
+  ): Promise<GitChangedFileRead>;
   /** Read tracked and untracked changes in the live tree relative to an arbitrary committed base. */
   listWorkingTreeDiffFiles?(
     worktreeRoot: string,
     baseCommit: string,
     options?: GitCommandOptions,
-  ): Promise<readonly WorktreeGitChangedFile[]>;
+  ): Promise<GitChangedFileRead>;
   /** Read one file from a baseline-wide tree-to-tree diff. */
   readDiffFileDiff?(
     worktreeRoot: string,

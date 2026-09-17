@@ -135,21 +135,24 @@ launch success.
 ### Use Git & Changes
 
 Open the **Git & Changes** tab from a managed Worktree Dashboard. For a managed Worktree with a
-persisted `baseBranch` that differs from the current branch, the Overview performs one compact, on-demand
-Git status read through the existing `/api` Connection. It shows ahead/behind commit counts plus separate
+persisted `baseBranch` that differs from the current branch, or with a captured acquisition commit that
+supplies the implicit baseline, the Overview performs one compact, on-demand Git status read through the
+existing `/api` Connection. It shows ahead/behind commit counts plus separate
 committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
 projection, not a watcher or a Worktree-record field. Main,
 unavailable, or baseline-unselected views honestly remain **Not connected**. Opening Overview does not
-load the branch list; the first Git tab activation loads local branches and, when a baseline is selected,
+load the branch list; the first Git tab activation loads local branches and, once a baseline is resolved,
 commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
 picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
 scrolls internally, so the dialog keeps one size while you filter. Choose any local branch except the
 current Worktree branch and save.
 The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default for
 the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
-history, changed files, and diffs without another Worktree-record write. If no valid baseline is saved
-(including a value equal to the current Worktree branch), the Git tab leaves it unselected and prompts you
-to choose one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
+history, changed files, and diffs without another Worktree-record write. If no usable saved baseline exists
+(absent or equal to the current Worktree branch), the Git tab and the Overview read against the Worktree's
+immutable captured acquisition commit and show that resolved commit as the Base fact; only a Worktree with
+neither a usable saved baseline nor a captured commit stays baseline-unselected and prompts you to choose
+one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
 Git & Changes view reports Worktree commits after that ancestor as `+N` ahead and base-branch commits after it
 as `-N` behind; history and file reads remain available. If the two heads have no common ancestor, the
 committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
@@ -158,9 +161,12 @@ With a valid baseline loaded, the Git & Changes tab initially selects **Baseline
 first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
 changes** when you need a narrower target.
 
-The selected local branch is resolved again for each read. The browser can choose only a local branch, not
-a raw commit SHA or arbitrary Git ref. `baseCommit` remains acquisition metadata for compatibility and
-recovery, but it is not the user-selectable baseline. When the Worktree has staged, unstaged, or untracked
+The selected local branch is resolved again for each read. The browser can choose only a plain local branch
+name, not a raw commit SHA or arbitrary Git ref: a full ref path, tag, or remote-tracking ref is rejected
+outright, while a selected branch that no longer exists shows the honest unavailable state instead of a
+generic Git failure. `baseCommit` is immutable acquisition metadata, is never user-selectable directly, and
+is the implicit baseline whenever no saved branch baseline is usable; creation recovery never overwrites
+it. When the Worktree has staged, unstaged, or untracked
 files, the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
 `HEAD` and uses the same changed-file and diff views.
 
@@ -182,7 +188,9 @@ reveals the current file in the native right sidebar using the current Session, 
 belongs to the Dashboard Worktree. An empty Worktree
 or an unrelated current Session cannot open a file through this action.
 
-The history is capped at 200 commits and marks longer histories as truncated. Commit details use
+The history is capped at 200 commits and marks longer histories as truncated. A changed-file list larger
+than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
+Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
 both paths; binary or oversized diffs show an explicit display-safe state. Changed-file rows show text
 line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. File names use

@@ -128,26 +128,31 @@ Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 
 ### 使用 Git 与变更
 
 从受管理 Worktree 的 Dashboard 打开 **Git 与变更** Tab。对于持久化 `baseBranch` 存在且不同于当前
-branch 的 managed Worktree，Overview 会通过现有 `/api` Connection 做一次轻量、按需的 Git 状态读取，
-分别展示 ahead/behind commit 数量、已提交（基线到 HEAD）和未提交（当前工作区）的文件行数。这是临时
-projection，不是 watcher，也不会写入 Worktree 记录。Main、不可用或未选择基线时会诚实显示 **待接入**。
+branch，或带有作为隐式基线的获取 commit 的 managed Worktree，Overview 会通过现有 `/api` Connection
+做一次轻量、按需的 Git 状态读取，分别展示 ahead/behind commit 数量、已提交（基线到 HEAD）和未提交
+（当前工作区）的文件行数。这是临时 projection，不是 watcher，也不会写入 Worktree 记录。Main、不可用
+或未选择基线时会诚实显示 **待接入**。
 打开 Overview 不会加载 branch 列表；
-第一次进入 Git Tab 时才加载本地 branch，并在选择基线后加载 commit history。要替换基线，可以点击
+第一次进入 Git Tab 时才加载本地 branch，并在基线解析后加载 commit history。要替换基线，可以点击
 Base fact 旁的铅笔图标打开 branch 选择器：搜索框固定在选择器顶部，下方是有固定高度的 branch 列表
 （默认展示约七条），超出部分在列表内滚动，因此过滤 branch 时整个弹窗尺寸保持不变。选择除当前
 Worktree branch 之外的任一本地 branch，再保存。
 保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器会以保存后的值作为默认值。
 Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载 history、changed files 和 Diff，
-不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前 Worktree branch），Git Tab 会保持
-未选择状态并提示用户选择。当所选 branch 已分叉时，Git 会解析两个 branch head 的共同先祖；
+不会再次写入 Worktree 记录。如果不存在可用的已保存基线（缺失或等于当前 Worktree branch），Git Tab
+和 Overview 会改用 Worktree 不可变的获取 commit 读取，并将该解析出的 commit 显示为 Base fact；只有
+既无可用已保存基线、也无获取 commit 的 Worktree 才会保持未选择状态并提示用户选择。当所选 branch
+已分叉时，Git 会解析两个 branch head 的共同先祖；
 Worktree 在共同先祖之后的 commit 计为 `+N` 领先，base branch 在共同先祖之后的 commit 计为 `-N` 落后，
 history 和文件读取仍然可用。如果两个 head 没有共同先祖，则基线汇总退化为 base branch head 与
 Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base head 独有的 commit。
 在有效基线加载后，Git 与变更 Tab 初始会选择**基线汇总**，而不是第一个 commit；切换基线 branch
 也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。
 
-所选 branch 每次读取都会重新解析。浏览器不能直接选择 commit SHA 或任意 Git ref；`baseCommit`
-仍作为兼容和恢复用的 acquisition 元数据保留，但不再作为用户可选择的基线。当 Worktree 存在 staged、
+所选 branch 每次读取都会重新解析。浏览器只能选择普通的本地 branch 名，不能直接选择 commit SHA 或
+任意 Git ref：完整 ref 路径、tag 或 remote-tracking ref 会被直接拒绝，而已选 branch 不复存在时会显示
+诚实的不可用状态，而不是泛化的 Git 失败。`baseCommit` 是不可变的获取元数据，永远不能由用户直接选择，
+并在没有可用已保存 branch 基线时作为隐式基线；创建恢复也绝不会改写它。当 Worktree 存在 staged、
 unstaged 或 untracked 文件时，列表顶部会加入**未提交的改动**；选择它会将当前工作区与 `HEAD` 比较，
 并使用相同的变更文件和 Diff 视图。
 
@@ -164,7 +169,8 @@ commit。变更文件栏标题会展示当前目标（基线汇总、所选 comm
 **在侧栏打开**会使用当前 Session 在原生右侧栏中显示当前文件，但前提是该 Session 属于 Dashboard
 对应的 Worktree。空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
 
-历史最多展示 200 个 commit，更多内容会标记为 truncated。commit 详情使用 first-parent 比较，root
+历史最多展示 200 个 commit，更多内容会标记为 truncated；超过 Git adapter 输出上限的变更文件列表
+也会显式标记为 truncated，而不是报泛化错误。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更
 文件行会用绿色 `+N` 表示新增、红色 `-N` 表示删除；binary 文件不显示这些数量。文件名会用绿色表示新增、红色表示删除、蓝色表示其他变更，每一行的标题与无障碍标签也会写出对应状态。文件夹 icon 会直接表示文件夹当前是展开还是折叠。
 **未提交的改动**是按需读取的临时快照，不会持久化，也不会持续监视 Git；刷新后才能看到后续编辑。

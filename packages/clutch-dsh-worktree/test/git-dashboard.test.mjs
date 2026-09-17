@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { execFile as execFileCallback } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setImmediate } from 'node:timers';
 import { promisify } from 'node:util';
 import test from 'node:test';
 
@@ -162,6 +164,17 @@ test('captures an immutable baseline and serves commit history, files, and a fil
       }),
       { code: 'WORKTREE_STATE_CONFLICT' },
     );
+
+    // A selected baseline branch that no longer exists is an honest unavailable
+    // projection, not a generic Git failure.
+    const vanishedBaseline = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: record.worktreeId,
+      baseBranch: 'deleted-baseline',
+    });
+    assert.equal(vanishedBaseline.unavailableReason, 'baseline-unknown');
+    assert.deepEqual(vanishedBaseline.commits, []);
+    assert.equal(vanishedBaseline.truncated, false);
     const selectedFiles = await fixture.manager.listWorktreeCommitFiles({
       workspaceId: 'ws_dashboard',
       worktreeId: record.worktreeId,
@@ -623,10 +636,11 @@ test('keeps Main and ambiguous legacy Worktrees unavailable while deriving only 
       result: undefined,
       snapshot: {
         ...snapshot,
-        worktrees: snapshot.worktrees.map(({ baseCommit: _baseCommit, ...item }) => ({
-          ...item,
-          baseBranch: 'main',
-        })),
+        worktrees: snapshot.worktrees.map((item) => {
+          const { baseCommit, ...rest } = item;
+          void baseCommit;
+          return { ...rest, baseBranch: 'main' };
+        }),
       },
     }));
     const derived = await fixture.manager.listWorktreeCommits({
@@ -1015,6 +1029,59 @@ test('defaults to the Baseline summary and stays unselected without a creation b
   controller.selectBaselineBranch(undefined);
   assert.equal(controller.getSnapshot().baselineBranch, undefined);
   assert.equal(controller.getSnapshot().history.status, 'idle');
+  controller.dispose();
+});
+
+test('reads the captured acquisition baseline without an explicit branch', async () => {
+  const requests = [];
+  const fileRequests = [];
+  const manager = {
+    listBranches: () => Promise.resolve([]),
+    listWorktreeCommits(input) {
+      requests.push(input.baseBranch);
+      return Promise.resolve({
+        headCommit: 'a'.repeat(40),
+        baseline: { commit: 'b'.repeat(40), source: 'captured' },
+        commits: [],
+        truncated: false,
+      });
+    },
+    listWorktreeCommitFiles(input) {
+      fileRequests.push(input);
+      return Promise.resolve({ commit: 'summary', selection: { kind: 'summary' }, files: [] });
+    },
+    getWorktreeCommitFileDiff() {
+      return Promise.resolve({ commit: 'summary', path: 'file.txt', patch: '', binary: false });
+    },
+  };
+
+  // Without a captured baseline the tab stays inert until a branch is selected.
+  const inert = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+  });
+  await inert.loadHistory();
+  assert.deepEqual(requests, []);
+  assert.equal(inert.getSnapshot().history.status, 'idle');
+  inert.dispose();
+
+  // With one, the Manager resolves it and the summary target loads.
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_dashboard',
+    worktreeId: 'wt_dashboard',
+    capturedBaseline: true,
+  });
+  await controller.loadHistory();
+  await flush();
+  assert.deepEqual(requests, [undefined]);
+  assert.equal(controller.getSnapshot().baselineBranch, undefined);
+  assert.equal(controller.getSnapshot().history.status, 'ready');
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.equal(fileRequests.length, 1);
+  assert.equal(fileRequests[0].baseBranch, undefined);
+  assert.deepEqual(fileRequests[0].selection, { kind: 'summary' });
   controller.dispose();
 });
 
