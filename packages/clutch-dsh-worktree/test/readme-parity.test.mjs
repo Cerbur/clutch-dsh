@@ -24,9 +24,9 @@ test('keeps English and Chinese plugin READMEs structurally aligned', async () =
   assert.match(readmeZh, /assets\/screenshots\/screenshots-en\.png/);
   assert.match(readme, /assets\/screenshots\/screenshots-import\.png/);
   assert.match(readmeZh, /assets\/screenshots\/screenshots-import\.png/);
-  assert.match(readme, /assets\/screenshots\/screenshots-dashboard\.webp/);
-  assert.match(readmeZh, /assets\/screenshots\/screenshots-dashboard\.webp/);
-  assert.ok(screenshots.includes('assets/screenshots/screenshots-dashboard.webp'));
+  assert.match(readme, /assets\/screenshots\/screenshots-dashboard\.png/);
+  assert.match(readmeZh, /assets\/screenshots\/screenshots-dashboard\.png/);
+  assert.ok(screenshots.includes('assets/screenshots/screenshots-dashboard.png'));
 
   const englishInstallation = readme.indexOf('## Installation');
   const englishFeatures = readme.indexOf('## Features');

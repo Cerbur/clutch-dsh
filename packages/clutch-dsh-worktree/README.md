@@ -65,7 +65,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | --- | --- | --- |
 | **Worktree navigation** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the Sidebar. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog"> | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory. |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.webp" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, instructions, connected actions, and the read-only Git & Changes view for eligible managed Worktrees. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, instructions, connected actions, and the read-only Git & Changes view for eligible managed Worktrees. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
 
 ## Usage
 

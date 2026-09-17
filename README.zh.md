@@ -46,12 +46,12 @@ pnpm dsh web
 
 ## 插件
 
-| Plugin                                                                       | 预览                                                                                                                             | 功能                                                                                                          |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.zh.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.webp" width="240" alt="Worktree Dashboard 预览"> | 增加按 Workspace、Worktree 和 Session 组织 DSH 会话的 Git Worktree 视图。Dashboard 目前是仅 plugin 的预览版。 |
-| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.zh.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="DSH Web UI 中的礼花覆盖层">      | 增加 `happy_fireworks` 工具，在重要里程碑完成时显示短暂的庆祝覆盖层。                                         |
-| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.zh.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming 流程">          | 增加 `/discuss [topic]`，作为 bundled brainstorming workflow 和 review 后 design doc 的入口。                 |
-| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.zh.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="DSH Session 标题列表">           | 增加可配置的 Session title template 和新 DSH Session 的设置管理器。                                           |
+| Plugin                                                                       | 预览                                                                                                                            | 功能                                                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.zh.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="240" alt="Worktree Dashboard 预览"> | 增加按 Workspace、Worktree 和 Session 组织 DSH 会话的 Git Worktree 视图。Dashboard 目前是仅 plugin 的预览版。 |
+| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.zh.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="DSH Web UI 中的礼花覆盖层">     | 增加 `happy_fireworks` 工具，在重要里程碑完成时显示短暂的庆祝覆盖层。                                         |
+| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.zh.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming 流程">         | 增加 `/discuss [topic]`，作为 bundled brainstorming workflow 和 review 后 design doc 的入口。                 |
+| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.zh.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="DSH Session 标题列表">          | 增加可配置的 Session title template 和新 DSH Session 的设置管理器。                                           |
 
 ## 开发
 

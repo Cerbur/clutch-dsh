@@ -64,7 +64,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | --- | --- | --- |
 | **Worktree 导航** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 Sidebar 增加 Worktree 模式。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗"> | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。 |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.webp" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、指令、已连接操作，以及符合条件的受管理 Worktree 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、指令、已连接操作，以及符合条件的受管理 Worktree 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
 
 ## 使用
 
