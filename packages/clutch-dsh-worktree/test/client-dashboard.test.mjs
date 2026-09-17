@@ -15,6 +15,10 @@ import {
 } from '../lib/client/dashboard/dashboard-overlay.js';
 import { en, zh } from '../lib/client/locales.js';
 import { dashboardSessionIds } from '../lib/client/dashboard/dashboard-sessions.js';
+import {
+  prepareDashboardNavigation,
+  settlePendingDashboardNavigation,
+} from '../lib/client/dashboard/dashboard-navigation.js';
 import { vscodeFolderUrl } from '../lib/client/dashboard/vscode-url.js';
 import { selectWorktreeAcquisitionFacts } from '../lib/client/dashboard/worktree-acquisition-facts.js';
 import {
@@ -90,6 +94,68 @@ test('dashboard follows the selected Worktree, ready refreshes, and native navig
     ),
     record,
   );
+  assert.equal(
+    resolveDashboardRecord(
+      { ...selection, sessionId: undefined },
+      'worktree',
+      'other-session',
+      ['repo'],
+      [record],
+    ),
+    record,
+  );
+});
+
+test('dashboard navigation follows the Worktree head Session without creating an empty one', () => {
+  assert.deepEqual(
+    prepareDashboardNavigation(record, ['worktree-head', 'worktree-tail'], 'session-a'),
+    {
+      selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+      sessionIdToOpen: 'worktree-head',
+    },
+  );
+  assert.deepEqual(
+    prepareDashboardNavigation(record, ['worktree-head', 'session-a'], 'session-a'),
+    {
+      selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'session-a' },
+      sessionIdToOpen: undefined,
+    },
+  );
+  assert.deepEqual(prepareDashboardNavigation(record, ['worktree-head'], 'session-a', 'pending'), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+    waitForSessionList: true,
+  });
+  const pending = {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+    originSessionId: 'session-a',
+  };
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'session-a'), { kind: 'wait' });
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'worktree-head'), {
+    kind: 'open',
+    selection: pending.selection,
+  });
+  assert.deepEqual(settlePendingDashboardNavigation(pending, 'unrelated-session'), {
+    kind: 'clear',
+  });
+  const pendingWithoutOrigin = {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'worktree-head' },
+    originSessionId: undefined,
+  };
+  assert.deepEqual(settlePendingDashboardNavigation(pendingWithoutOrigin, undefined), {
+    kind: 'wait',
+  });
+  assert.deepEqual(settlePendingDashboardNavigation(pendingWithoutOrigin, 'unrelated-session'), {
+    kind: 'clear',
+  });
+  assert.deepEqual(prepareDashboardNavigation(record, [], 'session-a'), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+  });
+  assert.deepEqual(prepareDashboardNavigation(record, [], undefined), {
+    selection: { workspaceId: 'repo', worktreeId: 'wt', sessionId: undefined },
+    sessionIdToOpen: undefined,
+  });
 });
 
 // Match the existing source-handler regressions: execute production JSX handlers
@@ -101,6 +167,10 @@ const source = await readFile(
 const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
+const dashboardCssSource = await readFile(
+  new URL('../src/client/dashboard/dashboard.css', import.meta.url),
+  'utf8',
+);
 
 function renderHarness(writeClipboard) {
   const state = [];
@@ -141,7 +211,24 @@ function renderHarness(writeClipboard) {
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
         '@deepseek-ai/dsh-client-ui-primitives': {
+          Button: ({ children, ...props }) => jsx('button', { ...props, children }),
+          IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+          IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+          IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
+          IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
+          IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+          IconPanelLeftOutline16: () => jsx('svg', { 'data-icon': 'sidebar' }),
+          Input: ({ children, ...props }) => jsx('input', { ...props, children }),
+          Modal: ({ open, children, footer, ...props }) =>
+            open
+              ? jsx('div', {
+                  ...props,
+                  role: 'dialog',
+                  children: [children, footer],
+                })
+              : null,
           StateDot: ({ state }) => jsx('span', { 'data-state-dot': state }),
+          Tooltip: ({ children }) => children,
           writeClipboard,
         },
         './dashboard-overlay.js': {},
@@ -156,6 +243,14 @@ function renderHarness(writeClipboard) {
           }),
         },
         './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
+        './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
+        './git/WorktreeGitOverview.js': {
+          useWorktreeGitOverview: () => ({ status: 'unavailable' }),
+          WorktreeGitOverviewValue: ({ metric }) => jsx('span', {
+            'data-dashboard-overview-metric': metric,
+            children: metric === 'aheadBehind' ? '+3 / -1' : metric === 'committed' ? '+20 / -6' : '+12 / -4',
+          }),
+        },
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
@@ -206,6 +301,21 @@ const historicalHints = (node, t) =>
     node,
     (item) => item.type === 'span' && item.props.children === t['dashboard.historicalUnavailable'],
   );
+
+test('Dashboard renders separate ahead-behind, committed, and uncommitted metric rows', () => {
+  const harness = renderHarness(async () => true);
+  const node = harness.render({ record: { ...record, baseBranch: 'main' } });
+  const metrics = findAll(node, (item) => item.props?.['data-dashboard-overview-metric']);
+  assert.deepEqual(
+    metrics.map((item) => [item.props['data-dashboard-overview-metric'], item.props.children]),
+    [
+      ['aheadBehind', '+3 / -1'],
+      ['committed', '+20 / -6'],
+      ['workingTree', '+12 / -4'],
+    ],
+  );
+  harness.dispose();
+});
 
 test('dashboard renders real identity and explicit placeholders in both languages', () => {
   const harness = renderHarness(async () => true);
@@ -280,6 +390,202 @@ test('dashboard renders source-aware acquisition facts and flags absent facts as
   // Missing creation time, plus the header and status base facts.
   assert.equal(historicalHints(node, en).length, 3);
   harness.dispose();
+});
+
+test('Dashboard facts preserve words before emergency wrapping', () => {
+  const factStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardFacts dt {'),
+    dashboardCssSource.indexOf('.dashboardFactAction {'),
+  );
+
+  assert.match(factStyles, /\.dashboardFacts dt \{[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
+  assert.match(factStyles, /\.dashboardFacts dd \{[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
+  assert.doesNotMatch(factStyles, /overflow-wrap: anywhere;/);
+});
+
+test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it to Git tab defaults', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  const branches = [
+    { name: 'main', isCurrent: true, checkedOut: true },
+    { name: 'develop', isCurrent: false, checkedOut: false },
+    { name: record.branch, isCurrent: false, checkedOut: true },
+  ];
+  let node = harness.render({
+    branches,
+    onSaveBaseline: async (baseBranch, expectedBaseBranch) => {
+      calls.push({ baseBranch, expectedBaseBranch });
+      return baseBranch;
+    },
+    record: { ...record, baseBranch: 'main' },
+  });
+  const editButton = findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0];
+  assert.equal(editButton.props.disabled, false);
+  assert.equal(editButton.props['aria-label'], en['dashboard.editBase']);
+  assert.equal(findAll(node, (item) => item.type === 'select').length, 0);
+  editButton.props.onClick();
+  node = harness.render();
+
+  const dialog = byRole(node, 'dialog')[0];
+  assert.equal(dialog.props.title, en['dashboard.editBase']);
+  assert.equal(dialog.props.description, en['dashboard.editBaseDescription']);
+  assert.equal(dialog.props.closeLabel, en['dialog.closeBaseline']);
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
+  const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  assert.ok(search);
+  assert.equal(search.props.autoFocus, undefined);
+  assert.equal(search.props.role, 'combobox');
+  assert.equal(search.props['aria-expanded'], true);
+  assert.equal(search.props['aria-controls'], 'dashboard-options');
+  assert.equal(search.props['aria-activedescendant'], 'dashboard-option-0');
+  const baselineRow = findAll(
+    node,
+    (item) =>
+      item.type === 'div' &&
+      Array.isArray(item.props?.children) &&
+      item.props.children.some((child) => child?.props?.['data-dashboard-baseline'] !== undefined),
+  )[0];
+  assert.equal(baselineRow.props.children[0].type, 'dt');
+  assert.equal(baselineRow.props.children[1].type, 'dd');
+  assert.equal(baselineRow.props.children[2].type, 'span');
+  // The branch list is part of the permanent frame: it exists without any
+  // focus or click, and only its rows react to the query.
+  const optionsSurface = findAll(
+    node,
+    (item) => item.props?.['data-dashboard-baseline-options'] !== undefined,
+  )[0];
+  assert.ok(optionsSurface);
+  const listbox = byRole(optionsSurface, 'listbox')[0];
+  assert.equal(byRole(listbox, 'option').length, 2);
+  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.deepEqual(
+    options.map((option) => option.props['data-dashboard-baseline-option']),
+    ['main', 'develop'],
+  );
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['aria-selected'], false);
+  assert.equal(findAll(options[0], (item) => item.props?.['data-icon'] === 'check').length, 1);
+
+  search.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], false);
+  assert.equal(options[1].props['aria-selected'], true);
+  const wrappedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  wrappedSearch.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['aria-selected'], false);
+
+  search.props.onChange({ currentTarget: { value: 'dev' } });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  assert.deepEqual(
+    options.map((option) => option.props['data-dashboard-baseline-option']),
+    ['develop'],
+  );
+  search.props.onChange({ currentTarget: { value: 'missing' } });
+  node = harness.render();
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-empty'])[0].props.children,
+    en['dashboard.noMatchingBranches'],
+  );
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined).length,
+    0,
+  );
+  // An empty result swaps in the status message without removing the frame.
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-options']).length,
+    1,
+  );
+  assert.equal(byRole(node, 'listbox').length, 0);
+  search.props.onChange({ currentTarget: { value: 'dev' } });
+  node = harness.render();
+  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(calls, [{ baseBranch: 'develop', expectedBaseBranch: 'main' }]);
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-value'])[0]?.props.children,
+    'develop',
+  );
+
+  const gitTab = byRole(node, 'tab').find((item) => item.props.children.includes(en['dashboard.tab.git']));
+  gitTab.props.onClick();
+  node = harness.render();
+  const gitPanel = findAll(node, (item) => item.props?.defaultBaselineBranch !== undefined)[0];
+  assert.equal(gitPanel.props.defaultBaselineBranch, 'develop');
+  assert.equal(gitPanel.props.currentBranch, record.currentBranch);
+  harness.dispose();
+});
+
+test('baseline picker keeps a long branch roster in one scrollable list', () => {
+  const harness = renderHarness(async (branch) => branch);
+  const branches = Array.from({ length: 24 }, (_, index) => ({
+    name: 'branch-' + String(index).padStart(2, '0'),
+    isCurrent: false,
+    checkedOut: false,
+  }));
+  let node = harness.render({
+    branches,
+    record: { ...record, baseBranch: 'branch-00' },
+    onSaveBaseline: async (branch) => branch,
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  const listbox = byRole(node, 'listbox')[0];
+  const options = byRole(listbox, 'option');
+  assert.equal(options.length, 24);
+  assert.equal(options[0].props['data-dashboard-baseline-option'], 'branch-00');
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options.at(-1).props['data-dashboard-baseline-option'], 'branch-23');
+  harness.dispose();
+});
+
+test('baseline picker renders one fixed, elevated, scrollable branch list', () => {
+  const modalStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardBaselineModal {'),
+    dashboardCssSource.indexOf('.dashboardBaselineSearch {'),
+  );
+  assert.match(modalStyles, /width: min\(440px, calc\(100vw - 48px\)\);/);
+  assert.match(modalStyles, /max-height: calc\(100dvh - 48px\);/);
+  assert.match(modalStyles, /min-height: 0;\n\s+overflow-y: auto;/);
+
+  const pickerStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardBaselinePicker {'),
+    dashboardCssSource.indexOf('.dashboardBaselineOption {'),
+  );
+  // A fixed (not max-) height viewport: filtering swaps rows and never resizes
+  // the list, so the modal frame stays put.
+  assert.match(
+    pickerStyles,
+    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?height: clamp\(258px, 48dvh, 300px\);[\s\S]*?overflow-y: auto;/,
+  );
+  assert.doesNotMatch(pickerStyles, /max-height:/);
+  assert.match(pickerStyles, /background: var\(--dsw-specific-menu/);
+  assert.match(pickerStyles, /border-radius: 20px;/);
+  // The Input primitive's wrapper is content-box, so the search field opts into
+  // border-box to stay flush with the branch list below it.
+  assert.match(
+    pickerStyles,
+    /\.dashboardBaselineSearch \{[\s\S]*?box-sizing: border-box;[\s\S]*?width: 100%;/,
+  );
+  assert.match(pickerStyles, /\.dashboardBaselineList \{[\s\S]*?flex-direction: column;/);
+  // The error floats over the list instead of growing the frame.
+  assert.match(
+    dashboardCssSource,
+    /\.dashboardBaselineError \{[\s\S]*?position: absolute;/,
+  );
+  assert.match(
+    dashboardCssSource,
+    /\.dashboardBaselineOption \{[\s\S]*?min-height: 40px;[\s\S]*?border-radius: 10px;/,
+  );
+  assert.match(source, /scrollIntoView\(\{ block: 'nearest' \}\)/);
 });
 
 test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {
@@ -563,27 +869,111 @@ test('tabs switch panels, keyboard selection wraps, and Escape closes the dashbo
   }
 });
 
-test('Surface connects dashboard actions to existing Session and dialog domains with eligibility gates', async () => {
+test('empty Dashboard offers new Session and the native rightbar button', () => {
+  const harness = renderHarness(async () => true);
+  let created = 0;
+  let opened = 0;
+  const node = harness.render({
+    sessionIds: [],
+    onCreateSession: () => { created += 1; },
+    onOpenSidebar: () => { opened += 1; },
+  });
+  const createButton = findAll(
+    node,
+    (item) => item.props?.['aria-label'] === en['dashboard.newSession'],
+  )[0];
+  assert.ok(createButton);
+  assert.equal(createButton.props.children, en['dashboard.newSession']);
+  createButton.props.onClick();
+  assert.equal(created, 1);
+
+  const sidebarButton = findAll(
+    node,
+    (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+  )[0];
+  assert.ok(sidebarButton);
+  assert.equal(sidebarButton.props['data-sidebar-right-expand'], true);
+  assert.equal(findAll(sidebarButton, (item) => item.props?.['data-icon'] === 'sidebar').length, 1);
+  sidebarButton.props.onClick();
+  assert.equal(opened, 1);
+
+  // After clicking openSidebar, the button is hidden
+  const nodeAfterOpen = harness.render({
+    sessionIds: [],
+    onCreateSession: () => { created += 1; },
+    onOpenSidebar: () => { opened += 1; },
+  });
+  assert.equal(
+    findAll(
+      nodeAfterOpen,
+      (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+    ).length,
+    0,
+  );
+
+  // When rendered with isRightSidebarExpanded returning true, the button is hidden initially
+  const harnessAlreadyOpen = renderHarness(async () => true);
+  const nodeAlreadyOpen = harnessAlreadyOpen.render({
+    sessionIds: [],
+    onOpenSidebar: () => {},
+    isRightSidebarExpanded: () => true,
+  });
+  assert.equal(
+    findAll(
+      nodeAlreadyOpen,
+      (item) => item.props?.['aria-label'] === en['dashboard.openSidebar'],
+    ).length,
+    0,
+  );
+  harnessAlreadyOpen.dispose();
+  assert.match(dashboardCssSource, /\.dashboardSidebarButton[\s\S]*?width: 28px;[\s\S]*?height: 28px;/);
+  assert.match(dashboardCssSource, /\.dashboardSidebarButton svg[\s\S]*?transform: scaleX\(-1\);/);
+
+  const populated = harness.render({ sessionIds: ['session-1'], onClose: () => {} });
+  const backButton = findAll(
+    populated,
+    (item) => item.props?.['aria-label'] === en['dashboard.back'],
+  )[0];
+  assert.ok(backButton);
+  harness.dispose();
+});
+
+test('Surface connects dashboard actions and preserves external Dashboard navigation', async () => {
   const surfaceSource = await readFile(
     new URL('../src/client/WorktreeSurface.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(surfaceSource, /if \(source\.mode !== 'worktree'\) setDashboard\(undefined\)/);
+  assert.match(surfaceSource, /if \(source\.mode !== 'worktree'\) closeDashboard\(\)/);
   assert.match(surfaceSource, /inputProps\.dashboardStore\?\.set\(undefined\)/);
+  assert.doesNotMatch(surfaceSource, /worktreeSessions\[0\] \?\? source\.currentSessionId/);
+  assert.match(surfaceSource, /source\.sessions\.phase \?\? 'ready'/);
+  assert.match(surfaceSource, /pendingDashboardRecord\.current = record/);
+  assert.match(
+    surfaceSource,
+    /if \(navigation\.waitForSessionList === true\) \{\s+pendingDashboard\.current = undefined;/,
+  );
+  assert.match(surfaceSource, /if \(source\.sessions\.phase === 'pending'\) return/);
+  assert.match(surfaceSource, /originSessionId: source\.currentSessionId/);
+  assert.match(surfaceSource, /settlePendingDashboardNavigation/);
   const compiled = ts.transpileModule(surfaceSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const { createNumberedWorktreeName } = await import('../lib/client/view/worktree-view.js');
+  const { buildSessionFileAddress } = await import('../lib/client/dashboard/git/file-address.js');
   const calls = [];
+  const refs = [];
+  let refCursor = 0;
   let selected = selection;
   let target = record;
+  let additionalTargets = [];
+  let bindings = [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }];
   const workspace = { workspaceId: 'repo', title: 'Repo' };
   const sourceState = {
     mode: 'worktree',
     currentSessionId: 'current',
     workspaceIds: ['repo'],
     workspaces: { items: [workspace] },
-    sessions: { ids: ['current'], current: 'current', byId: {} },
+    sessions: { ids: ['current'], current: 'current', byId: {}, phase: 'ready' },
     sessionPresentations: { current: { status: { state: 'done', labelKey: 'idle', runningSubagentCount: 0 } } },
     archivedSessionIds: [],
     bounds: { ready: false },
@@ -603,8 +993,14 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
             selected = next;
           },
         ],
+        useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
         useCallback: (fn) => fn,
-        useEffect() {},
+        useEffect: (effect) => effect(),
+        useRef: (initial) => {
+          const index = refCursor++;
+          refs[index] ??= { current: initial };
+          return refs[index];
+        },
       };
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name.endsWith('dashboard-selection.js'))
@@ -615,9 +1011,13 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
         isManagedDashboardRecord: (record) => !isMainWorktreeId(record.worktreeId),
       };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
+    if (name.endsWith('file-address.js')) return { buildSessionFileAddress };
+    if (name.endsWith('dashboard-navigation.js'))
+      return { prepareDashboardNavigation, settlePendingDashboardNavigation };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
     if (name.endsWith('view-mode.js')) return { workspaceSessionIds: (workspaces, workspaceId, ids) => ids ?? [] };
     if (name.endsWith('WorktreeDashboard.js')) return { WorktreeDashboard: 'Dashboard' };
+    if (name.endsWith('SurfaceContent.js')) return { SurfaceContent: 'SurfaceContent' };
     if (name.endsWith('.css')) return { default: {} };
     const hook = name.match(/\/(use\w+)\.js$/)?.[1];
     if (hook)
@@ -631,9 +1031,9 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
                 [
                   'repo',
                   {
-                    worktrees: [target],
+                    worktrees: [target, ...additionalTargets],
                     branches: [{ name: record.branch }],
-                    bindings: [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }],
+                    bindings,
                   },
                 ],
               ]),
@@ -657,18 +1057,30 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
       };
     return {};
   }, exports);
-  const render = () => {
-    selected = selection;
-    return findAll(
-      exports.WorktreeSurface({
-        t: (key) => en[key],
-        manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
-        createSessionForWorktree() {},
-        openSession: (id) => calls.push(['nativeOpen', id]),
-      }),
-      (item) => item.type === 'Dashboard',
-    )[0].props;
+  const dashboardStore = {
+    snapshot: undefined,
+    getSnapshot: () => dashboardStore.snapshot,
+    subscribe: () => () => {},
+    set: (next) => {
+      dashboardStore.snapshot = next;
+    },
   };
+  const surfaceInput = {
+    t: (key) => en[key],
+    manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
+    createSessionForWorktree() {},
+    openSession: (id) => calls.push(['nativeOpen', id]),
+    closeRightSidebar: () => calls.push(['closeRightSidebar']),
+    openResource: (...args) => calls.push(['resource', ...args]),
+    dashboardStore: undefined,
+  };
+  const renderTree = (resetSelected = true) => {
+    if (resetSelected) selected = selection;
+    refCursor = 0;
+    return exports.WorktreeSurface(surfaceInput);
+  };
+  const render = () =>
+    findAll(renderTree(), (item) => item.type === 'Dashboard')[0].props;
   let props = render();
   assert.equal(await props.onSaveInstructions('Use tests', ''), 'Use tests');
   assert.deepEqual(calls.splice(0), [
@@ -678,6 +1090,15 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   assert.equal(selected, selection);
   assert.deepEqual(props.sessionIds, ['current']);
   assert.equal(props.sessionPresentations, sourceState.sessionPresentations);
+  // A non-head current Session owns both the Dashboard and native file preview.
+  bindings.unshift({ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'head' });
+  sourceState.sessions.ids = ['head', 'current'];
+  render().onOpenFile('src/index.ts', { line: 7 });
+  assert.deepEqual(calls.splice(0), [
+    ['resource', 'dsh-resource://file/session/current/src/index.ts', { line: 7 }],
+  ]);
+  bindings.shift();
+  sourceState.sessions.ids = ['current'];
   props.onCreateWorktree();
   assert.deepEqual(calls.shift(), [
     'creator',
@@ -714,7 +1135,156 @@ test('Surface connects dashboard actions to existing Session and dialog domains 
   target = { ...record, currentBranch: null, health: 'branch-drift' };
   assert.equal(render().onCreateWorktree, undefined);
   assert.equal(typeof render().onCreateSession, 'function');
+  const surfaceContentProps = (tree) =>
+    findAll(tree, (item) => item.type === 'SurfaceContent')[0].props.props;
   target = record;
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
+  sourceState.sessions.phase = 'ready';
+  renderTree(false);
+  assert.deepEqual(selected, selection);
+
+  const switchingTarget = { ...record, worktreeId: 'wt-switch', branch: 'feat/payment-refactor-switch' };
+  additionalTargets = [record];
+  target = switchingTarget;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-switch', sessionId: 'head-switch' }];
+  sourceState.sessions.ids = ['head-switch'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(switchingTarget);
+  assert.deepEqual(calls, [['nativeOpen', 'head-switch']]);
+  sourceState.currentSessionId = 'head-switch';
+  sourceState.sessions.current = 'head-switch';
+  renderTree(false);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-switch',
+    sessionId: 'head-switch',
+  });
+
+  const targetB = { ...record, worktreeId: 'wt-b', branch: 'feat/payment-refactor-b' };
+  target = targetB;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-b', sessionId: 'head-b' }];
+  selected = undefined;
+  sourceState.currentSessionId = undefined;
+  sourceState.sessions.current = undefined;
+  sourceState.sessions.ids = [];
+  sourceState.sessions.phase = 'pending';
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetB);
+  assert.deepEqual(calls, []);
+
+  sourceState.sessions.phase = 'ready';
+  sourceState.sessions.ids = ['head-b'];
+  renderTree(false);
+  assert.deepEqual(calls.splice(0), [['nativeOpen', 'head-b']]);
+
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['head-b', 'unrelated'];
+  renderTree(false);
+  sourceState.currentSessionId = 'head-b';
+  sourceState.sessions.current = 'head-b';
+  renderTree(false);
+  assert.equal(selected, undefined);
+
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['head-b'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetB);
+  assert.deepEqual(calls, [['nativeOpen', 'head-b']]);
+  sourceState.currentSessionId = 'head-b';
+  sourceState.sessions.current = 'head-b';
+  renderTree(false);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-b',
+    sessionId: 'head-b',
+  });
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
+  const targetC = { ...record, worktreeId: 'wt-c', branch: 'feat/payment-refactor-c' };
+  target = targetC;
+  bindings = [];
+  sourceState.sessions.ids = [];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(targetC);
+  assert.deepEqual(calls, [['closeRightSidebar']]);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-c',
+    sessionId: undefined,
+  });
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
+  const targetD = { ...record, worktreeId: 'wt-d', branch: 'feat/payment-refactor-d' };
+  target = targetD;
+  sourceState.currentSessionId = 'unrelated';
+  sourceState.sessions.current = 'unrelated';
+  sourceState.sessions.ids = ['unrelated'];
+  selected = undefined;
+  calls.splice(0);
+  renderTree(false);
+  surfaceContentProps(renderTree(false)).openDashboard(targetD);
+  assert.deepEqual(calls, [['closeRightSidebar']]);
+  assert.deepEqual(selected, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-d',
+    sessionId: undefined,
+  });
+  findAll(renderTree(false), (item) => item.type === 'Dashboard')[0].props.onOpenFile('README.md');
+  assert.deepEqual(calls, [['closeRightSidebar']]);
+  assert.equal(
+    findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
+    1,
+  );
+
+  // Repeat the cross-Worktree transition through the production external dashboard store.
+  // The old stale-cleanup path must not write undefined over the pending target selection.
+  surfaceInput.dashboardStore = dashboardStore;
+  dashboardStore.snapshot = selection;
+  target = record;
+  additionalTargets = [record];
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
+  sourceState.sessions.phase = 'ready';
+  renderTree(false);
+  assert.deepEqual(dashboardStore.snapshot, selection);
+
+  const externalTarget = { ...record, worktreeId: 'wt-external', branch: 'feat/payment-refactor-external' };
+  target = externalTarget;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-external', sessionId: 'head-external' }];
+  sourceState.sessions.ids = ['head-external'];
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(externalTarget);
+  assert.deepEqual(calls, [['nativeOpen', 'head-external']]);
+  sourceState.currentSessionId = 'head-external';
+  sourceState.sessions.current = 'head-external';
+  renderTree(false);
+  assert.deepEqual(dashboardStore.snapshot, {
+    workspaceId: 'repo',
+    worktreeId: 'wt-external',
+    sessionId: 'head-external',
+  });
+  surfaceInput.dashboardStore = undefined;
+
+  calls.splice(0);
+  target = record;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }];
+  selected = selection;
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  sourceState.sessions.ids = ['current'];
   mutation.actionPending = true;
   props = render();
   props.onCreateSession();
@@ -811,18 +1381,39 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     overlay.parentElement = frame;
     surface.closest = () => overlay;
     sidebar.rect.right = 280;
+    right.rect.left = 960;
     let placement;
-    const dispose = mountDashboardOverlay(surface, (next) => {
-      placement = next;
-    });
+    let rightSidebarOpen = false;
+    const dispose = mountDashboardOverlay(
+      surface,
+      (next) => {
+        placement = next;
+      },
+      {
+        onRightSidebarChange: (open) => {
+          rightSidebarOpen = open;
+        },
+      },
+    );
     assert.equal(placement.left, 284);
-    assert.equal(placement.width, 916);
+    assert.equal(placement.width, 676);
+    assert.equal(rightSidebarOpen, false);
+    right.setAttribute('data-sidebar-right-open', '');
+    observers[1].callback();
+    pending();
+    assert.equal(rightSidebarOpen, true);
+    right.removeAttribute('data-sidebar-right-open');
+    observers[1].callback();
+    pending();
+    assert.equal(rightSidebarOpen, false);
     assert.equal(center.getAttribute('inert'), '');
+    assert.equal(right.getAttribute('inert'), null);
+    assert.equal(right.style.getPropertyValue('visibility'), '');
     sidebar.rect.right = 64;
     observers[0].callback();
     pending();
     assert.equal(placement.left, 68);
-    assert.equal(placement.width, 1132);
+    assert.equal(placement.width, 892);
     right.nextElementSibling = undefined;
     observers[1].callback();
     pending();
@@ -836,6 +1427,38 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     dispose();
     assert.equal(center.getAttribute('inert'), null);
     assert.ok(observers.every((observer) => observer.disconnected));
+  } finally {
+    Object.assign(globalThis, saved);
+  }
+});
+
+test('page-level Dashboard mounts when the native rightbar is absent', () => {
+  const globals = ['HTMLElement', 'ResizeObserver', 'MutationObserver'];
+  const saved = Object.fromEntries(globals.map((key) => [key, globalThis[key]]));
+  Object.assign(globalThis, {
+    HTMLElement: FakeElement,
+    ResizeObserver: undefined,
+    MutationObserver: undefined,
+  });
+  try {
+    const [frame, sidebar, center, overlay, surface] = Array.from(
+      { length: 5 },
+      () => new FakeElement(),
+    );
+    frame.firstElementChild = sidebar;
+    sidebar.nextElementSibling = center;
+    center.nextElementSibling = overlay;
+    overlay.parentElement = frame;
+    surface.closest = () => overlay;
+    sidebar.rect.right = 280;
+    let placement;
+    const dispose = mountDashboardOverlay(surface, (next) => {
+      placement = next;
+    });
+    assert.deepEqual(placement, { left: 284, top: 0, width: 916, height: 800 });
+    assert.equal(center.getAttribute('inert'), '');
+    dispose();
+    assert.equal(center.getAttribute('inert'), null);
   } finally {
     Object.assign(globalThis, saved);
   }

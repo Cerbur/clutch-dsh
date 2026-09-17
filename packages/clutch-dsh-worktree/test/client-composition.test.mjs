@@ -42,7 +42,7 @@ async function loadRuntimeClientExports() {
   return handoffs[0].factory((specifier) => {
     if (specifier === '@deepseek-ai/cordis') return cordis;
     if (specifier === 'react') return react;
-    if (specifier === 'react-dom') return {};
+    if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === 'react-dom/client') return {};
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
@@ -835,6 +835,31 @@ test('routes native Workspace creation through uiWorkspace and workspaces comman
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
+test('bridges Dashboard header actions to the native rightbar controller', async () => {
+  let expanded = true;
+  let toggles = 0;
+  const sidebarRight = {
+    isExpanded: () => expanded,
+    toggleExpanded: () => {
+      expanded = !expanded;
+      toggles += 1;
+    },
+  };
+  const fixture = await loadClientEntry({ sidebarRight });
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+
+  overlay.closeRightSidebar();
+  assert.equal(expanded, false);
+  assert.equal(toggles, 1);
+  overlay.openRightSidebar();
+  assert.equal(expanded, true);
+  assert.equal(toggles, 2);
+  overlay.openRightSidebar();
+  assert.equal(toggles, 2);
+
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
 test('initializes against the rc.1 read-only WorkspaceSource without requiring set', async () => {
   let fixture;
   await assert.doesNotReject(async () => {
@@ -1058,12 +1083,21 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     if (specifier === '@deepseek-ai/dsh-client-ui-renderer/client') return runtime;
     if (specifier === 'react') return react;
     if (specifier === 'react/jsx-runtime') return jsxRuntime;
+    if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return slots;
     throw new Error(`unexpected browser module request: ${specifier}`);
   });
 
   const ctx = new Context();
+  let rightExpanded = true;
+  const openedResources = [];
+  const rightbarFiber = ctx.plugin((provider) => provider.provide('sidebarRight', {
+    isExpanded: () => rightExpanded,
+    toggleExpanded: () => { rightExpanded = !rightExpanded; },
+    openResource: (...args) => { openedResources.push(args); rightExpanded = true; },
+  }));
+  await rightbarFiber.await();
   ctx.provide('connection', {
     rpc: {
       call: async () => ({ ok: true, value: { ok: true, value: [] } }),
@@ -1135,6 +1169,26 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, workspaceSnapshot.items);
     const overlay = ctx.slots.entries('shell.overlay')[0];
     const injected = overlay.inject();
+    assert.equal(injected.isRightSidebarExpanded(), true);
+    injected.closeRightSidebar();
+    assert.equal(rightExpanded, false);
+    assert.equal(injected.isRightSidebarExpanded(), false);
+    injected.openRightSidebar();
+    assert.equal(rightExpanded, true);
+    assert.equal(injected.isRightSidebarExpanded(), true);
+    injected.closeRightSidebar();
+    assert.equal(injected.isRightSidebarExpanded(), false);
+    injected.openResource('dsh-resource://file/session/s_virtual/src/index.ts', { line: 7 });
+    assert.equal(rightExpanded, true);
+    assert.equal(injected.isRightSidebarExpanded(), true);
+    assert.deepEqual(openedResources, [
+      ['dsh-resource://file/session/s_virtual/src/index.ts', { params: { line: 7 } }],
+    ]);
+    await rightbarFiber.dispose();
+    assert.equal(injected.isRightSidebarExpanded(), false);
+    assert.doesNotThrow(() => injected.closeRightSidebar());
+    assert.doesNotThrow(() => injected.openRightSidebar());
+    assert.equal(injected.openResource('dsh-resource://file/session/s_virtual/README.md'), false);
     injected.syncSessionWorkspaces([{ workspaceId: 'ws_native', sessionId: 's_virtual' }]);
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, [
       { workspaceId: 'ws_native', sessionIds: ['s_virtual'] },

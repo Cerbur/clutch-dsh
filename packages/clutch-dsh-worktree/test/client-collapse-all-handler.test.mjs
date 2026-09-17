@@ -33,7 +33,7 @@ function collapseButton(node) {
 }
 
 for (const kind of ['main', 'active', 'archived']) {
-  test('Collapse All handler suppresses ' + kind + ' reveal until Session switch', async () => {
+  test('Collapse All handles the ' + kind + ' current Session path correctly', async () => {
     const state = [];
     const effects = [];
     let cursor = 0;
@@ -75,6 +75,11 @@ for (const kind of ['main', 'active', 'archived']) {
               workspaceId: 'repo',
               worktreeId: 'wt',
               status: kind === 'active' ? 'active' : 'removed',
+            },
+            {
+              workspaceId: 'repo',
+              worktreeId: 'other-wt',
+              status: 'active',
             },
           ];
     const views = [
@@ -125,18 +130,28 @@ for (const kind of ['main', 'active', 'archived']) {
     assert.ok(button, 'find the actual Collapse All button');
     button.props.onClick();
     expansion = render();
-    assert.deepEqual(calls, [[['repo', 'other'], kind === 'main' ? [] : ['wt']]]);
-    assert.ok(keys.every((key) => !expansion.isCurrentSessionReveal(key)));
+    assert.deepEqual(calls, [[['other'], kind === 'main' ? [] : ['other-wt'], ['repo', 'other']]]);
+    assert.equal(
+      keys.every((key) => expansion.isCurrentSessionReveal(key)),
+      true,
+    );
     assert.deepEqual(expansion.expandedArchivedWorkspaces, {});
     assert.deepEqual(expansion.expandedSessionGroups, {});
-    // A refreshed snapshot of the same Session must not undo the explicit collapse.
+    // A refreshed snapshot of the same Session must preserve the current Worktree reveal.
     read.readState = { ...read.readState, views: [...views] };
     expansion = render();
-    assert.ok(keys.every((key) => !expansion.isCurrentSessionReveal(key)));
+    assert.equal(
+      keys.every((key) => expansion.isCurrentSessionReveal(key)),
+      true,
+    );
     source.currentSessionId = 'next';
-    render();
+    // The active reveal must synchronize immediately during render without collapsing for a frame.
+    expansion = render();
+    assert.equal(expansion.currentSessionReveal?.sessionId, 'next');
+    assert.ok(keys.every(expansion.isCurrentSessionReveal));
     pending[0]();
     expansion = render();
+    assert.equal(expansion.currentSessionReveal?.sessionId, 'next');
     assert.ok(keys.every(expansion.isCurrentSessionReveal));
   });
 }

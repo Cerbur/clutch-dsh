@@ -18,7 +18,11 @@ export interface WorktreeExpandStateActions {
   toggleWorkspace: (workspaceId: string) => void;
   toggleMain: (workspaceId: string) => void;
   toggleWorktree: (worktreeId: string) => void;
-  collapseAll: (workspaceIds: readonly string[], worktreeIds?: readonly string[]) => void;
+  collapseAll: (
+    workspaceIds: readonly string[],
+    worktreeIds?: readonly string[],
+    mainWorkspaceIds?: readonly string[],
+  ) => void;
   retain: (workspaceIds: readonly string[], worktreeIds: readonly string[]) => void;
 }
 
@@ -114,10 +118,12 @@ export function createWorktreeExpandStateStore(
     toggleWorktree: (worktreeId) => {
       store.update((draft) => { toggle(draft.collapsedWorktreeIds, worktreeId); });
     },
-    collapseAll: (workspaceIds, worktreeIds = []) => {
+    collapseAll: (workspaceIds, worktreeIds = [], mainWorkspaceIds = workspaceIds) => {
       store.update((draft) => {
         for (const id of workspaceIds) {
           draft.collapsedWorkspaceIds[id] = true;
+        }
+        for (const id of mainWorkspaceIds) {
           draft.collapsedMainWorkspaceIds[id] = true;
         }
         for (const id of worktreeIds) {
@@ -126,6 +132,10 @@ export function createWorktreeExpandStateStore(
       });
     },
     retain: (workspaceIds, worktreeIds) => {
+      // No Workspace IDs means the Workspace list has not arrived yet. Pruning from that
+      // read would delete every stored preference, so refuse it outright: only a caller
+      // holding a complete, non-empty snapshot may prune.
+      if (workspaceIds.length === 0) return;
       store.update((draft) => {
         retain(draft.collapsedWorkspaceIds, workspaceIds);
         retain(draft.collapsedMainWorkspaceIds, workspaceIds);

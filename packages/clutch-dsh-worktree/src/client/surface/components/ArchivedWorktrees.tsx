@@ -1,5 +1,5 @@
 import { IconArchiveOutline20 } from '@deepseek-ai/dsh-client-ui-primitives';
-import { hasOngoingSession } from '../../session/session-view.js';
+import { aggregateSessionStatus } from '../../session/session-view.js';
 import { filterArchivedSessionIds } from '../../view/worktree-view.js';
 import styles from '../../worktree.css';
 import { ArchivedWorktree } from './ArchivedWorktree.js';
@@ -90,7 +90,7 @@ export function ArchivedWorktrees({
         kind="archived-group"
         label={`${t('worktree.archivedGroup')} (${archivedWorktrees.length})`}
         expanded={isArchivedExpanded}
-        hasOngoingSession={hasOngoingSession(
+        groupActivityStatus={aggregateSessionStatus(
           filterArchivedSessionIds(
             archivedWorktrees.flatMap((record) =>
               bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>

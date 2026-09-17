@@ -6,6 +6,7 @@ export interface CreateWorktreeTransactionInput {
   readonly targetPath: string;
   readonly worktreeId: string;
   readonly baseBranch: string;
+  readonly baseCommit?: string;
   readonly newBranch?: string;
   readonly targetBranch: string;
 }

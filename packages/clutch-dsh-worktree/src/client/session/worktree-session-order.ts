@@ -21,7 +21,11 @@ export interface WorktreeSessionOrderActions {
     baseIds: readonly string[],
     updatedAtById: Readonly<Record<string, number | undefined>>,
   ) => void;
-  setOrder: (accountKey: string, order: readonly string[]) => void;
+  setOrder: (
+    accountKey: string,
+    order: readonly string[],
+    updatedAtById?: Readonly<Record<string, number | undefined>>,
+  ) => void;
   retain: (accountKeys: readonly string[]) => void;
 }
 
@@ -108,10 +112,26 @@ function sameAccount(
   );
 }
 
-/**
- * Native-style activity order transition. The first observation records timestamps
- * without turning an existing list into a recency sort.
- */
+function orderByUpdatedAt(
+  ids: readonly string[],
+  updatedAtById: Readonly<Record<string, number | undefined>>,
+): string[] {
+  return ids
+    .map((id, index) => ({ id, index, timestamp: updatedAtById[id] }))
+    .sort((left, right) => {
+      const leftValid = isValidTimestamp(left.timestamp);
+      const rightValid = isValidTimestamp(right.timestamp);
+      if (leftValid && rightValid) {
+        const difference = Number(right.timestamp) - Number(left.timestamp);
+        if (difference !== 0) return difference;
+      }
+      if (leftValid !== rightValid) return leftValid ? -1 : 1;
+      return left.index - right.index;
+    })
+    .map(({ id }) => id);
+}
+
+/** Native-style activity order transition driven by the latest Session timestamp. */
 export function nextSessionOrderAccount(input: {
   readonly baseIds: readonly string[];
   readonly updatedAtById: Readonly<Record<string, number | undefined>>;
@@ -125,7 +145,7 @@ export function nextSessionOrderAccount(input: {
       const timestamp = input.updatedAtById[id];
       if (isValidTimestamp(timestamp)) observedUpdatedAt[id] = timestamp;
     }
-    return { order: baseIds, observedUpdatedAt };
+    return { order: orderByUpdatedAt(baseIds, input.updatedAtById), observedUpdatedAt };
   }
 
   const available = new Set(baseIds);
@@ -163,14 +183,15 @@ export function nextSessionOrderAccount(input: {
     }
   }
 
+  const orderedNewlyObserved = orderByUpdatedAt(newlyObserved, input.updatedAtById);
   promoted.sort((left, right) => right.timestamp - left.timestamp || left.index - right.index);
   const promotedIds = new Set([
-    ...newlyObserved,
+    ...orderedNewlyObserved,
     ...promoted.map(({ id }) => id),
   ]);
   return {
     order: [
-      ...newlyObserved,
+      ...orderedNewlyObserved,
       ...promoted.map(({ id }) => id),
       ...order.filter((id) => !promotedIds.has(id)),
     ],
@@ -227,16 +248,24 @@ export function createWorktreeSessionOrderStore(
         draft.accounts[accountKey] = cloneAccount(next);
       });
     },
-    setOrder: (accountKey, order) => {
+    setOrder: (accountKey, order, updatedAtById) => {
       if (disposed || accountKey.length === 0) return;
       store.update((draft) => {
         const current = draft.accounts[accountKey] ?? {
           order: [],
           observedUpdatedAt: {},
         };
+        const observedUpdatedAt = { ...current.observedUpdatedAt };
+        if (updatedAtById !== undefined) {
+          for (const [id, timestamp] of Object.entries(updatedAtById)) {
+            if (isValidTimestamp(timestamp)) {
+              observedUpdatedAt[id] = Math.max(observedUpdatedAt[id] ?? timestamp, timestamp);
+            }
+          }
+        }
         const next = {
           order: validIds(order),
-          observedUpdatedAt: { ...current.observedUpdatedAt },
+          observedUpdatedAt,
         };
         if (sameAccount(current, next)) return;
         draft.accounts[accountKey] = next;
@@ -244,8 +273,9 @@ export function createWorktreeSessionOrderStore(
     },
     retain: (accountKeys) => {
       if (disposed) return;
+      const allowed = new Set(accountKeys);
+      if (allowed.size === 0) return;
       store.update((draft) => {
-        const allowed = new Set(accountKeys);
         for (const accountKey of Object.keys(draft.accounts)) {
           if (!allowed.has(accountKey)) delete draft.accounts[accountKey];
         }

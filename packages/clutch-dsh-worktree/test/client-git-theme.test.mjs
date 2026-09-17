@@ -1,0 +1,375 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
+import test from 'node:test';
+import ts from 'typescript';
+
+const cssUrl = new URL('../src/client/dashboard/git/worktree-git.css', import.meta.url);
+const changedFilesUrl = new URL('../src/client/dashboard/git/GitChangedFiles.tsx', import.meta.url);
+const gitPanelUrl = new URL('../src/client/dashboard/git/WorktreeGitPanel.tsx', import.meta.url);
+const diffViewUrl = new URL('../src/client/dashboard/git/GitDiffView.tsx', import.meta.url);
+const commitListUrl = new URL('../src/client/dashboard/git/GitCommitList.tsx', import.meta.url);
+const gitStateUrl = new URL('../src/client/dashboard/git/useWorktreeGitState.ts', import.meta.url);
+
+function jsxAttribute(node, ast, name) {
+  const attributes = ts.isJsxElement(node)
+    ? node.openingElement.attributes.properties
+    : node.attributes.properties;
+  return attributes.find(
+    (property) => ts.isJsxAttribute(property) && property.name.getText(ast) === name,
+  );
+}
+
+function jsxAttributeText(node, ast, name) {
+  const attribute = jsxAttribute(node, ast, name);
+  return attribute?.initializer === undefined ? undefined : attribute.initializer.getText(ast);
+}
+
+function findJsxElement(node, ast, predicate) {
+  if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && predicate(node, ast)) {
+    return node;
+  }
+  return ts.forEachChild(node, (child) => findJsxElement(child, ast, predicate));
+}
+
+function jsxElementChildren(node) {
+  return node.children.filter(
+    (child) => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child),
+  );
+}
+
+function jsxTagName(node, ast) {
+  return ts.isJsxElement(node)
+    ? node.openingElement.tagName.getText(ast)
+    : node.tagName.getText(ast);
+}
+
+function classNameText(node, ast) {
+  return jsxAttributeText(node, ast, 'className');
+}
+
+function cssBlock(source, selector) {
+  const start = source.indexOf(selector);
+  assert.notEqual(start, -1, 'missing CSS selector: ' + selector);
+  const end = source.indexOf('}', start);
+  assert.notEqual(end, -1, 'unterminated CSS block: ' + selector);
+  return source.slice(start, end).replace(/\s+/gu, ' ').replace(/\(\s+/gu, '(').replace(/\s+\)/gu, ')');
+}
+
+test('Git diff surfaces use DSH theme tokens for dark mode', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const diff = cssBlock(css, '.gitDiff {');
+  const hunk = cssBlock(css, '.gitDiffHunkHeader {');
+  const additions = cssBlock(css, '.gitDiffLineadd {');
+  const deletions = cssBlock(css, '.gitDiffLinedelete {');
+  const raw = cssBlock(css, '.gitRawDiff {');
+
+  assert.ok(diff.includes('background: var(--dsw-alias-markdown-code-block, #fafbfc);'));
+  assert.ok(diff.includes('color: var(--dsw-alias-label-primary, #263342);'));
+  assert.ok(hunk.includes('background: var(--dsw-alias-markdown-code-block-banner, #edf3fb);'));
+  assert.ok(hunk.includes('color: var(--dsw-alias-state-business-primary, #4a70a1);'));
+  assert.ok(
+    additions.includes(
+      'background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #23845f) 18%, var(--dsw-alias-markdown-code-block, #fafbfc));',
+    ),
+  );
+  assert.ok(
+    deletions.includes(
+      'background: color-mix(in srgb, var(--dsw-alias-state-error-secondary, #bd5d55) 18%, var(--dsw-alias-markdown-code-block, #fafbfc));',
+    ),
+  );
+  assert.ok(raw.includes('background: var(--dsw-alias-markdown-code-block, #fafbfc);'));
+  assert.ok(raw.includes('color: var(--dsw-alias-label-primary, #263342);'));
+
+  for (const lightOnlyColor of ['#fafbfc', '#263342', '#edf3fb', '#ecf8f0', '#fff0ef']) {
+    assert.equal(diff.includes('background: ' + lightOnlyColor), false);
+    assert.equal(diff.includes('color: ' + lightOnlyColor), false);
+    assert.equal(hunk.includes('background: ' + lightOnlyColor), false);
+    assert.equal(hunk.includes('color: ' + lightOnlyColor), false);
+    assert.equal(additions.includes('background: ' + lightOnlyColor), false);
+    assert.equal(deletions.includes('background: ' + lightOnlyColor), false);
+    assert.equal(raw.includes('background: ' + lightOnlyColor), false);
+    assert.equal(raw.includes('color: ' + lightOnlyColor), false);
+  }
+});
+
+test('Git panes stay bounded and scroll their data independently', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const columns = cssBlock(css, '.gitColumns {');
+  const column = cssBlock(css, '.gitColumn {');
+  const lists = cssBlock(css, '.gitCommitList,');
+  const diff = cssBlock(css, '.gitDiff {');
+  const raw = cssBlock(css, '.gitRawDiff {');
+
+  assert.match(columns, /height: var\(--git-columns-height\);/);
+  assert.match(columns, /min-height: 0;/);
+  assert.match(columns, /resize: none;/);
+  assert.match(column, /display: flex;/);
+  assert.match(column, /min-height: 0;/);
+  assert.match(column, /overflow: hidden;/);
+  assert.match(lists, /flex: 1 1 auto;/);
+  assert.match(lists, /min-height: 0;/);
+  assert.match(lists, /overflow-y: auto;/);
+  assert.match(diff, /flex: 1 1 auto;/);
+  assert.match(diff, /min-height: 0;/);
+  assert.match(diff, /overflow: auto;/);
+  assert.match(raw, /overflow: auto;/);
+  assert.match(css, /@container \(max-width: 900px\) \{/);
+  assert.match(css, /@container \(max-width: 520px\)[\s\S]*height: clamp\(260px, calc\(100dvh - 360px\), 360px\);/);
+});
+
+test('wide Git layout stacks commits over changed files beside the diff', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const columns = cssBlock(css, '.gitColumns {');
+  const splitter = cssBlock(css, '.gitColumnSplitter {');
+  const wide = css.slice(css.indexOf('@container (min-width: 901px)'), css.indexOf('@container (max-width: 900px)'));
+
+  // Two columns instead of three, with a taller bounded surface for the stacked panes.
+  assert.match(columns, /--git-rows-top: 45%;/);
+  assert.match(columns, /--git-columns-left: 38%;/);
+  assert.match(wide, /--git-columns-height: clamp\(440px, calc\(100dvh - 300px\), 720px\);/);
+
+  // Both axes mirror the drag math: 240px columns, 140px rows, and 7px dividers.
+  assert.match(
+    columns,
+    /grid-template-columns: minmax\(240px, min\(var\(--git-columns-left\), calc\(100% - 247px\)\)\) 7px minmax\(240px, 1fr\);/,
+  );
+  assert.match(
+    columns,
+    /grid-template-rows: minmax\(140px, min\(var\(--git-rows-top\), calc\(100% - 147px\)\)\) 7px minmax\(140px, 1fr\);/,
+  );
+  assert.match(splitter, /touch-action: none;/);
+  assert.match(css, /\[data-dashboard-git-splitter='rows'\] \{\s*box-sizing: border-box;\s*height: 7px;\s*cursor: row-resize;/);
+  assert.match(css, /\[data-dashboard-git-splitter='columns'\] \{\s*box-sizing: border-box;\s*width: 7px;\s*cursor: col-resize;/);
+
+  // Wide placement: the row divider only splits the left column, the column divider spans it.
+  const base = css.slice(0, css.indexOf('@container (min-width: 901px)'));
+  assert.match(base, /\[data-dashboard-git-pane='commits'\] \{\s*grid-area: 1 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-splitter='rows'\] \{\s*grid-area: 2 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-pane='changed-files'\] \{\s*grid-area: 3 \/ 1;/);
+  assert.match(base, /\[data-dashboard-git-splitter='columns'\] \{\s*grid-area: 1 \/ 2 \/ -1 \/ 3;/);
+  assert.match(base, /\[data-dashboard-git-pane='diff'\] \{\s*grid-area: 1 \/ 3 \/ -1 \/ -1;/);
+});
+
+test('Git markup routes both dividers through one splitter component', async () => {
+  const panel = await readFile(gitPanelUrl, 'utf8');
+  const ast = ts.createSourceFile('WorktreeGitPanel.tsx', panel, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const columnsElement = findJsxElement(
+    ast,
+    ast,
+    (node, file) => classNameText(node, file) === '{styles.gitColumns}',
+  );
+  assert.ok(columnsElement !== undefined, 'the panel renders a gitColumns grid');
+  assert.equal(jsxAttributeText(columnsElement, ast, 'ref'), '{gridRef}');
+
+  const children = jsxElementChildren(columnsElement);
+  assert.deepEqual(
+    children.map((child) => jsxTagName(child, ast)),
+    ['section', 'GitSplitter', 'section', 'GitSplitter', 'section'],
+  );
+  assert.deepEqual(
+    children.map((child) => jsxAttributeText(child, ast, 'data-dashboard-git-pane')),
+    ['"commits"', undefined, '"changed-files"', undefined, '"diff"'],
+  );
+  assert.equal(jsxAttributeText(children[0], ast, 'aria-label'), "{t('dashboard.git.commits')}");
+  assert.equal(jsxAttributeText(children[2], ast, 'aria-label'), "{t('dashboard.git.changedFiles')}");
+  assert.equal(jsxAttributeText(children[4], ast, 'aria-label'), "{t('dashboard.git.diff')}");
+
+  // Both dividers share one component, so its a11y and pointer contract covers both axes.
+  const splitterFunction = findJsxElement(
+    ast,
+    ast,
+    (node, file) => classNameText(node, file) === '{styles.gitColumnSplitter}',
+  );
+  assert.ok(splitterFunction !== undefined, 'GitSplitter renders the divider element');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'data-dashboard-git-splitter'), '{axis}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'data-dashboard-git-splitting'), "{split.dragging ? 'true' : undefined}");
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'role'), '"separator"');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'aria-orientation'), '{orientation}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'aria-valuenow'), '{Math.round(split.percent)}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'tabIndex'), '{0}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'ref'), '{split.splitterRef}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerDown'), '{split.startDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerMove'), '{split.drag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onPointerUp'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onLostPointerCapture'), '{split.endDrag}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onDoubleClick'), '{split.reset}');
+  assert.equal(jsxAttributeText(splitterFunction, ast, 'onKeyDown'), '{split.onKeyDown}');
+
+  // One grid ref feeds both split hooks, one per axis.
+  assert.match(panel, /const gridRef = useRef<HTMLDivElement \| null>\(null\);/);
+  assert.match(panel, /orientation: 'horizontal',\s*property: '--git-rows-top'/);
+  assert.match(panel, /orientation: 'vertical',\s*property: '--git-columns-left'/);
+});
+
+test('narrow Git layout keeps the two-row arrangement with both dividers', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const narrow = css.slice(css.indexOf('@container (max-width: 900px)'));
+
+  // Row 1 keeps commits and changed files side by side, split by the column divider.
+  assert.match(narrow, /\[data-dashboard-git-pane='commits'\] \{\s*grid-area: 1 \/ 1;/);
+  assert.match(narrow, /\[data-dashboard-git-splitter='columns'\] \{\s*grid-area: 1 \/ 2;/);
+  assert.match(narrow, /\[data-dashboard-git-pane='changed-files'\] \{\s*grid-area: 1 \/ 3;/);
+  // Row 2 is the row divider across the full width, and the diff spans row 3.
+  assert.match(narrow, /\[data-dashboard-git-splitter='rows'\] \{\s*grid-area: 2 \/ 1 \/ 3 \/ -1;/);
+  assert.match(narrow, /\[data-dashboard-git-pane='diff'\] \{\s*grid-area: 3 \/ 1 \/ -1 \/ -1;/);
+});
+
+test('changed-file lists scroll long names without ellipsis', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const filePath = cssBlock(css, '.gitFilePath {');
+  const folderName = cssBlock(css, '.gitFolderName {');
+  const fileButton = cssBlock(css, '.gitChangedFileList button {\n  display: flex;');
+
+  assert.match(css, /\.gitChangedFileList \{[\s\S]*overflow-x: auto;/);
+  assert.match(css, /\.gitChangedFileList > li,[\s\S]*width: max-content;/);
+  assert.match(fileButton, /width: max-content;/);
+  assert.match(fileButton, /min-width: 100%;/);
+  assert.match(filePath, /min-width: max-content;/);
+  assert.match(filePath, /overflow: visible;/);
+  assert.match(filePath, /text-overflow: clip;/);
+  assert.match(folderName, /min-width: max-content;/);
+  assert.match(folderName, /text-overflow: clip;/);
+});
+
+test('changed-file folders use the native DSH folder icons', async () => {
+  const source = await readFile(changedFilesUrl, 'utf8');
+
+  assert.match(source, /IconFolderClose16/);
+  assert.match(source, /IconFolderOpen16/);
+  assert.match(source, /collapsed \? <IconFolderClose16 \/> : <IconFolderOpen16 \/>/);
+  assert.doesNotMatch(source, /gitFolderDisclosure/);
+  assert.doesNotMatch(await readFile(cssUrl, 'utf8'), /\.gitFolderDisclosure/);
+});
+
+test('changed-file rows use color only while the localized status stays announced', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(changedFilesUrl, 'utf8');
+
+  // The row status is now the filename color alone; the localized wording remains
+  // in the row title and accessible label, and the A/M/D/R/C/T marker is gone.
+  assert.doesNotMatch(source, /STATUS_MARKERS/u);
+  assert.doesNotMatch(source, /gitStatusMarker/u);
+  assert.doesNotMatch(css, /\.gitStatusMarker/u);
+  assert.match(source, /data-status=\{file\.status\}/u);
+  assert.match(source, /aria-label=\{statusText\}/u);
+  assert.match(source, /const statusText = fileTitle\(file\) \+ ' · ' \+ t\(STATUS_LABELS\[file\.status\]\)/u);
+  assert.match(source, /'type-changed': 'dashboard\.git\.status\.typeChanged'/u);
+
+  assert.match(css, /\.gitFilePath\[data-status='added'\][\s\S]*state-success-primary/u);
+  assert.match(css, /\.gitFilePath\[data-status='deleted'\][\s\S]*state-error-secondary/u);
+  assert.match(css, /\.gitFilePath\[data-status='modified'\][\s\S]*state-business-primary/u);
+  assert.match(css, /\.gitFilePath\[data-status='renamed'\][\s\S]*state-business-primary/u);
+});
+
+test('the commits column header owns a native multi-select switch', async () => {
+  const panel = await readFile(gitPanelUrl, 'utf8');
+  const commitList = await readFile(commitListUrl, 'utf8');
+  const state = await readFile(gitStateUrl, 'utf8');
+  const css = await readFile(cssUrl, 'utf8');
+  const header = panel.slice(panel.indexOf('data-dashboard-git-pane="commits"'));
+
+  // A native checkbox carries the switch semantics and owns focus/keyboard behavior.
+  assert.match(header, /role="switch"/u);
+  assert.match(header, /data-dashboard-git-multi-select/u);
+  assert.match(header, /checked=\{state\.commitMultiSelect\}/u);
+  assert.match(header, /state\.setCommitMultiSelect\(event\.currentTarget\.checked\)/u);
+  assert.match(header, /multiSelect=\{state\.commitMultiSelect\}/u);
+  assert.match(state, /commitMultiSelect: false,/u);
+  assert.match(state, /const setCommitMultiSelect = \(enabled: boolean\): void => \{/u);
+
+  // The switch only changes whether a click replaces or adds to the selection.
+  assert.match(
+    commitList,
+    /if \(!multiSelect \|\| commit\.kind === 'working-tree' \|\| onToggle === undefined\) onSelect\(commit\.sha\);/u,
+  );
+  assert.match(commitList, /aria-multiselectable=\{multiSelect\}/u);
+  assert.match(commitList, /\{multiSelect && \(/u);
+
+  assert.match(css, /\.gitColumnHeaderControls \{[\s\S]*align-items: center;/u);
+  assert.match(css, /\.gitCommitMultiSelect input:checked \+ \.gitCommitMultiSelectTrack/u);
+  assert.match(css, /\.gitCommitMultiSelect input:focus-visible \+ \.gitCommitMultiSelectTrack/u);
+});
+
+test('Git dividers close both edges of the panes they separate', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  // The grid-placement rules share the selector, so anchor on the styled block.
+  const rows = cssBlock(css, ".gitColumns > [data-dashboard-git-splitter='rows'] {\n  box-sizing: border-box;");
+  const columns = cssBlock(css, ".gitColumns > [data-dashboard-git-splitter='columns'] {\n  box-sizing: border-box;");
+
+  assert.match(rows, /box-sizing: border-box;/u);
+  assert.match(rows, /border-top: 1px solid/u);
+  assert.match(rows, /border-bottom: 1px solid/u);
+  assert.match(columns, /box-sizing: border-box;/u);
+  assert.match(columns, /border-left: 1px solid/u);
+  assert.match(columns, /border-right: 1px solid/u);
+});
+
+test('the diff toolbar open action uses the square right-up arrow', async () => {
+  const source = await readFile(diffViewUrl, 'utf8');
+  const css = await readFile(cssUrl, 'utf8');
+
+  // IconRightUpOutline14 has an 8x14 viewBox that squashes it inside an 8px box;
+  // the 16px icon keeps its aspect ratio at the label's optical size.
+  assert.match(source, /import \{ IconRightUpOutline16 \} from '@deepseek-ai\/dsh-client-ui-primitives';/u);
+  assert.doesNotMatch(source, /IconRightUpOutline14/u);
+  assert.match(source, /<IconRightUpOutline16 size=\{14\} className=\{styles\.gitDiffOpenIcon\} \/>/u);
+  assert.match(css, /\.gitDiffOpenIcon \{[\s\S]*width: 14px;[\s\S]*height: 14px;/u);
+  assert.match(css, /\.gitDiffOpenInSidebar \{[\s\S]*align-items: center;[\s\S]*line-height: 16px;/u);
+});
+
+test('changed-file stats use explicit green additions and red deletions', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(changedFilesUrl, 'utf8');
+  const panel = await readFile(gitPanelUrl, 'utf8');
+  const lineStats = await readFile(new URL('../src/client/dashboard/git/GitLineStats.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /<GitLineStats[\s\S]*additions=\{file\.additions\}[\s\S]*deletions=\{file\.deletions\}/u);
+  assert.match(panel, /data-dashboard-git-summary/);
+  assert.match(panel, /gitColumnHeaderMeta/);
+  assert.match(panel, /lineTotals\.additions/);
+  assert.match(panel, /lineTotals\.deletions/);
+  assert.match(lineStats, /data-dashboard-git-additions/);
+  assert.match(lineStats, /data-dashboard-git-deletions/);
+  assert.match(css, /\.gitLineAdded[\s\S]*state-success-primary/u);
+  assert.match(css, /\.gitLineRemoved[\s\S]*state-error-secondary/u);
+  assert.match(css, /\.gitChangedFileList \.gitLineStats[\s\S]*font-size: 11px;/u);
+});
+
+test('Overview Git facts reuse history, committed summary, and working-tree reads', async () => {
+  const source = await readFile(new URL('../src/client/dashboard/git/WorktreeGitOverview.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /listWorktreeCommits/);
+  assert.match(source, /listWorktreeCommitFiles/);
+  assert.match(source, /selection: \{ kind: 'summary', includeWorkingTree: false \}/u);
+  assert.match(source, /committedFiles/);
+  assert.match(source, /workingTreeFiles/);
+  assert.match(source, /metric: 'aheadBehind' \| 'committed' \| 'workingTree'/u);
+  assert.match(source, /history\.unavailableReason/);
+});
+
+test('GitDiffView folds large patches behind a localized reveal action', async () => {
+  const css = await readFile(cssUrl, 'utf8');
+  const source = await readFile(new URL('../src/client/dashboard/git/GitDiffView.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /const MAX_RENDERED_DIFF_LINES = 2000;/u);
+  assert.match(source, /function limitHunks\(/u);
+  assert.match(source, /useMemo\(\(\) => parseUnifiedDiff\(patch\), \[patch\]\)/u);
+  assert.match(source, /t\('dashboard\.git\.diffLinesHidden', \{ n: limited\.hiddenLines \}\)/u);
+  assert.match(source, /data-dashboard-git-show-full-diff/u);
+  assert.match(source, /t\('dashboard\.git\.showFullDiff'\)/u);
+  assert.match(css, /\.gitDiffFolded \{[\s\S]*border-top: 1px dashed/u);
+  assert.match(css, /\.gitDiffShowAll \{[\s\S]*cursor: pointer/u);
+});
+
+test('Git tab state shares one live-target predicate across cache keys', async () => {
+  const cache = await readFile(new URL('../src/client/dashboard/git/git-state-cache.ts', import.meta.url), 'utf8');
+  const state = await readFile(new URL('../src/client/dashboard/git/useWorktreeGitState.ts', import.meta.url), 'utf8');
+
+  assert.match(cache, /export function isLiveCacheKey\(key: string\): boolean/u);
+  assert.match(cache, /const LIVE_KEY_MARKERS = \[/u);
+  assert.match(state, /isLiveCacheKey\(key\)/u);
+  assert.doesNotMatch(state, /isLiveTargetKey/u);
+  assert.match(state, /const isCurrentRequest = \(/u);
+});
+

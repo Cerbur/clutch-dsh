@@ -22,7 +22,11 @@ import type {
 import type { DashboardRecord, DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
 import { WORKTREE_NS } from '../locales.js';
-import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
+import type {
+  SessionListLike,
+  SessionPresentation,
+  SessionStatusPresentation,
+} from '../session/session-view.js';
 import type { createWorktreeViewStore } from '../view/view-mode-store.js';
 import type { WorktreeExpandStateStore } from '../view/worktree-expand-state.js';
 import type { WorktreeFullAccessConfirmationController } from '../permission/worktree-permission.js';
@@ -49,6 +53,7 @@ export interface WorkspaceLike {
 export interface WorkspaceListLike {
   readonly items: readonly WorkspaceLike[];
   readonly archivedSessionIds?: readonly string[];
+  readonly phase?: string;
 }
 
 export interface WorktreePermissionNotice {
@@ -62,6 +67,13 @@ export interface WorktreePermissionNotice {
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
+  readonly openResource?: (address: string, options?: { line?: number }) => boolean;
+  /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
+  readonly closeRightSidebar?: () => void;
+  /** Reveal the native session-scoped rightbar from the Dashboard header. */
+  readonly openRightSidebar?: () => void;
+  /** Whether the native session-scoped rightbar is currently expanded. */
+  readonly isRightSidebarExpanded?: () => boolean;
   readonly dashboardStore?: ObservableSnapshot<DashboardSelection | undefined> & {
     set(selection: DashboardSelection | undefined): void;
   };
@@ -234,7 +246,8 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
-  readonly hasOngoingSession: boolean;
+  /** One selected Session status shown when the Workspace row is collapsed. */
+  readonly groupActivityStatus?: SessionStatusPresentation;
   readonly actionPending: boolean;
   readonly menuOpen: boolean;
   readonly drag: WorkspaceDragProps;
@@ -280,7 +293,8 @@ export interface WorktreeGroupRowProps {
   readonly label: string;
   readonly worktreeId?: string;
   readonly expanded: boolean;
-  readonly hasOngoingSession: boolean;
+  /** One selected Session status shown when this group row is collapsed. */
+  readonly groupActivityStatus?: SessionStatusPresentation;
   readonly icon: ReactNode;
   readonly workspaceTitle: string;
   readonly state?: 'done' | 'warning' | 'error';

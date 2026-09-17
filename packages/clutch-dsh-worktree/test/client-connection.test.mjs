@@ -9,9 +9,13 @@ import {
 
 const METHODS = [
   ['updateWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1', instructions: 'Use tests', expectedInstructions: '' }, 'Use tests'],
+  ['updateWorktreeBaseBranch', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main', expectedBaseBranch: 'old' }, 'main'],
   ['adoptWorktreeBranch', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token', expectedBranch: 'merge/foo' }, null],
   ['recoverWorktrees', { workspaceId: 'ws1' }, null],
   ['listWorktrees', { workspaceId: 'ws1' }, []],
+  ['listWorktreeCommits', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main' }, { commits: [], truncated: false }],
+  ['listWorktreeCommitFiles', { workspaceId: 'ws1', worktreeId: 'wt1', commit: 'a'.repeat(40), baseBranch: 'main' }, { commit: 'a'.repeat(40), files: [] }],
+  ['getWorktreeCommitFileDiff', { workspaceId: 'ws1', worktreeId: 'wt1', commit: 'a'.repeat(40), path: 'src/index.ts', baseBranch: 'main' }, { commit: 'a'.repeat(40), path: 'src/index.ts', patch: '', binary: false }],
   ['listImportCandidates', { workspaceId: 'ws1' }, []],
   ['listBranches', { workspaceId: 'ws1' }, []],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
@@ -71,6 +75,9 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
     'worktreeManager/listWorktrees',
+    'worktreeManager/listWorktreeCommits',
+    'worktreeManager/listWorktreeCommitFiles',
+    'worktreeManager/getWorktreeCommitFileDiff',
     'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
     'worktreeManager/createWorktree',
@@ -83,6 +90,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
     'worktreeManager/updateWorktreeInstructions',
+    'worktreeManager/updateWorktreeBaseBranch',
     'worktreeManager/listBindings',
     'worktreeManager/bindSession',
     'worktreeManager/ensureWorktreePermission',

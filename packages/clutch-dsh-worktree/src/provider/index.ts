@@ -8,7 +8,9 @@
  */
 export { LocalGitAdapter } from './git/adapter.js';
 export {
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,
+  migrateSidecarSnapshot,
   validateSidecarSnapshot,
 } from './sidecar/repository.js';
 export {
@@ -27,6 +29,7 @@ export type {
   DshSessionSummary,
   DshWorkspaceSummary,
   GitBranchWorktreeInfo,
+  GitCommitHistoryRead,
   GitCommandOptions,
   GitSubprocessRuntime,
   GitWorktreeAdapter,

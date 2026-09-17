@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import React from 'react';
 import ts from 'typescript';
-import { hasOngoingSession } from '../lib/client/session/session-view.js';
+import { aggregateSessionStatus } from '../lib/client/session/session-view.js';
 import { bindingIdsFor } from '../lib/client/surface/selectors.js';
 import { filterArchivedSessionIds } from '../lib/client/view/worktree-view.js';
 import { createWorktreeRefreshGuard } from '../lib/client/view/worktree-view-read.js';
@@ -49,21 +49,31 @@ test('Archived group ignores native archived activity but retains hidden live ac
       ),
   );
   const expression = row.attributes.properties.find(
-    (attr) => attr.name?.text === 'hasOngoingSession',
+    (attr) => attr.name?.text === 'groupActivityStatus',
   ).initializer.expression;
   const context = {
-    hasOngoingSession,
+    aggregateSessionStatus,
     bindingIdsFor,
     filterArchivedSessionIds,
     archivedWorktrees: [{ worktreeId: 'wt' }],
     bindings: [{ worktreeId: 'wt', sessionId: 's', status: 'active' }],
     sessions: { ids: ['s'] },
     archivedSessionIds: ['s'],
-    sessionPresentations: { s: { ongoing: true } },
+    sessionPresentations: {
+      s: {
+        status: { state: 'ongoing', labelKey: 'running', runningSubagentCount: 0 },
+        ongoing: true,
+        completed: false,
+      },
+    },
   };
-  assert.equal(evaluate(`return ${expression.getText(ast)};`, context), false);
+  assert.equal(evaluate(`return ${expression.getText(ast)};`, context), undefined);
   context.archivedSessionIds = [];
-  assert.equal(evaluate(`return ${expression.getText(ast)};`, context), true);
+  assert.deepEqual(evaluate(`return ${expression.getText(ast)};`, context), {
+    state: 'ongoing',
+    labelKey: 'running',
+    runningSubagentCount: 0,
+  });
 });
 
 function permissionFixture(normalize) {

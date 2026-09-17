@@ -8,6 +8,9 @@ function createManager(overrides = {}) {
     async listWorktrees() {
       return [];
     },
+    async updateWorktreeBaseBranch(input) {
+      return input.baseBranch;
+    },
     async listBranches() {
       return [];
     },
@@ -60,6 +63,15 @@ test('projects every approved Manager operation as a serializable result', async
     ok: true,
     value: [],
   });
+  assert.deepEqual(
+    await remote.updateWorktreeBaseBranch({
+      workspaceId: 'ws_example',
+      worktreeId: 'wt_example',
+      baseBranch: 'main',
+      expectedBaseBranch: 'old',
+    }),
+    { ok: true, value: 'main' },
+  );
   assert.deepEqual(await remote.listBranches({ workspaceId: 'ws_example' }), {
     ok: true,
     value: [],

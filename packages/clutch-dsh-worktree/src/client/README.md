@@ -6,7 +6,14 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
-- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, the nine `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and outer/inner error normalization. The import endpoints are `listImportCandidates` and `importWorktree`; no second transport is added.
+- `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
+  `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
+  outer/inner error normalization. The Git endpoints are `listWorktreeCommits`,
+  `listWorktreeCommitFiles`, and `getWorktreeCommitFileDiff`; the Dashboard facts mutation uses
+  `updateWorktreeBaseBranch` on the same adapter, and no second transport is added. Overview reuses the
+  existing history, committed-summary, and working-tree-file reads for one compact status projection when a
+  valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
+  not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
@@ -110,20 +117,83 @@ Worktree and nested Session alignment slots are compacted to preserve the Sideba
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
 
-The dashboard uses `shell.overlay`, covering the frame area to the right of the Sidebar.
-It does not register over the occupied `conversation` slot. The AppFrame column order
-(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow
-the live Sidebar width, and missing/replaced anchors produce zero coverage and restore
-the native columns. Native center/rightbar visibility, inert, and aria-hidden attributes
-are restored on close or disposal. Session identity changes, explicit Sidebar Session
-opens (including the same Session), mode exit, and removal of the selected identity
-close the dashboard. No native Session or Workspace state is changed.
+The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
+occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
+already-open native right sidebar remains visible for a Session-bound Dashboard. The AppFrame column order
+(Sidebar, center, rightbar, overlay) is an explicit upstream layout seam: bounds follow the live Sidebar and
+rightbar widths, and missing/replaced anchors produce zero coverage and restore the native columns. Only the
+native center is concealed and made inert while the Dashboard is open; its visibility, inert, and aria-hidden
+attributes are restored on close or disposal. A ready page-level Dashboard for a Worktree with no retained
+Session collapses the native rightbar first, because that page has no Session-scoped rightbar to preserve; when
+a current Session can host the rightbar and the rightbar is collapsed, the Dashboard header exposes a native-style expand button, hiding it when the rightbar is open. Opening a
+Worktree Dashboard keeps the current Session if it belongs to the target, otherwise navigates to that
+Worktree's retained head Session when one exists; an initial pending
+list defers that decision until the list is ready, while an empty ready list leaves navigation unchanged and does
+not create a Session. Later Session identity changes close only a Session-bound Dashboard; a sessionless empty-list
+Dashboard remains a page-level target. Its top-right navigation action becomes New Session when the target has no
+Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
+identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
+
+Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
+time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
+including while opening an empty Dashboard. File preview uses the current Session only after checking
+its membership in the target Worktree, and native `openResource` reveals the rightbar. An unavailable
+rightbar service does not prevent page-level navigation.
 
 The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
-Tabs implement roving keyboard focus. Git details, derived Worktrees, Settings, and other unconnected
+Tabs implement roving keyboard focus. The Git tab is mounted only while selected. For a managed Worktree
+with a valid persisted `baseBranch`, or with a captured acquisition commit it reads as the implicit baseline,
+Overview performs one compact status read for ahead/behind, committed baseline-to-HEAD line counts, and live
+working-tree line counts without loading the branch list; Main, genuinely unavailable, and
+baseline-unselected views remain disconnected. The Git tab's first mount loads local branches and uses the
+persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and different
+from the current Worktree branch; when no usable saved baseline exists but the record has a captured
+acquisition commit, it reads against that immutable commit and shows the resolved commit as the Base fact,
+and only otherwise does it prompt for a baseline. The Overview facts editor is a fixed-size dialog that keeps
+its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
+rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
+replacement through the existing Worktree
+Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
+value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
+Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
+Selecting or changing a local branch inside the Git tab reloads committed history and the current working-tree snapshot but remains transient. A commit or
+**Uncommitted changes** selection loads changed files and a file selection loads one diff. The commits header owns an
+off-by-default **Multi-select commits** switch: while it is off a commit click replaces the selection, and while it
+is on clicks toggle rows into the aggregate target. Changed-file names use
+green, red, and blue to distinguish additions, deletions, and other changes, with the localized status kept in the
+row title and accessible label; folder icons show expansion state. An over-bound changed-file projection
+renders its explicit truncated notice instead of a generic error. Opening a file is a diff-toolbar action only.
+The pane layout is responsive: wide Dashboards stack the commit and
+changed-file panes in the narrower left column beside a full-height diff, while narrow Dashboards keep two rows of
+commits/changed files followed by the diff. Both layouts share one 3x3 grid and keep two draggable dividers, one per
+axis; container queries move the same panes and dividers between placements. Each divider accepts pointer drags,
+Arrow keys, and a double-click reset, publishes its share as `--git-rows-top` or `--git-columns-left`, draws both of
+its edges so each neighbouring pane is closed by its own line, and keeps the
+panes above the minimum size the CSS tracks declare. The Git state
+machine also exposes a separate Baseline summary target for the net committed comparison-boundary-to-captured-`HEAD`
+tree diff. For a connected selected branch, the Host uses the two branch heads' common ancestor as that
+boundary and reports the Worktree-side commits as ahead and base-branch-only commits as behind. If the
+heads have no common ancestor, the summary falls back to a full two-head tree diff. Its **Include working tree**
+switch changes that target to one fresh net baseline-to-live-tree projection containing committed, staged,
+unstaged, untracked, deleted, and renamed changes; it never concatenates two diffs and bypasses the committed-summary cache.
+With **Multi-select commits** on, committed rows toggle into an exact multi-commit union; the client sends the
+selected SHAs as a selection rather than constructing a
+range, and renders the returned per-commit segments; turning the switch off collapses the union back to the focused
+commit. Working-tree selection stays single-select and
+cannot be combined with committed rows. The Git state machine keeps bounded baseline-scoped per-entry/
+per-file caches, retains ready content during refresh, and uses request generations to ignore late results
+after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
+Host projection because the files can change between reads. Main
+remains explicitly unavailable. A selected local branch that no longer exists renders an honest unavailable
+state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or remote-tracking
+ref is rejected outright because only a plain local branch name can be selected; a Worktree with neither a
+usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
+sidecar files or `.git`, and it exposes no working-tree mutation controls.
+
+Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The connected Worktree
 instructions card persists plugin-owned text through the existing Manager path; active bindings receive
 that text through the Host's DSH `agent/pre-step` hook.
@@ -224,8 +294,12 @@ The Dashboard instructions card edits plugin-owned text through
 `updateWorktreeInstructions` on the existing Connection. Save carries the editor's
 `expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
-preserved. Main does not expose instruction editing. Creation/import time and base branch are
-optional recorded facts; missing values remain unknown. The open-editor control uses the
+preserved. Main does not expose instruction editing. The Dashboard Base fact for a managed Worktree
+can be replaced with a saved local branch other than the current Worktree branch through
+`updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
+owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
+remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
+never user-selectable directly. Missing creation/import facts remain unknown. The open-editor control uses the
 native split-button typography, padding, border, and hover colors, launching detected host
 applications or falling back to the encoded VS Code protocol link.
 
@@ -278,8 +352,13 @@ and runtime cycles inside the new implementation directories.
 The Client persists Workspace, Main, and Worktree expansion exceptions under
 clutch-dsh-worktree.expand-state in browser-local storage. Missing IDs are
 expanded by default. The five-row Session overflow control remains transient,
-and parent collapse clears its affected temporary group state. Storage failure
-falls back to in-memory behavior and does not change DSH or sidecar data.
+and parent collapse clears its affected temporary group state. The header's
+Collapse All action targets every Workspace, Main group, and Worktree except the Workspace
+and Worktree containing the current Session, which remain expanded. Storage failure
+falls back to in-memory behavior and does not change DSH or sidecar data. Stored choices are
+pruned only after a refresh confirms the complete Workspace list and every Workspace
+projection; a ready read that is still empty or partial means nothing has arrived yet, so it
+never clears a stored choice.
 
 ### Current Session reveal and positioning
 
@@ -324,7 +403,7 @@ Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cl
 browser-local fork recovery, membership projections, and permission notices for the affected
 Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending
 mutations and recovery health disable these actions. Cleanup requires explicit user confirmation.
-Positioning uses `scrollIntoView({ block: 'nearest' })` within that overlay.
+Positioning is scoped to the Worktree content scroll container. It keeps the navigation position when the current row is already visible and adjusts only the minimum vertical distance when the row is outside the viewport.
 
 The current Session reveal and suppression are browser-local, in-memory
 presentation state. Automatic reveal never mutates clutch-dsh-worktree.expand-state,
@@ -350,6 +429,7 @@ The Worktree surface is additive:
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
+- Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
 - Session rows derive one native-compatible status presentation from the DSH Session snapshot.
@@ -363,18 +443,25 @@ The Worktree surface is additive:
 - Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
   complete title, relative time, and current status; the card is suppressed while the Session menu
   is open or a row is being dragged.
-- Collapsed Workspace, Main, and Worktree rows receive a complete-membership ongoing flag before
-  search filtering and the five-row limit are applied. When collapsed, the flag renders one native
-  ongoing `StateDot` in the trailing action rail; the activity rail reserves 28px for the indicator
-  plus a 4px label gap, and a long Worktree label uses the same forward/return scroll loop while
-  activity remains active. Expansion, hover/focus, and menu-open state yield the rail to its existing
-  actions without starting a competing scroll loop. Main and Worktree share the same parameterized
-  group-row path.
-- A newer user-message `updatedAt` promotes that Session to the head of its current visual Main or
-  Worktree group. The order store is browser-local and persists only group keys, Session IDs, and
-  observed numeric timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates
-  DSH Workspace data for automatic promotion; manual drag updates the local order only after the
-  native DSH ordering call succeeds.
+- Collapsed Workspace, Main, and Worktree rows receive one aggregate Session status from complete
+  eligible membership (after native blank/archive filtering) before search filtering and the five-row
+  limit are applied. At most one native `StateDot` is rendered in the trailing action rail; pending
+  interaction warnings (including waiting approval) take priority over running, and running takes
+  priority over completed. Idle Sessions do not contribute a group dot. The activity rail reserves
+  28px for the indicator plus a 4px label gap, and a long Worktree label uses the same forward/return
+  scroll loop while a group status remains active. Expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions without starting a competing scroll loop. Main and Worktree share
+  the same parameterized group-row path.
+- The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
+  `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.
+  The order store is browser-local and persists only group keys, Session IDs, and observed numeric
+  timestamps. It never calls `insertSessionBefore`, writes the sidecar, or mutates DSH Workspace data
+  for automatic promotion. Manual Worktree drag updates the local order directly; manual Main drag
+  calls native DSH ordering first and updates the local projection only after success. A successful
+  drag re-baselines the observed `updatedAt` of its group, so reopening or refreshing the page keeps
+  the manual order until a Session receives strictly newer activity. Accounts are derived only from
+  Workspace projections that already arrived, and are pruned only from a complete snapshot, so a
+  pending or partial refresh never resets the stored order.
 - Main uses the native DSH Session `+`; Worktree uses the injected manager and then opens the created Session;
 - Main and Worktree group rows use one parameterized row component. Main uses the branch/tree icon and
   exposes the shared options menu with Copy path and, when a current local branch exists, Create new

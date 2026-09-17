@@ -55,6 +55,7 @@ export function recordForCreate(input: CreateWorktreeTransactionInput): Worktree
     branch: input.targetBranch,
     createdAt: new Date().toISOString(),
     baseBranch: input.baseBranch,
+    ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
     source: 'plugin',
     status: 'active',
   };
@@ -73,6 +74,7 @@ export function pendingCreate(
     targetPath: input.targetPath,
     branch: input.targetBranch,
     ...(input.newBranch !== undefined ? { baseRef: input.baseBranch } : {}),
+    ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
     repositoryFingerprint: createRepositoryFingerprint(repository),
     startedAt: new Date().toISOString(),
   };

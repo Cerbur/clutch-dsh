@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
+import ts from 'typescript';
 
 import {
   createNumberedWorktreeName,
@@ -70,7 +71,25 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(readmeZh, /临时.*展开|临时.*定位/);
   assert.match(readmeZh, /不改变.*展开选择|展开选择.*不改变/);
   assert.match(clientReadme, /current Session.*browser-local|当前 Session.*浏览器本地/i);
+  assert.match(readme, /already visible.*navigation scroll|navigation scroll.*already visible/i);
+  assert.match(readmeZh, /已在可见区域内.*导航滚动位置/);
+  assert.match(clientReadme, /keeps the navigation position.*already visible/i);
   assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
+});
+
+test('documents Worktree health icon presentation in bilingual READMEs', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
+  const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
+
+  assert.match(readme, /Worktree health is shown by tinting the branch icon/);
+  assert.match(readmeZh, /Worktree 健康状态通过 branch icon 的颜色显示/);
+  assert.match(clientReadme, /Worktree health is shown by tinting the branch icon/);
+  assert.match(readme, /ready uses the success \(green\) color/);
+  assert.match(readmeZh, /ready 使用 success（绿色）状态色/);
+  assert.match(clientReadme, /ready uses the success \(green\) color/);
+  assert.match(readme, /assistive technology even when hover replaces the icon/);
+  assert.match(readmeZh, /即使 hover 时 icon 被 disclosure control 替换/);
 });
 
 function manager(overrides = {}) {
@@ -1265,14 +1284,22 @@ test('keeps targeted refresh errors local and retryable', async () => {
   assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
 });
 
-test('renders transient Worktree health with the public StateDot primitive', async () => {
-  const source = (await readSurfaceSources()).combined;
+test('renders transient Worktree health through semantic icon colors', async () => {
+  const { rows, combined } = await readSurfaceSources();
 
-  assert.match(source, /StateDot/);
-  assert.match(source, /health/);
-  assert.match(source, /['"]warning['"]/);
-  assert.match(source, /['"]error['"]/);
-  assert.doesNotMatch(source, /worktreeStatus\(record\)/);
+  assert.match(rows, /data-worktree-state=\{state\}/);
+  assert.match(rows, /const worktreeStateVisible = stateLabel !== undefined;/);
+  assert.match(
+    rows,
+    /<span className=\{styles\.worktreeStateLabel\}>\{stateLabel\}<\/span>/,
+  );
+  assert.doesNotMatch(rows, /worktreeStateVisible = state !== undefined/);
+  assert.doesNotMatch(rows, /title=\{stateLabel\}/);
+  assert.match(combined, /['"]warning['"]/);
+  assert.match(combined, /['"]error['"]/);
+  assert.doesNotMatch(rows, /styles\.worktreeState(?!Label)/);
+  assert.doesNotMatch(rows, /<StateDot state=\{state\}/);
+  assert.doesNotMatch(rows, /worktreeStatus\(record\)/);
 });
 
 test('keeps the final surface bounded, scrollable, and action-aligned', async () => {
@@ -1526,6 +1553,10 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
     styles,
     /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeLabel,[\s\S]*\.worktreeRow:focus-within \.worktreeLabel[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
   );
+  assert.match(
+    styles,
+    /\.workspaceRow:hover \.menuAction,[\s\S]*\.workspaceRow\[data-menu-open='true'\] \.menuAction,[\s\S]*\.workspaceRow:focus-within \.menuAction/,
+  );
 
   const mainCall = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
   const activeCall = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
@@ -1535,6 +1566,112 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
   assert.match(archivedCall, /showDashboardAction=\{props\.openDashboard !== undefined\}/);
   assert.match(activeCall, /onDashboard:/);
   assert.match(archivedCall, /onDashboard:/);
+});
+
+test('dispatches Dashboard from an empty Worktree row button and menu', async () => {
+  const source = await readFile(
+    new URL('../src/client/surface/components/rows.tsx', import.meta.url),
+    'utf8',
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const jsx = (type, props) => ({ type, props: props ?? {} });
+  const jsxs = jsx;
+  const primitives = Object.fromEntries(
+    [
+      'HoverCard',
+      'IconArchiveOutline20',
+      'IconBranchOutline16',
+      'IconChevronDownOutline14',
+      'IconChevronRightOutline14',
+      'IconCopyOutline16',
+      'IconEditOutline16',
+      'IconEllipsisOutline16',
+      'IconFolderClose16',
+      'IconFolderOpen16',
+      'IconPlusOutline16',
+      'IconRefreshOutline16',
+      'IconTrashOutline16',
+      'Menu',
+      'StateDot',
+    ].map((name) => [name, function Primitive() {}]),
+  );
+  const styles = new Proxy(
+    {},
+    { get: (_target, key) => String(key) },
+  );
+  const react = {
+    useEffect: () => {},
+    useRef: (current) => ({ current }),
+    useState: (value) => [value, () => {}],
+  };
+  const module = { exports: {} };
+  new Function('require', 'exports', 'module', compiled)(
+    (name) => {
+      if (name === 'react') return react;
+      if (name === 'react/jsx-runtime') return { jsx, jsxs, Fragment: 'Fragment' };
+      if (name === '@deepseek-ai/dsh-client-ui-primitives')
+        return { ...primitives, writeClipboard: () => {} };
+      if (name === '../../dashboard/dashboard-icon.js')
+        return { IconDashboard: function IconDashboard() {} };
+      if (name === '../../session/session-view.js')
+        return { isBlankSession: () => false, relativeTime: () => '' };
+      if (name === '../selectors.js') return { sessionLabel: () => '' };
+      if (name === '../../worktree.css') return styles;
+      throw new Error('Unexpected rows.tsx import: ' + name);
+    },
+    module.exports,
+    module,
+  );
+
+  const record = { workspaceId: 'repo', worktreeId: 'wt-empty' };
+  const calls = [];
+  const tree = module.exports.WorktreeGroupRow({
+    t: (key) => key,
+    kind: 'worktree',
+    label: 'empty',
+    worktreeId: record.worktreeId,
+    expanded: false,
+    hasOngoingSession: false,
+    icon: jsx(function BranchIcon() {}, {}),
+    workspaceTitle: 'Repo',
+    state: undefined,
+    stateLabel: undefined,
+    onToggle: () => {},
+    showDashboardAction: true,
+    menu: {
+      onDashboard: () => calls.push(record),
+      open: false,
+      onOpenChange: () => {},
+      label: 'empty',
+      copyPath: '/tmp/empty',
+      disabled: false,
+    },
+  });
+
+  const nodes = [];
+  const seen = new Set();
+  const visit = (value) => {
+    if (value === null || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    nodes.push(value);
+    for (const child of Object.values(value)) visit(child);
+  };
+  visit(tree);
+
+  const dashboardButton = nodes.find((node) => node.props?.['data-dashboard-action'] !== undefined);
+  const menu = nodes.find((node) => node.type === primitives.Menu);
+  assert.ok(dashboardButton, 'empty Worktree renders a Dashboard action button');
+  assert.ok(menu, 'empty Worktree renders its action menu');
+
+  dashboardButton.props.onClick({ stopPropagation() {} });
+  menu.props.onSelect('dashboard');
+  assert.deepEqual(calls, [record, record]);
 });
 
 test('separates collapsed running activity and coordinates it with hover scrolling', async () => {
@@ -1548,10 +1685,10 @@ test('separates collapsed running activity and coordinates it with hover scrolli
 
   assert.match(rowSource, /const worktreeLabelPointerInsideRef = useRef<boolean>\(false\)/);
   assert.match(rowSource, /const syncWorktreeLabelScroll = \(\) =>/);
-  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| \(!expanded && hasOngoingSession\)/);
+  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| groupActivityVisible/);
   assert.match(
     rowSource,
-    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[expanded, hasOngoingSession, label\]\)/,
+    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[groupActivityVisible, label\]\)/,
   );
   assert.match(
     rowSource,
@@ -1697,6 +1834,14 @@ test('polishes Main and Worktree row hover presentation', async () => {
     /content=\{[\s\S]*<div className=\{styles\.worktreeHoverTitle\}>\{label\}<\/div>/,
   );
   assert.match(source, /disabled=\{menu\?\.open === true \|\| drag\?\.active === true\}/);
+  assert.match(
+    source,
+    /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}\s*aria-label=\{t\(expanded \? 'worktree\.collapse' : 'worktree\.expand'/,
+  );
+  assert.match(
+    source,
+    /\{stateLabel !== undefined && state !== 'done' && \(\s*<p className=\{styles\.worktreeHoverTitle\}>\{stateLabel\}<\/p>\s*\)\}/,
+  );
   assert.match(source, /repairGuidance !== undefined/);
   assert.match(source, /<p className=\{styles\.worktreeHoverTitle\}>\{repairGuidance\}<\/p>/);
 
@@ -1712,7 +1857,20 @@ test('polishes Main and Worktree row hover presentation', async () => {
     styles,
     /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*text-transform: uppercase;/,
   );
-  assert.match(styles, /\.worktreeState\s*\{[\s\S]*width: 12px;[\s\S]*margin-right: 0;/);
+  assert.doesNotMatch(styles, /\.worktreeState\s*\{/);
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='done'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-success-primary\);/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='warning'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-warn-primary\);/,
+  );
+  assert.match(
+    styles,
+    /\.worktreeIcon\[data-worktree-state='error'\]\s*\{[\s\S]*color: var\(--dsw-alias-state-error-primary\);/,
+  );
+  assert.match(styles, /\.worktreeStateLabel\s*\{[\s\S]*position: absolute;[\s\S]*clip: rect/);
   assert.match(
     styles,
     /\.worktreeHoverTitle\s*\{[\s\S]*color: var\(--dsw-static-neutral-bluish-00\);/,
@@ -1883,7 +2041,10 @@ test('positions the current Worktree Session after commit and cancels stale work
   assert.match(source, /scrollCurrentSessionIntoView/);
   assert.match(source, /generation !== locateGenerationRef\.current/);
   assert.match(positionSource, /querySelectorAll<HTMLElement>\('\[data-session-id\]'\)/);
-  assert.match(positionSource, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.match(positionSource, /getBoundingClientRect/);
+  assert.doesNotMatch(positionSource, /scrollIntoView/);
+  assert.match(source, /contentRef/);
+  assert.match(source, /ref=\{expansion\.contentRef\}/);
   assert.doesNotMatch(source, /document\.querySelector/);
 });
 
@@ -1935,6 +2096,19 @@ test('clears transient groups on parent collapse and prunes only ready snapshots
   assert.match(source, /main:/);
   assert.match(source, /worktree:/);
   assert.doesNotMatch(source, /expandedSessionGroups.*localStorage/);
+});
+
+test('keeps stored Session order and expansion while the native lists are pending', async () => {
+  const source = await readSurfaceSource();
+
+  // A refresh reaches "ready with nothing read yet" before the native lists land. Both
+  // hooks must wait for the reported arrival phase and for a complete projection, because
+  // deriving accounts or pruning from that empty read deletes stored browser-local state.
+  assert.match(source, /isPendingListPhase\(workspaces\.phase\)/);
+  assert.match(source, /isPendingListPhase\(sessions\.phase\)/);
+  assert.match(source, /if \(!canRetainAccounts\) return;/);
+  assert.match(source, /if \(view === undefined\) continue;/);
+  assert.match(source, /isCompleteWorktreeWorkspaceSnapshot\(workspaceIds, readState\.views\)/);
 });
 
 test('repair worktrees expose archive while recovery-needed worktrees remain blocked', async () => {

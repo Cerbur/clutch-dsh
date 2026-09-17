@@ -335,6 +335,32 @@ async function createWorktreeAttempt(
     throw asGitError('create worktree', workspace.rootPath, targetPath, error);
   }
 
+  let capturedBaseCommit: string | undefined;
+  if (context.git.resolveCommit) {
+    try {
+      // Read the Worktree's actual HEAD after Git has created it. The base
+      // branch may have moved during the preflight/create window.
+      capturedBaseCommit = await context.git.resolveCommit(targetPath, 'HEAD', { signal: context.signal });
+    } catch (error) {
+      try {
+        await context.git.removeWorktree(workspace.rootPath, targetPath);
+      } catch (cleanupError) {
+        throw providerError(
+          'SIDECAR_SYNC_REQUIRED',
+          `Created Worktree could not be verified or cleaned up: ${targetPath}`,
+          {
+            workspaceId: input.workspaceId,
+            workspaceRoot: workspace.rootPath,
+            targetPath,
+            verificationError: describeError(error),
+            cleanupError: describeError(cleanupError),
+          },
+        );
+      }
+      throw asGitError('resolve created Worktree HEAD', workspace.rootPath, targetPath, error);
+    }
+  }
+
   const record: WorktreeRecord = {
     worktreeId,
     workspaceId: input.workspaceId,
@@ -343,6 +369,7 @@ async function createWorktreeAttempt(
     source: 'plugin',
     createdAt: new Date().toISOString(),
     baseBranch,
+    ...(capturedBaseCommit !== undefined ? { baseCommit: capturedBaseCommit } : {}),
     status: 'active',
   };
 

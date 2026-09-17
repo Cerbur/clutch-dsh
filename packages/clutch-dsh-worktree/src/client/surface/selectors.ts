@@ -53,10 +53,24 @@ export function clearSessionGroupExpansion(
   return next;
 }
 
+/** DSH list snapshots report a monotone `pending` → `ready` arrival phase. */
+export function isPendingListPhase(phase: string | undefined): boolean {
+  return phase !== undefined && phase !== 'ready';
+}
+
+/**
+ * True only for an authoritative Worktree projection: the confirmed Workspace list is
+ * non-empty and every Workspace in it has a ready view.
+ *
+ * An empty `workspaceIds` means the Workspace list has not arrived yet — never that every
+ * Workspace disappeared. Callers prune browser-local preferences on `true`, so an empty or
+ * partial read must stay incomplete and keep those preferences untouched.
+ */
 export function isCompleteWorktreeWorkspaceSnapshot(
   workspaceIds: readonly string[],
   views: readonly WorktreeWorkspaceView[],
 ): boolean {
+  if (workspaceIds.length === 0) return false;
   if (views.length !== workspaceIds.length) return false;
   const expected = new Set(workspaceIds);
   const actual = new Set(views.map((view) => view.workspaceId));

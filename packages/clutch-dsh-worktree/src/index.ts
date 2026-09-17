@@ -14,7 +14,7 @@ export {
   WORKTREE_REMOTE_METHODS,
   createWorktreeError,
 } from './contract/index.js';
-export { WORKTREE_FULL_ACCESS_PRESET } from './contract/index.js';
+export { WORKTREE_FULL_ACCESS_PRESET, WORKTREE_GIT_SUMMARY, WORKTREE_GIT_WORKING_TREE } from './contract/index.js';
 export type {
   AdoptWorktreeBranchInput,
   BranchRecord,
@@ -26,6 +26,20 @@ export type {
   WorktreeErrorCode,
   WorktreeErrorDetails,
   WorktreeManager,
+  WorktreeGitBaseline,
+  WorktreeGitChangedFile,
+  WorktreeGitCommit,
+  WorktreeGitCommitFiles,
+  WorktreeGitCommitFilesRequest,
+  WorktreeGitCommitKind,
+  WorktreeGitDiffRequest,
+  WorktreeGitDiffSegment,
+  WorktreeGitDiffSelection,
+  WorktreeGitFileDiff,
+  WorktreeGitFileDiffRequest,
+  WorktreeGitFileStatus,
+  WorktreeGitHistory,
+  WorktreeGitRequestContext,
   WorktreeImportCandidate,
   WorktreeRemoteManager,
   WorktreeRemoteMethod,
@@ -58,10 +72,13 @@ export {
   createRepositoryFingerprint,
 } from './provider/index.js';
 export {
+  SUPPORTED_SIDECAR_SCHEMA_VERSIONS,
   WorkspaceShardedSidecarRepository,
+  migrateSidecarSnapshot,
   validateSidecarSnapshot,
 } from './provider/sidecar/repository.js';
 export {
+  LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
   WorktreeProviderError,
   isWorktreeProviderError,

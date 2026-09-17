@@ -5,7 +5,7 @@ import type { RecoverWorktreesInput } from '../types.js';
 import { pathExists } from '../support/paths.js';
 import { recoveryError } from '../support/journal.js';
 import { withShardLock } from '../support/locking.js';
-import { resolveRepository, findExactWorktree, isExactCreatedWorktree } from '../support/inspection.js';
+import { resolveRepository, findExactWorktree } from '../support/inspection.js';
 import { cleanLegacyObservations, assertRepositoryCompatible } from '../support/admission.js';
 import { assertRecoverableCreatePath } from '../support/path-safety.js';
 import { publishCreated, publishCleaned, clearPending, markRecovery } from '../support/publication.js';
@@ -74,16 +74,8 @@ export async function recoverWorktreeTransaction(
               },
             );
           }
-          const exact = await isExactCreatedWorktree(live, {
-            workspaceId: input.workspaceId,
-            workspaceRoot: input.workspaceRoot,
-            targetPath: pending.targetPath,
-            worktreeId: pending.worktreeId,
-            baseBranch: pending.baseRef ?? pending.branch,
-            newBranch: pending.baseRef !== undefined ? pending.branch : undefined,
-            targetBranch: pending.branch,
-          });
-          if (exact) {
+          const exact = await findExactWorktree(live, pending.targetPath, pending.branch);
+          if (exact && exact.detached !== true) {
             const record: WorktreeRecord = {
               worktreeId: pending.worktreeId,
               workspaceId: input.workspaceId,
@@ -91,6 +83,12 @@ export async function recoverWorktreeTransaction(
               branch: pending.branch,
               createdAt: pending.startedAt,
               baseBranch: pending.baseRef ?? pending.branch,
+              // The journaled acquisition commit is immutable and always wins.
+              // Recovery may run long after the interrupted create, so the live
+              // Worktree HEAD can already have advanced past the acquisition point.
+              ...(pending.baseCommit ?? exact.headCommit
+                ? { baseCommit: pending.baseCommit ?? exact.headCommit }
+                : {}),
               source: 'plugin',
               status: 'active',
             };

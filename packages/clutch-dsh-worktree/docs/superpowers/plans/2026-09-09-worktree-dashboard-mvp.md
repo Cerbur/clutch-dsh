@@ -185,7 +185,7 @@ This remains a Client-only fix and does not modify DSH source or persisted data.
 
 ## Dashboard preview evidence (2026-09-13)
 
-- The user-authorized Dashboard preview is stored as `assets/screenshots/screenshots-dashboard.webp`
+- The user-authorized Dashboard preview is stored as `assets/screenshots/screenshots-dashboard.png`
   (2584 × 1622) and listed in `screenshots.json`.
 - Both public READMEs show the screenshot and identify the Dashboard as a plugin-only preview MVP,
   including the connected actions and the placeholder tabs.
