@@ -403,7 +403,7 @@ test('Dashboard facts preserve words before emergency wrapping', () => {
   assert.doesNotMatch(factStyles, /overflow-wrap: anywhere;/);
 });
 
-test('dashboardFacts uses a responsive searchable baseline modal and feeds it to Git tab defaults', async () => {
+test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it to Git tab defaults', async () => {
   const harness = renderHarness(async () => true);
   const calls = [];
   const branches = [
@@ -435,8 +435,9 @@ test('dashboardFacts uses a responsive searchable baseline modal and feeds it to
   assert.ok(search);
   assert.equal(search.props.autoFocus, undefined);
   assert.equal(search.props.role, 'combobox');
-  assert.equal(search.props['aria-expanded'], false);
-  assert.equal(search.props['aria-controls'], undefined);
+  assert.equal(search.props['aria-expanded'], true);
+  assert.equal(search.props['aria-controls'], 'dashboard-options');
+  assert.equal(search.props['aria-activedescendant'], 'dashboard-option-0');
   const baselineRow = findAll(
     node,
     (item) =>
@@ -447,19 +448,16 @@ test('dashboardFacts uses a responsive searchable baseline modal and feeds it to
   assert.equal(baselineRow.props.children[0].type, 'dt');
   assert.equal(baselineRow.props.children[1].type, 'dd');
   assert.equal(baselineRow.props.children[2].type, 'span');
-  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
-  assert.deepEqual(options, []);
-
-  search.props.onFocus();
-  node = harness.render();
-  const focusedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
-  const listbox = byRole(node, 'listbox')[0];
-  assert.equal(focusedSearch.props['aria-expanded'], true);
-  assert.equal(focusedSearch.props['aria-controls'], 'dashboard-options');
-  assert.equal(focusedSearch.props['aria-activedescendant'], 'dashboard-option-0');
-  assert.equal(listbox.props['data-dashboard-baseline-options'], true);
+  // The branch list is part of the permanent frame: it exists without any
+  // focus or click, and only its rows react to the query.
+  const optionsSurface = findAll(
+    node,
+    (item) => item.props?.['data-dashboard-baseline-options'] !== undefined,
+  )[0];
+  assert.ok(optionsSurface);
+  const listbox = byRole(optionsSurface, 'listbox')[0];
   assert.equal(byRole(listbox, 'option').length, 2);
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
   assert.deepEqual(
     options.map((option) => option.props['data-dashboard-baseline-option']),
     ['main', 'develop'],
@@ -468,7 +466,7 @@ test('dashboardFacts uses a responsive searchable baseline modal and feeds it to
   assert.equal(options[1].props['aria-selected'], false);
   assert.equal(findAll(options[0], (item) => item.props?.['data-icon'] === 'check').length, 1);
 
-  focusedSearch.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
+  search.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
   node = harness.render();
   options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
   assert.equal(options[0].props['aria-selected'], false);
@@ -497,6 +495,12 @@ test('dashboardFacts uses a responsive searchable baseline modal and feeds it to
     findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined).length,
     0,
   );
+  // An empty result swaps in the status message without removing the frame.
+  assert.equal(
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-options']).length,
+    1,
+  );
+  assert.equal(byRole(node, 'listbox').length, 0);
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
   options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
@@ -534,8 +538,6 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   });
   findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
   node = harness.render();
-  findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0].props.onFocus();
-  node = harness.render();
   const listbox = byRole(node, 'listbox')[0];
   const options = byRole(listbox, 'option');
   assert.equal(options.length, 24);
@@ -545,18 +547,34 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   harness.dispose();
 });
 
-test('baseline picker uses an elevated viewport-aware scroll surface', () => {
+test('baseline picker renders one fixed, elevated, scrollable branch list', () => {
+  const modalStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardBaselineModal {'),
+    dashboardCssSource.indexOf('.dashboardBaselineSearch {'),
+  );
+  assert.match(modalStyles, /width: min\(440px, calc\(100vw - 48px\)\);/);
+  assert.match(modalStyles, /max-height: calc\(100dvh - 48px\);/);
+  assert.match(modalStyles, /min-height: 0;\n\s+overflow-y: auto;/);
+
+  const pickerStyles = dashboardCssSource.slice(
+    dashboardCssSource.indexOf('.dashboardBaselinePicker {'),
+    dashboardCssSource.indexOf('.dashboardBaselineOption {'),
+  );
+  // A fixed (not max-) height viewport: filtering swaps rows and never resizes
+  // the list, so the modal frame stays put.
+  assert.match(
+    pickerStyles,
+    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?height: clamp\(258px, 48dvh, 300px\);[\s\S]*?overflow-y: auto;/,
+  );
+  assert.doesNotMatch(pickerStyles, /max-height:/);
+  assert.match(pickerStyles, /background: var\(--dsw-specific-menu/);
+  assert.match(pickerStyles, /border-radius: 20px;/);
+  assert.match(pickerStyles, /\.dashboardBaselineList \{[\s\S]*?flex-direction: column;/);
+  // The error floats over the list instead of growing the frame.
   assert.match(
     dashboardCssSource,
-    /\.dashboardBaselineModal \{[\s\S]*?width: min\(440px, calc\(100vw - 48px\)\);[\s\S]*?max-height: calc\(100dvh - 48px\);/,
+    /\.dashboardBaselineError \{[\s\S]*?position: absolute;/,
   );
-  assert.match(
-    dashboardCssSource,
-    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?42dvh[\s\S]*?overflow-y: auto;/,
-  );
-  assert.match(dashboardCssSource, /min-height: 0;\n\s+overflow-y: auto;/);
-  assert.match(dashboardCssSource, /background: var\(--dsw-specific-menu/);
-  assert.match(dashboardCssSource, /border-radius: 20px;/);
   assert.match(
     dashboardCssSource,
     /\.dashboardBaselineOption \{[\s\S]*?min-height: 40px;[\s\S]*?border-radius: 10px;/,

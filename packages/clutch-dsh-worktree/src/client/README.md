@@ -149,9 +149,10 @@ baseline-to-HEAD line counts, and live working-tree line counts without loading 
 and baseline-unselected views
 remain disconnected. The Git tab's first mount loads local branches and uses the persisted `baseBranch` shown
 in Dashboard facts as the initial selection when it is present and different from the current Worktree branch;
-otherwise it prompts for a baseline. The Overview facts editor keeps
-its search field above an elevated, viewport-aware branch list; long rosters scroll inside the list so the
-dialog actions remain reachable on compact windows. It saves a replacement through the existing Worktree
+otherwise it prompts for a baseline. The Overview facts editor is a fixed-size dialog that keeps
+its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
+rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
+replacement through the existing Worktree
 Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
 value back as the next Git selector default. With a valid baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.

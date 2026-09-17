@@ -17,7 +17,7 @@
 
 - Sidecar schema 升级至 v5，严格保留可选 `baseCommit`，同时兼容读取 v1–v4 历史记录。
 - Git Dashboard 复用现有 `/api` Worktree Manager transport，并沿用 Provider 的 argv、超时、取消和输出边界。
-- 将 Overview 中的基线编辑改为铅笔图标入口和 DSH 弹窗；弹窗打开时先保持选择列表关闭，点击第一行搜索框后再展开响应式、可滚动的 branch 选择器并过滤本地 branch。
+- 将 Overview 中的基线编辑改为铅笔图标入口和固定尺寸的 DSH 弹窗：搜索框常驻顶部，下方是有固定高度、可滚动的 branch 列表（默认展示约七条），过滤 branch 只替换列表内容而不改变弹窗尺寸。
 - 收窄 Git 读取成本：working-tree 的存在性与路径授权改用仅路径 projection，未跟踪文件的行数统计限定为前 50 个（其余显示“未知”），多选 commit 的归属校验改为基于一次固定的 history projection，二进制基线不再写入文本临时文件比较。
 - changed-file 行改用文件名的颜色区分增删改，并在行标题与无障碍标签中给出本地化状态；超过 2000 行的 Diff 会先折叠并可手动展开；Main 的“Git 与变更”视图不再发起任何 Git 读取。
 - 在提交栏标题增加默认关闭的**多选提交**开关：关闭时点击 commit 直接查看该 commit 自己的 Diff，打开后才启用多选提交；关闭开关时会把多选收敛回当前聚焦的 commit。
@@ -39,7 +39,7 @@
 
 - Upgrade the sidecar schema to v5 with strict optional `baseCommit` support while continuing to read v1–v4 historical records.
 - Reuse the existing `/api` Worktree Manager transport and the Provider's argv, timeout, cancellation, and output bounds.
-- Replace the Overview baseline editor with a pencil-icon trigger and a DSH dialog whose responsive branch picker stays closed until the first-row search field is clicked, keeps search above a scrollable list, and filters local branches before saving.
+- Replace the Overview baseline editor with a pencil-icon trigger and a fixed-size DSH dialog whose search field stays above a fixed-height, scrollable branch list (about seven rows by default); filtering local branches swaps the rows without resizing the dialog.
 - Tighten Git read cost: working-tree presence and path authorization use a paths-only projection, untracked line statistics are bounded to the first 50 files (the rest report Unknown), multi-commit membership is authorized against one pinned history projection, and binary baselines are no longer compared through a text temporary file.
 - Mark changed-file rows with the filename color while keeping a localized status in the row title and accessible label; fold diffs past 2000 rendered lines behind a reveal action; and issue no Git read at all for the Main Git & Changes view.
 - Add an off-by-default **Multi-select commits** switch to the commits header: clicking a commit shows that commit's own diff, the switch enables additive multi-selection, and turning it off collapses the selection back to the focused commit.

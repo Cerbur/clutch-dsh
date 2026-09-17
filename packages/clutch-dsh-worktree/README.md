@@ -141,10 +141,10 @@ committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; th
 projection, not a watcher or a Worktree-record field. Main,
 unavailable, or baseline-unselected views honestly remain **Not connected**. Opening Overview does not
 load the branch list; the first Git tab activation loads local branches and, when a baseline is selected,
-commit history. To replace that baseline, click the pencil icon beside the Base fact, click the first-row
-search field to open the responsive branch picker; its search stays at the top while the bounded branch list
-scrolls on compact windows. Filter the local branches, choose any local branch except the current Worktree
-branch, and save.
+commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
+picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
+scrolls internally, so the dialog keeps one size while you filter. Choose any local branch except the
+current Worktree branch and save.
 The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default for
 the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
 history, changed files, and diffs without another Worktree-record write. If no valid baseline is saved

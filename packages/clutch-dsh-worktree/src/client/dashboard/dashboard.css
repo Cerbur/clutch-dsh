@@ -511,27 +511,27 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }
 .dashboardBaselineSearch {
+  flex: none;
   display: flex;
   width: 100%;
 }
 .dashboardBaselineOptions {
   box-sizing: border-box;
   display: flex;
+  flex: none;
   flex-direction: column;
-  gap: 2px;
   width: 100%;
   min-width: min(220px, 100%);
-  min-height: 0;
   max-width: min(420px, calc(100vw - 32px));
-  /* Keep roughly eight rows visible on normal windows, but leave the modal's
-     header, description, and footer enough room on compact viewports. */
-  max-height: max(96px, min(320px, 42vh, calc(100vh - 260px)));
-  max-height: max(96px, min(320px, 42dvh, calc(100dvh - 260px)));
-  margin-top: 8px;
+  /* Constant frame: six rows on compact windows, seven on normal ones. Search
+     swaps the rows inside this fixed box, so the modal never resizes. */
+  height: clamp(258px, 48vh, 300px);
+  height: clamp(258px, 48dvh, 300px);
   padding: 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -542,6 +542,12 @@
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   box-shadow: var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
+}
+.dashboardBaselineList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
 }
 .dashboardBaselineOption {
   box-sizing: border-box;
@@ -584,15 +590,42 @@
   white-space: nowrap;
 }
 .dashboardBaselineEmpty {
-  display: block;
-  margin-top: 8px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   padding: 8px 10px;
   color: var(--dsw-alias-label-secondary, #788191);
+  text-align: center;
+}
+/* Zero-height anchor: the save error floats over the list instead of growing
+   the modal, so the frame keeps its size in every state. */
+.dashboardBaselineStatus {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 0;
 }
 .dashboardBaselineError {
-  margin-top: 12px;
+  position: absolute;
+  right: 4px;
+  bottom: 12px;
+  left: 4px;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2, #fff);
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-state-error-label, #bd5d43) 10%,
+    var(--dsw-alias-bg-layer-2, #fff)
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-error-label, #bd5d43) 32%, transparent),
+    var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
   color: var(--dsw-alias-state-error-label, #bd5d43);
   font-size: 12px;
+  line-height: 16px;
 }
 .dashboardLink {
   display: flex;

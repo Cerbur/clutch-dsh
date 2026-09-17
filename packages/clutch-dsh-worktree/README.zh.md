@@ -133,9 +133,9 @@ branch 的 managed Worktree，Overview 会通过现有 `/api` Connection 做一�
 projection，不是 watcher，也不会写入 Worktree 记录。Main、不可用或未选择基线时会诚实显示 **待接入**。
 打开 Overview 不会加载 branch 列表；
 第一次进入 Git Tab 时才加载本地 branch，并在选择基线后加载 commit history。要替换基线，可以点击
-Base fact 旁的铅笔图标，再点击第一行搜索框展开响应式 branch 选择器；搜索固定在顶部，较小窗口中较长的
-branch 列表会在受限区域内滚动。然后过滤 branch，选择除当前 Worktree branch 之外的任一本地 branch，
-再保存。
+Base fact 旁的铅笔图标打开 branch 选择器：搜索框固定在选择器顶部，下方是有固定高度的 branch 列表
+（默认展示约七条），超出部分在列表内滚动，因此过滤 branch 时整个弹窗尺寸保持不变。选择除当前
+Worktree branch 之外的任一本地 branch，再保存。
 保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器会以保存后的值作为默认值。
 Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载 history、changed files 和 Diff，
 不会再次写入 Worktree 记录。如果尚未保存有效基线（包括基线等于当前 Worktree branch），Git Tab 会保持
