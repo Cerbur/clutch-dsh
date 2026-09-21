@@ -269,9 +269,16 @@ function nextRevision(current: string, changed: boolean): string {
 }
 
 async function syncFile(pathname: string): Promise<void> {
-  const handle = await open(pathname, 'r');
+  // Windows requires write access for FlushFileBuffers, which backs FileHandle.sync().
+  const handle = await open(pathname, 'r+');
   try {
-    await handle.sync();
+    try {
+      await handle.sync();
+    } catch (error) {
+      const code = (error as { readonly code?: string }).code;
+      // Some Windows/filesystem combinations do not support flushing this handle.
+      if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EPERM') throw error;
+    }
   } finally {
     await handle.close();
   }

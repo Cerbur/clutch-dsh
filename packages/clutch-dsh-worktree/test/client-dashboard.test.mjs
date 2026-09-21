@@ -635,6 +635,8 @@ test('VS Code folder URLs preserve paths and escape URL delimiters', () => {
     assert.equal(url.hash, '');
   }
   assert.equal(vscodeFolderUrl('C:\\Projects\\a b'), 'vscode://file/C:/Projects/a%20b');
+  assert.equal(vscodeFolderUrl(String.raw`\\?\C:\Projects\a b`), 'vscode://file/C:/Projects/a%20b');
+  assert.equal(vscodeFolderUrl(String.raw`\\?\UNC\server\share\repo`), 'vscode://file//server/share/repo');
 });
 
 test('dashboard actions delegate, pending disables mutations, and Sessions displays all live rows', () => {

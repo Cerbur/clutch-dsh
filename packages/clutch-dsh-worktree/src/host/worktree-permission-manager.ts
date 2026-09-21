@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type {
   WorktreeManager,
   WorktreePermissionManager,
@@ -8,6 +10,7 @@ import type {
 } from '../contract/index.js';
 import type { DshReadAdapter } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
+import { samePhysicalPath } from '../provider/path-identity.js';
 
 export interface WorktreePermissionManagerOptions {
   readonly manager: Pick<WorktreeManager, 'listWorktrees' | 'listBindings'>;
@@ -110,9 +113,11 @@ export function createWorktreePermissionManager(
           sessionId: input.sessionId,
         });
       }
+      const sessionCwdMatches = path.isAbsolute(session.cwd) &&
+        await samePhysicalPath(session.cwd, worktree.absolutePath);
       if (
         (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
-        session.cwd !== worktree.absolutePath
+        !sessionCwdMatches
       ) {
         throw providerError(
           'SESSION_CWD_MISMATCH',

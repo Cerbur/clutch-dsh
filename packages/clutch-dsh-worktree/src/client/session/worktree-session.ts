@@ -168,6 +168,28 @@ export async function ensureWorktreeSessionPermission(
   }, result);
 }
 
+function isWindowsPath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith('\\\\') || value.startsWith('//');
+}
+
+function normalizeWindowsPath(value: string): string {
+  let normalized = value.replaceAll('\\', '/');
+  if (/^\/\/\?\/UNC\//iu.test(normalized)) normalized = `//${normalized.slice(8)}`;
+  else if (/^\/\/\?\//u.test(normalized)) normalized = normalized.slice(4);
+  const unc = normalized.startsWith('//');
+  normalized = normalized.replace(/\/{2,}/gu, '/');
+  if (unc && normalized.startsWith('/')) normalized = `/${normalized}`;
+  if (normalized.length > 3) normalized = normalized.replace(/\/+$/u, '');
+  return normalized.toLowerCase();
+}
+
+/** Compare DSH and Worktree paths without rejecting Windows case/separator aliases. */
+function sameWorktreePath(left: string, right: string): boolean {
+  if (left === right) return true;
+  return (isWindowsPath(left) || isWindowsPath(right)) &&
+    normalizeWindowsPath(left) === normalizeWindowsPath(right);
+}
+
 export function resolveWorktreeSessionAction(
   input: ResolveWorktreeSessionActionInput,
 ): WorktreeSessionAction {
@@ -193,7 +215,7 @@ export function resolveWorktreeSessionAction(
         sessionId: targetBinding.sessionId,
       };
     }
-    if (summary.cwd !== input.target.absolutePath) {
+    if (summary.cwd === undefined || !sameWorktreePath(summary.cwd, input.target.absolutePath)) {
       return {
         kind: 'repair',
         reason: 'active-binding-cwd-mismatch',
@@ -223,7 +245,8 @@ export function resolveWorktreeSessionAction(
     const summary = input.sessions.byId[sessionId];
     if (
       summary?.blank !== true ||
-      summary.cwd !== input.target.absolutePath ||
+      summary.cwd === undefined ||
+      !sameWorktreePath(summary.cwd, input.target.absolutePath) ||
       input.archivedSessionIds.includes(sessionId)
     ) {
       continue;
@@ -312,7 +335,7 @@ export function createWorktreeSessionConnector(
       throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
     }
     const target = worktrees.find((record) => record.worktreeId === input.worktreeId);
-    if (target === undefined || target.absolutePath !== input.cwd) {
+    if (target === undefined || !sameWorktreePath(target.absolutePath, input.cwd)) {
       throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'worktree target unavailable', true);
     }
     const action = resolveWorktreeSessionAction({

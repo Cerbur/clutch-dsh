@@ -50,6 +50,27 @@ test('opens a qualifying blank Session already bound to the target Worktree', ()
   );
 });
 
+test('treats Windows path case and separator aliases as the same Worktree cwd', () => {
+  assert.deepEqual(
+    resolveWorktreeSessionAction({
+      target: target({ absolutePath: String.raw`C:\Users\Admin\Worktrees\Topic` }),
+      sessions: sessions({
+        byId: { 'blank-one': { blank: true, cwd: 'c:/users/admin/worktrees/topic' } },
+      }),
+      archivedSessionIds: [],
+      bindings: [
+        {
+          workspaceId: 'ws-one',
+          worktreeId: 'wt-one',
+          sessionId: 'blank-one',
+          status: 'active',
+        },
+      ],
+    }),
+    { kind: 'open-bound', sessionId: 'blank-one' },
+  );
+});
+
 test('binds an unbound qualifying blank Session before opening it', () => {
   assert.deepEqual(
     resolveWorktreeSessionAction({

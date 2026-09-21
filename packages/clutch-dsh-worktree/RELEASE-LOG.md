@@ -49,6 +49,12 @@
 - 让 Main Git 多选提交复用正常的 committed aggregate projection：按可见 Main history 授权 SHA，返回 changed-file 并集与每个 commit 的独立 Diff segment；实时工作区目标仍保持单选。
 - 移除没有调用方的 `isCommitAncestor` 与 `isExactCreatedWorktree`，并修正本分支新增测试文件中的 lint 错误，使 `pnpm run lint` 通过。
 
+#### 兼容性
+
+- 修复 Windows 下 sidecar 原子写入在只读文件句柄上执行 fsync 导致 `EPERM`、最终报告 `SIDECAR_UNAVAILABLE` 的问题。
+- 兼容 Windows Git 的 `NUL` 设备路径和 Worktree porcelain 输出的 CRLF 换行，规范化 VS Code 打开链接中的扩展 Windows 路径，并避免旧版 Node Windows signal-0 行为误杀存活的锁进程。
+- 使用物理路径比较绑定 Session cwd，兼容 Windows 和 macOS 的真实路径大小写、符号链接及其他路径别名表示。
+
 ### English
 
 #### Added
@@ -81,6 +87,12 @@
 - Return an explicit truncated changed-file projection with a localized browser notice when a list exceeds the Provider output bound, instead of a generic Git error.
 - Make Main Git commit multi-select use the normal committed aggregate projection: authorize SHAs against visible Main history and return a changed-file union with one diff segment per commit; the live working-tree target remains single-select.
 - Remove the unused `isCommitAncestor` and `isExactCreatedWorktree` surfaces, and fix lint errors in the branch's new test files so `pnpm run lint` passes.
+
+#### Compatibility
+
+- Fix Windows sidecar atomic writes that failed with `EPERM` when fsync ran on a read-only file handle and surfaced as `SIDECAR_UNAVAILABLE`.
+- Use Git for Windows' `NUL` device path, accept CRLF Worktree porcelain output, normalize extended Windows paths in VS Code links, and avoid the legacy Node Windows signal-0 behavior that could terminate a live lock owner.
+- Compare Session cwd bindings by physical path so Windows and macOS case, symlink, and other path-alias representations remain compatible.
 
 ## 0.1.12 — 2026-09-14
 

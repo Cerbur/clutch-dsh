@@ -2225,6 +2225,44 @@ test('rejects missing, mismatched, and relative Session bindings', async () => {
   });
 });
 
+test('binds a Session when Worktree and DSH use physical path aliases', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot, dsh, sidecar }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/bind-alias');
+    const record = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    const aliasPath = path.join(tempRoot, 'wt-bind-alias');
+    await symlink(record.absolutePath, aliasPath, 'dir');
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((candidate) =>
+          candidate.worktreeId === record.worktreeId ? { ...candidate, absolutePath: aliasPath } : candidate,
+        ),
+      },
+    }));
+    dsh.addSession({
+      sessionId: 'session-bind-alias',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: record.absolutePath,
+    });
+
+    assert.deepEqual(
+      await provider.bindSession({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        sessionId: 'session-bind-alias',
+      }),
+      {
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        sessionId: 'session-bind-alias',
+        status: 'active',
+      },
+    );
+  });
+});
+
 test('keeps stable sidecar relations unchanged when Git Worktree removal fails', async () => {
   await withGitFixture(async ({ dshHome, dsh, workspaceRoot, provider, sidecar }) => {
     await runGit(workspaceRoot, ['branch', 'feature/remove-failure']);
@@ -3329,6 +3367,41 @@ test('unarchive restores an archived worktree to active status', async () => {
     const worktrees = await provider.listWorktrees({ workspaceId: 'ws_one' });
     assert.equal(worktrees[0].status, 'active');
     assert.equal(worktrees[0].health, 'ready');
+  });
+});
+
+test('unarchive rejects physical path aliases that conflict with an active Worktree', async () => {
+  await withGitFixture(async ({ provider, sidecar, workspaceRoot, tempRoot }) => {
+    const firstPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/unarchive-alias-one');
+    const secondPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/unarchive-alias-two');
+    const first = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: firstPath });
+    const second = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: secondPath });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: second.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', second.worktreeId),
+    });
+
+    const aliasPath = path.join(tempRoot, 'unarchive-alias');
+    await symlink(first.absolutePath, aliasPath, 'junction');
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((candidate) =>
+          candidate.worktreeId === second.worktreeId ? { ...candidate, absolutePath: aliasPath } : candidate,
+        ),
+      },
+    }));
+
+    await assert.rejects(
+      provider.unarchiveWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: second.worktreeId,
+        mutationToken: await mutationTokenFor(provider, 'ws_one', second.worktreeId),
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
   });
 });
 

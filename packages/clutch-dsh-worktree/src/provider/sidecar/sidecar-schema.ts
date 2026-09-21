@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { SessionBinding, WorktreeRecord } from '../../contract/index.js';
 import { createRepositoryFingerprint } from '../git/repository-fingerprint.js';
+import { sameLexicalPath } from '../path-identity.js';
 import {
   LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
@@ -304,7 +305,7 @@ function assertGeneratedPluginPath(
     throw corrupt(pathname, 'Worktree record has an invalid generated ID');
   }
   const expectedPath = path.resolve(generatedWorktreeRoot, record.worktreeId);
-  if (path.resolve(record.absolutePath) !== expectedPath) {
+  if (!sameLexicalPath(record.absolutePath, expectedPath)) {
     throw corrupt(pathname, 'Worktree path is outside the generated DSH Home root');
   }
 }

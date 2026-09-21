@@ -11,6 +11,9 @@ import {
   providerError,
 } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
+import { samePhysicalPath } from '../provider/path-identity.js';
+
+export { samePhysicalPath };
 
 // 这是词法边界检查，既接受 parent 本身也接受其后代；物理路径边界会在后续单独校验。
 // This is a lexical boundary check that accepts parent itself and descendants; physical boundaries are validated separately later.
@@ -35,16 +38,6 @@ export async function pathExists(filePath: string): Promise<boolean> {
   } catch (error) {
     if ((error as { readonly code?: string }).code === 'ENOENT') return false;
     throw error;
-  }
-}
-
-// 优先比较 canonical path 以覆盖符号链接/路径别名；无法 canonicalize 时退回绝对词法比较。
-// Prefer canonical paths to cover symlinks and aliases; fall back to absolute lexical comparison when canonicalization is unavailable.
-export async function samePhysicalPath(left: string, right: string): Promise<boolean> {
-  try {
-    return (await realpath(left)) === (await realpath(right));
-  } catch {
-    return path.resolve(left) === path.resolve(right);
   }
 }
 
@@ -192,18 +185,18 @@ export async function validatePhysicalGeneratedPath(
 
 // 绑定只接受 DSH 已按目标 Worktree cwd 创建的 Session；Manager 不替用户迁移或改写 Session。
 // Binding accepts only Sessions already created by DSH with the target Worktree cwd; the Manager never migrates or rewrites a Session.
-export function assertSessionMatchesWorkspace(
+export async function assertSessionMatchesWorkspace(
   session: DshSessionSummary,
   workspace: DshWorkspaceSummary,
   worktree: WorktreeRecord,
-): void {
+): Promise<void> {
   if (
     (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
     (session.projectId !== undefined &&
       workspace.projectId !== undefined &&
       session.projectId !== workspace.projectId) ||
-    !path.isAbsolute(session.cwd) ||
-    path.resolve(session.cwd) !== path.resolve(worktree.absolutePath)
+    !(path.isAbsolute(session.cwd) &&
+      (await samePhysicalPath(session.cwd, worktree.absolutePath)))
   ) {
     throw providerError('SESSION_CWD_MISMATCH', `Session cwd or Workspace association does not match Worktree`, {
       sessionId: session.sessionId,
