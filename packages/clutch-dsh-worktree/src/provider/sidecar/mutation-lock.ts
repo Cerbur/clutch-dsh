@@ -1,17 +1,16 @@
-import { execFile as execFileCallback } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { promisify } from 'node:util';
-
 import { providerError } from '../types.js';
+import { defaultProcessLiveness, type ProcessLiveness } from './process-liveness.js';
 
 export interface MutationLockOptions {
   readonly acquisitionTimeoutMs?: number;
   readonly leaseMs?: number;
   readonly heartbeatMs?: number;
+  readonly processLiveness?: ProcessLiveness;
 }
 
 export interface MutationLockHandle {
@@ -32,8 +31,6 @@ interface LockOwner {
 const DEFAULT_ACQUISITION_TIMEOUT_MS = 10_000;
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_HEARTBEAT_MS = 5_000;
-const WINDOWS_PROCESS_PROBE_TIMEOUT_MS = 1_000;
-const execFile = promisify(execFileCallback);
 
 function isAlreadyExists(error: unknown): boolean {
   return (error as { readonly code?: string }).code === 'EEXIST';
@@ -41,37 +38,6 @@ function isAlreadyExists(error: unknown): boolean {
 
 function isMissing(error: unknown): boolean {
   return (error as { readonly code?: string }).code === 'ENOENT';
-}
-
-async function processIsAlive(pid: number): Promise<boolean> {
-  if (process.platform !== 'win32') {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      return (error as { readonly code?: string }).code === 'EPERM';
-    }
-  }
-
-  // Node 23.4.0 briefly mapped signal 0 to SIGKILL on Windows. Use the
-  // native process list instead, and fail closed when it cannot be queried.
-  try {
-    const { stdout } = await execFile(
-      'tasklist.exe',
-      ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'],
-      {
-        encoding: 'utf8',
-        maxBuffer: 64 * 1024,
-        timeout: WINDOWS_PROCESS_PROBE_TIMEOUT_MS,
-        windowsHide: true,
-      },
-    );
-    return new RegExp(`^"[^"]*","${pid}",`, 'mu').test(stdout);
-  } catch {
-    // Reclamation requires proof that the owner is dead. Keep an unknown
-    // process alive rather than risking removal of a live owner's lock.
-    return true;
-  }
 }
 
 function parseOwner(value: string): LockOwner | undefined {
@@ -106,12 +72,14 @@ export class CrossProcessMutationLock {
   private readonly acquisitionTimeoutMs: number;
   private readonly leaseMs: number;
   private readonly heartbeatMs: number;
+  private readonly processLiveness: ProcessLiveness;
 
   constructor({
     lockRoot,
     acquisitionTimeoutMs = DEFAULT_ACQUISITION_TIMEOUT_MS,
     leaseMs = DEFAULT_LEASE_MS,
     heartbeatMs = DEFAULT_HEARTBEAT_MS,
+    processLiveness = defaultProcessLiveness,
   }: MutationLockOptions & { readonly lockRoot: string }) {
     if (!path.isAbsolute(lockRoot)) {
       throw providerError('SIDECAR_UNAVAILABLE', 'Mutation lock root must be an absolute path', { lockRoot });
@@ -127,6 +95,7 @@ export class CrossProcessMutationLock {
     this.acquisitionTimeoutMs = acquisitionTimeoutMs;
     this.leaseMs = leaseMs;
     this.heartbeatMs = heartbeatMs;
+    this.processLiveness = processLiveness;
   }
 
   getLockPath(key: string): string {
@@ -279,7 +248,7 @@ export class CrossProcessMutationLock {
     if (!owner || owner.hostname !== os.hostname()) return;
     const heartbeatAt = Date.parse(owner.heartbeatAt);
     if (!Number.isFinite(heartbeatAt) || Date.now() - heartbeatAt < this.leaseMs) return;
-    if (await processIsAlive(owner.pid)) return;
+    if (await this.processLiveness.isAlive(owner.pid)) return;
 
     // Rename is the ownership handoff: a contender cannot remove a newly
     // acquired lock after another contender has already moved this directory.

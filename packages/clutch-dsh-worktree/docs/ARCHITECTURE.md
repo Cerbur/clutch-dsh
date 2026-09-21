@@ -26,10 +26,10 @@ contract  ←  provider
 
 - **`src/contract/`**：
   拥有稳定的 Service Definition 契约。包括 ID 类型、状态定义、外部关系类型、Manager 接口、纯 JSON 投影和运行时 cwd 契约。
-  保持浏览器安全（Browser-safe），不引入任何 Node-only API、Git/Sidecar 类或 DSH mutation 接口。
+  保持浏览器安全（Browser-safe），不引入任何 Node-only API、Git/Sidecar 类或 DSH mutation 接口；跨 Client/Provider 共用的 Windows 词法路径规范化也位于此层，Provider 的物理 `realpath` 仍留在 Node 层。
 - **`src/provider/`**：
   拥有底层 Git 适配器、Sidecar 仓储、DSH Project/Session 只读适配器端口、输入校验、持久化原语以及跨进程锁。
-  严格禁止反向导入 Manage、Host 或 Client，禁止直接参与 UI 或修改 DSH 原始数据。
+  严格禁止反向导入 Manage、Host 或 Client，禁止直接参与 UI 或修改 DSH 原始数据；跨进程锁通过独立的 process-liveness Adapter 隔离 POSIX signal-0 与 Windows 进程表探测。
 - **`src/manage/`**：
   负责业务用例编排（Use-case Orchestration）。包括 Worktree 与 Session 绑定的幂等处理、Main/Active/Detached cwd 解析、创建与清理的恢复顺序决策。
   不执行直接的 Git 命令，不实现 Sidecar 底层文件读写，不拥有 DSH 原始数据，不处理 Web UI。
@@ -195,7 +195,7 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 - **历史扩展元数据保留**：v4/v5 只接受并保留各自历史版本的 Worktree 元数据；`mainInstructions` 是 v6-only 字段，包含它的 v5 输入会被严格拒绝。首次将 v1-v5 快照写成 v6 时该字段保持缺省，v6 快照的已知元数据（`instructions`、`mainInstructions`、`createdAt`、`importedAt`、`baseBranch`、`baseCommit`）在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
 - **指纹与防串仓**：v4/v5/v6 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
 - **并发锁与原子写入**：
-  `SidecarPersistence` 在 `$dshHome/clutch-dsh-worktree/locks` 下使用跨进程文件锁对 Workspace Shard 进行互斥，并通过同目录临时文件 + `rename` 原语完成全量快照的原子发布。临时文件以可写句柄执行同步，避免 Windows 对只读句柄调用 `FlushFileBuffers` 时返回 `EPERM`；目录同步属于 best effort，因为 Windows 文件系统可能拒绝打开目录。
+  `SidecarPersistence` 在 `$dshHome/clutch-dsh-worktree/locks` 下使用跨进程文件锁对 Workspace Shard 进行互斥，并通过同目录临时文件 + `rename` 原语完成全量快照的原子发布。锁只依赖独立的 process-liveness Adapter；POSIX 使用 signal-0，Windows 使用进程表探测且查询失败时 fail closed。durability sync 由独立 helper 负责：临时文件以可写句柄执行同步，避免 Windows 对只读句柄调用 `FlushFileBuffers` 时返回 `EPERM`；目录同步属于 best effort，因为 Windows 文件系统可能拒绝打开目录。
 - **防损坏**：未知版本、格式非法或不变量冲突均视为严重损坏错误，**绝不静默覆盖为空索引**。
 
 ---

@@ -1,16 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 
-function isWindowsPath(value: string): boolean {
-  return /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith('\\\\') || value.startsWith('//');
-}
-
-function normalizeWindowsPath(value: string): string {
-  const normalized = value.replaceAll('/', '\\');
-  if (/^\\\\\?\\UNC\\/iu.test(normalized)) return '\\\\' + normalized.slice(8);
-  if (/^\\\\\?\\[A-Za-z]:[\\/]/u.test(normalized)) return normalized.slice(4);
-  return normalized;
-}
+import { isWindowsPath, normalizeWindowsPath } from '../contract/windows-path.js';
 
 /** Compare lexical paths using the case and separator rules of the represented platform. */
 export function sameLexicalPath(left: string, right: string): boolean {

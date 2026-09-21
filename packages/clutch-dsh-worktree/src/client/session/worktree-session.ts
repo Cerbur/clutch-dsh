@@ -6,6 +6,7 @@ import type {
   WorktreePermissionResult,
   WorktreeStatus,
 } from '../../contract/index.js';
+import { sameWindowsPath } from '../../contract/windows-path.js';
 import {
   createSessionForWorktree,
   WorktreeSessionBindingError,
@@ -168,26 +169,9 @@ export async function ensureWorktreeSessionPermission(
   }, result);
 }
 
-function isWindowsPath(value: string): boolean {
-  return /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith('\\\\') || value.startsWith('//');
-}
-
-function normalizeWindowsPath(value: string): string {
-  let normalized = value.replaceAll('\\', '/');
-  if (/^\/\/\?\/UNC\//iu.test(normalized)) normalized = `//${normalized.slice(8)}`;
-  else if (/^\/\/\?\//u.test(normalized)) normalized = normalized.slice(4);
-  const unc = normalized.startsWith('//');
-  normalized = normalized.replace(/\/{2,}/gu, '/');
-  if (unc && normalized.startsWith('/')) normalized = `/${normalized}`;
-  if (normalized.length > 3) normalized = normalized.replace(/\/+$/u, '');
-  return normalized.toLowerCase();
-}
-
 /** Compare DSH and Worktree paths without rejecting Windows case/separator aliases. */
 function sameWorktreePath(left: string, right: string): boolean {
-  if (left === right) return true;
-  return (isWindowsPath(left) || isWindowsPath(right)) &&
-    normalizeWindowsPath(left) === normalizeWindowsPath(right);
+  return left === right || sameWindowsPath(left, right);
 }
 
 export function resolveWorktreeSessionAction(
