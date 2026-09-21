@@ -18,7 +18,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess';
  * corruption rather than guessed or silently migrated.
  */
 export const LEGACY_SIDECAR_SCHEMA_VERSION = 1 as const;
-export const SIDECAR_SCHEMA_VERSION = 5 as const;
+export const SIDECAR_SCHEMA_VERSION = 6 as const;
 
 export interface RepositoryIdentity {
   readonly topLevel: string;
@@ -227,10 +227,10 @@ export interface GitWorktreeAdapter {
     headCommit: string,
     options?: GitCommandOptions,
   ): Promise<{ readonly ahead: number; readonly behind: number }>;
-  /** Read the bounded Worktree commit history after one resolved comparison boundary. */
+  /** Read up to 200 commits after a boundary, or the repository HEAD history when no boundary is supplied. */
   listCommits?(
     worktreeRoot: string,
-    baseCommit: string,
+    baseCommit?: string,
     options?: GitCommandOptions,
   ): Promise<GitCommitHistoryRead>;
   /** Read tracked and untracked changes in the live working tree against HEAD. */
@@ -304,9 +304,9 @@ export interface GitWorktreeAdapter {
 }
 
 /**
- * 单个 Workspace shard 的完整外部关系快照；这里只保存 Worktree 元数据和 Session binding。
- * Complete external-relation snapshot for one Workspace shard; it contains
- * only Worktree metadata and Session bindings.
+ * 单个 Workspace shard 的完整插件快照；保存 Worktree 元数据、Session binding 以及 Workspace-root Main 共享指引。
+ * Complete plugin snapshot for one Workspace shard; it contains Worktree metadata,
+ * Session bindings, and Workspace-root Main guidance.
  */
 export interface SidecarSnapshot {
   readonly schemaVersion: typeof SIDECAR_SCHEMA_VERSION;
@@ -316,6 +316,8 @@ export interface SidecarSnapshot {
   readonly repositoryFingerprint?: string;
   /** Provider-only repository metadata; never projected to the browser contract. */
   readonly repository?: RepositoryIdentity;
+  /** Shared guidance for Sessions running against the Workspace root (Main). */
+  readonly mainInstructions?: string;
   readonly worktrees: readonly WorktreeRecord[];
   readonly bindings: readonly SessionBinding[];
   readonly pendingOperation?: PendingOperation;

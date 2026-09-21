@@ -47,6 +47,12 @@ import {
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
 import { requireWorkspace } from './manager-support.js';
 
+function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
+  // `main` is retained for legacy browser callers; the canonical synthetic ID is
+  // workspace-scoped so one Workspace cannot address another Workspace's Main shard.
+  return worktreeId === 'main' || worktreeId === `main:${workspaceId}`;
+}
+
 /**
  * Worktree/Session 用例编排器：DSH 只提供权威只读事实，Git 承担 worktree 副作用，sidecar 只保存外部关系。
  * Worktree/Session use-case orchestrator: DSH supplies authoritative read-only facts, Git owns worktree side effects, and the sidecar stores only external relations.
@@ -94,6 +100,20 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     });
   }
 
+  getWorktreeInstructions(input: {
+    workspaceId: string;
+    worktreeId: string;
+  }): Promise<string> {
+    return this.afterRecovery(async () => {
+      await requireWorkspace(this.context, input.workspaceId);
+      const snapshot = await this.context.sidecar.read(input.workspaceId);
+      if (isMainWorktreeId(input.worktreeId, input.workspaceId)) return snapshot.mainInstructions ?? '';
+      const record = snapshot.worktrees.find((item) => item.worktreeId === input.worktreeId);
+      if (!record) throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found', {});
+      return record.instructions ?? '';
+    });
+  }
+
   updateWorktreeInstructions(input: {
     workspaceId: string;
     worktreeId: string;
@@ -114,8 +134,6 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
         );
       }
       return this.context.sidecar.mutate(input.workspaceId, (snapshot) => {
-        const record = snapshot.worktrees.find((item) => item.worktreeId === input.worktreeId);
-        if (!record) throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found', {});
         if (snapshot.pendingOperation || snapshot.recoveryIssues?.length) {
           throw providerError(
             'WORKTREE_RECOVERY_REQUIRED',
@@ -123,7 +141,12 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
             {},
           );
         }
-        const current = record.instructions ?? '';
+        const main = isMainWorktreeId(input.worktreeId, input.workspaceId);
+        const record = main
+          ? undefined
+          : snapshot.worktrees.find((item) => item.worktreeId === input.worktreeId);
+        if (!main && !record) throw providerError('WORKTREE_NOT_FOUND', 'Worktree not found', {});
+        const current = main ? snapshot.mainInstructions ?? '' : record?.instructions ?? '';
         if (current === input.instructions) return { snapshot, result: current, changed: false };
         if (current !== input.expectedInstructions) {
           throw providerError(
@@ -133,12 +156,14 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
           );
         }
         return {
-          snapshot: {
-            ...snapshot,
-            worktrees: snapshot.worktrees.map((item) =>
-              item === record ? { ...item, instructions: input.instructions } : item,
-            ),
-          },
+          snapshot: main
+            ? { ...snapshot, mainInstructions: input.instructions }
+            : {
+                ...snapshot,
+                worktrees: snapshot.worktrees.map((item) =>
+                  item === record ? { ...item, instructions: input.instructions } : item,
+                ),
+              },
           result: input.instructions,
         };
       });
@@ -156,16 +181,41 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   resolveSessionInstructions(sessionId: string): Promise<string> {
     return this.afterRecovery(async () => {
-      const workspaces = (await this.context.dsh.listWorkspaces?.()) ?? [];
-      for (const workspace of workspaces) {
-        const snapshot = await this.context.sidecar.read(workspace.workspaceId);
+      const session = await this.context.dsh.getSession(sessionId);
+      const readWorkspace = async (workspaceId: string) => {
+        const snapshot = await this.context.sidecar.read(workspaceId);
         const binding = snapshot.bindings.find(
           (item) => item.sessionId === sessionId && item.status === 'active',
         );
-        if (!binding) continue;
-        const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
-        if (!record || record.diskCleanup === 'completed') return '';
-        return record.instructions ?? '';
+        if (binding) {
+          const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
+          return {
+            snapshot,
+            instructions: !record || record.diskCleanup === 'completed' ? '' : record.instructions ?? '',
+          };
+        }
+        return { snapshot };
+      };
+
+      // DSH owns the Session-to-Workspace identity. Never let a duplicate or
+      // stale sidecar entry in another shard win over that authoritative key.
+      if (session?.workspaceId !== undefined) {
+        const workspace = await this.context.dsh.getWorkspace(session.workspaceId);
+        const result = await readWorkspace(session.workspaceId);
+        if (workspace !== undefined) return result.instructions ?? result.snapshot.mainInstructions ?? '';
+        // A stale Session may retain a Workspace id after DSH removes that
+        // Workspace. An active binding can still identify Worktree guidance,
+        // but an orphaned shard must never supply Main instructions by guess.
+        return result.instructions ?? '';
+      }
+
+      // Older DSH projections may not expose a Workspace id. In that degraded
+      // case only an active sidecar binding can identify the target; without one
+      // we must not guess that the Session belongs to Main.
+      const workspaces = (await this.context.dsh.listWorkspaces?.()) ?? [];
+      for (const workspace of workspaces) {
+        const result = await readWorkspace(workspace.workspaceId);
+        if (result.instructions !== undefined) return result.instructions;
       }
       return '';
     });

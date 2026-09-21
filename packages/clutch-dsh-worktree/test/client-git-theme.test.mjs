@@ -276,6 +276,8 @@ test('the commits column header owns a native multi-select switch', async () => 
   assert.match(header, /state\.setCommitMultiSelect\(event\.currentTarget\.checked\)/u);
   assert.match(header, /multiSelect=\{state\.commitMultiSelect\}/u);
   assert.match(state, /commitMultiSelect: false,/u);
+  assert.match(state, /if \(disposed \|\| state\.commitMultiSelect === enabled\)/u);
+  assert.match(state, /if \(disposed \|\| !canRead\(state\.baselineBranch\)/u);
   assert.match(state, /const setCommitMultiSelect = \(enabled: boolean\): void => \{/u);
 
   // The switch only changes whether a click replaces or adds to the selection.

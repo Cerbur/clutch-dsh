@@ -539,6 +539,7 @@ test('loads Worktree, branch, and binding projection through the Manager contrac
     worktrees: [],
     branches: [],
     bindings: [],
+    mainInstructions: '',
     readiness: { status: 'noLocalBranch' },
   });
   assert.deepEqual(calls, [
@@ -731,6 +732,10 @@ test('loads independent Worktree projections for every Workspace', async () => {
         calls.push(['listBindings', input]);
         return [];
       },
+      async getWorktreeInstructions(input) {
+        calls.push(['getWorktreeInstructions', input]);
+        return '';
+      },
     }),
     ['ws1', 'ws2'],
   );
@@ -741,6 +746,7 @@ test('loads independent Worktree projections for every Workspace', async () => {
       worktrees: [],
       branches: [],
       bindings: [],
+      mainInstructions: '',
       readiness: { status: 'noLocalBranch' },
     },
     {
@@ -748,6 +754,7 @@ test('loads independent Worktree projections for every Workspace', async () => {
       worktrees: [],
       branches: [],
       bindings: [],
+      mainInstructions: '',
       readiness: { status: 'noLocalBranch' },
     },
   ]);
@@ -755,9 +762,11 @@ test('loads independent Worktree projections for every Workspace', async () => {
     ['listWorktrees', { workspaceId: 'ws1' }],
     ['listBranches', { workspaceId: 'ws1' }],
     ['listBindings', { workspaceId: 'ws1' }],
+    ['getWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'main:ws1' }],
     ['listWorktrees', { workspaceId: 'ws2' }],
     ['listBranches', { workspaceId: 'ws2' }],
     ['listBindings', { workspaceId: 'ws2' }],
+    ['getWorktreeInstructions', { workspaceId: 'ws2', worktreeId: 'main:ws2' }],
   ]);
 });
 

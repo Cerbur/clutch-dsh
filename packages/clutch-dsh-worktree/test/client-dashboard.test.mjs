@@ -1471,12 +1471,14 @@ test('Main (Local) dashboard record resolution, session membership, and Surface 
   assert.equal(mainRec.workspaceId, 'ws-main');
   assert.equal(mainRec.branch, 'master');
   assert.equal(mainRec.absolutePath, '/workspaces/main-app');
+  assert.equal(mainRec.instructions, '');
 
   const unavailable = createMainWorktreeRecord(ws);
   assert.equal(unavailable.branch, '');
   assert.equal(unavailable.currentBranch, undefined);
   assert.equal(unavailable.health, undefined);
   assert.equal(unavailable.source, undefined);
+  assert.equal(unavailable.instructions, '');
 
   // resolveDashboardRecord supports mainRecord
   const selMain = { workspaceId: 'ws-main', worktreeId: 'main', sessionId: 's1' };

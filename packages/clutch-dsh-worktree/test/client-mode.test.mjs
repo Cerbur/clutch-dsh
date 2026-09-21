@@ -139,7 +139,9 @@ test('Worktree Session membership waits for the binding refresh before projectio
               }]
             : endpoint === 'worktreeManager/listBindings'
               ? []
-              : endpoint === 'worktreeManager/bindSession'
+              : endpoint === 'worktreeManager/getWorktreeInstructions'
+                ? ''
+                : endpoint === 'worktreeManager/bindSession'
                 ? { ...input, status: 'active' }
                 : [];
         return Promise.resolve({ ok: true, value: { ok: true, value } });
@@ -200,7 +202,9 @@ test('Worktree plus reuses a bound blank Session through the Client entry', asyn
                   sessionId: 'blank-existing',
                   status: 'active',
                 }]
-              : [];
+              : endpoint === 'worktreeManager/getWorktreeInstructions'
+                ? ''
+                : [];
         return Promise.resolve({ ok: true, value: { ok: true, value } });
       },
     },

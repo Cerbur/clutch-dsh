@@ -39,6 +39,8 @@ The interaction model should be broadly inspired by JetBrains IDE Git Log / Comm
 
 This feature MUST remain entirely inside the existing plugin package.
 
+> **Implementation amendment — Main Dashboard (2026-09-16, revised 2026-09-18):** Main is a browser-local projection of the Workspace root, not a managed Worktree comparison. Its Git & Changes tab reads the reachable `HEAD` history directly, requests 201 committed records and exposes at most the first 200, prepends a temporary working-tree entry when the Workspace root is dirty, and supports the same exact committed multi-selection projection as managed Worktrees. It does not expose a baseline, comparison summary, or working-tree inclusion control; Main instructions use a Workspace-level sidecar field and apply to known-Workspace Sessions without an active Worktree binding.
+
 ---
 
 # 2. Hard Constraints
@@ -238,14 +240,15 @@ Adding `baseCommit` must be treated as a real schema evolution.
 Preferred implementation:
 
 ```text
-SIDECAR_SCHEMA_VERSION: 4 → 5
+SIDECAR_SCHEMA_VERSION: 5 → 6
 ```
 
 Requirements:
 
 * continue reading all supported legacy schema versions;
-* v5 accepts `baseCommit`;
-* existing v1-v4 Worktrees may have no `baseCommit`;
+* v6 accepts top-level Workspace-root `mainInstructions` and preserves the v5 `baseCommit` Worktree field;
+* existing v1-v5 Worktrees may have no `baseCommit` or `mainInstructions`;
+* v5 input containing `mainInstructions` is rejected;
 * do not fabricate historical baseline commits during migration;
 * writes normalize to the current schema;
 * update schema tests.
@@ -419,15 +422,13 @@ Do not guess based on current Workspace branch.
 
 ## Main
 
-Main Worktree does not have this Worktree-relative comparison semantic.
-
-Return:
+Main is not a Worktree-relative comparison target. The amended behavior reads the Workspace-root `HEAD` history directly:
 
 ```text
-baseline unavailable / main
+git log --max-count=201 <HEAD>
 ```
 
-The UI should show a clear non-error empty state.
+The provider exposes at most 200 committed entries and marks the projection `truncated` when the 201st record exists. When the Workspace root is dirty, it prepends one temporary `working-tree` entry that is not part of that committed cap. The UI starts on the first visible target, supports changed files and per-file diffs for both targets, keeps baseline, comparison-summary, and working-tree inclusion controls hidden, and retains committed multi-select. The old `unavailableReason: 'main'` empty state is retained only for wire compatibility with older clients.
 
 ---
 
@@ -585,6 +586,17 @@ git log \
   --max-count=201 \
   --format=<NUL/record-safe machine format> \
   <baseCommit>..HEAD
+```
+
+For Main, omit the range argument and read the reachable Workspace-root `HEAD` history:
+
+```bash
+git log \
+  --no-color \
+  --topo-order \
+  --max-count=201 \
+  --format=<NUL/record-safe machine format> \
+  HEAD
 ```
 
 Do not rely on whitespace separation.
@@ -933,8 +945,7 @@ Opening the Dashboard may issue one compact Git status read for a managed Worktr
 persisted `baseBranch` differs from its current branch. This read reuses the existing history projection
 and, when a working-tree entry exists, its changed-file projection; it does not load the branch list.
 
-Main, unavailable, or baseline-unselected views must not issue a Git read. Git-tab branch/history reads
-remain lazy and independent from this Overview status projection.
+Main does not issue the baseline/Overview status read, but its selected Git & Changes tab lazily reads Workspace-root HEAD history. Unavailable or baseline-unselected managed views make no Git read; all Git-tab history reads remain independent from the Overview status projection.
 
 Expected sequence:
 
@@ -1250,17 +1261,13 @@ This remains inside the plugin Dashboard overlay.
 
 If Dashboard is opened for Main:
 
-do not invent a Worktree baseline.
+- do not invent a Worktree baseline or ahead/behind comparison;
+- read the Workspace-root `HEAD` history directly, with at most 200 visible commits and a `truncated` flag when the 201st record exists;
+- allow changed-file and per-file diff reads only for visible committed history entries;
+- hide baseline, comparison-summary, and working-tree inclusion controls while retaining committed multi-select;
+- keep all Main Git reads read-only.
 
-Preferred Git tab state:
-
-```text
-Worktree commit comparison is available for managed Worktrees.
-
-Main represents the repository root and has no Worktree acquisition baseline.
-```
-
-Keep Git history, changed files, and diffs read-only; allow only the explicit Dashboard Sidecar `baseBranch` update.
+The explicit Dashboard Sidecar `baseBranch` update remains a managed-Worktree-only operation.
 
 ---
 
@@ -1312,9 +1319,10 @@ Add deterministic tests at each boundary.
 Test:
 
 ```text
-v1-v4 legacy reads
-v5 baseCommit read/write
-invalid baseCommit
+v1-v5 legacy reads
+v5 baseCommit read/write and v5-to-v6 preservation
+v6 Main instruction read/write
+invalid Main instructions and baseCommit
 unknown keys rejected
 ```
 
@@ -1359,7 +1367,8 @@ captured baseline
 derived legacy baseline
 ambiguous legacy baseline
 external baseline unavailable
-Main unavailable
+Main HEAD history returns up to 200 visible commits and marks a 201st record truncated
+Main selected commit files/diffs authorize only visible history entries
 explicit branch baseline resolves current local tip
 updateWorktreeBaseBranch persists a replacement without changing baseCommit
 stale expectedBaseBranch save rejected
@@ -1496,7 +1505,7 @@ Implement in this order:
 ## Phase 1 — Baseline model
 
 * add `baseCommit`;
-* sidecar schema v5;
+* sidecar schema v6 (including Workspace-root Main instructions);
 * migrations;
 * capture baseline on create;
 * add persisted `baseBranch` replacement with optimistic expected-value validation;
@@ -1583,12 +1592,12 @@ Do not weaken existing invariants for convenience.
 ## Working-tree projection amendment
 
 The original V1 exclusion of staged and unstaged working-tree changes is superseded for the managed
-Worktree Dashboard. The history projection now prepends a temporary `working-tree` entry when the
-current Worktree contains staged, unstaged, or untracked files. Its file list and unified diffs are
-read-only snapshots against `HEAD`; they are not persisted, do not add to the committed-history cap,
-and do not introduce staging or commit controls. Manage re-reads and authorizes each selected path
-against the current working-tree projection so races fail closed. Local/Main remains unavailable for
-committed history as before.
+Worktree Dashboard and Main Workspace-root projection. Each history projection prepends a temporary
+`working-tree` entry when its live root contains staged, unstaged, or untracked files. Its file list and
+unified diffs are read-only snapshots against `HEAD`; they are not persisted, do not add to the committed-history
+cap, and do not introduce staging or commit controls. Manage re-reads and authorizes each selected path
+against the current working-tree projection so races fail closed. Main authorizes committed entries against
+bounded Workspace-root history and live entries against a fresh changed-path projection.
 
 Do not silently ignore errors.
 
@@ -1632,12 +1641,12 @@ second transport or generic Git reader:
   deleted, and renamed changes; it is not a concatenation of baseline-to-`HEAD` and `HEAD`-to-tree
   segments. The browser does not cache this live projection as a committed summary.
 - `selection: { kind: 'commits', commits }` is an exact union of the listed commits' first-parent deltas.
-  The server authorizes every SHA against the same pinned baseline/HEAD projection, returns a changed-file
-  union with contributor SHAs, and returns per-commit diff segments. It is deliberately not a range, so
+  For managed Worktrees, the server authorizes every SHA against the same pinned baseline/HEAD projection; for Main, it authorizes every SHA against one bounded visible Main history projection. Both return a changed-file
+  union with contributor SHAs and per-commit diff segments. The selection is deliberately not a range, so
   unselected commits between two selected commits are not silently included.
 - The working-tree marker remains a legacy single target and is mutually exclusive with committed aggregate
   selection. Requests enforce commit XOR selection at the contract and runtime seams.
-- Browser cache keys include the resolved baseline, captured HEAD projection, and summary mode. Live
+- Browser cache keys include the resolved baseline when applicable, the captured HEAD/history projection, and summary mode. Live
   summary reads bypass completed-summary caches so staged, unstaged, and untracked changes are observed
   on demand. The changed-files column header shows aggregate additions/deletions for the current target
   (baseline summary, selected commits, or working tree); binary-only totals remain explicitly unknown.
@@ -1669,11 +1678,11 @@ The task is complete when all of the following are true:
 * binary and oversized files degrade clearly;
 * arbitrary commit SHA access is rejected;
 * arbitrary path access is rejected;
-* Dashboard open performs only the compact Overview Git status read when a valid persisted baseline exists; Main, unavailable, and baseline-unselected views make no Git RPC;
+* Dashboard open performs only the compact Overview Git status read when a valid persisted managed baseline exists; Main skips Overview but its Git & Changes tab lazily reads bounded HEAD history; unavailable and baseline-unselected managed views make no Git RPC;
 * switching Git tab triggers lazy loading;
 * refresh preserves ready content;
 * stale responses do not change active selection;
-* Main and ambiguous legacy Worktrees show honest unavailable states;
+* Main shows direct committed HEAD history with no fabricated baseline/ahead/behind facts; ambiguous legacy Worktrees show honest unavailable states;
 * no DSH core file is modified;
 * no second transport is introduced;
 * all mandatory checks pass.
@@ -1727,7 +1736,7 @@ current source of truth; this section keeps the plan honest instead of rewriting
    text file: the live projection treats it as changed and reports unknown statistics.
 7. **Diff rendering is budgeted (§29).** Parsing is memoized per patch and hunks past 2000 rendered
    lines fold behind a localized reveal action; the provider output bound remains the hard limit.
-8. **Main issues no Git read (§22).** A Main target never requests branches or history.
+8. **Main reads direct history and live changes (§22, Main amendment).** A Main target skips branch/baseline and Overview reads, then requests bounded Workspace-root HEAD history plus a paths-only live projection when Git & Changes is selected; it may request the committed selection aggregate, but never requests comparison-summary or working-tree inclusion targets.
 9. **Supported sidecar versions are explicit (§6).** Optional Worktree keys are resolved from an
    explicit supported-version list, so a future schema bump still reads v5 records with
    `baseCommit`.
@@ -1748,8 +1757,8 @@ current source of truth; this section keeps the plan honest instead of rewriting
     Worktree has no saved `baseBranch`, or the saved value equals the current Worktree branch, the
     browser reads with no explicit branch and the Manager resolves `source: 'captured'` from
     `baseCommit`; the Base fact shows that resolved commit when there is no branch ref. Only a record
-    with neither a usable saved baseline nor a captured commit stays `baseline-unselected`; Main and
-    genuinely baseline-less records still make no Git read. This resolves the §22/§32 wording that
+    with neither a usable saved baseline nor a captured commit stays `baseline-unselected`; Main instead
+    reads direct Workspace-root HEAD history without a baseline. This resolves the §22/§32 wording that
     described the captured path as unreachable from the Dashboard.
 13. **A vanished selected baseline degrades to an unavailable projection (§32).** A plain local branch
     name that is no longer present in `listBranches` resolves to `undefined` for reads, so history and

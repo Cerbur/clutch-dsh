@@ -156,6 +156,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/ensureWorktreePermission',
       'worktreeManager/forgetWorktree',
       'worktreeManager/getWorktreeCommitFileDiff',
+      'worktreeManager/getWorktreeInstructions',
       'worktreeManager/importWorktree',
       'worktreeManager/insertWorktreeBefore',
       'worktreeManager/listBindings',
@@ -338,6 +339,7 @@ test('carries missing Git from Provider through Host projection and /api Client 
         left.endpoint.localeCompare(right.endpoint),
       ),
       [
+        { channel: '/api', endpoint: 'worktreeManager/getWorktreeInstructions' },
         { channel: '/api', endpoint: 'worktreeManager/listBindings' },
         { channel: '/api', endpoint: 'worktreeManager/listBranches' },
         { channel: '/api', endpoint: 'worktreeManager/listWorktrees' },
@@ -366,6 +368,7 @@ test('canonical upstream Host Gateway claims Worktree endpoints on the shared /a
     'worktreeManager/recoverWorktrees',
     'worktreeManager/forgetWorktree',
     'worktreeManager/insertWorktreeBefore',
+    'worktreeManager/getWorktreeInstructions',
     'worktreeManager/updateWorktreeInstructions',
     'worktreeManager/updateWorktreeBaseBranch',
     'worktreeManager/listBindings',
