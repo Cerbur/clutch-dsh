@@ -31,6 +31,8 @@
 - 一个 Session 最多绑定一个 active Worktree；一个 Worktree 可绑定多个 Session。
 - 运行时 cwd 是执行时派生的上下文：无绑定/main/detached 时使用 Project 根目录，active binding 时使用 Worktree 路径；**严禁将 cwd 持久化写回 DSH Session 元数据**。
 - 绑定操作必须幂等；绑定冲突必须显式报错。删除 Worktree 时关系转为 detached，绝不删除 DSH Session。
+- **平台路径身份**：Provider 通过 `stat`/`realpath` 比较物理身份；只有明确的 `ENOENT` 才允许回退词法比较，权限或其他 I/O 不确定性必须 fail closed。Client 快照路径仅用于候选筛选，最终 Session cwd 关系由 Host 重新校验。
+- **Sidecar durability**：临时文件必须通过可写句柄同步后才能发布；临时文件同步失败不得吞掉，只有目录同步保持 best effort。
 
 ### 3. 刷新作用域最小化 (Minimum-Scope Refresh Invariant)
 

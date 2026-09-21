@@ -1,6 +1,5 @@
 import { open } from 'node:fs/promises';
 
-const FILE_SYNC_FALLBACK_CODES = ['EINVAL', 'ENOTSUP', 'EPERM'] as const;
 const DIRECTORY_SYNC_FALLBACK_CODES = ['EINVAL', 'ENOTSUP', 'EISDIR', 'EPERM'] as const;
 
 type ErrorCode = { readonly code?: string };
@@ -10,19 +9,14 @@ function hasCode(error: unknown, codes: readonly string[]): boolean {
 }
 
 /**
- * Flush one temporary sidecar file when the filesystem supports it. Windows
- * requires a writable handle for FlushFileBuffers, while some filesystems do
- * not expose file sync at all; both cases retain the existing best-effort
- * durability contract.
+ * Flush one temporary sidecar file before publishing it. Windows requires a
+ * writable handle for FlushFileBuffers; file-sync failures remain visible so
+ * an unflushed snapshot is never acknowledged as durable.
  */
 export async function syncFile(pathname: string): Promise<void> {
   const handle = await open(pathname, 'r+');
   try {
-    try {
-      await handle.sync();
-    } catch (error) {
-      if (!hasCode(error, FILE_SYNC_FALLBACK_CODES)) throw error;
-    }
+    await handle.sync();
   } finally {
     await handle.close();
   }

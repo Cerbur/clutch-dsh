@@ -48,6 +48,8 @@ export interface ResolveWorktreeSessionActionInput {
   readonly sessions: WorktreeSessionListSnapshot;
   readonly archivedSessionIds: readonly string[];
   readonly bindings: readonly SessionBinding[];
+  /** True when Host will perform authoritative physical cwd validation before opening. */
+  readonly hostValidatesPhysicalPath?: boolean;
 }
 
 export class WorktreeSessionActionError extends Error {
@@ -169,7 +171,10 @@ export async function ensureWorktreeSessionPermission(
   }, result);
 }
 
-/** Compare DSH and Worktree paths without rejecting Windows case/separator aliases. */
+/**
+ * Compare paths for browser-side candidate filtering and the no-Host safety fallback.
+ * When Host validation is available, it remains authoritative for physical aliases.
+ */
 function sameWorktreePath(left: string, right: string): boolean {
   return left === right || sameWindowsPath(left, right);
 }
@@ -199,7 +204,10 @@ export function resolveWorktreeSessionAction(
         sessionId: targetBinding.sessionId,
       };
     }
-    if (summary.cwd === undefined || !sameWorktreePath(summary.cwd, input.target.absolutePath)) {
+    if (
+      summary.cwd === undefined ||
+      (!input.hostValidatesPhysicalPath && !sameWorktreePath(summary.cwd, input.target.absolutePath))
+    ) {
       return {
         kind: 'repair',
         reason: 'active-binding-cwd-mismatch',
@@ -319,7 +327,10 @@ export function createWorktreeSessionConnector(
       throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
     }
     const target = worktrees.find((record) => record.worktreeId === input.worktreeId);
-    if (target === undefined || !sameWorktreePath(target.absolutePath, input.cwd)) {
+    if (
+      target === undefined ||
+      (options.permission === undefined && !sameWorktreePath(target.absolutePath, input.cwd))
+    ) {
       throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'worktree target unavailable', true);
     }
     const action = resolveWorktreeSessionAction({
@@ -327,6 +338,7 @@ export function createWorktreeSessionConnector(
       sessions: options.sessions.getSnapshot(),
       archivedSessionIds: options.archivedSessionIds(),
       bindings,
+      hostValidatesPhysicalPath: options.permission !== undefined,
     });
     if (action.kind === 'open-bound') {
       await ensureWorktreeSessionPermission({

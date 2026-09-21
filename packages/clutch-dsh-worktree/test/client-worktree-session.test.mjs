@@ -50,12 +50,26 @@ test('opens a qualifying blank Session already bound to the target Worktree', ()
   );
 });
 
-test('treats Windows path case and separator aliases as the same Worktree cwd', () => {
+test('treats Windows path case and separator aliases as the same candidate cwd', () => {
   assert.deepEqual(
     resolveWorktreeSessionAction({
       target: target({ absolutePath: String.raw`C:\Users\Admin\Worktrees\Topic` }),
       sessions: sessions({
         byId: { 'blank-one': { blank: true, cwd: 'c:/users/admin/worktrees/topic' } },
+      }),
+      archivedSessionIds: [],
+      bindings: [],
+    }),
+    { kind: 'bind-existing', sessionId: 'blank-one' },
+  );
+});
+
+test('defers macOS physical cwd aliases to Host validation', () => {
+  assert.deepEqual(
+    resolveWorktreeSessionAction({
+      target: target({ absolutePath: '/var/tmp/worktree-one' }),
+      sessions: sessions({
+        byId: { 'blank-one': { blank: true, cwd: '/private/var/tmp/worktree-one' } },
       }),
       archivedSessionIds: [],
       bindings: [
@@ -66,6 +80,7 @@ test('treats Windows path case and separator aliases as the same Worktree cwd', 
           status: 'active',
         },
       ],
+      hostValidatesPhysicalPath: true,
     }),
     { kind: 'open-bound', sessionId: 'blank-one' },
   );
@@ -120,6 +135,27 @@ test('reports repair when an active target binding has the wrong Session cwd', (
       target: target(),
       sessions: sessions({
         byId: { 'blank-one': { blank: true, cwd: '/tmp/other-worktree' } },
+      }),
+      archivedSessionIds: [],
+      bindings: [
+        {
+          workspaceId: 'ws-one',
+          worktreeId: 'wt-one',
+          sessionId: 'blank-one',
+          status: 'active',
+        },
+      ],
+    }),
+    { kind: 'repair', reason: 'active-binding-cwd-mismatch', sessionId: 'blank-one' },
+  );
+});
+
+test('reports repair when an active target binding lacks cwd facts', () => {
+  assert.deepEqual(
+    resolveWorktreeSessionAction({
+      target: target(),
+      sessions: sessions({
+        byId: { 'blank-one': { blank: true } },
       }),
       archivedSessionIds: [],
       bindings: [
@@ -283,6 +319,60 @@ test('opens a bound blank Session without creating or rebinding it', async () =>
   assert.equal(calls.includes('createSession'), false);
   assert.equal(calls.includes('bindSession'), false);
   assert.deepEqual(calls.slice(-2), [
+    ['ensure', 'ws-one', 'blank-one'],
+    ['open', 'blank-one'],
+  ]);
+});
+
+test('defers physical cwd alias validation to Host before opening a bound Session', async () => {
+  const calls = [];
+  const connector = createWorktreeSessionConnector({
+    manager: {
+      async listWorktrees() {
+        return [target({ absolutePath: '/var/tmp/worktree-one' })];
+      },
+      async listBindings() {
+        return [{
+          workspaceId: 'ws-one',
+          worktreeId: 'wt-one',
+          sessionId: 'blank-one',
+          status: 'active',
+        }];
+      },
+      async bindSession() {
+        throw new Error('must not bind');
+      },
+    },
+    sessions: {
+      getSnapshot: () => sessions({
+        byId: { 'blank-one': { blank: true, cwd: '/private/var/tmp/worktree-one' } },
+      }),
+    },
+    archivedSessionIds: () => [],
+    createSession: async () => {
+      throw new Error('must not create');
+    },
+    permission: {
+      async ensureWorktreePermission(input) {
+        calls.push(['permission', input.sessionId]);
+        return { status: 'full-applied', retryable: false };
+      },
+    },
+    ensureSessionWorkspace(workspaceId, sessionId) {
+      calls.push(['ensure', workspaceId, sessionId]);
+    },
+    openSession(sessionId) {
+      calls.push(['open', sessionId]);
+    },
+  });
+
+  assert.equal(await connector.create({
+    workspaceId: 'ws-one',
+    worktreeId: 'wt-one',
+    cwd: '/private/var/tmp/worktree-one',
+  }), 'blank-one');
+  assert.deepEqual(calls, [
+    ['permission', 'blank-one'],
     ['ensure', 'ws-one', 'blank-one'],
     ['open', 'blank-one'],
   ]);

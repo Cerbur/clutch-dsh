@@ -53,7 +53,8 @@
 
 - 修复 Windows 下 sidecar 原子写入在只读文件句柄上执行 fsync 导致 `EPERM`、最终报告 `SIDECAR_UNAVAILABLE` 的问题。
 - 兼容 Windows Git 的 `NUL` 设备路径和 Worktree porcelain 输出的 CRLF 换行，规范化 VS Code 打开链接中的扩展 Windows 路径，并避免旧版 Node Windows signal-0 行为误杀存活的锁进程。
-- 使用物理路径比较绑定 Session cwd，兼容 Windows 和 macOS 的真实路径大小写、符号链接及其他路径别名表示。
+- 使用物理路径比较绑定 Session cwd，兼容 Windows 和 macOS 的真实路径大小写、符号链接及其他路径别名表示；浏览器端将物理身份校验交由 Host，避免误拒绝别名路径。
+- 临时 Sidecar 文件改用可写句柄同步；文件同步失败不再静默发布，只有目录同步保持 best effort；扩展 Windows 路径仅剥离 drive/UNC 前缀，未知 namespace 不再被误当作相对路径。
 
 ### English
 
@@ -92,7 +93,8 @@
 
 - Fix Windows sidecar atomic writes that failed with `EPERM` when fsync ran on a read-only file handle and surfaced as `SIDECAR_UNAVAILABLE`.
 - Use Git for Windows' `NUL` device path, accept CRLF Worktree porcelain output, normalize extended Windows paths in VS Code links, and avoid the legacy Node Windows signal-0 behavior that could terminate a live lock owner.
-- Compare Session cwd bindings by physical path so Windows and macOS case, symlink, and other path-alias representations remain compatible.
+- Compare Session cwd bindings by physical path so Windows and macOS case, symlink, and other path-alias representations remain compatible; the browser delegates physical identity validation to Host instead of rejecting aliases from a lexical snapshot.
+- Open temporary Sidecar files through a writable handle; surface file-sync failures instead of publishing silently, while keeping only directory sync best effort; strip extended Windows prefixes only for drive/UNC paths so unknown namespaces are not mistaken for relative paths.
 
 ## 0.1.12 — 2026-09-14
 
