@@ -17,6 +17,8 @@ export interface WorktreeViewData {
   readonly worktrees: readonly WorktreeRecord[];
   readonly branches: readonly BranchRecord[];
   readonly bindings: readonly SessionBinding[];
+  /** Shared instructions for the browser-local Main projection. */
+  readonly mainInstructions: string;
   readonly readiness: WorktreeGitReadiness;
 }
 
@@ -245,19 +247,24 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 }
 
-/** Read all three Worktree projections needed by the surface in one refresh. */
+/** Read the Worktree, branch, binding, and Workspace-root Main projections in one refresh. */
 export async function loadWorktreeView(
   manager: WorktreeManager,
   workspaceId: string,
 ): Promise<WorktreeViewData> {
-  const [worktreesResult, branchesResult, bindingsResult] = await Promise.allSettled([
-    manager.listWorktrees({ workspaceId }),
-    manager.listBranches({ workspaceId }),
-    manager.listBindings({ workspaceId }),
-  ]);
+  const [worktreesResult, branchesResult, bindingsResult, mainInstructionsResult] =
+    await Promise.allSettled([
+      manager.listWorktrees({ workspaceId }),
+      manager.listBranches({ workspaceId }),
+      manager.listBindings({ workspaceId }),
+      typeof manager.getWorktreeInstructions === 'function'
+        ? manager.getWorktreeInstructions({ workspaceId, worktreeId: `main:${workspaceId}` })
+        : Promise.resolve(''),
+    ]);
 
   if (worktreesResult.status === 'rejected') throw worktreesResult.reason;
   if (bindingsResult.status === 'rejected') throw bindingsResult.reason;
+  if (mainInstructionsResult.status === 'rejected') throw mainInstructionsResult.reason;
   if (branchesResult.status === 'rejected') {
     const readiness = readinessFromBranchError(branchesResult.reason);
     if (readiness !== undefined) {
@@ -265,6 +272,7 @@ export async function loadWorktreeView(
         worktrees: worktreesResult.value,
         branches: [],
         bindings: bindingsResult.value,
+        mainInstructions: mainInstructionsResult.value,
         readiness,
       };
     }
@@ -275,6 +283,7 @@ export async function loadWorktreeView(
     worktrees: worktreesResult.value,
     branches: branchesResult.value,
     bindings: bindingsResult.value,
+    mainInstructions: mainInstructionsResult.value,
     readiness: branchesResult.value.length > 0
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },

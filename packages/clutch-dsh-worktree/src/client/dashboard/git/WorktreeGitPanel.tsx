@@ -234,12 +234,24 @@ export function WorktreeGitPanel({
               )}
             </dl>
           )}
+          {isMain && historyValue !== undefined && (
+            <dl className={styles.gitBaselineFacts}>
+              <div>
+                <dt>{t('dashboard.git.head')}</dt>
+                <dd><code>{shortCommit(historyValue.headCommit)}</code></dd>
+              </div>
+              <div>
+                <dt>{t('dashboard.git.commits')}</dt>
+                <dd>{commitCountLabel(historyValue, t)}</dd>
+              </div>
+            </dl>
+          )}
         </div>
         <button
           type="button"
           className={styles.gitRefresh}
           data-dashboard-git-refresh
-          disabled={isMain || refreshing || state.history.status === 'loading'}
+          disabled={refreshing || state.history.status === 'loading'}
           aria-busy={refreshing || state.history.status === 'loading'}
           onClick={() => void state.refresh()}
         >
@@ -254,7 +266,6 @@ export function WorktreeGitPanel({
         </div>
       )}
 
-      {isMain && <UnavailableNotice reason="main" t={t} />}
       {!isMain && unavailable === 'baseline-unselected' && (
         <div className={styles.gitBaselinePrompt} data-dashboard-git-baseline-prompt>
           <strong>{t('dashboard.git.selectBaselineTitle')}</strong>
@@ -314,17 +325,19 @@ export function WorktreeGitPanel({
                 </label>
               </div>
             </div>
-            <button
-              type="button"
-              className={styles.gitSummaryButton}
+            {!isMain && (
+              <button
+                type="button"
+                className={styles.gitSummaryButton}
               data-dashboard-git-summary
               aria-pressed={state.view === 'summary'}
               onClick={state.selectSummary}
             >
               <span>{t('dashboard.git.baselineSummary')}</span>
-              <small>{t('dashboard.git.baselineSummaryDescription')}</small>
-            </button>
-            {state.view === 'summary' && (
+                <small>{t('dashboard.git.baselineSummaryDescription')}</small>
+              </button>
+            )}
+            {!isMain && state.view === 'summary' && (
               <label className={styles.gitSummaryToggle} data-dashboard-git-include-working-tree>
                 <input
                   type="checkbox"

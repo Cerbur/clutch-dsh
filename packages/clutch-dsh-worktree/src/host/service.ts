@@ -135,6 +135,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
   @Remote
+  getWorktreeInstructions(input: {
+    workspaceId: string;
+    worktreeId: string;
+  }): Promise<WorktreeRemoteResult<string>> {
+    return this.remote.getWorktreeInstructions(input);
+  }
+
+  @Remote
   updateWorktreeInstructions(input: {
     workspaceId: string;
     worktreeId: string;

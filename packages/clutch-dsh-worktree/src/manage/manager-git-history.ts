@@ -13,7 +13,7 @@ import {
   type WorktreeGitHistory,
   type WorktreeRecord,
 } from '../contract/index.js';
-import type { GitChangedFileRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
+import type { GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
@@ -92,8 +92,10 @@ interface ResolvedBaseline {
   readonly treeBaseCommit: string;
 }
 
-function isMainWorktreeId(worktreeId: string): boolean {
-  return worktreeId === 'main' || worktreeId.startsWith('main:');
+function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
+  // `main` is retained for legacy callers; canonical Main IDs are scoped to the
+  // Workspace whose root is being read.
+  return worktreeId === 'main' || worktreeId === `main:${workspaceId}`;
 }
 
 function unavailableHistory(
@@ -134,7 +136,7 @@ async function resolveWorktree(
   input: { readonly workspaceId: string; readonly worktreeId: string },
 ): Promise<{ readonly main: true; readonly workspaceRoot: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
   const workspace = await requireWorkspace(context, input.workspaceId);
-  if (isMainWorktreeId(input.worktreeId)) {
+  if (isMainWorktreeId(input.worktreeId, input.workspaceId)) {
     return { main: true, workspaceRoot: workspace.rootPath };
   }
 
@@ -557,12 +559,120 @@ async function authorizeWorkingTree(
   await requireBaseline(context, resolved, requestedBaseBranch);
 }
 
+/** Read Main's bounded HEAD history and expose live Workspace-root changes first. */
+async function listMainCommits(
+  context: WorktreeManagerContext,
+  workspaceRoot: string,
+  worktreeId: string,
+): Promise<GitCommitHistoryRead> {
+  const listCommits = gitRead(context, 'listCommits', worktreeId);
+  const readWorkingTreePaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
+    ?? gitReadOptional(context, 'listWorkingTreeFiles');
+  const [history, workingTreeFiles] = await Promise.all([
+    listCommits(workspaceRoot, undefined, { signal: context.signal }),
+    readWorkingTreePaths === undefined
+      ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
+      : readWorkingTreePaths(workspaceRoot, { signal: context.signal }),
+  ]);
+  const hasWorkingTreeChanges = workingTreeFiles.files.length > 0 || workingTreeFiles.truncated;
+  return {
+    ...history,
+    commits: hasWorkingTreeChanges
+      ? [workingTreeCommit(history.headCommit), ...history.commits]
+      : history.commits,
+  };
+}
+
+async function authorizeMainCommit(
+  context: WorktreeManagerContext,
+  workspaceRoot: string,
+  worktreeId: string,
+  commitInput: string,
+): Promise<string> {
+  if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
+      worktreeId,
+    });
+  }
+  const history = await listMainCommits(context, workspaceRoot, worktreeId);
+  if (!history.commits.some((commit) => commit.sha === commitInput)) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside the visible Main history', {
+      worktreeId,
+      commit: commitInput,
+    });
+  }
+  return commitInput;
+}
+
+const MAX_AGGREGATE_COMMITS = 200;
+
+type AuthorizedMainAggregate = {
+  readonly selection: Extract<WorktreeGitDiffSelection, { readonly kind: 'commits' }>;
+  readonly commits: readonly string[];
+};
+
+async function authorizeMainAggregate(
+  context: WorktreeManagerContext,
+  workspaceRoot: string,
+  worktreeId: string,
+  selection: WorktreeGitDiffSelection,
+): Promise<AuthorizedMainAggregate> {
+  if (selection.kind !== 'commits') {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Main Git supports committed selections only', {
+      worktreeId,
+    });
+  }
+  if (!Array.isArray(selection.commits) || selection.commits.length === 0 || selection.commits.length > MAX_AGGREGATE_COMMITS) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Select between 1 and ' + MAX_AGGREGATE_COMMITS + ' commits', {
+      worktreeId,
+    });
+  }
+  const requested = selection.commits.map((candidate) => {
+    if (typeof candidate !== 'string' || !COMMIT_PATTERN.test(candidate)) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
+        worktreeId,
+      });
+    }
+    return candidate;
+  });
+  if (new Set(requested).size !== requested.length) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'A Git diff selection cannot contain duplicate commits', {
+      worktreeId,
+    });
+  }
+  const history = await listMainCommits(context, workspaceRoot, worktreeId);
+  const members = new Set(
+    history.commits
+      .filter((commit) => commit.kind !== 'working-tree')
+      .map((commit) => commit.sha),
+  );
+  for (const commit of requested) {
+    if (!members.has(commit)) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside the visible Main history', {
+        worktreeId,
+        commit,
+      });
+    }
+  }
+  return {
+    selection: { kind: 'commits', commits: requested },
+    commits: requested,
+  };
+}
+
 export async function listWorktreeCommits(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
 ): Promise<WorktreeGitHistory> {
   const resolved = await resolveWorktree(context, input);
-  if (resolved.main) return unavailableHistory('main');
+  if (resolved.main) {
+    const history = await listMainCommits(context, resolved.workspaceRoot, input.worktreeId);
+    return {
+      headCommit: history.headCommit,
+      commits: history.commits,
+      truncated: history.truncated,
+    };
+  }
   const baseline = await resolveBaseline(context, resolved.value, input.baseBranch);
   if (baseline === undefined) {
     const selectedBranch = input.baseBranch ?? resolved.value.record.baseBranch;
@@ -600,8 +710,6 @@ export async function listWorktreeCommits(
     baseline: baseline.baseline,
   };
 }
-
-const MAX_AGGREGATE_COMMITS = 200;
 
 type RequestedDiff =
   | { readonly kind: 'commit'; readonly commit: string }
@@ -689,13 +797,14 @@ type CommitFileGroup = {
 
 async function selectedCommitFiles(
   context: WorktreeManagerContext,
-  resolved: ResolvedWorktree,
+  absolutePath: string,
+  worktreeId: string,
   commits: readonly string[],
 ): Promise<readonly CommitFileGroup[]> {
-  const listCommitFiles = gitRead(context, 'listCommitFiles', resolved.record.worktreeId);
+  const listCommitFiles = gitRead(context, 'listCommitFiles', worktreeId);
   return Promise.all(commits.map(async (commit) => {
     const read = await listCommitFiles(
-      resolved.record.absolutePath,
+      absolutePath,
       commit,
       { signal: context.signal },
     );
@@ -811,6 +920,94 @@ async function readSummaryFileDiff(
   );
 }
 
+async function selectedAggregateFileDiff(
+  context: WorktreeManagerContext,
+  absolutePath: string,
+  worktreeId: string,
+  selection: Extract<WorktreeGitDiffSelection, { readonly kind: 'commits' }>,
+  commits: readonly string[],
+  requestedPath: string,
+): Promise<WorktreeGitFileDiff> {
+  if (requestedPath.length === 0) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'A changed file path is required', {
+      worktreeId,
+    });
+  }
+  const groups = await selectedCommitFiles(context, absolutePath, worktreeId, commits);
+  const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', worktreeId);
+  const segments: Array<{ readonly commit: string; readonly patch: string; readonly binary: boolean; readonly truncated?: boolean }> = [];
+  for (const group of groups) {
+    const changedFile = findChangedFile(group.files, requestedPath);
+    if (changedFile === undefined) continue;
+    const diff = await readCommitFileDiff(
+      absolutePath,
+      group.commit,
+      changedFile.path,
+      { signal: context.signal },
+    );
+    segments.push({
+      commit: group.commit,
+      patch: diff.patch,
+      binary: diff.binary,
+      ...(diff.truncated === true ? { truncated: true } : {}),
+    });
+  }
+  if (segments.length === 0) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by the selected commits', {
+      worktreeId,
+      path: requestedPath,
+    });
+  }
+  return {
+    commit: commits[0]!,
+    path: requestedPath,
+    patch: '',
+    binary: segments.every((segment) => segment.binary),
+    ...(segments.some((segment) => segment.truncated === true) ? { truncated: true } : {}),
+    selection,
+    segments,
+  };
+}
+
+async function aggregateMainFileDiff(
+  context: WorktreeManagerContext,
+  workspaceRoot: string,
+  worktreeId: string,
+  selection: Extract<WorktreeGitDiffSelection, { readonly kind: 'commits' }>,
+  requestedPath: string,
+): Promise<WorktreeGitFileDiff> {
+  if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'A changed file path is required', {
+      worktreeId,
+    });
+  }
+  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
+  return selectedAggregateFileDiff(
+    context,
+    workspaceRoot,
+    worktreeId,
+    authorized.selection,
+    authorized.commits,
+    requestedPath,
+  );
+}
+
+async function listMainAggregateFiles(
+  context: WorktreeManagerContext,
+  workspaceRoot: string,
+  worktreeId: string,
+  selection: WorktreeGitDiffSelection,
+): Promise<WorktreeGitCommitFiles> {
+  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
+  const groups = await selectedCommitFiles(context, workspaceRoot, worktreeId, authorized.commits);
+  return {
+    commit: authorized.commits[0]!,
+    selection: authorized.selection,
+    files: mergeSelectedFiles(groups),
+    ...(groups.some((group) => group.truncated) ? { truncated: true } : {}),
+  };
+}
+
 async function listAggregateFiles(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
@@ -833,7 +1030,12 @@ async function listAggregateFiles(
       ...(read.truncated ? { truncated: true } : {}),
     };
   }
-  const groups = await selectedCommitFiles(context, resolved, authorized.commits!);
+  const groups = await selectedCommitFiles(
+    context,
+    resolved.record.absolutePath,
+    resolved.record.worktreeId,
+    authorized.commits!,
+  );
   return {
     commit: authorized.commits![0]!,
     selection: authorized.selection,
@@ -886,40 +1088,14 @@ async function aggregateFileDiff(
     };
   }
 
-  const groups = await selectedCommitFiles(context, resolved, authorized.commits!);
-  const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', resolved.record.worktreeId);
-  const segments: Array<{ readonly commit: string; readonly patch: string; readonly binary: boolean; readonly truncated?: boolean }> = [];
-  for (const group of groups) {
-    const changedFile = findChangedFile(group.files, requestedPath);
-    if (changedFile === undefined) continue;
-    const diff = await readCommitFileDiff(
-      resolved.record.absolutePath,
-      group.commit,
-      changedFile.path,
-      { signal: context.signal },
-    );
-    segments.push({
-      commit: group.commit,
-      patch: diff.patch,
-      binary: diff.binary,
-      ...(diff.truncated === true ? { truncated: true } : {}),
-    });
-  }
-  if (segments.length === 0) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by the selected commits', {
-      worktreeId: resolved.record.worktreeId,
-      path: requestedPath,
-    });
-  }
-  return {
-    commit: authorized.commits![0]!,
-    path: requestedPath,
-    patch: '',
-    binary: segments.every((segment) => segment.binary),
-    ...(segments.some((segment) => segment.truncated === true) ? { truncated: true } : {}),
-    selection: authorized.selection,
-    segments,
-  };
+  return selectedAggregateFileDiff(
+    context,
+    resolved.record.absolutePath,
+    resolved.record.worktreeId,
+    authorized.selection,
+    authorized.commits!,
+    requestedPath,
+  );
 }
 
 export async function listWorktreeCommitFiles(
@@ -927,12 +1103,39 @@ export async function listWorktreeCommitFiles(
   input: WorktreeGitCommitFilesRequest,
 ): Promise<WorktreeGitCommitFiles> {
   const resolved = await resolveWorktree(context, input);
-  if (resolved.main) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Git history is unavailable for the Main projection', {
-      workspaceId: input.workspaceId,
-    });
-  }
   const requested = requestedDiff(input, input.worktreeId);
+  if (resolved.main) {
+    if (requested.kind === 'aggregate') {
+      return listMainAggregateFiles(
+        context,
+        resolved.workspaceRoot,
+        input.worktreeId,
+        requested.selection,
+      );
+    }
+    if (requested.commit === WORKTREE_GIT_WORKING_TREE) {
+      const listWorkingTreeFiles = gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
+      const read = await listWorkingTreeFiles(resolved.workspaceRoot, { signal: context.signal });
+      return {
+        commit: WORKTREE_GIT_WORKING_TREE,
+        files: read.files,
+        ...(read.truncated ? { truncated: true } : {}),
+      };
+    }
+    const commit = await authorizeMainCommit(
+      context,
+      resolved.workspaceRoot,
+      input.worktreeId,
+      requested.commit,
+    );
+    const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
+    const read = await listCommitFiles(resolved.workspaceRoot, commit, { signal: context.signal });
+    return {
+      commit,
+      files: read.files,
+      ...(read.truncated ? { truncated: true } : {}),
+    };
+  }
   if (requested.kind === 'aggregate') {
     return listAggregateFiles(context, resolved.value, requested.selection, input.baseBranch);
   }
@@ -969,12 +1172,72 @@ export async function getWorktreeCommitFileDiff(
   input: WorktreeGitFileDiffRequest,
 ): Promise<WorktreeGitFileDiff> {
   const resolved = await resolveWorktree(context, input);
-  if (resolved.main) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'Git history is unavailable for the Main projection', {
-      workspaceId: input.workspaceId,
-    });
-  }
   const requested = requestedDiff(input, input.worktreeId);
+  if (resolved.main) {
+    if (requested.kind === 'aggregate') {
+      if (requested.selection.kind !== 'commits') {
+        throw providerError('WORKTREE_STATE_CONFLICT', 'Main Git supports committed selections only', {
+          worktreeId: input.worktreeId,
+        });
+      }
+      return aggregateMainFileDiff(
+        context,
+        resolved.workspaceRoot,
+        input.worktreeId,
+        requested.selection,
+        input.path,
+      );
+    }
+    if (typeof input.path !== 'string' || input.path.length === 0) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'A changed file path is required', {
+        worktreeId: input.worktreeId,
+      });
+    }
+    if (requested.commit === WORKTREE_GIT_WORKING_TREE) {
+      const readWorkingTreeFileDiff = gitRead(context, 'readWorkingTreeFileDiff', input.worktreeId);
+      const readChangedPaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
+        ?? gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
+      const readPaths = await readChangedPaths(resolved.workspaceRoot, { signal: context.signal });
+      const changedFile = findChangedFile(readPaths.files, input.path);
+      if (changedFile === undefined) {
+        throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the Main working tree', {
+          worktreeId: input.worktreeId,
+          commit: WORKTREE_GIT_WORKING_TREE,
+          path: input.path,
+        });
+      }
+      const diff = await readWorkingTreeFileDiff(
+        resolved.workspaceRoot,
+        changedFile.path,
+        { signal: context.signal },
+      );
+      return { ...diff, commit: WORKTREE_GIT_WORKING_TREE, path: input.path };
+    }
+    const commit = await authorizeMainCommit(
+      context,
+      resolved.workspaceRoot,
+      input.worktreeId,
+      requested.commit,
+    );
+    const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
+    const filesRead = await listCommitFiles(resolved.workspaceRoot, commit, { signal: context.signal });
+    const changedFile = findChangedFile(filesRead.files, input.path);
+    if (changedFile === undefined) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by this commit', {
+        worktreeId: input.worktreeId,
+        commit,
+        path: input.path,
+      });
+    }
+    const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', input.worktreeId);
+    const diff = await readCommitFileDiff(
+      resolved.workspaceRoot,
+      commit,
+      changedFile.path,
+      { signal: context.signal },
+    );
+    return { ...diff, commit, path: input.path };
+  }
   if (requested.kind === 'aggregate') {
     return aggregateFileDiff(context, resolved.value, requested.selection, input.path, input.baseBranch);
   }

@@ -1005,6 +1005,7 @@ test('shares one Worktree view reader between Context and Surface for one Client
     'worktreeManager/listWorktrees',
     'worktreeManager/listBranches',
     'worktreeManager/listBindings',
+    'worktreeManager/getWorktreeInstructions',
   ]);
 
   for (const dispose of fixture.disposers.reverse()) dispose();

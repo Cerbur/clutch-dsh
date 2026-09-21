@@ -303,6 +303,11 @@ export function createWorktreeError(
  * Stable Manage-layer domain contract; it coordinates read-only DSH data, Git worktrees, and the external sidecar without owning DSH data.
  */
 export interface WorktreeManager {
+  /** Read plugin-owned instructions for a managed Worktree or synthetic browser Main projection backed by sidecar guidance. */
+  getWorktreeInstructions(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+  }): Promise<string>;
   updateWorktreeInstructions(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
@@ -423,6 +428,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'getWorktreeInstructions',
   'updateWorktreeInstructions',
   'updateWorktreeBaseBranch',
   'listWorktrees',
@@ -461,6 +467,10 @@ export type WorktreeRemoteResult<Value> =
  * Browser-safe Host projection containing only domain values and serializable results, never Provider objects.
  */
 export interface WorktreeRemoteManager {
+  getWorktreeInstructions(input: {
+    workspaceId: WorkspaceId;
+    worktreeId: WorktreeId;
+  }): Promise<WorktreeRemoteResult<string>>;
   updateWorktreeInstructions(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;

@@ -10,6 +10,7 @@ import type {
 // 两份列表刻意独立于 interface 编写：任何方法遗漏或意外扩张都会在类型检查阶段失败。
 // These lists are deliberately independent of the interfaces so omissions or accidental expansion fail at type-check time.
 const expectedManagerKeys = [
+  'getWorktreeInstructions',
   'updateWorktreeInstructions',
   'updateWorktreeBaseBranch',
   'listWorktrees',
@@ -31,6 +32,7 @@ const expectedManagerKeys = [
   'bindSession',
 ] as const;
 const expectedRemoteKeys = [
+  'getWorktreeInstructions',
   'adoptWorktreeBranch',
   'recoverWorktrees',
   'listWorktrees',

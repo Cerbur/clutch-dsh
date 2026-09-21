@@ -23,6 +23,7 @@ import {
  * - v3: Added 'revision', optional 'repositoryFingerprint', 'pendingOperation', 'recoveryIssues'
  * - v4: Added optional acquisition metadata ('instructions', 'baseBranch', 'createdAt', 'importedAt', 'diskCleanup')
  * - v5: Added 'baseCommit' on worktree records and create-worktree pending operations
+ * - v6: Added top-level Workspace-root 'mainInstructions'
  */
 
 function createV1Fixture(workspaceId = 'ws_mig') {
@@ -317,9 +318,10 @@ test('migration v1 -> v4: normalizes legacy removed records to diskCleanup "comp
 });
 
 test('keeps every supported schema version readable when the current version advances', () => {
-  // A future v6 must still read v5 records, including their baseCommit, so the
-  // supported-version list is explicit instead of tracking the live constant.
-  assert.deepEqual(SUPPORTED_SIDECAR_SCHEMA_VERSIONS, [1, 2, 3, 4, 5]);
+  // Current v6 reads v5 records, including their baseCommit, while accepting
+  // mainInstructions only in the v6 shape. The list is explicit instead of
+  // tracking the live constant.
+  assert.deepEqual(SUPPORTED_SIDECAR_SCHEMA_VERSIONS, [1, 2, 3, 4, 5, 6]);
   assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(SIDECAR_SCHEMA_VERSION), true);
   assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.at(-1), SIDECAR_SCHEMA_VERSION);
 
@@ -343,11 +345,46 @@ test('keeps every supported schema version readable when the current version adv
   const revalidated = validateSidecarSnapshot(v5Record, '/tmp/ws.json', undefined, 5);
   assert.equal(revalidated.worktrees[0].baseCommit, 'a'.repeat(40));
   assert.equal(revalidated.schemaVersion, 5);
+  const migrated = validateSidecarSnapshot(v5Record, '/tmp/ws.json', undefined, 6);
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.worktrees[0].baseCommit, 'a'.repeat(40));
+  assert.equal(migrated.mainInstructions, undefined);
 });
 
-test('migration v1 -> v5: migrates legacy v1 directly to current schema version v5', () => {
+test('v6 preserves Main instructions and rejects the field in v5 or malformed snapshots', () => {
+  const v5 = validateSidecarSnapshot(createV1Fixture(), '/tmp/ws.json', undefined, 5);
+  assert.equal(v5.mainInstructions, undefined);
+  const v6 = validateSidecarSnapshot(
+    { ...v5, schemaVersion: 6, mainInstructions: 'Use the Workspace root context.' },
+    '/tmp/ws.json',
+    undefined,
+    6,
+  );
+  assert.equal(v6.mainInstructions, 'Use the Workspace root context.');
+  assert.equal(
+    validateSidecarSnapshot({ ...v5, schemaVersion: 6 }, '/tmp/ws.json', undefined, 6).mainInstructions,
+    undefined,
+  );
+
+  assert.throws(
+    () => validateSidecarSnapshot({ ...v5, mainInstructions: 'legacy field' }, '/tmp/ws.json', undefined, 6),
+    { code: 'SIDECAR_CORRUPT' },
+  );
+  for (const mainInstructions of [42, {}, 'x'.repeat(32_001)]) {
+    assert.throws(
+      () => validateSidecarSnapshot({ ...v6, mainInstructions }, '/tmp/ws.json', undefined, 6),
+      { code: 'SIDECAR_CORRUPT' },
+    );
+  }
+  assert.throws(
+    () => validateSidecarSnapshot({ ...v6, unknownField: true }, '/tmp/ws.json', undefined, 6),
+    { code: 'SIDECAR_CORRUPT' },
+  );
+});
+
+test('migration v1 -> v6: migrates legacy v1 directly to current schema version v6', () => {
   const v1 = createV1Fixture();
-  const v5 = validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 5);
+  const v5 = validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 6);
 
   assert.equal(v5.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(v5.workspaceId, 'ws_mig');
@@ -358,10 +395,10 @@ test('migration v1 -> v5: migrates legacy v1 directly to current schema version 
 
   // migrateSidecarSnapshot helper behaves identically and shares the
   // validateSidecarSnapshot parameter order.
-  const migratedViaHelper = migrateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 5);
+  const migratedViaHelper = migrateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 6);
   assert.deepEqual(migratedViaHelper, v5);
 
-  // Default targetVersion is 5
+  // Default targetVersion is the current schema (v6)
   const defaultMigrated = validateSidecarSnapshot(v1, '/tmp/ws.json');
   assert.deepEqual(defaultMigrated, v5);
 });
@@ -417,10 +454,14 @@ test('migration v2 -> v5: migrates v2 to v5 preserving explicit sources and mark
 
   const revalidated = validateSidecarSnapshot(v5, '/tmp/ws.json', undefined, 5);
   assert.deepEqual(revalidated, v5);
+  const migratedToV6 = validateSidecarSnapshot(v5, '/tmp/ws.json', undefined, 6);
+  assert.equal(migratedToV6.schemaVersion, 6);
+  assert.equal(migratedToV6.mainInstructions, undefined);
+  assert.equal(migratedToV6.worktrees[0].baseCommit, v5.worktrees[0].baseCommit);
 });
 
 // ---------------------------------------------------------------------------
-// 3. v3 -> v4, v5
+// 3. v3 -> v4, v5 (then v6 preserves historical fields)
 // ---------------------------------------------------------------------------
 
 test('migration v3 -> v4: preserves revision, converts transitional repository, marks removed as cleaned', () => {
@@ -486,7 +527,7 @@ test('migration v3 -> v5: migrates v3 to v5 preserving revision, fingerprint, pe
 });
 
 // ---------------------------------------------------------------------------
-// 4. v4 -> v5
+// 4. v4 -> v5 (v6 target is covered by the current-schema migration)
 // ---------------------------------------------------------------------------
 
 test('migration v4 -> v5: preserves all acquisition metadata and archived active bindings', () => {
@@ -521,7 +562,7 @@ test('migration v4 -> v5: preserves all acquisition metadata and archived active
 });
 
 // ---------------------------------------------------------------------------
-// 5. Transitive migration equivalence (stepwise vs direct)
+// 5. Transitive migration equivalence (stepwise vs direct historical targets)
 // ---------------------------------------------------------------------------
 
 test('transitive migration equivalence: v1 -> v2 -> v3 -> v4 -> v5 equals direct v1 -> v5', () => {
@@ -595,7 +636,7 @@ test('rejects downgrading schema version', () => {
 
 test('rejects unsupported target versions', () => {
   const v1 = createV1Fixture();
-  for (const invalidTarget of [0, 6, -1, 99]) {
+  for (const invalidTarget of [0, 7, -1, 99]) {
     assert.throws(
       () => validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, invalidTarget),
       { code: 'SIDECAR_CORRUPT' },
@@ -642,7 +683,7 @@ test('WorkspaceShardedSidecarRepository migrates legacy shards (v1, v2, v3, v4) 
       await mkdir(path.dirname(shardPath), { recursive: true });
       await writeFile(shardPath, JSON.stringify(fixture, null, 2), 'utf8');
 
-      // 1. Read normalizes to v5 in memory without corrupting on-disk raw data before mutation
+      // 1. Read normalizes to v6 in memory without corrupting on-disk raw data before mutation
       const readSnapshot = await repository.read(fixture.workspaceId);
       assert.equal(readSnapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
       assert.equal(readSnapshot.workspaceId, fixture.workspaceId);
@@ -651,7 +692,7 @@ test('WorkspaceShardedSidecarRepository migrates legacy shards (v1, v2, v3, v4) 
       const rawBeforeMutation = JSON.parse(await readFile(shardPath, 'utf8'));
       assert.equal(rawBeforeMutation.schemaVersion, version);
 
-      // 2. First mutation triggers migration write to v5
+      // 2. First mutation triggers migration write to v6
       await repository.upsertWorktree({
         workspaceId: fixture.workspaceId,
         worktreeId: `wt_new_${version}`,
@@ -661,7 +702,7 @@ test('WorkspaceShardedSidecarRepository migrates legacy shards (v1, v2, v3, v4) 
         status: 'active',
       });
 
-      // Shard on disk is now migrated to v5 with incremented revision
+      // Shard on disk is now migrated to v6 with incremented revision
       const rawAfterMutation = JSON.parse(await readFile(shardPath, 'utf8'));
       assert.equal(rawAfterMutation.schemaVersion, SIDECAR_SCHEMA_VERSION);
       assert.equal(typeof rawAfterMutation.revision, 'string');

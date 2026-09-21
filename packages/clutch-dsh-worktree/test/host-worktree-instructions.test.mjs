@@ -60,7 +60,7 @@ test('independent reminder persists through native pre-step messages and dedupli
   h.commit(update);
   h.state.text = '';
   const clear = (await h.invoke()).messages[0];
-  assert.match(clear.content[0].text, /Disregard earlier Worktree instructions/);
+  assert.match(clear.content[0].text, /Disregard earlier shared instructions/);
   h.commit(clear);
   assert.equal((await h.invoke()).messages.length, 0);
 });
@@ -71,7 +71,7 @@ test('compaction republishes instructions and clearing notice; unrelated message
   h.session.surface.nodes = [];
   assert.equal((await h.invoke()).messages.length, 1);
   h.state.text = '';
-  assert.match((await h.invoke()).messages[0].content[0].text, /No Worktree instructions/);
+  assert.match((await h.invoke()).messages[0].content[0].text, /No shared Worktree or Workspace instructions/);
   const empty = harness();
   empty.state.text = '';
   const decision = { kind: 'enter', messages: [{ id: 'human', source: { kind: 'user' } }] };

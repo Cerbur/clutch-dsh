@@ -395,7 +395,7 @@ function WorktreeBaselineEditor({
   );
 }
 
-/** A Worktree or browser Main projection with explicit unavailable states where Git is not applicable. */
+/** A managed Worktree or browser Main projection with explicit unavailable states for inapplicable facts. */
 export function WorktreeDashboard({
   manager,
   record,

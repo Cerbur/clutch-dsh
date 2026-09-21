@@ -89,12 +89,12 @@ function normalizeBranch(branch: string | undefined): string | undefined {
   return normalized === undefined || normalized.length === 0 ? undefined : normalized;
 }
 
-function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState {
+function emptyState(defaultBaselineBranch: string | undefined, main: boolean): WorktreeGitState {
   return {
     branches: { status: 'idle' },
     baselineBranch: normalizeBranch(defaultBaselineBranch),
     history: { status: 'idle' },
-    view: 'summary',
+    view: main ? 'commits' : 'summary',
     includeWorkingTree: false,
     selectedCommits: [],
     commitMultiSelect: false,
@@ -108,17 +108,13 @@ function emptyState(defaultBaselineBranch: string | undefined): WorktreeGitState
  * the caller explicitly starts history loading on first Git-tab activation.
  */
 export function createWorktreeGitStateController(input: ControllerInput): WorktreeGitStateController {
-  // Main (Local) has no Worktree-relative Git projection, so it never issues a
-  // Git read even when a panel mounts for it.
+  // Main reads the Workspace-root HEAD history directly; Worktree reads still
+  // require either an explicit baseline branch or an immutable acquisition commit.
   const main = isMainWorktreeId(input.worktreeId);
-  // A Worktree with a captured acquisition commit is readable without naming a
-  // baseline branch: the Manager resolves that immutable commit as the implicit
-  // boundary. Main never reads Git, and a Worktree with neither a selectable
-  // branch nor a captured commit stays unselected until the user picks one.
   const capturedBaseline = input.capturedBaseline === true;
   const canRead = (baselineBranch: string | undefined): boolean =>
-    !main && (capturedBaseline || baselineBranch !== undefined);
-  let state = emptyState(input.defaultBaselineBranch);
+    main || capturedBaseline || baselineBranch !== undefined;
+  let state = emptyState(input.defaultBaselineBranch, main);
   let disposed = false;
   let branchesLoaded = false;
   let branchesRequest = 0;
@@ -283,11 +279,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     update({ ...state, selectedPath, diff: { status: 'loading' } });
     try {
       const value = await requestDiff(baselineBranch, state.history, target, diffPath);
+      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       if (!isLiveTarget(target)) {
         diffCache.set(key, value);
         trimCache(diffCache, MAX_DIFF_CACHE);
       }
-      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
@@ -325,11 +321,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     }
     try {
       const value = await requestFiles(baselineBranch, state.history, target);
+      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       if (!isLiveTarget(target)) {
         filesCache.set(key, value);
         trimCache(filesCache, MAX_FILE_CACHE);
       }
-      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       applyFiles(target, value);
     } catch (error) {
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
@@ -355,7 +351,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const selectBaselineBranch = (branch: string | undefined): void => {
-    if (disposed) return;
+    if (disposed || main) return;
     const nextBranch = normalizeBranch(branch);
     if (state.baselineBranch === nextBranch) return;
     ++historyRequest;
@@ -384,14 +380,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   };
 
   const selectSummary = (): void => {
-    if (disposed || !canRead(state.baselineBranch)) return;
+    if (disposed || main || !canRead(state.baselineBranch)) return;
     const target: GitTarget = { kind: 'selection', selection: summarySelection(state.includeWorkingTree) };
     resetTarget({ view: 'summary', selectedCommit: undefined, selectedCommits: [] });
     void loadFiles(target);
   };
 
   const setIncludeWorkingTree = (includeWorkingTree: boolean): void => {
-    if (disposed || state.includeWorkingTree === includeWorkingTree) return;
+    if (disposed || main || state.includeWorkingTree === includeWorkingTree) return;
     if (state.view !== 'summary' || !canRead(state.baselineBranch)) {
       update({ ...state, includeWorkingTree });
       return;

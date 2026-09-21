@@ -30,14 +30,20 @@ export interface GitLineTotals {
   readonly deletions: number;
 }
 
-/** Sum additions/deletions, or undefined when any file count is unknown. */
+/**
+ * Sum the known text-file additions/deletions. Binary files have no line
+ * counts, so they are ignored when a target also contains readable files;
+ * binary-only targets remain explicitly unknown.
+ */
 export function sumLineTotals(files: readonly WorktreeGitChangedFile[]): GitLineTotals | undefined {
   let additions = 0;
   let deletions = 0;
+  let knownFiles = 0;
   for (const file of files) {
-    if (file.additions === undefined || file.deletions === undefined) return undefined;
+    if (file.additions === undefined || file.deletions === undefined) continue;
     additions += file.additions;
     deletions += file.deletions;
+    knownFiles += 1;
   }
-  return { additions, deletions };
+  return files.length === 0 || knownFiles > 0 ? { additions, deletions } : undefined;
 }

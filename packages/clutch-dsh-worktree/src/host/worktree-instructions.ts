@@ -24,7 +24,7 @@ export interface WorktreeInstructionHost {
 }
 const plugin = '@cerbur/clutch-dsh-worktree';
 const cleared =
-  '<system-reminder>\nNo Worktree instructions apply. Disregard earlier Worktree instructions.\n</system-reminder>';
+  '<system-reminder>\nNo shared Worktree or Workspace instructions apply. Disregard earlier shared instructions.\n</system-reminder>';
 
 function ownedText(value: unknown): string | undefined {
   const message = value as Partial<Message> | null;
@@ -49,7 +49,7 @@ export function registerWorktreeInstructions(
     const text = instructions.trim()
       ? [
           '<system-reminder>',
-          'Shared instructions for this Worktree. This replaces all earlier Worktree instructions:',
+          'Shared instructions for this Worktree or Workspace root. This replaces all earlier shared instructions:',
           instructions,
           '</system-reminder>',
         ].join('\n')

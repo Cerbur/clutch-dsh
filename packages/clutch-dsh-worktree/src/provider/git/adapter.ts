@@ -775,13 +775,13 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Read at most 201 Worktree commits after a resolved base branch tip. */
+  /** Read at most 201 commits after a boundary, or the complete reachable HEAD history when omitted. */
   async listCommits(
     worktreeRoot: string,
-    baseCommit: string,
+    baseCommit?: string,
     options: GitCommandOptions = {},
   ): Promise<GitCommitHistoryRead> {
-    assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
+    if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
     const headCommit = await this.resolveCommit(worktreeRoot, 'HEAD', options);
     try {
       const result = await this.run(
@@ -791,7 +791,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           '--topo-order',
           `--max-count=${HISTORY_REQUEST_LIMIT}`,
           '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
-          `${baseCommit}..HEAD`,
+          ...(baseCommit === undefined ? [] : [`${baseCommit}..HEAD`]),
         ],
         worktreeRoot,
         options,

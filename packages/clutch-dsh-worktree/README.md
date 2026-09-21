@@ -6,13 +6,13 @@
 Sessions as Workspace → Worktree → Session while keeping DSH as the source of truth for
 Workspace identity, Session metadata, native lists, messages, and conversation history.
 
-The plugin stores Worktree relationships, acquisition facts, and shared Worktree instructions in
-its own sidecar. Managed Worktrees also expose a read-only Git & Changes dashboard where users can
-choose a local branch baseline; the plugin does not copy transcripts or rewrite DSH Sessions.
+The plugin stores Worktree relationships, acquisition facts, shared Worktree instructions, and Workspace-root
+Main instructions in its own sidecar. Managed Worktrees expose a read-only baseline-relative Git & Changes dashboard, while Main exposes
+its Workspace-root HEAD history; the plugin does not copy transcripts or rewrite DSH Sessions.
 
-> **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation,
-> lifecycle actions, Session actions, instructions, and the managed Worktree Git & Changes view
-> are connected. Derived Worktrees, Settings, and other unfinished actions remain marked
+> **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
+> Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
+> Derived Worktrees, Settings, and other unfinished actions remain marked
 > **Coming soon**.
 
 ## Installation
@@ -65,7 +65,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | --- | --- | --- |
 | **Worktree navigation** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the Sidebar. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog"> | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory. |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, instructions, connected actions, and the read-only Git & Changes view for eligible managed Worktrees. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
 
 ## Usage
 
@@ -134,15 +134,18 @@ launch success.
 
 ### Use Git & Changes
 
-Open the **Git & Changes** tab from a managed Worktree Dashboard. For a managed Worktree with a
+Open the **Git & Changes** tab from a managed Worktree or Main Dashboard. Main reads the current Workspace-root
+commit history directly and prepends an **Uncommitted changes** entry when the root has tracked, staged, unstaged, or
+untracked changes. It shows at most the first 200 committed commits, selects the first visible target, and uses the same
+changed-file and diff panes for either a live working-tree target or a committed history entry. For a managed Worktree with a
 persisted `baseBranch` that differs from the current branch, or with a captured acquisition commit that
 supplies the implicit baseline, the Overview performs one compact, on-demand Git status read through the
 existing `/api` Connection. It shows ahead/behind commit counts plus separate
 committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
-projection, not a watcher or a Worktree-record field. Main,
-unavailable, or baseline-unselected views honestly remain **Not connected**. Opening Overview does not
-load the branch list; the first Git tab activation loads local branches and, once a baseline is resolved,
-commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
+projection, not a watcher or a Worktree-record field. Main has no Worktree baseline comparison, so Overview remains
+**Not connected** for ahead/behind facts while its Git tab still exposes Main history. Unavailable or baseline-unselected
+managed views honestly remain **Not connected**. Opening Overview does not load the branch list; the first Git tab
+activation loads local branches and, once a baseline is resolved, managed Worktree commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
 picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
 scrolls internally, so the dialog keeps one size while you filter. Choose any local branch except the
 current Worktree branch and save.
@@ -157,18 +160,20 @@ Git & Changes view reports Worktree commits after that ancestor as `+N` ahead an
 as `-N` behind; history and file reads remain available. If the two heads have no common ancestor, the
 committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
 history uses the Worktree commits not reachable from that base tip.
-With a valid baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
+With a valid managed Worktree baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
 first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
-changes** when you need a narrower target.
+changes** when you need a narrower target. Main skips this comparison-only summary but presents the same committed history and multi-commit selection behavior, plus a live working-tree target when the
+Workspace root has changes. Selecting **Uncommitted changes** compares the current Workspace root with `HEAD`; it does not
+create a baseline or write any Git state.
 
 The selected local branch is resolved again for each read. The browser can choose only a plain local branch
 name, not a raw commit SHA or arbitrary Git ref: a full ref path, tag, or remote-tracking ref is rejected
 outright, while a selected branch that no longer exists shows the honest unavailable state instead of a
 generic Git failure. `baseCommit` is immutable acquisition metadata, is never user-selectable directly, and
 is the implicit baseline whenever no saved branch baseline is usable; creation recovery never overwrites
-it. When the Worktree has staged, unstaged, or untracked
-files, the list prepends an **Uncommitted changes** entry; selecting it compares the live working tree with
-`HEAD` and uses the same changed-file and diff views.
+it. When a managed Worktree or Main Workspace root has staged, unstaged, or untracked files, the list prepends an
+**Uncommitted changes** entry; selecting it compares that live working tree with `HEAD` and uses the same changed-file
+and diff views.
 
 The **Baseline summary** is a separate target that shows the net committed tree diff from the resolved
 common ancestor to the request's captured `HEAD` (or the two branch tips when no common ancestor exists);
@@ -176,8 +181,8 @@ it excludes working-tree changes by default. Turn on **Include working tree** to
 one net diff from the same comparison boundary to the current working tree, including committed, staged,
 unstaged, untracked, deleted, and renamed changes. This is a
 fresh on-demand projection rather than a concatenation of two diffs. Clicking a commit shows that
-commit's own diff. Turn on **Multi-select commits** in the commits header to pick several committed rows
-and view the exact union of their first-parent deltas; the switch is off by default, and turning it off
+commit's own diff. For managed Worktrees and Main, turn on **Multi-select commits** in the commits header to pick several committed rows
+and view the exact union of their first-parent deltas; Main has no baseline-summary or working-tree-inclusion controls, and the switch is off by default; turning it off
 collapses the selection back to the focused commit. The changed-file list
 records the contributing commits, and each selected commit is rendered as its own diff segment; this is
 not an implicit range and does not include unselected commits. The changed-files column header shows the
@@ -188,7 +193,7 @@ reveals the current file in the native right sidebar using the current Session, 
 belongs to the Dashboard Worktree. An empty Worktree
 or an unrelated current Session cannot open a file through this action.
 
-The history is capped at 200 commits and marks longer histories as truncated. A changed-file list larger
+Managed Worktree and Main history are each capped at 200 commits and mark longer histories as truncated. A changed-file list larger
 than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
 Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
@@ -212,21 +217,21 @@ names untruncated. Changed files are grouped by folders; folders start expanded 
 collapsed independently. Diff content also scrolls inside its bounded pane, while the read-only selection
 and refresh behavior remains unchanged.
 
-The view is read-only and does not provide commit or staging controls. The plugin validates committed
-entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh
-status projection, so these endpoints are not generic Git object or file readers. Refresh keeps ready
+The view is read-only and does not provide commit or staging controls. For managed Worktrees, the plugin validates committed
+entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh status projection;
+Main validates committed entries against its bounded HEAD-history projection. These endpoints are not generic Git object or file readers. Refresh keeps ready
 content visible while replacement data loads, and late responses for an older commit or file selection
 are ignored.
 
-### Add Worktree instructions
+### Add Worktree or Main instructions
 
-In the Dashboard, use **Edit** on the instructions card to save or clear shared guidance, up to
-32,000 UTF-16 code units. For an active binding, the next model request receives the text as a
-separate `<system-reminder>` context entry through DSH's pre-step hook.
+In the Dashboard, use **Edit** on the instructions card to save or clear shared guidance for the selected Worktree or
+Main Workspace, up to 32,000 UTF-16 code units. The next model request receives the text as a separate
+`<system-reminder>` context entry through DSH's pre-step hook, including unbound Sessions running at Main.
 
 Instructions stay in the plugin's own data. They are not written to the project directory or an
-`AGENTS.md` file. Clearing, detaching, archiving, cleaning, or forgetting a Worktree stops future
-injection; unchanged instruction text is not repeatedly added while its message remains visible.
+`AGENTS.md` file. Clearing, detaching, cleaning, or forgetting a Worktree stops future injection; archiving
+keeps an active binding and therefore keeps its Worktree instruction effective. Unchanged instruction text is not repeatedly added while its message remains visible.
 
 ### Archive or remove a Worktree
 

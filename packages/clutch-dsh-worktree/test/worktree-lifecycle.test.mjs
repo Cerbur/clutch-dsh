@@ -43,7 +43,7 @@ test('legacy removed remains cleaned and detached', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 5);
+  assert.equal(snapshot.schemaVersion, 6);
   assert.equal(snapshot.revision, '7');
   assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
   assert.equal(snapshot.bindings[0].status, 'detached');
@@ -82,7 +82,7 @@ test('v1 source normalizes to plugin', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 5);
+  assert.equal(snapshot.schemaVersion, 6);
   assert.equal(snapshot.revision, '0');
   assert.equal(snapshot.worktrees[0].source, 'plugin');
 });
@@ -104,7 +104,7 @@ test('v2 retains explicit source and defaults revision to 0', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 5);
+  assert.equal(snapshot.schemaVersion, 6);
   assert.equal(snapshot.revision, '0');
   assert.equal(snapshot.worktrees[0].source, 'external');
 });
@@ -129,7 +129,7 @@ test('v3 preserves revision and repository fingerprint', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 5);
+  assert.equal(snapshot.schemaVersion, 6);
   assert.equal(snapshot.revision, '42');
   assert.equal(snapshot.repositoryFingerprint, fingerprint);
   assert.equal(snapshot.worktrees[0].diskCleanup, undefined);
@@ -152,8 +152,24 @@ test('v3 active binding to legacy removed record is rejected as corrupt', () => 
   );
 });
 
+test('v6 stores Main instructions while v5 rejects the new field', () => {
+  const base = {
+    schemaVersion: 6,
+    workspaceId: 'ws1',
+    revision: '0',
+    mainInstructions: 'Workspace guidance',
+    worktrees: [],
+    bindings: [],
+  };
+  assert.equal(validateSidecarSnapshot(base, '/tmp/ws1.json').mainInstructions, 'Workspace guidance');
+  assert.throws(
+    () => validateSidecarSnapshot({ ...base, schemaVersion: 5 }, '/tmp/ws1.json'),
+    { code: 'SIDECAR_CORRUPT' },
+  );
+});
+
 test('unsupported schema versions are rejected', () => {
-  for (const v of [0, 6, 99, -1]) {
+  for (const v of [0, 7, 99, -1]) {
     assert.throws(
       () =>
         validateSidecarSnapshot(

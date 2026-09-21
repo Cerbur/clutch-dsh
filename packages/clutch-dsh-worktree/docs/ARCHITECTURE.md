@@ -69,15 +69,15 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - `projectId`、`worktreeId`、`sessionId` 之间的绑定映射；
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
-- 可选字段：用户编写的 Worktree 指令（`instructions`，最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
+- 可选字段：用户编写的 Worktree 指令（`instructions`）与 Workspace-root Main 指令（`mainInstructions`，均最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
   新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据：创建恢复和创建后检查只会填充最初未能捕获的获取 commit，绝不会用后续的实时 HEAD 覆盖它。
 - Git ahead/behind、已提交/未提交 changed-file additions/deletions 以及工作区行数都属于运行时 Git projection，仅通过 contract/Manager 读取，不写入 `WorktreeRecord` 或 Sidecar；不可安全读取时必须返回显式 unavailable，而不是持久化猜测值。
 
 ### 共享指令（Instructions）注入机制
 
-- Worktree 指令保存在 Sidecar 中，**绝不写入业务仓库目录下的 AGENTS.md**。
-- Host 在 DSH `agent/pre-step` 钩子中根据当前 Session 的 active binding 读取最新指令，以独立的 `<system-reminder>` 消息注入到 `decision.messages`，由 DSH 自行持久化与展示。
-- 当绑定解除、Worktree 归档、清理或移出管理时，插件在下一步中追加一条失效提醒；已注入指令不重写历史消息。
+- Worktree 指令与 Main 指令都保存在 Sidecar 中，**绝不写入业务仓库目录下的 AGENTS.md**。
+- Host 在 DSH `agent/pre-step` 钩子中根据当前 Session 的 authoritative Workspace 身份读取最新指令：active Worktree binding 使用该 Worktree 指令；已知 Workspace 中没有 active binding 的 Session 使用 `mainInstructions`。两者都以独立的 `<system-reminder>` 消息注入到 `decision.messages`，由 DSH 自行持久化与展示。
+- 当 binding 解除、Worktree 清理或移出管理时，Worktree 指令在下一步中追加失效提醒；归档本身保留 active binding，因此仍可注入原指令。Main 指令只对 DSH 已确认属于该 Workspace 且没有 active binding 的 Session 生效（不依据 cwd 猜测），已注入指令不重写历史消息。
 
 ### 故障降级（Degraded State）
 
@@ -185,16 +185,14 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 ## 7. Sidecar 持久化与 Schema 演进
 
-- **版本演进**：支持从 v1/v2/v3/v4 到 v5 的向后兼容读取。
+- **版本演进**：支持从 v1/v2/v3/v4/v5 到 v6 的向后兼容读取。
   - v1 记录读取时规范化为 `source: 'plugin'`；
   - v2 记录保留其显式 source；
   - v3 记录保留 revision 字符串；
   - 旧版 `status: 'removed'` 规范化为 `diskCleanup: 'completed'` 且绑定解为 detached；
-  - **首次成功变更时，原子持久化为 v5 格式**。
-- **v4/v5 扩展元数据保留**：
-  已知开发构建元数据（`instructions`、`createdAt`、`importedAt`、`baseBranch`）以及 v5 的
-  `baseCommit` 在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
-- **指纹与防串仓**：v4/v5 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
+  - **首次成功变更时，原子持久化为 v6 格式**。
+- **历史扩展元数据保留**：v4/v5 只接受并保留各自历史版本的 Worktree 元数据；`mainInstructions` 是 v6-only 字段，包含它的 v5 输入会被严格拒绝。首次将 v1-v5 快照写成 v6 时该字段保持缺省，v6 快照的已知元数据（`instructions`、`mainInstructions`、`createdAt`、`importedAt`、`baseBranch`、`baseCommit`）在 Sidecar 写入时得到完整保留，未知字段仍被严格拦截校验，防止数据脏写。
+- **指纹与防串仓**：v4/v5/v6 记录使用不透明的 `repositoryFingerprint` 校验物理仓库一致性。
 - **并发锁与原子写入**：
   `SidecarPersistence` 在 `$dshHome/clutch-dsh-worktree/locks` 下使用跨进程文件锁对 Workspace Shard 进行互斥，并通过同目录临时文件 + `rename` 原语完成全量快照的原子发布。
 - **防损坏**：未知版本、格式非法或不变量冲突均视为严重损坏错误，**绝不静默覆盖为空索引**。
@@ -234,8 +232,9 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 ### Git Dashboard 只读投影
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
-Git Tab 首次挂载时读取 Workspace 的本地 branch 列表；如果 Worktree 记录存在持久化的
-`baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择；否则在记录带有不可变获取
+Git Tab 首次挂载时，Main 直接读取 Workspace root `HEAD` 的有界 commit history，并按需读取 root 的 changed-path projection；它不读取 branch 列表、
+不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，客户端读取 Workspace 的本地 branch 列表；
+如果 Worktree 记录存在持久化的 `baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择；否则在记录带有不可变获取
 commit（`baseCommit`）时，以该 commit 作为隐式基线读取并把解析出的 commit 显示为 Base fact。
 只有既无可用已保存基线、也无获取 commit 的 Worktree 才保持未选择并提示用户。受管理 Worktree 的 Overview
 Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排除当前 Worktree branch；保存通过
@@ -256,29 +255,30 @@ projection 超过 adapter 既有输出上限时返回显式的 truncated 结果�
 commit history 使用所选 branch 当前 tip 到 Worktree `HEAD` 的范围，只展示 Worktree 独有的 commit；
 基线汇总与文件 tree diff 使用两者共同先祖到 Worktree `HEAD` 的范围。若没有共同先祖，tree diff
 安全降级为两个 branch head 之间的完整范围，且 history 使用 Worktree head 相对 base tip 的完整可达 commit。
-最多返回 200 个 commit。当 tracked、staged、unstaged 或 untracked 文件存在时，历史顶部额外投影一个临时的
-`working-tree` entry，其文件和 unified diff 都相对于当前 `HEAD`。
-该 entry 不写入 Sidecar 或 DSH，也不计入 committed history 的 200 个 commit 上限。Sidecar 中的
+受管理 Worktree 与 Main history 都最多返回 200 个 committed history entries。Main 展示从 Workspace root `HEAD` 可达的 committed history，
+并在 tracked、staged、unstaged 或 untracked 文件存在时，在顶部额外投影一个临时的 `working-tree` entry；受管理 Worktree 也沿用同一规则。
+默认选中第一个可见目标；working-tree entry 的文件和 unified diff 都相对于当前 `HEAD`。
+该 entry 不写入 Sidecar 或 DSH，也不计入 committed history 的 200 个 commit 上限。Main 的 working-tree 文件与 Diff 读取使用 Workspace root；Sidecar 中的
 `baseCommit` 仍保留给历史 API 兼容和恢复逻辑，但不是新的用户选择类型。
 
-Manage 在每次文件/差异读取前校验 Worktree 仍是当前 Git registration，并验证 commit 可从
-Worktree `HEAD` 到达；存在共同先祖时，commit 还必须位于共同先祖之后的 Worktree 增量范围内，
+Manage 在每次 Main committed 文件/差异读取前，使用同一次有界的 Workspace-root history projection 授权可见 commit；Main 的 working-tree 文件/差异读取则重新授权 Workspace-root changed paths。对受管理 Worktree
+则校验 Worktree 仍是当前 Git registration，并验证 commit 可从 Worktree `HEAD` 到达；存在共同先祖时，commit 还必须位于共同先祖之后的 Worktree 增量范围内，
 没有共同先祖时则允许当前 branch 的完整 commit history。working-tree entry 则重新读取当前状态。
 随后只允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git
 object、ref、文件或命令读取能力。正常 commit 使用 first-parent，root commit 使用 empty tree；
 diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
 输出上限、超时、cleanup deadline 和 AbortSignal。
 
-Git projection 还提供两个 aggregate target，而不增加新的 RPC transport：`summary` 默认使用同一次
+受管理 Worktree 的 Git projection 提供 committed selection aggregate 与两个 comparison aggregate target，而不增加新的 RPC transport；Main 提供 committed selection aggregate，
+但不提供比较型 `summary` 或 working-tree inclusion target。`summary` 默认使用同一次
 授权中解析并固定的 tree comparison boundary（共同先祖，或无共同先祖时的 base head）与 `HEAD` SHA，
 读取真正的 boundary-to-HEAD 净 committed tree diff；它不把 working tree 变化混入默认 summary。打开
 `includeWorkingTree` 后，`summary` 改为读取从同一 boundary 到当前 live working tree 的一次净 projection，包含 committed、staged、unstaged、
 untracked、删除和重命名改动，而不是拼接两个 Diff。`commits` selection 逐个授权所选 SHA，并按
 请求顺序读取每个 commit 的 first-parent changed-file/diff projection。Manage 返回文件并集以及
 每个 commit 的独立 diff segment，绝不把任意多选静默解释为连续 range，因此未选择的中间 commit
-不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。所有
-aggregate 请求都必须满足 commit/selection 二选一，且继续经过 baseline、HEAD、commit、path
-授权。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
+不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。受管理 Worktree 的 comparison aggregate 继续经过 baseline、HEAD、commit、path
+授权；Main committed aggregate 则以同一次有界的可见 Main history 作为 commit 授权边界。所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
 Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
 当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 
