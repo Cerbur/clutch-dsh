@@ -188,6 +188,7 @@ export interface WorktreeGitFileDiff {
 }
 
 export * from './worktree-permission.js';
+export * from './windows-path.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
 export type WorktreeHealth = 'ready' | 'repair' | 'recovery-needed' | 'cleaned' | 'branch-drift';
