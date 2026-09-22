@@ -8,11 +8,23 @@
 
 - 将 Dashboard 的在应用中打开入口改为只调用 DSH 官方相对 Host 路由；应用选择只在当前页面内记忆，刷新后使用第一个可用应用，并保留无可用应用或 Host 失败时的 VS Code fallback。
 
+#### 兼容性
+
+- 修复 Windows 下 Sidecar 原子写入：临时文件通过可写句柄同步，文件同步失败显式报错而目录同步保持 best effort；VS Code 链接仅剥离 drive/UNC 扩展前缀并统一使用 / 分隔符，未知 namespace 保持不变。
+- 兼容 Windows Git 的 `NUL` 设备路径和 CRLF Worktree porcelain 输出，并避免旧版 Node 的 Windows signal-0 行为误杀存活锁进程。
+- 使用物理路径比较 Session cwd 绑定，兼容 Windows/macOS 的大小写、符号链接和其他路径别名；浏览器端将物理身份校验交由 Host。
+
 ### English
 
 #### Fixed
 
 - Make the Dashboard Open In action use only DSH's official relative Host routes; keep application selection in current-page memory, use the first available application after refresh, and retain the VS Code fallback when no application is available or the Host fails.
+
+#### Compatibility
+
+- Fix Windows Sidecar atomic writes by syncing temporary files through writable handles and surfacing file-sync failures while keeping directory sync best effort; normalize VS Code links by stripping only drive/UNC extended prefixes and using / separators, leaving unknown namespaces unchanged.
+- Support Git for Windows's `NUL` device path and CRLF Worktree porcelain output, and avoid the legacy Node Windows signal-0 behavior killing live lock owners.
+- Compare Session cwd bindings by physical path so Windows/macOS case, symlink, and other path aliases remain compatible; the browser delegates physical identity validation to Host.
 
 ## 0.1.13 — 2026-09-17
 

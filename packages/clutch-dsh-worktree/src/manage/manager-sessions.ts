@@ -54,7 +54,7 @@ export async function bindSession(
         sessionId: input.sessionId,
       });
     }
-    assertSessionMatchesWorkspace(session, workspace, worktree);
+    await assertSessionMatchesWorkspace(session, workspace, worktree);
 
     const binding: SessionBinding = {
       workspaceId: input.workspaceId,

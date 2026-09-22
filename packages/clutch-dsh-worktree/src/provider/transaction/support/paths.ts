@@ -1,6 +1,9 @@
 import path from 'node:path';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import type { RepositoryIdentity } from '../../types.js';
+import { samePhysicalPath } from '../../path-identity.js';
+
+export { samePhysicalPath };
 
 export function isMissing(error: unknown): boolean {
   return (error as { readonly code?: string }).code === 'ENOENT';
@@ -40,16 +43,6 @@ export async function canonicalPath(pathname: string): Promise<string> {
     return await realpath(pathname);
   } catch (error) {
     if (isMissing(error)) return path.resolve(pathname);
-    throw error;
-  }
-}
-
-export async function samePhysicalPath(left: string, right: string): Promise<boolean> {
-  if (path.resolve(left) === path.resolve(right)) return true;
-  try {
-    return (await realpath(left)) === (await realpath(right));
-  } catch (error) {
-    if (isMissing(error)) return false;
     throw error;
   }
 }

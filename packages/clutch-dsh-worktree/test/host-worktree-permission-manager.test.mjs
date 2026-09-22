@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { createWorktreePermissionManager } from '../lib/host/worktree-permission-manager.js';
@@ -85,6 +88,52 @@ test('validates the active Worktree binding before delegating permission changes
     retryable: false,
   });
   assert.deepEqual(fixture.calls, [{ ...request, binding: 'active' }]);
+});
+
+test('accepts a Session cwd that resolves to the Worktree through a physical alias', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-permission-'));
+  const actualPath = path.join(root, 'actual');
+  const aliasPath = path.join(root, 'alias');
+  await mkdir(actualPath);
+  await symlink(actualPath, aliasPath, 'junction');
+  try {
+    const fixture = createFixture({
+      manager: {
+        async listWorktrees() {
+          return [{ ...worktree, absolutePath: aliasPath }];
+        },
+        async listBindings() {
+          return [binding];
+        },
+      },
+      dsh: {
+        async getWorkspace() {
+          return { workspaceId: 'workspace-one', rootPath: path.join(root, 'repository') };
+        },
+        async getSession() {
+          return {
+            sessionId: 'session-one',
+            workspaceId: 'workspace-one',
+            cwd: actualPath,
+          };
+        },
+        async listSessions() {
+          return [];
+        },
+      },
+    });
+    const permissions = createWorktreePermissionManager(fixture);
+
+    assert.deepEqual(await permissions.ensureWorktreePermission(request), {
+      status: 'full-applied',
+      preset: 'worktree-full-access',
+      sandboxMode: 'danger-full-access',
+      approvalPolicy: 'ask',
+      retryable: false,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('rejects permission changes when the Session is not actively attached to the Worktree', async () => {

@@ -9,6 +9,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { LocalGitAdapter, WORKTREE_GIT_WORKING_TREE } from '../lib/index.js';
 
+const gitNullDevice = process.platform === 'win32' ? 'NUL' : os.devNull;
+
 test('preserves porcelain status flags with and without reasons', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
   try {
@@ -25,6 +27,23 @@ test('preserves porcelain status flags with and without reasons', async () => {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
+test('normalizes CRLF from Git worktree porcelain output', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
+  const worktreePath = String.raw`C:\Users\Admin\worktrees\topic`;
+  try {
+    const git = new LocalGitAdapter({ subprocess: createFakeRuntime({
+      stdout: `worktree ${worktreePath}\r\nbranch refs/heads/topic\r\n\r\n`,
+    }) });
+    assert.deepEqual(await git.listWorktrees(workspaceRoot), [{
+      absolutePath: worktreePath,
+      branch: 'topic',
+      detached: false,
+    }]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 
 function collectedReader(text, lossy = false) {
   return {
@@ -631,7 +650,7 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', 'HEAD', '--'],
-      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', 'untracked.txt'],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, 'untracked.txt'],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -662,7 +681,7 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
-      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
 
     const diffRuntime = createFakeRuntime({
@@ -686,7 +705,7 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
     assert.deepEqual(diffRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
       ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', baseCommit, '--', filePath],
-      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -716,7 +735,7 @@ test('reads an untracked working-tree diff after handling no-index exit 1', asyn
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
       ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', filePath],
-      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

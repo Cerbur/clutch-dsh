@@ -267,6 +267,7 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 | DSH Host | `>=0.1.5-rc.1`, including the Typert Gateway `/api` connection and subprocess capability |
 | Git | `>=2.20.0`, installed and available on `PATH` |
 | Node.js | `>=20.0.0` for the DSH host runtime |
+| Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
 
 ## Behavior and limitations
 

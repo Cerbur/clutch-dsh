@@ -229,6 +229,7 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 | DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
 | Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
 | Node.js | `>=20.0.0`，用于 DSH host runtime |
+| Host filesystem | 支持使用普通 Windows 和 macOS 本地路径保存 sidecar 与 Git Worktree 数据；网络、特殊或别名路径较多的文件系统可能不支持持久化同步或身份校验。 |
 
 ## 行为与限制
 

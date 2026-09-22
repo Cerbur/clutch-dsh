@@ -3,13 +3,14 @@ import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/pro
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-
 import { providerError } from '../types.js';
+import { defaultProcessLiveness, type ProcessLiveness } from './process-liveness.js';
 
 export interface MutationLockOptions {
   readonly acquisitionTimeoutMs?: number;
   readonly leaseMs?: number;
   readonly heartbeatMs?: number;
+  readonly processLiveness?: ProcessLiveness;
 }
 
 export interface MutationLockHandle {
@@ -37,15 +38,6 @@ function isAlreadyExists(error: unknown): boolean {
 
 function isMissing(error: unknown): boolean {
   return (error as { readonly code?: string }).code === 'ENOENT';
-}
-
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as { readonly code?: string }).code === 'EPERM';
-  }
 }
 
 function parseOwner(value: string): LockOwner | undefined {
@@ -80,12 +72,14 @@ export class CrossProcessMutationLock {
   private readonly acquisitionTimeoutMs: number;
   private readonly leaseMs: number;
   private readonly heartbeatMs: number;
+  private readonly processLiveness: ProcessLiveness;
 
   constructor({
     lockRoot,
     acquisitionTimeoutMs = DEFAULT_ACQUISITION_TIMEOUT_MS,
     leaseMs = DEFAULT_LEASE_MS,
     heartbeatMs = DEFAULT_HEARTBEAT_MS,
+    processLiveness = defaultProcessLiveness,
   }: MutationLockOptions & { readonly lockRoot: string }) {
     if (!path.isAbsolute(lockRoot)) {
       throw providerError('SIDECAR_UNAVAILABLE', 'Mutation lock root must be an absolute path', { lockRoot });
@@ -101,6 +95,7 @@ export class CrossProcessMutationLock {
     this.acquisitionTimeoutMs = acquisitionTimeoutMs;
     this.leaseMs = leaseMs;
     this.heartbeatMs = heartbeatMs;
+    this.processLiveness = processLiveness;
   }
 
   getLockPath(key: string): string {
@@ -253,7 +248,7 @@ export class CrossProcessMutationLock {
     if (!owner || owner.hostname !== os.hostname()) return;
     const heartbeatAt = Date.parse(owner.heartbeatAt);
     if (!Number.isFinite(heartbeatAt) || Date.now() - heartbeatAt < this.leaseMs) return;
-    if (processIsAlive(owner.pid)) return;
+    if (await this.processLiveness.isAlive(owner.pid)) return;
 
     // Rename is the ownership handoff: a contender cannot remove a newly
     // acquired lock after another contender has already moved this directory.
