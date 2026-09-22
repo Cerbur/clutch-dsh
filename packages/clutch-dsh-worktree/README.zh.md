@@ -253,6 +253,8 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
 - Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
+  sidecar 文件或 `.git`，也不会暴露修改 working tree 的控制项。文件 diff 会禁用外部 diff 与
+  文本转换，并限制显示范围以保障安全。
 - Dashboard 的在应用中打开入口只通过 DSH 官方相对 Host 路由完成应用探测、图标加载和启动；应用选择只保存在当前页面内，刷新后使用第一个可用应用，Host 返回空结果或失败时回退到编码后的 VS Code 协议链接。
 - Git Dashboard 只实现 commit history、只读的**基线汇总**（可选包含一次从基线到工作区的
   新鲜 projection）、顶部的只读**未提交的改动**快照、changed files 和一次一个 unified diff。
@@ -268,8 +270,11 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
   不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态；它不能突破
   DSH 宿主设置的 sandbox 上限。
+- Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
+- 如果插件的外部索引不可用或损坏，原生 DSH Workspace 和 Session 视图保持完全可读，插件
+  进入降级只读状态，绝不会使用空索引覆盖原生数据。
 
 ## 界面语言
 

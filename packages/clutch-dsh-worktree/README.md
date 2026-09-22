@@ -316,6 +316,7 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
   and does not change network or process policy. If unavailable, the plugin falls back to
   `workspace-write + ask` when possible or reports an unverified, retryable state. It cannot
   exceed the sandbox imposed by the host running DSH.
+- Session-to-Worktree bindings and permission checks compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
 - Git must be installed and available on `PATH`. A missing Git executable shows install guidance
   and no command block; the plugin does not run setup or installation commands.
 - If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
