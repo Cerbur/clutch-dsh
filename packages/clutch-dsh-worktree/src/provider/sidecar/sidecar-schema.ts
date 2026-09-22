@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { SessionBinding, WorktreeRecord } from '../../contract/index.js';
 import { createRepositoryFingerprint } from '../git/repository-fingerprint.js';
+import { sameLexicalPath } from '../path-identity.js';
 import {
   LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
@@ -18,6 +19,13 @@ const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceI
 // Preserve known development-build metadata without accepting arbitrary fields.
 const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
 const V5_OPTIONAL_WORKTREE_KEYS = [...V4_OPTIONAL_WORKTREE_KEYS, 'baseCommit'];
+const V6_OPTIONAL_SNAPSHOT_KEYS = [
+  'mainInstructions',
+  'pendingOperation',
+  'recoveryIssues',
+  'repository',
+  'repositoryFingerprint',
+];
 
 /**
  * Every on-disk schema version this build still reads, oldest first. Listing the
@@ -30,12 +38,13 @@ export const SUPPORTED_SIDECAR_SCHEMA_VERSIONS: readonly number[] = [
   3,
   4,
   5,
+  6,
 ];
 
 /** Versions that persist the acquisition metadata group. */
-const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5]);
+const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5, 6]);
 /** Versions that persist the immutable acquisition commit. */
-const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5]);
+const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5, 6]);
 
 function isSupportedSchemaVersion(schemaVersion: number): boolean {
   return SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(schemaVersion);
@@ -51,6 +60,10 @@ const BINDING_KEYS = ['sessionId', 'status', 'workspaceId', 'worktreeId'];
 const LEGACY_SNAPSHOT_KEYS = ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_REQUIRED_SNAPSHOT_KEYS = ['bindings', 'revision', 'schemaVersion', 'workspaceId', 'worktrees'];
 const V3_OPTIONAL_SNAPSHOT_KEYS = ['pendingOperation', 'recoveryIssues', 'repository', 'repositoryFingerprint'];
+
+function optionalSnapshotKeys(schemaVersion: number): readonly string[] {
+  return schemaVersion >= 6 ? V6_OPTIONAL_SNAPSHOT_KEYS : V3_OPTIONAL_SNAPSHOT_KEYS;
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -292,7 +305,7 @@ function assertGeneratedPluginPath(
     throw corrupt(pathname, 'Worktree record has an invalid generated ID');
   }
   const expectedPath = path.resolve(generatedWorktreeRoot, record.worktreeId);
-  if (path.resolve(record.absolutePath) !== expectedPath) {
+  if (!sameLexicalPath(record.absolutePath, expectedPath)) {
     throw corrupt(pathname, 'Worktree path is outside the generated DSH Home root');
   }
 }
@@ -330,7 +343,7 @@ export function validateSidecarSnapshot(
     : schemaVersion === 2
       ? hasExactKeys(value, ['bindings', 'schemaVersion', 'workspaceId', 'worktrees'])
       : schemaVersion >= 3 && isSupportedSchemaVersion(schemaVersion) &&
-        hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, V3_OPTIONAL_SNAPSHOT_KEYS);
+        hasAllowedKeys(value, V3_REQUIRED_SNAPSHOT_KEYS, optionalSnapshotKeys(schemaVersion));
   if (!validShape || !Array.isArray(value.worktrees) || !Array.isArray(value.bindings)) {
     throw corrupt(pathname, 'invalid sidecar snapshot');
   }
@@ -341,7 +354,7 @@ export function validateSidecarSnapshot(
     throw corrupt(pathname, 'cannot downgrade sidecar schema version', { schemaVersion, targetVersion });
   }
   if (
-    (schemaVersion === 3 || schemaVersion === 4 || schemaVersion === SIDECAR_SCHEMA_VERSION) &&
+    schemaVersion >= 3 && isSupportedSchemaVersion(schemaVersion) &&
     (typeof value.revision !== 'string' || !/^\d+$/.test(value.revision))
   ) {
     throw corrupt(pathname, 'invalid sidecar revision');
@@ -351,6 +364,12 @@ export function validateSidecarSnapshot(
     (typeof value.repositoryFingerprint !== 'string' || !/^v1-[a-f0-9]{64}$/.test(value.repositoryFingerprint))
   ) {
     throw corrupt(pathname, 'invalid repository fingerprint');
+  }
+  if (
+    value.mainInstructions !== undefined &&
+    (typeof value.mainInstructions !== 'string' || value.mainInstructions.length > 32000)
+  ) {
+    throw corrupt(pathname, 'invalid Main instructions');
   }
 
   for (const record of value.worktrees) assertWorktreeRecord(record, pathname, schemaVersion);
@@ -446,6 +465,7 @@ export function validateSidecarSnapshot(
     workspaceId,
     revision: schemaVersion >= 3 ? (value.revision as string) : '0',
     ...(repositoryFingerprint !== undefined ? { repositoryFingerprint } : {}),
+    ...(value.mainInstructions !== undefined ? { mainInstructions: value.mainInstructions } : {}),
     worktrees,
     bindings: value.bindings,
     ...(pendingOperation !== undefined ? { pendingOperation } : {}),

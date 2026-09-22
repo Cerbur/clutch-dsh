@@ -106,7 +106,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const dashboardMainRecord =
     targetWorkspace === undefined
       ? undefined
-      : createMainWorktreeRecord(targetWorkspace, dashboardMainBranch);
+      : createMainWorktreeRecord(targetWorkspace, dashboardMainBranch, targetView?.mainInstructions);
 
   const dashboardRecord = resolveDashboardRecord(
     dashboard,
@@ -353,7 +353,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           manager={props.manager}
           record={dashboardRecord}
           onSaveInstructions={
-            props.manager && !isMainWorktreeId(dashboardRecord.worktreeId)
+            props.manager
               ? async (instructions, expectedInstructions) => {
                   try {
                     return await props.manager!.updateWorktreeInstructions({

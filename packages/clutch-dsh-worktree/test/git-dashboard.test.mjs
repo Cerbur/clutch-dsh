@@ -620,7 +620,7 @@ test('falls back to a full tree diff when a captured baseline has no common ance
   }
 });
 
-test('keeps Main and ambiguous legacy Worktrees unavailable while deriving only a legacy branch baseline', async () => {
+test('keeps ambiguous legacy Worktrees unavailable while Main reads direct HEAD history', async () => {
   const fixture = await createFixture();
   try {
     const record = await fixture.manager.createWorktree({
@@ -667,9 +667,77 @@ test('keeps Main and ambiguous legacy Worktrees unavailable while deriving only 
       unavailableReason: 'baseline-unknown',
     });
 
-    assert.deepEqual(
-      await fixture.manager.listWorktreeCommits({ workspaceId: 'ws_dashboard', worktreeId: 'main' }),
-      { commits: [], truncated: false, unavailableReason: 'main' },
+    const mainHistory = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main',
+    });
+    assert.equal(mainHistory.headCommit, mainHistory.commits[0].sha);
+    assert.equal(mainHistory.commits[0].subject, 'baseline');
+    assert.equal(mainHistory.truncated, false);
+
+    const mainFiles = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main',
+      commit: mainHistory.commits[0].sha,
+    });
+    assert.deepEqual(mainFiles.files.map((file) => file.path), ['README.md']);
+    const mainDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main',
+      commit: mainHistory.commits[0].sha,
+      path: 'README.md',
+    });
+    assert.match(mainDiff.patch, /\+# baseline/u);
+    await assert.rejects(
+      fixture.manager.listWorktreeCommits({ workspaceId: 'ws_dashboard', worktreeId: 'main:other' }),
+      { code: 'WORKTREE_NOT_FOUND' },
+    );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('reads Main working-tree changes against the Workspace-root HEAD', async () => {
+  const fixture = await createFixture();
+  try {
+    await writeFile(path.join(fixture.workspaceRoot, 'README.md'), '# Main changed\n');
+    await writeFile(path.join(fixture.workspaceRoot, 'main-live.txt'), 'live\n');
+
+    const history = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+    });
+    assert.equal(history.commits[0].sha, WORKTREE_GIT_WORKING_TREE);
+    assert.equal(history.commits[0].kind, 'working-tree');
+    assert.equal(history.commits[1].subject, 'baseline');
+    assert.equal(history.headCommit, history.commits[0].parents[0]);
+
+    const files = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      commit: WORKTREE_GIT_WORKING_TREE,
+    });
+    assert.deepEqual(files.files.map((file) => file.path).toSorted(), ['README.md', 'main-live.txt']);
+
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      commit: WORKTREE_GIT_WORKING_TREE,
+      path: 'README.md',
+    });
+    assert.equal(diff.commit, WORKTREE_GIT_WORKING_TREE);
+    assert.match(diff.patch, /-# baseline/u);
+    assert.match(diff.patch, /\+# Main changed/u);
+
+    await assert.rejects(
+      fixture.manager.getWorktreeCommitFileDiff({
+        workspaceId: 'ws_dashboard',
+        worktreeId: 'main:ws_dashboard',
+        commit: WORKTREE_GIT_WORKING_TREE,
+        path: 'missing.txt',
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
     );
   } finally {
     await fixture.manager.close();
@@ -1622,7 +1690,71 @@ test('rejects aggregate selections that repeat or fall outside the pinned projec
   }
 });
 
-test('issues no Git read for a Main Dashboard target', async () => {
+test('serves Main multi-commit selections with exact file unions and diff segments', async () => {
+  const fixture = await createFixture();
+  try {
+    await writeFile(path.join(fixture.workspaceRoot, 'main-aggregate.txt'), 'first\n');
+    await runGit(fixture.workspaceRoot, ['add', 'main-aggregate.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'add Main aggregate file']);
+    const firstCommit = (await runGit(fixture.workspaceRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    await writeFile(path.join(fixture.workspaceRoot, 'main-aggregate.txt'), 'first\nsecond\n');
+    await writeFile(path.join(fixture.workspaceRoot, 'main-other.txt'), 'other\n');
+    await runGit(fixture.workspaceRoot, ['add', 'main-aggregate.txt', 'main-other.txt']);
+    await runGit(fixture.workspaceRoot, ['commit', '-m', 'update Main aggregate files']);
+    const secondCommit = (await runGit(fixture.workspaceRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    await writeFile(path.join(fixture.workspaceRoot, 'main-live.txt'), 'live\n');
+
+    const aggregate = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+    });
+    assert.equal(aggregate.commit, firstCommit);
+    assert.deepEqual(aggregate.selection, { kind: 'commits', commits: [firstCommit, secondCommit] });
+    assert.deepEqual(aggregate.files.find((file) => file.path === 'main-aggregate.txt').commits, [firstCommit, secondCommit]);
+
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: 'main:ws_dashboard',
+        selection: { kind: 'commits', commits: [firstCommit, firstCommit] },
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: 'main:ws_dashboard',
+        selection: { kind: 'commits', commits: ['c'.repeat(40)] },
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      fixture.manager.listWorktreeCommitFiles({
+        workspaceId: 'ws_dashboard',
+        worktreeId: 'main:ws_dashboard',
+        selection: { kind: 'summary' },
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+
+    const aggregateDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+      path: 'main-aggregate.txt',
+    });
+    assert.deepEqual(aggregateDiff.selection, { kind: 'commits', commits: [firstCommit, secondCommit] });
+    assert.deepEqual(aggregateDiff.segments.map((segment) => segment.commit), [firstCommit, secondCommit]);
+    assert.match(aggregateDiff.segments[0].patch, /[+]first/u);
+    assert.match(aggregateDiff.segments[1].patch, /[+]second/u);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('loads Main history without branch or baseline reads', async () => {
   const calls = [];
   const manager = {
     listBranches() {
@@ -1631,11 +1763,19 @@ test('issues no Git read for a Main Dashboard target', async () => {
     },
     listWorktreeCommits() {
       calls.push('history');
-      return Promise.resolve({ commits: [], truncated: false });
+      return Promise.resolve({
+        headCommit: 'a'.repeat(40),
+        commits: [
+          { sha: WORKTREE_GIT_WORKING_TREE, kind: 'working-tree', parents: ['a'.repeat(40)] },
+          { sha: 'a'.repeat(40), subject: 'main' },
+          { sha: 'b'.repeat(40), subject: 'older' },
+        ],
+        truncated: false,
+      });
     },
     listWorktreeCommitFiles() {
       calls.push('files');
-      return Promise.resolve({ commit: 'summary', files: [] });
+      return Promise.resolve({ commit: WORKTREE_GIT_WORKING_TREE, files: [] });
     },
     getWorktreeCommitFileDiff() {
       calls.push('diff');
@@ -1650,10 +1790,19 @@ test('issues no Git read for a Main Dashboard target', async () => {
   });
   await controller.loadBranches();
   await controller.loadHistory();
+  controller.selectSummary();
+  controller.setIncludeWorkingTree(true);
+  controller.selectBaselineBranch('develop');
+  controller.setCommitMultiSelect(true);
+  controller.toggleCommit('a'.repeat(40));
+  controller.toggleCommit('b'.repeat(40));
   await controller.refresh();
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ['history', 'files', 'files', 'files', 'history']);
+  assert.equal(controller.getSnapshot().selectedCommit, 'b'.repeat(40));
+  assert.deepEqual(controller.getSnapshot().selectedCommits, ['a'.repeat(40), 'b'.repeat(40)]);
+  assert.equal(controller.getSnapshot().commitMultiSelect, true);
   assert.equal(controller.getSnapshot().branches.status, 'idle');
-  assert.equal(controller.getSnapshot().history.status, 'idle');
+  assert.equal(controller.getSnapshot().history.status, 'ready');
   controller.dispose();
 });
 

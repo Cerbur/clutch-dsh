@@ -64,14 +64,47 @@ test('instructions persist with acquisition facts, reject stale edits, and follo
     assert.equal(record.baseBranch, 'main');
     assert.ok(Number.isFinite(Date.parse(record.createdAt)));
     const input = { workspaceId: 'ws_one', worktreeId: record.worktreeId };
+    const mainInput = { workspaceId: 'ws_one', worktreeId: 'main' };
+    assert.equal(await provider.getWorktreeInstructions(mainInput), '');
+    await provider.updateWorktreeInstructions({
+      ...mainInput,
+      instructions: 'Use the Workspace root',
+      expectedInstructions: '',
+    });
+    assert.equal(await provider.getWorktreeInstructions({ ...mainInput, worktreeId: 'main:ws_one' }), 'Use the Workspace root');
+    const mainRevision = (await sidecar.read('ws_one')).revision;
+    await provider.updateWorktreeInstructions({
+      ...mainInput,
+      instructions: 'Use the Workspace root',
+      expectedInstructions: '',
+    });
+    assert.equal((await sidecar.read('ws_one')).revision, mainRevision);
+    await assert.rejects(
+      provider.updateWorktreeInstructions({ ...mainInput, instructions: 'stale main', expectedInstructions: '' }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await assert.rejects(
+      provider.updateWorktreeInstructions({ ...mainInput, instructions: 'x'.repeat(32001), expectedInstructions: 'Use the Workspace root' }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
+    await sidecar.mutate('ws_missing', (snapshot) => ({
+      result: undefined,
+      snapshot: { ...snapshot, mainInstructions: 'must not be guessed' },
+    }));
+    dsh.addSession({ sessionId: 'main-session', workspaceId: 'ws_one', cwd: workspaceRoot });
+    dsh.addSession({ sessionId: 'bound', workspaceId: 'ws_one', cwd: workspaceRoot });
+    dsh.addSession({ sessionId: 'orphan-session', workspaceId: 'ws_missing', cwd: workspaceRoot });
     const beforeDsh = JSON.stringify(await dsh.listSessions());
+    assert.equal(await provider.resolveSessionInstructions('unknown-main'), '');
+    assert.equal(await provider.resolveSessionInstructions('orphan-session'), '');
+    assert.equal(await provider.resolveSessionInstructions('main-session'), 'Use the Workspace root');
     await provider.updateWorktreeInstructions({ ...input, instructions: 'Use tests\n{{literal}}', expectedInstructions: '' });
     const first = await sidecar.read('ws_one');
     await provider.updateWorktreeInstructions({ ...input, instructions: 'Use tests\n{{literal}}', expectedInstructions: '' });
     assert.equal((await sidecar.read('ws_one')).revision, first.revision);
     await assert.rejects(provider.updateWorktreeInstructions({ ...input, instructions: 'stale', expectedInstructions: '' }), { code: 'WORKTREE_STATE_CONFLICT' });
     await assert.rejects(provider.updateWorktreeInstructions({ ...input, instructions: 'x'.repeat(32001), expectedInstructions: '' }), { code: 'WORKTREE_STATE_CONFLICT' });
-    assert.equal(await provider.resolveSessionInstructions('main'), '');
+    assert.equal(await provider.resolveSessionInstructions('unknown-main'), '');
     await sidecar.mutate('ws_one', (snapshot) => ({
       result: undefined,
       snapshot: { ...snapshot, bindings: [{ ...input, sessionId: 'bound', status: 'active' }] },
@@ -82,12 +115,13 @@ test('instructions persist with acquisition facts, reject stale edits, and follo
     const restarted = createWorktreeManager({ dsh, dshHome });
     assert.equal(await restarted.resolveSessionInstructions('bound'), 'Use tests\n{{literal}}');
     await restarted.updateWorktreeInstructions({ ...input, instructions: '', expectedInstructions: 'Use tests\n{{literal}}' });
+    // An active Worktree with explicitly empty instructions must not inherit Main.
     assert.equal(await restarted.resolveSessionInstructions('bound'), '');
     await restarted.updateWorktreeInstructions({ ...input, instructions: 'again', expectedInstructions: '' });
     await sidecar.mutate('ws_one', (snapshot) => ({
       result: undefined, snapshot: { ...snapshot, bindings: snapshot.bindings.map((item) => ({ ...item, status: 'detached' })) },
     }));
-    assert.equal(await restarted.resolveSessionInstructions('bound'), '');
+    assert.equal(await restarted.resolveSessionInstructions('bound'), 'Use the Workspace root');
     assert.equal(JSON.stringify(await dsh.listSessions()), beforeDsh);
     await restarted.forgetWorktree({ ...input, mutationToken: await mutationTokenFor(restarted, 'ws_one', record.worktreeId) });
     await assert.rejects(restarted.updateWorktreeInstructions({ ...input, instructions: 'missing', expectedInstructions: '' }), { code: 'WORKTREE_NOT_FOUND' });
@@ -364,7 +398,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalized = await sidecar.read('ws_one');
-    assert.equal(normalized.schemaVersion, 5);
+    assert.equal(normalized.schemaVersion, 6);
     assert.equal(normalized.revision, '0');
     assert.equal(normalized.worktrees[0].source, 'plugin');
 
@@ -375,7 +409,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       source: 'plugin',
     });
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 5);
+    assert.equal(persisted.schemaVersion, 6);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal('pendingOperation' in persisted, false);
 
@@ -393,7 +427,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalizedV2 = await sidecar.read('ws_one');
-    assert.equal(normalizedV2.schemaVersion, 5);
+    assert.equal(normalizedV2.schemaVersion, 6);
     assert.equal(normalizedV2.revision, '0');
     assert.deepEqual(normalizedV2.worktrees, [v2Record]);
 
@@ -403,7 +437,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_legacy_v2_new'),
     });
     const persistedV2 = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persistedV2.schemaVersion, 5);
+    assert.equal(persistedV2.schemaVersion, 6);
     assert.equal(typeof persistedV2.revision, 'string');
     assert.equal('pendingOperation' in persistedV2, false);
   });
@@ -1946,7 +1980,7 @@ test('rejects import validation failures and managed physical paths', async () =
   });
 });
 
-test('normalizes v1 reads and writes source-aware schema v5 on mutation', async () => {
+test('normalizes v1 reads and writes source-aware schema v6 on mutation', async () => {
   await withGitFixture(async ({ dshHome, sidecar }) => {
     const worktreeRoot = path.join(dshHome, 'clutch-dsh-worktree', 'worktree');
     const shardPath = path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json');
@@ -1968,7 +2002,7 @@ test('normalizes v1 reads and writes source-aware schema v5 on mutation', async 
 
     await sidecar.mutate('ws_one', (snapshot) => ({ result: undefined, snapshot }));
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 5);
+    assert.equal(persisted.schemaVersion, 6);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal(persisted.worktrees[0].source, 'plugin');
   });
@@ -2187,6 +2221,44 @@ test('rejects missing, mismatched, and relative Session bindings', async () => {
     await expectCode(
       provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'wrong_cwd' }),
       'SESSION_CWD_MISMATCH',
+    );
+  });
+});
+
+test('binds a Session when Worktree and DSH use physical path aliases', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot, tempRoot, dsh, sidecar }) => {
+    const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/bind-alias');
+    const record = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: externalPath });
+    const aliasPath = path.join(tempRoot, 'wt-bind-alias');
+    await symlink(record.absolutePath, aliasPath, 'dir');
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((candidate) =>
+          candidate.worktreeId === record.worktreeId ? { ...candidate, absolutePath: aliasPath } : candidate,
+        ),
+      },
+    }));
+    dsh.addSession({
+      sessionId: 'session-bind-alias',
+      workspaceId: 'ws_one',
+      projectId: 'project_one',
+      cwd: record.absolutePath,
+    });
+
+    assert.deepEqual(
+      await provider.bindSession({
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        sessionId: 'session-bind-alias',
+      }),
+      {
+        workspaceId: 'ws_one',
+        worktreeId: record.worktreeId,
+        sessionId: 'session-bind-alias',
+        status: 'active',
+      },
     );
   });
 });
@@ -3295,6 +3367,41 @@ test('unarchive restores an archived worktree to active status', async () => {
     const worktrees = await provider.listWorktrees({ workspaceId: 'ws_one' });
     assert.equal(worktrees[0].status, 'active');
     assert.equal(worktrees[0].health, 'ready');
+  });
+});
+
+test('unarchive rejects physical path aliases that conflict with an active Worktree', async () => {
+  await withGitFixture(async ({ provider, sidecar, workspaceRoot, tempRoot }) => {
+    const firstPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/unarchive-alias-one');
+    const secondPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/unarchive-alias-two');
+    const first = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: firstPath });
+    const second = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: secondPath });
+    await provider.removeWorktree({
+      workspaceId: 'ws_one',
+      worktreeId: second.worktreeId,
+      mutationToken: await mutationTokenFor(provider, 'ws_one', second.worktreeId),
+    });
+
+    const aliasPath = path.join(tempRoot, 'unarchive-alias');
+    await symlink(first.absolutePath, aliasPath, 'junction');
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot,
+        worktrees: snapshot.worktrees.map((candidate) =>
+          candidate.worktreeId === second.worktreeId ? { ...candidate, absolutePath: aliasPath } : candidate,
+        ),
+      },
+    }));
+
+    await assert.rejects(
+      provider.unarchiveWorktree({
+        workspaceId: 'ws_one',
+        worktreeId: second.worktreeId,
+        mutationToken: await mutationTokenFor(provider, 'ws_one', second.worktreeId),
+      }),
+      { code: 'WORKTREE_STATE_CONFLICT' },
+    );
   });
 });
 

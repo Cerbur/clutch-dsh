@@ -18,6 +18,7 @@ const worktree = {
 
 test('publishes the browser-safe Worktree Manager method names', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'getWorktreeInstructions',
     'updateWorktreeInstructions',
     'updateWorktreeBaseBranch',
     'listWorktrees',
@@ -49,7 +50,9 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
     async call(channel, endpoint, payload, signal) {
       calls.push({ channel, endpoint, payload, signal });
       const input = payload.args.input;
-      const value = endpoint.endsWith('/listWorktrees')
+      const value = endpoint.endsWith('/getWorktreeInstructions')
+        ? 'Use the Workspace root.'
+        : endpoint.endsWith('/listWorktrees')
         ? [worktree]
         : endpoint.endsWith('/createWorktree')
         ? worktree
@@ -80,6 +83,10 @@ test('adapts the shared Connection RPC to the WorktreeManager contract', async (
   };
   const manager = createWorktreeConnectionAdapter(rpc);
 
+  assert.equal(
+    await manager.getWorktreeInstructions({ workspaceId: 'ws_example', worktreeId: 'main:ws_example' }),
+    'Use the Workspace root.',
+  );
   assert.deepEqual(await manager.listWorktrees({ workspaceId: 'ws_example' }), [worktree]);
   assert.deepEqual(await manager.listImportCandidates({ workspaceId: 'ws_example' }), []);
   assert.deepEqual(await manager.listBranches({ workspaceId: 'ws_example' }), []);

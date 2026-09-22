@@ -32,6 +32,8 @@ const HISTORY_VISIBLE_LIMIT = 200;
 const MAX_UNTRACKED_STAT_FILES = 50;
 /** Keeps the bounded per-file statistics fan-out from exhausting process limits. */
 const STAT_READ_CONCURRENCY = 8;
+/** Git for Windows rejects Node's \\.\NUL device-namespace path. */
+const GIT_NULL_DEVICE = process.platform === 'win32' ? 'NUL' : os.devNull;
 
 function parseCommitHash(stdout: string, operation: string, workspaceRoot: string): string {
   const commit = stdout.trim();
@@ -477,7 +479,7 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
     current = {};
   };
 
-  for (const line of output.split('\n')) {
+  for (const line of output.split(/\r?\n/u)) {
     if (line.length === 0) {
       flush();
       continue;
@@ -775,13 +777,13 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Read at most 201 Worktree commits after a resolved base branch tip. */
+  /** Read at most 201 commits after a boundary, or the complete reachable HEAD history when omitted. */
   async listCommits(
     worktreeRoot: string,
-    baseCommit: string,
+    baseCommit?: string,
     options: GitCommandOptions = {},
   ): Promise<GitCommitHistoryRead> {
-    assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
+    if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
     const headCommit = await this.resolveCommit(worktreeRoot, 'HEAD', options);
     try {
       const result = await this.run(
@@ -791,7 +793,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           '--topo-order',
           `--max-count=${HISTORY_REQUEST_LIMIT}`,
           '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
-          `${baseCommit}..HEAD`,
+          ...(baseCommit === undefined ? [] : [`${baseCommit}..HEAD`]),
         ],
         worktreeRoot,
         options,
@@ -1036,7 +1038,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           '--no-ext-diff',
           '--no-textconv',
           '--',
-          '/dev/null',
+          GIT_NULL_DEVICE,
           file.path,
         ],
         worktreeRoot,
@@ -1197,7 +1199,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       '--no-ext-diff',
       '--no-textconv',
       '--',
-      '/dev/null',
+      GIT_NULL_DEVICE,
       filePath,
     ];
     return shapeFileDiff(
@@ -1380,7 +1382,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
       '--no-ext-diff',
       '--no-textconv',
       '--',
-      '/dev/null',
+      GIT_NULL_DEVICE,
       filePath,
     ];
     return shapeFileDiff(

@@ -635,6 +635,10 @@ test('VS Code folder URLs preserve paths and escape URL delimiters', () => {
     assert.equal(url.hash, '');
   }
   assert.equal(vscodeFolderUrl('C:\\Projects\\a b'), 'vscode://file/C:/Projects/a%20b');
+  assert.equal(vscodeFolderUrl(String.raw`\\?\C:\Projects\a b`), 'vscode://file/C:/Projects/a%20b');
+  assert.equal(vscodeFolderUrl(String.raw`\\?\UNC\server\share\repo`), 'vscode://file//server/share/repo');
+  assert.equal(vscodeFolderUrl('//?/C:/Projects/a b'), 'vscode://file/C:/Projects/a%20b');
+  assert.equal(vscodeFolderUrl('//?/UNC/server/share/repo'), 'vscode://file//server/share/repo');
 });
 
 test('dashboard actions delegate, pending disables mutations, and Sessions displays all live rows', () => {
@@ -1471,12 +1475,14 @@ test('Main (Local) dashboard record resolution, session membership, and Surface 
   assert.equal(mainRec.workspaceId, 'ws-main');
   assert.equal(mainRec.branch, 'master');
   assert.equal(mainRec.absolutePath, '/workspaces/main-app');
+  assert.equal(mainRec.instructions, '');
 
   const unavailable = createMainWorktreeRecord(ws);
   assert.equal(unavailable.branch, '');
   assert.equal(unavailable.currentBranch, undefined);
   assert.equal(unavailable.health, undefined);
   assert.equal(unavailable.source, undefined);
+  assert.equal(unavailable.instructions, '');
 
   // resolveDashboardRecord supports mainRecord
   const selMain = { workspaceId: 'ws-main', worktreeId: 'main', sessionId: 's1' };
@@ -1509,17 +1515,17 @@ test('Main (Local) dashboard record resolution, session membership, and Surface 
   assert.deepEqual(mainSessions, ['s3', 's1']);
 });
 
-test('OpenInAppController reads apps, remembers choice, and launches via host routes', async () => {
+test('OpenInAppController uses official relative routes and launches with the recorded path', async () => {
   const requests = [];
   const fetcher = async (url, init) => {
     requests.push({ url: String(url), init });
-    if (String(url).endsWith('/open-in-app/apps')) {
+    if (url === '/open-in-app/apps') {
       return {
         ok: true,
         json: async () => ({ apps: ['cursor', 'vscode', 'webstorm'] }),
       };
     }
-    if (String(url).endsWith('/open-in-app/open')) {
+    if (url === '/open-in-app/open') {
       return { ok: true };
     }
     return { ok: false, status: 404 };
@@ -1531,14 +1537,65 @@ test('OpenInAppController reads apps, remembers choice, and launches via host ro
 
   await controller.load();
   assert.deepEqual(controller.apps, ['cursor', 'vscode', 'webstorm']);
-  assert.ok(controller.iconUrl('cursor').includes('/open-in-app/icon/cursor'));
+  assert.equal(controller.iconUrl('cursor'), '/open-in-app/icon/cursor');
 
   controller.choose('cursor');
   assert.equal(controller.choice, 'cursor');
 
-  await controller.launch('cursor', '/path/to/worktree');
-  assert.equal(requests.length, 2);
-  assert.ok(requests[1].url.endsWith('/open-in-app/open'));
-  assert.equal(requests[1].init.method, 'POST');
-  assert.deepEqual(JSON.parse(requests[1].init.body), { app: 'cursor', path: '/path/to/worktree' });
+  await controller.launch('cursor', '/path/to/worktree with spaces');
+  assert.deepEqual(requests, [
+    {
+      url: '/open-in-app/apps',
+      init: { headers: { accept: 'application/json' } },
+    },
+    {
+      url: '/open-in-app/open',
+      init: {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app: 'cursor', path: '/path/to/worktree with spaces' }),
+      },
+    },
+  ]);
+});
+
+test('OpenInAppController keeps application selection in memory without localStorage', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let accesses = 0;
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      accesses += 1;
+      throw new Error('Open In must not access localStorage');
+    },
+  });
+
+  try {
+    const fetcher = async () => ({
+      ok: true,
+      json: async () => ({ apps: ['vscode', 'cursor'] }),
+    });
+    const { OpenInAppController } = await import('../lib/client/dashboard/open-in-app-controller.js');
+    const pageController = new OpenInAppController(fetcher);
+    await pageController.load();
+    pageController.choose('cursor');
+    assert.equal(pageController.choice, 'cursor');
+
+    const refreshedPageController = new OpenInAppController(fetcher);
+    assert.equal(refreshedPageController.choice, '');
+    assert.equal(accesses, 0);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('OpenInAppController degrades to an empty app list when the apps endpoint fails', async () => {
+  const { OpenInAppController } = await import('../lib/client/dashboard/open-in-app-controller.js');
+  const controller = new OpenInAppController(async () => {
+    throw new Error('host unavailable');
+  });
+
+  await assert.doesNotReject(controller.load());
+  assert.deepEqual(controller.apps, []);
 });

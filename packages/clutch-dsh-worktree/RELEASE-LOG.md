@@ -1,5 +1,47 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.14 — 2026-09-22
+
+### 中文
+
+#### 新增
+
+- Main Dashboard 的 Git 与变更直接展示 Workspace 根目录 HEAD 的 commit history，最多可见 200 个已提交 commit（第 201 个记录使 projection 标记为 truncated），并在根目录有 tracked/staged/unstaged/untracked 改动时展示**未提交的改动**目标；Main 不提供基线或比较型汇总，但支持已提交多选、changed files、独立 Diff segments 与工作区目标。
+- Main 指令与 Worktree 指令均可在 Dashboard 编辑；Main 指令存储在 v6 Sidecar 的 Workspace-shard `mainInstructions` 中，并注入已知 Workspace 内没有 active Worktree binding 的 Session。
+
+#### 优化
+
+- Sidecar schema 升级至 v6，严格保留可选 `baseCommit` 与 Workspace-shard `mainInstructions`，同时兼容读取 v1–v5 历史记录。
+- 将 Dashboard 的在应用中打开入口改为只调用 DSH 官方相对 Host 路由；应用选择只在当前页面内记忆，刷新后使用第一个可用应用，并保留无可用应用或 Host 失败时的 VS Code fallback。
+- 让 Main Git 多选提交复用正常的 committed aggregate projection：按可见 Main history 授权 SHA，返回 changed-file 并集与每个 commit 的独立 Diff segment；实时工作区目标仍保持单选。
+- Main 的 Git 与变更视图跳过 baseline/Overview 读取，按需读取有界的 HEAD history。
+
+#### 兼容性
+
+- 修复 Windows 下 Sidecar 原子写入：临时文件通过可写句柄同步，文件同步失败显式报错而目录同步保持 best effort 容错；VS Code 链接仅剥离 drive/UNC 扩展前缀并统一使用 / 分隔符，未知 namespace 保持不变。
+- 兼容 Windows Git 的 `NUL` 设备路径和 CRLF Worktree porcelain 输出，并避免旧版 Node 的 Windows signal-0 行为误杀存活锁进程。
+- 使用物理路径比较 Session cwd 绑定与权限边界，全面兼容 Windows 盘符大小写、正反斜杠分隔符、长路径扩展前缀（`\\?\\`）、UNC 路径与符号链接；浏览器端将物理身份校验交由 Host。
+
+### English
+
+#### Added
+
+- Give the Main Dashboard direct Workspace-root HEAD history, capped at 200 committed entries with `truncated` on a 201st record, plus a live **Uncommitted changes** target when the root is dirty; Main omits baseline and comparison-summary targets while supporting committed multi-selection, per-commit diff segments, and working-tree files and diffs.
+- Let the Dashboard edit both Worktree and Main instructions; Main text is stored in the v6 Workspace-shard `mainInstructions` field and injected into known-Workspace Sessions without an active Worktree binding.
+
+#### Improved
+
+- Upgrade the sidecar schema to v6 with strict Workspace-shard `mainInstructions` support and optional `baseCommit`, while continuing to read v1–v5 historical records.
+- Make the Dashboard Open In action use only DSH's official relative Host routes; keep application selection in current-page memory, use the first available application after refresh, and retain the VS Code fallback when no application is available or the Host fails.
+- Make Main Git commit multi-select use the normal committed aggregate projection: authorize SHAs against visible Main history and return a changed-file union with one diff segment per commit; the live working-tree target remains single-select.
+- Let Main skip baseline/Overview reads while lazily loading bounded HEAD history in Git & Changes.
+
+#### Compatibility
+
+- Fix Windows Sidecar atomic writes by syncing temporary files through writable handles and surfacing file-sync failures while keeping directory sync best effort; normalize VS Code links by stripping only drive/UNC extended prefixes and using / separators, leaving unknown namespaces unchanged.
+- Support Git for Windows's `NUL` device path and CRLF Worktree porcelain output, and avoid legacy Node Windows signal-0 behavior killing live lock owners.
+- Compare Session cwd bindings and permission boundaries by physical path so Windows drive casing, path separators, extended prefixes (`\\?\\`), UNC paths, and symlinks remain compatible; the browser delegates physical identity validation to Host.
+
 ## 0.1.13 — 2026-09-17
 
 ### 中文

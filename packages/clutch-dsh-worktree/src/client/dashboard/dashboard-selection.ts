@@ -18,7 +18,8 @@ export interface MainDashboardRecord {
   readonly source?: never;
   readonly health?: never;
   readonly diskCleanup?: never;
-  readonly instructions?: never;
+  /** Workspace-root guidance stored in the plugin sidecar, shared by Main sessions. */
+  readonly instructions: string;
   readonly createdAt?: never;
   readonly importedAt?: never;
   readonly baseBranch?: never;
@@ -38,6 +39,7 @@ export function isManagedDashboardRecord(record: DashboardRecord): record is Wor
 export function createMainWorktreeRecord(
   workspace: { readonly workspaceId: string; readonly path: string },
   currentBranch?: string | null,
+  instructions = '',
 ): MainDashboardRecord {
   return {
     worktreeId: `main:${workspace.workspaceId}`,
@@ -48,6 +50,7 @@ export function createMainWorktreeRecord(
     currentBranch,
     absolutePath: workspace.path,
     status: 'active',
+    instructions,
   };
 }
 

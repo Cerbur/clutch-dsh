@@ -41,7 +41,7 @@ export function useWorktreeGitOverview(
 ): WorktreeGitOverviewState {
   const baselineBranch = normalizeBaselineBranch(input.defaultBaselineBranch, input.currentBranch);
   // A captured acquisition commit keeps the Overview readable without a selected
-  // branch; Main and genuinely baseline-less records still make no Git request.
+  // branch; Main keeps this comparison-only Overview disconnected while its Git tab reads direct history.
   const readable = input.capturedBaseline === true || baselineBranch !== undefined;
   const [state, setState] = useState<WorktreeGitOverviewState>({ status: 'unavailable' });
   useEffect(() => {

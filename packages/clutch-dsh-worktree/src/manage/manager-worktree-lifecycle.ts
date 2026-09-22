@@ -89,12 +89,19 @@ export async function unarchiveWorktree(
       }
 
       // Check conflict with other active worktrees in the same workspace
-      const conflict = snapshot.worktrees.find(
-        (w) =>
-          w.status === 'active' &&
-          w.worktreeId !== record.worktreeId &&
-          (w.branch === record.branch || w.absolutePath === record.absolutePath),
-      );
+      let conflict: WorktreeRecord | undefined;
+      for (const candidate of snapshot.worktrees) {
+        if (
+          candidate.status !== 'active' ||
+          candidate.worktreeId === record.worktreeId ||
+          (candidate.branch !== record.branch &&
+            !(await samePhysicalPath(candidate.absolutePath, record.absolutePath)))
+        ) {
+          continue;
+        }
+        conflict = candidate;
+        break;
+      }
       if (conflict) {
         throw providerError(
           'WORKTREE_STATE_CONFLICT',

@@ -109,6 +109,8 @@ export async function loadClientEntry({
               }
           : endpoint === 'worktreeManager/bindSession'
             ? { ...input, status: 'active' }
+            : endpoint === 'worktreeManager/getWorktreeInstructions'
+            ? ''
             : endpoint === 'worktreeManager/removeWorktree' || endpoint === 'worktreeManager/unarchiveWorktree'
               ? null
               : [];

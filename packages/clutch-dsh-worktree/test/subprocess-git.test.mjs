@@ -9,6 +9,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { LocalGitAdapter, WORKTREE_GIT_WORKING_TREE } from '../lib/index.js';
 
+const gitNullDevice = process.platform === 'win32' ? 'NUL' : os.devNull;
+
 test('preserves porcelain status flags with and without reasons', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
   try {
@@ -25,6 +27,23 @@ test('preserves porcelain status flags with and without reasons', async () => {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
+test('normalizes CRLF from Git worktree porcelain output', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
+  const worktreePath = String.raw`C:\Users\Admin\worktrees\topic`;
+  try {
+    const git = new LocalGitAdapter({ subprocess: createFakeRuntime({
+      stdout: `worktree ${worktreePath}\r\nbranch refs/heads/topic\r\n\r\n`,
+    }) });
+    assert.deepEqual(await git.listWorktrees(workspaceRoot), [{
+      absolutePath: worktreePath,
+      branch: 'topic',
+      detached: false,
+    }]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 
 function collectedReader(text, lossy = false) {
   return {
@@ -580,6 +599,33 @@ test('reads machine-delimited commit history with the immutable range and visibl
   }
 });
 
+test('reads direct HEAD history without a baseline and caps a 201st record', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  const head = 'a'.repeat(40);
+  try {
+    const records = Array.from({ length: 201 }, (_, index) => {
+      const sha = index.toString(16).padStart(40, '0');
+      return `${sha}\0\0subject ${index}\0Alice\0alice@example.invalid\x002026-09-14T00:00:00+00:00\x1e`;
+    }).join('');
+    const runtime = createFakeRuntime({ responses: [{ stdout: `${head}\n` }, { stdout: records }] });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+
+    const history = await git.listCommits(workspaceRoot);
+
+    assert.equal(history.commits.length, 200);
+    assert.equal(history.truncated, true);
+    assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
+      'log',
+      '--no-color',
+      '--topo-order',
+      '--max-count=201',
+      '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test('reads tracked and untracked working-tree files with bounded argv paths', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   try {
@@ -604,7 +650,7 @@ test('reads tracked and untracked working-tree files with bounded argv paths', a
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', 'HEAD', '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', 'HEAD', '--'],
-      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', 'untracked.txt'],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, 'untracked.txt'],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -635,7 +681,7 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--name-status', '-z', '-M', '-C', baseCommit, '--'],
       ['ls-files', '--others', '--exclude-standard', '-z', '--'],
       ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '-M', '-C', baseCommit, '--'],
-      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--numstat', '-z', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
 
     const diffRuntime = createFakeRuntime({
@@ -659,7 +705,7 @@ test('reads an arbitrary-base live tree diff and its untracked file patch', asyn
     assert.deepEqual(diffRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
       ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', baseCommit, '--', filePath],
-      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -689,7 +735,7 @@ test('reads an untracked working-tree diff after handling no-index exit 1', asyn
     assert.deepEqual(runtime.spawnCalls.map((call) => call.argv.slice(1)), [
       ['ls-files', '--error-unmatch', '--', filePath],
       ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', filePath],
-      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', '/dev/null', filePath],
+      ['--literal-pathspecs', 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', gitNullDevice, filePath],
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { CrossProcessMutationLock } from './mutation-lock.js';
@@ -11,6 +11,7 @@ import {
   providerError,
 } from '../types.js';
 import { corrupt, emptySnapshot, validateSidecarSnapshot } from './sidecar-schema.js';
+import { syncDirectory, syncFile } from './sidecar-durability.js';
 
 interface ReadSnapshot {
   readonly snapshot: SidecarSnapshot;
@@ -266,28 +267,4 @@ function stripLegacyRepositoryFields(snapshot: SidecarSnapshot): SidecarSnapshot
 function nextRevision(current: string, changed: boolean): string {
   if (!changed) return current;
   return (BigInt(current) + 1n).toString();
-}
-
-async function syncFile(pathname: string): Promise<void> {
-  const handle = await open(pathname, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-async function syncDirectory(pathname: string): Promise<void> {
-  try {
-    const handle = await open(pathname, 'r');
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  } catch (error) {
-    const code = (error as { readonly code?: string }).code;
-    // Windows and some filesystems do not support opening directories for fsync.
-    if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EISDIR' && code !== 'EPERM') throw error;
-  }
 }

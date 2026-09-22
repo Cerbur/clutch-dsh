@@ -6,6 +6,12 @@ The user extended the scope to shared instruction editing and system-reminder in
 native open-editor styling, creation time, and base branch. This supersedes the initial
 instructions placeholder and Client-only limit below.
 
+### Main instruction scope amendment (2026-09-16)
+
+Main remains a browser-only Dashboard projection, but its instruction card now edits the Workspace-shard `mainInstructions` field through the existing Manager/Remote path. DSH `Session.workspaceId` is authoritative: an active Worktree binding wins, while a known-Workspace Session without an active binding (including detached Sessions) receives Main instructions. Unknown Workspace identity may be scanned only for an active binding and must never guess a Main shard.
+
+The sidecar schema is v6. Main instructions are never written to `AGENTS.md`, a project directory, DSH Session metadata, or a fake Worktree record.
+
 - Add optional v4 Worktree facts: instructions, createdAt, importedAt, baseBranch.
 - Save instructions through the existing Connection/Remote/Manage path, under the shard lock,
   with a text comparison witness and recovery gate. Empty text disables injection.
