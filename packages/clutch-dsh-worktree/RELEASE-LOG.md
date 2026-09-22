@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## Unreleased
+
+### 中文
+
+#### 修复
+
+- 将 Dashboard 的在应用中打开入口改为只调用 DSH 官方相对 Host 路由；应用选择只在当前页面内记忆，刷新后使用第一个可用应用，并保留无可用应用或 Host 失败时的 VS Code fallback。
+
+### English
+
+#### Fixed
+
+- Make the Dashboard Open In action use only DSH's official relative Host routes; keep application selection in current-page memory, use the first available application after refresh, and retain the VS Code fallback when no application is available or the Host fails.
+
 ## 0.1.13 — 2026-09-17
 
 ### 中文

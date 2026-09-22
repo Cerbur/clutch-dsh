@@ -1,6 +1,9 @@
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
+// Official DSH Host open-in-app routes. Keep these URLs relative so requests stay on
+// the current DSH host and retain the Host's validation and permission checks.
 export const OPEN_IN_APP_APPS_ROUTE = '/open-in-app/apps';
+export const OPEN_IN_APP_ICON_ROUTE = '/open-in-app/icon/';
 export const OPEN_IN_APP_OPEN_ROUTE = '/open-in-app/open';
 
 export interface OpenInAppAppsPayload {
@@ -12,28 +15,13 @@ export interface OpenInAppOpenPayload {
   readonly path: string;
 }
 
-function hostBase(): string {
-  const origin = (globalThis as { location?: { origin?: string } }).location?.origin;
-  return origin !== undefined && origin !== 'null' ? origin : 'http://dsh.internal';
-}
-
-const STORAGE_KEY = 'dsh.open-in-app.choice';
-
 export class OpenInAppController {
   private _apps: readonly string[] | null = null;
   private _choice: string = '';
   private _loading: Promise<void> | undefined;
   private readonly _listeners = new Set<() => void>();
 
-  constructor(private readonly fetcher: Fetch = (input, init) => fetch(input, init)) {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        this._choice = localStorage.getItem(STORAGE_KEY) ?? '';
-      }
-    } catch {
-      // Ignore localStorage read errors in restricted contexts
-    }
-  }
+  constructor(private readonly fetcher: Fetch = (input, init) => fetch(input, init)) {}
 
   get apps(): readonly string[] | null {
     return this._apps;
@@ -64,23 +52,16 @@ export class OpenInAppController {
   choose(appId: string): void {
     if (this._choice === appId) return;
     this._choice = appId;
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, appId);
-      }
-    } catch {
-      // Ignore localStorage write errors
-    }
     this.notify();
   }
 
   iconUrl(appId: string): string {
-    return new URL(`/open-in-app/icon/${encodeURIComponent(appId)}`, hostBase()).href;
+    return `${OPEN_IN_APP_ICON_ROUTE}${encodeURIComponent(appId)}`;
   }
 
   async launch(appId: string, path: string): Promise<void> {
     const body: OpenInAppOpenPayload = { app: appId, path };
-    const response = await this.fetcher(new URL(OPEN_IN_APP_OPEN_ROUTE, hostBase()), {
+    const response = await this.fetcher(OPEN_IN_APP_OPEN_ROUTE, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -91,7 +72,7 @@ export class OpenInAppController {
   private async run(): Promise<void> {
     let apps: readonly string[] = [];
     try {
-      const response = await this.fetcher(new URL(OPEN_IN_APP_APPS_ROUTE, hostBase()), {
+      const response = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, {
         headers: { accept: 'application/json' },
       });
       if (response.ok) {

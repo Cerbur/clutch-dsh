@@ -65,7 +65,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | --- | --- | --- |
 | **Worktree navigation** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the Sidebar. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog"> | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory. |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
 
 ## Usage
 
@@ -131,6 +131,20 @@ path, open the recorded directory in VS Code, and inspect Git & Changes.
 Derived Worktrees, Settings, and other marked quick actions remain placeholders. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
+
+### Open the recorded directory in an app
+
+The Dashboard **Open in ...** split button is plugin UI backed by DSH's official Host routes:
+
+- `GET /open-in-app/apps` detects the available applications;
+- `GET /open-in-app/icon/<appId>` supplies each application icon; and
+- `POST /open-in-app/open` launches `{ "app": string, "path": absoluteDirectoryPath }`.
+
+The button sends relative requests to the current DSH host and uses the Dashboard record's
+`absolutePath`; it does not probe the operating system or persist an application choice. The selected
+application is remembered only in the current page's memory. After a refresh, the first available
+application is used. If no application is available or the Host request fails, the button keeps the
+existing VS Code protocol-link fallback.
 
 ### Use Git & Changes
 
@@ -282,6 +296,7 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 - Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
   not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File
   diffs disable external diff and text conversion and are bounded for safe display.
+- The Dashboard Open In action uses only the official relative DSH Host open-in-app routes for application discovery, icons, and launching. It keeps the application choice in current-page memory; refreshes use the first available application, and an empty or failed Host response falls back to the encoded VS Code protocol link.
 - The Git Dashboard is intentionally limited to committed history, a read-only **Baseline summary**
   (optionally including one fresh baseline-to-working-tree projection), one **Uncommitted changes**
   snapshot, changed files, and one unified diff at a time. These projections combine staged, unstaged,

@@ -64,7 +64,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | --- | --- | --- |
 | **Worktree 导航** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 Sidebar 增加 Worktree 模式。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗"> | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。 |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
+| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
 
 ## 使用
 
@@ -124,6 +124,18 @@ Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
 中打开记录的目录以及查看 Git 与变更。派生 Worktree、设置和其他标记的快捷操作仍是占位内容。VS Code
 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
+
+### 在应用中打开记录的目录
+
+Dashboard 的 **Open in ...** 分割按钮保留插件自己的按钮 UI，但只调用 DSH 官方 Host 路由：
+
+- `GET /open-in-app/apps` 探测可用应用；
+- `GET /open-in-app/icon/<appId>` 获取应用图标；
+- `POST /open-in-app/open` 使用 `{ "app": string, "path": absoluteDirectoryPath }` 启动应用。
+
+按钮使用指向当前 DSH Host 的相对 URL，并传入 Dashboard record 的 `absolutePath`；不会探测操作系统，
+也不会持久化应用选择。应用选择只在当前页面内记忆，刷新后使用第一个可用应用。如果没有可用应用
+或 Host 请求失败，按钮仍保留现有的 VS Code 协议链接 fallback。
 
 ### 使用 Git 与变更
 
@@ -240,6 +252,7 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
 - Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
+- Dashboard 的在应用中打开入口只通过 DSH 官方相对 Host 路由完成应用探测、图标加载和启动；应用选择只保存在当前页面内，刷新后使用第一个可用应用，Host 返回空结果或失败时回退到编码后的 VS Code 协议链接。
 - Git Dashboard 只实现 commit history、只读的**基线汇总**（可选包含一次从基线到工作区的
   新鲜 projection）、顶部的只读**未提交的改动**快照、changed files 和一次一个 unified diff。
   按请求启用时，这些 projection 会合并 staged、unstaged 和 untracked 文件，但不会写回 Git。
