@@ -6,7 +6,12 @@ import { mock } from 'node:test';
 import test from 'node:test';
 
 import { WorkspaceShardedSidecarRepository } from '../lib/index.js';
-import { isWindowsPath, normalizeWindowsPath, sameWindowsPath } from '../lib/contract/windows-path.js';
+import {
+  isWindowsPath,
+  normalizeWindowsPath,
+  sameWindowsPath,
+  stripExtendedWindowsPrefix,
+} from '../lib/contract/windows-path.js';
 import { sameLexicalPath, samePhysicalPath } from '../lib/provider/path-identity.js';
 import { createProcessLiveness } from '../lib/provider/sidecar/process-liveness.js';
 
@@ -73,6 +78,9 @@ test('shares Windows path identity rules between browser-safe and Node layers', 
 
   assert.equal(isWindowsPath(extendedDrive), true);
   assert.equal(isWindowsPath('//private/var/repo'), false);
+  assert.equal(stripExtendedWindowsPrefix(extendedDrive), 'C:/Repo/Worktree');
+  assert.equal(stripExtendedWindowsPrefix(extendedUnc), '//SERVER/Share/Repo');
+  assert.equal(stripExtendedWindowsPrefix(extendedVolume), extendedVolume);
   assert.equal(normalizeWindowsPath(extendedDrive), 'c:/repo/worktree');
   assert.equal(sameWindowsPath(extendedDrive, ordinaryDrive), true);
   assert.equal(sameWindowsPath(extendedUnc, ordinaryUnc), true);

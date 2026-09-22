@@ -8,11 +8,23 @@
 
 - 将 Dashboard 的在应用中打开入口改为只调用 DSH 官方相对 Host 路由；应用选择只在当前页面内记忆，刷新后使用第一个可用应用，并保留无可用应用或 Host 失败时的 VS Code fallback。
 
+#### 兼容性
+
+- 修复 Windows 下 Sidecar 原子写入：临时文件通过可写句柄同步，文件同步失败显式报错而目录同步保持 best effort；VS Code 链接仅剥离 drive/UNC 扩展前缀并统一使用 / 分隔符，未知 namespace 保持不变。
+- 兼容 Windows Git 的 `NUL` 设备路径和 CRLF Worktree porcelain 输出，并避免旧版 Node 的 Windows signal-0 行为误杀存活锁进程。
+- 使用物理路径比较 Session cwd 绑定，兼容 Windows/macOS 的大小写、符号链接和其他路径别名；浏览器端将物理身份校验交由 Host。
+
 ### English
 
 #### Fixed
 
 - Make the Dashboard Open In action use only DSH's official relative Host routes; keep application selection in current-page memory, use the first available application after refresh, and retain the VS Code fallback when no application is available or the Host fails.
+
+#### Compatibility
+
+- Fix Windows Sidecar atomic writes by syncing temporary files through writable handles and surfacing file-sync failures while keeping directory sync best effort; normalize VS Code links by stripping only drive/UNC extended prefixes and using / separators, leaving unknown namespaces unchanged.
+- Support Git for Windows's `NUL` device path and CRLF Worktree porcelain output, and avoid the legacy Node Windows signal-0 behavior killing live lock owners.
+- Compare Session cwd bindings by physical path so Windows/macOS case, symlink, and other path aliases remain compatible; the browser delegates physical identity validation to Host.
 
 ## 0.1.13 — 2026-09-17
 
@@ -49,13 +61,6 @@
 - 让 Main Git 多选提交复用正常的 committed aggregate projection：按可见 Main history 授权 SHA，返回 changed-file 并集与每个 commit 的独立 Diff segment；实时工作区目标仍保持单选。
 - 移除没有调用方的 `isCommitAncestor` 与 `isExactCreatedWorktree`，并修正本分支新增测试文件中的 lint 错误，使 `pnpm run lint` 通过。
 
-#### 兼容性
-
-- 修复 Windows 下 sidecar 原子写入在只读文件句柄上执行 fsync 导致 `EPERM`、最终报告 `SIDECAR_UNAVAILABLE` 的问题。
-- 兼容 Windows Git 的 `NUL` 设备路径和 Worktree porcelain 输出的 CRLF 换行，规范化 VS Code 打开链接中的扩展 Windows 路径，并避免旧版 Node Windows signal-0 行为误杀存活的锁进程。
-- 使用物理路径比较绑定 Session cwd，兼容 Windows 和 macOS 的真实路径大小写、符号链接及其他路径别名表示；浏览器端将物理身份校验交由 Host，避免误拒绝别名路径。
-- 临时 Sidecar 文件改用可写句柄同步；文件同步失败不再静默发布，只有目录同步保持 best effort；扩展 Windows 路径仅剥离 drive/UNC 前缀，未知 namespace 不再被误当作相对路径。
-
 ### English
 
 #### Added
@@ -88,13 +93,6 @@
 - Return an explicit truncated changed-file projection with a localized browser notice when a list exceeds the Provider output bound, instead of a generic Git error.
 - Make Main Git commit multi-select use the normal committed aggregate projection: authorize SHAs against visible Main history and return a changed-file union with one diff segment per commit; the live working-tree target remains single-select.
 - Remove the unused `isCommitAncestor` and `isExactCreatedWorktree` surfaces, and fix lint errors in the branch's new test files so `pnpm run lint` passes.
-
-#### Compatibility
-
-- Fix Windows sidecar atomic writes that failed with `EPERM` when fsync ran on a read-only file handle and surfaced as `SIDECAR_UNAVAILABLE`.
-- Use Git for Windows' `NUL` device path, accept CRLF Worktree porcelain output, normalize extended Windows paths in VS Code links, and avoid the legacy Node Windows signal-0 behavior that could terminate a live lock owner.
-- Compare Session cwd bindings by physical path so Windows and macOS case, symlink, and other path-alias representations remain compatible; the browser delegates physical identity validation to Host instead of rejecting aliases from a lexical snapshot.
-- Open temporary Sidecar files through a writable handle; surface file-sync failures instead of publishing silently, while keeping only directory sync best effort; strip extended Windows prefixes only for drive/UNC paths so unknown namespaces are not mistaken for relative paths.
 
 ## 0.1.12 — 2026-09-14
 

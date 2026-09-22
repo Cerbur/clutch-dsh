@@ -4,8 +4,8 @@
  * access to Node APIs.
  */
 
-const EXTENDED_UNC_PREFIX = '//?/UNC/';
 const EXTENDED_PATH_PREFIX = '//?/';
+const EXTENDED_UNC_PREFIX = '//?/UNC/';
 
 export function isWindowsPath(value: string): boolean {
   return /^[A-Za-z]:[\\/]/u.test(value) ||
@@ -16,16 +16,16 @@ export function isWindowsPath(value: string): boolean {
 /** Strip only the extended drive/UNC prefixes supported by the browser boundary. */
 export function stripExtendedWindowsPrefix(value: string): string {
   const normalized = value.replaceAll('\\', '/');
-  if (/^\/\/\?\/UNC\//iu.test(normalized)) {
+  const normalizedUncPrefix = EXTENDED_UNC_PREFIX.toLowerCase();
+  if (normalized.toLowerCase().startsWith(normalizedUncPrefix)) {
     return '//' + normalized.slice(EXTENDED_UNC_PREFIX.length);
   }
-  const extendedPath = normalized.slice(EXTENDED_PATH_PREFIX.length);
-  if (
-    normalized.startsWith(EXTENDED_PATH_PREFIX) &&
-    /^[A-Za-z]:\//u.test(extendedPath)
-  ) {
-    return extendedPath;
+
+  if (normalized.startsWith(EXTENDED_PATH_PREFIX)) {
+    const drivePath = normalized.slice(EXTENDED_PATH_PREFIX.length);
+    if (/^[A-Za-z]:\//u.test(drivePath)) return drivePath;
   }
+
   return value;
 }
 
