@@ -304,8 +304,11 @@ can be replaced with a saved local branch other than the current Worktree branch
 owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
 remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
 never user-selectable directly. Missing creation/import facts remain unknown. The open-editor control uses the
-native split-button typography, padding, border, and hover colors, launching detected host
-applications or falling back to the encoded VS Code protocol link.
+native split-button typography, padding, border, and hover colors, and calls only DSH's official relative
+`GET /open-in-app/apps`, `GET /open-in-app/icon/<appId>`, and `POST /open-in-app/open` routes. It passes
+the Dashboard record's `absolutePath`, never probes the operating system, and falls back to the encoded VS Code
+protocol link when no application is available or a Host request fails. The selected application is remembered
+only in current-page memory; after a refresh, the first available application is used.
 
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
