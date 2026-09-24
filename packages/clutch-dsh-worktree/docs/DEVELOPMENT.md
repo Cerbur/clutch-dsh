@@ -20,7 +20,7 @@
 
 本插件的本地开发、调试与全量联调以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness) 的源码 checkout 为准。
 
-> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.1.5-rc.1`。
+> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.1.5-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.1.7-rc.2`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
 
 克隆并构建 upstream DSH：
 
@@ -69,6 +69,18 @@ pnpm dsh plugin --profile web remove clutch-dsh-worktree
 
 ```bash
 pnpm dsh web
+```
+
+针对 `dsh-v0.1.7-rc.2` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
+
+```bash
+# From the clutch-dsh workspace root
+pnpm --filter @cerbur/clutch-dsh-worktree build
+
+# From the dsh-v0.1.7-rc.2 checkout root
+export DSH_HOME="$HOME/.dsh-test"
+pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
+pnpm dsh web --port 3088 --no-open
 ```
 
 ### 3.3 开发迭代与重载

@@ -1626,6 +1626,7 @@ test('dispatches Dashboard from an empty Worktree row button and menu', async ()
       if (name === 'react/jsx-runtime') return { jsx, jsxs, Fragment: 'Fragment' };
       if (name === '@deepseek-ai/dsh-client-ui-primitives')
         return { ...primitives, writeClipboard: () => {} };
+      if (name === '../../dsh-icons.js') return primitives;
       if (name === '../../dashboard/dashboard-icon.js')
         return { IconDashboard: function IconDashboard() {} };
       if (name === '../../session/session-view.js')
@@ -2020,7 +2021,7 @@ test('keeps current Session highlight without a leading inset frame', async () =
 
 test('temporarily reveals the current Session path without persisting it', async () => {
   const source = await readSurfaceSource();
-  assert.match(source, /const currentSessionId = sessions\.current/);
+  assert.match(source, /const currentSessionId = currentSessionIdFromList\(sessions\)/);
   assert.match(source, /resolveCurrentSessionLocation/);
   assert.match(source, /currentSessionReveal/);
   assert.match(source, /currentSessionRevealKeys/);

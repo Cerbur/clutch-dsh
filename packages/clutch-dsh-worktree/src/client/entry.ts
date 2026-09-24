@@ -39,6 +39,8 @@ import {
   createWorktreeSessionConnector,
   type WorktreeSessionSnapshotReader,
 } from './session/worktree-session.js';
+import { renameWorktreeSession } from './session/session-rename.js';
+import { openWorktreeSession } from './session/session-navigation.js';
 import {
   createWorktreeFullAccessConfirmationController,
 } from './permission/worktree-permission.js';
@@ -384,9 +386,8 @@ export function apply(ctx: Context): void {
       ? undefined
       : fullAccessConfirmation.request,
     onPermissionResult: reportPermissionNotice,
-    openSession: (sessionId) => {
-      ctx.sessions.open(sessionId as SessionId);
-    },
+    openSession: (sessionId) =>
+      openWorktreeSession(ctx.uiWorkspace, ctx.sessions, sessionId as SessionId),
   });
   ctx.effect(
     () => () => worktreeSessionConnector.dispose(),
@@ -568,12 +569,8 @@ export function apply(ctx: Context): void {
               worktreeId,
               beforeWorktreeId,
             }),
-          renameSession: async (sessionId: string, title: string) => {
-            const session = ctx.sessions.binding(sessionId as SessionId)?.session;
-            if (session === undefined) throw new Error(`unknown session "${sessionId}"`);
-            const result = await session.rename(title);
-            if (!result.ok) throw new Error(result.error.message);
-          },
+          renameSession: (sessionId: string, title: string) =>
+            renameWorktreeSession(ctx.sessions, sessionId as SessionId, title),
           forkSession: (sessionId: string) => {
             if (forkableSessions.fork === undefined) return;
             void ctx.sessions.fork({
@@ -581,7 +578,7 @@ export function apply(ctx: Context): void {
               increaseTitle: true,
             })
               .then((childId) => {
-                ctx.sessions.open(childId);
+                openWorktreeSession(ctx.uiWorkspace, ctx.sessions, childId);
               })
               .catch(() => {
                 // Fork failure leaves the current Session and Worktree projection unchanged.
@@ -599,9 +596,8 @@ export function apply(ctx: Context): void {
             : async (key: string) => {
                 await forkCoordinator.retry(key);
               },
-          openSession: (sessionId: string) => {
-            ctx.sessions.open(sessionId as SessionId);
-          },
+          openSession: (sessionId: string) =>
+            openWorktreeSession(ctx.uiWorkspace, ctx.sessions, sessionId as SessionId),
           onWorktreeForgotten: (input: ForgottenWorktree) => {
             forkCoordinator?.forgetWorktree(input);
             for (const sessionId of input.sessionIds) {

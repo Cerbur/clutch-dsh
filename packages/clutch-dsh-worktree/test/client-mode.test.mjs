@@ -522,6 +522,25 @@ test('initial Workspace follows the current Session, then rc.1 Session recency',
   );
 });
 
+test('initial Workspace follows DSH 1.7 mainView retention when current is not in the Session list', () => {
+  const workspaces = {
+    items: [
+      workspace('ws-selected', ['session-selected']),
+      workspace('ws-recent', ['session-recent']),
+    ],
+  };
+  assert.equal(
+    initialWorkspaceId(workspaces, {
+      ids: ['session-selected', 'session-recent'],
+      byId: {
+        'session-selected': { updatedAt: 1, retainedBy: { mainView: 1 } },
+        'session-recent': { updatedAt: 100, retainedBy: {} },
+      },
+    }),
+    'ws-selected',
+  );
+});
+
 test('rc.1 Workspace recency prefers the latest Session metadata', () => {
   const workspaces = {
     items: [

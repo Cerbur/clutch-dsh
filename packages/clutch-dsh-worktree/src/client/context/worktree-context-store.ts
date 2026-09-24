@@ -2,7 +2,8 @@ import type {
   ObservableSnapshot,
   SnapshotStore,
 } from '@deepseek-ai/dsh-client-store';
-import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
+import type { SessionId } from '@deepseek-ai/dsh-session/types';
+import { currentSessionIdFromList, type SessionSelectionListLike } from '../session/session-selection.js';
 import type { WorkspaceSnapshot as DshWorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
 
 import {
@@ -17,7 +18,7 @@ import {
   type WorktreeViewError,
 } from '../view/worktree-view.js';
 
-type SessionSnapshot = Pick<SessionListState, 'current' | 'byId'>;
+type SessionSnapshot = SessionSelectionListLike<SessionId>;
 
 type WorkspaceSnapshot = Pick<
   DshWorkspaceSnapshot,
@@ -81,7 +82,7 @@ function identityFrom(
 ): CurrentIdentity {
   const sessionSnapshot = sessions.getSnapshot();
   const workspaceSnapshot = workspaces.getSnapshot();
-  const sessionId = sessionSnapshot.current;
+  const sessionId = currentSessionIdFromList(sessionSnapshot);
   if (sessionId === undefined) {
     return {
       workspaceId: deriveRecentWorkspaceId(

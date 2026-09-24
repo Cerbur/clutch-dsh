@@ -1,5 +1,10 @@
 import {
   HoverCard,
+  Menu,
+  StateDot,
+  writeClipboard,
+} from '@deepseek-ai/dsh-client-ui-primitives';
+import {
   IconArchiveOutline20,
   IconBranchOutline16,
   IconChevronDownOutline14,
@@ -12,10 +17,7 @@ import {
   IconPlusOutline16,
   IconRefreshOutline16,
   IconTrashOutline16,
-  Menu,
-  StateDot,
-  writeClipboard,
-} from '@deepseek-ai/dsh-client-ui-primitives';
+} from '../../dsh-icons.js';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { IconDashboard } from '../../dashboard/dashboard-icon.js';

@@ -50,6 +50,21 @@ test('keeps the current blank Session and hides stale blank Sessions', () => {
   );
 });
 
+test('keeps the selected blank Session visible from DSH 1.7 mainView retention', () => {
+  const state = sessions({
+    current: undefined,
+    byId: {
+      'selected-blank': { blank: true, retainedBy: { mainView: 1 } },
+      'stale-blank': { blank: true, retainedBy: {} },
+    },
+  });
+
+  assert.deepEqual(
+    filterVisibleSessionIds(['selected-blank', 'stale-blank', 'normal'], state),
+    ['selected-blank', 'normal'],
+  );
+});
+
 test('uses the localized New Session label only for blank Sessions', () => {
   const state = sessions();
 

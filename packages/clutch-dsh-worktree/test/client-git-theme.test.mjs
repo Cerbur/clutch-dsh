@@ -313,7 +313,7 @@ test('the diff toolbar open action uses the square right-up arrow', async () => 
 
   // IconRightUpOutline14 has an 8x14 viewBox that squashes it inside an 8px box;
   // the 16px icon keeps its aspect ratio at the label's optical size.
-  assert.match(source, /import \{ IconRightUpOutline16 \} from '@deepseek-ai\/dsh-client-ui-primitives';/u);
+  assert.match(source, /import \{ IconRightUpOutline16 \} from '\.\.\/\.\.\/dsh-icons\.js';/u);
   assert.doesNotMatch(source, /IconRightUpOutline14/u);
   assert.match(source, /<IconRightUpOutline16 size=\{14\} className=\{styles\.gitDiffOpenIcon\} \/>/u);
   assert.match(css, /\.gitDiffOpenIcon \{[\s\S]*width: 14px;[\s\S]*height: 14px;/u);

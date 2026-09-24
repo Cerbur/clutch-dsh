@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { deriveSessionPresentationIndex, type SessionListLike } from '../../session/session-view.js';
 import { useSidebarOverlayGeometry } from '../../overlay/sidebar-overlay-geometry.js';
 import { effectiveViewMode } from '../../view/view-mode.js';
+import { currentSessionIdFromList } from '../../session/session-selection.js';
 import {
   EMPTY_FORK_RECOVERY_STORE,
   EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
@@ -51,7 +52,7 @@ export function useSurfaceSources({ props }: Input) {
     forkRecoveryStore.getSnapshot,
     forkRecoveryStore.getSnapshot,
   );
-  const currentSessionId = sessions.current;
+  const currentSessionId = currentSessionIdFromList(sessions);
   const workspaceIds = useStableWorkspaceIds(workspaces.items);
   const workspaceIdsRef = useRef(workspaceIds);
   workspaceIdsRef.current = workspaceIds;

@@ -251,6 +251,21 @@ function renderHarness(writeClipboard) {
             children: metric === 'aheadBehind' ? '+3 / -1' : metric === 'committed' ? '+20 / -6' : '+12 / -4',
           }),
         },
+        '../dsh-icons.js': {
+          IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+          IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+          IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
+          IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
+          IconPanelLeftOutline16: () => jsx('svg', { 'data-icon': 'sidebar' }),
+          IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+        },
+        '../session/session-selection.js': {
+          currentSessionIdFromList: (sessions) => {
+            if (typeof sessions.current === 'string') return sessions.current;
+            return Object.entries(sessions.byId ?? {})
+              .find(([, summary]) => (summary?.retainedBy?.mainView ?? 0) > 0)?.[0];
+          },
+        },
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },

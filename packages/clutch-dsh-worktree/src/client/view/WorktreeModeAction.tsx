@@ -2,7 +2,7 @@ import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-cli
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '../dsh-slot-contract.js';
 import { useEffect } from 'react';
-import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconBranchOutline16 } from '../dsh-icons.js';
 import { registerViewModeSetter } from './view-mode-dispatch.js';
 import { WORKTREE_NS } from '../locales.js';
 import type { createWorktreeViewStore } from './view-mode-store.js';
