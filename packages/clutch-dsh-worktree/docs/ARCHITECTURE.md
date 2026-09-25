@@ -76,7 +76,7 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 ### 共享指令（Instructions）注入机制
 
 - Worktree 指令与 Main 指令都保存在 Sidecar 中，**绝不写入业务仓库目录下的 AGENTS.md**。
-- Host 在 DSH `agent/pre-step` 钩子中根据当前 Session 的 authoritative Workspace 身份读取最新指令：active Worktree binding 使用该 Worktree 指令；已知 Workspace 中没有 active binding 的 Session 使用 `mainInstructions`。两者都以独立的 `<system-reminder>` 消息注入到 `decision.messages`，由 DSH 自行持久化与展示。
+- Host 在 DSH `agent/pre-step` 钩子中根据当前 Session 的 authoritative Workspace 身份读取最新指令：active Worktree binding 使用该 Worktree 指令；已知 Workspace 中没有 active binding 的 Session 使用 `mainInstructions`。两者都以独立的 `<system-reminder>` 消息注入到 `decision.messages`，由 DSH 自行持久化与展示。消息来源使用 producer-owned kind `plugin:@cerbur/clutch-dsh-worktree`；读取历史消息时兼容旧的 `{ kind: 'plugin', plugin: '@cerbur/clutch-dsh-worktree' }` 格式和 DSH v3→v4 迁移后的来源。
 - 当 binding 解除、Worktree 清理或移出管理时，Worktree 指令在下一步中追加失效提醒；归档本身保留 active binding，因此仍可注入原指令。Main 指令只对 DSH 已确认属于该 Workspace 且没有 active binding 的 Session 生效（不依据 cwd 猜测），已注入指令不重写历史消息。
 
 ### 故障降级（Degraded State）

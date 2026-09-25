@@ -23,12 +23,18 @@ export interface WorktreeInstructionHost {
   ): unknown;
 }
 const plugin = '@cerbur/clutch-dsh-worktree';
+const sourceKind = `plugin:${plugin}`;
 const cleared =
   '<system-reminder>\nNo shared Worktree or Workspace instructions apply. Disregard earlier shared instructions.\n</system-reminder>';
 
 function ownedText(value: unknown): string | undefined {
   const message = value as Partial<Message> | null;
-  if (message?.source?.kind !== 'plugin' || message.source.plugin !== plugin) return;
+  if (typeof message !== 'object' || message === null) return;
+  const source = message.source;
+  if (source === undefined) return;
+  const legacySource = source?.kind === 'plugin' && source.plugin === plugin;
+  const currentSource = source?.kind === sourceKind && source.form === 'instructions';
+  if (!legacySource && !currentSource) return;
   if (!Array.isArray(message.content) || message.content.length !== 1) return;
   const block = message.content[0];
   return block?.type === 'text' && typeof block.text === 'string' ? block.text : undefined;
@@ -80,7 +86,7 @@ export function registerWorktreeInstructions(
           id: randomUUID(),
           role: 'user',
           content: [{ type: 'text', text }],
-          source: { kind: 'plugin', plugin, form: 'instructions' },
+          source: { kind: sourceKind, form: 'instructions' },
         },
       ],
     };
