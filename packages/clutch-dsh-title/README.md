@@ -67,9 +67,9 @@ not rewrite existing titles until DSH explicitly generates or refreshes one.
 
 ### Manage templates
 
-Fresh settings include an editable emoji template while the built-in default template remains
-selected. The emoji template can be edited or deleted; deleting it does not recreate it on a later
-settings registration.
+Fresh settings include an editable emoji template with a description limit of 64 Unicode characters
+while the built-in default template remains selected. The emoji template can be edited or deleted;
+deleting it does not recreate it on a later settings registration.
 
 - Duplicate any row, including default, to open an editable copy.
 - Give a copy a unique name, edit its YAML, and select Save. Saving does not activate it.
@@ -139,15 +139,15 @@ malformed YAML, and invalid field definitions are rejected during validation.
 
 ## Configuration
 
-Template settings are stored under the clutch-dsh-title section of
-$DSH_HOME/settings.yaml. This settings file is the source of truth for the template map, active
-template, and enabled state.
+Title settings remain keyed by the `clutch-dsh-title` DSH profile entry. DSH 0.1.6 and earlier store
+the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.1.7-rc.1` stores the same enabled, selected,
+and template values as volatile fields in the active Web profile's `cordis.yml`; its one-time
+settings importer moves an existing `$DSH_HOME/settings.yaml` section into the profile and renames
+the old file to `settings.yaml.imported`.
 
-DSH normally uses ~/.dsh/settings.yaml as the default location for that file, but the documented
-source of truth is $DSH_HOME/settings.yaml rather than a hard-coded home-directory path. The
-package does not use browser storage or clutch.yaml.
-
-External edits to the settings file are picked up by DSH's settings reload path. Invalid template
+DSH normally uses `~/.dsh` as `$DSH_HOME`, but the source of truth is version-dependent DSH profile
+configuration, not a hard-coded home path. The package does not use browser storage or `clutch.yaml`.
+External edits to the source-of-truth settings are picked up by DSH's reload path. Invalid template
 entries remain visible in Settings so they can be repaired instead of silently disappearing.
 
 ## Behavior and limitations
@@ -177,8 +177,9 @@ entries remain visible in Settings so they can be repaired instead of silently d
   @deepseek-ai/dsh-client-ui-settings, @deepseek-ai/dsh-client-ui-slots,
   @deepseek-ai/dsh-client-ui-primitives, @deepseek-ai/dsh-llm, @deepseek-ai/dsh-session,
   @deepseek-ai/dsh-session-title, @deepseek-ai/dsh-session-title-llm, @deepseek-ai/dsh-timeout,
-  and @deepseek-ai/dsh-util-values, all at >=0.1.2-rc.1.
-- Cordis: @deepseek-ai/cordis 4.0.1.
+  and @deepseek-ai/dsh-util-values, all at >=0.1.2-rc.1 or >=0.1.7-rc.1.
+- Cordis: @deepseek-ai/cordis ^4.0.1.
+- Running DSH `dsh-v0.1.7-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
 - Profile: a DSH Web profile that provides the session, session-title, LLM, settings, storage,
   remote, and browser settings services declared by the package.
 
@@ -187,6 +188,12 @@ entries remain visible in Settings so they can be repaired instead of silently d
 Cordis configuration using template and fields remains supported. When those values come from the
 profile configuration, Settings exposes them as an editable legacy row. The current Settings template
 manager and the legacy configuration use the same validation rules.
+
+The plugin marks its extraction request with the `clutch-dsh-title` LLM message-source kind. DSH
+0.1.7 uses a merge-extensible source map instead of the catch-all `plugin` kind; the package
+declares its source kind without changing title-generation behavior. DSH 0.1.7 also replaces the
+old settings registration API with profile-backed volatile Config fields; the same title editor uses
+those fields, and DSH imports existing legacy settings during profile migration.
 
 Model routing and optional reasoning settings are profile-level configuration, not template field
 settings. Keep the DSH default title provider disabled and do not compose a second title provider

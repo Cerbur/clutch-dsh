@@ -1,12 +1,17 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
-import type { FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
+import type { ContextFormed, FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'clutch-dsh-title': { kind: 'clutch-dsh-title' } & ContextFormed;
+  }
+}
 import type { SessionTitleLlmRequestEventData } from '@deepseek-ai/dsh-session-title-llm';
 import { SESSION_TITLE_TIMEOUT_CODE } from '@deepseek-ai/dsh-session-title-llm';
 import { deadline } from '@deepseek-ai/dsh-timeout';
 import { deepFreeze } from '@deepseek-ai/dsh-util-values';
 import type {
-  SessionTitleModelProvenance,
   SessionTitleProviderId,
   SessionTitleProviderRequest,
   SessionTitleUserMessage,
@@ -57,7 +62,7 @@ function systemPrompt(fields: Readonly<Record<string, TitleFieldConfig>>): strin
 function resolveRoute(
   config: ResolvedTitleConfig,
   request: SessionTitleProviderRequest,
-): SessionTitleModelProvenance {
+): ExtractedLlmFields['model'] {
   const hasProvider = config.provider !== undefined;
   const hasModel = config.model !== undefined;
   if (hasProvider !== hasModel) {
@@ -98,7 +103,7 @@ function finishError(finish: FinishReason): Error | undefined {
 async function determineReasoningEffort(
   ctx: Context,
   config: ResolvedTitleConfig,
-  route: SessionTitleModelProvenance,
+  route: ExtractedLlmFields['model'],
   signal: AbortSignal,
 ): Promise<string | undefined> {
   if (config.reasoningEffort !== undefined) {
@@ -158,7 +163,7 @@ export async function extractLlmFields(
   const messages: Message[] = [
     createUserMessage({
       content: [{ type: 'text', text: framedInput }],
-      source: { kind: 'plugin', plugin: 'clutch-dsh-title' },
+      source: { kind: 'clutch-dsh-title' },
     }),
   ];
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE);

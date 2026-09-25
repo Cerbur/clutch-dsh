@@ -66,8 +66,8 @@ pnpm dsh web
 
 ### 管理模板
 
-全新的设置包含可编辑的 emoji 模板，同时保持内置 default 模板处于选中状态。emoji 模板
-可以编辑或删除；删除后，在之后重新注册设置时不会自动重新出现。
+全新的设置包含可编辑的 emoji 模板，其描述最多 64 个 Unicode 字符，同时保持内置 default
+模板处于选中状态。emoji 模板可以编辑或删除；删除后，在之后重新注册设置时不会自动重新出现。
 
 - 可以复制任意一行（包括 default），打开可编辑副本。
 - 为副本填写唯一名称，编辑 YAML 并点击保存。保存不会自动激活。
@@ -133,15 +133,15 @@ Token、总 Token，以及模型提供时的最近一次调用明细。重置需
 
 ## 配置
 
-模板设置保存在 $DSH_HOME/settings.yaml 的 clutch-dsh-title 区段中。这个设置文件是模板
-映射、当前模板和启用状态的 source of truth。
+模板设置仍以 DSH profile 中的 `clutch-dsh-title` 条目为键。DSH 0.1.6 及更早版本将其保存在
+`$DSH_HOME/settings.yaml`；DSH `dsh-v0.1.7-rc.1` 将相同的启用状态、当前模板和模板映射保存为
+活动 Web profile `cordis.yml` 中的 volatile 字段。DSH 的一次性设置导入器会将已有
+`$DSH_HOME/settings.yaml` 区段迁入 profile，并将旧文件重命名为 `settings.yaml.imported`。
 
-DSH 通常会将 ~/.dsh/settings.yaml 作为该文件的默认位置，但文档约定的 source of truth 是
-$DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使用 browser storage，也不
-使用 clutch.yaml。
-
-通过外部方式修改设置文件后，DSH 的设置重新加载路径会读取这些修改。非法模板条目会继续
-显示在设置中，便于修复，而不会被静默丢弃。
+DSH 通常将 `~/.dsh` 用作 `$DSH_HOME`，但 source of truth 取决于 DSH 版本，始终是 DSH 配置而非
+写死的 home 路径。package 不使用 browser storage，也不使用 `clutch.yaml`。通过外部方式修改
+source-of-truth 设置后，DSH 的重新加载路径会读取这些修改。非法模板条目会继续显示在设置中，
+便于修复，而不会被静默丢弃。
 
 ## 行为与限制
 
@@ -165,8 +165,9 @@ $DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使�
   @deepseek-ai/dsh-client-ui-slots、@deepseek-ai/dsh-client-ui-primitives、
   @deepseek-ai/dsh-llm、@deepseek-ai/dsh-session、@deepseek-ai/dsh-session-title、
   @deepseek-ai/dsh-session-title-llm、@deepseek-ai/dsh-timeout 和
-  @deepseek-ai/dsh-util-values，全部要求 >=0.1.2-rc.1。
-- Cordis：@deepseek-ai/cordis 4.0.1。
+  @deepseek-ai/dsh-util-values，全部要求 >=0.1.2-rc.1 或 >=0.1.7-rc.1。
+- Cordis：@deepseek-ai/cordis ^4.0.1。
+- 运行 DSH `dsh-v0.1.7-rc.1` 需要 Node.js `^22.19.0 || >=24.0.0`。
 - Profile：提供 package 所声明的 session、session-title、LLM、settings、storage、remote
   和 browser settings service 的 DSH Web profile。
 
@@ -174,6 +175,11 @@ $DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使�
 
 通过 Cordis 配置提供的 template 和 fields 仍然兼容。当这些值来自 profile 配置时，设置页面
 会将它们显示为可编辑的 legacy 行。当前设置模板管理器和 legacy 配置使用相同的校验规则。
+
+本插件的字段提取请求使用 `clutch-dsh-title` LLM 消息来源类型。DSH 0.1.7 使用可合并扩展的来源映射，
+不再提供通用的 `plugin` 类型；本 package 会声明自己的来源类型，标题生成行为保持不变。DSH 0.1.7
+还将旧 settings 注册 API 替换为 profile 中的 volatile Config 字段；同一标题编辑器继续使用这些字段，
+并由 DSH 在 profile 迁移时导入旧 settings。
 
 模型路由和可选的 reasoning 设置属于 profile 级配置，不属于模板字段设置。请保持 DSH 默认
 title provider 关闭，也不要将第二个 title provider 与本 package 组合。
