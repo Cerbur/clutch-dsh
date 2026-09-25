@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
-import type {} from '@deepseek-ai/dsh-client-ui-session/client';
-import {
-  FIREWORKS_DURATION_MS,
-  type FireworksProjection,
-  type FireworksSignal,
-} from '../contract/index.js';
+import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client';
+import { FIREWORKS_DURATION_MS, type FireworksSignal } from '../contract/index.js';
 import { emojiFireworksRenderer, type FireworksVisual } from './fireworks-renderer.js';
+import { selectCurrentFireworksSession } from './fireworks-session.js';
 import styles from './fireworks.css';
 
-type FireworksOverlayProps = PropsRuntime<'shell.overlay'>;
+interface FireworksOverlayProps {
+  readonly useSessions: UseSessions;
+}
 
 interface Burst {
   readonly key: string;
@@ -39,13 +37,7 @@ function VisualNode({ visual }: { visual: FireworksVisual }) {
 }
 
 export function FireworksOverlay({ useSessions }: FireworksOverlayProps) {
-  const current = useSessions((state) => {
-    const sessionId = state.current;
-    if (sessionId === undefined) return undefined;
-    const signal = state.byId[sessionId]?.projectionValues?.fireworks as
-      FireworksProjection | undefined;
-    return { sessionId: String(sessionId), signal };
-  });
+  const current = useSessions(selectCurrentFireworksSession);
   const seen = useRef(new Map<string, string | null>());
   const activeSession = useRef<string | undefined>();
   const [burst, setBurst] = useState<Burst | undefined>();
