@@ -20,7 +20,7 @@ export const EMOJI_TEMPLATE = stringify({
         value: ['🎨', '🔍', '🚀', '🔧', '♻️', '📦'][index]!,
       })),
     },
-    desc: { ...DEFAULT_PRESET.fields.desc, maxCharacters: 1024 },
+    desc: { ...DEFAULT_PRESET.fields.desc, maxCharacters: 64 },
   },
 });
 

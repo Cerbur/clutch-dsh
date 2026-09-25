@@ -10,11 +10,11 @@ import { TITLE_NAMESPACE, settingsDocument } from '../templates.js';
 import { DEFAULT_TITLE_STATS } from '../types.js';
 import type { TitleTokenStats } from '../types.js';
 import { en, zh } from './locales.js';
+import type { Translate } from './locales.js';
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    'clutch.title': keyof typeof en;
-  }
+interface TitleLocaleService {
+  register(namespace: string, dictionaries: { en: typeof en; zh: typeof zh }): () => void;
+  bind(namespace: string): Translate;
 }
 
 interface RemoteResult<T> {
@@ -64,8 +64,10 @@ async function withStatsDeadline<T>(
 
 export const inject = ['slots', 'locale', 'remote', 'remote.settings'];
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('clutch.title', { en, zh }));
-  const t = ctx.locale.bind('clutch.title');
+  // DSH releases may resolve nested slot types to a different peer copy; the locale runtime API is stable.
+  const locale = (ctx as unknown as { locale: TitleLocaleService }).locale;
+  ctx.effect(() => locale.register('clutch.title', { en, zh }));
+  const t = locale.bind('clutch.title');
   const remote = ctx.remote as unknown as {
     titleStats?: {
       getStats?(): Promise<RemoteResult<TitleTokenStats>>;
@@ -119,7 +121,13 @@ export function apply(ctx: Context): void {
     const refresh = () => {
       if (controller.getSnapshot().status !== 'idle') void controller.load();
     };
-    const dispose = ctx.remote.$on('settings/document-updated', (ns) => {
+    const remoteEvents = ctx.remote as unknown as {
+      $on(
+        event: 'settings/document-updated',
+        listener: (namespace: string, revision: number) => void,
+      ): () => void;
+    };
+    const dispose = remoteEvents.$on('settings/document-updated', (ns) => {
       if (ns === TITLE_NAMESPACE) refresh();
     });
     const reset = ctx.on('connection/reset', refresh);

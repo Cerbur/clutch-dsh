@@ -14,17 +14,17 @@ import type {
   TitleFieldConfig,
 } from './types.js';
 
-const DateTimeField: z<DateTimeFieldConfig> = z.object({
+const DateTimeField = z.object({
   kind: z.const('datetime').required(),
   source: z.const('session.createdAt').required(),
   format: z.string().required(),
   timezone: z.string().required(),
-});
+}) as unknown as z<DateTimeFieldConfig>;
 
-const LiteralField: z<LiteralFieldConfig> = z.object({
+const LiteralField = z.object({
   kind: z.const('literal').required(),
   value: z.string().required(),
-});
+}) as unknown as z<LiteralFieldConfig>;
 
 const LlmEnumField = z.object({
   kind: z.const('llm-enum').required(),
@@ -39,11 +39,11 @@ const LlmEnumField = z.object({
     .required(),
 }) as unknown as z<LlmEnumFieldConfig>;
 
-const LlmTextField: z<LlmTextFieldConfig> = z.object({
+const LlmTextField = z.object({
   kind: z.const('llm-text').required(),
   instruction: z.string().required(),
   maxCharacters: z.number().step(1).min(1).required(),
-});
+}) as unknown as z<LlmTextFieldConfig>;
 
 const FieldConfig: z<TitleFieldConfig> = z.union([
   DateTimeField,
@@ -52,7 +52,7 @@ const FieldConfig: z<TitleFieldConfig> = z.union([
   LlmTextField,
 ]) as unknown as z<TitleFieldConfig>;
 
-export const TitleConfigSchema: z<TitleConfig> = z.object({
+export const TitleConfigSchema = z.object({
   preset: z.string().default('default'),
   template: z.string(),
   fields: z.dict(FieldConfig),
@@ -62,7 +62,10 @@ export const TitleConfigSchema: z<TitleConfig> = z.object({
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(60000),
   provider: z.string(),
   model: z.string(),
-});
+  enabled: z.any().volatile(),
+  active: z.any().volatile(),
+  templates: z.any().volatile(),
+}) as unknown as z<TitleConfig>;
 
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'preset',
@@ -74,6 +77,9 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'timeoutMs',
   'provider',
   'model',
+  'enabled',
+  'active',
+  'templates',
 ]);
 
 const FIELD_KEY_SETS: Readonly<Record<TitleFieldConfig['kind'], ReadonlySet<string>>> = {

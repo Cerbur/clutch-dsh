@@ -14,7 +14,7 @@ test('emoji sample preserves separators, timezone and described enum value', () 
     config.fields.type.values.map((entry) => entry.value),
     ['🎨', '🔍', '🚀', '🔧', '♻️', '📦'],
   );
-  assert.equal(config.fields.desc.maxCharacters, 1024);
+  assert.equal(config.fields.desc.maxCharacters, 64);
 });
 
 test('sample renders arbitrary fields, normalizes literals and respects Unicode text limits', () => {

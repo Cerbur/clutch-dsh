@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
-import { Button, Input, IconPlusOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives';
 import { DEFAULT_TEMPLATE, validateTemplate } from '../templates.js';
 import { DEFAULT_TITLE_STATS } from '../types.js';
 import type { TemplateAction } from '../templates.js';
@@ -17,6 +17,14 @@ interface Draft {
   source: string;
   revision: number;
   create: boolean;
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+      <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeLinecap="round" strokeWidth={1.5} />
+    </svg>
+  );
 }
 
 export function TemplateSection({ controller, t }: TemplateSectionProps) {
@@ -344,7 +352,7 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
           <Button
             size="sm"
             variant="outline"
-            icon={<IconPlusOutline16 />}
+            icon={<PlusIcon />}
             disabled={locked || draft !== null}
             onClick={() => {
               setDraft({
