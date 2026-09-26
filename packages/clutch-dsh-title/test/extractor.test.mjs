@@ -113,7 +113,8 @@ test('builds one structured JSON request and records the native request event fi
   assert.notEqual(options.signal, request.signal);
   assert.equal(options.messages.length, 1);
   assert.equal(options.messages[0].role, 'user');
-  assert.deepEqual(options.messages[0].source, { kind: 'plugin', plugin: 'clutch-dsh-title' });
+  // DSH 0.1.7's V4 session format refuses a bare `plugin` source kind; third-party producers are namespaced.
+  assert.deepEqual(options.messages[0].source, { kind: 'plugin:clutch-dsh-title' });
   assert.match(options.messages[0].content[0].text, /JSON array/);
   assert.match(options.messages[0].content[0].text, /请优化 session title 生成规则/);
   assert.match(options.system, /JSON object/i);
@@ -442,5 +443,236 @@ test('requires one selected message and a route when no explicit override is pre
   await assert.rejects(
     extractLlmFields(ctx, makeConfig(), request, selectedMessages, titleProvider),
     /route|provider|model/i,
+  );
+});
+
+async function runRepair({
+  config = makeConfig(),
+  responses,
+  diagnostics,
+  requestOptions = {},
+  logger,
+  signal,
+}) {
+  const { request, events } = makeRequest(
+    signal === undefined ? requestOptions : { ...requestOptions, signal },
+  );
+  const requests = [];
+  let call = 0;
+  const ctx = {
+    ...(logger === undefined ? {} : { logger }),
+    llm: {
+      async *stream(options) {
+        requests.push(options);
+        events.push({ kind: 'stream' });
+        const index = Math.min(call, responses.length - 1);
+        call += 1;
+        for (const chunk of responses[index]) yield chunk;
+      },
+    },
+  };
+  let outcome;
+  try {
+    outcome = {
+      ok: true,
+      result: await extractLlmFields(
+        ctx,
+        config,
+        request,
+        selectedMessages,
+        titleProvider,
+        diagnostics,
+      ),
+    };
+  } catch (error) {
+    outcome = { ok: false, error };
+  }
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  return { outcome, requests, events, request };
+}
+
+test('rejects an unusable response, then repairs it by quoting the response back', async () => {
+  const { outcome, requests, events } = await runRepair({
+    responses: [
+      textChunks('{"type":"配置","desc":"优化","extra":"unexpected"}'),
+      textChunks('{"type":"配置","desc":"优化 session title 生成规则"}'),
+    ],
+  });
+
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.result.values, {
+    type: '配置',
+    desc: '优化 session title 生成规则',
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].messages.length, 1);
+  assert.equal(requests[0].system, requests[1].system);
+
+  const repairMessages = requests[1].messages;
+  assert.equal(repairMessages.length, 3);
+  assert.equal(repairMessages[1].role, 'assistant');
+  assert.equal(
+    repairMessages[1].content[0].text,
+    '{"type":"配置","desc":"优化","extra":"unexpected"}',
+  );
+  assert.deepEqual(repairMessages[1].source, {
+    kind: 'model',
+    provider: 'main-route',
+    model: 'main-model',
+  });
+  assert.equal(repairMessages[2].role, 'user');
+  const instruction = repairMessages[2].content[0].text;
+  assert.match(instruction, /Rejection reason:/);
+  assert.match(instruction, /exactly the configured dynamic fields/);
+  assert.match(instruction, /quoted as data to correct/);
+  assert.match(instruction, /"前端", "后端", "配置", "文档"/);
+  assert.match(instruction, /copied without edits/);
+  assert.match(instruction, /"type", "desc"/);
+
+  assert.deepEqual(
+    events.map((event) => (event.kind === 'append' ? event.type : event.kind)),
+    ['session/title-llm-request', 'stream', 'session/title-llm-request', 'stream'],
+  );
+});
+
+test('repairs an undeclared enum value without inventing one', async () => {
+  const { outcome, requests } = await runRepair({
+    responses: [
+      textChunks('{"type":"更新","desc":"更新取数通道"}'),
+      textChunks('{"type":"配置","desc":"更新取数通道"}'),
+    ],
+  });
+
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.result.values, { type: '配置', desc: '更新取数通道' });
+  assert.equal(requests.length, 2);
+  assert.match(requests[1].messages[2].content[0].text, /is not declared/);
+});
+
+test('honors repairAttempts as the number of extra calls and never retries transport failures', async () => {
+  const disabled = await runRepair({
+    config: makeConfig({ repairAttempts: 0 }),
+    responses: [textChunks('{"type":"更新","desc":"更新取数通道"}')],
+  });
+  assert.equal(disabled.outcome.ok, false);
+  assert.match(disabled.outcome.error.message, /is not declared/);
+  assert.equal(disabled.requests.length, 1);
+
+  const bounded = await runRepair({
+    config: makeConfig({ repairAttempts: 2 }),
+    responses: [textChunks('not json at all')],
+  });
+  assert.equal(bounded.outcome.ok, false);
+  assert.match(bounded.outcome.error.message, /not valid JSON/);
+  assert.equal(bounded.requests.length, 3);
+
+  const transport = await runRepair({
+    responses: [
+      textChunks('{"type":"配置","desc":"优化"}', {
+        kind: 'error',
+        failure: { message: 'provider exploded', code: 'PROVIDER_ERROR' },
+      }),
+    ],
+  });
+  assert.equal(transport.outcome.ok, false);
+  assert.match(transport.outcome.error.message, /provider exploded/);
+  assert.equal(transport.requests.length, 1);
+});
+
+test('records one incident with the raw response once a first attempt is rejected', async () => {
+  const incidents = [];
+  const warnings = [];
+  const diagnostics = {
+    async record(incident) {
+      incidents.push(incident);
+    },
+  };
+  const logger = { warn: (message) => warnings.push(message) };
+
+  const recovered = await runRepair({
+    diagnostics,
+    logger,
+    responses: [
+      textChunks('{"type":"配置"}'),
+      textChunks('{"type":"配置","desc":"优化 session title 生成规则"}'),
+    ],
+  });
+  assert.equal(recovered.outcome.ok, true);
+  assert.equal(incidents.length, 1);
+  assert.equal(incidents[0].recovered, true);
+  assert.equal(incidents[0].error, '');
+  assert.equal(incidents[0].provider, 'main-route');
+  assert.equal(incidents[0].model, 'main-model');
+  assert.deepEqual(incidents[0].messageSeqs, [7]);
+  assert.equal(incidents[0].attempts.length, 1);
+  assert.equal(incidents[0].attempts[0].attempt, 1);
+  assert.equal(incidents[0].attempts[0].output, '{"type":"配置"}');
+  assert.match(incidents[0].attempts[0].error, /exactly the configured dynamic fields/);
+  assert.match(warnings[0], /clutch-dsh-title/);
+  assert.match(warnings[0], /repaired/);
+
+  incidents.length = 0;
+  warnings.length = 0;
+  const failed = await runRepair({
+    diagnostics,
+    logger,
+    responses: [textChunks('{"type":"更新","desc":"更新取数通道"}')],
+  });
+  assert.equal(failed.outcome.ok, false);
+  assert.equal(incidents.length, 1);
+  assert.equal(incidents[0].recovered, false);
+  assert.equal(incidents[0].error, failed.outcome.error.message);
+  assert.equal(incidents[0].attempts.length, 2);
+  assert.equal(incidents[0].attempts[1].attempt, 2);
+  assert.match(warnings[0], /gave up/);
+});
+
+test('bounds the recorded raw response and skips incidents for aborted generations', async () => {
+  const incidents = [];
+  const diagnostics = {
+    async record(incident) {
+      incidents.push(incident);
+    },
+  };
+
+  const oversized = await runRepair({
+    diagnostics,
+    responses: [textChunks(`${'x'.repeat(5000)}`)],
+  });
+  assert.equal(oversized.outcome.ok, false);
+  assert.equal(incidents.length, 1);
+  assert.equal(incidents[0].attempts[0].output.length, 2012);
+  assert.match(incidents[0].attempts[0].output, /…\[truncated\]$/);
+
+  incidents.length = 0;
+  const controller = new globalThis.AbortController();
+  controller.abort();
+  const aborted = await runRepair({
+    diagnostics,
+    responses: [textChunks('{}')],
+    signal: controller.signal,
+  });
+  assert.equal(aborted.outcome.ok, false);
+  assert.match(aborted.outcome.error.message, /abort/i);
+  assert.equal(incidents.length, 0);
+});
+
+test('restates the exact key set, literal enum values and a shape example in the system prompt', async () => {
+  const { requests } = await runRepair({
+    responses: [textChunks('{"type":"配置","desc":"优化"}')],
+  });
+  const system = requests[0].system;
+
+  assert.match(system, /must start with \{ and end with \}/);
+  assert.match(
+    system,
+    /Copy the selected value exactly as written: "前端", "后端", "配置", "文档"/,
+  );
+  assert.match(system, /Never invent another value/);
+  assert.match(system, /keys are exactly "type", "desc"/);
+  assert.match(system, /Any additional key is rejected/);
+  assert.match(
+    system,
+    /\{"type":"<one of the allowed values>","desc":"<text of at most 32 characters>"\}/,
   );
 });

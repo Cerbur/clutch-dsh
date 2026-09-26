@@ -116,6 +116,11 @@ Session 原始的 createdAt，因此仅刷新标题不会改变日期字段。
 Token、总 Token，以及模型提供时的最近一次调用明细。重置需要确认。只包含确定性字段的
 模板不会调用模型，也不会增加生成统计。
 
+首条响应不可用的生成不会静默消失。package 会把 incident、拒绝原因和有界的原始响应记录在
+clutch_title_diagnostics storage domain，并通过 titleStats remote namespace（getDiagnostics 和
+resetDiagnostics）暴露同一份记录，每个 incident 还会写一条 warning 日志。设置面板目前只显示
+Token 统计，诊断信息需要从 storage domain 读取。
+
 ## 模板参考
 
 模板使用简单的字段替换：
@@ -143,6 +148,12 @@ $DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使�
 通过外部方式修改设置文件后，DSH 的设置重新加载路径会读取这些修改。非法模板条目会继续
 显示在设置中，便于修复，而不会被静默丢弃。
 
+profile 配置还可以设置：
+
+- repairAttempts：当模型返回不可用输出时，一次标题生成最多额外发起的模型调用次数。默认 1，
+  可接受 0 到 3，更大的值会被拒绝。这些调用与 timeoutMs 共用同一个预算，并且绝不会用于
+  传输错误、取消或超时。
+
 ## 行为与限制
 
 - 自动标题只使用首条符合条件的用户 prompt，后续消息不会自动替换标题。
@@ -150,7 +161,17 @@ $DSH_HOME/settings.yaml，而不是写死的 home 目录路径。package 不使�
   Session 消息不会被修改。
 - 修改模板只影响后续生成或显式刷新，不会批量重写已有标题。
 - 当前激活模板缺失或非法时，设置管理器会使用内置 default 模板。
-- 如果字段提取、渲染或自定义标题生成失败，DSH 会使用正常的首条 prompt 标题生成器。
+- 如果字段提取、渲染或自定义标题生成失败，DSH 会使用正常的首条 prompt 标题生成器。该
+  fallback 是 DSH 自己对首条 prompt 的截断结果，因此不遵循模板。
+- 模型会被要求只输出一个 JSON 对象：键集合必须精确等于声明的字段，枚举字段必须使用声明的
+  字面值之一，并给出字面形状示例。当响应仍不可用时，package 会再发一次有界的纠正轮，把被
+  拒绝的响应原文引用回去并说明拒绝原因，最多 repairAttempts 次额外调用。
+- 只有不可用的输出会被修复。传输错误、取消或超时耗尽会保留自身错误并立即 fallback；所有
+  尝试共用同一个 timeoutMs 预算。
+- 每个 incident 会记录一次日志（provider、model、消息 seq、拒绝原因，以及截断到 2000 字符的
+  原始响应），并持久化到 clutch_title_diagnostics storage domain（每个 incident 最多 4 条
+  attempt；storage 不可用时内存最多缓存 64 条 incident）。持久化是 best effort，绝不会延迟或
+  让标题生成失败。
 - 标题长度限制、标题持久化、手动重命名后的 pin、刷新和取消 pin、fork 的标题事件继承、
   取消以及过期结果保护，仍由 DSH 负责。
 - bundle patch 会先禁用 DSH 默认的 session-title-first-prompt-llm provider，再插入本

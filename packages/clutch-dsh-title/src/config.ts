@@ -52,6 +52,9 @@ const FieldConfig: z<TitleFieldConfig> = z.union([
   LlmTextField,
 ]) as unknown as z<TitleFieldConfig>;
 
+/** Upper bound for repairAttempts so one failure cannot fan out into many calls. */
+export const MAX_REPAIR_ATTEMPTS = 3;
+
 export const TitleConfigSchema: z<TitleConfig> = z.object({
   preset: z.string().default('default'),
   template: z.string(),
@@ -60,6 +63,7 @@ export const TitleConfigSchema: z<TitleConfig> = z.object({
   maxOutputTokens: z.number().step(1).min(1).default(512),
   reasoningEffort: z.union([z.string(), z.const(null)]),
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(60000),
+  repairAttempts: z.number().step(1).min(0).max(MAX_REPAIR_ATTEMPTS).default(1),
   provider: z.string(),
   model: z.string(),
 });
@@ -72,6 +76,7 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'maxOutputTokens',
   'reasoningEffort',
   'timeoutMs',
+  'repairAttempts',
   'provider',
   'model',
 ]);
@@ -112,6 +117,12 @@ function assertNonEmptyString(name: string, value: unknown): asserts value is st
 function assertPositiveSafeInteger(name: string, value: unknown): asserts value is number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`clutch-dsh-title: ${name} must be a positive safe integer`);
+  }
+}
+
+function assertNonNegativeSafeInteger(name: string, value: unknown): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`clutch-dsh-title: ${name} must be a non-negative safe integer`);
   }
 }
 
@@ -232,6 +243,11 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
   if (timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`clutch-dsh-title: timeoutMs must not exceed ${MAX_TIMER_DELAY_MS}`);
   }
+  const repairAttempts = input.repairAttempts === undefined ? 1 : input.repairAttempts;
+  assertNonNegativeSafeInteger('repairAttempts', repairAttempts);
+  if (repairAttempts > MAX_REPAIR_ATTEMPTS) {
+    throw new Error(`clutch-dsh-title: repairAttempts must not exceed ${MAX_REPAIR_ATTEMPTS}`);
+  }
 
   const hasProvider = input.provider !== undefined;
   const hasModel = input.model !== undefined;
@@ -252,6 +268,7 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
     maxOutputTokens,
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
     timeoutMs,
+    repairAttempts,
     ...(hasProvider ? { provider: input.provider, model: input.model } : {}),
   });
 }

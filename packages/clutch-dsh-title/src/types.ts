@@ -51,6 +51,8 @@ export interface TitleConfig {
   readonly maxOutputTokens?: number;
   readonly reasoningEffort?: string | null;
   readonly timeoutMs?: number;
+  /** Extra model calls allowed after one unusable response. */
+  readonly repairAttempts?: number;
   readonly provider?: string;
   readonly model?: string;
 }
@@ -64,6 +66,7 @@ export interface ResolvedTitleConfig {
   readonly maxOutputTokens: number;
   readonly reasoningEffort?: string | null;
   readonly timeoutMs: number;
+  readonly repairAttempts: number;
   readonly provider?: string;
   readonly model?: string;
 }
@@ -111,6 +114,68 @@ export const DEFAULT_TITLE_STATS: TitleTokenStats = Object.freeze({
   totalOutputTokens: 0,
   totalTokens: 0,
 });
+
+/** Raw response text kept from one rejected attempt when an incident is recorded. */
+export const MAX_DIAGNOSTIC_OUTPUT_CHARS = 2_000;
+/** Attempts kept per incident when an incident is recorded. */
+export const MAX_DIAGNOSTIC_ATTEMPTS = 4;
+
+/** One model attempt whose response could not be used for a title. */
+export interface TitleExtractionAttemptRecord {
+  /** 1-based attempt number inside one generation. */
+  readonly attempt: number;
+  /** Why this attempt's response was rejected. */
+  readonly error: string;
+  /** Raw response text, bounded by MAX_DIAGNOSTIC_OUTPUT_CHARS. */
+  readonly output: string;
+}
+
+/** One title generation whose first attempt produced no usable extraction. */
+export interface TitleExtractionIncident {
+  readonly timestamp: number;
+  readonly provider: string;
+  readonly model: string;
+  /** Human message seqs the incident belongs to. */
+  readonly messageSeqs: readonly number[];
+  /** One entry per attempt that produced a response. */
+  readonly attempts: readonly TitleExtractionAttemptRecord[];
+  /** True when a repair attempt produced the title; false when DSH fell back. */
+  readonly recovered: boolean;
+  /** Final rejection message; empty when a repair attempt succeeded. */
+  readonly error: string;
+}
+
+/** Cumulative extraction diagnostics persisted for post-mortem inspection. */
+export interface TitleDiagnostics {
+  /** Generations whose first attempt produced no usable extraction. */
+  readonly totalIncidents: number;
+  /** Extra model calls dispatched by the repair path. */
+  readonly totalRepairAttempts: number;
+  /** Incidents where a repair attempt still produced the title. */
+  readonly totalRecovered: number;
+  readonly lastIncident?: TitleExtractionIncident;
+}
+
+/** Best-effort sink for extraction incidents; failures never affect a title. */
+export interface TitleDiagnosticsRecorder {
+  record(incident: TitleExtractionIncident): Promise<void>;
+}
+
+export const DEFAULT_TITLE_DIAGNOSTICS: TitleDiagnostics = Object.freeze({
+  totalIncidents: 0,
+  totalRepairAttempts: 0,
+  totalRecovered: 0,
+});
+
+/**
+ * Bound one raw model response before it is persisted or replayed.
+ * @param text - raw response text.
+ * @returns the text, truncated with an explicit marker when it exceeds the budget.
+ */
+export function truncateDiagnosticOutput(text: string): string {
+  if (text.length <= MAX_DIAGNOSTIC_OUTPUT_CHARS) return text;
+  return `${text.slice(0, MAX_DIAGNOSTIC_OUTPUT_CHARS)}…[truncated]`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -209,5 +274,54 @@ export function parseStats(value: unknown): TitleTokenStats {
     totalOutputTokens,
     totalTokens,
     ...(lastUsage !== undefined ? { lastUsage } : {}),
+  };
+}
+
+function readNonNegativeInt(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+function readAttemptRecords(value: unknown): readonly TitleExtractionAttemptRecord[] {
+  if (!Array.isArray(value)) return [];
+  const attempts: TitleExtractionAttemptRecord[] = [];
+  for (const entry of value.slice(0, MAX_DIAGNOSTIC_ATTEMPTS)) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.error !== 'string') continue;
+    attempts.push({
+      attempt: readNonNegativeInt(entry.attempt),
+      error: entry.error,
+      output: typeof entry.output === 'string' ? entry.output : '',
+    });
+  }
+  return attempts;
+}
+
+function readIncident(value: unknown): TitleExtractionIncident | undefined {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.provider !== 'string' || typeof value.model !== 'string') return undefined;
+  if (typeof value.error !== 'string') return undefined;
+  const messageSeqs = Array.isArray(value.messageSeqs)
+    ? value.messageSeqs.filter((seq): seq is number => typeof seq === 'number')
+    : [];
+  return {
+    timestamp: readNonNegativeInt(value.timestamp),
+    provider: value.provider,
+    model: value.model,
+    messageSeqs,
+    attempts: readAttemptRecords(value.attempts),
+    recovered: value.recovered === true,
+    error: value.error,
+  };
+}
+
+/** Parse a persisted diagnostics record, tolerating missing or malformed fields. */
+export function parseDiagnostics(value: unknown): TitleDiagnostics {
+  if (!isRecord(value)) return { ...DEFAULT_TITLE_DIAGNOSTICS };
+  const lastIncident = readIncident(value.lastIncident);
+  return {
+    totalIncidents: readNonNegativeInt(value.totalIncidents),
+    totalRepairAttempts: readNonNegativeInt(value.totalRepairAttempts),
+    totalRecovered: readNonNegativeInt(value.totalRecovered),
+    ...(lastIncident !== undefined ? { lastIncident } : {}),
   };
 }
