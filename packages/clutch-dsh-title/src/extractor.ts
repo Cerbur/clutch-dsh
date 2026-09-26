@@ -29,10 +29,9 @@ import type {
   TitleTokenUsage,
 } from './types.js';
 
-type DynamicField = Extract<TitleFieldConfig, { kind: 'llm-enum' | 'llm-text' }>;
+import { TITLE_MESSAGE_SOURCE } from './message-source.js';
 
-/** Producer tag of every message this plugin sends to the auxiliary title route. */
-const PLUGIN_SOURCE = { kind: 'plugin', plugin: 'clutch-dsh-title' } as const;
+type DynamicField = Extract<TitleFieldConfig, { kind: 'llm-enum' | 'llm-text' }>;
 
 /** Raw response text replayed inside one repair prompt. */
 export const MAX_REPAIR_OUTPUT_CHARS = 8_000;
@@ -320,7 +319,7 @@ function repairMessages(
     }),
     createUserMessage({
       content: [textBlock(repairPrompt(fields, quoted, rejectionMessage))],
-      source: PLUGIN_SOURCE,
+      source: TITLE_MESSAGE_SOURCE,
     }),
   ];
 }
@@ -377,7 +376,7 @@ export async function extractLlmFields(
   const system = systemPrompt(fields);
   const messageSeqs = sourceMessages.map((message) => message.seq);
   const baseMessages: Message[] = [
-    createUserMessage({ content: [textBlock(framedInput)], source: PLUGIN_SOURCE }),
+    createUserMessage({ content: [textBlock(framedInput)], source: TITLE_MESSAGE_SOURCE }),
   ];
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE);
 
