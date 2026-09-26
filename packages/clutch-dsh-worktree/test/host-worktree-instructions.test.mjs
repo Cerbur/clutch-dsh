@@ -43,10 +43,10 @@ test('independent reminder persists through native pre-step messages and dedupli
   const message = first.messages[0];
   assert.equal(message.role, 'user');
   assert.deepEqual(message.source, {
-    kind: 'plugin',
-    plugin: '@cerbur/clutch-dsh-worktree',
+    kind: 'plugin:@cerbur/clutch-dsh-worktree',
     form: 'instructions',
   });
+  assert.notEqual(message.source.kind, 'plugin');
   assert.match(message.content[0].text, /^<system-reminder>\n/);
   assert.ok(message.content[0].text.includes('{{literal}}'));
   assert.equal((await h.invoke(first)).messages[0], message);
@@ -63,6 +63,40 @@ test('independent reminder persists through native pre-step messages and dedupli
   assert.match(clear.content[0].text, /Disregard earlier shared instructions/);
   h.commit(clear);
   assert.equal((await h.invoke()).messages.length, 0);
+});
+
+test('recognizes legacy and migrated source identities for committed reminders', async () => {
+  const plugin = '@cerbur/clutch-dsh-worktree';
+  const text = [
+    '<system-reminder>',
+    'Shared instructions for this Worktree or Workspace root. This replaces all earlier shared instructions:',
+    'Use {{literal}}',
+    '</system-reminder>',
+  ].join('\n');
+  const legacy = harness();
+  legacy.commit({
+    id: 'legacy',
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin, form: 'instructions' },
+  });
+  assert.equal((await legacy.invoke()).messages.length, 0);
+  legacy.state.text = 'Updated';
+  const replacement = (await legacy.invoke()).messages[0];
+  assert.deepEqual(replacement.source, {
+    kind: `plugin:${plugin}`,
+    form: 'instructions',
+  });
+  assert.ok(replacement.content[0].text.includes('Updated'));
+
+  const migrated = harness();
+  migrated.commit({
+    id: 'migrated',
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: `plugin:${plugin}`, form: 'instructions' },
+  });
+  assert.equal((await migrated.invoke()).messages.length, 0);
 });
 
 test('compaction republishes instructions and clearing notice; unrelated messages stay intact', async () => {

@@ -30,4 +30,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
   ) => void;
+
+  export interface TypertLookup<Host = unknown, Wire = unknown> {
+    readonly host: Host;
+    readonly wire: Wire;
+  }
 }

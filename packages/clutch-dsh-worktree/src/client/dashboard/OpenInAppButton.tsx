@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import {
-  IconChevronDownOutline14,
-  Menu,
-  type MenuItem,
-} from '@deepseek-ai/dsh-client-ui-primitives';
+import { Menu, type MenuItem } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconChevronDownOutline14 } from '../dsh-icons.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { vscodeFolderUrl } from './vscode-url.js';
 import { defaultOpenInAppController, type OpenInAppController } from './open-in-app-controller.js';

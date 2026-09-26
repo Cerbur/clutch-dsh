@@ -225,10 +225,10 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 
 | 组件 | 要求 |
 | --- | --- |
-| DSH Client | `>=0.1.5-rc.1`，需要 Session/Workspace Controller 和 Client Store |
-| DSH Host | `>=0.1.5-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
+| DSH Client | `dsh-v0.1.5-rc.1` 及之后的稳定版本，以及 prerelease `dsh-v0.1.7-rc.2`；需要 Session/Workspace Controller 和 Client Store |
+| DSH Host | `dsh-v0.1.5-rc.1` 及之后的稳定版本，以及 prerelease `dsh-v0.1.7-rc.2`；需要 Typert Gateway `/api` connection 和 subprocess capability |
 | Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
-| Node.js | `>=20.0.0`，用于 DSH host runtime |
+| Node.js | 插件自身要求 `>=20.0.0`；DSH `dsh-v0.1.7-rc.2` 要求 `^22.19.0 || >=24.0.0` |
 | Host filesystem | 支持使用普通 Windows 和 macOS 本地路径保存 sidecar 与 Git Worktree 数据；网络、特殊或别名路径较多的文件系统可能不支持持久化同步或身份校验。 |
 
 ## 行为与限制
