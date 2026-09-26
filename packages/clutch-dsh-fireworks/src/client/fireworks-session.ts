@@ -11,7 +11,7 @@ interface FireworksSessionRow {
 }
 
 interface SessionListSnapshot {
-  readonly byId: object;
+  readonly byId?: object | null;
 }
 
 /**
@@ -22,18 +22,29 @@ interface SessionListSnapshot {
 export function selectCurrentFireworksSession(
   state: SessionListSnapshot,
 ): { readonly sessionId: string; readonly signal: FireworksProjection | undefined } | undefined {
-  const sessions = state.byId as Record<string, FireworksSessionRow>;
+  const sessions = (state.byId ?? {}) as Record<
+    string,
+    FireworksSessionRow | null | undefined
+  >;
   const hasLegacyCurrent = Object.hasOwn(state, 'current');
   const legacyCurrentId = Reflect.get(state, 'current');
   const selected = hasLegacyCurrent
     ? typeof legacyCurrentId === 'string'
       ? sessions[legacyCurrentId]
       : undefined
-    : Object.values(sessions).find((session) => (session.retainedBy?.mainView ?? 0) > 0);
+    : Object.values(sessions).find((session) => (session?.retainedBy?.mainView ?? 0) > 0);
 
-  if (selected === undefined || typeof selected.id !== 'string') return undefined;
+  if (selected == null) return undefined;
+  const sessionId =
+    typeof selected.id === 'string'
+      ? selected.id
+      : hasLegacyCurrent && typeof legacyCurrentId === 'string'
+        ? legacyCurrentId
+        : undefined;
+  if (sessionId === undefined) return undefined;
+
   return {
-    sessionId: selected.id,
+    sessionId,
     signal: selected.projectionValues?.fireworks,
   };
 }

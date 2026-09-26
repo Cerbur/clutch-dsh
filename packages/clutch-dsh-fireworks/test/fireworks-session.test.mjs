@@ -39,6 +39,25 @@ test('keeps using the legacy current pointer when an older host provides it', ()
   assert.deepEqual(selection, { sessionId: 'legacy', signal });
 });
 
+test('prefers the selected id and falls back to the legacy current id when needed', () => {
+  const signal = { id: 'legacy-call' };
+  const selectedId = selectCurrentFireworksSession({
+    current: 'legacy-key',
+    byId: {
+      'legacy-key': { id: 'canonical-id', projectionValues: { fireworks: signal } },
+    },
+  });
+  const legacyFallback = selectCurrentFireworksSession({
+    current: 'legacy-key',
+    byId: {
+      'legacy-key': { id: 42, projectionValues: { fireworks: signal } },
+    },
+  });
+
+  assert.deepEqual(selectedId, { sessionId: 'canonical-id', signal });
+  assert.deepEqual(legacyFallback, { sessionId: 'legacy-key', signal });
+});
+
 test('does not infer a session when a legacy host explicitly clears current', () => {
   assert.equal(
     selectCurrentFireworksSession({
@@ -57,4 +76,26 @@ test('does not infer a session when a legacy host explicitly clears current', ()
 
 test('returns no selection when the host has no active main-view session', () => {
   assert.equal(selectCurrentFireworksSession({ byId: {} }), undefined);
+});
+
+test('skips undefined entries in the session list while selecting the main-view session', () => {
+  const signal = { id: 'active-call' };
+  const selection = selectCurrentFireworksSession({
+    byId: {
+      missing: undefined,
+      active: {
+        id: 'active',
+        retainedBy: { mainView: 1 },
+        projectionValues: { fireworks: signal },
+      },
+    },
+  });
+
+  assert.deepEqual(selection, { sessionId: 'active', signal });
+});
+
+test('treats absent, null, or undefined byId as an empty session list', () => {
+  assert.equal(selectCurrentFireworksSession({}), undefined);
+  assert.equal(selectCurrentFireworksSession({ byId: null }), undefined);
+  assert.equal(selectCurrentFireworksSession({ byId: undefined }), undefined);
 });
