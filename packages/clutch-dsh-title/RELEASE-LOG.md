@@ -1,5 +1,23 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.4 — 2026-09-26
+
+### 中文
+
+#### 优化
+
+- 适配 DSH 0.1.7 架构与 API 变更，支持可合并扩展的消息来源类型与 profile 驱动的 volatile 设置表单。
+- 将 DSH 依赖基线更新为 `>=0.1.7-rc.1`，并将 Cordis 依赖范围调整为 `^4.0.1`。
+- 将预设 emoji 模板描述长度上限规范为 64 字符，并使用插件内置 SVG 图标替换已废弃的 UI Primitives 图标。
+
+### English
+
+#### Improved
+
+- Support DSH 0.1.7 architecture and API updates, including merge-extensible LLM message sources and profile-backed volatile settings forms.
+- Update DSH peer dependency baseline to `>=0.1.7-rc.1` and broaden Cordis peer range to `^4.0.1`.
+- Standardize description length limit for the preset emoji template to 64 characters and replace retired UI Primitives icon with a title-owned SVG.
+
 ## 0.1.3 — 2026-09-12
 
 ### 中文

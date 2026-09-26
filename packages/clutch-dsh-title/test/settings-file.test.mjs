@@ -1,15 +1,89 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { watch } from 'node:fs';
+import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { setTimeout, clearTimeout } from 'node:timers';
-import { Context } from '@deepseek-ai/cordis';
-import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file';
-import { parse, stringify } from 'yaml';
+import { Context, Service } from '@deepseek-ai/cordis';
+import { SettingsProvider } from '@deepseek-ai/dsh-settings-legacy';
+import z from '@deepseek-ai/schemastery';
+import { Document, parse, parseDocument, stringify } from 'yaml';
 import { registerTemplateSettings } from '../lib/settings.js';
 import { templateMutation } from '../lib/templates.js';
 import { TitleConfigSchema } from '../lib/config.js';
+
+// Test-only file adapter for the DSH <=0.1.6 SettingsProvider seam. DSH 0.1.7
+// moved production settings to profile-backed SettingsForms.
+class FileSettingsProvider extends SettingsProvider {
+  static Config = z.object({
+    path: z.string().required(),
+    watch: z.boolean().default(true),
+    debounceMs: z.number().default(100),
+  });
+
+  constructor(ctx, config) {
+    super(ctx);
+    this.path = config.path;
+    this.watchEnabled = config.watch;
+    this.debounceMs = config.debounceMs;
+  }
+
+  get writable() {
+    return true;
+  }
+
+  async load() {
+    try {
+      const document = parseDocument(await readFile(this.path, 'utf8'));
+      if (document.errors.length > 0) throw document.errors[0];
+      const value = document.toJS() ?? {};
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+        throw new TypeError('settings document must be a map');
+      }
+      return value;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return {};
+      throw error;
+    }
+  }
+
+  async persist(namespace, section) {
+    await mkdir(dirname(this.path), { recursive: true });
+    let document;
+    try {
+      document = parseDocument(await readFile(this.path, 'utf8'));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      document = new Document({});
+    }
+    document.setIn([namespace], section);
+    await writeFile(this.path, document.toString());
+  }
+
+  async *[Service.init]() {
+    yield* super[Service.init]();
+    if (!this.watchEnabled) return;
+    let timer;
+    let closed = false;
+    const watcher = watch(dirname(this.path), (_event, filename) => {
+      if (filename !== null && String(filename) !== basename(this.path)) return;
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          if (!closed) this.publish(await this.load());
+        } catch {
+          // Ignore partial external writes; a later filesystem event retries.
+        }
+      }, this.debounceMs);
+    });
+    yield async () => {
+      closed = true;
+      if (timer !== undefined) clearTimeout(timer);
+      watcher.close();
+    };
+  }
+}
 
 test('fresh settings provide editable emoji and persist its deletion across registration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'title-emoji-'));
@@ -156,4 +230,49 @@ test('native settings file preserves other namespaces and rejects stale writes a
     await ctx.fiber.dispose();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('uses DSH 0.1.7 profile fields while retaining the custom title settings UI', () => {
+  const owner = {};
+  let configureOptions;
+  let configuredOwner;
+  let disposeConfiguration;
+  let disposed = false;
+  const context = {
+    fiber: owner,
+    effect(effect) {
+      disposeConfiguration = effect();
+    },
+    settings: {
+      configure(options, fiber) {
+        configureOptions = options;
+        configuredOwner = fiber;
+        return () => {
+          disposed = true;
+        };
+      },
+      describe() {
+        return [
+          {
+            ns: 'clutch-dsh-title',
+            base: { enabled: true, active: 'default', templates: {} },
+            user: {
+              enabled: false,
+              active: 'personal',
+              templates: { personal: 'template: Personal title' },
+            },
+          },
+        ];
+      },
+    },
+  };
+
+  const read = registerTemplateSettings(context, { preset: 'default' });
+  assert.deepEqual(configureOptions, { auto: false });
+  assert.equal(configuredOwner, owner);
+  assert.equal(read().enabled, false);
+  assert.equal(read().active, 'personal');
+  assert.equal(read().config.template, 'Personal title');
+  disposeConfiguration();
+  assert.equal(disposed, true);
 });

@@ -1,5 +1,3 @@
-import type { SessionTitleModelProvenance } from '@deepseek-ai/dsh-session-title';
-
 export type DateTimeFieldConfig = {
   readonly kind: 'datetime';
   readonly source: 'session.createdAt';
@@ -53,6 +51,10 @@ export interface TitleConfig {
   readonly timeoutMs?: number;
   readonly provider?: string;
   readonly model?: string;
+  /** Mutable template-manager state stored in DSH 0.1.7 profile configuration. */
+  readonly enabled?: unknown;
+  readonly active?: unknown;
+  readonly templates?: unknown;
 }
 
 export interface ResolvedTitleConfig {
@@ -102,7 +104,7 @@ export interface TitleTokenStats {
 
 export interface ExtractedLlmFields {
   readonly values: Readonly<Record<string, string>>;
-  readonly model: SessionTitleModelProvenance;
+  readonly model: { readonly provider: string; readonly model: string };
   readonly usage?: TitleTokenUsage;
 }
 export const DEFAULT_TITLE_STATS: TitleTokenStats = Object.freeze({

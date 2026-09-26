@@ -8,7 +8,7 @@ import LlmRuntime, { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session';
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection';
 import SessionTitleService from '@deepseek-ai/dsh-session-title';
-import { SettingsProvider } from '@deepseek-ai/dsh-settings';
+import { SettingsProvider } from '@deepseek-ai/dsh-settings-legacy';
 
 class MemorySettings extends SettingsProvider {
   writable = true;

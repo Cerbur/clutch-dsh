@@ -43,14 +43,10 @@ test('folds the real package patch into the DSH session-title entry list', async
 
   assert.deepEqual(warnings, []);
   assert.equal(composed.find((entry) => entry.id === 'session-title-llm').disabled, true);
-  assert.deepEqual(
-    composed.find((entry) => entry.id === 'clutch-dsh-title'),
-    {
-      id: 'clutch-dsh-title',
-      name: '@cerbur/clutch-dsh-title',
-      config: { preset: 'default' },
-    },
-  );
+  const titleEntry = composed.find((entry) => entry.id === 'clutch-dsh-title');
+  assert.equal(titleEntry.name, '@cerbur/clutch-dsh-title');
+  assert.equal(titleEntry.config.preset, 'default');
+  assert.equal(yaml.load(titleEntry.config.templates.emoji).fields.desc.maxCharacters, 64);
 });
 
 test('does not disable a same-id entry whose package name changed', async () => {

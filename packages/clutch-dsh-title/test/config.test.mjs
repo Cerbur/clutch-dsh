@@ -90,6 +90,19 @@ test('resolves the default preset', () => {
   ]);
 });
 
+test('keeps DSH 1.7 profile settings separate from title generation policy', () => {
+  const resolved = resolveTitleConfig({
+    enabled: false,
+    active: 'personal',
+    templates: { personal: 'template: Personal title' },
+  });
+
+  assert.equal(resolved.template, '${daytime}|${type}|${desc}');
+  assert.equal(Object.hasOwn(resolved, 'enabled'), false);
+  assert.equal(Object.hasOwn(resolved, 'active'), false);
+  assert.equal(Object.hasOwn(resolved, 'templates'), false);
+});
+
 test('merges field names while replacing each field definition as a whole', () => {
   const fields = {
     desc: {
