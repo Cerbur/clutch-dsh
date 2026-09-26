@@ -113,7 +113,8 @@ test('builds one structured JSON request and records the native request event fi
   assert.notEqual(options.signal, request.signal);
   assert.equal(options.messages.length, 1);
   assert.equal(options.messages[0].role, 'user');
-  assert.deepEqual(options.messages[0].source, { kind: 'plugin', plugin: 'clutch-dsh-title' });
+  // DSH 0.1.7's V4 session format refuses a bare `plugin` source kind; third-party producers are namespaced.
+  assert.deepEqual(options.messages[0].source, { kind: 'plugin:clutch-dsh-title' });
   assert.match(options.messages[0].content[0].text, /JSON array/);
   assert.match(options.messages[0].content[0].text, /请优化 session title 生成规则/);
   assert.match(options.system, /JSON object/i);
