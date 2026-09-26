@@ -263,10 +263,10 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 
 | Component | Requirement |
 | --- | --- |
-| DSH Client | `dsh-v0.1.5-rc.1` and later stable releases, plus prerelease `dsh-v0.1.7-rc.2`; includes the Session and Workspace Controllers and Client Store |
-| DSH Host | `dsh-v0.1.5-rc.1` and later stable releases, plus prerelease `dsh-v0.1.7-rc.2`; includes the Typert Gateway `/api` connection and subprocess capability |
+| DSH Client | `>=0.1.7-rc.1`, including the Session and Workspace Controllers and Client Store |
+| DSH Host | `>=0.1.7-rc.1`, including the Typert Gateway `/api` connection and subprocess capability |
 | Git | `>=2.20.0`, installed and available on `PATH` |
-| Node.js | `>=20.0.0` for the plugin; DSH `dsh-v0.1.7-rc.2` requires `^22.19.0 || >=24.0.0` |
+| Node.js | `>=20.0.0` for the plugin; DSH `dsh-v0.1.7-rc.1` requires `^22.19.0 || >=24.0.0` |
 | Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
 
 ## Behavior and limitations

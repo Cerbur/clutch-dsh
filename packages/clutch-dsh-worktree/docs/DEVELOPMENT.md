@@ -20,7 +20,7 @@
 
 本插件的本地开发、调试与全量联调以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness) 的源码 checkout 为准。
 
-> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.1.5-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.1.7-rc.2`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
+> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.1.7-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.1.7-rc.2`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
 
 克隆并构建 upstream DSH：
 
