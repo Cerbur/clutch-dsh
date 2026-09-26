@@ -1,4 +1,4 @@
-import { IconFolderClose16, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconFolderClose16, IconFolderOpen16 } from '../../dsh-icons.js';
 import { useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { WorktreeGitChangedFile, WorktreeGitFileStatus } from '../../../contract/index.js';

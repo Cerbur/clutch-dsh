@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import semver from 'semver';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -92,9 +93,9 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   });
 });
 
-test('declares the dsh-v0.1.5-rc.1 compatibility floor', () => {
-  const minimumDshVersion = '>=0.1.5-rc.1';
-  const validatedDshVersion = '0.1.2-rc.1';
+test('accepts the DSH 0.1.7 prerelease graph while preserving the compatibility floor', () => {
+  const minimumDshVersion = '0.1.7-rc.1';
+  const validatedDshVersion = '0.1.7-rc.2';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -103,11 +104,15 @@ test('declares the dsh-v0.1.5-rc.1 compatibility floor', () => {
   assert.ok(dshPeerDependencies.length > 0);
   assert.ok(dshDevDependencies.length > 0);
   for (const [name, version] of dshPeerDependencies) {
-    assert.equal(version, minimumDshVersion, `${name} must expose the rc.1 compatibility floor`);
+    assert.equal(semver.satisfies(minimumDshVersion, version), true, `${name} must preserve the compatibility floor`);
+    assert.equal(semver.satisfies(validatedDshVersion, version), true, `${name} must accept DSH ${validatedDshVersion}`);
   }
   for (const [name, version] of dshDevDependencies) {
-    assert.equal(version, validatedDshVersion, `${name} must match the rc.1 validation graph`);
+    assert.equal(version, validatedDshVersion, `${name} must match the DSH ${validatedDshVersion} validation graph`);
   }
+  assert.equal(packageManifest.peerDependencies['@deepseek-ai/cordis'], '^4.0.1');
+  assert.equal(semver.satisfies('4.0.4', packageManifest.peerDependencies['@deepseek-ai/cordis']), true);
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/cordis'], '4.0.4');
   assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
   assert.doesNotMatch(JSON.stringify(packageManifest), /0\.1\.0-rc\.8/);
@@ -118,11 +123,11 @@ test('declares the dsh-v0.1.5-rc.1 compatibility floor', () => {
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '>=0.1.5-rc.1',
+    '>=0.1.7-rc.1',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.1.2-rc.1',
+    '0.1.7-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);

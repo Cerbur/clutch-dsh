@@ -1,4 +1,4 @@
-import { IconRightUpOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconRightUpOutline16 } from '../../dsh-icons.js';
 import { useEffect, useMemo, useState } from 'react';
 import type { WorktreeGitDiffSegment, WorktreeGitFileDiff } from '../../../contract/index.js';
 import type { WorktreeTranslate } from '../../surface/types.js';

@@ -23,23 +23,31 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
-## DSH `dsh-v0.1.2-rc.1` Client boundary
+## DSH Client boundary
 
-The browser Consumer targets the public rc.1 Client graph. Browser-local stores import
-`createSnapshotStore` and `defineStore` from `@deepseek-ai/dsh-client-store`; the removed
-The legacy monolithic Client runtime entry is not probed or used as a fallback.
+The browser Consumer uses the split Controller/Store graph introduced in
+`dsh-v0.1.2-rc.1`; the current validation graph is `dsh-v0.1.7-rc.2`. Browser-local
+stores import `createSnapshotStore` and `defineStore` from
+`@deepseek-ai/dsh-client-store`. The removed monolithic Client runtime entry is not probed or
+used as a fallback.
 
 The injected DSH services have deliberately separate read and command faces:
 
-- `ctx.sessions.list` is the read-only `ObservableSnapshot<SessionListState>`, while Session
-  creation, opening, and fork use `ctx.sessions.create()`, `ctx.sessions.open()`, and
-  `ctx.sessions.fork()`.
+- `ctx.sessions.list` is the read-only `ObservableSnapshot<SessionListState>`. Creation and fork
+  use `ctx.sessions.create()` and `ctx.sessions.fork()`; navigation uses
+  `ctx.uiWorkspace.openSession()` on DSH 1.7 and falls back to `ctx.sessions.open()` on legacy
+  clients.
 - `ctx.workspaces.list` is the read-only `WorkspaceSource` with only `getSnapshot()` and
   `subscribe()`. Workspace creation, rename, deletion, ordering, and archive commands use the
   corresponding `ctx.workspaces` methods; the Consumer never performs writable-list mutation.
 - `ctx.uiWorkspace` owns cross-Controller navigation and directory UI: Main Session creation uses
-  `startSession()`, and the Workspace picker uses `pickDirectory()` before calling the native
-  Workspace Controller's `create()` command.
+  `startSession()`, Worktree Session opening uses `openSession()`, and the Workspace picker uses
+  `pickDirectory()` before calling the native Workspace Controller's `create()` command.
+
+On DSH 1.7, `SessionListState` no longer carries a `current` field: the selected Main Session is
+read from the `retainedBy.mainView` owner count. Rename actions use `ctx.sessions.using()` to
+acquire a temporary reference because `binding(id)` is borrow-only; pre-1.7 clients retain their
+listed-binding fallback.
 
 The Client receives one identity-stable `ctx.workspaces.list` object from DSH. The browser-only
 Worktree membership projection wraps that same source's read methods, reprojects every native
@@ -369,9 +377,9 @@ never clears a stored choice.
 
 ### Current Session reveal and positioning
 
-The Worktree surface reads DSH sessions.current as the only current-Session fact.
-The matching Main, active Worktree, or detached Worktree row receives the current
-marker. When Worktree mode opens or sessions.current changes, the Client clears
+The Worktree surface reads the legacy DSH `current` field when available; on DSH 1.7 it derives
+the selected Session from the `mainView` retention count. The matching Main, active Worktree, or
+detached Worktree row receives the current marker. When Worktree mode opens or the selected Session changes, the Client clears
 a search that would hide the row, temporarily expands the Workspace/Main/Worktree
 path (including the parent `Archived` group when the current Session belongs to an
 archived Worktree, with manual collapse suppression), expands the five-row Session overflow only when

@@ -1,4 +1,4 @@
-import { IconArchiveOutline20 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconArchiveOutline20 } from '../../dsh-icons.js';
 import { aggregateSessionStatus } from '../../session/session-view.js';
 import { filterArchivedSessionIds } from '../../view/worktree-view.js';
 import styles from '../../worktree.css';

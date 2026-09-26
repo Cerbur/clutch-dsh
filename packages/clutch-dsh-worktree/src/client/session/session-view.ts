@@ -1,3 +1,5 @@
+import { currentSessionIdFromList } from './session-selection.js';
+
 /** Browser-visible DSH Session summary facts used by the Worktree tree. */
 export interface SessionSummaryLike {
   /** Native DSH's empty-log bit. Missing is treated as non-blank. */
@@ -9,6 +11,7 @@ export interface SessionSummaryLike {
   readonly parentId?: string;
   readonly origin?: 'subagent' | string;
   readonly updatedAt?: number;
+  readonly retainedBy?: { readonly mainView?: number | undefined } | undefined;
 }
 
 export type PendingInteractionStatus = 'approval' | 'plan-review' | 'question';
@@ -277,7 +280,7 @@ function isVisibleSession(
   sessionId: string,
   sessions: Pick<SessionListLike, 'byId' | 'current'>,
 ): boolean {
-  return !isBlankSession(sessionId, sessions) || sessions.current === sessionId;
+  return !isBlankSession(sessionId, sessions) || currentSessionIdFromList(sessions) === sessionId;
 }
 
 /** Filter a group without mutating its source order. */

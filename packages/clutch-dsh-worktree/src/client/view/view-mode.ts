@@ -1,4 +1,5 @@
 import type { ActionsDecl } from '@deepseek-ai/dsh-client-ui-slots';
+import { currentSessionIdFromList } from '../session/session-selection.js';
 
 /** Peer navigation modes owned by this browser Consumer. */
 export type WorktreeViewMode = 'workspace-session' | 'worktree';
@@ -116,10 +117,11 @@ export interface WorkspaceListLike {
 
 export interface SessionLike {
   readonly updatedAt?: number;
+  readonly retainedBy?: { readonly mainView?: number | undefined } | undefined;
 }
 
 export interface SessionListLike {
-  readonly current?: string;
+  readonly current?: string | undefined;
   readonly byId: Readonly<Record<string, SessionLike | undefined>>;
 }
 
@@ -168,7 +170,7 @@ export function initialWorkspaceId(
   workspaces: WorkspaceListLike,
   sessions: SessionListLike,
 ): string | undefined {
-  const currentSessionId = sessions.current;
+  const currentSessionId = currentSessionIdFromList(sessions);
   if (currentSessionId !== undefined) {
     const currentWorkspace = workspaces.items.find((workspace) =>
       workspace.sessionIds.includes(currentSessionId),

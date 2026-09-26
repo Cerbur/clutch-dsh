@@ -66,7 +66,7 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /renameSession/);
   assert.match(source, /forkSession/);
   assert.match(source, /archiveSession/);
-  assert.match(source, /ctx\.sessions\.binding/);
+  assert.match(source, /renameWorktreeSession/);
   assert.match(source, /ctx\.sessions\s*\.fork/);
   assert.match(source, /ctx\.workspaces\.archiveSession/);
   assert.match(source, /renameWorkspace/);
@@ -77,6 +77,113 @@ test('injects native Session actions into the Worktree surface', async () => {
   assert.match(source, /ctx\.workspaces\.delete/);
   assert.match(source, /ctx\.workspaces\.insertBefore/);
   assert.match(source, /ctx\.workspaces\.insertSessionBefore/);
+});
+
+test('adapts both size-named and weighted DSH icon exports', async () => {
+  const { createDshIconAlias } = await import('../lib/client/dsh-icon-compat.js');
+  const legacyIcon = () => null;
+  const weightedIcon = () => null;
+  const legacyAlias = createDshIconAlias({ IconBranchOutline16: legacyIcon }, 'IconBranchOutline16', 'IconBranchOutlineRegular');
+  const weightedAlias = createDshIconAlias({ IconBranchOutlineRegular: weightedIcon }, 'IconBranchOutline16', 'IconBranchOutlineRegular');
+
+  assert.equal(legacyAlias({ size: 14 }).type, legacyIcon);
+  assert.equal(weightedAlias({ size: 14 }).type, weightedIcon);
+  assert.throws(
+    () => createDshIconAlias({}, 'IconBranchOutline16', 'IconBranchOutlineRegular')({}),
+    /Missing DSH icon export/,
+  );
+});
+
+test('renames a listed Worktree Session when DSH has not retained its generation', async () => {
+  const sessionId = 'session-f9ba560d-8497-42d8-9cbd-4508d5f6ce77';
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: {
+      phase: 'ready',
+      ids: [sessionId],
+      byId: {
+        [sessionId]: {
+          id: sessionId,
+          displayTitle: 'Old Worktree Session',
+          running: false,
+          blank: false,
+          cwd: '/tmp/legacy-worktree',
+          updatedAt: 1,
+        },
+      },
+      current: undefined,
+    },
+  });
+  const renameCalls = [];
+  const usingCalls = [];
+  let releases = 0;
+  fixture.fakeContext.sessions.binding = (id) => {
+    assert.equal(id, sessionId);
+    return undefined;
+  };
+  fixture.fakeContext.sessions.using = async (target, options, operation) => {
+    usingCalls.push({ target, options });
+    const reference = {
+      binding: {
+        session: {
+          async rename(title) {
+            renameCalls.push({ sessionId: target, title });
+            return { ok: true, value: { title, seq: 2 } };
+          },
+        },
+      },
+      release() {
+        releases += 1;
+      },
+    };
+    try {
+      return await operation(reference);
+    } finally {
+      reference.release();
+    }
+  };
+
+  const overlay = fixture.registrationsBySlot.get('shell.overlay');
+  await overlay.options.inject().renameSession(sessionId, 'Renamed from Worktree');
+
+  assert.deepEqual(usingCalls, [{ target: sessionId, options: { source: 'workspaceOperation' } }]);
+  assert.deepEqual(renameCalls, [{ sessionId, title: 'Renamed from Worktree' }]);
+  assert.equal(releases, 1);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('opens Worktree Sessions through DSH uiWorkspace navigation when available', async () => {
+  const sessionId = 'session-f9ba560d-8497-42d8-9cbd-4508d5f6ce77';
+  const fixture = await loadClientEntry();
+  const opened = [];
+  fixture.fakeContext.uiWorkspace.openSession = (id) => opened.push(id);
+  fixture.fakeContext.sessions.open = () => {
+    throw new Error('legacy Session open must not be used when uiWorkspace.openSession exists');
+  };
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  overlay.openSession(sessionId);
+  assert.deepEqual(opened, [sessionId]);
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('renames through the legacy listed-session binding when retain APIs are unavailable', async () => {
+  const sessionId = 'session-legacy-binding';
+  const renameCalls = [];
+  const fixture = await loadClientEntry();
+  delete fixture.fakeContext.sessions.using;
+  fixture.fakeContext.sessions.binding = (id) => ({
+    session: {
+      async rename(title) {
+        renameCalls.push({ sessionId: id, title });
+        return { ok: true, value: { title, seq: 1 } };
+      },
+    },
+  });
+
+  const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
+  await overlay.renameSession(sessionId, 'Legacy rename');
+
+  assert.deepEqual(renameCalls, [{ sessionId, title: 'Legacy rename' }]);
+  for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
 test('wraps the shared native fork entry point for Worktree child binding', async () => {
@@ -1031,9 +1138,9 @@ test('declares the native Conversation package without depending on a Hero conte
   );
   assert.equal(
     manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'],
-    '>=0.1.5-rc.1',
+    '>=0.1.7-rc.1',
   );
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.2-rc.1');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.7-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);

@@ -1,10 +1,10 @@
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   IconCloseFill14,
   IconCloseOutline16,
   IconProjectAddOutline16,
   IconSearchOutline16,
-  Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives';
+} from '../../dsh-icons.js';
 import styles from '../../worktree.css';
 import { cx, IconCollapseAll16 } from '../shared.js';
 import type { WorktreeSurfaceProps } from '../types.js';

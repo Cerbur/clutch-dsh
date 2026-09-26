@@ -1,4 +1,4 @@
-import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconBranchOutline16 } from '../../dsh-icons.js';
 import type { SessionBinding, WorktreeRecord } from '../../../contract/index.js';
 import {
   filterVisibleSessionIds,

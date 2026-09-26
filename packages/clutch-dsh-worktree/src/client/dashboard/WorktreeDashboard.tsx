@@ -2,21 +2,24 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
   Button,
-  IconBranchOutline16,
-  IconCheckOutline16,
-  IconCopyOutline16,
-  IconEditOutline16,
-  IconPanelLeftOutline16,
-  IconSearchOutline16,
   Input,
   Modal,
   StateDot,
   Tooltip,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives';
+import {
+  IconBranchOutline16,
+  IconCheckOutline16,
+  IconCopyOutline16,
+  IconEditOutline16,
+  IconPanelLeftOutline16,
+  IconSearchOutline16,
+} from '../dsh-icons.js';
 import type { DashboardRecord } from './dashboard-selection.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { isBlankSession, relativeTime, sessionDisplayLabel } from '../session/session-view.js';
+import { currentSessionIdFromList } from '../session/session-selection.js';
 import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
 import { sessionStatusLabel, sessionTimeLabel } from '../session/session-labels.js';
 import { OpenInAppButton } from './OpenInAppButton.js';
@@ -589,7 +592,7 @@ export function WorktreeDashboard({
               <button
                 type="button"
                 data-dashboard-session={sessionId}
-                aria-current={sessions.current === sessionId ? 'page' : undefined}
+                aria-current={currentSessionIdFromList(sessions) === sessionId ? 'page' : undefined}
                 onClick={() => onOpenSession(sessionId)}
               >
                 <DashboardIcon kind="sessions" />

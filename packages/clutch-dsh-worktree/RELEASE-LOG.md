@@ -1,5 +1,23 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.15 — 2026-09-27
+
+### 中文
+
+#### 优化
+
+- 全面适配 DSH 0.1.7 系列版本（支持 `>=0.1.7-rc.1` 及已验证的 `0.1.7-rc.2`），更新 Session 导航、重命名与选中适配层，兼容 DSH 1.7 移除 `current` 字段后的 `mainView` 归属与 `using()` 生命周期。
+- 采用 producer-owned 指令来源 `plugin:@cerbur/clutch-dsh-worktree` 注入 Worktree 与 Main 指令，并向前兼容读取 DSH 历史指令来源。
+- 桥接 TypertLookup 生成元数据，提升在新版 DSH typert 协议下的类型与 RPC 生成稳定性。
+
+### English
+
+#### Improved
+
+- Add full compatibility for DSH 0.1.7 releases (supporting `>=0.1.7-rc.1` and the verified `0.1.7-rc.2` release graph), adapting Session navigation, rename, and selection to handle DSH 1.7's `mainView` retention and `using()` lifecycle without the deprecated `current` field.
+- Use producer-owned instruction source `plugin:@cerbur/clutch-dsh-worktree` when injecting Worktree and Main instructions, while retaining backward-compatible recognition of historical sources.
+- Bridge TypertLookup in typert protocol metadata for resilient type and RPC descriptor generation under newer DSH runtimes.
+
 ## 0.1.14 — 2026-09-22
 
 ### 中文
