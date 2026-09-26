@@ -10,6 +10,7 @@ import {
 import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title';
 import { registerTemplateSettings } from './settings.js';
 import { createTitleStatsStore, installTitleTokenStatsRecorder } from './storage.js';
+import { createTitleDiagnosticsStore } from './diagnostics.js';
 import { TitleRemoteService } from './host/remote.js';
 
 export const name = 'clutch-dsh-title';
@@ -21,7 +22,8 @@ export const Config: z<Config> = TitleConfigSchema;
 export function apply(ctx: Context, config: Config): void {
   const statsStore = createTitleStatsStore(ctx);
   installTitleTokenStatsRecorder(ctx, statsStore);
-  new TitleRemoteService(ctx, statsStore);
+  const diagnosticsStore = createTitleDiagnosticsStore(ctx);
+  new TitleRemoteService(ctx, statsStore, diagnosticsStore);
 
   const initial = resolveTitleConfig(config);
   let read = () => ({ enabled: true, config: initial });
@@ -67,7 +69,9 @@ export function apply(ctx: Context, config: Config): void {
           ? {}
           : { provider: initial.provider, model: initial.model }),
       };
-      return createTitleProvider(settingsContext ?? ctx, selected).generate(request);
+      return createTitleProvider(settingsContext ?? ctx, selected, diagnosticsStore).generate(
+        request,
+      );
     },
   });
 }
@@ -80,10 +84,19 @@ export {
   validateExtractedFields,
 } from './fields.js';
 export { createTitleProvider, hasLlmFields, mergeFieldValues } from './provider.js';
-export { resolveTitleConfig, TitleConfigSchema } from './config.js';
+export { MAX_REPAIR_ATTEMPTS, resolveTitleConfig, TitleConfigSchema } from './config.js';
+export {
+  createTitleDiagnosticsStore,
+  MAX_PENDING_INCIDENTS,
+  TitleDiagnosticsStoreImpl,
+} from './diagnostics.js';
 export { TitleRemoteService } from './host/remote.js';
 export type {
   CompiledTemplate,
+  TitleDiagnostics,
+  TitleDiagnosticsRecorder,
+  TitleExtractionAttemptRecord,
+  TitleExtractionIncident,
   DateTimeFieldConfig,
   ExtractedLlmFields,
   LiteralFieldConfig,

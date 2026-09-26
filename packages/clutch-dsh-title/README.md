@@ -122,6 +122,12 @@ tokens, output tokens, total tokens, and the latest call details when the model 
 requires confirmation. Deterministic-only templates make no model request and therefore do not add a
 generation statistic.
 
+A generation whose first response is unusable does not disappear silently. The package records the
+incident, the rejection reason, and the bounded raw response in the clutch_title_diagnostics storage
+domain, exposes the same record through the titleStats remote namespace (getDiagnostics and
+resetDiagnostics), and logs one warning per incident. The Settings panel currently shows token
+statistics only; diagnostics are read from the storage domain.
+
 ## Template reference
 
 Templates use simple field substitution:
@@ -150,6 +156,13 @@ package does not use browser storage or clutch.yaml.
 External edits to the settings file are picked up by DSH's settings reload path. Invalid template
 entries remain visible in Settings so they can be repaired instead of silently disappearing.
 
+Profile configuration may additionally set:
+
+- repairAttempts: how many extra model calls one title generation may spend after the model returns
+  unusable output. Defaults to 1; accepted values are 0 through 3, and larger values are rejected.
+  These calls share the single timeoutMs budget and are never used for transport, cancellation, or
+  deadline failures.
+
 ## Behavior and limitations
 
 - Only the first eligible user prompt contributes to an automatic title. Later messages do not
@@ -161,7 +174,18 @@ entries remain visible in Settings so they can be repaired instead of silently d
 - If the active template is missing or invalid, the settings manager uses the built-in default
   template.
 - If field extraction, rendering, or custom title generation fails, DSH's normal first-prompt
-  generator handles the title instead.
+  generator handles the title instead. That fallback is DSH's own truncation of the first prompt, so
+  it does not follow the template.
+- The model is asked for exactly one JSON object whose keys are exactly the declared fields, one of
+  the declared literal values for each enum field, and a literal shape example. When a response is
+  still unusable, the package sends one bounded corrective turn that quotes the rejected response
+  back verbatim and states the rejection reason, up to repairAttempts extra calls.
+- Only unusable output is repaired. A transport error, a cancellation, or an exhausted deadline
+  keeps its own error and falls back immediately; every attempt shares the one timeoutMs budget.
+- Each incident is logged once with its provider, model, message seqs, rejection reason, and the raw
+  response bounded to 2000 characters, and is persisted in the clutch_title_diagnostics storage
+  domain (at most four attempts per incident, and at most 64 incidents buffered in memory while
+  storage is unavailable). Persistence is best effort and never delays or fails a title.
 - DSH remains responsible for title length limits, title persistence, manual rename pinning,
   refresh and unpin behavior, fork title-event inheritance, cancellation, and stale-result
   protection.

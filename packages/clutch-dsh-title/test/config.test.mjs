@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout';
 
-const { resolveTitleConfig } = await import('../lib/config.js');
+const { MAX_REPAIR_ATTEMPTS, resolveTitleConfig } = await import('../lib/config.js');
 
 test('leaves reasoning effort undefined by default and accepts adapter IDs or explicit null', () => {
   assert.equal(resolveTitleConfig({}).reasoningEffort, undefined);
@@ -253,4 +253,14 @@ test('requires provider and model together and validates request budgets', () =>
   assert.throws(() => resolveTitleConfig({ maxInputBytes: 0 }), /maxInputBytes/i);
   assert.throws(() => resolveTitleConfig({ maxOutputTokens: 0 }), /maxOutputTokens/i);
   assert.throws(() => resolveTitleConfig({ timeoutMs: MAX_TIMER_DELAY_MS + 1 }), /timeout/i);
+});
+
+test('defaults to one repair attempt and bounds the configured value', () => {
+  assert.equal(resolveTitleConfig({}).repairAttempts, 1);
+  for (const repairAttempts of [0, 1, 2, MAX_REPAIR_ATTEMPTS]) {
+    assert.equal(resolveTitleConfig({ repairAttempts }).repairAttempts, repairAttempts);
+  }
+  for (const repairAttempts of [-1, 1.5, MAX_REPAIR_ATTEMPTS + 1, '1', true, {}, []]) {
+    assert.throws(() => resolveTitleConfig({ repairAttempts }), /repairAttempts/);
+  }
 });
