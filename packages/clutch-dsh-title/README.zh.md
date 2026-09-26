@@ -165,7 +165,7 @@ source-of-truth 设置后，DSH 的重新加载路径会读取这些修改。非
   @deepseek-ai/dsh-client-ui-slots、@deepseek-ai/dsh-client-ui-primitives、
   @deepseek-ai/dsh-llm、@deepseek-ai/dsh-session、@deepseek-ai/dsh-session-title、
   @deepseek-ai/dsh-session-title-llm、@deepseek-ai/dsh-timeout 和
-  @deepseek-ai/dsh-util-values，全部要求 >=0.1.2-rc.1 或 >=0.1.7-rc.1。
+  @deepseek-ai/dsh-util-values，全部要求 >=0.1.7-rc.1。
 - Cordis：@deepseek-ai/cordis ^4.0.1。
 - 运行 DSH `dsh-v0.1.7-rc.1` 需要 Node.js `^22.19.0 || >=24.0.0`。
 - Profile：提供 package 所声明的 session、session-title、LLM、settings、storage、remote

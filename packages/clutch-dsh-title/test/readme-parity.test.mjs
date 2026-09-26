@@ -93,8 +93,8 @@ test('English and Chinese README files keep the public documentation contract al
   const sourceInstall = 'pnpm dsh plugin --profile web add ' + localPath;
   assert.ok(readme.includes(sourceInstall));
   assert.ok(readmeZh.includes(sourceInstall));
-  assert.ok(readme.includes('>=0.1.2-rc.1'));
-  assert.ok(readmeZh.includes('>=0.1.2-rc.1'));
+  assert.ok(readme.includes('>=0.1.7-rc.1'));
+  assert.ok(readmeZh.includes('>=0.1.7-rc.1'));
   assert.ok(!/0\.1\.3/.test(readme));
   assert.ok(!/0\.1\.3/.test(readmeZh));
 

@@ -20,7 +20,7 @@ test('package manifest exposes a public DSH plugin with a settings browser entry
   assert.equal(packageJson.clutchDsh.role, 'plugin');
   assert.equal(packageJson.clutchDsh.serviceDefinition, '@cerbur/clutch-dsh-title');
   assert.equal(packageJson.publishConfig.access, 'public');
-  const supportedDshVersions = '>=0.1.2-rc.1 || >=0.1.7-rc.1';
+  const supportedDshVersions = '>=0.1.7-rc.1';
   assert.equal(
     packageJson.peerDependencies['@deepseek-ai/dsh-session-title'],
     supportedDshVersions,
