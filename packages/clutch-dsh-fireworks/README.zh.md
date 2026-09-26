@@ -73,11 +73,11 @@ pnpm dsh web
 
 ## 要求
 
-| 组件    | 要求                                                                                                                                                                                  |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH     | 提供 DSH Session、Session Projection、Tools、UI Renderer、UI Session 和 UI Slots service 的 Web profile。peer 范围覆盖 0.1.2-rc.1 基线和 0.1.7-rc.2；同一范围内的兼容稳定版也可使用。 |
-| Cordis  | `@deepseek-ai/cordis` `4.0.1`，或 package peer range 允许的兼容 `4.x` 版本；DSH 0.1.7-rc.2 使用 `4.0.4`。                                                                             |
-| Browser | 已加载该 plugin Web client bundle 的 DSH Web UI。                                                                                                                                     |
+| 组件    | 要求                                                                                                                                                                    |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH     | 提供 DSH Session、Session Projection、Tools、UI Renderer、UI Session 和 UI Slots service 的 Web profile。peer 范围要求 `>=0.1.7-rc.1`；同一范围内的兼容稳定版也可使用。 |
+| Cordis  | `@deepseek-ai/cordis` `4.0.1`，或 package peer range 允许的兼容 `4.x` 版本；DSH 0.1.7-rc.2 使用 `4.0.4`。                                                               |
+| Browser | 已加载该 plugin Web client bundle 的 DSH Web UI。                                                                                                                       |
 
 ## 行为与限制
 

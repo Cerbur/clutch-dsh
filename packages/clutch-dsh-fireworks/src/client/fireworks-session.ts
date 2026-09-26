@@ -22,10 +22,7 @@ interface SessionListSnapshot {
 export function selectCurrentFireworksSession(
   state: SessionListSnapshot,
 ): { readonly sessionId: string; readonly signal: FireworksProjection | undefined } | undefined {
-  const sessions = (state.byId ?? {}) as Record<
-    string,
-    FireworksSessionRow | null | undefined
-  >;
+  const sessions = (state.byId ?? {}) as Record<string, FireworksSessionRow | null | undefined>;
   const hasLegacyCurrent = Object.hasOwn(state, 'current');
   const legacyCurrentId = Reflect.get(state, 'current');
   const selected = hasLegacyCurrent
