@@ -7,7 +7,7 @@ Make `@cerbur/clutch-dsh-title` work with the DSH `dsh-v0.1.7-rc.1` release whil
 ## Compatibility findings
 
 - DSH 0.1.7's LLM `MessageSourceMap` is merge-extensible and no longer has the catch-all `{ kind: 'plugin', plugin: string }` source. `src/extractor.ts` used that removed source shape for its structured field-extraction request.
-- Declare the plugin-owned `clutch-dsh-title` source kind through module augmentation using DSH's `ContextFormed` type, and emit `{ kind: 'clutch-dsh-title' }`. This changes only attribution metadata on the internal extraction message; prompt, route, and output remain unchanged.
+- Use DSH's shared `{ kind: 'dsh-session-title-llm' }` source on the wrapper message recorded by `session/title-llm-request`; format v4 restoration requires this source kind. Keep `clutch-dsh-title` as the request's `titleProvider`, which records the actual provider identity. The system prompt, user content, route, and output remain unchanged.
 - Keep the editable emoji template's `desc.maxCharacters` at 64 in both `src/templates.ts` and `cordis.patch.yml`. This is an intentional shared default across supported DSH versions, not a version-specific behavior change.
 - DSH 0.1.7 renamed public primitives icons from fixed pixel-suffix names to size variants; `IconPlusOutline16` is no longer exported. Use a tiny title-owned SVG for the same plus affordance, avoiding reliance on a DSH-version-specific icon export.
 - DSH 0.1.7 replaced `SettingsProvider.register()` with profile-backed `SettingsForms` over volatile fields on the plugin Config. Preserve the existing `enabled`, `active`, and `templates` data by declaring those optional fields volatile, disabling the generated generic form, and reading the plain base/user descriptor; retain the legacy `register()` branch for older DSH. DSH's settings importer migrates the legacy settings.yaml namespace into the profile.
@@ -17,12 +17,14 @@ Make `@cerbur/clutch-dsh-title` work with the DSH `dsh-v0.1.7-rc.1` release whil
 
 ## Verification sequence
 
-1. Add regressions asserting the plugin-owned extraction message source and DSH 0.1.7 profile-settings read/configure behavior while retaining legacy SettingsProvider coverage.
+1. Add regressions asserting the DSH-shared extraction message source and DSH 0.1.7 profile-settings read/configure behavior while retaining legacy SettingsProvider coverage.
 2. Install workspace dependencies and run title package typecheck, build, tests, lint, README parity, and workspace/patch checks as applicable.
 3. Install the built title package into the isolated `~/.dsh-test` DSH 0.1.7 profile, start DSH Web on port 3088, and verify startup and title-plugin composition. Do not edit DSH source.
 4. Review the scoped diff and commit only title-plugin compatibility changes.
 
 ## Verification record
+
+- 2026-09-27 session-reload follow-up: a title request recorded with source kind `clutch-dsh-title` fails DSH 0.1.7-rc.2 format-v4 relationship validation with `session/title-llm-request messages do not represent messageSeqs`. Changing only the wrapper message source to `dsh-session-title-llm` allows the same validator to pass; the title provider identity remains `clutch-dsh-title`.
 
 - Before the requested rc1 pin, `pnpm install --filter @cerbur/clutch-dsh-title --ignore-scripts --registry=https://registry.npmjs.org` passed on the original rc2 dependency graph. An unfiltered workspace install attempted the unrelated `clutch-dsh-worktree` prepare script and failed on its mixed Cordis peer graph, so dependency linking was filtered to this package without running unrelated lifecycle scripts.
 - Before the requested rc1 pin, title package typecheck, lint, and test passed on the original rc2 dependency graph; the package suite reports 115/115 passing. The test command includes the package build.

@@ -189,11 +189,10 @@ Cordis configuration using template and fields remains supported. When those val
 profile configuration, Settings exposes them as an editable legacy row. The current Settings template
 manager and the legacy configuration use the same validation rules.
 
-The plugin marks its extraction request with the `clutch-dsh-title` LLM message-source kind. DSH
-0.1.7 uses a merge-extensible source map instead of the catch-all `plugin` kind; the package
-declares its source kind without changing title-generation behavior. DSH 0.1.7 also replaces the
-old settings registration API with profile-backed volatile Config fields; the same title editor uses
-those fields, and DSH imports existing legacy settings during profile migration.
+The plugin marks its extraction wrapper message with DSH's native `dsh-session-title-llm` message-source
+kind to satisfy format v4 validation during session reload, while recording `clutch-dsh-title` as the title
+provider. DSH 0.1.7 also replaces the old settings registration API with profile-backed volatile Config
+fields; the same title editor uses those fields, and DSH imports existing legacy settings during profile migration.
 
 Model routing and optional reasoning settings are profile-level configuration, not template field
 settings. Keep the DSH default title provider disabled and do not compose a second title provider
