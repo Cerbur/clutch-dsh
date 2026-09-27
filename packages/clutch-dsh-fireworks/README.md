@@ -77,11 +77,11 @@ supported as well as direct top-level tool results.
 
 ## Requirements
 
-| Component | Requirement                                                                                                                                               |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH       | A Web profile providing the DSH Session, Session Projection, Tools, UI Renderer, UI Session, and UI Slots services at the package's declared peer ranges. |
-| Cordis    | `@deepseek-ai/cordis` `4.0.1` or a compatible version allowed by the package peer range.                                                                  |
-| Browser   | DSH Web UI with the plugin's Web client bundle loaded.                                                                                                    |
+| Component | Requirement                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH       | A Web profile providing the DSH Session, Session Projection, Tools, UI Renderer, UI Session, and UI Slots services. Peer ranges require `>=0.1.7-rc.1`; compatible stable releases are accepted by the same ranges. |
+| Cordis    | `@deepseek-ai/cordis` `4.0.1` or a compatible `4.x` version allowed by the package peer range; DSH 0.1.7-rc.2 uses `4.0.4`.                                                                                         |
+| Browser   | DSH Web UI with the plugin's Web client bundle loaded.                                                                                                                                                              |
 
 ## Behavior and limitations
 
