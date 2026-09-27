@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.5 — 2026-09-27
+
+### 中文
+
+#### 修复
+
+- 优化标题提取包装消息来源为 DSH 原生 `dsh-session-title-llm` 类型，解决 DSH 0.1.7 会话重新加载时的 format v4 关系校验失败问题，并保留 `clutch-dsh-title` 标题提供者标识。
+
+### English
+
+#### Fixed
+
+- Set the title extraction wrapper message source to DSH native `dsh-session-title-llm` to resolve format v4 validation errors during session reload, while retaining `clutch-dsh-title` as the title provider identity.
+
 ## 0.1.4 — 2026-09-26
 
 ### 中文
