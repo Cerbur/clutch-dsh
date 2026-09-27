@@ -1,12 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
-import type { ContextFormed, FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
-
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    'clutch-dsh-title': { kind: 'clutch-dsh-title' } & ContextFormed;
-  }
-}
+import type { FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
 import type { SessionTitleLlmRequestEventData } from '@deepseek-ai/dsh-session-title-llm';
 import { SESSION_TITLE_TIMEOUT_CODE } from '@deepseek-ai/dsh-session-title-llm';
 import { deadline } from '@deepseek-ai/dsh-timeout';
@@ -163,7 +157,7 @@ export async function extractLlmFields(
   const messages: Message[] = [
     createUserMessage({
       content: [{ type: 'text', text: framedInput }],
-      source: { kind: 'clutch-dsh-title' },
+      source: { kind: 'dsh-session-title-llm' },
     }),
   ];
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE);
