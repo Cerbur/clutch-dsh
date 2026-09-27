@@ -1,5 +1,14 @@
 # 发布记录
 
+## 0.1.4 — 2026-09-26
+
+### 中文
+
+#### 修复
+
+- 适配 DSH 0.1.7 会话 API 与主视图选定会话变更，并在会话状态异常或缺失时提供安全回退。
+- 将 DSH 依赖基线更新为 `>=0.1.7-rc.1`，并对齐 Cordis `^4.0.1` peer 依赖范围。
+
 ## 0.1.3 — 2026-09-10
 
 ### 中文
@@ -41,6 +50,15 @@
 - 将每次礼花扩展为 40 个视觉元素，并保证 🎉、🌟 和 ✨ 的最低数量，同时提供 seeded variety。
 
 # Release log
+
+## 0.1.4 — 2026-09-26
+
+### English
+
+#### Fixed
+
+- Adapt to DSH 0.1.7 session APIs and main-view session selection, with safe fallback when session state is malformed or absent.
+- Update DSH peer dependency baseline to `>=0.1.7-rc.1` and align Cordis peer dependency range to `^4.0.1`.
 
 ## 0.1.3 — 2026-09-10
 
