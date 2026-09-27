@@ -176,10 +176,9 @@ source-of-truth 设置后，DSH 的重新加载路径会读取这些修改。非
 通过 Cordis 配置提供的 template 和 fields 仍然兼容。当这些值来自 profile 配置时，设置页面
 会将它们显示为可编辑的 legacy 行。当前设置模板管理器和 legacy 配置使用相同的校验规则。
 
-本插件的字段提取请求使用 `clutch-dsh-title` LLM 消息来源类型。DSH 0.1.7 使用可合并扩展的来源映射，
-不再提供通用的 `plugin` 类型；本 package 会声明自己的来源类型，标题生成行为保持不变。DSH 0.1.7
-还将旧 settings 注册 API 替换为 profile 中的 volatile Config 字段；同一标题编辑器继续使用这些字段，
-并由 DSH 在 profile 迁移时导入旧 settings。
+本插件的字段提取包装消息使用 DSH 原生的 `dsh-session-title-llm` 消息来源类型，以满足会话重新加载时的
+format v4 关系校验，同时记录 `clutch-dsh-title` 作为标题提供者。DSH 0.1.7 还将旧 settings 注册 API
+替换为 profile 中的 volatile Config 字段；同一标题编辑器继续使用这些字段，并由 DSH 在 profile 迁移时导入旧 settings。
 
 模型路由和可选的 reasoning 设置属于 profile 级配置，不属于模板字段设置。请保持 DSH 默认
 title provider 关闭，也不要将第二个 title provider 与本 package 组合。
