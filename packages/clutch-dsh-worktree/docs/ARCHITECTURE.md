@@ -83,6 +83,8 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 
 Sidecar 文件损坏或不可用时，原始 Project / Session 视图必须保持完全可读；插件进入降级只读状态，严禁使用空索引覆盖已有的数据。
 
+DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree 列表、Session 绑定与已记录指令继续按 Sidecar 事实渲染，Git 相关读取以专用错误码 `WORKSPACE_ROOT_MISSING` 明确失败并由 Client 显示本地化的目录缺失状态（`workspaceMissing`），创建、导入、清理等写操作保持拒绝。只有 `stat` 明确返回 `ENOENT` 才判定根目录确实缺失；未知 Workspace、非绝对 root、存在但不是目录以及无法解析的 root 继续使用 `WORKSPACE_NOT_FOUND` 并保留各自错误语义，绝不被映射为目录缺失。读取降级不得放宽身份校验或写入门禁。
+
 ---
 
 ## 4. 关系模型与运行时 cwd

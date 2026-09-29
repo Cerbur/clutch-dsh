@@ -25,6 +25,7 @@
 - **Sidecar 存储范围**：插件仅在 host 数据目录维护外部关系索引（`projectId`、`worktreeId`、`sessionId`、Worktree 路径、branch、source、生命周期状态、指令，以及获取事实 `createdAt`/`importedAt`、不可变获取 commit `baseCommit` 和用户可改写的 Dashboard 基线 `baseBranch`）。Git ahead/behind、changed-file 行数与 working-tree 快照属于运行时 projection，只读且绝不写入 Sidecar。
 - **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。
 - **降级容灾**：Sidecar 损坏或不可用时，原生 Project/Session 视图必须完全可读；插件进入降级只读状态，严禁使用空索引覆盖 DSH 原始数据。
+- **根目录缺失降级**：仅当 `stat` 明确返回 `ENOENT` 确认 Workspace 根目录确实缺失时，Sidecar 支撑的读取（Worktree 列表、Session 绑定、已记录指令）才允许继续投影，Git 相关读取以专用 `WORKSPACE_ROOT_MISSING` 失败并由 Client 显示本地化的目录缺失状态（`workspaceMissing`）；未知 Workspace、非绝对 root、存在但不是目录或无法解析的 root 必须保留 `WORKSPACE_NOT_FOUND` 语义，严禁误报为目录缺失。降级读取不得放宽身份校验、写入门禁与破坏性操作确认。
 
 ### 2. Session 与运行时 cwd 契约
 

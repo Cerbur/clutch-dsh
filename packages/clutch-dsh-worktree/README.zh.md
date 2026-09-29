@@ -273,6 +273,9 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 - Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
+- Workspace 根目录缺失时，Worktree 视图仍会渲染索引中的 Worktree、Session 绑定和指令，并显示
+  本地化的目录缺失状态，而不会让整个视图读取失败。该 Workspace 的 Git 读取、Worktree 创建与
+  导入以及清理操作仍会被拒绝，直到目录恢复。
 - 如果插件的外部索引不可用或损坏，原生 DSH Workspace 和 Session 视图保持完全可读，插件
   进入降级只读状态，绝不会使用空索引覆盖原生数据。
 

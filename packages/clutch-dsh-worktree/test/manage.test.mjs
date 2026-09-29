@@ -20,6 +20,7 @@ import {
   createWorktreeMutationToken,
   createWorktreeManager,
 } from '../lib/index.js';
+import { loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
 
 const execFile = promisify(execFileCallback);
 
@@ -50,6 +51,120 @@ test('shared status filters stale imports and repairs managed stale registration
     );
     assert.equal((await sidecar.read('ws_one')).worktrees.length, 1);
     assert.match((await runGit(workspaceRoot, ['worktree', 'list', '--porcelain'])).stdout, /prunable/);
+  });
+});
+
+test('loads an imported Workspace Worktree view after its root directory disappears', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, sidecar, provider }) => {
+    const imported = {
+      ...makeRecord({
+        worktreeId: 'wt_missing_workspace_root',
+        absolutePath: path.join(tempRoot, 'missing-import'),
+      }),
+      source: 'external',
+      importedAt: new Date().toISOString(),
+    };
+    const binding = makeBinding({
+      worktreeId: imported.worktreeId,
+      sessionId: 'session_missing_workspace_root',
+    });
+    await sidecar.upsertWorktree(imported);
+    await sidecar.upsertBinding(binding);
+    await rm(workspaceRoot, { recursive: true });
+
+    const snapshotBeforeReads = await sidecar.read('ws_one');
+    const view = await loadWorktreeView(provider, 'ws_one');
+    assert.deepEqual(
+      view.worktrees.map(({ worktreeId, health }) => ({ worktreeId, health })),
+      [{ worktreeId: imported.worktreeId, health: 'repair' }],
+    );
+    assert.deepEqual(view.bindings, [binding]);
+    assert.deepEqual(view.branches, []);
+    assert.equal(view.mainInstructions, '');
+    assert.equal(view.readiness.status, 'workspaceMissing');
+    assert.equal(view.readiness.error.code, 'WORKSPACE_ROOT_MISSING');
+    assert.equal(view.readiness.error.details?.rootPath, workspaceRoot);
+    assert.deepEqual(await sidecar.read('ws_one'), snapshotBeforeReads);
+
+    // Sidecar-backed reads keep projecting indexed facts without the root directory.
+    assert.deepEqual(
+      (await provider.listWorktrees({ workspaceId: 'ws_one' })).map((record) => record.worktreeId),
+      [imported.worktreeId],
+    );
+    assert.deepEqual(await provider.listBindings({ workspaceId: 'ws_one' }), [binding]);
+    assert.equal(
+      await provider.getWorktreeInstructions({ workspaceId: 'ws_one', worktreeId: `main:ws_one` }),
+      '',
+    );
+
+    // Git-dependent reads and mutations name the confirmed-missing root instead of the generic code.
+    await expectCode(provider.listBranches({ workspaceId: 'ws_one' }), 'WORKSPACE_ROOT_MISSING');
+    await expectCode(
+      provider.listImportCandidates({ workspaceId: 'ws_one' }),
+      'WORKSPACE_ROOT_MISSING',
+    );
+    await expectCode(
+      provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'must-stay-rejected' }),
+      'WORKSPACE_ROOT_MISSING',
+    );
+    await expectCode(provider.listWorktrees({ workspaceId: 'ws_unknown' }), 'WORKSPACE_NOT_FOUND');
+    assert.deepEqual(await sidecar.read('ws_one'), snapshotBeforeReads);
+  });
+});
+
+test('keeps WORKSPACE_NOT_FOUND for an unknown Workspace instead of reporting a missing root', async () => {
+  await withGitFixture(async ({ provider }) => {
+    await expectCode(provider.listWorktrees({ workspaceId: 'ws_unknown' }), 'WORKSPACE_NOT_FOUND');
+    await expectCode(provider.listBindings({ workspaceId: 'ws_unknown' }), 'WORKSPACE_NOT_FOUND');
+    await expectCode(provider.listBranches({ workspaceId: 'ws_unknown' }), 'WORKSPACE_NOT_FOUND');
+    await expectCode(
+      provider.getWorktreeInstructions({ workspaceId: 'ws_unknown', worktreeId: 'main:ws_unknown' }),
+      'WORKSPACE_NOT_FOUND',
+    );
+    await assert.rejects(
+      loadWorktreeView(provider, 'ws_unknown'),
+      (error) => {
+        assert.equal(error?.code, 'WORKSPACE_NOT_FOUND');
+        assert.equal(error?.details?.workspaceId, 'ws_unknown');
+        return true;
+      },
+    );
+  });
+});
+
+test('keeps WORKSPACE_NOT_FOUND when a Workspace root is unusable but not confirmed missing', async () => {
+  await withGitFixture(async ({ dshHome, tempRoot }) => {
+    // 相对 root 无法解析为绝对路径：属于无效 root，不能被当成目录缺失而降级读取。
+    const relativeProvider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: 'relative/workspace' }),
+      dshHome,
+    });
+    await expectCode(relativeProvider.listWorktrees({ workspaceId: 'ws_one' }), 'WORKSPACE_NOT_FOUND');
+    await assert.rejects(
+      loadWorktreeView(relativeProvider, 'ws_one'),
+      (error) => error?.code === 'WORKSPACE_NOT_FOUND',
+    );
+
+    // root 存在但不是目录：同样不能被降级读取容忍或报告为目录缺失。
+    const fileRoot = path.join(tempRoot, 'root-is-a-file');
+    await writeFile(fileRoot, 'not a directory\n');
+    const fileProvider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: fileRoot }),
+      dshHome,
+    });
+    await assert.rejects(
+      fileProvider.listWorktrees({ workspaceId: 'ws_one' }),
+      (error) => {
+        assert.equal(error?.code, 'WORKSPACE_NOT_FOUND');
+        assert.equal(error?.details?.rootPath, fileRoot);
+        assert.match(error?.message ?? '', /not a directory/);
+        return true;
+      },
+    );
+    await assert.rejects(
+      loadWorktreeView(fileProvider, 'ws_one'),
+      (error) => error?.code === 'WORKSPACE_NOT_FOUND',
+    );
   });
 });
 

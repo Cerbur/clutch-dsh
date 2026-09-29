@@ -9,6 +9,7 @@ import {
 test('exports the approved stable error codes', () => {
   assert.deepEqual(WORKTREE_ERROR_CODES, [
     'WORKSPACE_NOT_FOUND',
+    'WORKSPACE_ROOT_MISSING',
     'WORKSPACE_NOT_GIT_REPOSITORY',
     'GIT_NOT_INSTALLED',
     'WORKTREE_REQUIRES_INITIAL_COMMIT',

@@ -103,9 +103,28 @@ export function generatedId(idFactory: () => string): string {
   return worktreeId;
 }
 
+// 只有 `stat` 明确返回 ENOENT 才判定根目录确实不存在；其他情况（未知 Workspace、
+// 非绝对 root、存在但不是目录、无法解析）保留 `WORKSPACE_NOT_FOUND` 语义。
+// Only an explicit ENOENT from `stat` proves the root directory is gone. Every other
+// case (unknown Workspace, non-absolute root, existing non-directory, unresolvable root)
+// keeps its own `WORKSPACE_NOT_FOUND` semantics.
+function throwWorkspaceRootUnavailable(workspaceId: string, rootPath: string, rootMissing: boolean): never {
+  if (rootMissing) {
+    throw providerError('WORKSPACE_ROOT_MISSING', `Workspace root directory is missing: ${rootPath}`, {
+      workspaceId,
+      rootPath,
+    });
+  }
+  throw providerError('WORKSPACE_NOT_FOUND', `Workspace root is not a directory: ${rootPath}`, {
+    workspaceId,
+    rootPath,
+  });
+}
+
 export async function requireWorkspace(
   context: WorktreeManagerContext,
   workspaceId: string,
+  options: { readonly allowMissingRoot?: boolean } = {},
 ): Promise<DshWorkspaceSummary> {
   const workspace = await context.dsh.getWorkspace(workspaceId);
   if (!workspace || workspace.workspaceId !== workspaceId || !path.isAbsolute(workspace.rootPath)) {
@@ -116,10 +135,9 @@ export async function requireWorkspace(
   }
   const rootPath = path.resolve(workspace.rootPath);
   if (!(await isDirectory(rootPath))) {
-    throw providerError('WORKSPACE_NOT_FOUND', `Workspace root does not exist: ${rootPath}`, {
-      workspaceId,
-      rootPath,
-    });
+    const rootMissing = !(await pathExists(rootPath));
+    if (rootMissing && options.allowMissingRoot) return { ...workspace, rootPath };
+    throwWorkspaceRootUnavailable(workspaceId, rootPath, rootMissing);
   }
   try {
     await realpath(rootPath);
@@ -131,6 +149,24 @@ export async function requireWorkspace(
     });
   }
   return { ...workspace, rootPath };
+}
+
+/** Allow sidecar-backed read projections when DSH still knows a Workspace whose root is gone. */
+export async function requireWorkspaceForRead(
+  context: WorktreeManagerContext,
+  workspaceId: string,
+): Promise<DshWorkspaceSummary> {
+  return requireWorkspace(context, workspaceId, { allowMissingRoot: true });
+}
+
+/** Reject Git-dependent reads when the tolerated Workspace root is not an available directory. */
+export async function requireWorkspaceRoot(workspace: DshWorkspaceSummary): Promise<void> {
+  if (await isDirectory(workspace.rootPath)) return;
+  throwWorkspaceRootUnavailable(
+    workspace.workspaceId,
+    workspace.rootPath,
+    !(await pathExists(workspace.rootPath)),
+  );
 }
 
 // 第一层使用未解析路径验证目标属于插件根且不位于 Workspace 内。
