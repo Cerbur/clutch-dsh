@@ -134,10 +134,14 @@ async function findLiveWorktree(
 async function resolveWorktree(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: string; readonly worktreeId: string },
-): Promise<{ readonly main: true; readonly workspaceRoot: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
+): Promise<{ readonly main: true; readonly workspaceRoot: string; readonly repositoryRoot: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   if (isMainWorktreeId(input.worktreeId, input.workspaceId)) {
-    return { main: true, workspaceRoot: workspace.rootPath };
+    // The imported Workspace can be nested, while committed Git paths are root-relative.
+    const repositoryRoot = context.git.resolveRepositoryRoot
+      ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
+      : workspace.rootPath;
+    return { main: true, workspaceRoot: workspace.rootPath, repositoryRoot };
   }
 
   const snapshot = await context.sidecar.read(input.workspaceId);
@@ -972,6 +976,7 @@ async function selectedAggregateFileDiff(
 async function aggregateMainFileDiff(
   context: WorktreeManagerContext,
   workspaceRoot: string,
+  repositoryRoot: string,
   worktreeId: string,
   selection: Extract<WorktreeGitDiffSelection, { readonly kind: 'commits' }>,
   requestedPath: string,
@@ -984,7 +989,7 @@ async function aggregateMainFileDiff(
   const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
   return selectedAggregateFileDiff(
     context,
-    workspaceRoot,
+    repositoryRoot,
     worktreeId,
     authorized.selection,
     authorized.commits,
@@ -995,11 +1000,12 @@ async function aggregateMainFileDiff(
 async function listMainAggregateFiles(
   context: WorktreeManagerContext,
   workspaceRoot: string,
+  repositoryRoot: string,
   worktreeId: string,
   selection: WorktreeGitDiffSelection,
 ): Promise<WorktreeGitCommitFiles> {
   const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
-  const groups = await selectedCommitFiles(context, workspaceRoot, worktreeId, authorized.commits);
+  const groups = await selectedCommitFiles(context, repositoryRoot, worktreeId, authorized.commits);
   return {
     commit: authorized.commits[0]!,
     selection: authorized.selection,
@@ -1109,6 +1115,7 @@ export async function listWorktreeCommitFiles(
       return listMainAggregateFiles(
         context,
         resolved.workspaceRoot,
+        resolved.repositoryRoot,
         input.worktreeId,
         requested.selection,
       );
@@ -1129,7 +1136,7 @@ export async function listWorktreeCommitFiles(
       requested.commit,
     );
     const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
-    const read = await listCommitFiles(resolved.workspaceRoot, commit, { signal: context.signal });
+    const read = await listCommitFiles(resolved.repositoryRoot, commit, { signal: context.signal });
     return {
       commit,
       files: read.files,
@@ -1183,6 +1190,7 @@ export async function getWorktreeCommitFileDiff(
       return aggregateMainFileDiff(
         context,
         resolved.workspaceRoot,
+        resolved.repositoryRoot,
         input.worktreeId,
         requested.selection,
         input.path,
@@ -1220,7 +1228,7 @@ export async function getWorktreeCommitFileDiff(
       requested.commit,
     );
     const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
-    const filesRead = await listCommitFiles(resolved.workspaceRoot, commit, { signal: context.signal });
+    const filesRead = await listCommitFiles(resolved.repositoryRoot, commit, { signal: context.signal });
     const changedFile = findChangedFile(filesRead.files, input.path);
     if (changedFile === undefined) {
       throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed by this commit', {
@@ -1231,7 +1239,7 @@ export async function getWorktreeCommitFileDiff(
     }
     const readCommitFileDiff = gitRead(context, 'readCommitFileDiff', input.worktreeId);
     const diff = await readCommitFileDiff(
-      resolved.workspaceRoot,
+      resolved.repositoryRoot,
       commit,
       changedFile.path,
       { signal: context.signal },
