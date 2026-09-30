@@ -21,6 +21,7 @@ import {
   createWorktreeManager,
 } from '../lib/index.js';
 import { loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
+import { requireWorkspaceRoot } from '../lib/manage/manager-support.js';
 
 const execFile = promisify(execFileCallback);
 
@@ -164,6 +165,33 @@ test('keeps WORKSPACE_NOT_FOUND when a Workspace root is unusable but not confir
     await assert.rejects(
       loadWorktreeView(fileProvider, 'ws_one'),
       (error) => error?.code === 'WORKSPACE_NOT_FOUND',
+    );
+  });
+});
+
+test('wraps non-ENOENT Workspace root stat failures with Workspace error details', async () => {
+  await withGitFixture(async ({ dshHome, tempRoot }) => {
+    const rootParentFile = path.join(tempRoot, 'root-parent-is-file');
+    await writeFile(rootParentFile, 'not a directory\n');
+    const rootPath = path.join(rootParentFile, 'workspace');
+    const provider = createWorktreeManager({
+      dsh: createDshReader({ rootPath }),
+      dshHome,
+    });
+
+    const assertWorkspaceNotFound = (error) => {
+      assert.equal(error?.code, 'WORKSPACE_NOT_FOUND');
+      assert.equal(error?.details?.workspaceId, 'ws_one');
+      assert.equal(error?.details?.rootPath, rootPath);
+      assert.equal(error?.details?.causeCode, 'ENOTDIR');
+      assert.match(error?.details?.cause ?? '', /ENOTDIR/);
+      return true;
+    };
+
+    await assert.rejects(provider.listWorktrees({ workspaceId: 'ws_one' }), assertWorkspaceNotFound);
+    await assert.rejects(
+      requireWorkspaceRoot({ workspaceId: 'ws_one', rootPath }),
+      assertWorkspaceNotFound,
     );
   });
 });

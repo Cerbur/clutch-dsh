@@ -103,13 +103,18 @@ export function generatedId(idFactory: () => string): string {
   return worktreeId;
 }
 
-// 只有 `stat` 明确返回 ENOENT 才判定根目录确实不存在；其他情况（未知 Workspace、
-// 非绝对 root、存在但不是目录、无法解析）保留 `WORKSPACE_NOT_FOUND` 语义。
-// Only an explicit ENOENT from `stat` proves the root directory is gone. Every other
-// case (unknown Workspace, non-absolute root, existing non-directory, unresolvable root)
-// keeps its own `WORKSPACE_NOT_FOUND` semantics.
-function throwWorkspaceRootUnavailable(workspaceId: string, rootPath: string, rootMissing: boolean): never {
-  if (rootMissing) {
+// 只有 `stat` 明确返回 ENOENT 才判定根目录确实不存在；其他 I/O 错误都保留
+// WORKSPACE_NOT_FOUND 语义，并携带原始错误信息供诊断。
+// Only an explicit ENOENT from `stat` proves the root directory is gone. Other I/O
+// failures keep WORKSPACE_NOT_FOUND and preserve the original error details for diagnosis.
+type WorkspaceRootState = 'directory' | 'missing' | 'not-directory';
+
+function throwWorkspaceRootUnavailable(
+  workspaceId: string,
+  rootPath: string,
+  rootState: Exclude<WorkspaceRootState, 'directory'>,
+): never {
+  if (rootState === 'missing') {
     throw providerError('WORKSPACE_ROOT_MISSING', `Workspace root directory is missing: ${rootPath}`, {
       workspaceId,
       rootPath,
@@ -119,6 +124,52 @@ function throwWorkspaceRootUnavailable(workspaceId: string, rootPath: string, ro
     workspaceId,
     rootPath,
   });
+}
+
+function throwWorkspaceRootIoFailure(
+  workspaceId: string,
+  rootPath: string,
+  operation: 'inspect' | 'resolve',
+  error: unknown,
+): never {
+  const details: Record<string, string> = {
+    workspaceId,
+    rootPath,
+    cause: String(error),
+  };
+  if (typeof error === 'object' && error !== null) {
+    const fileSystemError = error as {
+      readonly code?: unknown;
+      readonly path?: unknown;
+      readonly syscall?: unknown;
+    };
+    if (typeof fileSystemError.code === 'string') details.causeCode = fileSystemError.code;
+    if (typeof fileSystemError.path === 'string') details.causePath = fileSystemError.path;
+    if (typeof fileSystemError.syscall === 'string') details.syscall = fileSystemError.syscall;
+  }
+  const message = operation === 'inspect'
+    ? `Unable to inspect Workspace root: ${rootPath}`
+    : `Unable to resolve Workspace root: ${rootPath}`;
+  throw providerError('WORKSPACE_NOT_FOUND', message, details);
+}
+
+/** Classify the root once so all Workspace gates treat stat and resolution failures consistently. */
+async function inspectWorkspaceRoot(workspaceId: string, rootPath: string): Promise<WorkspaceRootState> {
+  let rootStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    rootStat = await stat(rootPath);
+  } catch (error) {
+    if ((error as { readonly code?: string }).code === 'ENOENT') return 'missing';
+    throwWorkspaceRootIoFailure(workspaceId, rootPath, 'inspect', error);
+  }
+  if (!rootStat.isDirectory()) return 'not-directory';
+  try {
+    await realpath(rootPath);
+  } catch (error) {
+    // Resolution errors are not evidence that stat observed a missing root.
+    throwWorkspaceRootIoFailure(workspaceId, rootPath, 'resolve', error);
+  }
+  return 'directory';
 }
 
 export async function requireWorkspace(
@@ -134,20 +185,9 @@ export async function requireWorkspace(
     });
   }
   const rootPath = path.resolve(workspace.rootPath);
-  if (!(await isDirectory(rootPath))) {
-    const rootMissing = !(await pathExists(rootPath));
-    if (rootMissing && options.allowMissingRoot) return { ...workspace, rootPath };
-    throwWorkspaceRootUnavailable(workspaceId, rootPath, rootMissing);
-  }
-  try {
-    await realpath(rootPath);
-  } catch (error) {
-    throw providerError('WORKSPACE_NOT_FOUND', `Unable to resolve Workspace root: ${rootPath}`, {
-      workspaceId,
-      rootPath,
-      cause: String(error),
-    });
-  }
+  const rootState = await inspectWorkspaceRoot(workspaceId, rootPath);
+  if (rootState === 'missing' && options.allowMissingRoot) return { ...workspace, rootPath };
+  if (rootState !== 'directory') throwWorkspaceRootUnavailable(workspaceId, rootPath, rootState);
   return { ...workspace, rootPath };
 }
 
@@ -161,12 +201,14 @@ export async function requireWorkspaceForRead(
 
 /** Reject Git-dependent reads when the tolerated Workspace root is not an available directory. */
 export async function requireWorkspaceRoot(workspace: DshWorkspaceSummary): Promise<void> {
-  if (await isDirectory(workspace.rootPath)) return;
-  throwWorkspaceRootUnavailable(
-    workspace.workspaceId,
-    workspace.rootPath,
-    !(await pathExists(workspace.rootPath)),
-  );
+  if (!path.isAbsolute(workspace.rootPath)) {
+    throw providerError('WORKSPACE_NOT_FOUND', `Workspace root has a non-absolute path: ${workspace.rootPath}`, {
+      workspaceId: workspace.workspaceId,
+      rootPath: workspace.rootPath,
+    });
+  }
+  const rootState = await inspectWorkspaceRoot(workspace.workspaceId, workspace.rootPath);
+  if (rootState !== 'directory') throwWorkspaceRootUnavailable(workspace.workspaceId, workspace.rootPath, rootState);
 }
 
 // 第一层使用未解析路径验证目标属于插件根且不位于 Workspace 内。
