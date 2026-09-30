@@ -39,16 +39,19 @@ function recordGitCalls(adapter, calls) {
 async function createFixture(options = {}) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-git-dashboard-'));
   const dshHome = path.join(tempRoot, 'dsh-home');
-  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const repositoryRoot = path.join(tempRoot, 'workspace');
+  const workspaceRoot = options.workspaceSubdirectory === undefined
+    ? repositoryRoot
+    : path.join(repositoryRoot, options.workspaceSubdirectory);
   await mkdir(dshHome, { recursive: true });
   await mkdir(workspaceRoot, { recursive: true });
-  await runGit(workspaceRoot, ['init']);
-  await runGit(workspaceRoot, ['config', 'user.email', 'test@example.invalid']);
-  await runGit(workspaceRoot, ['config', 'user.name', 'Dashboard Test']);
-  await runGit(workspaceRoot, ['branch', '-M', 'main']);
-  await writeFile(path.join(workspaceRoot, 'README.md'), '# baseline\n');
-  await runGit(workspaceRoot, ['add', 'README.md']);
-  await runGit(workspaceRoot, ['commit', '-m', 'baseline']);
+  await runGit(repositoryRoot, ['init']);
+  await runGit(repositoryRoot, ['config', 'user.email', 'test@example.invalid']);
+  await runGit(repositoryRoot, ['config', 'user.name', 'Dashboard Test']);
+  await runGit(repositoryRoot, ['branch', '-M', 'main']);
+  await writeFile(path.join(repositoryRoot, 'README.md'), '# baseline\n');
+  await runGit(repositoryRoot, ['add', 'README.md']);
+  await runGit(repositoryRoot, ['commit', '-m', 'baseline']);
 
   const dsh = {
     async getWorkspace(workspaceId) {
@@ -65,7 +68,7 @@ async function createFixture(options = {}) {
   };
   const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
   const manager = createWorktreeManager({ dsh, dshHome, sidecar, git: options.git });
-  return { tempRoot, dshHome, workspaceRoot, sidecar, manager };
+  return { tempRoot, dshHome, workspaceRoot, repositoryRoot, sidecar, manager };
 }
 
 test('persists a manually selected baseline branch and rejects the current branch', async () => {
@@ -1684,6 +1687,65 @@ test('rejects aggregate selections that repeat or fall outside the pinned projec
       fixture.manager.listWorktreeCommitFiles(selectionInput([record.baseCommit])),
       { code: 'WORKTREE_STATE_CONFLICT' },
     );
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('reads Main commit diffs when the Workspace root is nested inside the repository', async () => {
+  const fixture = await createFixture({ workspaceSubdirectory: 'packages/clutch-dsh-worktree' });
+  try {
+    const changedPath = 'packages/clutch-dsh-title/README.md';
+    const absoluteChangedPath = path.join(fixture.repositoryRoot, changedPath);
+    await mkdir(path.dirname(absoluteChangedPath), { recursive: true });
+    await writeFile(absoluteChangedPath, '# sibling package change\n');
+    await runGit(fixture.repositoryRoot, ['add', '--', changedPath]);
+    await runGit(fixture.repositoryRoot, ['commit', '-m', 'change sibling package']);
+    const firstCommit = (await runGit(fixture.repositoryRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    const directDiff = await new LocalGitAdapter().readCommitFileDiff(
+      fixture.repositoryRoot,
+      firstCommit,
+      changedPath,
+    );
+    assert.match(directDiff.patch, /\+# sibling package change/u);
+
+    await writeFile(absoluteChangedPath, '# sibling package change\nsecond line\n');
+    await runGit(fixture.repositoryRoot, ['add', '--', changedPath]);
+    await runGit(fixture.repositoryRoot, ['commit', '-m', 'update sibling package']);
+    const secondCommit = (await runGit(fixture.repositoryRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+
+    const files = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      commit: firstCommit,
+    });
+    assert.deepEqual(files.files.map((file) => file.path), [changedPath]);
+
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      commit: firstCommit,
+      path: changedPath,
+    });
+    assert.match(diff.patch, /\+# sibling package change/u);
+
+    const aggregateFiles = await fixture.manager.listWorktreeCommitFiles({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+    });
+    assert.deepEqual(aggregateFiles.files.map((file) => file.path), [changedPath]);
+
+    const aggregateDiff = await fixture.manager.getWorktreeCommitFileDiff({
+      workspaceId: 'ws_dashboard',
+      worktreeId: 'main:ws_dashboard',
+      selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
+      path: changedPath,
+    });
+    assert.deepEqual(aggregateDiff.segments.map((segment) => segment.commit), [firstCommit, secondCommit]);
+    assert.match(aggregateDiff.segments[0].patch, /\+# sibling package change/u);
+    assert.match(aggregateDiff.segments[1].patch, /\+second line/u);
   } finally {
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });
