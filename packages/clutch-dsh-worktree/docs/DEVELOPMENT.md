@@ -11,7 +11,7 @@
 ## 1. 环境前置要求
 
 - **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
-- **pnpm**: 遵循 monorepo 根目录 `packageManager` 指定版本（pnpm 11+）
+- **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
 
 ---
@@ -47,7 +47,7 @@ pnpm install
 pnpm --filter @cerbur/clutch-dsh-worktree build
 ```
 
-构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。
+构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。Typert Host 分析通过 `tsconfig.host.json` 将 DSH Client Locale 和 Workspace 的类型导入映射到 `scripts/typert-client-locale-meta.d.ts` 与 `scripts/typert-client-ui-workspace-meta.d.ts`。这些 build-only projection 只描述 Worktree 实际使用的 Context 服务，避免 Host 生成时递归载入 Client UI 的 API-remotes 类型图；普通 Client 类型检查和运行时类型仍使用 DSH 的真实模块，Worktree Client 仍只通过现有 `/api` Connection 通信。
 
 ### 3.2 将本地插件添加到 DSH Profile
 

@@ -629,6 +629,66 @@ test('maps a missing Git executable to Workspace-local readiness without setup c
   assert.deepEqual(worktreeSetupCommands('gitNotInstalled'), []);
 });
 
+test('maps a confirmed-missing Workspace root to a kept list plus a workspaceMissing readiness state', async () => {
+  const data = await loadWorktreeView(
+    manager({
+      async listBranches() {
+        throw {
+          code: 'WORKSPACE_ROOT_MISSING',
+          message: 'Workspace root directory is missing: /tmp/ws1',
+          details: { workspaceId: 'ws1', rootPath: '/tmp/ws1' },
+        };
+      },
+    }),
+    'ws1',
+  );
+
+  assert.equal(data.readiness.status, 'workspaceMissing');
+  assert.equal(data.readiness.error.code, 'WORKSPACE_ROOT_MISSING');
+  assert.equal(data.worktrees.length, 1);
+  assert.equal(data.bindings.length, 1);
+  assert.deepEqual(data.branches, []);
+  assert.deepEqual(worktreeSetupCommands('workspaceMissing'), []);
+});
+
+test('keeps other WORKSPACE_NOT_FOUND causes out of the workspaceMissing state', async () => {
+  const causes = [
+    {
+      message: 'Workspace is missing or has a non-absolute root: ws1',
+      rootPath: 'relative/workspace',
+    },
+    {
+      message: 'Unable to resolve Workspace root: /tmp/ws1',
+      rootPath: '/tmp/ws1',
+    },
+    {
+      message: 'Workspace root is not a directory: /tmp/ws1',
+      rootPath: '/tmp/ws1',
+    },
+  ];
+  for (const cause of causes) {
+    await assert.rejects(
+      loadWorktreeView(
+        manager({
+          async listBranches() {
+            throw {
+              code: 'WORKSPACE_NOT_FOUND',
+              message: cause.message,
+              details: { workspaceId: 'ws1', rootPath: cause.rootPath },
+            };
+          },
+        }),
+        'ws1',
+      ),
+      (error) => {
+        assert.equal(error?.code, 'WORKSPACE_NOT_FOUND');
+        assert.equal(error?.message, cause.message);
+        return true;
+      },
+    );
+  }
+});
+
 test('maps a no-initial-commit branch-list failure to setup readiness', async () => {
   const data = await loadWorktreeView(
     manager({
@@ -687,6 +747,7 @@ test('returns setup commands for each Git readiness state', () => {
   ]);
   assert.deepEqual(worktreeSetupCommands('noLocalBranch'), ['git switch -c main']);
   assert.deepEqual(worktreeSetupCommands('gitNotInstalled'), []);
+  assert.deepEqual(worktreeSetupCommands('workspaceMissing'), []);
   assert.deepEqual(worktreeSetupCommands('ready'), []);
 });
 
@@ -1959,6 +2020,7 @@ test('renders setup instructions instead of a fake base-branch option', async ()
   assert.match(localeSource, /worktree\.setup\.noInitialCommit/);
   assert.match(localeSource, /worktree\.setup\.noLocalBranch/);
   assert.match(localeSource, /worktree\.setup\.gitNotInstalled/);
+  assert.match(localeSource, /worktree\.setup\.workspaceMissing/);
   assert.match(styles, /\.commandBlock\s*\{/);
 });
 

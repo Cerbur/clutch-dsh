@@ -1,14 +1,14 @@
 import type { SessionBinding, WorkspaceId } from '../contract/index.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { assertSessionMatchesWorkspace, isDirectory, requireWorkspace } from './manager-support.js';
+import { assertSessionMatchesWorkspace, isDirectory, requireWorkspace, requireWorkspaceForRead } from './manager-support.js';
 
 /** Return active/detached Session relations for one Workspace. */
 export async function listBindings(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId },
 ): Promise<readonly SessionBinding[]> {
-  await requireWorkspace(context, input.workspaceId);
+  await requireWorkspaceForRead(context, input.workspaceId);
   return (await context.sidecar.read(input.workspaceId)).bindings;
 }
 

@@ -74,6 +74,12 @@ export function formatWorktreeViewError(
       return t('error.workspaceRenameUnavailable');
     case 'WORKSPACE_DELETE_UNAVAILABLE':
       return t('error.workspaceDeleteUnavailable');
+    // 只有确认根目录缺失才显示本地化的目录缺失提示；其余 WORKSPACE_NOT_FOUND
+    // 语义（未知 Workspace、无效或无法解析的 root）落到默认分支保留原始错误信息。
+    // Only a confirmed-missing root shows the localized missing-directory copy; other
+    // WORKSPACE_NOT_FOUND causes fall through so the accurate message is preserved.
+    case 'WORKSPACE_ROOT_MISSING':
+      return t('error.workspaceRootMissing', { rootPath: detail(error, 'rootPath') });
     case 'SESSION_RENAME_UNAVAILABLE':
       return t('error.sessionRenameUnavailable');
     case 'SESSION_BINDING_FAILED':

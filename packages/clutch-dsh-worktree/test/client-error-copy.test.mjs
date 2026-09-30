@@ -95,6 +95,52 @@ test('formats missing Git with localized copy', () => {
   );
 });
 
+test('formats a confirmed-missing Workspace root with the localized path copy', () => {
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'WORKSPACE_ROOT_MISSING',
+        message: 'Workspace root directory is missing: /private/tmp/ws1',
+        retryable: false,
+        details: { workspaceId: 'ws1', rootPath: '/private/tmp/ws1' },
+      },
+      t,
+    ),
+    'error.workspaceRootMissing:rootPath=/private/tmp/ws1',
+  );
+});
+
+test('keeps the accurate message for WORKSPACE_NOT_FOUND causes that are not a missing root', () => {
+  const causes = [
+    {
+      message: 'Workspace is missing or has a non-absolute root: ws1',
+      rootPath: 'relative/workspace',
+    },
+    {
+      message: 'Unable to resolve Workspace root: /private/tmp/ws1',
+      rootPath: '/private/tmp/ws1',
+    },
+    {
+      message: 'Workspace root is not a directory: /private/tmp/ws1',
+      rootPath: '/private/tmp/ws1',
+    },
+  ];
+  for (const cause of causes) {
+    assert.equal(
+      formatWorktreeViewError(
+        {
+          code: 'WORKSPACE_NOT_FOUND',
+          message: cause.message,
+          retryable: false,
+          details: { workspaceId: 'ws1', rootPath: cause.rootPath },
+        },
+        t,
+      ),
+      cause.message,
+    );
+  }
+});
+
 test('formats external import and registration errors with localized primary copy', () => {
   assert.equal(
     formatWorktreeViewError(

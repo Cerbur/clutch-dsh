@@ -60,7 +60,8 @@ never writes DSH Workspace state or exposes the projection as a new Controller o
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
 It keeps one entry per Workspace and provides:
 
-- a complete Worktree/branch/binding view read, including valid non-ready Git readiness states;
+- a complete Worktree/branch/binding view read, including valid non-ready Git readiness states
+  (`workspaceMissing`, `gitNotInstalled`, `noRepository`, `noInitialCommit`, `noLocalBranch`);
 - completed-view caching and in-flight Promise sharing for the same Workspace and generation;
 - de-duplicated `readMany()` reads for an explicit ordered Workspace set; and
 - disposal that clears entries and makes late callbacks unable to repopulate the cache.
@@ -71,6 +72,16 @@ The Promise may settle for cleanup, but its captured generation must still match
 the cache. This prevents an overlapping older read from replacing a newer invalidation with stale
 Worktree, branch, or binding facts. The reader owns this cache and lifecycle; Context and Surface do
 not maintain separate Manager read caches.
+
+Sidecar-backed reads tolerate a DSH Workspace whose root directory is gone: Worktree records, Session
+bindings, and recorded instructions project the indexed facts instead of failing. Git-dependent reads
+(`listBranches`, `listImportCandidates`) reject that Workspace with `WORKSPACE_ROOT_MISSING`, which the
+view read maps to `workspaceMissing`; the modal renders localized missing-directory copy without setup
+commands, and the Context projection reports the same localized error. Only an explicit `stat` `ENOENT`
+confirms a missing root: an unknown Workspace, a non-absolute root, an existing non-directory root, and
+an unresolvable root keep `WORKSPACE_NOT_FOUND`, propagate their own error, and never render the
+missing-directory state. Mutations keep rejecting the Workspace, so a missing root never weakens
+identity or write guards.
 
 The Surface makes refresh scope explicit. Initial entry and global retry invalidate and read the
 current Workspace set. Binding, Worktree, Session, and modal changes target the owning Workspace;

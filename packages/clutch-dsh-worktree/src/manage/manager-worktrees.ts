@@ -22,6 +22,8 @@ import {
   generatedId,
   isDirectory,
   requireWorkspace,
+  requireWorkspaceForRead,
+  requireWorkspaceRoot,
   samePhysicalPath,
   validateGeneratedPath,
   validatePhysicalGeneratedPath,
@@ -52,7 +54,7 @@ export async function listWorktrees(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId },
 ): Promise<readonly WorktreeRecord[]> {
-  const workspace = await requireWorkspace(context, input.workspaceId);
+  const workspace = await requireWorkspaceForRead(context, input.workspaceId);
   const snapshot = await context.sidecar.read(input.workspaceId);
   const records = snapshot.worktrees;
   const recoveryNeeded = snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0;
@@ -147,7 +149,8 @@ export async function listImportCandidates(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId },
 ): Promise<readonly WorktreeImportCandidate[]> {
-  const workspace = await requireWorkspace(context, input.workspaceId);
+  const workspace = await requireWorkspaceForRead(context, input.workspaceId);
+  await requireWorkspaceRoot(workspace);
   await context.git.validateRepository(workspace.rootPath);
   const gitRoot = context.git.resolveRepositoryRoot
     ? await context.git.resolveRepositoryRoot(workspace.rootPath)
@@ -179,7 +182,8 @@ export async function listBranches(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId },
 ): Promise<readonly BranchRecord[]> {
-  const workspace = await requireWorkspace(context, input.workspaceId);
+  const workspace = await requireWorkspaceForRead(context, input.workspaceId);
+  await requireWorkspaceRoot(workspace);
   await context.git.validateRepository(workspace.rootPath);
   const gitRoot = context.git.resolveRepositoryRoot
     ? await context.git.resolveRepositoryRoot(workspace.rootPath)
