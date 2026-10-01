@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { deriveSessionPresentationIndex, type SessionListLike } from '../../session/session-view.js';
+import {
+  deriveSessionPresentationIndex,
+  type SessionListLike,
+} from '../../session/session-view.js';
 import { useSidebarOverlayGeometry } from '../../overlay/sidebar-overlay-geometry.js';
 import { effectiveViewMode } from '../../view/view-mode.js';
 import { currentSessionIdFromList } from '../../session/session-selection.js';
@@ -93,8 +96,9 @@ export function useSurfaceSources({ props }: Input) {
     () => deriveSessionPresentationIndex(sessions),
     [sessions.byId],
   );
-  const { ref, width, bounds } = useSidebarOverlayGeometry(mode === 'worktree');
-  const collapsed = width <= 64;
+  const { ref, width, bounds, collapsed, nativeCovered } = useSidebarOverlayGeometry(
+    mode === 'worktree',
+  );
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
   return {
     preferredMode,
@@ -118,6 +122,7 @@ export function useSurfaceSources({ props }: Input) {
     width,
     bounds,
     collapsed,
+    nativeCovered,
     archivedSessionIds,
   };
 }

@@ -179,7 +179,12 @@ export function SurfaceContent({
   }
 
   return (
-    <div ref={expansion.contentRef} className={styles.content} tabIndex={0}>
+    <div
+      ref={expansion.contentRef}
+      className={styles.content}
+      tabIndex={0}
+      data-worktree-scrollport
+    >
       <NotificationToasts notices={notices} detailsLabel={t('notice.details')} />
       {notices.length > 0 && (
         <details className={styles.notificationDetails}>

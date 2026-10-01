@@ -100,16 +100,27 @@
   cursor: pointer;
 }
 .dashboardTopline {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 28px;
+  gap: 8px 20px;
+  min-height: 50px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  background: var(--dsw-alias-bg-base, #fff);
   color: var(--dsw-alias-label-secondary, #677080);
-  font-size: 12px;
+  font-size: 13px;
 }
 .dashboardTopline > span {
-  overflow-wrap: anywhere;
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dashboardTopline > span > span {
   margin: 0 8px;
@@ -117,9 +128,20 @@
 }
 .dashboardToplineActions {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex: none;
+  margin-inline-start: auto;
+  max-width: 100%;
+  -webkit-app-region: no-drag;
+}
+/* AppFrame's native reopen/New Session seat follows shell.overlay in DOM order.
+   Keep its existing actions above the Dashboard, with its published clearance
+   reserved in the title. This rule disappears as soon as the Dashboard closes. */
+html[data-platform='darwin']
+  [data-sidebar-collapsed]:has([data-worktree-dashboard], [data-worktree-dashboard-request])
+  > [data-shell-leading] {
+  z-index: 21;
 }
 .dashboardSidebarButton {
   display: inline-flex;
@@ -724,7 +746,6 @@
   }
   .dashboardTopline {
     gap: 10px;
-    align-items: flex-start;
   }
 }
 .dashboardInstructionsText {

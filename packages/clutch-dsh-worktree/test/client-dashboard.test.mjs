@@ -342,16 +342,14 @@ test('dashboard renders real identity and explicit placeholders in both language
       },
     });
     assert.equal(findAll(node, (item) => item.type === 'h1')[0].props.children, record.branch);
-    assert.ok(
-      findAll(
-        node,
-        (item) =>
-          item.type === 'span' &&
-          Array.isArray(item.props.children) &&
-          item.props.children.includes(locale['dashboard.preview']),
-      ),
-      'dashboard topline uses the preview label',
-    );
+    const topbar = findAll(node, (item) => item.props?.['data-dashboard-topbar'])[0];
+    assert.equal(topbar.type, 'header');
+    assert.equal(topbar.props['data-window-drag'], true);
+    const title = findAll(topbar, (item) => item.props?.title === `Payments/${record.branch}`)[0];
+    assert.ok(title, 'the top bar identifies the Workspace and selected Worktree');
+    assert.ok(title.props.children.includes(record.branch));
+    assert.equal(title.props.children.includes(locale['dashboard.preview']), false);
+    assert.match(title.props.style.marginInlineStart, /--dsh-frame-leading-clearance/);
     assert.ok(
       findAll(node, (item) => item.type === 'code').some(
         (item) => item.props.children === record.absolutePath,
@@ -360,6 +358,33 @@ test('dashboard renders real identity and explicit placeholders in both language
     assert.equal(byRole(node, 'tab').length, 5);
     assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 8);
   }
+  harness.dispose();
+});
+
+test('Dashboard top bar groups directory, return, and rightbar actions above the page body', () => {
+  const harness = renderHarness(async () => true);
+  let closed = 0;
+  let opened = 0;
+  const node = harness.render({
+    sessionIds: ['session-1'],
+    onClose: () => { closed++; },
+    onOpenSidebar: () => { opened++; },
+  });
+  const topbar = findAll(node, (item) => item.props?.['data-dashboard-topbar'])[0];
+  const openApp = findAll(topbar, (item) => item.type === 'a')[0];
+  assert.equal(openApp.props.href, vscodeFolderUrl(record.absolutePath));
+  assert.equal(findAll(node, (item) => item.type === 'a' && item.props.href === openApp.props.href).length, 1);
+  findAll(topbar, (item) => item.props?.['aria-label'] === en['dashboard.back'])[0].props.onClick();
+  findAll(topbar, (item) => item.props?.['data-sidebar-right-expand'])[0].props.onClick();
+  assert.equal(closed, 1);
+  assert.equal(opened, 1);
+  assert.equal(node.props.children[0], topbar, 'the bar sits outside the width-constrained page');
+  assert.match(dashboardCssSource, /\.dashboardTopline\s*\{[^}]*position: sticky;[^}]*top: 0;/);
+  assert.match(dashboardCssSource, /\.dashboardToplineActions\s*\{[^}]*-webkit-app-region: no-drag;/);
+  assert.match(
+    dashboardCssSource,
+    /html\[data-platform='darwin'\][\s\S]*?\[data-sidebar-collapsed\]:has\(\[data-worktree-dashboard\], \[data-worktree-dashboard-request\]\)[\s\S]*?> \[data-shell-leading\]\s*\{\s*z-index: 21;/,
+  );
   harness.dispose();
 });
 
@@ -880,6 +905,13 @@ test('tabs switch panels, keyboard selection wraps, and Escape closes the dashbo
       stopPropagation() { assert.fail('The native menu must receive Escape'); },
     });
     assert.equal(closed, 0);
+    node.props.onKeyDown({
+      key: 'Escape',
+      defaultPrevented: true,
+      currentTarget: { querySelector: () => null },
+      stopPropagation() { assert.fail('A native menu already consumed Escape during document capture'); },
+    });
+    assert.equal(closed, 0, 'a capture-dismissed menu does not also dismiss Dashboard');
     node.props.onKeyDown({ key: 'Escape', currentTarget: { querySelector: () => null }, stopPropagation() {} });
     assert.equal(closed, 1);
   } finally {
@@ -1433,6 +1465,21 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     pending();
     assert.equal(placement.left, 68);
     assert.equal(placement.width, 892);
+    // macOS hides the column completely; the bar's title clears native chrome,
+    // while the native leading seat remains outside the concealed center.
+    sidebar.rect.right = 0;
+    observers[0].callback();
+    pending();
+    assert.equal(placement.left, 4);
+    assert.equal(placement.width, 956);
+    // Windows keeps its caption row above the native center. Dashboard content
+    // must neither cover that row nor exceed the remaining center height.
+    center.rect.top = 32;
+    overlay.rect.top = 0;
+    observers[0].callback();
+    pending();
+    assert.equal(placement.top, 32);
+    assert.equal(placement.height, 768);
     right.nextElementSibling = undefined;
     observers[1].callback();
     pending();

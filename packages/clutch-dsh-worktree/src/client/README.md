@@ -14,7 +14,7 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   existing history, committed-summary, and working-tree-file reads for one compact status projection when a
   valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
   not add a Git-specific endpoint or branch-list read.
-- `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
+- `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`. `sidebar-overlay-geometry.ts` conceals only the native direct children covered between New Session and the footer, restoring visibility, opacity, inert and aria-hidden on collapse, anchor replacement, mode exit or disposal. Parent opacity also suppresses descendants that explicitly opt into visible presentation. On macOS, `worktree.css` makes the covered Worktree surface transparent so AppFrame's existing tint and native window vibrancy supply one continuous material. Other platforms and an unrecognized native structure retain the theme fill; reduced transparency uses a stronger fill.
 - On Client load and `connection/reset`, a non-blocking, five-second Host probe uses the adapter's
   existing `listBindings` endpoint with an empty Workspace identity. An outer Gateway success,
   including an inner `WORKSPACE_NOT_FOUND`, proves Host composition without selecting user data.
@@ -127,6 +127,13 @@ both candidate reads and import mutations and releases the membership projection
 
 ## Conversation context
 
+The Sidebar overlay's New Session anchor excludes buttons inside native
+`data-window-drag` rows. On Web, the clickable brand and the dedicated action share
+the same aria-label, while shortcut glyphs can change the dedicated action's textContent.
+Using the brand would cover and conceal the whole logo/toggle row. The exclusion uses
+native chrome semantics rather than a platform flag, fixed inset or generated class name;
+if only the brand shortcut remains, the overlay has no anchor and yields zero coverage.
+
 ### Worktree dashboard
 
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
@@ -137,12 +144,30 @@ Worktree projection, not a replacement for DSH's native Session page or a new so
 selected Workspace/Worktree IDs against the same ready view used by the Sidebar.
 No additional read or global refresh is triggered by opening the dashboard. Read-only
 menu refreshes retain ready facts; updated and forgotten records project normally.
+An external header request can precede the initial view read. Missing target facts are not
+treated as removal until that Workspace view arrives; Session changes and confirmed missing
+identities still dismiss the request. `DashboardRequest` occupies the same center bounds while
+loading or showing a retryable read error; retry reads only the requested Workspace. Neither
+the request nor the ready Dashboard expands the native Sidebar.
 The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
 active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
 reuses the same callback as the menu entry, and stays hidden until the row is hovered, focused, or its menu is open. The Worktree rail remains zero-width at rest, so Dashboard, the menu, and the Session `+` do not reserve label space; when interaction reveals the row, the available controls use their intrinsic width. Long Worktree labels automatically scroll while the pointer is over the row and reset to their original position when it leaves; the existing delayed HoverCard remains the accessible full-value fallback. The leading
 Worktree and nested Session alignment slots are compacted to preserve the Sidebar width. Dashboard
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
+
+The sticky Dashboard top bar is outside the constrained page body. Its breadcrumb uses
+the Workspace title and selected record's branch, while Open In, return/create Session
+and rightbar actions share a no-drag cluster. `data-window-drag` participates in DSH's
+macOS drag-region and geometry-recall contract, including the loading/error page.
+The title reserves AppFrame's `--dsh-frame-leading-clearance` minus the overlay's
+live left offset. While a Dashboard is mounted, plugin CSS raises the existing
+`data-shell-leading` seat above the overlay only on collapsed macOS frames; its
+native reopen/New Session handlers, shortcut tooltips and fullscreen clearance remain intact.
+No duplicate left-sidebar action or slot registration is introduced. Placement starts
+at the native center's top edge, leaving the Windows caption strip uncovered.
+Dashboard Escape handling respects native capture listeners' `defaultPrevented`
+even after a dismissed menu unmounts, so one Escape closes only the application menu.
 
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
@@ -449,13 +474,16 @@ view state rather than a new domain error.
 
 The Worktree surface is additive:
 
-- the Sidebar footer action is the only entry point;
+- the Sidebar entry remains the footer action; the Session header can open a Dashboard directly;
 - the footer action inherits the native Sidebar label line box and spacing; when the
-  Sidebar is collapsed, its icon-only footer action remains the only Worktree control
-  and the plugin does not render a duplicate `WT` rail button;
+  Sidebar is collapsed on a platform with a rail, its icon-only footer action remains the
+  Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
+  The plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
 - the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
+- semantic `data-sidebar-collapsed` and zero-width measurements hide the surface on desktop as well as Web; zero never retains the last expanded width;
+- `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
 - Workspace rename, delete and drag ordering use native DSH Workspace APIs;
 - Session menus retain Rename/Fork/Archive and Copy session ID for ordinary Sessions. A provisional blank Session is visible only while it is the current DSH Session, uses the localized `New Session` label, and has no Session action menu; the binding remains browser/sidecar-owned even when the row is hidden. Session drag ordering is restricted to the current visual Main or Worktree group;
 - the Worktree dialog keeps Create as the default and exposes Import as a horizontal tab; Import candidates are branch-attached, non-root, unmanaged records supplied by the Host and selected through a standard dropdown, and imported records follow the same Session, binding, membership projection, opening, refresh, and recovery lifecycle as plugin-created records;

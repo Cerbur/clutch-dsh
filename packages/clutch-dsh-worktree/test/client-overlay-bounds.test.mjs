@@ -41,6 +41,20 @@ test('prefers the visible New Session button when the logo shortcut shares its l
   assert.equal(findNewSessionAnchor(root), newSession);
 });
 
+test('never uses a marked native chrome row as the overlay anchor when its dedicated action is missing', () => {
+  const root = { querySelectorAll: () => [brand] };
+  const chrome = {
+    parentElement: root,
+    hasAttribute: (name) => name === 'data-window-drag',
+  };
+  const brand = {
+    textContent: 'DSH Local Build',
+    parentElement: chrome,
+    getAttribute: () => 'New session',
+  };
+  assert.equal(findNewSessionAnchor(root), undefined);
+});
+
 test('computes coverage from New Session top to footer top', () => {
   assert.deepEqual(
     computeOverlayBounds(

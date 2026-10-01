@@ -12,6 +12,7 @@ import { createMainWorktreeRecord } from '../../dashboard/dashboard-selection.js
 import styles from '../../worktree.css';
 import { ActiveWorktree } from './ActiveWorktree.js';
 import { ArchivedWorktrees } from './ArchivedWorktrees.js';
+import { AnimatedTree } from './AnimatedTree.js';
 import { WorktreeGroupRow, WorktreeSessionGroup, WorktreeWorkspaceRow } from './rows.js';
 import { includesText, isSessionGroupAutoExpanded, workspaceMatches } from '../selectors.js';
 import type { WorktreeSurfaceProps } from '../types.js';
@@ -161,7 +162,16 @@ export function WorkspaceTree({
   );
   return (
     <>
-      <div className={styles.workspaceList}>
+      <AnimatedTree
+        className={styles.workspaceList}
+        ready={
+          sessions.phase !== 'pending' &&
+          workspaceDrag === undefined &&
+          worktreeDrag === undefined &&
+          sessionDrag === undefined
+        }
+        resetKey={query}
+      >
         {visibleWorkspaces.length === 0 ? (
           <p className={styles.empty}>{t('workspace.noMatches')}</p>
         ) : (
@@ -301,7 +311,10 @@ export function WorkspaceTree({
                       kind="main"
                       label={mainLabel}
                       expanded={mainExpanded}
-                      groupActivityStatus={aggregateSessionStatus(mainSessionIds, sessionPresentations)}
+                      groupActivityStatus={aggregateSessionStatus(
+                        mainSessionIds,
+                        sessionPresentations,
+                      )}
                       icon={<IconBranchOutline16 />}
                       workspaceTitle={workspace.title}
                       onToggle={() => {
@@ -445,7 +458,7 @@ export function WorkspaceTree({
             );
           })
         )}
-      </div>
+      </AnimatedTree>
     </>
   );
 }
