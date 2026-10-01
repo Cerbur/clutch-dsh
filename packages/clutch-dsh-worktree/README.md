@@ -135,6 +135,11 @@ open native right sidebar because there is no target Session, and does not creat
 Dashboard header keeps the native right-sidebar button available whenever a current Session can host it and the
 sidebar is collapsed; once opened, the button is hidden following native behavior.
 
+The top bar shows **{workspace}/{worktreeName}** and groups **Open in ...**, **Back to session**
+(or **New Session**) and the right-sidebar control. It stays visible while the page scrolls.
+On macOS desktop, its blank space drags the window, and a collapsed left Sidebar exposes
+DSH's native reopen button beside the traffic lights. Windows retains its native caption bar.
+
 Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a

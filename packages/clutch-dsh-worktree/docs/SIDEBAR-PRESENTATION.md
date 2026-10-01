@@ -50,6 +50,21 @@ retryable error page, and opens automatically on that first request. Retry reads
 the owning Workspace. A different Session, mode exit or confirmed target removal
 still cancels selection. No Sidebar expansion command is used.
 
+## Dashboard window chrome
+
+The sticky full-width top bar shows `{workspace}/{worktreeName}` and groups Open In,
+return/create Session and rightbar controls. Its `data-window-drag` marker uses the
+native macOS drag/geometry-recall mechanism; the action cluster is explicitly no-drag.
+The loading/error page uses the same chrome presentation.
+
+On collapsed macOS frames, scoped plugin CSS raises the existing `data-shell-leading`
+seat from native z-index 15 above `shell.overlay` (20) to 21. The title clears its
+published `--dsh-frame-leading-clearance` after subtracting the live Dashboard left
+offset. This reuses the native reopen/New Session buttons, their shortcuts and fullscreen
+spacing, and the CSS ceases to match when the Dashboard closes. No DSH source, native
+slot registration or Sidebar state is replaced. Windows placement clears the native
+center's top offset so its caption buttons and drag strip remain uncovered.
+
 ## Verification
 
 The regressions exercise the actual geometry hook, WorktreeSurface selection effects

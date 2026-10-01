@@ -149,6 +149,19 @@ Worktree and nested Session alignment slots are compacted to preserve the Sideba
 placement reserves the native Sidebar resize hit area, so the Sidebar remains resizable while the
 Dashboard is open.
 
+The sticky Dashboard top bar is outside the constrained page body. Its breadcrumb uses
+the Workspace title and selected record's branch, while Open In, return/create Session
+and rightbar actions share a no-drag cluster. `data-window-drag` participates in DSH's
+macOS drag-region and geometry-recall contract, including the loading/error page.
+The title reserves AppFrame's `--dsh-frame-leading-clearance` minus the overlay's
+live left offset. While a Dashboard is mounted, plugin CSS raises the existing
+`data-shell-leading` seat above the overlay only on collapsed macOS frames; its
+native reopen/New Session handlers, shortcut tooltips and fullscreen clearance remain intact.
+No duplicate left-sidebar action or slot registration is introduced. Placement starts
+at the native center's top edge, leaving the Windows caption strip uncovered.
+Dashboard Escape handling respects native capture listeners' `defaultPrevented`
+even after a dismissed menu unmounts, so one Escape closes only the application menu.
+
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
 already-open native right sidebar remains visible for a Session-bound Dashboard. The AppFrame column order

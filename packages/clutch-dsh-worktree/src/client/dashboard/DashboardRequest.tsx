@@ -56,13 +56,21 @@ export function DashboardRequest({
         }
       }}
     >
-      <div className={styles.dashboardPage}>
-        <div className={styles.dashboardTopline}>
-          <span>{t('dashboard.title')}</span>
+      <header className={styles.dashboardTopline} data-dashboard-topbar data-window-drag>
+        <span
+          style={{
+            marginInlineStart: `max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - ${placement?.left ?? 0}px - 20px))`,
+          }}
+        >
+          {t('dashboard.title')}
+        </span>
+        <div className={styles.dashboardToplineActions}>
           <button type="button" className={styles.dashboardButton} onClick={onClose}>
             {t('dashboard.back')}
           </button>
         </div>
+      </header>
+      <div className={styles.dashboardPage}>
         <p role={error ? 'alert' : 'status'}>
           {error ? formatWorktreeViewError(error, t) : t('status.loading')}
         </p>

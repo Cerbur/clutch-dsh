@@ -30,10 +30,7 @@ import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
-import {
-  useWorktreeGitOverview,
-  WorktreeGitOverviewValue,
-} from './git/WorktreeGitOverview.js';
+import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
@@ -311,9 +308,7 @@ function WorktreeBaselineEditor({
             <Button
               variant="primary"
               data-dashboard-baseline-save
-              disabled={
-                pending || disabled || !options.some((branch) => branch.name === draft)
-              }
+              disabled={pending || disabled || !options.some((branch) => branch.name === draft)}
               onClick={() => void save()}
             >
               {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
@@ -423,13 +418,13 @@ export function WorktreeDashboard({
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(
-    Boolean(isRightSidebarExpanded?.()),
-  );
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(Boolean(isRightSidebarExpanded?.()));
   const [tab, setTab] = useState<DashboardTab>('overview');
   const [baselineBranch, setBaselineBranch] = useState(record.baseBranch);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
-  const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
+  const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>(
+    'idle',
+  );
   const copyGeneration = useRef(0);
   const branchCopyGeneration = useRef(0);
   const copyPending = useRef(false);
@@ -533,7 +528,7 @@ export function WorktreeDashboard({
       : (record.currentBranch ??
         (branchAvailable ? record.branch : t('dashboard.branchUnavailable')));
   const baselineCurrentBranch =
-    record.currentBranch === undefined ? record.branch : record.currentBranch ?? undefined;
+    record.currentBranch === undefined ? record.branch : (record.currentBranch ?? undefined);
   const persistBaseline =
     onSaveBaseline === undefined
       ? undefined
@@ -634,6 +629,9 @@ export function WorktreeDashboard({
       aria-labelledby={`${id}-title`}
       style={placement ?? { visibility: 'hidden', height: 0 }}
       onKeyDown={(event) => {
+        // Native menus dismiss during document capture, before React sees this
+        // event. Their DOM may already be gone; defaultPrevented retains ownership.
+        if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
@@ -642,44 +640,50 @@ export function WorktreeDashboard({
         }
       }}
     >
-      <div className={styles.dashboardPage}>
-        <div className={styles.dashboardTopline}>
-          <span>
-            {workspaceTitle}
-            <span aria-hidden="true"> / </span>
-            {t('dashboard.preview')}
-          </span>
-          <div className={styles.dashboardToplineActions}>
-            <button
-              type="button"
-              className={styles.dashboardButton}
-              aria-label={t(topActionIsCreateSession ? 'dashboard.newSession' : 'dashboard.back')}
-              onClick={() => {
-                if (topActionIsCreateSession) onCreateSession?.();
-                else onClose();
-              }}
-            >
-              {topActionIsCreateSession ? t('dashboard.newSession') : <>← {t('dashboard.back')}</>}
-            </button>
-            {!rightSidebarOpen && onOpenSidebar !== undefined && (
-              <Tooltip label={t('dashboard.openSidebar')} side="bottom" delayMs={500}>
-                <button
-                  type="button"
-                  className={styles.dashboardSidebarButton}
-                  aria-label={t('dashboard.openSidebar')}
-                  title={t('dashboard.openSidebar')}
-                  data-sidebar-right-expand
-                  onClick={() => {
-                    onOpenSidebar();
-                    setRightSidebarOpen(true);
-                  }}
-                >
-                  <IconPanelLeftOutline16 />
-                </button>
-              </Tooltip>
-            )}
-          </div>
+      <header className={styles.dashboardTopline} data-dashboard-topbar data-window-drag>
+        <span
+          title={`${workspaceTitle}/${displayBranch}`}
+          style={{
+            marginInlineStart: `max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - ${placement?.left ?? 0}px - 20px))`,
+          }}
+        >
+          {workspaceTitle}
+          <span aria-hidden="true"> / </span>
+          {displayBranch}
+        </span>
+        <div className={styles.dashboardToplineActions}>
+          <OpenInAppButton path={record.absolutePath} t={t} />
+          <button
+            type="button"
+            className={styles.dashboardButton}
+            aria-label={t(topActionIsCreateSession ? 'dashboard.newSession' : 'dashboard.back')}
+            onClick={() => {
+              if (topActionIsCreateSession) onCreateSession?.();
+              else onClose();
+            }}
+          >
+            {topActionIsCreateSession ? t('dashboard.newSession') : <>← {t('dashboard.back')}</>}
+          </button>
+          {!rightSidebarOpen && onOpenSidebar !== undefined && (
+            <Tooltip label={t('dashboard.openSidebar')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={styles.dashboardSidebarButton}
+                aria-label={t('dashboard.openSidebar')}
+                title={t('dashboard.openSidebar')}
+                data-sidebar-right-expand
+                onClick={() => {
+                  onOpenSidebar();
+                  setRightSidebarOpen(true);
+                }}
+              >
+                <IconPanelLeftOutline16 />
+              </button>
+            </Tooltip>
+          )}
         </div>
+      </header>
+      <div className={styles.dashboardPage}>
         <header className={styles.dashboardHeader}>
           <div className={styles.dashboardIdentity}>
             <div
@@ -753,7 +757,6 @@ export function WorktreeDashboard({
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
-            <OpenInAppButton path={record.absolutePath} t={t} />
             <dl className={styles.dashboardFacts}>
               <DashboardFactRow label={t(acquisitionLabel)}>
                 {acquisitionFacts.timestamp ? (
@@ -874,8 +877,12 @@ export function WorktreeDashboard({
                   icon={<DashboardIcon kind="instructions" />}
                 >
                   <p>{t('dashboard.instructionsDescription')}</p>
-                  <WorktreeInstructions value={record.instructions ?? ''} onSave={onSaveInstructions}
-                    t={t} disabled={actionPending || record.health === 'recovery-needed'} />
+                  <WorktreeInstructions
+                    value={record.instructions ?? ''}
+                    onSave={onSaveInstructions}
+                    t={t}
+                    disabled={actionPending || record.health === 'recovery-needed'}
+                  />
                 </Card>
                 <Card
                   title={tabLabel('sessions')}
@@ -893,9 +900,7 @@ export function WorktreeDashboard({
                     <DashboardFactRow label={t('dashboard.health')}>
                       {t(healthKey)}
                     </DashboardFactRow>
-                    <DashboardFactRow label={t('dashboard.branch')}>
-                      {liveBranch}
-                    </DashboardFactRow>
+                    <DashboardFactRow label={t('dashboard.branch')}>{liveBranch}</DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.base')}>
                       {displayedBaseline ?? (
                         <span className={styles.dashboardHistorical}>

@@ -129,6 +129,11 @@ Session，让两侧视图保持一致。ready 的空 Session list 会打开不�
 它会收起当前打开的原生右侧栏，也不会自动创建 Session。只要当前 Session 可以承载右侧栏且右侧栏处于收起状态，
 Dashboard 右上角会保留原生的右侧栏按钮；右侧栏打开后，该按钮按原生行为自动隐藏。
 
+顶部栏显示 **{workspace}/{worktreeName}**，集中放置 **Open in ...**、**Back to session**
+（或 **New Session**）和右侧工具栏按钮，页面滚动时保持可见。
+macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收起时，
+红绿灯旁显示 DSH 原生展开按钮。Windows 保留原生窗口标题栏。
+
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
