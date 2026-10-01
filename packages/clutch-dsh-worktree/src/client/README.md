@@ -15,6 +15,14 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
   not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`.
+- On Client load and `connection/reset`, a non-blocking, five-second Host probe uses the adapter's
+  existing `listBindings` endpoint with an empty Workspace identity. An outer Gateway success,
+  including an inner `WORKSPACE_NOT_FOUND`, proves Host composition without selecting user data.
+  Only `gateway/service-unavailable`, `gateway/definition-unavailable`, and
+  `gateway/invocation-unavailable` show the native restart toast, once per Client fiber. Rechecks
+  abort superseded probes, disposal aborts pending probes, and stale responses never update the
+  reminder. The reminder uses its own `shell.overlay` registration and does not change ready views,
+  refresh scopes, Session/Workspace data, or the transport graph.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
   acknowledgement, and fails pending requests closed when the Client fiber is disposed.
