@@ -93,9 +93,9 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   });
 });
 
-test('accepts the DSH 0.1.7 prerelease graph while preserving the compatibility floor', () => {
-  const minimumDshVersion = '0.1.7-rc.1';
-  const validatedDshVersion = '0.1.7-rc.2';
+test('accepts the DSH 0.2.0 prerelease graph while preserving the compatibility floor', () => {
+  const minimumDshVersion = '0.2.0-rc.1';
+  const validatedDshVersion = '0.2.0-rc.1';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -123,11 +123,11 @@ test('accepts the DSH 0.1.7 prerelease graph while preserving the compatibility 
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '>=0.1.7-rc.1',
+    '>=0.2.0-rc.1',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.1.7-rc.2',
+    '0.2.0-rc.1',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);
