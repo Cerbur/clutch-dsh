@@ -64,11 +64,11 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ## 功能
 
-| 功能 | 预览 | 作用 |
-| --- | --- | --- |
-| **Worktree 导航** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 Sidebar 增加 Worktree 模式。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
-| **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗"> | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。 |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览"> | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。 |
+| 功能                    | 预览                                                                                                                                 | 作用                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
+| **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。                                                                                         |
 
 ## 使用
 
@@ -80,6 +80,10 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
    和 Session 导航仍然可用。每组初始显示五行，可使用**展开更多**和**收起**查看其余内容。
 4. 使用 header 中的 **Collapse All** 折叠其他无关的 Workspace 和 Worktree，当前 Session 所在的
    Workspace 与 Worktree 保持展开。
+
+收起原生 Sidebar 时，Web 和 desktop 的 Worktree 面板都会同步隐藏。macOS desktop 不保留
+收起后的窄栏，请使用原生标题栏控件重新展开。行动画遵循减少动态效果偏好，并在搜索、
+拖拽和首次加载时直接完成布局。
 
 ### 创建 Worktree
 
@@ -116,7 +120,9 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 ### 打开 Worktree Dashboard
 
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
-图标打开。Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
+图标打开。Sidebar 收起时，标题行图标也可单击打开 Dashboard，不需要展开 Sidebar。
+如果目标仍在加载，请求会保持，并在主区域显示加载状态或可重试错误。
+Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
 的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
 当前 Session 已属于目标 Worktree，就保持当前 Session；否则切换到目标 Worktree 保留顺序中排在最前的
 Session，让两侧视图保持一致。ready 的空 Session list 会打开不绑定当前 Session 的 page-level Dashboard；因为没有目标 Session，
@@ -227,12 +233,12 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 
 ## 要求
 
-| 组件 | 要求 |
-| --- | --- |
-| DSH Client | `>=0.1.7-rc.1`，需要 Session/Workspace Controller 和 Client Store |
-| DSH Host | `>=0.1.7-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability |
-| Git | `>=2.20.0`，必须已安装且可在 `PATH` 中使用 |
-| Node.js | 插件自身要求 `>=20.0.0`；DSH `dsh-v0.1.7-rc.1` 要求 `^22.19.0 || >=24.0.0` |
+| 组件            | 要求                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH Client      | `>=0.1.7-rc.1`，需要 Session/Workspace Controller 和 Client Store                                                                           |
+| DSH Host        | `>=0.1.7-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability                                                              |
+| Git             | `>=2.20.0`，必须已安装且可在 `PATH` 中使用                                                                                                  |
+| Node.js         | 插件自身要求 `>=20.0.0`；DSH `dsh-v0.1.7-rc.1` 要求 `^22.19.0                                                                               |     | >=24.0.0` |
 | Host filesystem | 支持使用普通 Windows 和 macOS 本地路径保存 sidecar 与 Git Worktree 数据；网络、特殊或别名路径较多的文件系统可能不支持持久化同步或身份校验。 |
 
 ## 行为与限制

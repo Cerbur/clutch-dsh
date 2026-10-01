@@ -311,7 +311,11 @@ export async function loadClientEntry({
     if (specifier === 'react/jsx-runtime') {
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
-    if (specifier === 'react') return { createElement: (type, props) => ({ type, props }) };
+    if (specifier === 'react') return {
+      createElement: (type, props) => ({ type, props }),
+      Component: class { constructor(props) { this.props = props; } },
+      createRef: () => ({ current: null }),
+    };
     if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return {};

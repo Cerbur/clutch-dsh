@@ -66,11 +66,11 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Features
 
-| Feature | Preview | What it does |
-| --- | --- | --- |
-| **Worktree navigation** | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the Sidebar. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
-| **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog"> | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory. |
-| **Worktree Dashboard** | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions"> | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**. |
+| Feature                         | Preview                                                                                                                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
+| **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
 
 ## Usage
 
@@ -83,6 +83,10 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
    use **Expand more** and **Collapse** for additional rows.
 4. Use **Collapse All** in the header to collapse other unrelated Workspaces and Worktrees;
    the Workspace and Worktree containing the current Session remain expanded.
+
+Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
+keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
+reduced motion and settles immediately during search, drag, and initial loading.
 
 ### Create a Worktree
 
@@ -119,7 +123,9 @@ or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 ### Open the Worktree Dashboard
 
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon
-beside the native Session-header actions. The Dashboard is a peer page to the native Session content: it
+beside the native Session-header actions. The header icon opens it in one click even when the Sidebar
+is collapsed, without expanding the Sidebar. If the target is still loading, the request stays open
+and shows loading or a retryable error in the center area. The Dashboard is a peer page to the native Session content: it
 occupies the center area beside the Sidebar while leaving an already-open right sidebar visible for a
 session-bound target. When the target Worktree has Sessions, opening its Dashboard waits for an initial pending
 Session list to become ready, then keeps the current Session if it belongs to that Worktree; otherwise it
@@ -266,12 +272,12 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 
 ## Requirements
 
-| Component | Requirement |
-| --- | --- |
-| DSH Client | `>=0.1.7-rc.1`, including the Session and Workspace Controllers and Client Store |
-| DSH Host | `>=0.1.7-rc.1`, including the Typert Gateway `/api` connection and subprocess capability |
-| Git | `>=2.20.0`, installed and available on `PATH` |
-| Node.js | `>=20.0.0` for the plugin; DSH `dsh-v0.1.7-rc.1` requires `^22.19.0 || >=24.0.0` |
+| Component       | Requirement                                                                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH Client      | `>=0.1.7-rc.1`, including the Session and Workspace Controllers and Client Store                                                                                                    |
+| DSH Host        | `>=0.1.7-rc.1`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
+| Git             | `>=2.20.0`, installed and available on `PATH`                                                                                                                                       |
+| Node.js         | `>=20.0.0` for the plugin; DSH `dsh-v0.1.7-rc.1` requires `^22.19.0                                                                                                                 |     | >=24.0.0` |
 | Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
 
 ## Behavior and limitations

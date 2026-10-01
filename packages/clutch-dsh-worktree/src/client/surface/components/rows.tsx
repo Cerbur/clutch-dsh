@@ -1,9 +1,4 @@
-import {
-  HoverCard,
-  Menu,
-  StateDot,
-  writeClipboard,
-} from '@deepseek-ai/dsh-client-ui-primitives';
+import { HoverCard, Menu, StateDot, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   IconArchiveOutline20,
   IconBranchOutline16,
@@ -212,6 +207,7 @@ export function WorktreeWorkspaceRow({
   return (
     <div
       className={`${styles.workspaceRow} ${markerClass}`}
+      data-worktree-motion-key={`workspace:${workspace.workspaceId}`}
       data-workspace-drag={drag.active ? 'active' : undefined}
       data-group-activity={groupActivityVisible ? 'true' : undefined}
       data-menu-open={menuOpen || undefined}
@@ -343,8 +339,7 @@ export function WorktreeGroupRow({
   const groupActivityLabel =
     groupActivityStatus === undefined ? undefined : sessionStatusLabel(t, groupActivityStatus);
   const worktreeStateVisible = stateLabel !== undefined;
-  const dashboardActionVisible =
-    showDashboardAction === true && menu?.onDashboard !== undefined;
+  const dashboardActionVisible = showDashboardAction === true && menu?.onDashboard !== undefined;
   const worktreeLabelRef = useRef<HTMLSpanElement>(null);
   const labelScrollFrameRef = useRef<number | undefined>(undefined);
   const worktreeLabelPointerInsideRef = useRef<boolean>(false);
@@ -387,8 +382,7 @@ export function WorktreeGroupRow({
         return;
       }
 
-      labelElement.scrollLeft =
-        maxScrollLeft * worktreeLabelScrollProgress(timestamp - startedAt);
+      labelElement.scrollLeft = maxScrollLeft * worktreeLabelScrollProgress(timestamp - startedAt);
       labelScrollFrameRef.current = requestAnimationFrame(animate);
     };
 
@@ -449,6 +443,7 @@ export function WorktreeGroupRow({
   const row = (
     <div
       className={`${styles.worktreeRow} ${markerClass}`}
+      data-worktree-motion-key={`group:${kind}:${menu?.copyPath ?? ''}`}
       data-main-group={main ? 'true' : undefined}
       data-main-expanded={main ? String(expanded) : undefined}
       data-group-activity={groupActivityVisible ? 'true' : undefined}
@@ -484,15 +479,11 @@ export function WorktreeGroupRow({
       <span className={styles.worktreeIcon} data-worktree-state={state} aria-hidden="true">
         {icon}
       </span>
-      {worktreeStateVisible && (
-        <span className={styles.worktreeStateLabel}>{stateLabel}</span>
-      )}
+      {worktreeStateVisible && <span className={styles.worktreeStateLabel}>{stateLabel}</span>}
       <span ref={worktreeLabelRef} className={styles.worktreeLabel}>
         {label}
       </span>
-      <span
-        className={styles.treeActionSlot}
-      >
+      <span className={styles.treeActionSlot}>
         <span
           className={styles.groupActivity}
           data-group-activity={groupActivityVisible ? 'true' : undefined}
@@ -530,7 +521,13 @@ export function WorktreeGroupRow({
               items={[
                 ...(menu.onDashboard === undefined
                   ? []
-                  : [{ id: 'dashboard', label: t('dashboard.title'), icon: <IconDashboard size={16} /> }]),
+                  : [
+                      {
+                        id: 'dashboard',
+                        label: t('dashboard.title'),
+                        icon: <IconDashboard size={16} />,
+                      },
+                    ]),
                 ...(menu.showCreate
                   ? [
                       {
@@ -747,6 +744,7 @@ export function WorktreeSessionRow({
     <div
       className={`${styles.treeSessionRow} ${markerClass}`}
       data-session-id={sessionId}
+      data-worktree-motion-key={`session:${sessionId}`}
       data-session-blank={blank ? 'true' : undefined}
       data-session-current={current ? 'true' : undefined}
       data-session-drag={drag.active ? 'active' : undefined}
