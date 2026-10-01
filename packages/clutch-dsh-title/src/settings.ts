@@ -4,21 +4,30 @@ import z from '@deepseek-ai/schemastery';
 import { stringify } from 'yaml';
 import { TITLE_NAMESPACE, EMOJI_TEMPLATE, decodeTemplates, settingsDocument } from './templates.js';
 import type { TitleConfig } from './types.js';
+import { MAX_REPAIR_ATTEMPTS, resolveTitleConfig } from './config.js';
 
 /** Deliberately tolerant: external malformed rows must remain visible for repair. */
 export const TemplateSettingsSchema: z = z.object({
   enabled: z.any().default(true),
   active: z.any().default('default'),
   templates: z.any().default({}),
+  repairAttempts: z.number().step(1).min(0).max(MAX_REPAIR_ATTEMPTS).default(1),
 });
 
 export function templateSettingsBase(config: TitleConfig): Record<string, unknown> {
+  const repairAttempts = resolveTitleConfig(config).repairAttempts;
   // Schemastery materializes an omitted dictionary as {}; that is not a legacy override.
   if (config.template === undefined && Object.keys(config.fields ?? {}).length === 0)
-    return { enabled: true, active: 'default', templates: { emoji: EMOJI_TEMPLATE } };
+    return {
+      enabled: true,
+      active: 'default',
+      templates: { emoji: EMOJI_TEMPLATE },
+      repairAttempts,
+    };
   return {
     enabled: true,
     active: 'legacy',
+    repairAttempts,
     templates: {
       legacy: stringify({
         template: config.template ?? '${daytime}|${type}|${desc}',

@@ -17,7 +17,11 @@ import type {
 } from '@deepseek-ai/dsh-session-title';
 import { selectReferencedFields, validateExtractedFields } from './fields.js';
 import { frameBoundedInput } from './input.js';
-import { normalizeTokenUsage, truncateDiagnosticOutput } from './types.js';
+import {
+  MAX_DIAGNOSTIC_ERROR_CHARS,
+  normalizeTokenUsage,
+  truncateDiagnosticOutput,
+} from './types.js';
 import type {
   ExtractedLlmFields,
   ResolvedTitleConfig,
@@ -47,7 +51,7 @@ export class TitleOutputError extends Error {
   readonly code = 'INVALID_TITLE_OUTPUT';
 
   constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
+    super(message.slice(0, MAX_DIAGNOSTIC_ERROR_CHARS), options);
     this.name = 'TitleOutputError';
   }
 }
@@ -173,9 +177,13 @@ function finishError(finish: FinishReason): Error | undefined {
       return error;
     }
     case 'max-tokens':
-      return new Error('clutch-dsh-title: structured extraction reached maxOutputTokens');
+      return new TitleOutputError(
+        'clutch-dsh-title: structured extraction reached maxOutputTokens',
+      );
     case 'tool-calls':
-      return new Error('clutch-dsh-title: structured extraction unexpectedly requested a tool');
+      return new TitleOutputError(
+        'clutch-dsh-title: structured extraction unexpectedly requested a tool',
+      );
     default:
       return new Error(
         `clutch-dsh-title: unsupported finish reason ${JSON.stringify((finish as { kind?: unknown }).kind)}`,
@@ -239,6 +247,7 @@ function textBlock(text: string): Message['content'][number] {
 interface StreamedResponse {
   readonly text: string;
   readonly usage?: TitleTokenUsage;
+  readonly outputError?: TitleOutputError;
 }
 
 /** Drain one auxiliary stream and return its usable text. */
@@ -254,11 +263,9 @@ async function streamResponse(
   }
   signal.throwIfAborted();
   const terminalError = finishError(assembler.finish);
-  if (terminalError !== undefined) throw terminalError;
+  if (terminalError !== undefined && !(terminalError instanceof TitleOutputError))
+    throw terminalError;
   const blocks = assembler.blocks();
-  if (blocks.some((block) => block.type === 'tool-call')) {
-    throw new TitleOutputError('clutch-dsh-title: structured extraction must contain text only');
-  }
   const text = blocks
     .filter(
       (block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text',
@@ -266,11 +273,16 @@ async function streamResponse(
     .map((block) => block.text)
     .join(' ')
     .trim();
-  if (text.length === 0) {
-    throw new TitleOutputError('clutch-dsh-title: structured extraction produced no text');
-  }
+  const outputError =
+    terminalError ??
+    (blocks.some((block) => block.type === 'tool-call')
+      ? new TitleOutputError('clutch-dsh-title: structured extraction must contain text only')
+      : text.length === 0
+        ? new TitleOutputError('clutch-dsh-title: structured extraction produced no text')
+        : undefined);
   return {
     text,
+    outputError,
     usage: assembler.usage === undefined ? undefined : normalizeTokenUsage(assembler.usage),
   };
 }
@@ -340,12 +352,9 @@ function reportIncident(
   diagnostics: TitleDiagnosticsRecorder | undefined,
   incident: TitleExtractionIncident,
 ): void {
-  const last = incident.attempts[incident.attempts.length - 1];
-  const outcome = incident.recovered ? 'repaired' : 'gave up';
-  const detail = last === undefined ? incident.error : last.error;
   warn(
     ctx,
-    `clutch-dsh-title: session ${JSON.stringify(String(incident.messageSeqs.join(',')))} title extraction ${outcome} after ${incident.attempts.length} rejected response(s) on ${incident.provider}/${incident.model}: ${detail}`,
+    `clutch-dsh-title: title extraction ${incident.recovered ? 'repaired' : 'gave up'} ${JSON.stringify(incident)}`,
   );
   if (diagnostics === undefined) return;
   void Promise.resolve()
@@ -387,6 +396,7 @@ export async function extractLlmFields(
   let messages: Message[] = baseMessages;
   let result: ExtractedLlmFields | undefined;
   let failure: Error | undefined;
+  let dispatched = 0;
 
   try {
     for (let attempt = 1; attempt <= dispatches; attempt += 1) {
@@ -402,6 +412,7 @@ export async function extractLlmFields(
       request.session.append('session/title-llm-request', event);
       callDeadline.signal.throwIfAborted();
 
+      dispatched = attempt;
       const response = await streamResponse(
         ctx,
         buildOptions(
@@ -417,6 +428,7 @@ export async function extractLlmFields(
       );
 
       try {
+        if (response.outputError !== undefined) throw response.outputError;
         const candidate = JSON.parse(response.text) as unknown;
         const values = validateExtractedFields(fields, candidate);
         result = deepFreeze({
@@ -453,8 +465,9 @@ export async function extractLlmFields(
       model: route.model,
       messageSeqs,
       attempts,
+      repairAttempts: Math.max(dispatched - 1, 0),
       recovered: result !== undefined,
-      error: result !== undefined ? '' : failure.message,
+      error: result !== undefined ? '' : failure.message.slice(0, MAX_DIAGNOSTIC_ERROR_CHARS),
     });
   }
   if (result !== undefined) return result;

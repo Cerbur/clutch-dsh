@@ -63,7 +63,7 @@ export const TitleConfigSchema = z.object({
   maxOutputTokens: z.number().step(1).min(1).default(512),
   reasoningEffort: z.union([z.string(), z.const(null)]),
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(60000),
-  repairAttempts: z.number().step(1).min(0).max(MAX_REPAIR_ATTEMPTS).default(1),
+  repairAttempts: z.number().step(1).min(0).max(MAX_REPAIR_ATTEMPTS).default(1).volatile(),
   provider: z.string(),
   model: z.string(),
   enabled: z.any().volatile(),
@@ -249,7 +249,15 @@ export function resolveTitleConfig(config: TitleConfig): ResolvedTitleConfig {
   if (timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`clutch-dsh-title: timeoutMs must not exceed ${MAX_TIMER_DELAY_MS}`);
   }
-  const repairAttempts = input.repairAttempts === undefined ? 1 : input.repairAttempts;
+  const rawRepairAttempts = input.repairAttempts;
+  const repairAttempts =
+    rawRepairAttempts !== null &&
+    typeof rawRepairAttempts === 'object' &&
+    typeof rawRepairAttempts.get === 'function'
+      ? rawRepairAttempts.get()
+      : rawRepairAttempts === undefined
+        ? 1
+        : rawRepairAttempts;
   assertNonNegativeSafeInteger('repairAttempts', repairAttempts);
   if (repairAttempts > MAX_REPAIR_ATTEMPTS) {
     throw new Error(`clutch-dsh-title: repairAttempts must not exceed ${MAX_REPAIR_ATTEMPTS}`);

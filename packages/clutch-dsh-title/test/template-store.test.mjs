@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadPackageModule } from './load-module.mjs';
 const { TemplateStore } = await loadPackageModule('client/store');
+const { DEFAULT_TITLE_DIAGNOSTICS } = await loadPackageModule('types');
 const snapshot = (revision) => ({
   writable: true,
   revision,
@@ -57,6 +58,166 @@ test('late load cannot overwrite a newer invalidation result', async () => {
   await first;
   assert.equal(store.getSnapshot().revision, 3);
 });
+
+test('diagnostic failure is isolated, reload restores clearing, and reset never writes settings', async () => {
+  let available = false;
+  let diagnostics = { ...DEFAULT_TITLE_DIAGNOSTICS, totalIncidents: 2 };
+  const writes = [];
+  const store = new TemplateStore(
+    {
+      read: async () => snapshot(3),
+      write: async (...args) => {
+        writes.push(args);
+      },
+      getDiagnostics: async () => {
+        if (!available) throw new Error('diagnostics offline');
+        return diagnostics;
+      },
+      resetDiagnostics: async () => {
+        diagnostics = DEFAULT_TITLE_DIAGNOSTICS;
+        return diagnostics;
+      },
+    },
+    20,
+  );
+  await store.load();
+  assert.equal(store.getSnapshot().status, 'ready');
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(store.getSnapshot().diagnosticsStatus, 'error');
+  assert.equal(store.canResetDiagnostics, false);
+  await assert.rejects(store.resetDiagnostics(), /unavailable/);
+  available = true;
+  await store.load();
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  assert.equal(store.canResetDiagnostics, true);
+  assert.equal(store.getSnapshot().diagnostics.totalIncidents, 2);
+  await store.resetDiagnostics();
+  assert.deepEqual(store.getSnapshot().diagnostics, DEFAULT_TITLE_DIAGNOSTICS);
+  assert.equal(store.getSnapshot().busy, false);
+  assert.equal(writes.length, 0);
+  await store.write({ kind: 'repairAttempts', value: 3 }, 3);
+  assert.deepEqual(writes[0], [[{ op: 'set', path: ['repairAttempts'], value: 3 }], 3]);
+  await assert.rejects(store.write({ kind: 'repairAttempts', value: 4 }, 3), /repairAttempts/);
+  assert.equal(writes.length, 1);
+});
+
+test('hanging diagnostics read is bounded without disabling template settings', async () => {
+  const store = new TemplateStore(
+    {
+      read: async () => snapshot(1),
+      write: async () => {},
+      getDiagnostics: () => new Promise(() => {}),
+    },
+    10,
+  );
+  await store.load();
+  assert.equal(store.getSnapshot().status, 'ready');
+  assert.equal(store.getSnapshot().writable, true);
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
+  assert.equal(store.getSnapshot().diagnosticsStatus, 'error');
+  assert.match(store.getSnapshot().diagnosticsError, /timed out/);
+});
+
+test('pending diagnostics do not delay initial settings or template and repair writes', async () => {
+  const diagnostics = [];
+  const writes = [];
+  let revision = 1;
+  const store = new TemplateStore(
+    {
+      read: async () => snapshot(revision),
+      write: async (ops, expectedRevision) => {
+        writes.push({ ops, expectedRevision });
+        revision++;
+      },
+      getDiagnostics: () => new Promise((resolve) => diagnostics.push(resolve)),
+    },
+    500,
+  );
+  let timer;
+  try {
+    await Promise.race([
+      (async () => {
+        await store.load();
+        assert.equal(store.getSnapshot().writable, true);
+        assert.equal(store.getSnapshot().diagnosticsStatus, 'idle');
+        await store.write({ kind: 'save', id: 'one', source: 'template: hello' }, 1);
+        await store.write({ kind: 'repairAttempts', value: 3 }, 2);
+        assert.equal(store.getSnapshot().revision, 3);
+        assert.equal(store.getSnapshot().busy, false);
+        assert.deepEqual(
+          writes.map((write) => write.expectedRevision),
+          [1, 2],
+        );
+      })(),
+      new Promise((_, reject) => {
+        timer = globalThis.setTimeout(() => reject(new Error('diagnostics blocked settings')), 100);
+      }),
+    ]);
+    diagnostics.at(-1)({ ...DEFAULT_TITLE_DIAGNOSTICS, totalIncidents: 3 });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+    diagnostics[0]({ ...DEFAULT_TITLE_DIAGNOSTICS, totalIncidents: 99 });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+    assert.equal(store.getSnapshot().diagnostics.totalIncidents, 3);
+  } finally {
+    globalThis.clearTimeout(timer);
+    for (const resolve of diagnostics) resolve(DEFAULT_TITLE_DIAGNOSTICS);
+  }
+});
+
+for (const outcome of ['success', 'failure', 'timeout']) {
+  test(`diagnostics reset ${outcome} completes despite a hanging settings refresh`, async () => {
+    let reads = 0;
+    let finishRead;
+    const failure = new Error('reset offline');
+    const store = new TemplateStore(
+      {
+        read: () =>
+          ++reads === 1
+            ? Promise.resolve(snapshot(1))
+            : new Promise((resolve) => {
+                finishRead = resolve;
+              }),
+        write: async () => {},
+        getDiagnostics: async () => DEFAULT_TITLE_DIAGNOSTICS,
+        resetDiagnostics: () =>
+          outcome === 'success'
+            ? Promise.resolve(DEFAULT_TITLE_DIAGNOSTICS)
+            : outcome === 'failure'
+              ? Promise.reject(failure)
+              : new Promise(() => {}),
+      },
+      10,
+    );
+    await store.load();
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+    const reset = store.resetDiagnostics();
+    // A test deadline catches regressions without leaving the test itself hanging.
+    let timer;
+    const bounded = Promise.race([
+      reset,
+      new Promise((_, reject) => {
+        timer = globalThis.setTimeout(
+          () => reject(new Error('reset blocked by settings refresh')),
+          200,
+        );
+      }),
+    ]);
+    try {
+      if (outcome === 'success') await bounded;
+      else
+        await assert.rejects(
+          bounded,
+          outcome === 'failure' ? failure : /diagnostics reset timed out/,
+        );
+      assert.equal(store.getSnapshot().busy, false);
+      assert.equal(reads, 2);
+    } finally {
+      globalThis.clearTimeout(timer);
+      finishRead(snapshot(2));
+      await reset.catch(() => {});
+    }
+  });
+}
 
 test('resetStats delegates to operations.resetStats without writing settings', async () => {
   const operations = [];

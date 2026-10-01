@@ -548,6 +548,37 @@ test('repairs an undeclared enum value without inventing one', async () => {
   assert.match(requests[1].messages[2].content[0].text, /is not declared/);
 });
 
+for (const kind of ['max-tokens', 'tool-calls']) {
+  test(`repairs ${kind} output and retains its rejected text`, async () => {
+    const incidents = [];
+    const output = '{"type":"配置","desc":"unfinished';
+    const { outcome, requests } = await runRepair({
+      responses: [textChunks(output, { kind }), textChunks('{"type":"配置","desc":"Recovered"}')],
+      diagnostics: { record: async (incident) => incidents.push(incident) },
+    });
+    assert.equal(outcome.ok, true);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].messages[1].content[0].text, output);
+    assert.equal(incidents[0].recovered, true);
+    assert.equal(incidents[0].repairAttempts, 1);
+    assert.equal(incidents[0].attempts[0].output, output);
+    assert.match(incidents[0].attempts[0].error, /maxOutputTokens|requested a tool/);
+  });
+
+  test(`disabled repair still records ${kind} output`, async () => {
+    const incidents = [];
+    const { outcome, requests } = await runRepair({
+      config: makeConfig({ repairAttempts: 0 }),
+      responses: [textChunks('rejected response', { kind })],
+      diagnostics: { record: async (incident) => incidents.push(incident) },
+    });
+    assert.equal(outcome.ok, false);
+    assert.equal(requests.length, 1);
+    assert.equal(incidents[0].repairAttempts, 0);
+    assert.equal(incidents[0].attempts[0].output, 'rejected response');
+  });
+}
+
 test('honors repairAttempts as the number of extra calls and never retries transport failures', async () => {
   const disabled = await runRepair({
     config: makeConfig({ repairAttempts: 0 }),
@@ -599,6 +630,7 @@ test('records one incident with the raw response once a first attempt is rejecte
   assert.equal(recovered.outcome.ok, true);
   assert.equal(incidents.length, 1);
   assert.equal(incidents[0].recovered, true);
+  assert.equal(incidents[0].repairAttempts, 1);
   assert.equal(incidents[0].error, '');
   assert.equal(incidents[0].provider, 'main-route');
   assert.equal(incidents[0].model, 'main-model');
@@ -620,10 +652,44 @@ test('records one incident with the raw response once a first attempt is rejecte
   assert.equal(failed.outcome.ok, false);
   assert.equal(incidents.length, 1);
   assert.equal(incidents[0].recovered, false);
+  assert.equal(incidents[0].repairAttempts, 1);
   assert.equal(incidents[0].error, failed.outcome.error.message);
   assert.equal(incidents[0].attempts.length, 2);
   assert.equal(incidents[0].attempts[1].attempt, 2);
   assert.match(warnings[0], /gave up/);
+});
+
+test('repairs an empty response and counts a repair ending in a transport failure', async () => {
+  const incidents = [];
+  const diagnostics = {
+    async record(incident) {
+      incidents.push(incident);
+    },
+  };
+  const empty = await runRepair({
+    diagnostics,
+    responses: [textChunks(''), textChunks('{"type":"配置","desc":"Recovered"}')],
+  });
+  assert.equal(empty.outcome.ok, true);
+  assert.equal(empty.requests.length, 2);
+  assert.equal(incidents[0].repairAttempts, 1);
+  assert.match(incidents[0].attempts[0].error, /no text/);
+  incidents.length = 0;
+  const failed = await runRepair({
+    diagnostics,
+    responses: [
+      textChunks('{}'),
+      textChunks('', {
+        kind: 'error',
+        failure: { message: 'offline', code: 'OFFLINE' },
+      }),
+    ],
+  });
+  assert.equal(failed.outcome.ok, false);
+  assert.equal(failed.requests.length, 2);
+  assert.equal(incidents[0].repairAttempts, 1);
+  assert.equal(incidents[0].attempts.length, 1);
+  assert.equal(incidents[0].error, 'offline');
 });
 
 test('bounds the recorded raw response and skips incidents for aborted generations', async () => {

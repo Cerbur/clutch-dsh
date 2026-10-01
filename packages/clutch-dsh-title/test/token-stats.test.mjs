@@ -262,6 +262,188 @@ test('parseStats handles missing, corrupted or negative stats values safely', ()
   assert.equal(cached.lastUsage.cacheWriteTokens, 10);
 });
 
+for (const scenario of [
+  {
+    name: 'repaired title',
+    outputs: ['invalid', '{"type":"功能","desc":"统计修复"}'],
+    count: 2,
+    calls: 2,
+  },
+  { name: 'exhausted repairs', outputs: ['invalid', 'invalid'], count: 2, calls: 2 },
+  {
+    name: 'transport failure after usage',
+    outputs: ['invalid'],
+    transport: true,
+    count: 1,
+    calls: 1,
+  },
+  {
+    name: 'truncated output',
+    outputs: ['{"type":"功能","desc":"统计修复"}'],
+    truncated: true,
+    count: 2,
+    calls: 2,
+  },
+  {
+    name: 'success without usage',
+    outputs: ['{"type":"功能","desc":"统计修复"}'],
+    noUsage: true,
+    count: 1,
+    calls: 1,
+  },
+  { name: 'native success', outputs: ['原生标题'], native: true, count: 1, calls: 1 },
+  { name: 'native empty output with usage', outputs: [''], native: true, count: 1, calls: 1 },
+  {
+    name: 'failure without usage',
+    outputs: ['invalid'],
+    transport: true,
+    noUsage: true,
+    count: 0,
+    calls: 1,
+  },
+  {
+    name: 'failure with zero usage',
+    outputs: ['invalid'],
+    transport: true,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    count: 0,
+    calls: 1,
+  },
+  {
+    name: 'success with zero usage',
+    outputs: ['{"type":"功能","desc":"统计修复"}'],
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    count: 1,
+    calls: 1,
+  },
+  {
+    name: 'native success without usage',
+    outputs: ['原生标题'],
+    native: true,
+    noUsage: true,
+    count: 1,
+    calls: 1,
+  },
+  {
+    name: 'repair success without final usage',
+    outputs: ['invalid', '{"type":"功能","desc":"统计修复"}'],
+    noFinalUsage: true,
+    count: 2,
+    calls: 2,
+  },
+  {
+    name: 'cache-only consumption on failure',
+    outputs: ['invalid'],
+    transport: true,
+    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 5, totalTokens: 5 },
+    count: 1,
+    calls: 1,
+  },
+  { name: 'deterministic title', outputs: [], deterministic: true, count: 0, calls: 0 },
+]) {
+  test(`generation count excludes only unsuccessful calls without consumption: ${scenario.name}`, async () => {
+    const ctx = new Context();
+    let calls = 0;
+    class ScenarioAdapter extends LlmAdapter {
+      async *stream() {
+        const output = scenario.outputs[Math.min(calls++, scenario.outputs.length - 1)];
+        if (output) yield { type: 'text-delta', index: 0, text: output };
+        if (!scenario.noUsage && !(scenario.noFinalUsage && calls === scenario.calls)) {
+          yield {
+            type: 'usage',
+            usage: scenario.usage ?? { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          };
+        }
+        if (scenario.transport) throw new Error('connection lost');
+        yield { type: 'finish', reason: { kind: scenario.truncated ? 'max-tokens' : 'stop' } };
+      }
+    }
+    try {
+      await ctx.plugin(MemorySettings);
+      await ctx.plugin(LlmRuntime);
+      await ctx.plugin(SessionStore);
+      await ctx.plugin(SessionProjectionRegistry);
+      await ctx.plugin(SessionTitleService, {
+        fallbackMaxWords: 5,
+        fallbackMaxBytes: 80,
+        maxTitleBytes: 120,
+      });
+      ctx.llm.registerAdapter(['count-route'], new ScenarioAdapter());
+      await ctx.plugin(titlePlugin, {
+        provider: 'count-route',
+        model: 'count-model',
+        repairAttempts: 1,
+        ...(scenario.deterministic ? { template: '固定标题', fields: {} } : { preset: 'default' }),
+      });
+      if (scenario.native) {
+        ctx.settings.external({ enabled: false, active: 'default', templates: {} });
+      }
+      const session = ctx.sessions.create(SessionId(`count-${scenario.name}`), {
+        meta: { createdAt: Date.now() },
+      });
+      session.append('turn/start', { turn: 1 });
+      session.append(
+        'user/message',
+        createUserMessage({
+          content: [{ type: 'text', text: '生成次数与消耗统计' }],
+          source: { kind: 'user' },
+        }),
+        { surfaceOp: 'append' },
+      );
+      session.append('request/header', {
+        header: { config: { provider: 'count-route', model: 'count-model' } },
+        reason: 'initial',
+      });
+      await delay(50);
+      const stats = await ctx.get('titleRemote').getStats();
+      assert.equal(calls, scenario.calls);
+      assert.equal(stats.totalCalls, scenario.count);
+      const usage = scenario.usage ?? { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
+      const meteredCalls = scenario.noUsage ? 0 : scenario.calls - (scenario.noFinalUsage ? 1 : 0);
+      assert.equal(
+        stats.totalInputTokens,
+        meteredCalls * (usage.inputTokens + (usage.cacheReadTokens ?? 0)),
+      );
+      assert.equal(stats.totalOutputTokens, meteredCalls * usage.outputTokens);
+      assert.equal(stats.totalTokens, meteredCalls * usage.totalTokens);
+    } finally {
+      await ctx.fiber.dispose();
+    }
+  });
+}
+
+test('consumed token calls survive late storage connection and reset', async () => {
+  let facility;
+  let persisted = { ...DEFAULT_TITLE_STATS };
+  const store = new TitleStatsStoreImpl({ get: () => facility });
+  try {
+    await store.record({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
+    facility = {
+      open: async () => ({
+        global: {
+          get: () => persisted,
+          set: async (value) => {
+            persisted = value;
+          },
+        },
+        close: async () => {},
+      }),
+    };
+    const stats = await store.get();
+    assert.equal(stats.totalCalls, 1);
+    assert.equal(stats.totalTokens, 15);
+    assert.equal(persisted.totalTokens, 15);
+    await store.recordSuccess();
+    assert.equal((await store.get()).totalCalls, 2);
+    assert.equal((await store.get()).totalTokens, 15);
+    await store.reset();
+    assert.deepEqual(await store.get(), DEFAULT_TITLE_STATS);
+    assert.deepEqual(persisted, DEFAULT_TITLE_STATS);
+  } finally {
+    await store.close();
+  }
+});
+
 test('TitleStatsStore records, retrieves, and resets token statistics with storageDomain', async () => {
   const ctx = new Context();
   try {
@@ -900,6 +1082,103 @@ test('TitleStatsStore closes a late-merge domain when persistence fails', async 
   }
 });
 
+test('title usage tracking keeps concurrent generations isolated and counts metered success once', async () => {
+  const ctx = new Context();
+  const store = createTitleStatsStore(ctx);
+  const track = installTitleTokenStatsRecorder(ctx, store);
+  const signal = new globalThis.AbortController().signal;
+  async function consume(usage) {
+    const stream = ctx.waterfall(ctx, 'llm/stream', { purpose: 'session-title' }, () =>
+      (async function* () {
+        if (usage !== undefined) yield { type: 'usage', usage };
+        yield { type: 'finish', reason: { kind: 'stop' } };
+      })(),
+    );
+    for await (const chunk of stream) void chunk;
+  }
+  let releaseFirst;
+  const release = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let startedFirst;
+  const started = new Promise((resolve) => {
+    startedFirst = resolve;
+  });
+  try {
+    const first = track(async () => {
+      await consume({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
+      startedFirst();
+      await release;
+    }, signal);
+    await started;
+    await track(() => consume(undefined), signal);
+    releaseFirst();
+    await first;
+    await delay(0);
+    const stats = await store.get();
+    assert.equal(stats.totalCalls, 2);
+    assert.equal(stats.totalTokens, 15);
+  } finally {
+    releaseFirst();
+    await ctx.fiber.dispose();
+  }
+});
+
+for (const consumed of [false, true]) {
+  test(`cancelled title counts only when tokens were consumed: ${consumed}`, async () => {
+    const ctx = new Context();
+    const store = createTitleStatsStore(ctx);
+    const track = installTitleTokenStatsRecorder(ctx, store);
+    const cancellation = new globalThis.AbortController();
+    try {
+      await track(async () => {
+        const stream = ctx.waterfall(ctx, 'llm/stream', { purpose: 'session-title' }, () =>
+          (async function* () {
+            if (consumed)
+              yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } };
+          })(),
+        );
+        for await (const chunk of stream) void chunk;
+        cancellation.abort();
+      }, cancellation.signal);
+      await delay(0);
+      const stats = await store.get();
+      assert.equal(stats.totalCalls, consumed ? 1 : 0);
+      assert.equal(stats.totalTokens, consumed ? 15 : 0);
+    } finally {
+      await ctx.fiber.dispose();
+    }
+  });
+}
+
+test('multiple usage snapshots count once and a zero snapshot does not discard consumed tokens', async () => {
+  const ctx = new Context();
+  const store = createTitleStatsStore(ctx);
+  const track = installTitleTokenStatsRecorder(ctx, store);
+  try {
+    await assert.rejects(
+      track(async () => {
+        const stream = ctx.waterfall(ctx, 'llm/stream', { purpose: 'session-title' }, () =>
+          (async function* () {
+            yield { type: 'usage', usage: { inputTokens: 5, outputTokens: 5, totalTokens: 10 } };
+            yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } };
+            yield { type: 'usage', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+            throw new Error('connection lost');
+          })(),
+        );
+        for await (const chunk of stream) void chunk;
+      }, new globalThis.AbortController().signal),
+      /connection lost/,
+    );
+    await delay(0);
+    const stats = await store.get();
+    assert.equal(stats.totalCalls, 1);
+    assert.equal(stats.totalTokens, 15);
+  } finally {
+    await ctx.fiber.dispose();
+  }
+});
+
 test('session-title usage recorder does not block a stream on a stalled stats write', async () => {
   const ctx = new Context();
   let recordCalls = 0;
@@ -909,6 +1188,7 @@ test('session-title usage recorder does not block a stream on a stalled stats wr
         recordCalls++;
         return new Promise(() => {});
       },
+      recordSuccess: async () => {},
     });
     const stream = ctx.waterfall(ctx, 'llm/stream', { purpose: 'session-title' }, () =>
       (async function* () {

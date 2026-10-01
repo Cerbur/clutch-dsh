@@ -6,31 +6,55 @@ import {
   DEFAULT_TITLE_DIAGNOSTICS,
   MAX_DIAGNOSTIC_ATTEMPTS,
   MAX_DIAGNOSTIC_OUTPUT_CHARS,
+  MAX_DIAGNOSTIC_ERROR_CHARS,
+  MAX_DIAGNOSTIC_ROUTE_CHARS,
+  MAX_DIAGNOSTIC_MESSAGE_SEQS,
+  MAX_RECENT_INCIDENTS,
   parseDiagnostics,
 } from './types.js';
 import type { TitleDiagnostics, TitleExtractionIncident } from './types.js';
 
 export const titleDiagnosticsAttemptRecord = z.object({
   attempt: z.number().int().nonnegative(),
-  error: z.string(),
+  error: z.string().max(MAX_DIAGNOSTIC_ERROR_CHARS),
   output: z.string().max(MAX_DIAGNOSTIC_OUTPUT_CHARS + 32),
 });
 
 export const titleDiagnosticsIncidentRecord = z.object({
   timestamp: z.number().int().nonnegative(),
-  provider: z.string(),
-  model: z.string(),
-  messageSeqs: z.array(z.number().int().nonnegative()),
+  provider: z.string().max(MAX_DIAGNOSTIC_ROUTE_CHARS),
+  model: z.string().max(MAX_DIAGNOSTIC_ROUTE_CHARS),
+  messageSeqs: z.array(z.number().int().nonnegative()).max(MAX_DIAGNOSTIC_MESSAGE_SEQS),
   attempts: z.array(titleDiagnosticsAttemptRecord).max(MAX_DIAGNOSTIC_ATTEMPTS),
   recovered: z.boolean(),
-  error: z.string(),
+  error: z.string().max(MAX_DIAGNOSTIC_ERROR_CHARS),
+  repairAttempts: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_DIAGNOSTIC_ATTEMPTS - 1)
+    .optional(),
 });
 
 export const titleDiagnosticsRecord = z.object({
   totalIncidents: z.number().int().nonnegative(),
   totalRepairAttempts: z.number().int().nonnegative(),
   totalRecovered: z.number().int().nonnegative(),
-  lastIncident: titleDiagnosticsIncidentRecord.optional(),
+  // Legacy v1 records did not bound route/error strings or message-seq arrays.
+  // Keep them readable; normalization and the next write enforce the new bounds.
+  lastIncident: titleDiagnosticsIncidentRecord
+    .extend({
+      provider: z.string(),
+      model: z.string(),
+      error: z.string(),
+      messageSeqs: z.array(z.number().int().nonnegative()),
+      attempts: z
+        .array(titleDiagnosticsAttemptRecord.extend({ error: z.string() }))
+        .max(MAX_DIAGNOSTIC_ATTEMPTS),
+    })
+    .optional(),
+  recentIncidents: z.array(titleDiagnosticsIncidentRecord).max(MAX_RECENT_INCIDENTS).optional(),
+  lastRepairAt: z.number().int().nonnegative().optional(),
 });
 
 export const titleDiagnosticsDomainSpec = defineDomain({
@@ -64,7 +88,11 @@ export const TITLE_DIAGNOSTICS_STORAGE_TIMEOUT_MS = 5_000;
 
 /** Repair calls a single incident proved were dispatched. */
 export function repairCallsOf(incident: TitleExtractionIncident): number {
-  return Math.max(incident.attempts.length - 1, 0);
+  if (incident.repairAttempts !== undefined) return incident.repairAttempts;
+  // Legacy extraction records contain rejected responses only. Some callers include
+  // the successful response (empty error), so avoid counting that twice.
+  const last = incident.attempts.at(-1);
+  return Math.max((last?.attempt ?? 0) - 1 + (incident.recovered && last?.error ? 1 : 0), 0);
 }
 
 function applyIncident(
@@ -75,7 +103,12 @@ function applyIncident(
     totalIncidents: base.totalIncidents + 1,
     totalRepairAttempts: base.totalRepairAttempts + repairCallsOf(incident),
     totalRecovered: base.totalRecovered + (incident.recovered ? 1 : 0),
-    lastIncident: incident,
+    recentIncidents: [incident, ...base.recentIncidents].slice(0, MAX_RECENT_INCIDENTS),
+    ...(incident.recovered
+      ? { lastRepairAt: Math.max(base.lastRepairAt ?? 0, incident.timestamp) }
+      : base.lastRepairAt === undefined
+        ? {}
+        : { lastRepairAt: base.lastRepairAt }),
   };
 }
 
@@ -97,9 +130,7 @@ function cloneIncident(incident: TitleExtractionIncident): TitleExtractionIncide
 function cloneDiagnostics(value: TitleDiagnostics): TitleDiagnostics {
   return {
     ...value,
-    ...(value.lastIncident !== undefined
-      ? { lastIncident: cloneIncident(value.lastIncident) }
-      : {}),
+    recentIncidents: value.recentIncidents.map(cloneIncident),
   };
 }
 
@@ -141,6 +172,9 @@ export class TitleDiagnosticsStoreImpl implements TitleDiagnosticsStore {
   private openFacility: StorageFacility | undefined;
   private pending: TitleExtractionIncident[] = [];
   private resetPending = false;
+  private resetRevision = 0;
+  private flushPromise: Promise<void> | undefined;
+  private pendingWrite: Promise<void> | undefined;
   private writeQueue: Promise<void> = Promise.resolve();
   private domainLock: Promise<void> = Promise.resolve();
   private closePromise: Promise<void> | null = null;
@@ -209,90 +243,29 @@ export class TitleDiagnosticsStoreImpl implements TitleDiagnosticsStore {
     this.assertActive();
     await this.writeQueue;
     this.assertActive();
-    const domain = await this.ensureDomain();
-    if (domain !== undefined) {
-      return cloneDiagnostics(
-        this.resetPending
-          ? foldIncidents({ ...DEFAULT_TITLE_DIAGNOSTICS }, this.pending)
-          : parseDiagnostics(domain.global.get()),
-      );
-    }
+    await this.ensureDomain();
     return this.getSnapshot();
   }
 
   async record(incident: TitleExtractionIncident): Promise<void> {
-    const normalized: TitleExtractionIncident = {
-      timestamp: incident.timestamp,
-      provider: incident.provider,
-      model: incident.model,
-      messageSeqs: [...incident.messageSeqs],
-      attempts: incident.attempts.slice(0, MAX_DIAGNOSTIC_ATTEMPTS).map((attempt) => ({
-        attempt: attempt.attempt,
-        error: attempt.error,
-        output: attempt.output,
-      })),
-      recovered: incident.recovered,
-      error: incident.error,
-    };
-    const run = async () => {
-      this.assertActive();
-      let domain: DiagnosticsDomain | undefined;
-      try {
-        domain = await this.ensureDomain();
-        if (domain !== undefined) {
-          const activeDomain = domain;
-          const current = parseDiagnostics(activeDomain.global.get());
-          await withStorageTimeout(
-            () =>
-              Promise.resolve(
-                activeDomain.global.set(
-                  applyIncident(
-                    this.resetPending ? { ...DEFAULT_TITLE_DIAGNOSTICS } : current,
-                    normalized,
-                  ),
-                ),
-              ),
-            this.storageTimeoutMs,
-            'clutch-dsh-title: storage write timed out',
-          );
-          this.resetPending = false;
-        } else {
-          this.pushPending(normalized);
-        }
-      } catch (error) {
-        if (this.closed) throw error;
-        await this.invalidateDomain(domain);
-        this.pushPending(normalized);
-      }
-    };
-    return this.enqueue(run);
+    this.assertActive();
+    // Enforce bounds at the storage boundary, including callers other than the extractor.
+    const normalized = parseDiagnostics({ recentIncidents: [incident] }).recentIncidents[0];
+    if (normalized === undefined) throw new Error('clutch-dsh-title: invalid diagnostic incident');
+    // Bound records before any asynchronous storage work. Reuse one flush task;
+    // never capture an incident in one queued closure per generation.
+    this.pushPending(normalized);
+    return this.scheduleFlush();
   }
 
   async reset(): Promise<TitleDiagnostics> {
+    this.assertActive();
+    // Establish the reset boundary now so later records survive a queued reset.
+    this.pending = [];
+    this.resetPending = true;
+    this.resetRevision += 1;
     const run = async (): Promise<TitleDiagnostics> => {
-      this.assertActive();
-      let domain: DiagnosticsDomain | undefined;
-      try {
-        domain = await this.ensureDomain();
-        if (domain !== undefined) {
-          const activeDomain = domain;
-          await withStorageTimeout(
-            () => Promise.resolve(activeDomain.global.set({ ...DEFAULT_TITLE_DIAGNOSTICS })),
-            this.storageTimeoutMs,
-            'clutch-dsh-title: storage write timed out',
-          );
-          this.pending = [];
-          this.resetPending = false;
-        } else {
-          this.pending = [];
-          this.resetPending = true;
-        }
-      } catch (error) {
-        if (this.closed) throw error;
-        await this.invalidateDomain(domain);
-        this.pending = [];
-        this.resetPending = true;
-      }
+      await this.flushPending();
       return { ...DEFAULT_TITLE_DIAGNOSTICS };
     };
     return this.enqueue(run);
@@ -353,6 +326,10 @@ export class TitleDiagnosticsStoreImpl implements TitleDiagnosticsStore {
   }
 
   private async openDomainForFacility(facility: StorageFacility): Promise<DiagnosticsDomain> {
+    // A replacement caches its snapshot on open. Wait before loading it so a
+    // late successful write through the old handle is included in that snapshot.
+    await this.settlePendingWrite();
+    this.assertActive();
     let domain: DiagnosticsDomain | undefined;
     const opening = Promise.resolve().then(() => facility.open(titleDiagnosticsDomainSpec));
     try {
@@ -391,27 +368,78 @@ export class TitleDiagnosticsStoreImpl implements TitleDiagnosticsStore {
     if (this.openFacility !== undefined) this.openFacility = undefined;
   }
 
-  private async invalidateDomain(domain: DiagnosticsDomain | undefined): Promise<void> {
-    if (domain === undefined) return;
-    await this.withDomainLock(async () => {
-      if (this.openDomain !== domain) return;
-      await closeDomain(domain, this.storageTimeoutMs);
-      if (this.openDomain === domain) this.openDomain = undefined;
-      if (this.openFacility !== undefined) this.openFacility = undefined;
-    });
+  private scheduleFlush(): Promise<void> {
+    if (this.flushPromise === undefined) {
+      this.flushPromise = this.enqueue(() => this.flushPending()).then(
+        (flushed) => {
+          this.flushPromise = undefined;
+          if (flushed && !this.closed && (this.pending.length > 0 || this.resetPending))
+            return this.scheduleFlush();
+        },
+        (error: unknown) => {
+          this.flushPromise = undefined;
+          throw error;
+        },
+      );
+    }
+    return this.flushPromise;
+  }
+
+  private async flushPending(): Promise<boolean> {
+    this.assertActive();
+    try {
+      // Yield the write queue between batches so a reset is not starved by
+      // continuously arriving incidents. scheduleFlush handles the next batch.
+      return (await this.ensureDomain()) !== undefined;
+    } catch (error) {
+      if (this.closed) throw error;
+      // The bounded buffer and reset marker survive storage failures. A later
+      // read, record or facility injection retries the flush.
+      return false;
+    }
+  }
+
+  private async settlePendingWrite(): Promise<void> {
+    // A timeout does not cancel the backend write or its acknowledgement.
+    const previousWrite = this.pendingWrite;
+    if (previousWrite !== undefined) {
+      await withStorageTimeout(
+        () => previousWrite,
+        this.storageTimeoutMs,
+        'clutch-dsh-title: storage write timed out',
+      );
+    }
   }
 
   private async materializePending(domain: DiagnosticsDomain): Promise<void> {
+    await this.settlePendingWrite();
     if (this.pending.length === 0 && !this.resetPending) return;
     const current = parseDiagnostics(domain.global.get());
     const base = this.resetPending ? { ...DEFAULT_TITLE_DIAGNOSTICS } : current;
+    const revision = this.resetRevision;
+    const last = this.pending.at(-1);
+    const next = foldIncidents(base, this.pending);
+    const writing = Promise.resolve()
+      .then(() => domain.global.set(next))
+      .then(() => {
+        if (revision === this.resetRevision) {
+          // Acknowledge successful writes even when the caller already timed out.
+          // New arrivals, evictions and resets must keep their own pending records.
+          const index = last === undefined ? -1 : this.pending.indexOf(last);
+          if (index >= 0) this.pending.splice(0, index + 1);
+          this.resetPending = false;
+        }
+      });
+    this.pendingWrite = writing;
+    const settled = () => {
+      if (this.pendingWrite === writing) this.pendingWrite = undefined;
+    };
+    void writing.then(settled, settled);
     await withStorageTimeout(
-      () => Promise.resolve(domain.global.set(foldIncidents(base, this.pending))),
+      () => writing,
       this.storageTimeoutMs,
       'clutch-dsh-title: storage write timed out',
     );
-    this.pending = [];
-    this.resetPending = false;
   }
 }
 

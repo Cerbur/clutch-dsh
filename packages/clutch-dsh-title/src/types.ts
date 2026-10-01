@@ -1,3 +1,5 @@
+import type { Volatile } from '@deepseek-ai/cordis';
+
 export type DateTimeFieldConfig = {
   readonly kind: 'datetime';
   readonly source: 'session.createdAt';
@@ -50,7 +52,7 @@ export interface TitleConfig {
   readonly reasoningEffort?: string | null;
   readonly timeoutMs?: number;
   /** Extra model calls allowed after one unusable response. */
-  readonly repairAttempts?: number;
+  readonly repairAttempts?: number | Volatile<number>;
   readonly provider?: string;
   readonly model?: string;
   /** Mutable template-manager state stored in DSH 0.1.7 profile configuration. */
@@ -96,7 +98,7 @@ export interface TitleTokenLastUsage {
 }
 
 export interface TitleTokenStats {
-  /** Total number of title model calls that reported valid token usage. */
+  /** Successful model calls plus failed calls with reported token consumption. */
   readonly totalCalls: number;
   /** Aggregate billed input: uncached input plus cache read/write tokens. */
   readonly totalInputTokens: number;
@@ -121,6 +123,10 @@ export const DEFAULT_TITLE_STATS: TitleTokenStats = Object.freeze({
 export const MAX_DIAGNOSTIC_OUTPUT_CHARS = 2_000;
 /** Attempts kept per incident when an incident is recorded. */
 export const MAX_DIAGNOSTIC_ATTEMPTS = 4;
+export const MAX_RECENT_INCIDENTS = 10;
+export const MAX_DIAGNOSTIC_ERROR_CHARS = 2_000;
+export const MAX_DIAGNOSTIC_ROUTE_CHARS = 256;
+export const MAX_DIAGNOSTIC_MESSAGE_SEQS = 64;
 
 /** One model attempt whose response could not be used for a title. */
 export interface TitleExtractionAttemptRecord {
@@ -141,6 +147,8 @@ export interface TitleExtractionIncident {
   readonly messageSeqs: readonly number[];
   /** One entry per attempt that produced a response. */
   readonly attempts: readonly TitleExtractionAttemptRecord[];
+  /** Actual extra calls dispatched, including successful and failed transports. */
+  readonly repairAttempts?: number;
   /** True when a repair attempt produced the title; false when DSH fell back. */
   readonly recovered: boolean;
   /** Final rejection message; empty when a repair attempt succeeded. */
@@ -155,7 +163,10 @@ export interface TitleDiagnostics {
   readonly totalRepairAttempts: number;
   /** Incidents where a repair attempt still produced the title. */
   readonly totalRecovered: number;
-  readonly lastIncident?: TitleExtractionIncident;
+  /** Newest first; bounded on both read and write. */
+  readonly recentIncidents: readonly TitleExtractionIncident[];
+  /** Latest successful repair, preserved after its incident is evicted. */
+  readonly lastRepairAt?: number;
 }
 
 /** Best-effort sink for extraction incidents; failures never affect a title. */
@@ -167,6 +178,7 @@ export const DEFAULT_TITLE_DIAGNOSTICS: TitleDiagnostics = Object.freeze({
   totalIncidents: 0,
   totalRepairAttempts: 0,
   totalRecovered: 0,
+  recentIncidents: Object.freeze([]),
 });
 
 /**
@@ -280,7 +292,12 @@ export function parseStats(value: unknown): TitleTokenStats {
 }
 
 function readNonNegativeInt(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= Number.MAX_SAFE_INTEGER
+    ? Math.floor(value)
+    : 0;
 }
 
 function readAttemptRecords(value: unknown): readonly TitleExtractionAttemptRecord[] {
@@ -291,8 +308,8 @@ function readAttemptRecords(value: unknown): readonly TitleExtractionAttemptReco
     if (typeof entry.error !== 'string') continue;
     attempts.push({
       attempt: readNonNegativeInt(entry.attempt),
-      error: entry.error,
-      output: typeof entry.output === 'string' ? entry.output : '',
+      error: entry.error.slice(0, MAX_DIAGNOSTIC_ERROR_CHARS),
+      output: typeof entry.output === 'string' ? truncateDiagnosticOutput(entry.output) : '',
     });
   }
   return attempts;
@@ -303,27 +320,44 @@ function readIncident(value: unknown): TitleExtractionIncident | undefined {
   if (typeof value.provider !== 'string' || typeof value.model !== 'string') return undefined;
   if (typeof value.error !== 'string') return undefined;
   const messageSeqs = Array.isArray(value.messageSeqs)
-    ? value.messageSeqs.filter((seq): seq is number => typeof seq === 'number')
+    ? value.messageSeqs
+        .filter(
+          (seq): seq is number => typeof seq === 'number' && Number.isSafeInteger(seq) && seq >= 0,
+        )
+        .slice(0, MAX_DIAGNOSTIC_MESSAGE_SEQS)
     : [];
   return {
     timestamp: readNonNegativeInt(value.timestamp),
-    provider: value.provider,
-    model: value.model,
+    provider: value.provider.slice(0, MAX_DIAGNOSTIC_ROUTE_CHARS),
+    model: value.model.slice(0, MAX_DIAGNOSTIC_ROUTE_CHARS),
     messageSeqs,
     attempts: readAttemptRecords(value.attempts),
     recovered: value.recovered === true,
-    error: value.error,
+    error: value.error.slice(0, MAX_DIAGNOSTIC_ERROR_CHARS),
+    ...(typeof value.repairAttempts === 'number' && Number.isInteger(value.repairAttempts)
+      ? { repairAttempts: Math.min(Math.max(value.repairAttempts, 0), MAX_DIAGNOSTIC_ATTEMPTS - 1) }
+      : {}),
   };
 }
 
 /** Parse a persisted diagnostics record, tolerating missing or malformed fields. */
 export function parseDiagnostics(value: unknown): TitleDiagnostics {
   if (!isRecord(value)) return { ...DEFAULT_TITLE_DIAGNOSTICS };
-  const lastIncident = readIncident(value.lastIncident);
+  // Version 1 stored only lastIncident. Promote it once; writes drop that legacy field.
+  const legacy = readIncident(value.lastIncident);
+  const recentIncidents = (
+    Array.isArray(value.recentIncidents)
+      ? value.recentIncidents.slice(0, MAX_RECENT_INCIDENTS).map(readIncident)
+      : [legacy]
+  ).filter((incident): incident is TitleExtractionIncident => incident !== undefined);
+  const lastRepairAt =
+    readNonNegativeInt(value.lastRepairAt) ||
+    recentIncidents.find((incident) => incident.recovered)?.timestamp;
   return {
     totalIncidents: readNonNegativeInt(value.totalIncidents),
     totalRepairAttempts: readNonNegativeInt(value.totalRepairAttempts),
     totalRecovered: readNonNegativeInt(value.totalRecovered),
-    ...(lastIncident !== undefined ? { lastIncident } : {}),
+    recentIncidents,
+    ...(lastRepairAt !== undefined ? { lastRepairAt } : {}),
   };
 }

@@ -7,7 +7,7 @@ import { TemplateStore, TITLE_STATS_TIMEOUT_MS } from './store.js';
 import type { TemplateOperations } from './store.js';
 import { TemplateSection } from './TemplateSection.js';
 import { TITLE_NAMESPACE, settingsDocument } from '../templates.js';
-import { DEFAULT_TITLE_STATS } from '../types.js';
+import { parseDiagnostics, parseStats } from '../types.js';
 import type { TitleTokenStats } from '../types.js';
 import { en, zh } from './locales.js';
 import type { Translate } from './locales.js';
@@ -29,7 +29,7 @@ interface ConnectionRpc {
     endpoint: string,
     payload: unknown,
     signal?: AbortSignal,
-  ): Promise<RemoteResult<TitleTokenStats>>;
+  ): Promise<RemoteResult<unknown>>;
 }
 
 function connectionRpc(ctx: Context): ConnectionRpc | undefined {
@@ -68,12 +68,6 @@ export function apply(ctx: Context): void {
   const locale = (ctx as unknown as { locale: TitleLocaleService }).locale;
   ctx.effect(() => locale.register('clutch.title', { en, zh }));
   const t = locale.bind('clutch.title');
-  const remote = ctx.remote as unknown as {
-    titleStats?: {
-      getStats?(): Promise<RemoteResult<TitleTokenStats>>;
-      resetStats?(): Promise<RemoteResult<TitleTokenStats>>;
-    };
-  };
   const operations: TemplateOperations = {
     resetStatsAvailable: false,
     async read() {
@@ -93,29 +87,46 @@ export function apply(ctx: Context): void {
     },
     async getStats(): Promise<TitleTokenStats> {
       const rpc = connectionRpc(ctx);
-      if (!rpc) {
-        if (remote.titleStats?.getStats || remote.titleStats?.resetStats)
-          throw new Error('clutch-dsh-title: statistics connection unavailable');
-        return DEFAULT_TITLE_STATS;
-      }
+      if (!rpc) throw new Error('clutch-dsh-title: statistics connection unavailable');
       const result = await withStatsDeadline('read', (signal) =>
         rpc.call('/api', 'titleStats/getStats', { args: {} }, signal),
       );
-      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to get title stats');
-      return result.value!;
+      if (!result.ok || result.value === undefined)
+        throw new Error(result.error?.message ?? 'Failed to get title stats');
+      return parseStats(result.value);
     },
-  };
-  if (remote.titleStats?.resetStats) {
-    operations.resetStats = async () => {
+    async getDiagnostics() {
+      const rpc = connectionRpc(ctx);
+      if (!rpc) throw new Error('clutch-dsh-title: diagnostics connection unavailable');
+      const result = await withStatsDeadline('diagnostics read', (signal) =>
+        rpc.call('/api', 'titleStats/getDiagnostics', { args: {} }, signal),
+      );
+      if (!result.ok || result.value === undefined)
+        throw new Error(result.error?.message ?? 'Failed to get title diagnostics');
+      return parseDiagnostics(result.value);
+    },
+    // Plugin namespaces need not exist in DSH's generated proxy; use the same live RPC as reads.
+    async resetStats() {
       const rpc = connectionRpc(ctx);
       if (!rpc) throw new Error('clutch-dsh-title: statistics connection unavailable');
       const result = await withStatsDeadline('reset', (signal) =>
         rpc.call('/api', 'titleStats/resetStats', { args: {} }, signal),
       );
-      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to reset title stats');
-      return result.value!;
-    };
-  }
+      if (!result.ok || result.value === undefined)
+        throw new Error(result.error?.message ?? 'Failed to reset title stats');
+      return parseStats(result.value);
+    },
+    async resetDiagnostics() {
+      const rpc = connectionRpc(ctx);
+      if (!rpc) throw new Error('clutch-dsh-title: diagnostics connection unavailable');
+      const result = await withStatsDeadline('diagnostics reset', (signal) =>
+        rpc.call('/api', 'titleStats/resetDiagnostics', { args: {} }, signal),
+      );
+      if (!result.ok || result.value === undefined)
+        throw new Error(result.error?.message ?? 'Failed to reset title diagnostics');
+      return parseDiagnostics(result.value);
+    },
+  };
   const controller = new TemplateStore(operations);
   ctx.effect(() => {
     const refresh = () => {

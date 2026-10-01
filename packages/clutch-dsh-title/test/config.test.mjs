@@ -3,7 +3,8 @@ import test from 'node:test';
 
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout';
 
-const { MAX_REPAIR_ATTEMPTS, resolveTitleConfig } = await import('../lib/config.js');
+const { MAX_REPAIR_ATTEMPTS, resolveTitleConfig, TitleConfigSchema } =
+  await import('../lib/config.js');
 
 test('leaves reasoning effort undefined by default and accepts adapter IDs or explicit null', () => {
   assert.equal(resolveTitleConfig({}).reasoningEffort, undefined);
@@ -275,5 +276,15 @@ test('defaults to one repair attempt and bounds the configured value', () => {
   }
   for (const repairAttempts of [-1, 1.5, MAX_REPAIR_ATTEMPTS + 1, '1', true, {}, []]) {
     assert.throws(() => resolveTitleConfig({ repairAttempts }), /repairAttempts/);
+  }
+});
+
+test('profile schema exposes a volatile repair setting and the resolver snapshots its current value', () => {
+  const config = TitleConfigSchema({ repairAttempts: 2 });
+  assert.equal(config.repairAttempts.get(), 2);
+  assert.equal(resolveTitleConfig(config).repairAttempts, 2);
+  assert.equal(TitleConfigSchema.dict.repairAttempts.meta.volatile, true);
+  for (const repairAttempts of [-1, 1.5, 4, '1']) {
+    assert.throws(() => TitleConfigSchema({ repairAttempts }));
   }
 });
