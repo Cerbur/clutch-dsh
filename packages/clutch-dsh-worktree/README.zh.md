@@ -84,6 +84,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 收起原生 Sidebar 时，Web 和 desktop 的 Worktree 面板都会同步隐藏。macOS desktop 不保留
 收起后的窄栏，请使用原生标题栏控件重新展开。行动画遵循减少动态效果偏好，并在搜索、
 拖拽和首次加载时直接完成布局。
+Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可点击的 Sidebar 按钮；
+新会话按钮显示快捷键时也不会遮挡顶部栏。
 
 ### 创建 Worktree
 

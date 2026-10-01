@@ -87,7 +87,7 @@ function hooks() {
   };
 }
 
-test('desktop zero-width collapse hides Worktree and reopening restores live geometry', async (t) => {
+async function assertSidebarGeometry(t, platform) {
   const h = hooks();
   const mutations = [];
   const resizes = [];
@@ -113,7 +113,9 @@ test('desktop zero-width collapse hides Worktree and reopening restores live geo
       };
     }
     hasAttribute(name) {
-      return name === 'data-sidebar-collapsed' && this.collapsed === true;
+      return (
+        this.attributes.has(name) || (name === 'data-sidebar-collapsed' && this.collapsed === true)
+      );
     }
     querySelectorAll() {
       return this.buttons ?? [];
@@ -135,17 +137,29 @@ test('desktop zero-width collapse hides Worktree and reopening restores live geo
   const surface = new Element();
   const button = new Element();
   button.top = 100;
-  button.textContent = '新会话';
-  button.attributes.set('aria-label', '新建会话');
+  const label = platform === 'Web English' ? 'New Session' : '新会话';
+  const accessibleLabel = platform === 'Web English' ? 'New session' : '新建会话';
+  // Native shortcut glyphs share textContent with the visible label.
+  button.textContent = label + '⌘N';
+  button.attributes.set('aria-label', accessibleLabel);
   const footer = new Element();
   footer.top = 740;
   const chrome = new Element();
+  chrome.bottom = 80;
+  chrome.attributes.set('data-window-drag', '');
+  // Web's clickable brand is also a New Session shortcut. macOS has no
+  // brand button; both platforms retain the dedicated action below chrome.
+  const brand = new Element();
+  brand.top = 10;
+  brand.textContent = 'DSH 本地构建';
+  brand.attributes.set('aria-label', accessibleLabel);
+  brand.parentElement = chrome;
   const panel = new Element();
   const region = new Element();
   region.attributes.set('aria-hidden', 'false');
   root.children = [chrome, button, panel, region, footer];
   for (const child of root.children) child.parentElement = root;
-  root.buttons = [button];
+  root.buttons = platform === 'desktop' ? [button] : [brand, button];
   root.lastElementChild = footer;
   sidebar.firstElementChild = root;
   frame.firstElementChild = sidebar;
@@ -199,6 +213,12 @@ test('desktop zero-width collapse hides Worktree and reopening restores live geo
       return result;
     });
   const expanded = render();
+  assert.equal(
+    expanded.bounds.top,
+    100,
+    'overlay starts at the dedicated action below the native brand and toggle',
+  );
+  assert.equal(expanded.bounds.height, 640);
   assert.equal(expanded.width, 280);
   assert.equal(expanded.nativeCovered, true);
   for (const child of [button, panel, region]) {
@@ -211,6 +231,8 @@ test('desktop zero-width collapse hides Worktree and reopening restores live geo
     assert.equal(child.getAttribute('inert'), '');
   }
   assert.equal(chrome.getAttribute('inert'), null);
+  assert.equal(chrome.style.getPropertyValue('visibility'), '');
+  assert.equal(chrome.style.getPropertyValue('opacity'), '');
   assert.equal(footer.getAttribute('inert'), null);
   frame.collapsed = true;
   sidebar.width = 0;
@@ -258,7 +280,12 @@ test('desktop zero-width collapse hides Worktree and reopening restores live geo
   assert.equal(nextButton.getAttribute('inert'), null);
   assert.equal(nextButton.style.getPropertyValue('visibility'), '');
   assert.equal(nextButton.style.getPropertyValue('opacity'), '');
-});
+}
+for (const platform of ['desktop', 'Web Chinese', 'Web English']) {
+  test(platform + ' keeps native brand/toggle above Worktree and restores collapse geometry', (t) =>
+    assertSidebarGeometry(t, platform),
+  );
+}
 
 function find(node, type) {
   if (!node || typeof node !== 'object') return undefined;

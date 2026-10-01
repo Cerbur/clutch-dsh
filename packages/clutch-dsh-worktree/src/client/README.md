@@ -127,6 +127,13 @@ both candidate reads and import mutations and releases the membership projection
 
 ## Conversation context
 
+The Sidebar overlay's New Session anchor excludes buttons inside native
+`data-window-drag` rows. On Web, the clickable brand and the dedicated action share
+the same aria-label, while shortcut glyphs can change the dedicated action's textContent.
+Using the brand would cover and conceal the whole logo/toggle row. The exclusion uses
+native chrome semantics rather than a platform flag, fixed inset or generated class name;
+if only the brand shortcut remains, the overlay has no anchor and yields zero coverage.
+
 ### Worktree dashboard
 
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing

@@ -87,6 +87,8 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
 keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
 reduced motion and settles immediately during search, drag, and initial loading.
+On Web, Worktree navigation starts below the native DSH brand row, leaving its Sidebar toggle
+visible and clickable even when the New Session action displays keyboard shortcuts.
 
 ### Create a Worktree
 

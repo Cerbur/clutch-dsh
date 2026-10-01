@@ -34,7 +34,18 @@ export function resolveNativeSidebarRoot(sidebar: Element): Element | undefined 
 
 export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   const labels = ['新建会话', 'New session', '新会话', 'New Session'];
-  const buttons = Array.from(root.querySelectorAll<HTMLElement>('button'));
+  const buttons = Array.from(root.querySelectorAll<HTMLElement>('button')).filter((button) => {
+    // On Web the brand also starts a Session and shares the action's aria-label.
+    // Its marked chrome row contains the Sidebar toggle and must remain uncovered.
+    // The dedicated action's text may include shortcut glyphs, so text alone
+    // cannot distinguish it from that brand shortcut.
+    let parent = button.parentElement;
+    while (parent && parent !== root) {
+      if (parent.hasAttribute('data-window-drag')) return false;
+      parent = parent.parentElement;
+    }
+    return true;
+  });
   const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
     return text === '新会话' || text === 'New Session';

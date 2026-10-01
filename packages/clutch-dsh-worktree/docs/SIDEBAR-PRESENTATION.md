@@ -24,6 +24,14 @@ The native Workspace header explicitly sets visibility on some descendants. Pare
 opacity is therefore also suppressed while covered; visibility alone would let that
 header ghost through the transparent plugin surface.
 
+On Web, the brand is a New Session shortcut with the same aria-label as the dedicated
+action. Shortcut glyphs appended to the latter's textContent defeat exact visible-text
+matching, causing the old fallback to select the brand and cover its entire logo/toggle row.
+Anchor selection now excludes buttons within native `data-window-drag` chrome rows.
+The dedicated action below chrome remains the measured start on Web and desktop, even
+with shortcut text. A missing dedicated action yields zero coverage instead of consuming
+native chrome. This requires no Web-specific hard-coded height or DSH source change.
+
 ## Native-style tree motion
 
 `AnimatedTree` uses React pre-commit snapshots and the Web Animations API. Workspace,
