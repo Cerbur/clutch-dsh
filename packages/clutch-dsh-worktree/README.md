@@ -17,6 +17,11 @@ its Workspace-root HEAD history; the plugin does not copy transcripts or rewrite
 
 ## Installation
 
+After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
+server and refresh the page, to load the plugin Host. If the Client loads while the Host is
+still unavailable, a native toast reminds you once per Client load. Network failures and
+Workspace errors do not trigger the reminder.
+
 ### Install from npm
 
 With an installed DSH CLI:

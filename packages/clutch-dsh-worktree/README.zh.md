@@ -16,6 +16,10 @@ Main 指令。受管理的 Worktree 提供可选择本地 branch 基线的只读
 
 ## 安装
 
+向运行中的 DSH 安装插件后，请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以加载
+插件 Host。如果 Client 已加载而 Host 尚未挂载，原生 toast 会在每次 Client 加载期间提醒
+一次。网络故障和 Workspace 错误不会触发重启提示。
+
 ### 从 npm 安装
 
 在已安装 DSH CLI 的环境中：

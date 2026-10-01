@@ -20,6 +20,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
+import { RestartNotice } from './restart-notice.js';
+import { RestartToast } from './surface/components/RestartToast.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
 import { WorktreeModeAction } from './view/WorktreeModeAction.js';
 import { switchViewMode } from './view/view-mode-dispatch.js';
@@ -223,6 +225,28 @@ export function apply(ctx: Context): void {
   };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  ctx.effect(() => {
+    const notice = new RestartNotice((signal) => manager.probeHost(signal));
+    const check = () => void notice.check();
+    const reset = ctx.on('connection/reset', check);
+    const overlay = slots.inject('shell.overlay', () =>
+      slots.register(
+        {
+          name: 'shell.overlay',
+          id: 'clutch-dsh-worktree-restart-toast',
+          locale: WORKTREE_NS,
+          inject: () => ({ notice }),
+        },
+        RestartToast,
+      ),
+    );
+    check();
+    return () => {
+      notice.dispose();
+      reset();
+      overlay();
+    };
+  }, 'clutch-dsh-worktree: restart reminder');
   const virtualWorkspaceMembership = createVirtualWorkspaceMembership(ctx.workspaces.list);
   const contextProjection = createWorktreeContextProjection({
     sessions: ctx.sessions.list,

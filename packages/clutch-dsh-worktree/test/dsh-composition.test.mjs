@@ -273,6 +273,34 @@ test('loads the package and calls its Host Remote through the real DSH compositi
       result: { ok: true, value: { ok: true, value: [] } },
     });
     assert.equal(subprocessCalls.some(({ type }) => type === 'spawn'), true);
+    const callsBeforeProbe = subprocessCalls.length;
+    const probeAdapter = createWorktreeConnectionAdapter({
+      async call(channel, endpoint, payload) {
+        const reply = await fetchHandler.fetch(
+          new globalThis.Request(`http://localhost${channel}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              type: 'client-request',
+              rpcId: 'rpc-worktree-host-probe',
+              method: endpoint,
+              payload,
+            }),
+          }),
+        );
+        assert.equal(reply.status, 200);
+        return (await reply.json()).result;
+      },
+    });
+    try {
+      const probe = await probeAdapter.probeHost(new AbortController().signal);
+      assert.equal(probe.ok, true);
+      assert.equal(probe.value.ok, false);
+      assert.equal(probe.value.error.code, 'WORKSPACE_NOT_FOUND');
+      assert.equal(subprocessCalls.length, callsBeforeProbe);
+    } finally {
+      probeAdapter.dispose();
+    }
     const worktreeListCall = subprocessCalls.find(({ type, spec }) =>
       type === 'spawn' && spec.argv.includes('worktree') && spec.argv.includes('list'),
     );

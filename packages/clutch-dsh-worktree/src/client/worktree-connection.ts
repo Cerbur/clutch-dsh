@@ -68,8 +68,15 @@ export class WorktreeConnectionError extends Error {
 }
 
 export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager {
+  /** Check Host composition without requiring a user Workspace or reading its projection. */
+  probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
   /** Abort all requests owned by this Client plugin instance. */
   dispose(): void;
+}
+
+export interface WorktreeHostProbeResult {
+  readonly ok: boolean;
+  readonly error?: { readonly code: string };
 }
 
 type ConnectionResult = Awaited<ReturnType<WorktreeConnectionRpc['call']>>;
@@ -159,9 +166,16 @@ export function createWorktreeConnectionAdapter(
   const inFlight = new Set<AbortController>();
   let disposed = false;
 
-  async function invoke<Value>(method: WorktreeRemoteMethod, input: unknown): Promise<Value> {
+  async function call(
+    method: WorktreeRemoteMethod,
+    input: unknown,
+    signal?: AbortSignal,
+  ): Promise<ConnectionResult> {
     if (disposed) throw disposedError();
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (signal?.aborted) controller.abort();
+    else signal?.addEventListener('abort', abort, { once: true });
     inFlight.add(controller);
     const endpoint = WORKTREE_CONNECTION_ENDPOINTS[method];
     try {
@@ -177,13 +191,21 @@ export function createWorktreeConnectionAdapter(
         if (disposed && controller.signal.aborted) throw disposedError();
         throw connectionFailure(endpoint, error);
       }
-      return unwrap<Value>(endpoint, result);
+      return result;
     } finally {
+      signal?.removeEventListener('abort', abort);
       inFlight.delete(controller);
     }
   }
 
+  async function invoke<Value>(method: WorktreeRemoteMethod, input: unknown): Promise<Value> {
+    return unwrap<Value>(WORKTREE_CONNECTION_ENDPOINTS[method], await call(method, input));
+  }
+
   return {
+    // Empty Workspace identity reaches the existing read endpoint but cannot select user data.
+    // An outer success (including inner WORKSPACE_NOT_FOUND) proves the Host is composed.
+    probeHost: (signal) => call('listBindings', { workspaceId: '' }, signal),
     listWorktrees: (input) => invoke('listWorktrees', input),
     listWorktreeCommits: (input) => invoke('listWorktreeCommits', input),
     listWorktreeCommitFiles: (input) => invoke('listWorktreeCommitFiles', input),

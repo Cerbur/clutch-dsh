@@ -1,6 +1,8 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  restartRequired:
+    'Worktree 插件已安装。请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以启用插件。',
   'dashboard.title': "Dashboard",
   'dashboard.preview': 'Dashboard 预览',
   'dashboard.open': '打开 Dashboard',
@@ -331,6 +333,8 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  restartRequired:
+    'Worktree is installed. Restart DSH Desktop, or restart the DSH Web server and refresh this page, to enable it.',
   'dashboard.title': "Dashboard",
   'dashboard.preview': 'Dashboard preview',
   'dashboard.open': 'Open Dashboard',
