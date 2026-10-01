@@ -24,6 +24,11 @@ dsh web
 When using a DeepSeek Harness source checkout without a standalone dsh command, use the equivalent
 pnpm dsh form.
 
+If DSH is already running, restart DSH Desktop, or restart the DSH Web server and refresh the
+browser page, after installation. Refreshing the page alone does not apply the host changes.
+When the plugin's client loads before its host service is available, a native toast reminds you
+to restart once per client load. A healthy host does not show the reminder.
+
 ### Install from a local checkout
 
 The package's lib/ directory is generated and is not committed. Build both this workspace package

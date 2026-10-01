@@ -3,6 +3,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type {} from '@deepseek-ai/dsh-plugin-manager/types';
 import { TemplateStore, TITLE_STATS_TIMEOUT_MS } from './store.js';
 import type { TemplateOperations } from './store.js';
 import { TemplateSection } from './TemplateSection.js';
@@ -11,6 +13,8 @@ import { parseDiagnostics, parseStats } from '../types.js';
 import type { TitleTokenStats } from '../types.js';
 import { en, zh } from './locales.js';
 import type { Translate } from './locales.js';
+import { RestartNotice } from './restart-notice.js';
+import { RestartToast } from './RestartToast.js';
 
 interface TitleLocaleService {
   register(namespace: string, dictionaries: { en: typeof en; zh: typeof zh }): () => void;
@@ -20,7 +24,7 @@ interface TitleLocaleService {
 interface RemoteResult<T> {
   ok: boolean;
   value?: T;
-  error?: { message: string };
+  error?: { code?: string; message: string };
 }
 
 interface ConnectionRpc {
@@ -159,4 +163,30 @@ export function apply(ctx: Context): void {
       TemplateSection,
     ),
   );
+  ctx.effect(() => {
+    const notice = new RestartNotice(async (signal) => {
+      const rpc = connectionRpc(ctx);
+      return rpc?.call('/api', 'titleStats/getStats', { args: {} }, signal);
+    });
+    const check = () => void notice.check();
+    const reset = ctx.on('connection/reset', check);
+    const changed = ctx.remote.$on('plugin-manager/changed', check);
+    const overlay = ctx.slots.inject('shell.overlay', () =>
+      ctx.slots.register(
+        {
+          name: 'shell.overlay',
+          id: 'clutch-dsh-title.restart-toast',
+          inject: () => ({ notice, t }),
+        },
+        RestartToast,
+      ),
+    );
+    check();
+    return () => {
+      notice.dispose();
+      reset();
+      changed();
+      overlay();
+    };
+  });
 }

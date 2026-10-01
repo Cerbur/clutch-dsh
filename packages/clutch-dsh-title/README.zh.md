@@ -23,6 +23,10 @@ dsh web
 如果使用 DeepSeek Harness 源码 checkout 且没有独立的 dsh 命令，可使用等价的 pnpm dsh
 形式。
 
+如果安装时 DSH 已在运行，请在安装后重启 DSH Desktop，或重启 DSH Web 服务后刷新浏览器页面。
+仅刷新页面无法应用 host 变更。插件客户端已加载但 host 服务尚不可用时，会通过原生 toast
+提醒重启，每次客户端加载只提示一次；host 正常时不会提示。
+
 ### 从本地 checkout 安装
 
 package 的 lib/ 目录由构建生成，不会提交到仓库。先构建 workspace package 和 DSH 源码
