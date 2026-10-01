@@ -200,6 +200,22 @@ test('invalid managed templates at startup leave provider and repair settings av
   );
 });
 
+test('repair budgets survive managed templates and change live through native settings', async () => {
+  const { ctx, adapter } = await makeContext({ installPlugin: false });
+  await ctx.plugin(MemorySettings);
+  adapter.response = '{}';
+  await ctx.plugin(titlePlugin, { repairAttempts: 0 });
+  const { session } = appendSession(ctx, 'managed-repair-budget', 'Repair title');
+  await settle();
+  assert.equal(adapter.requests.length, 1);
+  ctx.settings.external({ repairAttempts: 2 });
+  await assert.rejects(ctx.sessionTitle.refresh(session), /structured|configured/);
+  assert.equal(adapter.requests.length, 4);
+  ctx.settings.external({ repairAttempts: 0 });
+  await assert.rejects(ctx.sessionTitle.refresh(session), /structured|configured/);
+  assert.equal(adapter.requests.length, 5);
+});
+
 test('renders the default title from session.createdAt and the first message', async () => {
   const { ctx, adapter } = await makeContext();
   const { session, first } = appendSession(ctx, 'default-title', '请优化 session title 生成规则');
