@@ -172,7 +172,7 @@ warning。诊断读取失败时，面板会显示错误，并禁用重置操作�
 ## 配置
 
 模板设置仍以 DSH profile 中的 `clutch-dsh-title` 条目为键。DSH 0.1.6 及更早版本将其保存在
-`$DSH_HOME/settings.yaml`；DSH `dsh-v0.1.7-rc.1` 将相同的启用状态、当前模板和模板映射保存为
+`$DSH_HOME/settings.yaml`；DSH `dsh-v0.2.0-rc.1` 将相同的启用状态、当前模板和模板映射保存为
 活动 Web profile `cordis.yml` 中的 volatile 字段。DSH 的一次性设置导入器会将已有
 `$DSH_HOME/settings.yaml` 区段迁入 profile，并将旧文件重命名为 `settings.yaml.imported`。
 
@@ -221,9 +221,9 @@ profile 配置和设置 → 会话标题可以设置：
   @deepseek-ai/dsh-client-ui-slots、@deepseek-ai/dsh-client-ui-primitives、
   @deepseek-ai/dsh-llm、@deepseek-ai/dsh-session、@deepseek-ai/dsh-session-title、
   @deepseek-ai/dsh-session-title-llm、@deepseek-ai/dsh-timeout 和
-  @deepseek-ai/dsh-util-values，全部要求 >=0.1.7-rc.1。
+  @deepseek-ai/dsh-util-values，全部要求 >=0.2.0-rc.1。
 - Cordis：@deepseek-ai/cordis ^4.0.1。
-- 运行 DSH `dsh-v0.1.7-rc.1` 需要 Node.js `^22.19.0 || >=24.0.0`。
+- 运行 DSH `dsh-v0.2.0-rc.1` 需要 Node.js `^22.19.0 || >=24.0.0`。
 - Profile：提供 package 所声明的 session、session-title、LLM、settings、storage、remote
   和 browser settings service 的 DSH Web profile。
 

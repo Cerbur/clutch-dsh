@@ -184,7 +184,7 @@ malformed YAML, and invalid field definitions are rejected during validation.
 ## Configuration
 
 Title settings remain keyed by the `clutch-dsh-title` DSH profile entry. DSH 0.1.6 and earlier store
-the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.1.7-rc.1` stores the same enabled, selected,
+the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.2.0-rc.1` stores the same enabled, selected,
 and template values as volatile fields in the active Web profile's `cordis.yml`; its one-time
 settings importer moves an existing `$DSH_HOME/settings.yaml` section into the profile and renames
 the old file to `settings.yaml.imported`.
@@ -241,9 +241,9 @@ Profile configuration and Settings → Session Title can set:
   @deepseek-ai/dsh-client-ui-settings, @deepseek-ai/dsh-client-ui-slots,
   @deepseek-ai/dsh-client-ui-primitives, @deepseek-ai/dsh-llm, @deepseek-ai/dsh-session,
   @deepseek-ai/dsh-session-title, @deepseek-ai/dsh-session-title-llm, @deepseek-ai/dsh-timeout,
-  and @deepseek-ai/dsh-util-values, all at >=0.1.7-rc.1.
+  and @deepseek-ai/dsh-util-values, all at >=0.2.0-rc.1.
 - Cordis: @deepseek-ai/cordis ^4.0.1.
-- Running DSH `dsh-v0.1.7-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
+- Running DSH `dsh-v0.2.0-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
 - Profile: a DSH Web profile that provides the session, session-title, LLM, settings, storage,
   remote, and browser settings services declared by the package.
 
