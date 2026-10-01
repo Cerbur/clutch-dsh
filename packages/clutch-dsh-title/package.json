@@ -132,6 +132,8 @@
     "@deepseek-ai/dsh-util-values": "0.1.7-rc.1",
     "@types/node": "^22.15.3",
     "js-yaml": "^4.1.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-plugin-manager": "0.1.7-rc.1"
   }
 }

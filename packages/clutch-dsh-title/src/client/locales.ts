@@ -1,6 +1,8 @@
 export const en = {
   nav: 'Session Title',
   intro: 'Choose how new conversations are named.',
+  restartRequired:
+    'Session Title is installed. Restart DSH Desktop, or restart the DSH Web server and refresh this page, to enable it.',
   templates: 'Templates',
   custom: 'Custom template',
   needsRepair: 'Needs attention',
@@ -91,6 +93,8 @@ export const en = {
 export const zh: Record<keyof typeof en, string> = {
   nav: '会话标题',
   intro: '为新会话选择合适的标题格式。',
+  restartRequired:
+    '会话标题插件已安装。请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，使插件生效。',
   templates: '模板',
   custom: '自定义模板',
   needsRepair: '待修复',
