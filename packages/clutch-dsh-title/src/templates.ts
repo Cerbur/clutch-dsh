@@ -1,5 +1,5 @@
 import { parseDocument, stringify } from 'yaml';
-import { resolveTitleConfig } from './config.js';
+import { MAX_REPAIR_ATTEMPTS, resolveTitleConfig } from './config.js';
 import { DEFAULT_PRESET } from './presets/default.js';
 import type { ResolvedTitleConfig, TitleConfig } from './types.js';
 import type { JsonValue } from '@deepseek-ai/dsh-util-values';
@@ -45,6 +45,7 @@ export type TemplateAction =
   | { kind: 'save' | 'create'; id: string; source: string }
   | { kind: 'activate'; id: string }
   | { kind: 'delete'; id: string }
+  | { kind: 'repairAttempts'; value: number }
   | { kind: 'enabled'; enabled: boolean };
 export type TemplateOp =
   { op: 'set'; path: string[]; value: JsonValue } | { op: 'unset'; path: string[] };
@@ -89,6 +90,14 @@ export function decodeTemplates(raw: unknown = {}): TemplateState {
   const errors: string[] = [];
   if (!record(raw)) errors.push('Settings must be an object.');
   const data = record(raw) ? raw : {};
+  const validRepairAttempts =
+    typeof data.repairAttempts === 'number' &&
+    Number.isInteger(data.repairAttempts) &&
+    data.repairAttempts >= 0 &&
+    data.repairAttempts <= MAX_REPAIR_ATTEMPTS;
+  if (data.repairAttempts !== undefined && !validRepairAttempts)
+    errors.push('repairAttempts must be an integer from 0 through 3; using 1.');
+  const repairAttempts = validRepairAttempts ? (data.repairAttempts as number) : 1;
   if (data.enabled !== undefined && typeof data.enabled !== 'boolean')
     errors.push('enabled must be a boolean.');
   if (data.active !== undefined && typeof data.active !== 'string')
@@ -128,7 +137,7 @@ export function decodeTemplates(raw: unknown = {}): TemplateState {
     effective,
     rows,
     errors,
-    config: configs.get(effective)!,
+    config: { ...configs.get(effective)!, repairAttempts },
     sources: templates as Record<string, JsonValue>,
   };
 }
@@ -136,6 +145,11 @@ export function decodeTemplates(raw: unknown = {}): TemplateState {
 /** Build minimal native settings operations, leaving unrelated broken entries intact. */
 export function templateMutation(state: TemplateState, action: TemplateAction): TemplateOp[] {
   if (action.kind === 'enabled') return [{ op: 'set', path: ['enabled'], value: action.enabled }];
+  if (action.kind === 'repairAttempts') {
+    if (!Number.isInteger(action.value) || action.value < 0 || action.value > MAX_REPAIR_ATTEMPTS)
+      throw new Error('repairAttempts must be an integer from 0 through 3.');
+    return [{ op: 'set', path: ['repairAttempts'], value: action.value }];
+  }
   const row = state.rows.find((item) => item.id === action.id);
   if (action.kind === 'activate') {
     if (!row || row.error) throw new Error('Cannot activate an invalid or missing template.');

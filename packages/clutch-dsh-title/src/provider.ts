@@ -7,7 +7,7 @@ import type {
 import { extractLlmFields } from './extractor.js';
 import { resolveDeterministicFields, selectReferencedFields } from './fields.js';
 import { renderTemplate } from './renderer.js';
-import type { ResolvedTitleConfig, TitleFieldConfig } from './types.js';
+import type { ResolvedTitleConfig, TitleDiagnosticsRecorder, TitleFieldConfig } from './types.js';
 import { deepFreeze } from '@deepseek-ai/dsh-util-values';
 
 export function hasLlmFields(fields: Readonly<Record<string, TitleFieldConfig>>): boolean {
@@ -60,6 +60,7 @@ function assertTemplateValues(
 export function createTitleProvider(
   ctx: Context,
   config: ResolvedTitleConfig,
+  diagnostics?: TitleDiagnosticsRecorder,
 ): SessionTitleProvider {
   const titleProvider = SessionTitleProviderId('clutch-dsh-title');
   const fields = selectReferencedFields(config);
@@ -73,7 +74,7 @@ export function createTitleProvider(
       }
       const deterministic = resolveDeterministicFields(fields, request.session.header.createdAt);
       const extracted = hasLlmFields(fields)
-        ? await extractLlmFields(ctx, config, request, [first], titleProvider)
+        ? await extractLlmFields(ctx, config, request, [first], titleProvider, diagnostics)
         : undefined;
       const values = mergeFieldValues(deterministic, extracted?.values);
       assertTemplateValues(config, values);

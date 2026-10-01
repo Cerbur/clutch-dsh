@@ -1,5 +1,31 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.6 — 2026-10-02
+
+### 中文
+
+#### 新增
+
+- 新增模型输出不可用时的自动修复机制与重试次数配置（0–3 次），并在 Token 统计中包含实际消耗的重试调用。
+- 新增设置中心异常诊断与错误日志面板，支持查看累计异常、重试与修复成功次数、最近 10 条异常详情及独立重置。
+- 新增插件客户端已加载但 host 服务不可用时的原生重启提示 Toast，提醒及时重启 DSH 服务。
+
+#### 优化
+
+- 将支持的最低 DSH 版本基线提高至 `dsh-v0.2.0-rc.1`，并将 peerDependencies 更新为 `>=0.2.0-rc.1`。
+
+### English
+
+#### Added
+
+- Add automatic output repair with configurable retry attempts (0–3) for unusable model responses, including consumed retry calls in token statistics.
+- Add diagnostics and error log panel in Settings, supporting cumulative counts, recent 10 incident details, and independent error log reset.
+- Add native restart reminder toast when plugin client is loaded but host service is unavailable.
+
+#### Improved
+
+- Raise the minimum DSH compatibility floor to `dsh-v0.2.0-rc.1` and update peerDependencies to `>=0.2.0-rc.1`.
+
 ## 0.1.5 — 2026-09-27
 
 ### 中文

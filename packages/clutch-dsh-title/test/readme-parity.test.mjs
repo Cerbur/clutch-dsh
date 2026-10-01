@@ -20,6 +20,7 @@ test('English and Chinese README files keep the public documentation contract al
     '### Refresh / regenerate a title',
     '### Disable custom titles',
     '### View generation statistics',
+    '### Configure repair and inspect error logs',
     '## Template reference',
     '## Configuration',
     '## Behavior and limitations',
@@ -37,6 +38,7 @@ test('English and Chinese README files keep the public documentation contract al
     '### 刷新 / 重新生成标题',
     '### 关闭自定义标题',
     '### 查看生成统计',
+    '### 设置修复次数并查看错误日志',
     '## 模板参考',
     '## 配置',
     '## 行为与限制',
@@ -93,8 +95,8 @@ test('English and Chinese README files keep the public documentation contract al
   const sourceInstall = 'pnpm dsh plugin --profile web add ' + localPath;
   assert.ok(readme.includes(sourceInstall));
   assert.ok(readmeZh.includes(sourceInstall));
-  assert.ok(readme.includes('>=0.1.7-rc.1'));
-  assert.ok(readmeZh.includes('>=0.1.7-rc.1'));
+  assert.ok(readme.includes('>=0.2.0-rc.1'));
+  assert.ok(readmeZh.includes('>=0.2.0-rc.1'));
   assert.ok(!/0\.1\.3/.test(readme));
   assert.ok(!/0\.1\.3/.test(readmeZh));
 

@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Domain } from '@deepseek-ai/dsh-storage-domain';
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain';
 import type { StreamChunk } from '@deepseek-ai/dsh-llm';
@@ -44,7 +45,10 @@ export const titleStatsDomainSpec = defineDomain({
 export interface TitleStatsStore {
   get(): Promise<TitleTokenStats>;
   getSnapshot(): TitleTokenStats;
+  /** Count one model call when its reported token consumption is positive. */
   record(usage: TitleTokenUsage): Promise<void>;
+  /** Count a successful call not already counted from positive usage. */
+  recordSuccess(): Promise<void>;
   reset(): Promise<TitleTokenStats>;
   close(): Promise<void>;
   ensureDomain(targetCtx?: Context): Promise<Domain<typeof titleStatsDomainSpec> | undefined>;
@@ -55,7 +59,9 @@ type StorageFacility = {
   open: (spec: typeof titleStatsDomainSpec) => Promise<TitleDomain>;
 };
 
-type StatsRecorder = Pick<TitleStatsStore, 'record'>;
+type StatsRecorder = Pick<TitleStatsStore, 'record' | 'recordSuccess'>;
+type TitleCallUsage = { counted: boolean };
+type TitleGenerationUsage = { lastCall?: TitleCallUsage };
 
 export const TITLE_STATS_STORAGE_TIMEOUT_MS = 5_000;
 
@@ -103,7 +109,7 @@ function mergeStats(base: TitleTokenStats, addition: TitleTokenStats): TitleToke
 function statsForUsage(usage: TitleTokenUsage): TitleTokenStats {
   const inputTokens = aggregateInputTokens(usage);
   return {
-    totalCalls: 1,
+    totalCalls: usage.totalTokens > 0 ? 1 : 0,
     totalInputTokens: inputTokens,
     totalOutputTokens: usage.outputTokens,
     totalTokens: usage.totalTokens,
@@ -138,39 +144,63 @@ async function closeDomain(
   }
 }
 
-/** Record every session-title model call without delaying its consumer. */
-export function installTitleTokenStatsRecorder(ctx: Context, store: StatsRecorder): void {
+/** Observe token consumption and return a wrapper that also counts unmetered successes. */
+export function installTitleTokenStatsRecorder(ctx: Context, store: StatsRecorder) {
+  const generations = new AsyncLocalStorage<TitleGenerationUsage>();
+  ctx.effect(() => () => generations.disable(), 'clutch-dsh-title: usage scopes cleanup');
   ctx.on(
     'llm/stream',
     (options, next) => {
       if (options.purpose !== 'session-title') return next();
-      return recordTitleStream(next(), store);
+      const call = { counted: false };
+      const generation = generations.getStore();
+      if (generation !== undefined) generation.lastCall = call;
+      return recordTitleStream(next(), store, call);
     },
     { global: true },
   );
+
+  return <T>(generate: () => Promise<T>, signal: AbortSignal): Promise<T> => {
+    const generation: TitleGenerationUsage = {};
+    return generations.run(generation, async () => {
+      const result = await generate();
+      if (!signal.aborted && generation.lastCall !== undefined && !generation.lastCall.counted) {
+        recordWithoutBlocking(() => store.recordSuccess());
+      }
+      return result;
+    });
+  };
+}
+
+function recordWithoutBlocking(write: () => Promise<void>): void {
+  void Promise.resolve()
+    .then(write)
+    .catch(() => {
+      // Statistics must never delay or fail the title, even during a storage outage.
+    });
 }
 
 async function* recordTitleStream(
   source: AsyncIterable<StreamChunk>,
   store: StatsRecorder,
+  call: TitleCallUsage,
 ): AsyncGenerator<StreamChunk> {
   let usage: TitleTokenUsage | undefined;
   try {
     for await (const chunk of source) {
       if (chunk.type === 'usage') {
         const normalized = normalizeTokenUsage(chunk.usage);
-        if (normalized !== undefined) usage = normalized;
+        if (normalized !== undefined && (normalized.totalTokens > 0 || usage === undefined)) {
+          usage = normalized;
+        }
       }
       yield chunk;
     }
   } finally {
     if (usage !== undefined) {
       const recordedUsage = usage;
-      void Promise.resolve()
-        .then(() => store.record(recordedUsage))
-        .catch(() => {
-          // Statistics are ancillary and must never fail the model call.
-        });
+      call.counted = recordedUsage.totalTokens > 0;
+      recordWithoutBlocking(() => store.record(recordedUsage));
     }
   }
 }
@@ -257,7 +287,14 @@ export class TitleStatsStoreImpl implements TitleStatsStore {
     if (normalized === undefined) {
       throw new TypeError('clutch-dsh-title: invalid token usage');
     }
-    const addition = statsForUsage(normalized);
+    return this.addStats(statsForUsage(normalized));
+  }
+
+  async recordSuccess(): Promise<void> {
+    return this.addStats({ ...DEFAULT_TITLE_STATS, totalCalls: 1 });
+  }
+
+  private addStats(addition: TitleTokenStats): Promise<void> {
     const run = async () => {
       this.assertActive();
       let domain: TitleDomain | undefined;
@@ -412,7 +449,7 @@ export class TitleStatsStoreImpl implements TitleStatsStore {
   private async materializeMemory(domain: TitleDomain): Promise<void> {
     const current = parseStats(domain.global.get());
     const memory = this.memoryStats;
-    if (!this.resetPending && memory.totalCalls === 0) return;
+    if (!this.resetPending && memory.totalCalls === 0 && memory.lastUsage === undefined) return;
     const base = this.resetPending ? DEFAULT_TITLE_STATS : current;
     await withStorageTimeout(
       () => Promise.resolve(domain.global.set(mergeStats(base, memory))),

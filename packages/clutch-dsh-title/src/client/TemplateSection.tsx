@@ -7,6 +7,7 @@ import type { TemplateStore } from './store.js';
 import type { Translate } from './locales.js';
 import { templateStyles } from './styles.js';
 import { previewTemplate } from '../preview.js';
+import { RetrySettingsSection } from './TitleHealth.js';
 
 export interface TemplateSectionProps {
   controller: TemplateStore;
@@ -215,7 +216,13 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
             {!resettingStats && (
               <Button
                 size="sm"
-                disabled={state.busy || !controller.canResetStats || stats?.totalCalls === 0}
+                disabled={
+                  state.busy ||
+                  !controller.canResetStats ||
+                  (stats?.totalCalls === 0 &&
+                    stats.totalTokens === 0 &&
+                    stats.lastUsage === undefined)
+                }
                 onClick={() => setResettingStats(true)}
               >
                 {t('statsReset')}
@@ -278,6 +285,12 @@ export function TemplateSection({ controller, t }: TemplateSectionProps) {
             </span>
           </div>
         </div>
+        <RetrySettingsSection
+          controller={controller}
+          state={state}
+          t={t}
+          locked={locked || draft !== null}
+        />
       </article>
       <div className="clutch-title-preference">
         <div className="clutch-title-current">

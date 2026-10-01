@@ -24,6 +24,11 @@ dsh web
 When using a DeepSeek Harness source checkout without a standalone dsh command, use the equivalent
 pnpm dsh form.
 
+If DSH is already running, restart DSH Desktop, or restart the DSH Web server and refresh the
+browser page, after installation. Refreshing the page alone does not apply the host changes.
+When the plugin's client loads before its host service is available, a native toast reminds you
+to restart once per client load. A healthy host does not show the reminder.
+
 ### Install from a local checkout
 
 The package's lib/ directory is generated and is not committed. Build both this workspace package
@@ -46,12 +51,13 @@ the absolute-path add command.
 
 ## Features
 
-| Feature                  | Preview                                                                                                                      | What it does                                                                                                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Native Session titles    | <img src="assets/screenshots/session-title-list.png" width="420" alt="Custom session titles in the native DSH Session list"> | The selected template automatically composes a compact title from date, category, fixed text, and first-prompt summary. Titles remain in DSH's native Session list; the plugin does not take over that list. |
-| Template manager         | <img src="assets/screenshots/title-settings.png" width="420" alt="Session title template manager in DSH Settings">           | Settings → Session Title supports preview, duplicate, edit, save, activate, and delete. The same page enables or disables custom title generation.                                                           |
-| Flexible template fields | —                                                                                                                            | datetime and literal fields resolve deterministically without a model. llm-enum and llm-text fields are model-backed; referenced LLM fields are extracted in one structured request.                         |
-| Generation statistics    | —                                                                                                                            | View generation count, cumulative input/output/total tokens, and the latest generation details when available. Reset the stored statistics after confirmation.                                               |
+| Feature                     | Preview                                                                                                                      | What it does                                                                                                                                                                                                 |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Native Session titles       | <img src="assets/screenshots/session-title-list.png" width="420" alt="Custom session titles in the native DSH Session list"> | The selected template automatically composes a compact title from date, category, fixed text, and first-prompt summary. Titles remain in DSH's native Session list; the plugin does not take over that list. |
+| Template manager            | <img src="assets/screenshots/title-settings.png" width="420" alt="Session title template manager in DSH Settings">           | Settings → Session Title supports preview, duplicate, edit, save, activate, and delete. The same page enables or disables custom title generation.                                                           |
+| Flexible template fields    | —                                                                                                                            | datetime and literal fields resolve deterministically without a model. llm-enum and llm-text fields are model-backed; referenced LLM fields are extracted in one structured request.                         |
+| Generation statistics       | —                                                                                                                            | Count successful model calls and failed calls that consumed tokens; view cumulative input/output/total tokens and the latest model-call details. Reset the stored statistics after confirmation.             |
+| Output repair and error log | —                                                                                                                            | Expand Retry settings below token statistics to choose 0–3 extra calls and view the error log for counters, last successful repair time, the latest 10 incidents, and confirmed reset.                       |
 
 ## Usage
 
@@ -117,10 +123,48 @@ selection, but DSH resumes its native first-prompt title generator.
 
 ### View generation statistics
 
-Open Settings → Session Title to see cumulative title-model generations with valid usage data, input
-tokens, output tokens, total tokens, and the latest call details when the model reports them. Reset
-requires confirmation. Deterministic-only templates make no model request and therefore do not add a
-generation statistic.
+Open Settings → Session Title to see counted title-model calls, input tokens, output tokens,
+total tokens, and the latest model-call details when the model reports them. Every successful model
+call counts once, even with zero or missing usage. Failed calls count when they report positive token
+consumption; only failed calls with zero or missing consumption are excluded. Repair calls follow
+the same rule, so a consumed failed attempt followed by a successful repair counts twice. A success
+with reported consumption is never counted twice. Tokens include reported consumption from all
+calls. Deterministic-only templates do not add a generation statistic. Reset requires confirmation.
+
+Reset is available after statistics are successfully read from the connected host, including
+locally installed plugins. The token card and counters
+inherit the settings panel background in both light and dark themes.
+
+Existing statistics retain their historical count because the old data does not contain enough
+information to reconstruct all past call outcomes and consumption. Reset statistics to start a
+fresh count under this rule.
+
+### Configure repair and inspect error logs
+
+Within the Token usage card, expand Retry settings below the counters to access output repair and
+error logs. This section starts collapsed. Use its dropdown to choose 0–3 extra model calls after
+unusable output; 0 disables repair. Dividers separate the counters, retry section and error log.
+The dropdown uses DSH's settings-selector background and highlights on hover or while open.
+The choice is saved immediately through DSH settings and applies to future generation or refresh.
+All calls share the title timeout; transport, cancellation and deadline failures are not retried.
+
+The Error log is displayed directly when Retry settings is expanded. It shows cumulative incident, repair-call
+and recovered counts, the last successful repair time, and a table of the latest 10 incidents,
+newest first. Expand a row's response details for message seqs, rejection reasons and bounded raw
+responses. Reload refreshes diagnostics. Reset diagnostics requires confirmation and resets the
+entire error-log domain: incident, repair-attempt and recovered counts, the last repair time and
+all incident records. Token statistics and templates are independent.
+
+The clutch_title_diagnostics storage domain persists only the latest 10 incidents; a new incident
+evicts the oldest without reducing cumulative counts. Legacy lastIncident data is imported on read
+and replaced by recentIncidents on the next write. The titleStats remote namespace provides
+getDiagnostics and resetDiagnostics; each incident also produces one warning. If diagnostics cannot
+be read, the panel reports that failure and disables resetting until a read succeeds.
+Reset results and errors remain available even if the subsequent settings refresh stalls.
+Diagnostics refresh independently, so a slow or unavailable error log does not delay template
+loading or saving the repair setting. A diagnostic write that succeeds after its timeout is
+counted once; records arriving later and resets remain separate from that write.
+Replacing the storage connection also preserves those completed writes and subsequent records.
 
 ## Template reference
 
@@ -140,7 +184,7 @@ malformed YAML, and invalid field definitions are rejected during validation.
 ## Configuration
 
 Title settings remain keyed by the `clutch-dsh-title` DSH profile entry. DSH 0.1.6 and earlier store
-the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.1.7-rc.1` stores the same enabled, selected,
+the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.2.0-rc.1` stores the same enabled, selected,
 and template values as volatile fields in the active Web profile's `cordis.yml`; its one-time
 settings importer moves an existing `$DSH_HOME/settings.yaml` section into the profile and renames
 the old file to `settings.yaml.imported`.
@@ -149,6 +193,13 @@ DSH normally uses `~/.dsh` as `$DSH_HOME`, but the source of truth is version-de
 configuration, not a hard-coded home path. The package does not use browser storage or `clutch.yaml`.
 External edits to the source-of-truth settings are picked up by DSH's reload path. Invalid template
 entries remain visible in Settings so they can be repaired instead of silently disappearing.
+
+Profile configuration and Settings → Session Title can set:
+
+- repairAttempts: how many extra model calls one title generation may spend after the model returns
+  unusable output. Defaults to 1; accepted values are 0 through 3, and larger values are rejected.
+  These calls share the single timeoutMs budget and are never used for transport, cancellation, or
+  deadline failures.
 
 ## Behavior and limitations
 
@@ -161,7 +212,20 @@ entries remain visible in Settings so they can be repaired instead of silently d
 - If the active template is missing or invalid, the settings manager uses the built-in default
   template.
 - If field extraction, rendering, or custom title generation fails, DSH's normal first-prompt
-  generator handles the title instead.
+  generator handles the title instead. That fallback is DSH's own truncation of the first prompt, so
+  it does not follow the template.
+- The model is asked for exactly one JSON object whose keys are the referenced LLM fields, one of
+  the declared literal values for each enum field, and a literal shape example. When a response is
+  still unusable, the package sends one bounded corrective turn that quotes the rejected response
+  back verbatim and states the rejection reason, up to repairAttempts extra calls.
+- Unusable output, including max-tokens truncation and unexpected tool-calls, is repaired within
+  the configured budget. A transport error, a cancellation, or an exhausted deadline
+  keeps its own error and falls back immediately; every attempt shares the one timeoutMs budget.
+- Each incident is logged once with its provider, model, message seqs, rejection reason, and the raw
+  response bounded to 2000 characters, and is persisted in the clutch_title_diagnostics storage
+  domain (only the latest 10 incidents, at most four rejected responses per incident, and at most 64 incidents buffered in memory while
+  storage is unavailable, including stalled opens or writes). Once that buffer is full, the oldest
+  buffered incident is dropped. Persistence is best effort and never delays or fails a title.
 - DSH remains responsible for title length limits, title persistence, manual rename pinning,
   refresh and unpin behavior, fork title-event inheritance, cancellation, and stale-result
   protection.
@@ -177,9 +241,9 @@ entries remain visible in Settings so they can be repaired instead of silently d
   @deepseek-ai/dsh-client-ui-settings, @deepseek-ai/dsh-client-ui-slots,
   @deepseek-ai/dsh-client-ui-primitives, @deepseek-ai/dsh-llm, @deepseek-ai/dsh-session,
   @deepseek-ai/dsh-session-title, @deepseek-ai/dsh-session-title-llm, @deepseek-ai/dsh-timeout,
-  and @deepseek-ai/dsh-util-values, all at >=0.1.7-rc.1.
+  and @deepseek-ai/dsh-util-values, all at >=0.2.0-rc.1.
 - Cordis: @deepseek-ai/cordis ^4.0.1.
-- Running DSH `dsh-v0.1.7-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
+- Running DSH `dsh-v0.2.0-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
 - Profile: a DSH Web profile that provides the session, session-title, LLM, settings, storage,
   remote, and browser settings services declared by the package.
 

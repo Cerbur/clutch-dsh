@@ -1,7 +1,7 @@
 import { decodeTemplates, templateMutation } from '../templates.js';
 import type { TemplateAction, TemplateOp, TemplateState } from '../templates.js';
-import { DEFAULT_TITLE_STATS } from '../types.js';
-import type { TitleTokenStats } from '../types.js';
+import { DEFAULT_TITLE_DIAGNOSTICS, DEFAULT_TITLE_STATS } from '../types.js';
+import type { TitleDiagnostics, TitleTokenStats } from '../types.js';
 
 export const TITLE_STATS_TIMEOUT_MS = 5_000;
 
@@ -17,6 +17,8 @@ export interface TemplateOperations {
   resetStats?(): Promise<TitleTokenStats>;
   /** Set false when reset availability still needs a remote capability check. */
   resetStatsAvailable?: boolean;
+  getDiagnostics?(): Promise<TitleDiagnostics>;
+  resetDiagnostics?(): Promise<TitleDiagnostics>;
 }
 export interface PageState {
   status: 'idle' | 'ready' | 'error';
@@ -25,6 +27,9 @@ export interface PageState {
   revision: number;
   templates: TemplateState;
   stats: TitleTokenStats;
+  diagnostics: TitleDiagnostics;
+  diagnosticsStatus: 'idle' | 'ready' | 'error';
+  diagnosticsError?: string;
   error?: string;
 }
 
@@ -58,6 +63,8 @@ export class TemplateStore {
     revision: 0,
     templates: decodeTemplates(),
     stats: DEFAULT_TITLE_STATS,
+    diagnostics: DEFAULT_TITLE_DIAGNOSTICS,
+    diagnosticsStatus: 'idle',
   };
   private listeners = new Set<() => void>();
   private generation = 0;
@@ -73,6 +80,11 @@ export class TemplateStore {
   getSnapshot = (): PageState => this.state;
   get canResetStats(): boolean {
     return this.resetConfigured && this.resetAvailable;
+  }
+  get canResetDiagnostics(): boolean {
+    return (
+      this.operations.resetDiagnostics !== undefined && this.state.diagnosticsStatus === 'ready'
+    );
   }
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -90,8 +102,33 @@ export class TemplateStore {
     this.resetAvailable = next;
     this.update({});
   }
+  private async loadDiagnostics(generation: number): Promise<void> {
+    if (this.operations.getDiagnostics === undefined) {
+      this.update({
+        diagnosticsStatus: 'error',
+        diagnosticsError: 'clutch-dsh-title: diagnostics unavailable',
+      });
+      return;
+    }
+    try {
+      const diagnostics = await withTimeout(
+        () => this.operations.getDiagnostics!(),
+        this.statsTimeoutMs,
+        'clutch-dsh-title: diagnostics read timed out',
+      );
+      if (generation === this.generation)
+        this.update({ diagnostics, diagnosticsStatus: 'ready', diagnosticsError: undefined });
+    } catch (error) {
+      if (generation === this.generation)
+        this.update({
+          diagnosticsStatus: 'error',
+          diagnosticsError: error instanceof Error ? error.message : String(error),
+        });
+    }
+  }
   async load(): Promise<void> {
     const generation = ++this.generation;
+    void this.loadDiagnostics(generation);
     try {
       const [snapshot, stats] = await Promise.all([
         this.operations.read(),
@@ -163,6 +200,27 @@ export class TemplateStore {
       await this.load();
     } finally {
       this.update({ busy: false });
+    }
+  }
+  async resetDiagnostics(): Promise<void> {
+    if (this.state.busy) throw new Error('Settings are busy.');
+    if (!this.canResetDiagnostics)
+      throw new Error('clutch-dsh-title: diagnostics reset is unavailable');
+    const generation = ++this.generation;
+    this.update({ busy: true });
+    try {
+      const diagnostics = await withTimeout(
+        () => this.operations.resetDiagnostics!(),
+        this.statsTimeoutMs,
+        'clutch-dsh-title: diagnostics reset timed out',
+      );
+      if (generation === this.generation)
+        this.update({ diagnostics, diagnosticsStatus: 'ready', diagnosticsError: undefined });
+    } finally {
+      this.update({ busy: false });
+      // Reconcile any settings invalidation or reads that raced with the reset.
+      // A stalled settings read must not hide the reset result or its error.
+      void this.load();
     }
   }
 }
