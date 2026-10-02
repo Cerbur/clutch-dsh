@@ -71,6 +71,8 @@ function worktreeSetupMessage(
   t: WorktreeCreateDialogProps['t'],
 ): string {
   switch (status) {
+    case 'workspaceMissing':
+      return t('worktree.setup.workspaceMissing');
     case 'gitNotInstalled':
       return t('worktree.setup.gitNotInstalled');
     case 'noRepository':

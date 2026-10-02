@@ -19,6 +19,8 @@ export async function loadClientEntry({
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
   const registrationsBySlot = new Map();
+  const registrationsById = new Map();
+  const eventListeners = new Map();
   const disposers = [];
   const openedSessions = [];
   const startedSessions = [];
@@ -235,6 +237,12 @@ export async function loadClientEntry({
   const nativeFork = fakeSessions.fork;
 
   const fakeContext = {
+    on(event, listener) {
+      const listeners = eventListeners.get(event) ?? new Set();
+      listeners.add(listener);
+      eventListeners.set(event, listeners);
+      return () => listeners.delete(listener);
+    },
     get(name) { return name === 'sidebarRight' ? sidebarRight : undefined; },
     connection: { rpc: connectionRpc },
     locale,
@@ -274,8 +282,10 @@ export async function loadClientEntry({
       },
       register(options, component) {
         registrationsBySlot.set(options.name, { options, component });
+        registrationsById.set(options.id, { options, component });
         return () => {
           registrationsBySlot.delete(options.name);
+          registrationsById.delete(options.id);
         };
       },
     },
@@ -301,7 +311,11 @@ export async function loadClientEntry({
     if (specifier === 'react/jsx-runtime') {
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
-    if (specifier === 'react') return { createElement: (type, props) => ({ type, props }) };
+    if (specifier === 'react') return {
+      createElement: (type, props) => ({ type, props }),
+      Component: class { constructor(props) { this.props = props; } },
+      createRef: () => ({ current: null }),
+    };
     if (specifier === 'react-dom') return { createPortal: (node) => node };
     if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {};
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return {};
@@ -313,6 +327,10 @@ export async function loadClientEntry({
     exports,
     fakeContext,
     registrationsBySlot,
+    registrationsById,
+    emit(event) {
+      for (const listener of eventListeners.get(event) ?? []) listener();
+    },
     disposers,
     openedSessions,
     startedSessions,

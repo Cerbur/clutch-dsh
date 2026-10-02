@@ -11,7 +11,7 @@
 ## 1. 环境前置要求
 
 - **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
-- **pnpm**: 遵循 monorepo 根目录 `packageManager` 指定版本（pnpm 11+）
+- **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
 
 ---
@@ -20,7 +20,7 @@
 
 本插件的本地开发、调试与全量联调以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness) 的源码 checkout 为准。
 
-> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.1.7-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.1.7-rc.2`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
+> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.2.0-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.2.0-rc.1`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
 
 克隆并构建 upstream DSH：
 
@@ -47,7 +47,7 @@ pnpm install
 pnpm --filter @cerbur/clutch-dsh-worktree build
 ```
 
-构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。
+构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。Typert Host 分析通过 `tsconfig.host.json` 将 DSH Client Locale 和 Workspace 的类型导入映射到 `scripts/typert-client-locale-meta.d.ts` 与 `scripts/typert-client-ui-workspace-meta.d.ts`。这些 build-only projection 只描述 Worktree 实际使用的 Context 服务，避免 Host 生成时递归载入 Client UI 的 API-remotes 类型图；普通 Client 类型检查和运行时类型仍使用 DSH 的真实模块，Worktree Client 仍只通过现有 `/api` Connection 通信。
 
 ### 3.2 将本地插件添加到 DSH Profile
 
@@ -71,13 +71,13 @@ pnpm dsh plugin --profile web remove clutch-dsh-worktree
 pnpm dsh web
 ```
 
-针对 `dsh-v0.1.7-rc.2` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
+针对 `dsh-v0.2.0-rc.1` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
 
 ```bash
 # From the clutch-dsh workspace root
 pnpm --filter @cerbur/clutch-dsh-worktree build
 
-# From the dsh-v0.1.7-rc.2 checkout root
+# From the dsh-v0.2.0-rc.1 checkout root
 export DSH_HOME="$HOME/.dsh-test"
 pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
 pnpm dsh web --port 3088 --no-open

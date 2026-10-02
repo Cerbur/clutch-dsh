@@ -3,6 +3,12 @@
   "compilerOptions": {
     "baseUrl": "../..",
     "paths": {
+      "@deepseek-ai/dsh-client-locale/client": [
+        "packages/clutch-dsh-worktree/scripts/typert-client-locale-meta.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-workspace/client": [
+        "packages/clutch-dsh-worktree/scripts/typert-client-ui-workspace-meta.d.ts"
+      ],
       "@deepseek-ai/dsh-typert-protocol": [
         "packages/clutch-dsh-worktree/scripts/typert-protocol-meta.d.ts"
       ]

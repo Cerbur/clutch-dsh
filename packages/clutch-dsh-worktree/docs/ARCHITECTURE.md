@@ -83,6 +83,8 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 
 Sidecar 文件损坏或不可用时，原始 Project / Session 视图必须保持完全可读；插件进入降级只读状态，严禁使用空索引覆盖已有的数据。
 
+DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree 列表、Session 绑定与已记录指令继续按 Sidecar 事实渲染，Git 相关读取以专用错误码 `WORKSPACE_ROOT_MISSING` 明确失败并由 Client 显示本地化的目录缺失状态（`workspaceMissing`），创建、导入、清理等写操作保持拒绝。只有 `stat` 明确返回 `ENOENT` 才判定根目录确实缺失；未知 Workspace、非绝对 root、存在但不是目录以及无法解析的 root 继续使用 `WORKSPACE_NOT_FOUND` 并保留各自错误语义，绝不被映射为目录缺失。读取降级不得放宽身份校验或写入门禁。
+
 ---
 
 ## 4. 关系模型与运行时 cwd
@@ -311,7 +313,7 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 
 ### 客户端边界与接口契约
 
-- 最低兼容基线为 DSH `dsh-v0.1.7-rc.1`，并已按 `dsh-v0.1.7-rc.2` 的 Client graph 验证。
+- 最低兼容基线为 DSH `dsh-v0.2.0-rc.1`，并已按 `dsh-v0.2.0-rc.1` 的 Client graph 验证。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
 - 导航与目录选取委托至 `ctx.uiWorkspace.startSession()`、`ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。
@@ -382,8 +384,12 @@ Refresh scope is determined by the smallest affected identity.
 
 ### Shell Overlay 呈现
 
+- Worktree 导航浮层随原生 `data-sidebar-collapsed` 状态同步隐藏，0px 是 desktop 的有效收起宽度，不能回退到旧展开宽度。当前 Sidebar root 与 New Session/footer 锚点动态重测；锚点丢失时浮层零覆盖并恢复原生内容。
+- 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
+- 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载/可重试错误，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
+- Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
 - Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件只在当前 Session 属于目标 Worktree 时通过原生 `openResource` 打开并展开 rightbar，不回退到无关 Session。

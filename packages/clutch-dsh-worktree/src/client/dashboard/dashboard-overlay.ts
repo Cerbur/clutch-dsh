@@ -131,7 +131,9 @@ export function mountDashboardOverlay(
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
     const rightBoundary =
-      hasRightbar && rightbar instanceof HTMLElement ? rightbar.getBoundingClientRect().left : box.right;
+      hasRightbar && rightbar instanceof HTMLElement
+        ? rightbar.getBoundingClientRect().left
+        : box.right;
     const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
     const rightEdge = Math.min(box.right, rightBoundary);
     const width = rightEdge - box.left - left;
@@ -147,7 +149,15 @@ export function mountDashboardOverlay(
       }
     }
     if (!hidden.has(center)) hidden.set(center, concealDashboardBackground(center));
-    onPlacement({ left, top: 0, width, height: box.height });
+    // The Windows caption strip is outside the native center. Never cover it;
+    // macOS's hidden titlebar belongs to our own marked top bar instead.
+    const top = Math.max(0, (center.getBoundingClientRect().top ?? 0) - (box.top ?? 0));
+    if (top >= box.height) {
+      restore();
+      onPlacement(undefined);
+      return;
+    }
+    onPlacement({ left, top, width, height: box.height - top });
     const isRightSidebarOpen =
       options?.isRightSidebarExpanded !== undefined
         ? options.isRightSidebarExpanded()
@@ -194,4 +204,3 @@ export function mountDashboardOverlay(
     }
   };
 }
-

@@ -8,6 +8,7 @@ import { toWorktreeViewError, type WorktreeViewError } from './worktree-view-err
 
 export type WorktreeGitReadiness =
   | { readonly status: 'ready' }
+  | { readonly status: 'workspaceMissing'; readonly error: WorktreeViewError }
   | { readonly status: 'gitNotInstalled'; readonly error: WorktreeViewError }
   | { readonly status: 'noRepository'; readonly error: WorktreeViewError }
   | { readonly status: 'noInitialCommit'; readonly error: WorktreeViewError }
@@ -152,6 +153,8 @@ export function worktreeSetupCommands(
   status: WorktreeGitReadiness['status'],
 ): readonly string[] {
   switch (status) {
+    case 'workspaceMissing':
+      return [];
     case 'gitNotInstalled':
       return [];
     case 'noRepository':
@@ -176,6 +179,13 @@ export function worktreeSetupCommands(
 
 function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefined {
   const viewError = toWorktreeViewError(error);
+  // 只有确认根目录缺失才降级为 workspaceMissing；未知 Workspace、无效或无法解析的
+  // root 继续以自身错误语义上抛，不被误报成目录缺失。
+  // Only a confirmed-missing root degrades to workspaceMissing; an unknown Workspace and an
+  // invalid or unresolvable root keep their own error semantics instead of being misreported.
+  if (viewError.code === 'WORKSPACE_ROOT_MISSING') {
+    return { status: 'workspaceMissing', error: viewError };
+  }
   if (viewError.code === 'GIT_NOT_INSTALLED') {
     return { status: 'gitNotInstalled', error: viewError };
   }

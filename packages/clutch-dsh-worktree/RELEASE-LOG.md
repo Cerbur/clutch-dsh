@@ -1,5 +1,47 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.16 — 2026-10-02
+
+### 中文
+
+#### 新增
+
+- 当插件组合层不可用或断开连接时，在界面提示用户重启 Host。
+
+#### 优化
+
+- 侧栏采用磨砂玻璃质感与平滑折叠动效展示 Worktree 与 Session 树形结构，并排除窗口顶部拖拽区域对侧栏 overlay 锚点的影响。
+- 优化 Dashboard 顶部栏布局与粘性吸顶交互，保持滚动时基线与关键操作常驻可见。
+
+#### 修复
+
+- 完善 Workspace 根目录缺失时的状态分类，仅在确认物理缺失时保留 Sidecar 列表与指令读取，Git 相关读取呈现明确的缺失状态并拦截破坏性操作。
+- 修复 Main Dashboard 中查看已提交改动时未能正确从 Git root 读取文件的问题。
+
+#### 兼容性
+
+- 最低 DSH 兼容版本升级至 `dsh-v0.2.0-rc.1`（peerDependencies `>=0.2.0-rc.1`），并隔离 Client UI remote 类型图以保证 Host 构建稳定。
+
+### English
+
+#### Added
+
+- Prompt users with a toast notice to restart Host when the plugin composition layer is unavailable or disconnected.
+
+#### Improved
+
+- Present the sidebar with a frosted glass surface and smooth expansion animations, excluding window drag chrome from overlay anchoring.
+- Optimize the Dashboard top bar layout with sticky headers so baselines and primary controls remain visible while scrolling.
+
+#### Fixed
+
+- Classify Workspace root stat errors precisely, keeping sidecar-backed list and instruction reads visible while presenting a dedicated missing state for Git operations and guarding destructive actions when the root is missing.
+- Fix Main Dashboard committed file reads by resolving paths against the Git repository root.
+
+#### Compatibility
+
+- Bump the minimum DSH compatibility floor to `dsh-v0.2.0-rc.1` (peerDependencies `>=0.2.0-rc.1`) and isolate Client UI remote types during Host builds.
+
 ## 0.1.15 — 2026-09-27
 
 ### 中文

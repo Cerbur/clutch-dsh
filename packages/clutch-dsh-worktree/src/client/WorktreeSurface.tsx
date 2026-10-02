@@ -21,6 +21,7 @@ import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
+import { DashboardRequest } from './dashboard/DashboardRequest.js';
 import {
   createMainWorktreeRecord,
   isMainWorktreeId,
@@ -106,26 +107,43 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const dashboardMainRecord =
     targetWorkspace === undefined
       ? undefined
-      : createMainWorktreeRecord(targetWorkspace, dashboardMainBranch, targetView?.mainInstructions);
+      : createMainWorktreeRecord(
+          targetWorkspace,
+          dashboardMainBranch,
+          targetView?.mainInstructions,
+        );
 
   const dashboardRecord = resolveDashboardRecord(
     dashboard,
     source.mode,
     source.currentSessionId,
     source.workspaceIds,
-    dashboard === undefined
-      ? undefined
-      : targetView?.worktrees,
+    dashboard === undefined ? undefined : targetView?.worktrees,
     dashboardMainRecord,
   );
   useEffect(() => {
-    if (dashboard !== undefined && dashboardRecord === undefined) {
+    if (
+      dashboard !== undefined &&
+      dashboardRecord === undefined &&
+      (source.mode !== 'worktree' ||
+        (dashboard.sessionId !== undefined && dashboard.sessionId !== source.currentSessionId) ||
+        !source.workspaceIds.includes(dashboard.workspaceId) ||
+        targetView !== undefined)
+    ) {
       // A target Session switch can invalidate the old Dashboard in the same
       // commit that settles a new Worktree navigation. Do not cancel that
       // pending navigation while dismissing the stale page.
       setDashboard(undefined);
     }
-  }, [dashboard, dashboardRecord, setDashboard]);
+  }, [
+    dashboard,
+    dashboardRecord,
+    setDashboard,
+    source.mode,
+    source.currentSessionId,
+    source.workspaceIds,
+    targetView,
+  ]);
   const mutation = useSurfaceMutation({ read });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
@@ -261,10 +279,10 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       );
       // A file opened from Git must stay inside the Dashboard Worktree.
       // Never fall back to the current or another Workspace Session.
-      const targetSessionId = source.currentSessionId !== undefined &&
-        worktreeSessions.includes(source.currentSessionId)
-        ? source.currentSessionId
-        : undefined;
+      const targetSessionId =
+        source.currentSessionId !== undefined && worktreeSessions.includes(source.currentSessionId)
+          ? source.currentSessionId
+          : undefined;
       if (targetSessionId === undefined) return;
       const address = buildSessionFileAddress(targetSessionId, filePath);
       props.openResource(address, options);
@@ -291,6 +309,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         className={styles.surface}
         data-worktree-surface
         data-collapsed={collapsed || undefined}
+        data-native-sidebar-covered={source.nativeCovered || undefined}
+        aria-hidden={collapsed || undefined}
         aria-label={t('mode.navigation')}
         style={{
           width: `${width}px`,
@@ -347,6 +367,28 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
 
         <AccessConfirmation source={source} props={props} />
       </aside>
+      {dashboard !== undefined &&
+        dashboardRecord === undefined &&
+        dashboard.sessionId === source.currentSessionId &&
+        source.workspaceIds.includes(dashboard.workspaceId) &&
+        targetView === undefined && (
+          <DashboardRequest
+            t={t}
+            error={
+              read.readState.error ??
+              (read.readState.targetError?.workspaceIds.includes(dashboard.workspaceId)
+                ? read.readState.targetError.error
+                : undefined)
+            }
+            onClose={closeDashboard}
+            onRetry={() => {
+              void read.refresh({
+                scope: { kind: 'workspace', workspaceId: dashboard.workspaceId },
+                preserveCurrent: true,
+              });
+            }}
+          />
+        )}
       {dashboardRecord !== undefined && (
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}

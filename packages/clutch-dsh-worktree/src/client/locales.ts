@@ -1,6 +1,8 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  restartRequired:
+    'Worktree 插件已安装。请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以启用插件。',
   'dashboard.title': "Dashboard",
   'dashboard.preview': 'Dashboard 预览',
   'dashboard.open': '打开 Dashboard',
@@ -227,6 +229,7 @@ export const zh = {
   'worktree.baseBranch': 'Worktree 基线分支',
   'worktree.noLocalBranch': '没有本地分支',
   'worktree.noBranches': '此工作区中没有找到本地分支。',
+  'worktree.setup.workspaceMissing': '此 Workspace 的本地目录已不存在。请恢复该目录，或在 DSH 中移除该 Workspace 后重试。',
   'worktree.setup.gitNotInstalled': 'Git 未安装或不在 PATH 中。请先安装 Git，然后重启 DSH 再重试。',
   'worktree.setup.noRepository': '此 Workspace 不是 Git 仓库。请在 Workspace 目录执行以下命令：',
   'worktree.setup.noInitialCommit': '此 Git 仓库还没有首次 commit。请先执行以下命令：',
@@ -312,6 +315,7 @@ export const zh = {
     'Worktree 已注册，但 Session 创建不可用，请重新连接后重试。',
   'error.workspaceRenameUnavailable': '工作区重命名不可用，请重新连接后重试。',
   'error.workspaceDeleteUnavailable': '工作区删除不可用，请重新连接后重试。',
+  'error.workspaceRootMissing': 'Workspace 目录不存在：{rootPath}',
   'error.sessionRenameUnavailable': '会话重命名不可用，请重新连接后重试。',
   'error.sessionBindingFailed': 'Session {sessionId} 已创建，但 Worktree 绑定失败：{reason}',
   'error.sessionAlreadyBound': 'Session 已绑定到其他 Worktree，未创建新的 Session。',
@@ -329,6 +333,8 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  restartRequired:
+    'Worktree is installed. Restart DSH Desktop, or restart the DSH Web server and refresh this page, to enable it.',
   'dashboard.title': "Dashboard",
   'dashboard.preview': 'Dashboard preview',
   'dashboard.open': 'Open Dashboard',
@@ -557,6 +563,8 @@ export const en = {
   'worktree.baseBranch': 'Worktree base branch',
   'worktree.noLocalBranch': 'No local branch',
   'worktree.noBranches': 'No local branches found in this Workspace.',
+  'worktree.setup.workspaceMissing':
+    'The local directory for this Workspace no longer exists. Restore it, or remove the Workspace in DSH and retry.',
   'worktree.setup.gitNotInstalled':
     'Git is not installed or is not available on PATH. Install Git, restart DSH, and retry.',
   'worktree.setup.noRepository':
@@ -651,6 +659,7 @@ export const en = {
     'The Worktree was registered, but Session creation is unavailable; retry after reconnecting.',
   'error.workspaceRenameUnavailable': 'Workspace rename is unavailable; retry after reconnecting.',
   'error.workspaceDeleteUnavailable': 'Workspace delete is unavailable; retry after reconnecting.',
+  'error.workspaceRootMissing': 'Workspace directory is missing: {rootPath}',
   'error.sessionRenameUnavailable': 'Session rename is unavailable; retry after reconnecting.',
   'error.sessionBindingFailed':
     'Session {sessionId} was created, but Worktree binding failed: {reason}',

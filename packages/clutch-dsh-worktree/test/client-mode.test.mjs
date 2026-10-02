@@ -111,7 +111,7 @@ test('connection-backed Worktree Manager remains available when canonical Remote
   assert.equal(typeof injected.manager.listImportCandidates, 'function');
   assert.equal(typeof injected.manager.importWorktree, 'function');
   await injected.manager.listWorktrees({ workspaceId: 'ws1' });
-  assert.equal(fixture.rpcCalls[0].endpoint, 'worktreeManager/listWorktrees');
+  assert.ok(fixture.rpcCalls.some((call) => call.endpoint === 'worktreeManager/listWorktrees'));
 });
 
 test('Worktree Session membership waits for the binding refresh before projection', async () => {

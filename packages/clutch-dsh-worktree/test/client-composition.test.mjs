@@ -218,7 +218,7 @@ test('binds a native fork child through the existing browser-local membership ov
     rpc: {
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           return Promise.resolve({
             ok: true,
             value: {
@@ -311,7 +311,7 @@ test('coalesces fork binding reads across repeated Client notifications', async 
     rpc: {
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(input.workspaceId);
           if (input.workspaceId === 'workspace-one' && !parentOneBindingAvailable) {
             return Promise.resolve({
@@ -423,7 +423,7 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
             },
           });
         }
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(input.workspaceId);
           return Promise.resolve({
             ok: true,
@@ -510,7 +510,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
               },
             });
           }
-          if (endpoint === 'worktreeManager/listBindings') {
+          if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
             bindingRequests.push(input.workspaceId);
             return Promise.resolve({
               ok: true,
@@ -626,7 +626,7 @@ test('does not treat browser-local Worktree membership as a Fork scope change', 
     fork: async () => 'unused',
     rpc: {
       call(_channel, endpoint, payload) {
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(payload.args.input.workspaceId);
         }
         return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
@@ -674,7 +674,7 @@ test('does not rescan bindings when Workspace order changes', async () => {
     fork: async () => 'unused',
     rpc: {
       call(_channel, endpoint, payload) {
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(payload.args.input.workspaceId);
           return Promise.resolve({
             ok: true,
@@ -730,7 +730,7 @@ test('looks up a Fork parent only in its known owning Workspace', async () => {
     fork: async () => 'child-one',
     rpc: {
       call(_channel, endpoint, payload) {
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(payload.args.input.workspaceId);
           return Promise.resolve({
             ok: true,
@@ -794,7 +794,7 @@ test('uses a found Fork binding when an unrelated fallback Workspace read fails'
     fork: async () => 'unused',
     rpc: {
       call(_channel, endpoint, payload) {
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           const workspaceId = payload.args.input.workspaceId;
           bindingRequests.push(workspaceId);
           if (workspaceId === 'workspace-unrelated') {
@@ -875,7 +875,7 @@ test('shares an overlapping direct Fork lookup with notification reconciliation'
     },
     rpc: {
       call(_channel, endpoint, payload) {
-        if (endpoint === 'worktreeManager/listBindings') {
+        if (endpoint === 'worktreeManager/listBindings' && payload.args.input.workspaceId !== '') {
           bindingRequests.push(payload.args.input.workspaceId);
           return bindingResult.promise;
         }
@@ -1109,6 +1109,7 @@ test('shares one Worktree view reader between Context and Surface for one Client
 
   assert.equal(typeof reader.readMany, 'function');
   assert.deepEqual(calls, [
+    'worktreeManager/listBindings', // Host readiness probe; no Workspace projection is read.
     'worktreeManager/listWorktrees',
     'worktreeManager/listBranches',
     'worktreeManager/listBindings',
@@ -1138,9 +1139,9 @@ test('declares the native Conversation package without depending on a Hero conte
   );
   assert.equal(
     manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'],
-    '>=0.1.7-rc.1',
+    '>=0.2.0-rc.1',
   );
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.1.7-rc.2');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.2.0-rc.1');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);
@@ -1275,7 +1276,8 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     };
     for (const listener of [...workspaceSubscribers]) listener();
     assert.deepEqual(uiWorkspaceRootHook.hooks.workspaces.getSnapshot().items, workspaceSnapshot.items);
-    const overlay = ctx.slots.entries('shell.overlay')[0];
+    const overlay = ctx.slots.entries('shell.overlay').find((entry) =>
+      entry.options.id === 'clutch-dsh-worktree-navigation');
     const injected = overlay.inject();
     assert.equal(injected.isRightSidebarExpanded(), true);
     injected.closeRightSidebar();
@@ -1304,7 +1306,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
     assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
-    assert.equal(ctx.slots.entries('shell.overlay').length, 1);
+    assert.equal(ctx.slots.entries('shell.overlay').length, 2);
 
     await clientFiber.dispose();
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 0);

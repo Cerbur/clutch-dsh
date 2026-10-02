@@ -79,11 +79,11 @@ test('renders one aggregate status dot per collapsed row from complete eligible 
   );
   assert.match(
     surface,
-    /const mainSessionIds = filterVisibleSessionIds\([\s\S]*?allWorkspaceSessionIds,[\s\S]*?sessions,\s*\);[\s\S]*?groupActivityStatus=\{aggregateSessionStatus\(mainSessionIds,/,
+    /const mainSessionIds = filterVisibleSessionIds\([\s\S]*?allWorkspaceSessionIds,[\s\S]*?sessions,\s*\);[\s\S]*?groupActivityStatus=\{\s*aggregateSessionStatus\(\s*mainSessionIds,/,
   );
   assert.match(
     surface,
-    /const worktreeSessionIds = filterVisibleSessionIds\([\s\S]*?sessions,\s*\);[\s\S]*?groupActivityStatus=\{aggregateSessionStatus\(worktreeSessionIds,/,
+    /const worktreeSessionIds = filterVisibleSessionIds\([\s\S]*?sessions,\s*\);[\s\S]*?groupActivityStatus=\{\s*aggregateSessionStatus\(\s*worktreeSessionIds,/,
   );
 });
 

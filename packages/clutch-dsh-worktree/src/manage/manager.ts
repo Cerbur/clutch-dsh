@@ -45,7 +45,7 @@ import {
   updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
-import { requireWorkspace } from './manager-support.js';
+import { requireWorkspace, requireWorkspaceForRead } from './manager-support.js';
 
 function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
   // `main` is retained for legacy browser callers; the canonical synthetic ID is
@@ -105,7 +105,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     worktreeId: string;
   }): Promise<string> {
     return this.afterRecovery(async () => {
-      await requireWorkspace(this.context, input.workspaceId);
+      await requireWorkspaceForRead(this.context, input.workspaceId);
       const snapshot = await this.context.sidecar.read(input.workspaceId);
       if (isMainWorktreeId(input.worktreeId, input.workspaceId)) return snapshot.mainInstructions ?? '';
       const record = snapshot.worktrees.find((item) => item.worktreeId === input.worktreeId);
