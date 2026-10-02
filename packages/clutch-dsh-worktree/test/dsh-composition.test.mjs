@@ -293,7 +293,7 @@ test('loads the package and calls its Host Remote through the real DSH compositi
       },
     });
     try {
-      const probe = await probeAdapter.probeHost(new AbortController().signal);
+      const probe = await probeAdapter.probeHost(new globalThis.AbortController().signal);
       assert.equal(probe.ok, true);
       assert.equal(probe.value.ok, false);
       assert.equal(probe.value.error.code, 'WORKSPACE_NOT_FOUND');

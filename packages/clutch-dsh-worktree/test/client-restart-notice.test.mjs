@@ -105,7 +105,7 @@ test('adapter probes the existing read endpoint without selecting a user Workspa
       return result;
     },
   });
-  const controller = new AbortController();
+  const controller = new globalThis.AbortController();
   assert.equal(await adapter.probeHost(controller.signal), result);
   assert.equal(signal.aborted, false);
   adapter.dispose();
