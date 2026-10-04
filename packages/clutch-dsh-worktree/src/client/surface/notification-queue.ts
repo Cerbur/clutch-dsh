@@ -1,6 +1,7 @@
 export interface WorktreeNotification {
   readonly key: string;
   readonly text: string;
+  readonly actions?: readonly { readonly label: string; readonly onClick: () => void }[];
 }
 
 export interface NotificationQueue {

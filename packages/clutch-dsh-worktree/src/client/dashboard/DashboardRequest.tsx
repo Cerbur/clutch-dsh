@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { WorktreeTranslate } from '../surface/types.js';
 import type { WorktreeViewError } from '../view/worktree-view.js';
-import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { mountDashboardOverlay, type DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 
@@ -71,9 +70,7 @@ export function DashboardRequest({
         </div>
       </header>
       <div className={styles.dashboardPage}>
-        <p role={error ? 'alert' : 'status'}>
-          {error ? formatWorktreeViewError(error, t) : t('status.loading')}
-        </p>
+        {error === undefined && <p role="status">{t('status.loading')}</p>}
         {error && (
           <button type="button" className={styles.dashboardButton} onClick={onRetry}>
             {t('action.retry')}

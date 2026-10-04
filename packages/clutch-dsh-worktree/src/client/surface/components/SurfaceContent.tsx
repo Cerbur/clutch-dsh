@@ -1,3 +1,5 @@
+import { Modal, Button } from '@deepseek-ai/dsh-client-ui-primitives';
+import { useEffect, useState } from 'react';
 import {
   formatWorktreePermissionNotice,
   formatWorktreeViewError,
@@ -146,9 +148,27 @@ export function SurfaceContent({
     setPendingSessionBinding,
   } = session;
   const { refresh, readState } = read;
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const hasRecovery =
+    permissionRetryTarget !== undefined ||
+    forkRecoverySnapshot.pending.length > 0 ||
+    pendingSessionBinding !== undefined ||
+    actionError?.retryable === true ||
+    recoveryAction(actionError) !== null ||
+    readState.targetError !== undefined ||
+    readState.status === 'error';
+  useEffect(() => {
+    if (!hasRecovery) setRecoveryOpen(false);
+  }, [hasRecovery]);
   const notices: WorktreeNotification[] = [];
   const addNotice = (scope: string, text: string) => {
-    notices.push({ key: JSON.stringify([scope, text]), text });
+    notices.push({
+      key: JSON.stringify([scope, text]),
+      text,
+      actions: hasRecovery
+        ? [{ label: t('notice.recovery'), onClick: () => setRecoveryOpen(true) }]
+        : undefined,
+    });
   };
   if (permissionNoticeSnapshot !== undefined) {
     addNotice(
@@ -185,17 +205,29 @@ export function SurfaceContent({
       tabIndex={0}
       data-worktree-scrollport
     >
-      <NotificationToasts notices={notices} detailsLabel={t('notice.details')} />
-      {notices.length > 0 && (
-        <details className={styles.notificationDetails}>
-          <summary>
-            {t('notice.details')} ({notices.length})
-          </summary>
+      <NotificationToasts notices={notices} />
+      {hasRecovery && (
+        <Modal
+          open={recoveryOpen}
+          onClose={() => setRecoveryOpen(false)}
+          closeLabel={t('dialog.close')}
+          title={t('notice.recovery')}
+          footer={
+            <Button variant="outline" onClick={() => setRecoveryOpen(false)}>
+              {t('dialog.close')}
+            </Button>
+          }
+        >
           {permissionNoticeSnapshot !== undefined && (
-            <div className={styles.notice} role="status" data-worktree-permission-notice>
-              <p className={styles.message}>
-                {formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t)}
-              </p>
+            <div className={styles.recoveryActions} role="status" data-worktree-permission-notice>
+              {permissionRetryTarget !== undefined && (
+                <p>
+                  {t('notice.workspaceRecovery', {
+                    workspaceId: permissionRetryTarget.workspaceId,
+                  })}
+                </p>
+              )}
+
               {permissionRetryTarget !== undefined && (
                 <button
                   type="button"
@@ -213,13 +245,11 @@ export function SurfaceContent({
             return (
               <div
                 key={recovery.key}
-                className={styles.error}
-                role="alert"
+                className={styles.recoveryActions}
                 data-fork-recovery={recovery.key}
               >
-                <p className={styles.message} data-error="true">
-                  {formatWorktreeViewError(recoveryViewError, t)}
-                </p>
+                <p>{t('notice.sessionRecovery', { sessionId: recovery.childSessionId })}</p>
+
                 <div className={styles.recoveryActions}>
                   {retryForkSession !== undefined && recoveryViewError.retryable && (
                     <button
@@ -247,11 +277,12 @@ export function SurfaceContent({
               </div>
             );
           })}
-          {actionError !== undefined && (
-            <div className={styles.error} role="alert" data-worktree-error>
-              <p className={styles.message} data-error="true">
-                {formatWorktreeViewError(actionError, t)}
-              </p>
+          {(actionError !== undefined || pendingSessionBinding !== undefined) && (
+            <div className={styles.recoveryActions} data-worktree-recovery>
+              {pendingSessionBinding !== undefined && (
+                <p>{t('notice.sessionRecovery', { sessionId: pendingSessionBinding.sessionId })}</p>
+              )}
+
               {recoveryAction(actionError)}
               {pendingSessionBinding !== undefined && (
                 <div className={styles.recoveryActions}>
@@ -282,13 +313,22 @@ export function SurfaceContent({
                   )}
                 </div>
               )}
-              {actionError.retryable && (
+              {actionError?.retryable && (
                 <button
                   type="button"
                   className={styles.retryButton}
+                  disabled={actionPending}
                   onClick={() => {
                     setActionError(undefined);
-                    void refresh({ scope: { kind: 'global' } });
+                    const workspaceId =
+                      pendingSessionBinding?.workspaceId ?? actionError.details?.workspaceId;
+                    void refresh({
+                      scope:
+                        typeof workspaceId === 'string'
+                          ? { kind: 'workspace', workspaceId }
+                          : { kind: 'global' },
+                      preserveCurrent: true,
+                    });
                   }}
                 >
                   {t('action.retry')}
@@ -298,14 +338,18 @@ export function SurfaceContent({
           )}
 
           {readState.targetError !== undefined && (
-            <div className={styles.error} role="alert" data-worktree-target-error>
-              <p className={styles.message} data-error="true">
-                {formatWorktreeViewError(readState.targetError.error, t)}
+            <div className={styles.recoveryActions} data-worktree-target-recovery>
+              <p>
+                {t('notice.workspaceRecovery', {
+                  workspaceId: readState.targetError.workspaceIds.join(', '),
+                })}
               </p>
+
               {recoveryAction(readState.targetError.error)}
               <button
                 type="button"
                 className={styles.retryButton}
+                disabled={actionPending}
                 onClick={() => {
                   void refresh({
                     scope: {
@@ -322,14 +366,12 @@ export function SurfaceContent({
           )}
 
           {readState.status === 'error' && readState.error !== undefined ? (
-            <div className={styles.error} role="alert" data-worktree-error>
-              <p className={styles.message} data-error="true">
-                {formatWorktreeViewError(readState.error, t)}
-              </p>
+            <div className={styles.recoveryActions} data-worktree-recovery>
               {recoveryAction(readState.error)}
               <button
                 type="button"
                 className={styles.retryButton}
+                disabled={actionPending}
                 onClick={() => {
                   void refresh({ scope: { kind: 'global' } });
                 }}
@@ -338,7 +380,7 @@ export function SurfaceContent({
               </button>
             </div>
           ) : null}
-        </details>
+        </Modal>
       )}
       {readState.status === 'loading' && <p className={styles.message}>{t('status.loading')}</p>}
       {readState.status === 'ready' ? (
@@ -358,6 +400,11 @@ export function SurfaceContent({
           lifecycleState={lifecycleState}
         />
       ) : null}
+      {hasRecovery && (
+        <button type="button" className={styles.retryButton} onClick={() => setRecoveryOpen(true)}>
+          {t('notice.recovery')}
+        </button>
+      )}
     </div>
   );
 }

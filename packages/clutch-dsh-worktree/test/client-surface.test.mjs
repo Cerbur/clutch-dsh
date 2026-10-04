@@ -257,7 +257,7 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   assert.match(coordinator, /previousWorkspaceIdsRef/);
   assert.match(coordinator, /addedWorkspaceIds/);
   assert.match(coordinator, /mergeWorktreeViews\(current\.views, workspaceIds, \[\]\)/);
-  assert.match(coordinator, /data-worktree-target-error/);
+  assert.match(coordinator, /data-worktree-target-recovery/);
 });
 
 test('records the minimum-scope refresh invariant in package instructions', async () => {
@@ -1028,7 +1028,7 @@ test('keeps modal candidate state current without blanking ready Worktrees', asy
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
   const source = await readSurfaceSource();
-  assert.match(source, /data-worktree-error/);
+  assert.match(source, /data-worktree-recovery/);
   assert.match(source, /t\('action\.retry'\)/);
   assert.match(source, /status === 'error'/);
   assert.match(source, /executeWorktreeAction/);
@@ -1058,8 +1058,8 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /import \{ formatWorktreeViewError \}/);
-  assert.match(source, /\{formatWorktreeViewError\(actionError, t\)\}/);
-  assert.match(source, /\{formatWorktreeViewError\(readState\.error, t\)\}/);
+  assert.match(source, /formatWorktreeViewError\(actionError, t\)/);
+  assert.match(source, /formatWorktreeViewError\(readState\.error, t\)/);
   assert.match(source, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKTREE_RECORD_MISSING'/);
   assert.doesNotMatch(source, /message: t\('error\.workspaceOrderingUnavailable'\)/);
@@ -1070,7 +1070,7 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKSPACE_DELETE_UNAVAILABLE'/);
   assert.match(source, /code: 'SESSION_RENAME_UNAVAILABLE'/);
-  assert.match(source, /formatWorktreeViewError\(error, t\)/);
+  assert.match(source, /ErrorToast error=\{error\}/);
   assert.match(source, /WorktreeWorkspaceRenameDialog/);
   assert.match(source, /WorktreeWorkspaceDeleteDialog/);
   assert.match(source, /WorktreeSessionRenameDialog/);
@@ -1277,7 +1277,7 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
     /\.then\(\(\) =>\s*refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\),?\s*\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
-  assert.match(source, /\{actionError\.retryable && \(/);
+  assert.match(source, /\{actionError\?\.retryable && \(/);
 });
 
 test('preserves the Worktree projection for action refreshes', async () => {
@@ -1317,7 +1317,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
     /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
   );
 
-  const actionRetryStart = source.indexOf('{actionError.retryable && (');
+  const actionRetryStart = source.indexOf('{actionError?.retryable && (');
   const actionRetryEnd = source.indexOf("{readState.status === 'loading'", actionRetryStart);
   assert.notEqual(actionRetryStart, -1);
   assert.notEqual(actionRetryEnd, -1);
@@ -1349,7 +1349,7 @@ test('keeps targeted refresh errors local and retryable', async () => {
   assert.match(refreshSource, /if \(!workspaceIdsRef\.current\.includes\(workspaceId\)\) return/);
   assert.notEqual(targetErrorStart, -1);
   assert.notEqual(targetErrorEnd, -1);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /data-worktree-target-error/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /data-worktree-target-recovery/);
   assert.match(source.slice(targetErrorStart, targetErrorEnd), /kind: 'workspaces'/);
   assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
 });
@@ -1424,7 +1424,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   assert.match(coordinator, /readError=\{modalReadError\}/);
   assert.match(coordinator, /onRetry=\{\(\) =>/);
   assert.match(dialogs, /!canCreate/);
-  assert.match(dialogs, /formatWorktreeViewError\(readError, t\)/);
+  assert.match(dialogs, /ErrorToast error=\{readError\}/);
   assert.match(dialogs, /t\('action\.retry'\)/);
   assert.match(types, /readonly readError\?: WorktreeViewError/);
 });

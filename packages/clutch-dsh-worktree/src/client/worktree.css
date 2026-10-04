@@ -1178,9 +1178,3 @@
   overflow-wrap: anywhere;
   line-height: 1.5;
 }
-
-.notificationDetails > summary {
-  cursor: pointer;
-  padding: 8px;
-  font-size: 12px;
-}

@@ -147,7 +147,7 @@ menu refreshes retain ready facts; updated and forgotten records project normall
 An external header request can precede the initial view read. Missing target facts are not
 treated as removal until that Workspace view arrives; Session changes and confirmed missing
 identities still dismiss the request. `DashboardRequest` occupies the same center bounds while
-loading or showing a retryable read error; retry reads only the requested Workspace. Neither
+loading or showing a retry control and a failure toast; retry reads only the requested Workspace. Neither
 the request nor the ready Dashboard expands the native Sidebar.
 The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
 active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
@@ -376,9 +376,14 @@ only in current-page memory; after a refresh, the first available application is
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
 are announced once while present; resolved entries leave the queue and a later recurrence
-can announce again. Toast disposal is owned by React unmount. Full diagnostics and recovery
-buttons remain in one collapsed native details element; no Session recovery is tied to the
-toast timer. Dialog validation and scoped Git setup guidance remain local.
+can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
+notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
+unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
+Toast actions and the list's bottom Recovery actions entry open a native Modal containing persistent
+retry/binding/recovery controls; no Session recovery is tied to the toast timer. Known contract codes
+have exhaustive bilingual problem/recovery copy; unknown codes use localized support guidance.
+Raw diagnostics stay in the original error objects, never in toast copy. Dialogs retain input and
+retry controls; scoped Git setup guidance remains local.
 The shared Worktree HoverCard adds status-specific repair guidance and the path for unhealthy
 active rows, and is suppressed during menus and dragging. These changes do not mutate Git,
 sidecar state, Session bindings, or permissions.
@@ -454,7 +459,7 @@ a branch is adopted, while forget and archive retain their existing lifecycle se
 
 Sibling creation uses the observed `currentBranch`, falling back to the accepted branch only
 when the runtime field is unavailable; detached HEAD does not expose that action. Adoption
-errors stay inside the confirmation dialog and disable submission until Retry reloads the
+errors are announced by toast and disable confirmation submission until Retry reloads the
 branch and token for explicit reconfirmation. Retry retains unrelated ready views, and late
 retry results are ignored after the dialog closes or the Client mode/manager changes.
 Read-only menu refreshes share an equivalent in-flight Workspace read and do not invalidate

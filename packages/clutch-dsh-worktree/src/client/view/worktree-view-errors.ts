@@ -32,10 +32,16 @@ export class WorktreeSessionBindingError extends Error {
     const conflict = candidate?.code === 'SESSION_ALREADY_BOUND';
     this.code = conflict ? 'SESSION_ALREADY_BOUND' : 'SESSION_BINDING_FAILED';
     this.retryable = conflict ? false : candidate?.retryable !== false;
-    this.details = typeof candidate?.details === 'object' && candidate.details !== null
-      && !Array.isArray(candidate.details)
-      ? candidate.details as Readonly<Record<string, unknown>>
-      : {};
+    this.details =
+      typeof candidate?.details === 'object' &&
+      candidate.details !== null &&
+      !Array.isArray(candidate.details)
+        ? (candidate.details as Readonly<Record<string, unknown>>)
+        : {};
+    this.details = {
+      ...this.details,
+      ...(typeof candidate?.code === 'string' ? { causeCode: candidate.code } : {}),
+    };
     this.sessionId = sessionId;
     this.cause = cause;
   }

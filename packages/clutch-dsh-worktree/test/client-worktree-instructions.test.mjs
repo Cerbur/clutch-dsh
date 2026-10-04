@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import test from 'node:test';
 import ts from 'typescript';
+import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
+import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { en } from '../lib/client/locales.js';
 
 const compiled = ts.transpileModule(
@@ -54,6 +56,9 @@ function harness(onSave) {
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
         './dashboard.css': { default: {} },
+        '../surface/components/NotificationToasts.js': { NotificationToasts: 'toasts' },
+        '../view/worktree-view.js': { toWorktreeViewError },
+        '../view/worktree-error-copy.js': { formatWorktreeViewError },
       })[name],
     exports,
   );
@@ -105,7 +110,8 @@ test('instruction editor retains failed drafts, retries with its original witnes
   button(h.render(), 'Save').onClick();
   await settle();
   assert.equal(nodes(h.render()).find((item) => item.type === 'textarea').props.value, 'changed');
-  assert.ok(nodes(h.render()).some((item) => item.props?.role === 'alert'));
+  assert.ok(nodes(h.render()).some((item) => item.type === 'toasts' && item.props.notices.some((notice) => notice.text === en['dashboard.instructionsSaveFailed'])));
+  assert.ok(nodes(h.render()).every((item) => item.props?.role !== 'alert'));
   fail = false;
   button(h.render(), 'Save').onClick();
   await settle();

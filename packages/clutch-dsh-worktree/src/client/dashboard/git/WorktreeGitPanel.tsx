@@ -1,3 +1,6 @@
+import { NotificationToasts } from '../../surface/components/NotificationToasts.js';
+import { toWorktreeViewError } from '../../view/worktree-view.js';
+import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { useRef } from 'react';
 import type {
   WorktreeGitCommit,
@@ -163,6 +166,42 @@ export function WorktreeGitPanel({
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
+      <NotificationToasts
+        notices={[
+          ['branches', branchError],
+          [
+            'history',
+            state.history.status === 'error' || state.history.status === 'ready'
+              ? state.history.error
+              : undefined,
+          ],
+          [
+            'files',
+            state.files.status === 'error' || state.files.status === 'ready'
+              ? state.files.error
+              : undefined,
+          ],
+          ['diff', state.diff.status === 'error' ? state.diff.error : undefined],
+        ].flatMap(([scope, error]) => {
+          if (!(error instanceof Error)) return [];
+          const text = formatWorktreeViewError(toWorktreeViewError(error), t);
+          return [
+            {
+              key: JSON.stringify([workspaceId, worktreeId, scope, text]),
+              text,
+              actions: [
+                {
+                  label: t('dashboard.git.retry'),
+                  onClick: () => {
+                    if (scope === 'branches') void state.loadBranches();
+                    else void state.refresh();
+                  },
+                },
+              ],
+            },
+          ];
+        })}
+      />
       <header className={styles.gitPanelHeader}>
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
@@ -260,9 +299,10 @@ export function WorktreeGitPanel({
       </header>
 
       {branchError !== undefined && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(branchError, t) })}</p>
-          <button type="button" onClick={() => void state.loadBranches()}>{t('dashboard.git.retry')}</button>
+        <div className={styles.gitEmpty}>
+          <button type="button" onClick={() => void state.loadBranches()}>
+            {t('dashboard.git.retry')}
+          </button>
         </div>
       )}
 
@@ -277,15 +317,17 @@ export function WorktreeGitPanel({
         <div className={styles.gitLoading} role="status">{t('dashboard.git.loading')}</div>
       )}
       {state.history.status === 'error' && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(state.history.error, t) })}</p>
-          <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
+        <div className={styles.gitEmpty}>
+          <button type="button" onClick={() => void state.refresh()}>
+            {t('dashboard.git.retry')}
+          </button>
         </div>
       )}
       {state.history.status === 'ready' && state.history.error !== undefined && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.refreshFailed', { reason: errorText(state.history.error, t) })}</p>
-          <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
+        <div className={styles.gitEmpty}>
+          <button type="button" onClick={() => void state.refresh()}>
+            {t('dashboard.git.retry')}
+          </button>
         </div>
       )}
 
@@ -408,11 +450,11 @@ export function WorktreeGitPanel({
             ) : state.files.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
             ) : state.files.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
+              <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
             ) : (
               <>
                 {state.files.status === 'ready' && state.files.error !== undefined && (
-                  <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
+                  <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
                 )}
                 {state.files.status === 'ready' && state.files.value.truncated === true && (
                   <div className={styles.gitEmpty} role="status" data-dashboard-git-files-truncated>
@@ -452,7 +494,7 @@ export function WorktreeGitPanel({
             {state.diff.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryDiff') : t('dashboard.git.loadingDiff')}</div>
             ) : state.diff.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.diff.error, t)}</div>
+              <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
             ) : (
               <GitDiffView diff={diff} onOpenFile={onOpenFile} t={t} />
             )}
@@ -502,8 +544,4 @@ function GitSplitter({ split, orientation, axis, label }: GitSplitterProps) {
       onKeyDown={split.onKeyDown}
     />
   );
-}
-
-function errorText(error: Error, t: WorktreeTranslate): string {
-  return error.message || t('dashboard.unknownError');
 }

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
+import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { setImmediate } from 'node:timers';
@@ -231,6 +233,9 @@ function renderHarness(writeClipboard) {
           Tooltip: ({ children }) => children,
           writeClipboard,
         },
+        '../surface/components/NotificationToasts.js': { NotificationToasts: ({ notices }) => jsx('toasts', { notices }) },
+        '../view/worktree-view.js': { toWorktreeViewError },
+        '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
         './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord },
         './worktree-acquisition-facts.js': { selectWorktreeAcquisitionFacts },
@@ -819,7 +824,7 @@ test('copy uses the complete cwd, coalesces pending clicks, and reports boolean 
   assert.equal(copyButton(harness.render()).props.disabled, true);
   complete(false);
   await tick();
-  assert.equal(byRole(harness.render(), 'alert')[0].props.children, en['dashboard.copyFailed']);
+  assert.ok(findAll(harness.render(), (item) => item.type === 'toasts').some((item) => item.props.notices.some((notice) => notice.text === en['dashboard.copyFailed'])));
   copyButton(harness.render()).props.onClick();
   complete(true);
   await tick();
@@ -865,11 +870,13 @@ test('copy rejection is visible and results for a replaced cwd are ignored', asy
   copyButton(harness.render()).props.onClick();
   reject(new Error('denied'));
   await tick();
-  assert.equal(byRole(harness.render(), 'alert').length, 1);
+  assert.ok(findAll(harness.render(), (item) => item.type === 'toasts').some((item) => item.props.notices.length > 0));
+  assert.equal(byRole(harness.render(), 'alert').length, 0);
   copyButton(harness.render()).props.onClick();
   harness.render({ record: { ...record, absolutePath: '/another' } });
   reject(new Error('late failure'));
   await tick();
+  assert.ok(findAll(harness.render(), (item) => item.type === 'toasts').every((item) => item.props.notices.length === 0));
   assert.equal(byRole(harness.render(), 'alert').length, 0);
   assert.notEqual(byRole(harness.render(), 'status')[0].props.children, en['dashboard.copied']);
   harness.dispose();

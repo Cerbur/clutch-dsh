@@ -312,6 +312,7 @@ export async function loadClientEntry({
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
     if (specifier === 'react') return {
+      createContext: () => ({ Provider: 'NotificationProvider' }),
       createElement: (type, props) => ({ type, props }),
       Component: class { constructor(props) { this.props = props; } },
       createRef: () => ({ current: null }),

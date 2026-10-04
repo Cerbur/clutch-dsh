@@ -143,7 +143,7 @@ test('active and archived menu opens share the owning Workspace read', async () 
   await Promise.all(pending);
 });
 
-test('adoption failures are visible inside the dialog with a refresh action', async () => {
+test('adoption failures keep confirmation disabled and offer refresh without an inline alert', async () => {
   const text = await readFile(
     new URL('../src/client/surface/components/dialogs.tsx', import.meta.url),
     'utf8',
@@ -189,7 +189,7 @@ test('adoption failures are visible inside the dialog with a refresh action', as
   }
   walk(element);
   const alert = nodes.find((node) => node.props.role === 'alert');
-  assert.ok(alert, 'error must be rendered in the modal');
+  assert.equal(alert, undefined, 'the Surface toast owns failure copy');
   const retry = nodes.find((node) => node.props.onClick && node.props.children === 'action.retry');
   assert.ok(retry, 'failed confirmation must offer refresh before reconfirmation');
   assert.equal(

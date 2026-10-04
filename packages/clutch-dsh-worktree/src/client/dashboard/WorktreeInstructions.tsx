@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { WorktreeTranslate } from '../surface/types.js';
+import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
+import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import styles from './dashboard.css';
 
 export function WorktreeInstructions({
@@ -15,7 +18,7 @@ export function WorktreeInstructions({
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<WorktreeViewError>();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
@@ -33,15 +36,15 @@ export function WorktreeInstructions({
     if (busy.current || draft === undefined || !onSave) return;
     busy.current = true;
     setPending(true);
-    setError(false);
+    setError(undefined);
     try {
       const result = await onSave(draft, expected.current);
       if (alive.current) {
         setSaved(result);
         setDraft(undefined);
       }
-    } catch {
-      if (alive.current) setError(true);
+    } catch (cause) {
+      if (alive.current) setError(toWorktreeViewError(cause));
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -62,7 +65,7 @@ export function WorktreeInstructions({
             onClick={() => {
               expected.current = saved;
               setDraft(saved);
-              setError(false);
+              setError(undefined);
             }}
           >
             {t('dashboard.edit')}
@@ -94,13 +97,28 @@ export function WorktreeInstructions({
               disabled={pending}
               onClick={() => {
                 setDraft(undefined);
-                setError(false);
+                setError(undefined);
               }}
             >
               {t('dashboard.cancelInstructions')}
             </button>
           </div>
-          {error && <p role="alert">{t('dashboard.instructionsSaveFailed')}</p>}
+          <NotificationToasts
+            notices={
+              error === undefined
+                ? []
+                : [
+                    {
+                      key: JSON.stringify(['instructions', error.code, error.details]),
+                      text:
+                        t('dashboard.instructionsSaveFailed') +
+                        (error.code === 'WORKTREE_VIEW_FAILED'
+                          ? ''
+                          : ' ' + formatWorktreeViewError(error, t)),
+                    },
+                  ]
+            }
+          />
         </>
       )}
     </div>

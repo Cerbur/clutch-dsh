@@ -1,4 +1,6 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
+import type { WorktreeLocaleKey } from '../locales.js';
+import type { WorktreeErrorCode } from '../../contract/index.js';
 import type { WorktreePermissionResult } from '../../contract/index.js';
 import type { WorktreeViewError } from './worktree-view.js';
 import { WORKTREE_NS } from '../locales.js';
@@ -10,8 +12,65 @@ function detail(error: WorktreeViewError, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+const DOMAIN_ERROR_COPY = {
+  WORKSPACE_NOT_FOUND: 'error.workspaceNotFound',
+  WORKSPACE_ROOT_MISSING: 'error.workspaceRootMissing',
+  WORKSPACE_NOT_GIT_REPOSITORY: 'error.workspaceNotGitRepository',
+  GIT_NOT_INSTALLED: 'error.gitNotInstalled',
+  WORKTREE_REQUIRES_INITIAL_COMMIT: 'error.initialCommitRequired',
+  WORKTREE_BRANCH_CONFLICT: 'error.branchConflict',
+  WORKTREE_NOT_FOUND: 'error.worktreeNotFound',
+  WORKTREE_ORDER_INVALID: 'error.worktreeOrderInvalid',
+  WORKTREE_REMOVED: 'error.worktreeRemoved',
+  WORKTREE_IMPORT_INVALID: 'error.worktreeImportInvalid',
+  WORKTREE_ALREADY_MANAGED: 'error.worktreeAlreadyManaged',
+  SESSION_NOT_FOUND: 'error.sessionNotFound',
+  SESSION_CWD_MISMATCH: 'error.sessionCwdMismatch',
+  SESSION_ALREADY_BOUND: 'error.sessionAlreadyBound',
+  SIDECAR_UNAVAILABLE: 'error.sidecarUnavailable',
+  SIDECAR_CORRUPT: 'error.sidecarCorrupt',
+  SIDECAR_SYNC_REQUIRED: 'error.sidecarSyncRequired',
+  GIT_OPERATION_FAILED: 'error.gitOperationFailed',
+  WORKTREE_MUTATION_BUSY: 'error.worktreeMutationBusy',
+  WORKTREE_STATE_CONFLICT: 'error.worktreeStateConflict',
+  WORKTREE_RECOVERY_REQUIRED: 'error.worktreeRecoveryRequired',
+  WORKTREE_IDENTITY_CHANGED: 'error.worktreeIdentityChanged',
+  WORKTREE_PERMISSION_BINDING_REQUIRED: 'error.permissionBindingRequired',
+  WORKTREE_SESSION_BUSY: 'error.worktreeSessionBusy',
+  WORKTREE_ACTIVITY_UNAVAILABLE: 'error.worktreeActivityUnavailable',
+} as const satisfies Record<WorktreeErrorCode, WorktreeLocaleKey>;
+
 function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
-  return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
+  const causeCode = detail(error, 'causeCode');
+  const key = Object.hasOwn(DOMAIN_ERROR_COPY, causeCode)
+    ? DOMAIN_ERROR_COPY[causeCode as WorktreeErrorCode]
+    : undefined;
+  return key === undefined
+    ? t('error.worktreeDataUnavailable')
+    : causeCode === 'WORKSPACE_ROOT_MISSING'
+      ? t(key, { rootPath: detail(error, 'rootPath') })
+      : t(key);
+}
+
+/** Recognize actionable Git diagnostics without displaying untranslated stderr. */
+function gitErrorCopy(error: WorktreeViewError): WorktreeLocaleKey {
+  if (error.details?.gitTimedOut === true) return 'error.gitTimeout';
+  const diagnostic = detail(error, 'gitStderr');
+  if (
+    /contains modified or untracked files|uncommitted changes|local changes.*overwritten/i.test(
+      diagnostic,
+    )
+  )
+    return 'error.gitLocalChanges';
+  if (
+    /permission denied|access is denied|operation not permitted|dubious ownership/i.test(diagnostic)
+  )
+    return 'error.gitAccessDenied';
+  if (/is locked|cannot lock|unable to create.*\.lock|another git process/i.test(diagnostic))
+    return 'error.gitLocked';
+  if (/not a valid branch name|invalid branch name|not a valid ref/i.test(diagnostic))
+    return 'error.gitInvalidBranch';
+  return 'error.gitOperationFailed';
 }
 
 export function formatWorktreePermissionNotice(
@@ -30,20 +89,25 @@ export function formatWorktreePermissionNotice(
   }
 }
 
-export function formatWorktreeViewError(
-  error: WorktreeViewError,
-  t: WorktreeTranslate,
-): string {
+export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTranslate): string {
+  if (error.code === 'GIT_OPERATION_FAILED') return t(gitErrorCopy(error));
+  const domainKey = Object.hasOwn(DOMAIN_ERROR_COPY, error.code)
+    ? DOMAIN_ERROR_COPY[error.code as WorktreeErrorCode]
+    : undefined;
+  if (domainKey !== undefined)
+    return error.code === 'WORKSPACE_ROOT_MISSING'
+      ? t(domainKey, { rootPath: detail(error, 'rootPath') })
+      : t(domainKey);
   switch (error.code) {
     case 'CLIENT_DISPOSED':
       return t('error.connectionDisposed');
+    case 'gateway/service-unavailable':
+    case 'gateway/definition-unavailable':
+    case 'gateway/invocation-unavailable':
     case 'CONNECTION_CALL_FAILED':
-      return t('error.connectionFailed', {
-        endpoint: detail(error, 'endpoint'),
-        reason: reason(error, t),
-      });
+      return t('error.connectionFailed');
     case 'WORKTREE_RPC_INVALID_RESULT':
-      return t('error.invalidResult', { endpoint: detail(error, 'endpoint') });
+      return t('error.invalidResult');
     case 'WORKSPACE_ORDER_UNAVAILABLE':
       return t('error.workspaceOrderingUnavailable');
     case 'SESSION_ORDER_UNAVAILABLE':
@@ -74,12 +138,6 @@ export function formatWorktreeViewError(
       return t('error.workspaceRenameUnavailable');
     case 'WORKSPACE_DELETE_UNAVAILABLE':
       return t('error.workspaceDeleteUnavailable');
-    // 只有确认根目录缺失才显示本地化的目录缺失提示；其余 WORKSPACE_NOT_FOUND
-    // 语义（未知 Workspace、无效或无法解析的 root）落到默认分支保留原始错误信息。
-    // Only a confirmed-missing root shows the localized missing-directory copy; other
-    // WORKSPACE_NOT_FOUND causes fall through so the accurate message is preserved.
-    case 'WORKSPACE_ROOT_MISSING':
-      return t('error.workspaceRootMissing', { rootPath: detail(error, 'rootPath') });
     case 'SESSION_RENAME_UNAVAILABLE':
       return t('error.sessionRenameUnavailable');
     case 'SESSION_BINDING_FAILED':
@@ -92,7 +150,7 @@ export function formatWorktreeViewError(
     case 'WORKTREE_PERMISSION_CONFIRMATION_REQUIRED':
       return t('error.worktreePermissionConfirmationRequired');
     case 'WORKTREE_PERMISSION_FAILED':
-      return t('error.worktreePermissionFailed', { reason: reason(error, t) });
+      return t('error.worktreePermissionFailed');
     case 'SESSION_LIST_NOT_READY':
       return t('error.sessionListNotReady');
     case 'SESSION_FACTS_INCOMPLETE':
@@ -106,6 +164,8 @@ export function formatWorktreeViewError(
     case 'GIT_NOT_INSTALLED':
       return t('error.gitNotInstalled');
     default:
-      return error.message.length > 0 ? error.message : t('error.worktreeDataUnavailable');
+      return error.code === 'WORKTREE_VIEW_FAILED'
+        ? t('error.worktreeDataUnavailable')
+        : t('error.unexpected', { code: error.code });
   }
 }

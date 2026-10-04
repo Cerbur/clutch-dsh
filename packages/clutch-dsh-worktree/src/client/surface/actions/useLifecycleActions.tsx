@@ -111,7 +111,16 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   };
   const recoveryAction = (error: WorktreeViewError | undefined) => {
     const workspaceId = error?.details?.workspaceId;
-    if (!manager || error?.code !== 'WORKTREE_RECOVERY_REQUIRED' || typeof workspaceId !== 'string')
+    if (
+      !manager ||
+      error === undefined ||
+      ![
+        'WORKTREE_RECOVERY_REQUIRED',
+        'SIDECAR_SYNC_REQUIRED',
+        'WORKTREE_IDENTITY_CHANGED',
+      ].includes(error.code) ||
+      typeof workspaceId !== 'string'
+    )
       return null;
     return (
       <button
