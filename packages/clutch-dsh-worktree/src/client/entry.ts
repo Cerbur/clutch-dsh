@@ -20,6 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
+import { createWorktreeToolChangeMonitor } from './worktree-tool-changes.js';
 import { RestartNotice } from './restart-notice.js';
 import { RestartToast } from './surface/components/RestartToast.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
@@ -257,6 +258,18 @@ export function apply(ctx: Context): void {
     viewReader,
     storeFactory: createSnapshotStore,
   });
+  const toolChanges = createWorktreeToolChangeMonitor({
+    read: (revision, signal) => manager.watchToolChanges(revision, signal),
+    changed: ({ workspaceId }) => {
+      viewReader.invalidate(workspaceId);
+      if (contextProjection.store.getSnapshot().workspaceId === workspaceId) {
+        void contextProjection.refresh();
+      }
+    },
+  });
+  ctx.effect(() => () => toolChanges.dispose(), 'clutch-dsh-worktree: tool notification cleanup');
+  ctx.on('connection/reset', () => toolChanges.reset());
+  if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
   ctx.effect(
@@ -551,6 +564,7 @@ export function apply(ctx: Context): void {
           hooks: { worktreeContext: contextProjection.store },
           manager,
           viewReader,
+          subscribeToolChanges: toolChanges.subscribe,
           permission: permissionManager,
           confirmFullAccess: permissionManager === undefined
             ? undefined

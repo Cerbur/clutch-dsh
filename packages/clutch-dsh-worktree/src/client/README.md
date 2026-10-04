@@ -67,6 +67,12 @@ never writes DSH Workspace state or exposes the projection as a new Controller o
 
 ## Shared Worktree views and refresh scopes
 
+Agent tool mutations arrive through `watchToolChanges` on the existing `/api` adapter.
+One cancellable long-poll loop belongs to the Client fiber. Each notification invalidates only
+its Workspace reader generation; the current matching Context and visible Surface share the
+replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
+This runtime notification carries identities only and does not add another data store.
+
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
 It keeps one entry per Workspace and provides:

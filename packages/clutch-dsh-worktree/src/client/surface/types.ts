@@ -18,6 +18,7 @@ import type {
   WorktreePermissionManager,
   WorktreePermissionResult,
   WorktreeRecord,
+  WorktreeToolChange,
 } from '../../contract/index.js';
 import type { DashboardRecord, DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
@@ -82,6 +83,7 @@ export interface WorktreeSurfaceInjected {
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
   readonly viewReader: WorktreeViewReader;
+  readonly subscribeToolChanges?: (listener: (change: WorktreeToolChange) => void) => () => void;
   readonly permission?: Pick<
     WorktreePermissionManager,
     'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
@@ -184,6 +186,8 @@ export interface TargetedWorktreeReadError {
 }
 
 export interface RefreshOptions {
+  /** A Host tool notification already retired the shared reader generation. */
+  readonly alreadyInvalidated?: boolean;
   readonly preserveCurrent?: boolean;
   /** Only read-only triggers may reuse reads started before this refresh. */
   readonly reuseInFlight?: boolean;

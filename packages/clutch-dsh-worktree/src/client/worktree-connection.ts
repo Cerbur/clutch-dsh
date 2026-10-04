@@ -7,6 +7,7 @@ import type {
   WorktreePermissionNormalizationRequest,
   WorktreeRemoteMethod,
   WorktreeRemoteResult,
+  WorktreeToolChangeBatch,
 } from '../contract/index.js';
 
 /** The one logical channel shared by the DSH Connection and Typert Gateway. */
@@ -17,6 +18,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  watchToolChanges: 'worktreeManager/watchToolChanges',
   listWorktrees: 'worktreeManager/listWorktrees',
   listWorktreeCommits: 'worktreeManager/listWorktreeCommits',
   listWorktreeCommitFiles: 'worktreeManager/listWorktreeCommitFiles',
@@ -68,6 +70,7 @@ export class WorktreeConnectionError extends Error {
 }
 
 export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager {
+  watchToolChanges(afterRevision: number, signal: AbortSignal): Promise<WorktreeToolChangeBatch>;
   /** Check Host composition without requiring a user Workspace or reading its projection. */
   probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
   /** Abort all requests owned by this Client plugin instance. */
@@ -203,6 +206,11 @@ export function createWorktreeConnectionAdapter(
   }
 
   return {
+    watchToolChanges: async (afterRevision, signal) =>
+      unwrap<WorktreeToolChangeBatch>(
+        WORKTREE_CONNECTION_ENDPOINTS.watchToolChanges,
+        await call('watchToolChanges', { afterRevision }, signal),
+      ),
     // Empty Workspace identity reaches the existing read endpoint but cannot select user data.
     // An outer success (including inner WORKSPACE_NOT_FOUND) proves the Host is composed.
     probeHost: (signal) => call('listBindings', { workspaceId: '' }, signal),

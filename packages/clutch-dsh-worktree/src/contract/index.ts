@@ -189,6 +189,7 @@ export interface WorktreeGitFileDiff {
 }
 
 export * from './worktree-permission.js';
+export * from './worktree-tool-changes.js';
 export * from './windows-path.js';
 
 /** Runtime-only Git health projection; this value is never persisted in the sidecar. */
@@ -438,6 +439,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'watchToolChanges',
   'getWorktreeInstructions',
   'updateWorktreeInstructions',
   'updateWorktreeBaseBranch',

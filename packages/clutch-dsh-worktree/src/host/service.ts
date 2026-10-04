@@ -34,6 +34,9 @@ import {
   type DshWorktreePermissionAdapterOptions,
 } from './worktree-permission.js';
 import { createWorktreePermissionManager } from './worktree-permission-manager.js';
+import { registerWorktreeTools, type WorktreeToolSessionPort } from './worktree-tools.js';
+import { WorktreeToolChanges } from './worktree-tool-changes.js';
+import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -64,6 +67,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
 
   private readonly manager: WorktreeManagerService;
   private readonly remote: WorktreeRemoteManager;
+  private readonly toolChanges = new WorktreeToolChanges();
 
   /**
    * 为当前 Cordis fiber 建立一次 Host 组合，并复用同一个 Remote projection 处理调用。
@@ -91,6 +95,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
       subprocess,
     });
     this.manager = manager;
+    ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
+    // Optional command composition keeps the read-only Provider adapter unchanged.
+    ctx.inject(['commands', 'tools', 'sessionController'], (toolCtx) => {
+      registerWorktreeTools(toolCtx, {
+        manager, dsh,
+        sessions: toolCtx.get('sessionController') as WorktreeToolSessionPort,
+        changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+        isDisposed: () => disposed,
+      });
+    });
     registerWorktreeInstructions(
       ctx as unknown as WorktreeInstructionHost,
       (sessionId) => manager.resolveSessionInstructions(sessionId),
@@ -131,6 +145,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  async watchToolChanges(
+    input: { readonly afterRevision: number },
+    signal: AbortSignal,
+  ): Promise<WorktreeRemoteResult<WorktreeToolChangeBatch>> {
+    return { ok: true, value: await this.toolChanges.watch(input.afterRevision, signal) };
+  }
+
   @Remote
   getWorktreeInstructions(input: {
     workspaceId: string;

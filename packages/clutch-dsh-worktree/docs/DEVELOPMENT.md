@@ -98,6 +98,16 @@ pnpm dsh web --port 3088 --no-open
 
 ### 3.3 开发迭代与重载
 
+`/worktree` 的可选 Host 接缝需要原生 `commands`、`tools` 与
+`sessionController` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
+真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将
+Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
+Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
+
+```bash
+node --test test/worktree-tools.test.mjs test/worktree-tool-changes.test.mjs
+```
+
 修改代码后，重新构建插件包并重启 DSH：
 
 ```bash

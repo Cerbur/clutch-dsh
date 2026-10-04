@@ -89,6 +89,28 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ## 4. 关系模型与运行时 cwd
 
+### Agent Worktree 工具接缝
+
+Host 的可选 `commands/tools/sessionController` composition 提供 `/worktree`，
+并在调用 Agent 的独立工具作用域注册 `clutch_new_worktree` 与
+`clutch_span_worktree`。启用状态只存在于运行时，Agent 或插件销毁后移除，
+不写入 DSH Session metadata、事件或 Sidecar。原生 command/tool 生命周期日志由 DSH
+自行记录。未绑定且没有原生 Workspace 归属的 Session 不根据 cwd 猜测 Project。
+
+创建沿用 Manage 的 Git/Sidecar 事务，随后保存可选共享指令。派发通过原生
+`sessionController.create({ cwd })` 创建新 Session，然后 `bindSession`，
+最后 `sessionController.prompt(..., signal)`；不修改已有 Session 或原生
+Workspace 成员表，不自动调整模型、preset 或权限。失败保留已创建实体并返回
+身份及阶段结果，禁止回滚删除 Session。Provider 的 DSH adapter 继续完全只读。
+
+`watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
+20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
+内存 revision，绝不持久化到 Sidecar。Client fiber 共享一个通知循环，
+先使该 Workspace 的 reader generation 失效，再共享 Context/Surface 的定向读取，
+保持其他 ready Workspace 可见。没有新变更时不读取 Git 或 Worktree 列表。
+
+研究证据、具体限制和验证方案见 [WORKTREE-TOOLS.md](WORKTREE-TOOLS.md)。
+
 `WorktreeRecord.source` 记录来源类型：
 
 - `plugin`：在插件管理目录（`$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-chars>`）下新建；

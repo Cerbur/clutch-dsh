@@ -94,6 +94,8 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 
 ### 创建 Worktree
 
+也可以通过 `/worktree` 启用 Agent 工具，见下一节。
+
 新建 Worktree 操作使用与 Worktree 行相同的分支图标。Workspace 行按钮在 hover、键盘聚焦
 或选项菜单打开时显示，与菜单按钮保持一致。
 
@@ -113,6 +115,30 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 
 已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用。Git 文件预览对当前 Session
 cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
+
+### 启用 Agent Worktree 工具
+
+在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/worktree`。
+该指令为当前 Session 运行中的 Agent 启用两个工具：
+
+| 工具 | 参数 | 行为 |
+| --- | --- | --- |
+| `clutch_new_worktree` | `name`、可选 `instructions` | 以 Workspace Main 当前本地分支为基线创建受管 Worktree。名称作为新 Git 分支名；可选指令供其 Session 共享。 |
+| `clutch_span_worktree` | `name`、`prompt` | 在指定 active Worktree 中创建新的原生 DSH Session，建立绑定并提交 prompt。提交被接受后立即返回，不等待任务结束。 |
+
+例如，让 Agent 调用 `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`，
+再调用 `clutch_span_worktree({ name: "feature/demo", prompt: "Implement the feature and report the result." })`。
+工具名按约定保留为 `clutch_span_worktree`。Worktree 名称是调用方 Workspace 内准确的
+Git 分支名。单独创建 Worktree 不会创建 Session。
+
+工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
+派发保留当前对话，使用 DSH 新 Session 的默认模型、preset 和权限；
+不会自动授予 Worktree Full Access，也不会自动为派发的 Session 启用这两个工具。
+Agent 或插件重启后需要重新执行 `/worktree`。指令不接受额外参数。
+
+若创建后保存指令、绑定或提交 prompt 失败，工具会返回已创建的身份和错误
+（`instructionsSaved: false`、`binding-failed` 或 `prompt-failed`），保留 Worktree 和
+原生 Session。重试前先修复或打开返回的 Session；再次派发会创建另一个 Session。
 
 ### 导入已有 Worktree
 

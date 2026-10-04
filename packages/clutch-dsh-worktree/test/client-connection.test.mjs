@@ -75,6 +75,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     })),
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/watchToolChanges',
     'worktreeManager/listWorktrees',
     'worktreeManager/listWorktreeCommits',
     'worktreeManager/listWorktreeCommitFiles',

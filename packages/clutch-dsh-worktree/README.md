@@ -99,6 +99,8 @@ visible and clickable even when the New Session action displays keyboard shortcu
 
 ### Create a Worktree
 
+You can also enable Agent tools with `/worktree`; see the next section.
+
 New Worktree actions use the same branch icon as Worktree rows. The Workspace row button appears
 on hover, keyboard focus, or while its options menu is open, matching the menu button.
 
@@ -119,6 +121,32 @@ not fall back to the Git root or create the missing directory.
 Already-bound Sessions with a legacy Git-root cwd remain usable. Git file previews use
 relative addresses inside the current Session cwd and absolute addresses for other checkout files,
 subject to DSH's native file-access checks.
+
+### Enable Agent Worktree tools
+
+Run `/worktree` in a Session belonging to a Workspace or an active managed Worktree.
+The command enables these two tools for that Session's running Agent:
+
+| Tool | Parameters | Behavior |
+| --- | --- | --- |
+| `clutch_new_worktree` | `name`, optional `instructions` | Creates a managed Worktree using the Workspace Main's current local branch as the base. The name becomes its new Git branch; optional instructions are shared with its Sessions. |
+| `clutch_span_worktree` | `name`, `prompt` | Creates a fresh native DSH Session in the named active Worktree, binds it, and submits the prompt. Returns after admission, without waiting for the task to finish. |
+
+For example, ask the Agent to call `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`,
+then `clutch_span_worktree({ name: "feature/demo", prompt: "Implement the feature and report the result." })`.
+The tool name is intentionally `clutch_span_worktree`. Worktree names are exact Git branch names
+within the calling Workspace. Creating a Worktree alone does not create a Session.
+
+Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
+content. Dispatch keeps the current conversation open and uses DSH's normal new-Session model,
+preset, and permission defaults; it does not automatically grant Worktree Full Access or enable
+these tools in the dispatched Session. Run `/worktree` again after the Agent or plugin restarts.
+No extra command arguments are accepted.
+
+If saving instructions, binding, or prompt admission fails after creation, the tool returns the
+created identity and an error (`instructionsSaved: false`, `binding-failed`, or `prompt-failed`).
+The Worktree and native Session are retained. Repair or open the returned Session before retrying;
+another dispatch creates another Session.
 
 ### Import an existing Worktree
 
