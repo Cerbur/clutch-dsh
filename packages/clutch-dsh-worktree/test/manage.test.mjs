@@ -2780,9 +2780,28 @@ test('reports an explicit error for an active binding whose Worktree path disapp
     await sidecar.upsertBinding(makeBinding({ worktreeId: 'wt_missing', sessionId: 'session_missing_path' }));
     dsh.addSession({ sessionId: 'session_missing_path', workspaceId: 'ws_one', cwd: workspaceRoot });
 
-    await expectCode(
+    await assert.rejects(
       provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_missing_path' }),
-      'WORKTREE_NOT_FOUND',
+      (error) => {
+        assert.equal(error.code, 'WORKTREE_NOT_FOUND');
+        assert.deepEqual(error.details, {
+          workspaceId: 'ws_one', worktreeId: 'wt_missing',
+          sessionId: 'session_missing_path', absolutePath: missingPath,
+        });
+        return true;
+      },
+    );
+    dsh.addSession({ sessionId: 'session_bind_missing_path', workspaceId: 'ws_one', cwd: missingPath });
+    await assert.rejects(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: 'wt_missing', sessionId: 'session_bind_missing_path' }),
+      (error) => {
+        assert.equal(error.code, 'WORKTREE_NOT_FOUND');
+        assert.deepEqual(error.details, {
+          workspaceId: 'ws_one', worktreeId: 'wt_missing',
+          sessionId: 'session_bind_missing_path', absolutePath: missingPath,
+        });
+        return true;
+      },
     );
   });
 });

@@ -98,6 +98,43 @@ test('binds an unbound qualifying blank Session before opening it', () => {
   );
 });
 
+test('keeps an existing Git-root binding out of repair without Host path validation', () => {
+  const nestedTarget = target({
+    absolutePath: '/tmp/worktree-one/packages/app', gitRootPath: '/tmp/worktree-one',
+  });
+  const binding = {
+    workspaceId: 'ws-one', worktreeId: 'wt-one', sessionId: 'blank-one', status: 'active',
+  };
+  for (const blank of [true, false]) {
+    assert.deepEqual(resolveWorktreeSessionAction({
+      target: nestedTarget,
+      sessions: sessions({ byId: { 'blank-one': { blank, cwd: nestedTarget.gitRootPath } } }),
+      archivedSessionIds: [], bindings: [binding], hostValidatesPhysicalPath: false,
+    }), blank ? { kind: 'open-bound', sessionId: 'blank-one' } : { kind: 'create' });
+  }
+  // Compatibility is exclusive to an existing active binding.
+  assert.deepEqual(resolveWorktreeSessionAction({
+    target: nestedTarget,
+    sessions: sessions({ byId: { 'blank-one': { blank: true, cwd: nestedTarget.gitRootPath } } }),
+    archivedSessionIds: [], bindings: [], hostValidatesPhysicalPath: false,
+  }), { kind: 'create' });
+  assert.deepEqual(resolveWorktreeSessionAction({
+    target: nestedTarget,
+    sessions: sessions({ byId: { 'blank-one': { blank: true, cwd: nestedTarget.absolutePath } } }),
+    archivedSessionIds: [], bindings: [], hostValidatesPhysicalPath: false,
+  }), { kind: 'bind-existing', sessionId: 'blank-one' });
+});
+
+test('accepts Windows Git-root aliases only for already-bound Sessions', () => {
+  assert.deepEqual(resolveWorktreeSessionAction({
+    target: target({ absolutePath: 'C:/Worktrees/Topic/packages/app', gitRootPath: 'C:/Worktrees/Topic' }),
+    sessions: sessions({ byId: { 'blank-one': { blank: true, cwd: 'c:\\worktrees\\topic' } } }),
+    archivedSessionIds: [],
+    bindings: [{ workspaceId: 'ws-one', worktreeId: 'wt-one', sessionId: 'blank-one', status: 'active' }],
+    hostValidatesPhysicalPath: false,
+  }), { kind: 'open-bound', sessionId: 'blank-one' });
+});
+
 test('waits instead of creating while the Session list is not ready', () => {
   assert.deepEqual(
     resolveWorktreeSessionAction({

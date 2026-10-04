@@ -106,6 +106,10 @@ Sessions, the Dashboard path, Copy Path, and Open In. Git operations still use t
 If that directory is missing or resolves outside the checkout, the Worktree needs repair; it does
 not fall back to the Git root or create the missing directory.
 
+Already-bound Sessions with a legacy Git-root cwd remain usable. Git file previews use
+relative addresses inside the current Session cwd and absolute addresses for other checkout files,
+subject to DSH's native file-access checks.
+
 ### Import an existing Worktree
 
 1. Select a Workspace, open its `+` action, and switch to **Import**.

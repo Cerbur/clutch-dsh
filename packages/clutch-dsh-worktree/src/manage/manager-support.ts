@@ -1,7 +1,7 @@
 import { lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { WorktreeRecord } from '../contract/index.js';
+import type { WorktreeErrorDetails, WorktreeRecord } from '../contract/index.js';
 import {
   type DshSessionSummary,
   type DshWorkspaceSummary,
@@ -293,6 +293,7 @@ export async function resolveWorktreeWorkspaceRecord(
   context: WorktreeManagerContext,
   workspace: DshWorkspaceSummary,
   record: WorktreeRecord,
+  details: WorktreeErrorDetails = {},
 ): Promise<WorktreeRecord> {
   const repositoryRoot = record.gitRootPath === undefined && context.git.resolveRepositoryRoot
     ? await context.git.resolveRepositoryRoot(workspace.rootPath)
@@ -300,6 +301,8 @@ export async function resolveWorktreeWorkspaceRecord(
   const projected = await projectWorktreePath(record, workspace.rootPath, repositoryRoot);
   if (!(await worktreeWorkspaceAvailable(projected))) {
     throw providerError('WORKTREE_NOT_FOUND', 'Workspace directory is unavailable inside the Worktree', {
+      ...details,
+      workspaceId: workspace.workspaceId,
       worktreeId: record.worktreeId,
       absolutePath: projected.absolutePath,
     });

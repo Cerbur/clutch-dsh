@@ -54,7 +54,10 @@ export async function bindSession(
         sessionId: input.sessionId,
       });
     }
-    await assertSessionMatchesWorkspace(session, workspace, await resolveWorktreeWorkspaceRecord(context, workspace, worktree));
+    const resolvedWorktree = await resolveWorktreeWorkspaceRecord(context, workspace, worktree, {
+      sessionId: input.sessionId,
+    });
+    await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree);
 
     const binding: SessionBinding = {
       workspaceId: input.workspaceId,
@@ -97,5 +100,7 @@ export async function resolveRuntimeCwd(
       sessionId: input.sessionId,
     });
   }
-  return (await resolveWorktreeWorkspaceRecord(context, workspace, worktree)).absolutePath;
+  return (await resolveWorktreeWorkspaceRecord(context, workspace, worktree, {
+    sessionId: input.sessionId,
+  })).absolutePath;
 }

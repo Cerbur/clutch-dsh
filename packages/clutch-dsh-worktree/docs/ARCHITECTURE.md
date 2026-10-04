@@ -114,8 +114,12 @@ mutation token 仍基于持久记录，避免投影变化破坏生命周期门�
 现有只读降级规则。已绑定旧 Session 的原 Git-root cwd 可用于 Host 权限关系校验，但新绑定
 必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
 
-Git Dashboard 的文件路径保持 checkout-relative；对子目录 Worktree 的原生文件预览将其
-锚定到 `gitRootPath` 构造绝对地址，避免重复拼接 Workspace 子目录。
+Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
+`gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
+按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
+使用相对地址，其余 checkout 文件使用 Session 作用域的绝对地址，并遵循 Host 原生访问校验。
+这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
+的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
 
 ### 外部导入（External Import）规则
 

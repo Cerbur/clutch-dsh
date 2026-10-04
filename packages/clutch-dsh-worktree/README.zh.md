@@ -103,6 +103,9 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 如果该目录缺失或解析到了 checkout 外部，Worktree 会显示需要修复，不会回退到 Git 根目录，
 也不会自动创建缺失目录。
 
+已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用。Git 文件预览对当前 Session
+cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
+
 ### 导入已有 Worktree
 
 1. 选择 Workspace，打开它的 `+` 操作，然后切换到 **Import**。

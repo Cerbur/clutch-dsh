@@ -2,6 +2,8 @@ import { currentSessionIdFromList } from './session-selection.js';
 
 /** Browser-visible DSH Session summary facts used by the Worktree tree. */
 export interface SessionSummaryLike {
+  /** Native Session cwd used to resolve file preview addresses. */
+  readonly cwd?: string;
   /** Native DSH's empty-log bit. Missing is treated as non-blank. */
   readonly blank?: boolean;
   readonly displayTitle?: string;
