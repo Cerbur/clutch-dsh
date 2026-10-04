@@ -20,6 +20,7 @@ import { assertGeneratedTarget } from '../support/path-safety.js';
 import { publishCreated, markRecovery } from '../support/publication.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
+import { workspacePathInWorktree } from '../../worktree-path.js';
 
 export async function createWorktreeTransaction(
   dependencies: Pick<TransactionDependencies, 'dshHome' | 'git' | 'repositoryLock' | 'sidecar'>,
@@ -149,9 +150,11 @@ export async function createWorktreeTransaction(
         const capturedBaseCommit = dependencies.git.resolveCommit
           ? await dependencies.git.resolveCommit(gitRoot, input.baseBranch)
           : undefined;
-        const transactionInput = capturedBaseCommit === undefined
-          ? input
-          : { ...input, baseCommit: capturedBaseCommit };
+        const transactionInput = {
+          ...input,
+          workspacePath: await workspacePathInWorktree(input.workspaceRoot, gitRoot, input.targetPath),
+          ...(capturedBaseCommit === undefined ? {} : { baseCommit: capturedBaseCommit }),
+        };
         const record = recordForCreate(transactionInput);
         const pending = pendingCreate(transactionInput, repository.identity);
         await locked.mutate((snapshot) => {

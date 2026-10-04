@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../contract/index.js';
 import path from 'node:path';
 import type { GitWorktreeInfo, SidecarSnapshot } from './types.js';
 import { WorktreeProviderError } from './types.js';
@@ -24,7 +25,7 @@ export async function assertGeneratedNameAvailable(
     snapshot.worktrees.some(
       (record) =>
         record.worktreeId === worktreeId ||
-        path.resolve(record.absolutePath) === path.resolve(targetPath),
+        path.resolve(gitWorktreeRoot(record)) === path.resolve(targetPath),
     )
   ) {
     throw new GeneratedWorktreeNameCollision(worktreeId, targetPath);
@@ -32,10 +33,10 @@ export async function assertGeneratedNameAvailable(
   // Retained records and prunable registrations still own their missing paths.
   for (const worktree of [...snapshot.worktrees, ...worktrees]) {
     if (
-      (await samePhysicalPath(worktree.absolutePath, targetPath)) ||
-      (path.basename(worktree.absolutePath).toLowerCase() ===
+      (await samePhysicalPath(gitWorktreeRoot(worktree), targetPath)) ||
+      (path.basename(gitWorktreeRoot(worktree)).toLowerCase() ===
         path.basename(targetPath).toLowerCase() &&
-        (await samePhysicalPath(path.dirname(worktree.absolutePath), path.dirname(targetPath))))
+        (await samePhysicalPath(path.dirname(gitWorktreeRoot(worktree)), path.dirname(targetPath))))
     ) {
       throw new GeneratedWorktreeNameCollision(worktreeId, targetPath);
     }

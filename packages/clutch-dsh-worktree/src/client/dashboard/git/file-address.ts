@@ -11,7 +11,11 @@ function encodePath(path: string): string {
   return path.split('/').map(encodeSegment).join('/');
 }
 
-export function buildSessionFileAddress(sessionId: string, path: string): string {
+export function buildSessionFileAddress(sessionId: string, path: string, gitRootPath?: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '');
-  return `dsh-resource://file/session/${encodeSegment(sessionId)}/${encodePath(normalized)}`;
+  // Git paths remain checkout-relative even when the Session cwd is nested.
+  const target = gitRootPath === undefined
+    ? normalized
+    : gitRootPath.replace(/\\/g, '/').replace(/\/$/, '') + '/' + normalized;
+  return `dsh-resource://file/session/${encodeSegment(sessionId)}/${encodePath(target)}`;
 }

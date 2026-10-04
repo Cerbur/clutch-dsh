@@ -9,6 +9,7 @@ export interface DashboardSelection {
 
 /** Browser-only Main projection; it is not a persisted WorktreeRecord. */
 export interface MainDashboardRecord {
+  readonly gitRootPath?: undefined;
   readonly worktreeId: string;
   readonly workspaceId: string;
   readonly branch: string;

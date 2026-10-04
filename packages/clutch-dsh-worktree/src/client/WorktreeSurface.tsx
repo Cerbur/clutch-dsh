@@ -284,7 +284,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           ? source.currentSessionId
           : undefined;
       if (targetSessionId === undefined) return;
-      const address = buildSessionFileAddress(targetSessionId, filePath);
+      const address = buildSessionFileAddress(targetSessionId, filePath, dashboardRecord.gitRootPath);
       props.openResource(address, options);
     },
     [

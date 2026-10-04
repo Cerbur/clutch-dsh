@@ -17,6 +17,7 @@ import {
 } from '../support/admission.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
+import { workspacePathInWorktree, worktreeWorkspaceAvailable } from '../../worktree-path.js';
 
 export async function importWorktreeTransaction(
   dependencies: Pick<TransactionDependencies, 'git' | 'repositoryLock' | 'sidecar'>,
@@ -76,6 +77,10 @@ export async function importWorktreeTransaction(
           }
 
           const normalizedPath = await canonicalPath(liveWorktree.absolutePath);
+          const absolutePath = await workspacePathInWorktree(input.workspaceRoot, gitRoot, normalizedPath);
+          if (!(await worktreeWorkspaceAvailable({ absolutePath, gitRootPath: normalizedPath }))) {
+            throw providerError('WORKTREE_IMPORT_INVALID', 'Workspace directory is unavailable in this Worktree', { absolutePath });
+          }
           const existing = await findSidecarWorktreeByPhysicalPath(
             snapshot.worktrees,
             normalizedPath,
@@ -120,7 +125,8 @@ export async function importWorktreeTransaction(
           const record: WorktreeRecord = {
             worktreeId: input.worktreeId,
             workspaceId: input.workspaceId,
-            absolutePath: normalizedPath,
+            absolutePath,
+            ...(absolutePath === normalizedPath ? {} : { gitRootPath: normalizedPath }),
             branch: liveWorktree.branch,
             source: 'external',
             importedAt: new Date().toISOString(),

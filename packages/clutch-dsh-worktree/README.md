@@ -100,6 +100,12 @@ visible and clickable even when the New Session action displays keyboard shortcu
 Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
 
+When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
+For example, a Workspace at `/repo/packages/app` uses `<worktree-root>/packages/app` for new
+Sessions, the Dashboard path, Copy Path, and Open In. Git operations still use the entire checkout.
+If that directory is missing or resolves outside the checkout, the Worktree needs repair; it does
+not fall back to the Git root or create the missing directory.
+
 ### Import an existing Worktree
 
 1. Select a Workspace, open its `+` action, and switch to **Import**.
@@ -110,6 +116,11 @@ shows the relevant readiness message and copyable setup guidance.
 The first version lists only ready, branch-attached, non-root Git Worktrees that are not already
 managed by the plugin. Detached, bare, prunable, missing, and invalid entries are omitted. Imported
 Worktrees can still use Git & Changes after you choose a local baseline branch.
+
+Import uses the same Workspace-relative directory rule and offers only candidates where that
+directory is available. Existing records are projected with the corrected path when the original
+Workspace is available. Existing DSH Sessions keep their original metadata; create a new Session
+to run from the corrected directory.
 
 ### Create and open Sessions
 

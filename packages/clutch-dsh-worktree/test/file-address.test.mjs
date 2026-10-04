@@ -22,3 +22,14 @@ test('normalizes leading dot-slash and backslashes', () => {
     'dsh-resource://file/session/sess-1/src/index.ts',
   );
 });
+
+test('anchors repository-relative Git paths at the checkout root for a nested Session cwd', () => {
+  assert.equal(
+    buildSessionFileAddress('sess-1', 'packages/nested/src/index.ts', '/tmp/checkout'),
+    'dsh-resource://file/session/sess-1//tmp/checkout/packages/nested/src/index.ts',
+  );
+  assert.equal(
+    buildSessionFileAddress('sess-1', 'packages/nested/src/index.ts', 'C:\\worktrees\\topic'),
+    'dsh-resource://file/session/sess-1/C:/worktrees/topic/packages/nested/src/index.ts',
+  );
+});

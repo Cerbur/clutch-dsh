@@ -1,7 +1,7 @@
 import type { SessionBinding, WorkspaceId } from '../contract/index.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { assertSessionMatchesWorkspace, isDirectory, requireWorkspace, requireWorkspaceForRead } from './manager-support.js';
+import { assertSessionMatchesWorkspace, requireWorkspace, requireWorkspaceForRead, resolveWorktreeWorkspaceRecord } from './manager-support.js';
 
 /** Return active/detached Session relations for one Workspace. */
 export async function listBindings(
@@ -54,7 +54,7 @@ export async function bindSession(
         sessionId: input.sessionId,
       });
     }
-    await assertSessionMatchesWorkspace(session, workspace, worktree);
+    await assertSessionMatchesWorkspace(session, workspace, await resolveWorktreeWorkspaceRecord(context, workspace, worktree));
 
     const binding: SessionBinding = {
       workspaceId: input.workspaceId,
@@ -97,13 +97,5 @@ export async function resolveRuntimeCwd(
       sessionId: input.sessionId,
     });
   }
-  if (!(await isDirectory(worktree.absolutePath))) {
-    throw providerError('WORKTREE_NOT_FOUND', `Active Worktree path does not exist: ${worktree.absolutePath}`, {
-      workspaceId: input.workspaceId,
-      worktreeId: worktree.worktreeId,
-      sessionId: input.sessionId,
-      absolutePath: worktree.absolutePath,
-    });
-  }
-  return worktree.absolutePath;
+  return (await resolveWorktreeWorkspaceRecord(context, workspace, worktree)).absolutePath;
 }

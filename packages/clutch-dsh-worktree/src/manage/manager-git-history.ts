@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../contract/index.js';
 import {
   WORKTREE_GIT_COMMIT_PATTERN,
   WORKTREE_GIT_SUMMARY,
@@ -168,11 +169,11 @@ async function resolveWorktree(
       worktreeId: input.worktreeId,
     });
   }
-  if (!(await isDirectory(record.absolutePath))) {
-    throw providerError('WORKTREE_NOT_FOUND', `Worktree directory is unavailable: ${record.absolutePath}`, {
+  if (!(await isDirectory(gitWorktreeRoot(record)))) {
+    throw providerError('WORKTREE_NOT_FOUND', `Worktree directory is unavailable: ${gitWorktreeRoot(record)}`, {
       workspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
-      absolutePath: record.absolutePath,
+      absolutePath: gitWorktreeRoot(record),
     });
   }
 
@@ -181,13 +182,13 @@ async function resolveWorktree(
     : workspace.rootPath;
   const live = await findLiveWorktree(
     await context.git.listWorktrees(repositoryRoot, { signal: context.signal }),
-    record.absolutePath,
+    gitWorktreeRoot(record),
   );
   if (!live) {
-    throw providerError('WORKTREE_NOT_FOUND', `Git Worktree registration is unavailable: ${record.absolutePath}`, {
+    throw providerError('WORKTREE_NOT_FOUND', `Git Worktree registration is unavailable: ${gitWorktreeRoot(record)}`, {
       workspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
-      absolutePath: record.absolutePath,
+      absolutePath: gitWorktreeRoot(record),
     });
   }
   return {
@@ -244,7 +245,7 @@ async function resolveLocalBranchCommit(
     if (options.allowUnavailable === true) return undefined;
     unavailable();
   }
-  const commit = await resolveCommit(resolved.record.absolutePath, baseBranch, {
+  const commit = await resolveCommit(gitWorktreeRoot(resolved.record), baseBranch, {
     signal: context.signal,
   });
   if (!COMMIT_PATTERN.test(commit)) {
@@ -276,7 +277,7 @@ async function resolveSelectedBaseline(
   const findMergeBase = gitReadOptional(context, 'findMergeBase');
   const mergeBase = headCommit !== undefined && findMergeBase !== undefined
     ? await findMergeBase(
-        resolved.record.absolutePath,
+        gitWorktreeRoot(resolved.record),
         commit,
         headCommit,
         { signal: context.signal },
@@ -407,7 +408,7 @@ async function resolveBaseline(
       });
     }
     const commit = context.git.resolveCommit
-      ? await context.git.resolveCommit(record.absolutePath, record.baseCommit, { signal: context.signal })
+      ? await context.git.resolveCommit(gitWorktreeRoot(record), record.baseCommit, { signal: context.signal })
       : record.baseCommit;
     return {
       baseline: {
@@ -430,7 +431,7 @@ async function resolveBaseline(
     return undefined;
   }
   const commit = await context.git.findMergeBase(
-    record.absolutePath,
+    gitWorktreeRoot(record),
     record.baseBranch,
     'HEAD',
     { signal: context.signal },
@@ -476,7 +477,7 @@ async function baselineHeadCommit(
   const resolveCommit = gitReadOptional(context, 'resolveCommit');
   return resolveCommit === undefined
     ? undefined
-    : await resolveCommit(resolved.record.absolutePath, 'HEAD', { signal: context.signal });
+    : await resolveCommit(gitWorktreeRoot(resolved.record), 'HEAD', { signal: context.signal });
 }
 
 /** Count commits unique to each head for one resolved comparison boundary. */
@@ -492,7 +493,7 @@ async function readCommitDivergence(
   // Count each branch from its current tip. The tree boundary may be the
   // merge base, but ahead/behind must include commits unique to both heads.
   return getCommitDivergence(
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     comparison.baseHeadCommit,
     head,
     { signal: context.signal },
@@ -526,7 +527,7 @@ async function authorizeCommits(
     return candidate;
   });
   const listCommits = gitRead(context, 'listCommits', worktreeId);
-  const history = await listCommits(resolved.record.absolutePath, comparison.baseHeadCommit, {
+  const history = await listCommits(gitWorktreeRoot(resolved.record), comparison.baseHeadCommit, {
     signal: context.signal,
   });
   const members = new Set(history.commits.map((commit) => commit.sha));
@@ -693,14 +694,14 @@ export async function listWorktreeCommits(
     ?? gitReadOptional(context, 'listWorkingTreeFiles');
   const [history, workingTreeFiles] = await Promise.all([
     listCommits(
-      resolved.value.record.absolutePath,
+      gitWorktreeRoot(resolved.value.record),
       baseline.baseHeadCommit,
       { signal: context.signal },
     ),
     readWorkingTreePaths === undefined
       ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
       : readWorkingTreePaths(
-          resolved.value.record.absolutePath,
+          gitWorktreeRoot(resolved.value.record),
           { signal: context.signal },
         ),
   ]);
@@ -860,7 +861,7 @@ async function authorizeLiveSummaryHead(
   const resolveCommit = gitReadOptional(context, 'resolveCommit');
   if (resolveCommit === undefined) return;
   const currentHead = await resolveCommit(
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     'HEAD',
     { signal: context.signal },
   );
@@ -882,14 +883,14 @@ async function listSummaryFiles(
     const listWorkingTreeDiffFiles = gitRead(context, 'listWorkingTreeDiffFiles', resolved.record.worktreeId);
     await authorizeLiveSummaryHead(context, resolved);
     return listWorkingTreeDiffFiles(
-      resolved.record.absolutePath,
+      gitWorktreeRoot(resolved.record),
       baseCommit,
       { signal: context.signal },
     );
   }
   const listDiffFiles = gitRead(context, 'listDiffFiles', resolved.record.worktreeId);
   return listDiffFiles(
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     baseCommit,
     headCommit,
     { signal: context.signal },
@@ -908,7 +909,7 @@ async function readSummaryFileDiff(
     const readWorkingTreeDiffFileDiff = gitRead(context, 'readWorkingTreeDiffFileDiff', resolved.record.worktreeId);
     await authorizeLiveSummaryHead(context, resolved);
     return readWorkingTreeDiffFileDiff(
-      resolved.record.absolutePath,
+      gitWorktreeRoot(resolved.record),
       baseCommit,
       filePath,
       { signal: context.signal },
@@ -916,7 +917,7 @@ async function readSummaryFileDiff(
   }
   const readDiffFileDiff = gitRead(context, 'readDiffFileDiff', resolved.record.worktreeId);
   return readDiffFileDiff(
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     baseCommit,
     headCommit,
     filePath,
@@ -1038,7 +1039,7 @@ async function listAggregateFiles(
   }
   const groups = await selectedCommitFiles(
     context,
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     resolved.record.worktreeId,
     authorized.commits!,
   );
@@ -1096,7 +1097,7 @@ async function aggregateFileDiff(
 
   return selectedAggregateFileDiff(
     context,
-    resolved.record.absolutePath,
+    gitWorktreeRoot(resolved.record),
     resolved.record.worktreeId,
     authorized.selection,
     authorized.commits!,
@@ -1151,7 +1152,7 @@ export async function listWorktreeCommitFiles(
     await authorizeWorkingTree(context, resolved.value, input.baseBranch);
     const listWorkingTreeFiles = gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
     const read = await listWorkingTreeFiles(
-      resolved.value.record.absolutePath,
+      gitWorktreeRoot(resolved.value.record),
       { signal: context.signal },
     );
     return {
@@ -1163,7 +1164,7 @@ export async function listWorktreeCommitFiles(
   const authorized = await authorizeCommit(context, resolved.value, commit, input.baseBranch);
   const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
   const read = await listCommitFiles(
-    resolved.value.record.absolutePath,
+    gitWorktreeRoot(resolved.value.record),
     authorized.commit,
     { signal: context.signal },
   );
@@ -1264,7 +1265,7 @@ export async function getWorktreeCommitFileDiff(
     const readChangedPaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
       ?? gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
     const readPaths = await readChangedPaths(
-      resolved.value.record.absolutePath,
+      gitWorktreeRoot(resolved.value.record),
       { signal: context.signal },
     );
     const changedFile = findChangedFile(readPaths.files, input.path);
@@ -1276,7 +1277,7 @@ export async function getWorktreeCommitFileDiff(
       });
     }
     const diff = await readWorkingTreeFileDiff(
-      resolved.value.record.absolutePath,
+      gitWorktreeRoot(resolved.value.record),
       changedFile.path,
       { signal: context.signal },
     );
@@ -1292,7 +1293,7 @@ export async function getWorktreeCommitFileDiff(
   // The changed-file projection is the authorization boundary for the path, so
   // the diff is only read for an exact member of that projection.
   const filesRead = await listCommitFiles(
-    resolved.value.record.absolutePath,
+    gitWorktreeRoot(resolved.value.record),
     authorized.commit,
     { signal: context.signal },
   );
@@ -1305,7 +1306,7 @@ export async function getWorktreeCommitFileDiff(
     });
   }
   const diff = await readCommitFileDiff(
-    resolved.value.record.absolutePath,
+    gitWorktreeRoot(resolved.value.record),
     authorized.commit,
     changedFile.path,
     { signal: context.signal },

@@ -114,7 +114,11 @@ export function createWorktreePermissionManager(
         });
       }
       const sessionCwdMatches = path.isAbsolute(session.cwd) &&
-        await samePhysicalPath(session.cwd, worktree.absolutePath);
+        (await samePhysicalPath(session.cwd, worktree.absolutePath) ||
+          // An already-bound legacy Session retains its DSH-owned Git-root cwd.
+          // New bindings are validated against absolutePath by Manage.
+          (worktree.gitRootPath !== undefined &&
+            await samePhysicalPath(session.cwd, worktree.gitRootPath)));
       if (
         (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
         !sessionCwdMatches

@@ -196,6 +196,10 @@ The accepted branch supplies the Worktree name, and clicking the dashboard title
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
+For nested Workspaces, `absolutePath` includes the original repository-relative directory.
+The optional `gitRootPath` retains the complete checkout identity for Git and disk cleanup; the Client
+does not derive this path from the native Workspace snapshot. New Sessions and Open In use
+`absolutePath`, while Git file resource addresses use `gitRootPath` to avoid duplicating the subdirectory.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. Main loads the Workspace-root
 HEAD history directly, skips branch-baseline and comparison-summary controls, and caps committed history at 200 commits.
 When the Workspace root has tracked, staged, unstaged, or untracked changes, the history prepends a live

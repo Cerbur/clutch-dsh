@@ -685,12 +685,15 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           operation: 'resolve repository identity',
         });
       }
+      // Git resolves relative output against its physical cwd, which can differ
+      // from the Workspace's symlink spelling.
+      const physicalWorkspaceRoot = await realpath(workspaceRoot);
       return {
         identity: {
-          topLevel: await realpath(path.isAbsolute(topLevel) ? path.resolve(topLevel) : path.resolve(workspaceRoot, topLevel)),
+          topLevel: await realpath(path.isAbsolute(topLevel) ? path.resolve(topLevel) : path.resolve(physicalWorkspaceRoot, topLevel)),
           commonDirectory: await realpath(path.isAbsolute(commonDirectory)
             ? path.resolve(commonDirectory)
-            : path.resolve(workspaceRoot, commonDirectory)),
+            : path.resolve(physicalWorkspaceRoot, commonDirectory)),
         },
         headCommit,
       };
