@@ -4,7 +4,7 @@ import {
   toWorktreeViewError,
   type WorktreeViewError,
 } from '../../view/worktree-view.js';
-import styles from '../../worktree.css';
+import type { WorktreeNotification } from '../notification-queue.js';
 import type { WorktreeSurfaceProps } from '../types.js';
 import type { useLifecycleState } from '../state/useLifecycleState.js';
 import type { useSurfaceMutation } from './useSurfaceMutation.js';
@@ -109,7 +109,9 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       }
     }
   };
-  const recoveryAction = (error: WorktreeViewError | undefined) => {
+  const recoveryAction = (
+    error: WorktreeViewError | undefined,
+  ): NonNullable<WorktreeNotification['actions']>[number] | null => {
     const workspaceId = error?.details?.workspaceId;
     if (
       !manager ||
@@ -122,21 +124,16 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       typeof workspaceId !== 'string'
     )
       return null;
-    return (
-      <button
-        type="button"
-        className={styles.retryButton}
-        disabled={actionPending}
-        onClick={() => {
+    return {
+      label: t('worktree.retryRecovery'),
+      disabled: actionPending,
+      onClick: () => {
           void runMutation(() => manager.recoverWorktrees({ workspaceId }), {
             scope: { kind: 'workspace', workspaceId },
             preserveCurrent: true,
           });
-        }}
-      >
-        {t('worktree.retryRecovery')}
-      </button>
-    );
+      },
+    };
   };
   const branchActions = (record: WorktreeRecord) => ({
     onAdoptBranch:

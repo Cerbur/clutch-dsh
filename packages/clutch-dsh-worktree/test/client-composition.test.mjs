@@ -1002,6 +1002,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
+    'settings.section',
     'shell.overlay',
     'sidebar.footer.action',
   ]);
@@ -1015,6 +1016,7 @@ test('contributes context to the active Session title row and the Hero overlay',
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
+    'settings.section',
     'shell.overlay',
     'sidebar.footer.action',
   ]);
@@ -1256,6 +1258,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
         'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
+        'settings.section': { kind: 'list', scope: 'root' },
       },
     },
     () => null,
@@ -1306,12 +1309,14 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
     assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
+    assert.equal(ctx.slots.entries('settings.section').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 2);
 
     await clientFiber.dispose();
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 0);
     assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 0);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 0);
+    assert.equal(ctx.slots.entries('settings.section').length, 0);
     assert.equal(ctx.slots.entries('shell.overlay').length, 0);
   } finally {
     uiWorkspaceRootDisposer();

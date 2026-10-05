@@ -142,7 +142,7 @@ or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon
 beside the native Session-header actions. The header icon opens it in one click even when the Sidebar
 is collapsed, without expanding the Sidebar. If the target is still loading, the request stays open
-and shows loading or a retry control in the center area, with failures announced by toast. The Dashboard is a peer page to the native Session content: it
+and shows loading in the center area, with failures announced by toast and retries available in Worktree settings. The Dashboard is a peer page to the native Session content: it
 occupies the center area beside the Sidebar while leaving an already-open right sidebar visible for a
 session-bound target. When the target Worktree has Sessions, opening its Dashboard waits for an initial pending
 Session list to become ready, then keeps the current Session if it belongs to that Worktree; otherwise it
@@ -286,10 +286,15 @@ Failures in the Worktree list, dialogs, and Dashboard appear as native toasts in
 language (English or Chinese). Each message explains the problem and how to recover. The list
 keeps its existing content and has no error banner or diagnostics drawer at the top.
 
-Use **Recovery actions** in the toast or at the bottom of the list to retry reads, recover an
-interrupted Worktree operation, retry a Session binding, or open a retained Session. This entry
-remains available after the toast fades. Dialogs keep their input and retry controls; failed
-instruction and baseline saves retain your draft. Git setup guidance stays in the creation dialog.
+Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
+to read each failure and expand its original
+diagnostics (including Git stderr). Retry reads, recover interrupted Worktree operations, retry
+Session bindings, or open retained Sessions from the same tab. Records remain after the toast
+fades; the list and Git panels have no inline error or retry controls. Closed operation views
+disable their recovery actions; reopen the corresponding view to load its current state.
+Records stay in page memory and clear on reload. **Clear history** keeps active recoveries.
+Dialogs keep input; failed instruction and baseline saves retain drafts. Git setup guidance
+stays in the creation dialog. Matching Git failures share one toast while keeping separate records.
 
 ### Archive or remove a Worktree
 
@@ -376,8 +381,8 @@ instruction and baseline saves retain your draft. Git setup guidance stays in th
 Worktree mode follows DSH's current interface language. The entry point, tree, menus, dialogs,
 statuses, Dashboard labels, and retry messages are localized in English and Chinese. Workspace
 names, Session titles, branch names, and paths keep their original values. Errors use localized
-problem and recovery guidance; unknown errors include a support code. Raw diagnostics remain in
-DSH logs and error objects.
+problem and recovery guidance; unknown errors include a support code. Original diagnostics are available in Worktree settings. The plugin
+does not write them to DSH logs.
 
 ## Development
 

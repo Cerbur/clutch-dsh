@@ -36,6 +36,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       kind: 'list';
       scope: 'root';
     };
+    'settings.section': {
+      kind: 'list';
+      scope: 'root';
+      owner: { close: () => void };
+    };
   }
 
   interface GlobalStandardProps {

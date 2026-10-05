@@ -11,18 +11,24 @@ import {
 } from 'react';
 import {
   reconcileNotifications,
+  failureToastKey,
   type NotificationQueue,
   type WorktreeNotification,
 } from '../notification-queue.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import type { WorktreeTranslate } from '../types.js';
 import type { WorktreeViewError } from '../../view/worktree-view.js';
+import { worktreeDiagnostics } from '../../settings/diagnostics.js';
 
 type Publish = (source: string, notices: readonly WorktreeNotification[]) => void;
 const Notifications = createContext<Publish | undefined>(undefined);
 
 /** One queue for the list, dialogs and Dashboard; unmount removes a source's notices. */
-export function NotificationProvider({ children }: { children: ReactNode }) {
+export function NotificationProvider({ children, t, openSettings }: {
+  children: ReactNode;
+  t: WorktreeTranslate;
+  openSettings?: () => boolean;
+}) {
   const [sources, setSources] = useState<ReadonlyMap<string, readonly WorktreeNotification[]>>(
     new Map(),
   );
@@ -38,7 +44,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   return (
     <Notifications.Provider value={publish}>
       {children}
-      <ToastQueue notices={[...sources.values()].flat()} />
+      <ToastQueue notices={[...sources.values()].flat()} hint={t('settings.toastHint')}
+        settingsAction={openSettings === undefined ? undefined
+          : { label: t('settings.errors'), onClick: openSettings }} />
     </Notifications.Provider>
   );
 }
@@ -51,27 +59,32 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
   const alive = useRef(true);
   latest.current = notices;
   const signature = JSON.stringify(
-    notices.map(({ key, text, actions }) => [key, text, actions?.map(({ label }) => label)]),
+    notices.map(({ key, text, context, error, actions }) => [
+      key, text, context, error, actions?.map(({ label, disabled, leaveSettings }) => [label, disabled, leaveSettings]),
+    ]),
   );
   useEffect(() => {
-    publish?.(
-      id,
-      latest.current.map((notice) => ({
-        ...notice,
-        actions: notice.actions?.map((action, index) => ({
-          label: action.label,
-          onClick: () => {
-            if (alive.current)
-              latest.current.find((item) => item.key === notice.key)?.actions?.[index]?.onClick();
-          },
-        })),
+    const registered = latest.current.map((notice) => ({
+      ...notice,
+      actions: notice.actions?.map((action) => ({
+        leaveSettings: action.leaveSettings,
+        disabled: action.disabled,
+        label: action.label,
+        onClick: () => {
+          const current = latest.current.find((item) => item.key === notice.key)?.actions
+            ?.find((item) => item.label === action.label);
+          if (alive.current && !current?.disabled) current?.onClick();
+        },
       })),
-    );
+    }));
+    worktreeDiagnostics.publish(id, registered);
+    publish?.(id, registered);
   }, [publish, id, signature]);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      worktreeDiagnostics.deactivate(id);
       publish?.(id, []);
     };
   }, [publish, id]);
@@ -82,22 +95,35 @@ export function ErrorToast({
   error,
   t,
   scope,
+  context,
+  actions,
+  describe,
 }: {
   readonly error?: WorktreeViewError;
   readonly t: WorktreeTranslate;
   readonly scope: string;
+  readonly context?: string;
+  readonly actions?: WorktreeNotification['actions'];
+  readonly describe?: WorktreeNotification['describe'];
 }) {
   const text = error === undefined ? undefined : formatWorktreeViewError(error, t);
   return (
     <NotificationToasts
       notices={
-        text === undefined ? [] : [{ key: JSON.stringify([scope, error?.code, text]), text }]
+        text === undefined ? [] : [{
+          key: JSON.stringify([scope, error?.code, error?.details]), text, error, context, actions, describe,
+          toastKey: failureToastKey(error!),
+        }]
       }
     />
   );
 }
 
-function ToastQueue({ notices }: { notices: readonly WorktreeNotification[] }) {
+function ToastQueue({ notices, hint, settingsAction }: {
+  notices: readonly WorktreeNotification[];
+  hint?: string;
+  settingsAction?: { readonly label: string; readonly onClick: () => void };
+}) {
   const [queue, setQueue] = useState<NotificationQueue>({ seen: [], pending: [] });
   useEffect(() => {
     setQueue((current) => reconcileNotifications(current, notices));
@@ -112,12 +138,12 @@ function ToastQueue({ notices }: { notices: readonly WorktreeNotification[] }) {
   }, [key]);
   if (current === undefined) return null;
   // Never truncate recovery guidance. Resolve actions from the current render.
-  const active = notices.find((notice) => notice.key === current.key);
+  const active = notices.find((notice) => (notice.toastKey ?? notice.key) === current.key);
   return (
     <Toast
       key={current.key}
-      text={active?.text ?? current.text}
-      actions={active?.actions}
+      text={[active?.text ?? current.text, hint].filter(Boolean).join(' ')}
+      actions={settingsAction === undefined ? undefined : [settingsAction]}
       holdMs={8000}
       onDone={onDone}
     />

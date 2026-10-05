@@ -30,8 +30,10 @@ export class WorktreeSessionBindingError extends Error {
     super(reason);
     this.name = 'WorktreeSessionBindingError';
     const conflict = candidate?.code === 'SESSION_ALREADY_BOUND';
+    const incompatible = conflict || candidate?.code === 'SESSION_CWD_MISMATCH' ||
+      candidate?.code === 'SESSION_NOT_FOUND';
     this.code = conflict ? 'SESSION_ALREADY_BOUND' : 'SESSION_BINDING_FAILED';
-    this.retryable = conflict ? false : candidate?.retryable !== false;
+    this.retryable = !incompatible && candidate?.retryable !== false;
     this.details =
       typeof candidate?.details === 'object' &&
       candidate.details !== null &&

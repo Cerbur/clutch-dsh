@@ -3,6 +3,7 @@ import type { WorktreeTranslate } from '../surface/types.js';
 import type { WorktreeViewError } from '../view/worktree-view.js';
 import { mountDashboardOverlay, type DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
+import { ErrorToast } from '../surface/components/NotificationToasts.js';
 
 /** Present a header request while its target read settles, without expanding navigation. */
 export function DashboardRequest({
@@ -10,11 +11,13 @@ export function DashboardRequest({
   error,
   onRetry,
   onClose,
+  context,
 }: {
   readonly t: WorktreeTranslate;
   readonly error?: WorktreeViewError;
   readonly onRetry: () => void;
   readonly onClose: () => void;
+  readonly context?: string;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
@@ -71,11 +74,9 @@ export function DashboardRequest({
       </header>
       <div className={styles.dashboardPage}>
         {error === undefined && <p role="status">{t('status.loading')}</p>}
-        {error && (
-          <button type="button" className={styles.dashboardButton} onClick={onRetry}>
-            {t('action.retry')}
-          </button>
-        )}
+        <ErrorToast error={error} t={t} scope="dashboard-request"
+          context={context ?? t('dashboard.title')}
+          actions={[{ label: t('action.retry'), onClick: onRetry }]} />
       </div>
     </section>
   );

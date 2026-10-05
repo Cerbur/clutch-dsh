@@ -6,8 +6,14 @@ now appear through native Toast, with no top-of-list error panel or diagnostics 
 - One browser-only queue spans Surface, dialogs and Dashboard; unchanged failures do not replay.
 - Every contract error and Client failure uses English/Chinese problem and recovery guidance.
 - Unknown errors show localized fallback guidance and a support code; raw errors stay intact.
-- A bottom-of-list Recovery actions entry and toast action expose persistent native Modal
-  recovery controls. Retained Sessions and failed drafts remain available after toast dismissal.
+- A native Settings → Worktree section with Overview and Errors & recovery tabs retains
+  contextual error records, original diagnostics and scoped actions beyond toast dismissal.
+  Unmount revokes callbacks and marks records inactive; reload clears page-memory history.
+  A toast navigation action opens the native Settings shell without closing operation dialogs.
+  Retained Sessions and failed drafts remain available; list/panel inline retries are removed.
+- Shared Git root causes deduplicate toasts without dropping per-operation diagnostics.
+- Binding wrappers remain neutral so the cause supplies one consistent recovery instruction.
+- Original diagnostics are visible in settings; no DSH logging is claimed.
 - Retry keeps known Workspace scope and ready content. Git setup guidance remains local.
 - No Provider data model, Sidecar persistence, Session identity, permissions or cleanup gates change.
 

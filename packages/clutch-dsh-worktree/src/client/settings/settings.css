@@ -1,0 +1,11 @@
+.settings { color: var(--dsw-alias-label-primary); max-width: 900px; }
+.tabs { display: flex; gap: 8px; margin-block: 16px; }
+.tabs button { padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--dsw-alias-interactive-bg-hover); font-weight: 600; }
+.issue { border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; padding: 16px; margin-block: 12px; }
+.issue h3 { margin: 0 0 8px; overflow-wrap: anywhere; }
+.issue p { line-height: 1.6; }
+.issue span { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.issue details { margin-top: 12px; }
+.issue pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; user-select: text; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }

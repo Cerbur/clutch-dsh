@@ -55,13 +55,9 @@ export function WorktreeAdoptBranchDialog({
         </>
       }
     >
-      {error !== undefined && (
-        <div>
-          <Button variant="outline" disabled={actionPending} onClick={onRetry}>
-            {t('action.retry')}
-          </Button>
-        </div>
-      )}
+      <ErrorToast error={error} t={t} scope={'adopt:' + worktree.worktreeId}
+        context={t('settings.adopt') + ' · ' + worktree.branch + ' · ' + worktree.absolutePath}
+        actions={[{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }]} />
     </Modal>
   );
 }
@@ -136,7 +132,8 @@ export function WorktreeSessionRenameDialog({
           }
         }}
       />
-      {error !== undefined && <ErrorToast error={error} t={t} scope="native-dialog" />}
+      <ErrorToast error={error} t={t} scope={'rename-session:' + target?.sessionId}
+        describe={(translate) => translate('session.rename') + ' · ' + (target?.currentTitle ?? '')} />
     </Modal>
   );
 }
@@ -203,10 +200,13 @@ export function WorktreeWorkspaceRenameDialog({
       />
       {duplicate && (
         <NotificationToasts
-          notices={[{ key: 'workspace-duplicate', text: t('workspace.duplicate') }]}
+          notices={[{ key: 'workspace-duplicate', text: t('workspace.duplicate'),
+            context: target.currentTitle,
+            message: (translate) => translate('workspace.duplicate') }]}
         />
       )}
-      {error !== undefined && <ErrorToast error={error} t={t} scope="native-dialog" />}
+      <ErrorToast error={error} t={t} scope={'rename-workspace:' + target.workspaceId}
+        describe={(translate) => translate('workspace.rename') + ' · ' + target.currentTitle} />
     </Modal>
   );
 }
@@ -245,7 +245,8 @@ export function WorktreeWorkspaceDeleteDialog({
         </>
       }
     >
-      {error !== undefined && <ErrorToast error={error} t={t} scope="native-dialog" />}
+      <ErrorToast error={error} t={t} scope={'delete-workspace:' + target.workspaceId}
+        describe={(translate) => translate('workspace.deleteTitle') + ' · ' + target.title} />
     </Modal>
   );
 }
@@ -353,10 +354,9 @@ export function WorktreeCreateDialog({
                 error={importCandidates.error}
                 t={t}
                 scope={'import:' + workspace.workspaceId}
+                context={t('settings.import') + ' · ' + workspace.title + ' · ' + workspace.path}
+                actions={[{ label: t('action.retry'), disabled: actionPending, onClick: onRetryImportCandidates }]}
               />
-              <Button variant="outline" disabled={actionPending} onClick={onRetryImportCandidates}>
-                {t('action.retry')}
-              </Button>
             </div>
           )}
           {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
@@ -389,17 +389,10 @@ export function WorktreeCreateDialog({
         </div>
       ) : readError !== undefined ? (
         <div className={styles.gitReadiness} data-worktree-readiness="error">
-          <ErrorToast error={readError} t={t} scope={'modal-read:' + workspace.workspaceId} />
-          {readError.retryable && onRetry !== undefined && (
-            <button
-              type="button"
-              className={styles.retryButton}
-              disabled={actionPending}
-              onClick={onRetry}
-            >
-              {t('action.retry')}
-            </button>
-          )}
+          <ErrorToast error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
+            context={t('settings.create') + ' · ' + workspace.title + ' · ' + workspace.path}
+            actions={readError.retryable && onRetry !== undefined
+              ? [{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }] : []} />
         </div>
       ) : canCreate ? (
         <>

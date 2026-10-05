@@ -10,11 +10,13 @@ export function WorktreeInstructions({
   onSave,
   t,
   disabled,
+  context,
 }: {
   value: string;
   onSave?: (text: string, expected: string) => Promise<string>;
   t: WorktreeTranslate;
   disabled: boolean;
+  context?: string;
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
@@ -109,7 +111,13 @@ export function WorktreeInstructions({
                 ? []
                 : [
                     {
-                      key: JSON.stringify(['instructions', error.code, error.details]),
+                      key: JSON.stringify(['instructions', context, error.code, error.details]),
+                      context, error,
+                      actions: [{ label: t('action.retry'), disabled: pending || disabled,
+                        onClick: () => { void save(); } }],
+                      describe: (translate) => translate('dashboard.instructions') + ' · ' + (context ?? ''),
+                      message: (translate) => translate('dashboard.instructionsSaveFailed') +
+                        (error.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(error, translate)),
                       text:
                         t('dashboard.instructionsSaveFailed') +
                         (error.code === 'WORKTREE_VIEW_FAILED'

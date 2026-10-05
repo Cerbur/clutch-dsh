@@ -110,24 +110,23 @@ function permissionFixture(normalize) {
   };
   const declaration = (name) =>
     find((node) => ts.isVariableDeclaration(node) && node.name.getText(ast) === name);
-  const noticeJsx = find(
-    (node) =>
-      ts.isJsxExpression(node) &&
-      ts.isBinaryExpression(node.expression ?? {}) &&
-      node.expression.left.getText(ast) === 'permissionNoticeSnapshot !== undefined',
+  const noticeStatement = find(
+    node => ts.isIfStatement(node) &&
+      node.expression.getText(ast) === 'permissionNoticeSnapshot !== undefined',
   );
-  const render = () =>
-    evaluate(
-      [
-        ...['permissionRetryTarget', 'retryCleanupPermissions'].flatMap((name) => {
-          const node = declaration(name);
-          return node ? [`const ${node.getText(ast)};`] : [];
-        }),
-        `return ${noticeJsx.expression.getText(ast)};`,
-      ].join('\n'),
-      context,
-    );
-  const button = () => elements(render()).find((element) => element.type === 'button');
+  context.workspaceLabel = id => id;
+  const render = () => evaluate([
+    ...['permissionRetryTarget', 'retryCleanupPermissions'].flatMap(name => {
+      const node = declaration(name);
+      return node ? [`const ${node.getText(ast)};`] : [];
+    }),
+    'const notices = [];', noticeStatement.getText(ast),
+    'return notices[0]?.actions?.[0];',
+  ].join('\n'), context);
+  const button = () => {
+    const action = render();
+    return action === undefined ? undefined : { props: action };
+  };
   return { context, published, button };
 }
 

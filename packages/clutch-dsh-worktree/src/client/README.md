@@ -147,7 +147,7 @@ menu refreshes retain ready facts; updated and forgotten records project normall
 An external header request can precede the initial view read. Missing target facts are not
 treated as removal until that Workspace view arrives; Session changes and confirmed missing
 identities still dismiss the request. `DashboardRequest` occupies the same center bounds while
-loading or showing a retry control and a failure toast; retry reads only the requested Workspace. Neither
+loading, with failures announced by toast and retries in Worktree settings; retry reads only the requested Workspace. Neither
 the request nor the ready Dashboard expands the native Sidebar.
 The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
 active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
@@ -379,11 +379,21 @@ are announced once while present; resolved entries leave the queue and a later r
 can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
 notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
 unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
-Toast actions and the list's bottom Recovery actions entry open a native Modal containing persistent
-retry/binding/recovery controls; no Session recovery is tied to the toast timer. Known contract codes
-have exhaustive bilingual problem/recovery copy; unknown codes use localized support guidance.
-Raw diagnostics stay in the original error objects, never in toast copy. Dialogs retain input and
-retry controls; scoped Git setup guidance remains local.
+The native settings.section seat exposes Overview and Errors & recovery tabs. Browser-memory
+diagnostics outlive toast dismissal and source unmount. Each entry includes contextual names/paths,
+localized problem/recovery copy, original code/message/details (including Git stderr) and live
+scoped actions. Unmounted sources become inactive and revoke callbacks; absence of a reported
+error moves the record into history, not proof that a retry succeeded. Only inactive history is
+bounded to 100 entries; Clear history preserves active recoveries, and page reload clears all.
+The toast's sole action opens the Worktree section through the native rc.1 Settings shell's
+shared viewing store (the winning sidebar.settings ledger entry); it keeps operation dialogs
+mounted so their retry controls remain live. An unavailable store falls back to the written
+settings navigation path. Settings navigation changes only browser viewing state.
+Git command argv is excluded from toast grouping when shared stderr identifies the root cause;
+independent operations retain their own records. Toasts include the settings navigation path.
+Known contract codes have exhaustive bilingual copy; retained binding failures add only a neutral
+wrapper around the cause guidance. Dialogs retain input; retries live in settings, while scoped Git
+setup guidance stays local. The plugin does not log original diagnostics to DSH.
 The shared Worktree HoverCard adds status-specific repair guidance and the path for unhealthy
 active rows, and is suppressed during menus and dragging. These changes do not mutate Git,
 sidecar state, Session bindings, or permissions.
@@ -459,7 +469,7 @@ a branch is adopted, while forget and archive retain their existing lifecycle se
 
 Sibling creation uses the observed `currentBranch`, falling back to the accepted branch only
 when the runtime field is unavailable; detached HEAD does not expose that action. Adoption
-errors are announced by toast and disable confirmation submission until Retry reloads the
+errors are announced by toast and disable confirmation submission until Retry in Worktree settings reloads the
 branch and token for explicit reconfirmation. Retry retains unrelated ready views, and late
 retry results are ignored after the dialog closes or the Client mode/manager changes.
 Read-only menu refreshes share an equivalent in-flight Workspace read and do not invalidate

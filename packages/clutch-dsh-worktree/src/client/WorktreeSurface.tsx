@@ -309,7 +309,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
   return (
-    <NotificationProvider>
+    <NotificationProvider t={t} openSettings={props.openErrorSettings}>
       <aside
         ref={ref}
         className={styles.surface}
@@ -379,6 +379,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         source.workspaceIds.includes(dashboard.workspaceId) &&
         targetView === undefined && (
           <DashboardRequest
+            context={targetWorkspace === undefined ? dashboard.workspaceId : targetWorkspace.title + ' · ' + targetWorkspace.path}
             t={t}
             error={
               read.readState.error ??

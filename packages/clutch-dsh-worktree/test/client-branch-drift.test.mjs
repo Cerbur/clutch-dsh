@@ -165,6 +165,7 @@ test('adoption failures keep confirmation disabled and offer refresh without an 
       React,
       Modal: 'modal',
       Button: 'button',
+      ErrorToast: 'error-notice',
       styles: {},
       formatWorktreeViewError: (error) => error.message,
     },
@@ -190,13 +191,14 @@ test('adoption failures keep confirmation disabled and offer refresh without an 
   walk(element);
   const alert = nodes.find((node) => node.props.role === 'alert');
   assert.equal(alert, undefined, 'the Surface toast owns failure copy');
-  const retry = nodes.find((node) => node.props.onClick && node.props.children === 'action.retry');
+  const notice = nodes.find((node) => node.type === 'error-notice');
+  const retry = notice.props.actions[0];
   assert.ok(retry, 'failed confirmation must offer refresh before reconfirmation');
   assert.equal(
     React.Children.toArray(element.props.footer.props.children).at(-1).props.disabled,
     true,
   );
-  retry.props.onClick();
+  retry.onClick();
   assert.equal(refreshed, true);
 });
 
@@ -396,7 +398,7 @@ test('production adoption dialog names the accepted and current branches before 
   );
   const render = evaluate(
     `${fn.getText(file).replace('export ', '')}; return WorktreeAdoptBranchDialog;`,
-    { React, Modal: 'modal', Button: 'button' },
+    { React, Modal: 'modal', Button: 'button', ErrorToast: 'error-notice' },
   );
   const element = render({
     t: (key, values) => ({ key, values }),

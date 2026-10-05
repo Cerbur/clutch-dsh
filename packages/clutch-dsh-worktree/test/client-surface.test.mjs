@@ -257,7 +257,7 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   assert.match(coordinator, /previousWorkspaceIdsRef/);
   assert.match(coordinator, /addedWorkspaceIds/);
   assert.match(coordinator, /mergeWorktreeViews\(current\.views, workspaceIds, \[\]\)/);
-  assert.match(coordinator, /data-worktree-target-recovery/);
+  assert.match(coordinator, /key: 'target:'/);
 });
 
 test('records the minimum-scope refresh invariant in package instructions', async () => {
@@ -1028,7 +1028,7 @@ test('keeps modal candidate state current without blanking ready Worktrees', asy
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
   const source = await readSurfaceSource();
-  assert.match(source, /data-worktree-recovery/);
+  assert.match(source, /NotificationToasts notices/);
   assert.match(source, /t\('action\.retry'\)/);
   assert.match(source, /status === 'error'/);
   assert.match(source, /executeWorktreeAction/);
@@ -1058,8 +1058,8 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /import \{ formatWorktreeViewError \}/);
-  assert.match(source, /formatWorktreeViewError\(actionError, t\)/);
-  assert.match(source, /formatWorktreeViewError\(readState\.error, t\)/);
+  assert.match(source, /formatWorktreeViewError\(error, t\)/);
+  assert.match(source, /const error = readState\.error/);
   assert.match(source, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKTREE_RECORD_MISSING'/);
   assert.doesNotMatch(source, /message: t\('error\.workspaceOrderingUnavailable'\)/);
@@ -1179,7 +1179,7 @@ test('refreshes the ready Worktree projection after fork binding and exposes rec
   const source = await readSurfaceSource();
   assert.match(source, /forkRecovery/);
   assert.match(source, /retryForkSession/);
-  assert.match(source, /data-fork-recovery/);
+  assert.match(source, /key: 'fork:'/);
   assert.match(source, /refresh\(\{[\s\S]*preserveCurrent: true/);
   assert.match(source, /forkRecoverySnapshot\.affectedWorkspaceIds\.length === 0\) return/);
   assert.match(source, /scope: \{[\s\S]*kind: 'workspaces',[\s\S]*affectedWorkspaceIds/);
@@ -1277,7 +1277,7 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
     /\.then\(\(\) =>\s*refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\),?\s*\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
-  assert.match(source, /\{actionError\?\.retryable && \(/);
+  assert.match(source, /error\.retryable \?/);
 });
 
 test('preserves the Worktree projection for action refreshes', async () => {
@@ -1317,19 +1317,20 @@ test('preserves the Worktree projection for action refreshes', async () => {
     /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
   );
 
-  const actionRetryStart = source.indexOf('{actionError?.retryable && (');
+  const actionRetryStart = source.indexOf('...(error.retryable ?');
   const actionRetryEnd = source.indexOf("{readState.status === 'loading'", actionRetryStart);
   assert.notEqual(actionRetryStart, -1);
   assert.notEqual(actionRetryEnd, -1);
   assert.match(source.slice(actionRetryStart, actionRetryEnd), /kind: 'global'/);
 
   const readErrorStart = source.indexOf(
-    "{readState.status === 'error' && readState.error !== undefined ?",
+    "if (readState.status === 'error' && readState.error !== undefined)",
   );
   const readErrorEnd = source.indexOf("{readState.status === 'ready' ?", readErrorStart);
   assert.notEqual(readErrorStart, -1);
   assert.notEqual(readErrorEnd, -1);
-  assert.match(source.slice(readErrorStart, readErrorEnd), /kind: 'global'/);
+  assert.match(source.slice(readErrorStart, readErrorEnd), /retryRead\(\)/);
+  assert.match(source, /workspaceIds === undefined \? \{ kind: 'global' \}/);
 });
 
 test('keeps targeted refresh errors local and retryable', async () => {
@@ -1337,7 +1338,7 @@ test('keeps targeted refresh errors local and retryable', async () => {
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  const targetErrorStart = source.indexOf('{readState.targetError !== undefined && (');
+  const targetErrorStart = source.indexOf('if (readState.targetError !== undefined)');
   const targetErrorEnd = source.indexOf("{readState.status === 'loading'", targetErrorStart);
 
   assert.match(
@@ -1349,9 +1350,10 @@ test('keeps targeted refresh errors local and retryable', async () => {
   assert.match(refreshSource, /if \(!workspaceIdsRef\.current\.includes\(workspaceId\)\) return/);
   assert.notEqual(targetErrorStart, -1);
   assert.notEqual(targetErrorEnd, -1);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /data-worktree-target-recovery/);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /kind: 'workspaces'/);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /key: 'target:'/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /retryRead\(workspaceIds\)/);
+  assert.match(source, /kind: 'workspaces', workspaceIds/);
+  assert.match(source, /preserveCurrent: true/);
 });
 
 test('renders transient Worktree health through semantic icon colors', async () => {

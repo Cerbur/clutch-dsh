@@ -29,6 +29,9 @@ import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
+import { WorktreeSettings } from './settings/WorktreeSettings.js';
+import { worktreeDiagnostics } from './settings/diagnostics.js';
+import { openWorktreeErrorSettings } from './settings/settings-navigation.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
 import { createWorktreeSessionOrderStore } from './session/worktree-session-order.js';
@@ -270,6 +273,16 @@ export function apply(ctx: Context): void {
   );
   void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
+  slots.inject('settings.section', () =>
+    slots.register({
+      name: 'settings.section',
+      id: 'clutch-dsh-worktree',
+      order: 36,
+      locale: WORKTREE_NS,
+      label: () => ctx.locale.bind(WORKTREE_NS)('settings.title'),
+    }, WorktreeSettings),
+  );
+  ctx.effect(() => () => worktreeDiagnostics.dispose(), 'clutch-dsh-worktree: diagnostics cleanup');
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);
   const sessionOrder = createWorktreeSessionOrderStore(createSnapshotStore);
   ctx.effect(() => () => sessionOrder.dispose(), 'clutch-dsh-worktree: Session order cleanup');
@@ -508,6 +521,7 @@ export function apply(ctx: Context): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);
             if (sidebar && typeof sidebar.openResource === 'function') {

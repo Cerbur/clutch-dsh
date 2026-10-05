@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
-import { reconcileNotifications } from '../lib/client/surface/notification-queue.js';
+import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
+import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 import { WORKTREE_ERROR_CODES } from '../lib/contract/index.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { en, zh } from '../lib/client/locales.js';
@@ -88,6 +89,7 @@ function hookHarness(source, modules, context) {
     useCallback(fn) {
       return fn;
     },
+    useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
     useEffect(effect, deps) {
       const index = cursor++;
       if (!effects[index] || deps.some((value, i) => value !== effects[index].deps[i])) {
@@ -101,7 +103,7 @@ function hookHarness(source, modules, context) {
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
   const exports = {};
   const output = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   new Function('require', 'exports', output)((name) => {
     if (name === 'react') return react;
@@ -128,15 +130,18 @@ async function toastHarness(context) {
     new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url),
     'utf8',
   );
-  return hookHarness(
+  const diagnostics = createWorktreeDiagnostics();
+  const harness = hookHarness(
     source,
     {
       '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
-      '../notification-queue.js': { reconcileNotifications },
+      '../notification-queue.js': { reconcileNotifications, failureToastKey },
+      '../../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
       '../../view/worktree-error-copy.js': { formatWorktreeViewError },
     },
     context,
   );
+  return { ...harness, diagnostics };
 }
 
 test('toasts show complete guidance, serialize failures, and do not replay after dismissal', async () => {
@@ -151,7 +156,8 @@ test('toasts show complete guidance, serialize failures, and do not replay after
   let node = h.render('NotificationToasts', { notices });
   assert.equal(node.type, 'toast');
   assert.equal(node.props.text, text, 'guidance must not be truncated');
-  node.props.actions[0].onClick();
+  assert.equal(node.props.actions, undefined, 'recovery actions belong to Settings');
+  h.diagnostics.getSnapshot()[0].actions[0].onClick();
   assert.equal(recovered, 1);
   node.props.onDone();
   node = h.render('NotificationToasts', { notices });
@@ -196,6 +202,25 @@ test('shared registration keeps the latest recovery callback and withdraws on un
   assert.equal(recovered, undefined, 'unmounted recovery actions must be inert');
 });
 
+test('the shared toast opens Settings while repair callbacks stay in the diagnostic record', async () => {
+  const h = await toastHarness();
+  let opened = 0;
+  const input = { children: null, t: key => en[key], openSettings: () => { opened++; return true; } };
+  let node = h.render('NotificationProvider', input);
+  node.props.value('operation-dialog', [{ key: 'error', text: 'Problem and solution',
+    actions: [{ label: 'Retry', onClick() { throw new Error('must not run from toast'); } }] }]);
+  h.render('NotificationProvider', input);
+  node = h.render('NotificationProvider', input);
+  const toast = nodes(node).find(item => item.type === 'toast');
+  assert.ok(toast, JSON.stringify(node));
+  assert.ok(toast.props.text.includes(en['settings.toastHint']));
+  assert.equal(toast.props.actions.length, 1);
+  assert.equal(toast.props.actions[0].label, en['settings.errors']);
+  toast.props.actions[0].onClick();
+  assert.equal(opened, 1);
+  h.dispose();
+});
+
 function nodes(node) {
   if (!node || typeof node !== 'object') return [];
   return [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];
@@ -221,10 +246,13 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
     },
     './WorkspaceTree.js': { WorkspaceTree: 'tree' },
     './NotificationToasts.js': { NotificationToasts: 'notices' },
+    '../notification-queue.js': { failureToastKey },
   });
   const refreshed = [];
   const input = {
-    source: { forkRecoverySnapshot: { pending: [] } },
+    source: { forkRecoverySnapshot: { pending: [] },
+      workspaces: { items: [{ workspaceId: 'affected', title: 'My repo', path: '/repo' }] },
+      sessions: { byId: { 'retained-session': { displayTitle: 'My Session' } } } },
     props: { t: (key) => en[key], openSession() {} },
     lifecycle: { recoveryAction: () => null },
     mutation: { actionPending: false },
@@ -251,13 +279,12 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   let node = h.render('SurfaceContent', input);
   assert.ok(nodes(node).some((item) => item.type === 'tree'));
   assert.ok(nodes(node).every((item) => item.props?.role !== 'alert'));
-  const recovery = nodes(node).find((item) => item.type === 'button' && item.props.onClick);
-  recovery.props.onClick();
-  node = h.render('SurfaceContent', input);
-  const target = nodes(node).find((item) => 'data-worktree-target-recovery' in (item.props ?? {}));
-  nodes(target)
-    .find((item) => item.type === 'button')
-    .props.onClick();
+  assert.ok(!nodes(node).some((item) => item.type === 'button'), 'list has no recovery controls');
+  const notice = nodes(node).find((item) => item.type === 'notices').props.notices[0];
+  assert.ok(notice.context.includes('My repo'));
+  assert.ok(notice.context.includes('/repo'));
+  assert.ok(notice.text.length > 25);
+  notice.actions[0].onClick();
   assert.deepEqual(refreshed, [
     { scope: { kind: 'workspaces', workspaceIds: ['affected'] }, preserveCurrent: true },
   ]);
@@ -271,11 +298,47 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   input.session.setPendingSessionBinding = () => {};
   input.session.retrySessionBinding = () => {};
   node = h.render('SurfaceContent', input);
-  const retained = nodes(node).find((item) => 'data-worktree-recovery' in (item.props ?? {}));
-  const openButton = nodes(retained).find((item) => item.props?.children === en['action.openCreatedSession']);
+  const retained = nodes(node).find((item) => item.type === 'notices').props.notices[0];
+  const openButton = retained.actions.find((item) => item.label === en['action.openCreatedSession']);
   assert.ok(openButton, 'retained Session recovery must survive cleared error state');
-  openButton.props.onClick();
+  assert.ok(retained.context.includes('My Session'));
+  openButton.onClick();
   assert.equal(opened, 'retained-session');
+  h.dispose();
+});
+
+test('Settings renders contextual explanations, original diagnostics and safe recovery after toast dismissal', async () => {
+  const store = createWorktreeDiagnostics();
+  const source = await readFile(new URL('../src/client/settings/WorktreeSettings.tsx', import.meta.url), 'utf8');
+  const h = hookHarness(source, {
+    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button' },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError },
+    './diagnostics.js': { worktreeDiagnostics: store },
+    './settings.css': { default: {} },
+  });
+  let retried = 0, closed = 0;
+  store.publish('view', [{
+    key: 'failure', context: 'My Workspace · feature/task · /repo/wt',
+    text: 'old language',
+    error: { code: 'GIT_OPERATION_FAILED', retryable: true, message: 'raw Git failure',
+      details: { gitStderr: 'fatal: permission denied' } },
+    actions: [{ label: en['action.retry'], onClick: () => retried++ }],
+  }]);
+  const input = { t: (key) => en[key], close: () => closed++ };
+  let node = h.render('WorktreeSettings', input);
+  assert.ok(nodes(node).some(item => item.props?.children === 'My Workspace · feature/task · /repo/wt'));
+  assert.ok(nodes(node).some(item => item.props?.children === en['error.gitAccessDenied']));
+  assert.ok(nodes(node).some(item => item.type === 'pre' && item.props.children.includes('fatal: permission denied')));
+  nodes(node).find(item => item.type === 'button' && item.props.children === en['action.retry']).props.onClick();
+  assert.equal(retried, 1);
+  assert.equal(closed, 0, 'retry should keep Settings open');
+  node = h.render('WorktreeSettings', { ...input, t: key => zh[key] });
+  assert.ok(nodes(node).some(item => item.props?.children === zh['error.gitAccessDenied']));
+  store.deactivate('view');
+  node = h.render('WorktreeSettings', input);
+  assert.ok(nodes(node).some(item => item.type === 'pre'));
+  assert.ok(!nodes(node).some(item => item.type === 'button' && item.props.children === en['action.retry']));
+  assert.ok(nodes(node).some(item => item.props?.children === en['settings.reopen']));
   h.dispose();
 });
 

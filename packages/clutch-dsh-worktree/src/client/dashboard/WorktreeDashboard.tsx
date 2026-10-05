@@ -146,6 +146,7 @@ function WorktreeBaselineEditor({
   onSave,
   t,
   disabled,
+  context,
 }: {
   readonly value?: string;
   readonly branches: readonly BranchRecord[];
@@ -153,6 +154,7 @@ function WorktreeBaselineEditor({
   readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
   readonly t: WorktreeTranslate;
   readonly disabled: boolean;
+  readonly context?: string;
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
@@ -385,7 +387,13 @@ function WorktreeBaselineEditor({
                 ? []
                 : [
                     {
-                      key: JSON.stringify(['baseline', error.code, error.details]),
+                      key: JSON.stringify(['baseline', context, error.code, error.details]),
+                      context, error,
+                      actions: [{ label: t('action.retry'), disabled: pending || disabled,
+                        onClick: () => { void save(); } }],
+                      describe: (translate) => translate('dashboard.base') + ' · ' + (context ?? ''),
+                      message: (translate) => translate('dashboard.baseSaveFailed') +
+                        (error.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(error, translate)),
                       text:
                         t('dashboard.baseSaveFailed') +
                         (error.code === 'WORKTREE_VIEW_FAILED'
@@ -745,10 +753,14 @@ export function WorktreeDashboard({
             <NotificationToasts
               notices={[
                 ...(branchCopyState === 'failed'
-                  ? [{ key: 'copy-branch', text: t('dashboard.branchCopyFailed') }]
+                  ? [{ key: 'copy-branch:' + record.absolutePath, text: t('dashboard.branchCopyFailed'),
+                      context: workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath,
+                      message: (translate: WorktreeTranslate) => translate('dashboard.branchCopyFailed') }]
                   : []),
                 ...(copyState === 'failed'
-                  ? [{ key: 'copy-path', text: t('dashboard.copyFailed') }]
+                  ? [{ key: 'copy-path:' + record.absolutePath, text: t('dashboard.copyFailed'),
+                      context: workspaceTitle + ' · ' + record.absolutePath,
+                      message: (translate: WorktreeTranslate) => translate('dashboard.copyFailed') }]
                   : []),
               ]}
             />
@@ -775,6 +787,7 @@ export function WorktreeDashboard({
               </DashboardFactRow>
               {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
                 <WorktreeBaselineEditor
+                  context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
                   branches={branches}
                   currentBranch={baselineCurrentBranch}
@@ -882,6 +895,7 @@ export function WorktreeDashboard({
                 >
                   <p>{t('dashboard.instructionsDescription')}</p>
                   <WorktreeInstructions
+                    context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                     value={record.instructions ?? ''}
                     onSave={onSaveInstructions}
                     t={t}
@@ -958,6 +972,7 @@ export function WorktreeDashboard({
             </div>
           ) : tab === 'git' ? (
             <WorktreeGitPanel
+              context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
               manager={manager}
               workspaceId={record.workspaceId}
               worktreeId={record.worktreeId}

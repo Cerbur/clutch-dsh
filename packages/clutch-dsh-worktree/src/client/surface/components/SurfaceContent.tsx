@@ -1,5 +1,3 @@
-import { Modal, Button } from '@deepseek-ai/dsh-client-ui-primitives';
-import { useEffect, useState } from 'react';
 import {
   formatWorktreePermissionNotice,
   formatWorktreeViewError,
@@ -120,6 +118,7 @@ type Input = {
 import { WorkspaceTree } from './WorkspaceTree.js';
 import { NotificationToasts } from './NotificationToasts.js';
 import type { WorktreeNotification } from '../notification-queue.js';
+import { failureToastKey } from '../notification-queue.js';
 export function SurfaceContent({
   source,
   props,
@@ -148,54 +147,120 @@ export function SurfaceContent({
     setPendingSessionBinding,
   } = session;
   const { refresh, readState } = read;
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
-  const hasRecovery =
-    permissionRetryTarget !== undefined ||
-    forkRecoverySnapshot.pending.length > 0 ||
-    pendingSessionBinding !== undefined ||
-    actionError?.retryable === true ||
-    recoveryAction(actionError) !== null ||
-    readState.targetError !== undefined ||
-    readState.status === 'error';
-  useEffect(() => {
-    if (!hasRecovery) setRecoveryOpen(false);
-  }, [hasRecovery]);
   const notices: WorktreeNotification[] = [];
-  const addNotice = (scope: string, text: string) => {
-    notices.push({
-      key: JSON.stringify([scope, text]),
-      text,
-      actions: hasRecovery
-        ? [{ label: t('notice.recovery'), onClick: () => setRecoveryOpen(true) }]
-        : undefined,
-    });
+  const workspaceLabel = (workspaceId: string) => {
+    const workspace = source.workspaces.items.find((item) => item.workspaceId === workspaceId);
+    return workspace === undefined ? workspaceId : `${workspace.title} · ${workspace.path}`;
+  };
+  const sessionLabel = (sessionId: string) => source.sessions.byId[sessionId]?.displayTitle ?? sessionId;
+  const retryRead = (workspaceIds?: readonly string[]) => ({
+    label: t('action.retry'), disabled: actionPending,
+    onClick: () => { void refresh({
+      scope: workspaceIds === undefined ? { kind: 'global' } : { kind: 'workspaces', workspaceIds },
+      preserveCurrent: true,
+    }); },
+  });
+  const actionsFor = (error: NonNullable<typeof actionError>) => {
+    const recovery = recoveryAction(error);
+    return recovery === null ? [] : [recovery];
   };
   if (permissionNoticeSnapshot !== undefined) {
-    addNotice(
-      'permission:' +
-        permissionNoticeSnapshot.workspaceId +
-        ':' +
-        permissionNoticeSnapshot.worktreeId,
-      formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t),
-    );
+    notices.push({
+      key: 'permission:' + permissionNoticeSnapshot.workspaceId + ':' + permissionNoticeSnapshot.worktreeId,
+      text: formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t),
+      message: (translate) => formatWorktreePermissionNotice(permissionNoticeSnapshot.result, translate),
+      context: t('settings.permission') + ' · ' + workspaceLabel(permissionNoticeSnapshot.workspaceId),
+      actions: permissionRetryTarget === undefined ? [] : [{
+        label: t('action.retry'), disabled: actionPending, onClick: retryCleanupPermissions,
+      }],
+    });
   }
   for (const recovery of forkRecoverySnapshot.pending) {
-    addNotice('fork:' + recovery.key, formatWorktreeViewError(forkRecoveryError(recovery), t));
+    const error = forkRecoveryError(recovery);
+    notices.push({
+      key: 'fork:' + recovery.key, error, text: formatWorktreeViewError(error, t),
+      toastKey: failureToastKey(error),
+      context: t('settings.binding') + ' · ' + sessionLabel(recovery.childSessionId),
+      actions: [
+        ...(retryForkSession !== undefined && error.retryable ? [{
+          label: t('action.retryBinding'), disabled: forkRetryKey !== undefined,
+          onClick: () => { void retryForkBinding(recovery.key); },
+        }] : []),
+        { label: t('action.openCreatedSession'), disabled: forkRetryKey !== undefined,
+          leaveSettings: true,
+          onClick: () => openSession(recovery.childSessionId) },
+      ],
+    });
   }
-  if (actionError !== undefined) {
-    addNotice(
-      'action:' + JSON.stringify(actionError.details),
-      formatWorktreeViewError(actionError, t),
-    );
+  if (actionError !== undefined &&
+    (pendingSessionBinding === undefined || actionError.details?.sessionId !== pendingSessionBinding.sessionId)) {
+    const error = actionError;
+    const workspaceId = error.details?.workspaceId;
+    const context = typeof workspaceId === 'string' ? workspaceLabel(workspaceId) : '';
+    notices.push({
+      key: 'action:' + JSON.stringify([error.code, error.details]), error,
+      toastKey: failureToastKey(error), text: formatWorktreeViewError(error, t),
+      context: t('settings.operation') + ' · ' + context,
+      describe: (translate) => translate('settings.operation') + ' · ' + context,
+      actions: [
+        ...actionsFor(error),
+        ...(error.retryable ? [{
+          label: t('action.retry'), disabled: actionPending,
+          onClick: () => {
+            setActionError(undefined);
+            void refresh({
+              scope: typeof workspaceId === 'string'
+                ? { kind: 'workspace', workspaceId } : { kind: 'global' },
+              preserveCurrent: true,
+            });
+          },
+        }] : []),
+      ],
+    });
+  }
+  if (pendingSessionBinding !== undefined) {
+    const binding = pendingSessionBinding;
+    const error = binding.error ?? (actionError?.details?.sessionId === binding.sessionId
+      ? actionError : { code: 'SESSION_BINDING_FAILED', message: '', retryable: true,
+        details: { sessionId: binding.sessionId } });
+    const context = [workspaceLabel(binding.workspaceId), sessionLabel(binding.sessionId), binding.cwd].filter(Boolean).join(' · ');
+    notices.push({
+      key: 'binding:' + binding.sessionId, error,
+      toastKey: failureToastKey(error), text: formatWorktreeViewError(error, t),
+      context: t('settings.binding') + ' · ' + context,
+      describe: (translate) => translate('settings.binding') + ' · ' + context,
+      actions: [
+        { label: t('action.retryBinding'),
+          disabled: actionPending || pendingSessionArchived || error.retryable === false,
+          onClick: () => { void retrySessionBinding(); } },
+        ...(binding.permissionRequired ? [] : [{
+          label: t('action.openCreatedSession'), disabled: actionPending,
+          leaveSettings: true,
+          onClick: () => {
+            setPendingSessionBinding(undefined);
+            if (actionError?.details?.sessionId === binding.sessionId) setActionError(undefined);
+            openSession(binding.sessionId);
+          },
+        }]),
+      ],
+    });
   }
   if (readState.targetError !== undefined) {
-    addNotice(
-      'target:' + JSON.stringify(readState.targetError.workspaceIds),
-      formatWorktreeViewError(readState.targetError.error, t),
-    );
+    const { error, workspaceIds } = readState.targetError;
+    notices.push({
+      key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
+      error, text: formatWorktreeViewError(error, t),
+      context: t('settings.read') + ' · ' + workspaceIds.map(workspaceLabel).join(', '),
+      actions: [...actionsFor(error), retryRead(workspaceIds)],
+    });
   }
   if (readState.status === 'error' && readState.error !== undefined) {
-    addNotice('read', formatWorktreeViewError(readState.error, t));
+    const error = readState.error;
+    notices.push({
+      key: 'read:' + JSON.stringify([error.code, error.details]),
+      error, text: formatWorktreeViewError(error, t), context: t('settings.read'),
+      actions: [...actionsFor(error), retryRead()],
+    });
   }
 
   return (
@@ -206,182 +271,6 @@ export function SurfaceContent({
       data-worktree-scrollport
     >
       <NotificationToasts notices={notices} />
-      {hasRecovery && (
-        <Modal
-          open={recoveryOpen}
-          onClose={() => setRecoveryOpen(false)}
-          closeLabel={t('dialog.close')}
-          title={t('notice.recovery')}
-          footer={
-            <Button variant="outline" onClick={() => setRecoveryOpen(false)}>
-              {t('dialog.close')}
-            </Button>
-          }
-        >
-          {permissionNoticeSnapshot !== undefined && (
-            <div className={styles.recoveryActions} role="status" data-worktree-permission-notice>
-              {permissionRetryTarget !== undefined && (
-                <p>
-                  {t('notice.workspaceRecovery', {
-                    workspaceId: permissionRetryTarget.workspaceId,
-                  })}
-                </p>
-              )}
-
-              {permissionRetryTarget !== undefined && (
-                <button
-                  type="button"
-                  className={styles.retryButton}
-                  disabled={actionPending}
-                  onClick={retryCleanupPermissions}
-                >
-                  {t('action.retry')}
-                </button>
-              )}
-            </div>
-          )}
-          {forkRecoverySnapshot.pending.map((recovery) => {
-            const recoveryViewError = forkRecoveryError(recovery);
-            return (
-              <div
-                key={recovery.key}
-                className={styles.recoveryActions}
-                data-fork-recovery={recovery.key}
-              >
-                <p>{t('notice.sessionRecovery', { sessionId: recovery.childSessionId })}</p>
-
-                <div className={styles.recoveryActions}>
-                  {retryForkSession !== undefined && recoveryViewError.retryable && (
-                    <button
-                      type="button"
-                      className={styles.actionButton}
-                      disabled={forkRetryKey !== undefined}
-                      onClick={() => {
-                        void retryForkBinding(recovery.key);
-                      }}
-                    >
-                      {t('action.retryBinding')}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.actionButton}
-                    disabled={forkRetryKey !== undefined}
-                    onClick={() => {
-                      openSession(recovery.childSessionId);
-                    }}
-                  >
-                    {t('action.openCreatedSession')}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {(actionError !== undefined || pendingSessionBinding !== undefined) && (
-            <div className={styles.recoveryActions} data-worktree-recovery>
-              {pendingSessionBinding !== undefined && (
-                <p>{t('notice.sessionRecovery', { sessionId: pendingSessionBinding.sessionId })}</p>
-              )}
-
-              {recoveryAction(actionError)}
-              {pendingSessionBinding !== undefined && (
-                <div className={styles.recoveryActions}>
-                  <button
-                    type="button"
-                    className={styles.actionButton}
-                    disabled={actionPending || pendingSessionArchived}
-                    onClick={() => {
-                      void retrySessionBinding();
-                    }}
-                  >
-                    {t('action.retryBinding')}
-                  </button>
-                  {!pendingSessionBinding.permissionRequired && (
-                    <button
-                      type="button"
-                      className={styles.actionButton}
-                      disabled={actionPending}
-                      onClick={() => {
-                        const sessionId = pendingSessionBinding.sessionId;
-                        setPendingSessionBinding(undefined);
-                        setActionError(undefined);
-                        openSession(sessionId);
-                      }}
-                    >
-                      {t('action.openCreatedSession')}
-                    </button>
-                  )}
-                </div>
-              )}
-              {actionError?.retryable && (
-                <button
-                  type="button"
-                  className={styles.retryButton}
-                  disabled={actionPending}
-                  onClick={() => {
-                    setActionError(undefined);
-                    const workspaceId =
-                      pendingSessionBinding?.workspaceId ?? actionError.details?.workspaceId;
-                    void refresh({
-                      scope:
-                        typeof workspaceId === 'string'
-                          ? { kind: 'workspace', workspaceId }
-                          : { kind: 'global' },
-                      preserveCurrent: true,
-                    });
-                  }}
-                >
-                  {t('action.retry')}
-                </button>
-              )}
-            </div>
-          )}
-
-          {readState.targetError !== undefined && (
-            <div className={styles.recoveryActions} data-worktree-target-recovery>
-              <p>
-                {t('notice.workspaceRecovery', {
-                  workspaceId: readState.targetError.workspaceIds.join(', '),
-                })}
-              </p>
-
-              {recoveryAction(readState.targetError.error)}
-              <button
-                type="button"
-                className={styles.retryButton}
-                disabled={actionPending}
-                onClick={() => {
-                  void refresh({
-                    scope: {
-                      kind: 'workspaces',
-                      workspaceIds: readState.targetError!.workspaceIds,
-                    },
-                    preserveCurrent: true,
-                  });
-                }}
-              >
-                {t('action.retry')}
-              </button>
-            </div>
-          )}
-
-          {readState.status === 'error' && readState.error !== undefined ? (
-            <div className={styles.recoveryActions} data-worktree-recovery>
-              {recoveryAction(readState.error)}
-              <button
-                type="button"
-                className={styles.retryButton}
-                disabled={actionPending}
-                onClick={() => {
-                  void refresh({ scope: { kind: 'global' } });
-                }}
-              >
-                {t('action.retry')}
-              </button>
-            </div>
-          ) : null}
-        </Modal>
-      )}
       {readState.status === 'loading' && <p className={styles.message}>{t('status.loading')}</p>}
       {readState.status === 'ready' ? (
         <WorkspaceTree
@@ -400,11 +289,7 @@ export function SurfaceContent({
           lifecycleState={lifecycleState}
         />
       ) : null}
-      {hasRecovery && (
-        <button type="button" className={styles.retryButton} onClick={() => setRecoveryOpen(true)}>
-          {t('notice.recovery')}
-        </button>
-      )}
+
     </div>
   );
 }
