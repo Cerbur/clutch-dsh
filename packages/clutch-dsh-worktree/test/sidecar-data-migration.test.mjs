@@ -1,3 +1,5 @@
+/* global structuredClone */
+
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -334,8 +336,10 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
 test('migration v3 -> v7 normalizes transitional repository identities without losing the pending journal', () => {
   const fixture = createV3Fixture();
   const identity = { topLevel: '/tmp/repo', commonDirectory: '/tmp/repo/.git' };
-  const { repositoryFingerprint: _fingerprint, ...legacySnapshot } = fixture;
-  const { repositoryFingerprint: _pendingFingerprint, ...legacyPending } = fixture.pendingOperation;
+  const legacySnapshot = { ...fixture };
+  delete legacySnapshot.repositoryFingerprint;
+  const legacyPending = { ...fixture.pendingOperation };
+  delete legacyPending.repositoryFingerprint;
   const transitional = {
     ...legacySnapshot,
     repository: identity,
@@ -804,7 +808,9 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
     try {
       const repository = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
       const worktreeRoot = path.join(tempDir, 'clutch-dsh-worktree', 'worktree');
-      const { pendingOperation: _pending, recoveryIssues: _issues, ...readyFixture } = createFixture(`ws_disk_v${version}`);
+      const readyFixture = { ...createFixture(`ws_disk_v${version}`) };
+      delete readyFixture.pendingOperation;
+      delete readyFixture.recoveryIssues;
       const fixture = withGeneratedPaths(readyFixture, worktreeRoot);
       const expected = expectedV7Snapshot(fixture);
       const shardPath = repository.getShardPath(fixture.workspaceId);
