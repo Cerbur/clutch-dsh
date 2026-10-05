@@ -32,11 +32,6 @@ function evaluate(code, context) {
   }).outputText;
   return new Function(...Object.keys(context), js)(...Object.values(context));
 }
-function elements(node) {
-  if (!node || typeof node !== 'object') return [];
-  return [node, ...React.Children.toArray(node.props?.children).flatMap(elements)];
-}
-
 test('Archived group ignores native archived activity but retains hidden live activity', () => {
   const row = find(
     (node) =>

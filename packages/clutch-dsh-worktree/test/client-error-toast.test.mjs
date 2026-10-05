@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { URL } from 'node:url';
 import ts from 'typescript';
 import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
