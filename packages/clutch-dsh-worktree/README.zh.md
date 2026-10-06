@@ -136,7 +136,7 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
 图标打开。Sidebar 收起时，标题行图标也可单击打开 Dashboard，不需要展开 Sidebar。
-如果目标仍在加载，请求会保持，并在主区域显示加载状态或可重试错误。
+如果目标仍在加载，请求会保持，并在主区域显示加载状态；失败信息通过 toast 提示，重试在 Worktree 设置中提供。
 Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
 的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
 当前 Session 已属于目标 Worktree，就保持当前 Session；否则切换到目标 Worktree 保留顺序中排在最前的
@@ -241,6 +241,21 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 指令保存在 plugin 自己的数据中，不会写入项目目录或 `AGENTS.md`。清空、解绑、清理或移出管理后，后续请求不再注入；
 归档会保留 active binding，因此 Worktree 指令仍然生效。指令消息仍可见时，不变的指令不会重复追加。
 
+### 处理错误
+
+Worktree 列表、弹窗和 Dashboard 的失败统一通过原生 toast 显示，跟随 DSH 当前界面语言
+（中文或英文）。提示会说明问题和解决办法。列表保留已有内容，顶部不再显示错误窗口或诊断抽屉。
+
+点击 toast 的**报错与修复**，或打开 **设置 → Worktree → 报错与修复**，可查看每次失败的问题说明，并展开原始诊断详情（包括
+Git stderr）。读取重试、恢复中断操作、重试 Session 绑定和打开已保留 Session 的操作集中在同一个
+Tab。toast 消失后记录仍然保留；列表和 Git 面板不再提供行内报错或重试按钮。原操作视图关闭后，
+对应恢复按钮会停用；重新打开该视图可加载当前状态。记录仅保留在页面内存中，刷新后清空；
+**清除历史记录**保留仍待处理的操作。弹窗保留输入，指令和基线保存失败时保留草稿。
+Git 初始化指引仍在创建弹窗中显示。同一 Git 故障只弹一次 toast，各受影响操作仍分别保留记录。
+
+Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文字、操作按钮和诊断详情跟随
+**设置 → 通用**中的字体大小设置。
+
 ### 归档或移除 Worktree
 
 - **Archive Worktree** 是非破坏性操作，会保留目录、binding、指令和运行时 Worktree 上下文。
@@ -312,7 +327,8 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 ## 界面语言
 
 Worktree 模式跟随 DSH 当前界面语言。入口、树、菜单、弹窗、状态、Dashboard 标签和重试提示
-提供英文和中文。Workspace 名称、Session 标题、branch、路径以及原始 DSH 或 Git 错误保留原值。
+提供英文和中文。Workspace 名称、Session 标题、branch 和路径保留原值。错误使用本地化的问题说明与恢复指引，
+未知错误附带可供排查的错误码。原始诊断信息可在 Worktree 设置中查看；插件不会将其写入 DSH 日志。
 
 ## 开发
 

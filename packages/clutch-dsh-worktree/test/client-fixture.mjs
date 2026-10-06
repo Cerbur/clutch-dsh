@@ -178,6 +178,9 @@ export async function loadClientEntry({
   };
 
   const locale = {
+    bind(namespace) {
+      return (key) => localeRegistrations.find(entry => entry.namespace === namespace)?.dictionaries.en[key] ?? key;
+    },
     register(namespace, dictionaries) {
       const entry = { namespace, dictionaries };
       localeRegistrations.push(entry);
@@ -271,6 +274,10 @@ export async function loadClientEntry({
       },
     },
     slots: {
+      entriesOfSlot(name) {
+        const entry = registrationsBySlot.get(name);
+        return entry === undefined ? [] : [{ ...entry, store: entry.options.store }];
+      },
       inject(key, callback) {
         const dispose = callback();
         const controller = () => {
@@ -312,6 +319,7 @@ export async function loadClientEntry({
       return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
     if (specifier === 'react') return {
+      createContext: () => ({ Provider: 'NotificationProvider' }),
       createElement: (type, props) => ({ type, props }),
       Component: class { constructor(props) { this.props = props; } },
       createRef: () => ({ current: null }),

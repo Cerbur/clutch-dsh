@@ -3,6 +3,7 @@ import { LifecycleDialogs } from './surface/components/LifecycleDialogs.js';
 import { NativeDialogs } from './surface/components/NativeDialogs.js';
 import { RegistrationDialog } from './surface/components/RegistrationDialog.js';
 import { SurfaceContent } from './surface/components/SurfaceContent.js';
+import { NotificationProvider } from './surface/components/NotificationToasts.js';
 import { SurfaceHeader } from './surface/components/SurfaceHeader.js';
 import { useDragActions } from './surface/actions/useDragActions.js';
 import { useLifecycleActions } from './surface/actions/useLifecycleActions.js';
@@ -308,7 +309,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { ref, width, bounds, collapsed } = source;
   const { t } = props;
   return (
-    <>
+    <NotificationProvider t={t} openSettings={props.openErrorSettings}>
       <aside
         ref={ref}
         className={styles.surface}
@@ -378,6 +379,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         source.workspaceIds.includes(dashboard.workspaceId) &&
         targetView === undefined && (
           <DashboardRequest
+            context={targetWorkspace === undefined ? dashboard.workspaceId : targetWorkspace.title + ' · ' + targetWorkspace.path}
             t={t}
             error={
               read.readState.error ??
@@ -521,6 +523,6 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           isRightSidebarExpanded={props.isRightSidebarExpanded}
         />
       )}
-    </>
+    </NotificationProvider>
   );
 }

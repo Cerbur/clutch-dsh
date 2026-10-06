@@ -224,14 +224,16 @@ export function useWorktreeRegistration({
     try {
       await createSessionCallback(sessionInput);
     } catch (error) {
-      if (error instanceof WorktreeSessionBindingError && error.retryable) {
-        setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId });
+      if (error instanceof WorktreeSessionBindingError) {
+        setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId,
+          error: toWorktreeViewError(error) });
       }
       if (error instanceof WorktreeSessionPermissionError && error.retryable) {
         setPendingSessionBinding({
           ...sessionInput,
           sessionId: error.sessionId,
           permissionRequired: true,
+          error: toWorktreeViewError(error),
         });
       }
       throw error;

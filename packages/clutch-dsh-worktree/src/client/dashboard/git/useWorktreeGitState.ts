@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
 import type {
   BranchRecord,
@@ -81,7 +82,9 @@ interface ControllerInput {
 }
 
 function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+  return error instanceof Error
+    ? error
+    : Object.assign(new Error(toWorktreeViewError(error).message), toWorktreeViewError(error));
 }
 
 function normalizeBranch(branch: string | undefined): string | undefined {

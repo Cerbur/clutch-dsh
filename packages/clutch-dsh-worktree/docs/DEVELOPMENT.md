@@ -39,6 +39,10 @@ pnpm run build
 
 ### 3.1 构建插件包
 
+Client 的 Worktree 设置入口依赖原生 `@deepseek-ai/dsh-client-ui-settings`（rc.1 基线）。
+`dsh-slot-contract.ts` 收敛其 `settings.section` 的最小 owner 契约，避免 Host 生成加载
+设置包的 Remote 类型图；运行时通过 DSH 现有 slot 注册，不新增 Host 设置存储。
+
 在 `clutch-dsh` monorepo 根目录执行：
 
 ```bash

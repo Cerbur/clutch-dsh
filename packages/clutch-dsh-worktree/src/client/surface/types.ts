@@ -66,6 +66,7 @@ export interface WorktreePermissionNotice {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly openErrorSettings?: () => boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
   readonly openResource?: (address: string, options?: { line?: number }) => boolean;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
@@ -193,6 +194,7 @@ export interface RefreshOptions {
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
   readonly permissionRequired?: boolean;
+  readonly error?: WorktreeViewError;
 }
 
 export interface SessionRenameTarget {

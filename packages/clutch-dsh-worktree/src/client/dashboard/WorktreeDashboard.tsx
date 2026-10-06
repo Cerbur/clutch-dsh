@@ -1,3 +1,6 @@
+import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
+import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
@@ -143,6 +146,7 @@ function WorktreeBaselineEditor({
   onSave,
   t,
   disabled,
+  context,
 }: {
   readonly value?: string;
   readonly branches: readonly BranchRecord[];
@@ -150,12 +154,13 @@ function WorktreeBaselineEditor({
   readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
   readonly t: WorktreeTranslate;
   readonly disabled: boolean;
+  readonly context?: string;
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
   const [search, setSearch] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<WorktreeViewError>();
   const busy = useRef(false);
   const alive = useRef(true);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -183,13 +188,13 @@ function WorktreeBaselineEditor({
     if (pending) return;
     setDraft(undefined);
     setSearch('');
-    setError(false);
+    setError(undefined);
   };
   const openEditor = () => {
     expected.current = saved;
     setDraft(saved ?? '');
     setSearch('');
-    setError(false);
+    setError(undefined);
   };
   const query = search.trim().toLowerCase();
   const filteredOptions =
@@ -238,7 +243,7 @@ function WorktreeBaselineEditor({
       return;
     busy.current = true;
     setPending(true);
-    setError(false);
+    setError(undefined);
     try {
       const result = await onSave(draft, expected.current);
       if (alive.current) {
@@ -247,8 +252,8 @@ function WorktreeBaselineEditor({
         setDraft(undefined);
         setSearch('');
       }
-    } catch {
-      if (alive.current) setError(true);
+    } catch (cause) {
+      if (alive.current) setError(toWorktreeViewError(cause));
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -376,17 +381,28 @@ function WorktreeBaselineEditor({
               </div>
             )}
           </div>
-          <div className={styles.dashboardBaselineStatus} data-dashboard-baseline-status>
-            {error && (
-              <span
-                className={styles.dashboardBaselineError}
-                data-dashboard-baseline-error
-                role="alert"
-              >
-                {t('dashboard.baseSaveFailed')}
-              </span>
-            )}
-          </div>
+          <NotificationToasts
+            notices={
+              error === undefined
+                ? []
+                : [
+                    {
+                      key: JSON.stringify(['baseline', context, error.code, error.details]),
+                      context, error,
+                      actions: [{ label: t('action.retry'), disabled: pending || disabled,
+                        onClick: () => { void save(); } }],
+                      describe: (translate) => translate('dashboard.base') + ' · ' + (context ?? ''),
+                      message: (translate) => translate('dashboard.baseSaveFailed') +
+                        (error.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(error, translate)),
+                      text:
+                        t('dashboard.baseSaveFailed') +
+                        (error.code === 'WORKTREE_VIEW_FAILED'
+                          ? ''
+                          : ' ' + formatWorktreeViewError(error, t)),
+                    },
+                  ]
+            }
+          />
         </div>
       </Modal>
     </>
@@ -734,26 +750,26 @@ export function WorktreeDashboard({
                 <IconCopyOutline16 />
               </button>
             </div>
-            <p
-              className={styles.dashboardCopyStatus}
-              role={
-                branchCopyState === 'failed' ||
-                (branchCopyState === 'idle' && copyState === 'failed')
-                  ? 'alert'
-                  : 'status'
-              }
-            >
-              {branchCopyState === 'pending'
-                ? '\u00a0'
-                : branchCopyState === 'copied'
-                  ? t('dashboard.branchCopied')
-                  : branchCopyState === 'failed'
-                    ? t('dashboard.branchCopyFailed')
-                    : copyState === 'copied'
-                      ? t('dashboard.copied')
-                      : copyState === 'failed'
-                        ? t('dashboard.copyFailed')
-                        : '\u00a0'}
+            <NotificationToasts
+              notices={[
+                ...(branchCopyState === 'failed'
+                  ? [{ key: 'copy-branch:' + record.absolutePath, text: t('dashboard.branchCopyFailed'),
+                      context: workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath,
+                      message: (translate: WorktreeTranslate) => translate('dashboard.branchCopyFailed') }]
+                  : []),
+                ...(copyState === 'failed'
+                  ? [{ key: 'copy-path:' + record.absolutePath, text: t('dashboard.copyFailed'),
+                      context: workspaceTitle + ' · ' + record.absolutePath,
+                      message: (translate: WorktreeTranslate) => translate('dashboard.copyFailed') }]
+                  : []),
+              ]}
+            />
+            <p className={styles.dashboardCopyStatus} role="status">
+              {branchCopyState === 'copied'
+                ? t('dashboard.branchCopied')
+                : copyState === 'copied'
+                  ? t('dashboard.copied')
+                  : '\u00a0'}
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
@@ -771,6 +787,7 @@ export function WorktreeDashboard({
               </DashboardFactRow>
               {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
                 <WorktreeBaselineEditor
+                  context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
                   branches={branches}
                   currentBranch={baselineCurrentBranch}
@@ -878,6 +895,7 @@ export function WorktreeDashboard({
                 >
                   <p>{t('dashboard.instructionsDescription')}</p>
                   <WorktreeInstructions
+                    context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                     value={record.instructions ?? ''}
                     onSave={onSaveInstructions}
                     t={t}
@@ -954,6 +972,7 @@ export function WorktreeDashboard({
             </div>
           ) : tab === 'git' ? (
             <WorktreeGitPanel
+              context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
               manager={manager}
               workspaceId={record.workspaceId}
               worktreeId={record.worktreeId}
