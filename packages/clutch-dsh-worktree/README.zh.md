@@ -136,7 +136,7 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 
 可以从 Local/Main 或 Worktree 行菜单、悬浮操作，或 Session 标题行原生操作旁边的 Dashboard
 图标打开。Sidebar 收起时，标题行图标也可单击打开 Dashboard，不需要展开 Sidebar。
-如果目标仍在加载，请求会保持，并在主区域显示加载状态或重试按钮，失败信息通过 toast 提示。
+如果目标仍在加载，请求会保持，并在主区域显示加载状态；失败信息通过 toast 提示，重试在 Worktree 设置中提供。
 Dashboard 是与原生 Session 内容平级的页面，显示在 Sidebar 旁边的主区域；对于绑定 Session
 的目标，会保留已经打开的右侧栏。初始 Session list 处于 pending 时，Dashboard 会等待它变为 ready；如果
 当前 Session 已属于目标 Worktree，就保持当前 Session；否则切换到目标 Worktree 保留顺序中排在最前的
