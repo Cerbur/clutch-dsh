@@ -1,3 +1,5 @@
+/* global structuredClone */
+
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,6 +26,7 @@ import {
  * - v4: Added optional acquisition metadata ('instructions', 'baseBranch', 'createdAt', 'importedAt', 'diskCleanup')
  * - v5: Added 'baseCommit' on worktree records and create-worktree pending operations
  * - v6: Added top-level Workspace-root 'mainInstructions'
+ * - v7: Separates nested Workspace 'absolutePath' from 'gitRootPath', with journal 'workspacePath'
  */
 
 function createV1Fixture(workspaceId = 'ws_mig') {
@@ -252,6 +255,117 @@ function createV4Fixture(workspaceId = 'ws_mig') {
   };
 }
 
+function createV5Fixture(workspaceId = 'ws_mig') {
+  const fixture = createV4Fixture(workspaceId);
+  return {
+    ...fixture,
+    schemaVersion: 5,
+    worktrees: fixture.worktrees.map((record, index) => ({
+      ...record,
+      baseCommit: index === 1 ? 'b'.repeat(64) : 'a'.repeat(40),
+    })),
+    pendingOperation: {
+      id: 'op_v5_create', type: 'create-worktree', phase: 'recovery-needed',
+      workspaceId, worktreeId: 'wt_v5_pending',
+      targetPath: '/tmp/repo/worktrees/wt_v5_pending',
+      branch: 'feature/v5-pending', baseRef: 'main', baseCommit: 'c'.repeat(40),
+      repositoryFingerprint: fixture.repositoryFingerprint,
+      startedAt: '2026-09-11T00:00:00.000Z',
+    },
+  };
+}
+
+function createV6Fixture(workspaceId = 'ws_mig') {
+  return {
+    ...createV5Fixture(workspaceId),
+    schemaVersion: 6,
+    mainInstructions: 'Main 指令：保留原始 Workspace；run pnpm test.\nSecond line.',
+  };
+}
+
+// Raw historical fixtures, never produced by the migration implementation under test.
+const LEGACY_MIGRATION_CASES = [
+  { version: 1, createFixture: createV1Fixture },
+  { version: 2, createFixture: createV2Fixture },
+  { version: 3, createFixture: createV3Fixture },
+  { version: 4, createFixture: createV4Fixture },
+  { version: 5, createFixture: createV5Fixture },
+  { version: 6, createFixture: createV6Fixture },
+];
+
+function expectedV7Snapshot(fixture) {
+  return {
+    ...structuredClone(fixture),
+    schemaVersion: 7,
+    revision: fixture.revision ?? '0',
+    worktrees: fixture.worktrees.map((record) => ({
+      ...record,
+      source: record.source ?? 'plugin',
+      ...(fixture.schemaVersion < 4 && record.status === 'removed'
+        ? { diskCleanup: 'completed' }
+        : {}),
+    })),
+  };
+}
+
+for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
+  test(`migration v${version} -> v7 preserves historical fields, bindings, journals, and legacy paths`, () => {
+    const fixture = createFixture();
+    const before = structuredClone(fixture);
+    const expected = expectedV7Snapshot(fixture);
+    const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+    assert.deepEqual(migrated, expected);
+    assert.deepEqual(validateSidecarSnapshot(fixture, '/tmp/ws.json'), expected);
+    assert.deepEqual(migrateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7), expected);
+    assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json'), expected);
+    assert.deepEqual(fixture, before, 'migration must not mutate the input');
+    for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'gitRootPath'), false);
+    if (migrated.pendingOperation) assert.equal(Object.hasOwn(migrated.pendingOperation, 'workspacePath'), false);
+  });
+
+  test(`migration v${version} -> v7 matches sequential upgrades through every intermediate version`, () => {
+    const fixture = createFixture();
+    let sequential = fixture;
+    for (let targetVersion = version + 1; targetVersion <= 7; targetVersion++) {
+      sequential = migrateSidecarSnapshot(sequential, '/tmp/ws.json', undefined, targetVersion);
+    }
+    assert.deepEqual(sequential, expectedV7Snapshot(fixture));
+  });
+}
+
+test('migration v3 -> v7 normalizes transitional repository identities without losing the pending journal', () => {
+  const fixture = createV3Fixture();
+  const identity = { topLevel: '/tmp/repo', commonDirectory: '/tmp/repo/.git' };
+  const legacySnapshot = { ...fixture };
+  delete legacySnapshot.repositoryFingerprint;
+  const legacyPending = { ...fixture.pendingOperation };
+  delete legacyPending.repositoryFingerprint;
+  const transitional = {
+    ...legacySnapshot,
+    repository: identity,
+    pendingOperation: { ...legacyPending, repository: identity },
+  };
+  const before = structuredClone(transitional);
+  const expected = {
+    ...expectedV7Snapshot(fixture),
+    repositoryFingerprint: createRepositoryFingerprint(identity),
+    pendingOperation: { ...legacyPending, repositoryFingerprint: createRepositoryFingerprint(identity) },
+  };
+  assert.deepEqual(migrateSidecarSnapshot(transitional, '/tmp/ws.json', undefined, 7), expected);
+  assert.deepEqual(transitional, before);
+});
+
+test('migration v6 -> v7 distinguishes disabled Main instructions from an absent field', () => {
+  for (const mainInstructions of ['', undefined]) {
+    const fixture = createV6Fixture();
+    if (mainInstructions === undefined) delete fixture.mainInstructions;
+    else fixture.mainInstructions = mainInstructions;
+    const migrated = migrateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+    assert.deepEqual(migrated, expectedV7Snapshot(fixture));
+    assert.equal(Object.hasOwn(migrated, 'mainInstructions'), mainInstructions !== undefined);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 1. v1 -> v2, v3, v4, v5
 // ---------------------------------------------------------------------------
@@ -318,10 +432,8 @@ test('migration v1 -> v4: normalizes legacy removed records to diskCleanup "comp
 });
 
 test('keeps every supported schema version readable when the current version advances', () => {
-  // Current v6 reads v5 records, including their baseCommit, while accepting
-  // mainInstructions only in the v6 shape. The list is explicit instead of
-  // tracking the live constant.
-  assert.deepEqual(SUPPORTED_SIDECAR_SCHEMA_VERSIONS, [1, 2, 3, 4, 5, 6]);
+  // The list is explicit instead of tracking the live constant.
+  assert.deepEqual(SUPPORTED_SIDECAR_SCHEMA_VERSIONS, [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(SIDECAR_SCHEMA_VERSION), true);
   assert.equal(SUPPORTED_SIDECAR_SCHEMA_VERSIONS.at(-1), SIDECAR_SCHEMA_VERSION);
 
@@ -349,6 +461,25 @@ test('keeps every supported schema version readable when the current version adv
   assert.equal(migrated.schemaVersion, 6);
   assert.equal(migrated.worktrees[0].baseCommit, 'a'.repeat(40));
   assert.equal(migrated.mainInstructions, undefined);
+});
+
+test('v7 captures nested Workspace and Git-root paths and rejects paths outside the checkout', () => {
+  const snapshot = {
+    schemaVersion: 7, workspaceId: 'ws_nested', revision: '0', bindings: [],
+    worktrees: [{
+      worktreeId: 'wt_nested', workspaceId: 'ws_nested', branch: 'topic',
+      source: 'plugin', status: 'active',
+      absolutePath: '/tmp/generated/wt_nested/packages/app',
+      gitRootPath: '/tmp/generated/wt_nested',
+    }],
+  };
+  assert.deepEqual(validateSidecarSnapshot(snapshot, '/tmp/ws.json', '/tmp/generated'), snapshot);
+  for (const absolutePath of ['/tmp/elsewhere', '/tmp/generated/wt_nested/../other', 'packages/app']) {
+    assert.throws(() => validateSidecarSnapshot({
+      ...snapshot, worktrees: [{ ...snapshot.worktrees[0], absolutePath }],
+    }, '/tmp/ws.json', '/tmp/generated'), { code: 'SIDECAR_CORRUPT' });
+  }
+  assert.throws(() => validateSidecarSnapshot({ ...snapshot, schemaVersion: 6 }, '/tmp/ws.json'), { code: 'SIDECAR_CORRUPT' });
 });
 
 test('v6 preserves Main instructions and rejects the field in v5 or malformed snapshots', () => {
@@ -382,9 +513,9 @@ test('v6 preserves Main instructions and rejects the field in v5 or malformed sn
   );
 });
 
-test('migration v1 -> v6: migrates legacy v1 directly to current schema version v6', () => {
+test('migration v1 -> current: migrates legacy v1 directly to the current schema', () => {
   const v1 = createV1Fixture();
-  const v5 = validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 6);
+  const v5 = validateSidecarSnapshot(v1, '/tmp/ws.json');
 
   assert.equal(v5.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(v5.workspaceId, 'ws_mig');
@@ -395,10 +526,10 @@ test('migration v1 -> v6: migrates legacy v1 directly to current schema version 
 
   // migrateSidecarSnapshot helper behaves identically and shares the
   // validateSidecarSnapshot parameter order.
-  const migratedViaHelper = migrateSidecarSnapshot(v1, '/tmp/ws.json', undefined, 6);
+  const migratedViaHelper = migrateSidecarSnapshot(v1, '/tmp/ws.json');
   assert.deepEqual(migratedViaHelper, v5);
 
-  // Default targetVersion is the current schema (v6)
+  // Default targetVersion is the current schema.
   const defaultMigrated = validateSidecarSnapshot(v1, '/tmp/ws.json');
   assert.deepEqual(defaultMigrated, v5);
 });
@@ -603,6 +734,14 @@ test('transitive migration equivalence: v3 -> v4 -> v5 equals direct v3 -> v5', 
 // ---------------------------------------------------------------------------
 
 test('rejects downgrading schema version', () => {
+  const v7 = validateSidecarSnapshot(createV6Fixture(), '/tmp/ws.json', undefined, 7);
+  for (const target of [6, 5, 4, 3, 2, 1]) {
+    assert.throws(
+      () => validateSidecarSnapshot(v7, '/tmp/ws.json', undefined, target),
+      { code: 'SIDECAR_CORRUPT' },
+    );
+  }
+
   const v5 = validateSidecarSnapshot(createV4Fixture(), '/tmp/ws.json', undefined, 5);
   for (const target of [4, 3, 2, 1]) {
     assert.throws(
@@ -636,7 +775,7 @@ test('rejects downgrading schema version', () => {
 
 test('rejects unsupported target versions', () => {
   const v1 = createV1Fixture();
-  for (const invalidTarget of [0, 7, -1, 99]) {
+  for (const invalidTarget of [0, SIDECAR_SCHEMA_VERSION + 1, -1, 99]) {
     assert.throws(
       () => validateSidecarSnapshot(v1, '/tmp/ws.json', undefined, invalidTarget),
       { code: 'SIDECAR_CORRUPT' },
@@ -648,67 +787,95 @@ test('rejects unsupported target versions', () => {
 // 7. WorkspaceShardedSidecarRepository integration with legacy shard files
 // ---------------------------------------------------------------------------
 
-test('WorkspaceShardedSidecarRepository migrates legacy shards (v1, v2, v3, v4) on disk upon read and mutation', async () => {
-  const tempDir = await mkdtemp(path.join(tmpdir(), 'sidecar-migration-repo-'));
-  try {
-    const repository = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
+function withGeneratedPaths(fixture, worktreeRoot) {
+  return {
+    ...fixture,
+    worktrees: fixture.worktrees.map((record) => ({
+      ...record, absolutePath: path.join(worktreeRoot, record.worktreeId),
+    })),
+    ...(fixture.pendingOperation ? {
+      pendingOperation: {
+        ...fixture.pendingOperation,
+        targetPath: path.join(worktreeRoot, fixture.pendingOperation.worktreeId),
+      },
+    } : {}),
+  };
+}
 
-    // Test each legacy version on disk
-    const worktreeRoot = path.join(tempDir, 'clutch-dsh-worktree', 'worktree');
-    function adjustPaths(fixture) {
-      return {
-        ...fixture,
-        worktrees: fixture.worktrees.map((w) => ({
-          ...w,
-          absolutePath: path.join(worktreeRoot, w.worktreeId),
-        })),
-        ...(fixture.pendingOperation ? {
-          pendingOperation: {
-            ...fixture.pendingOperation,
-            targetPath: path.join(worktreeRoot, fixture.pendingOperation.worktreeId),
-          },
-        } : {}),
-      };
-    }
-
-    const legacyVersions = [
-      { version: 1, fixture: adjustPaths(createV1Fixture('ws_disk_v1')) },
-      { version: 2, fixture: adjustPaths(createV2Fixture('ws_disk_v2')) },
-      { version: 3, fixture: adjustPaths({ ...createV3Fixture('ws_disk_v3'), pendingOperation: undefined, recoveryIssues: undefined }) },
-      { version: 4, fixture: adjustPaths({ ...createV4Fixture('ws_disk_v4'), pendingOperation: undefined, recoveryIssues: undefined }) },
-    ];
-
-    for (const { version, fixture } of legacyVersions) {
+for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
+  test(`disk migration v${version} -> v7 leaves reads untouched and durably preserves historical data on first write`, async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), `sidecar-migration-v${version}-`));
+    try {
+      const repository = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
+      const worktreeRoot = path.join(tempDir, 'clutch-dsh-worktree', 'worktree');
+      const readyFixture = { ...createFixture(`ws_disk_v${version}`) };
+      delete readyFixture.pendingOperation;
+      delete readyFixture.recoveryIssues;
+      const fixture = withGeneratedPaths(readyFixture, worktreeRoot);
+      const expected = expectedV7Snapshot(fixture);
       const shardPath = repository.getShardPath(fixture.workspaceId);
+      const originalText = JSON.stringify(fixture, null, 2);
       await mkdir(path.dirname(shardPath), { recursive: true });
-      await writeFile(shardPath, JSON.stringify(fixture, null, 2), 'utf8');
+      await writeFile(shardPath, originalText, 'utf8');
 
-      // 1. Read normalizes to v6 in memory without corrupting on-disk raw data before mutation
-      const readSnapshot = await repository.read(fixture.workspaceId);
-      assert.equal(readSnapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
-      assert.equal(readSnapshot.workspaceId, fixture.workspaceId);
+      assert.deepEqual(await repository.read(fixture.workspaceId), expected);
+      assert.equal(await readFile(shardPath, 'utf8'), originalText);
+      await assert.rejects(repository.mutate(fixture.workspaceId, (snapshot) => ({
+        result: undefined, snapshot: { ...snapshot, workspaceId: 'wrong_workspace' },
+      })), { code: 'SIDECAR_CORRUPT' });
+      assert.equal(await readFile(shardPath, 'utf8'), originalText, 'failed writes must not upgrade the shard');
 
-      // On-disk file is still the original version until first mutation
-      const rawBeforeMutation = JSON.parse(await readFile(shardPath, 'utf8'));
-      assert.equal(rawBeforeMutation.schemaVersion, version);
-
-      // 2. First mutation triggers migration write to v6
-      await repository.upsertWorktree({
-        workspaceId: fixture.workspaceId,
-        worktreeId: `wt_new_${version}`,
+      const added = {
+        workspaceId: fixture.workspaceId, worktreeId: `wt_new_${version}`,
         absolutePath: path.join(worktreeRoot, `wt_new_${version}`),
-        branch: `feature/new-${version}`,
-        source: 'plugin',
-        status: 'active',
-      });
-
-      // Shard on disk is now migrated to v6 with incremented revision
-      const rawAfterMutation = JSON.parse(await readFile(shardPath, 'utf8'));
-      assert.equal(rawAfterMutation.schemaVersion, SIDECAR_SCHEMA_VERSION);
-      assert.equal(typeof rawAfterMutation.revision, 'string');
-      assert.ok(rawAfterMutation.worktrees.some((w) => w.worktreeId === `wt_new_${version}`));
+        branch: `feature/new-${version}`, source: 'plugin', status: 'active',
+      };
+      await repository.upsertWorktree(added);
+      const written = {
+        ...expected, revision: String(BigInt(expected.revision) + 1n),
+        worktrees: [added, ...expected.worktrees],
+      };
+      assert.deepEqual(JSON.parse(await readFile(shardPath, 'utf8')), written);
+      const restarted = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
+      assert.deepEqual(await restarted.read(fixture.workspaceId), written);
+      const textAfterWrite = await readFile(shardPath, 'utf8');
+      await restarted.upsertWorktree(added);
+      assert.equal(await readFile(shardPath, 'utf8'), textAfterWrite, 'idempotent writes must not bump revision');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
     }
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
-});
+  });
+
+  if (version < 3) continue;
+  test(`disk migration v${version} -> v7 preserves recovery blockers and the interrupted operation journal`, async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), `sidecar-recovery-migration-v${version}-`));
+    try {
+      const repository = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
+      const worktreeRoot = path.join(tempDir, 'clutch-dsh-worktree', 'worktree');
+      const fixture = withGeneratedPaths(createFixture(`ws_pending_v${version}`), worktreeRoot);
+      const expected = expectedV7Snapshot(fixture);
+      const shardPath = repository.getShardPath(fixture.workspaceId);
+      const originalText = JSON.stringify(fixture, null, 2);
+      await mkdir(path.dirname(shardPath), { recursive: true });
+      await writeFile(shardPath, originalText, 'utf8');
+
+      assert.deepEqual(await repository.read(fixture.workspaceId), expected);
+      await assert.rejects(repository.mutate(fixture.workspaceId, (snapshot) => ({
+        result: undefined, snapshot, changed: false,
+      })), { code: 'WORKTREE_RECOVERY_REQUIRED' });
+      assert.equal(await readFile(shardPath, 'utf8'), originalText);
+      // Recovery owns this administrative seam; a format-only write preserves its journal and revision.
+      await repository.runExclusive(fixture.workspaceId, (locked) => locked.mutate((snapshot) => ({
+        result: undefined, snapshot, changed: false,
+      })));
+      assert.deepEqual(JSON.parse(await readFile(shardPath, 'utf8')), expected);
+      const restarted = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
+      assert.deepEqual(await restarted.read(fixture.workspaceId), expected);
+      await assert.rejects(restarted.mutate(fixture.workspaceId, (snapshot) => ({
+        result: undefined, snapshot, changed: false,
+      })), { code: 'WORKTREE_RECOVERY_REQUIRED' });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+}

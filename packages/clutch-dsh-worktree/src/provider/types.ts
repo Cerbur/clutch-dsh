@@ -18,7 +18,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess';
  * corruption rather than guessed or silently migrated.
  */
 export const LEGACY_SIDECAR_SCHEMA_VERSION = 1 as const;
-export const SIDECAR_SCHEMA_VERSION = 6 as const;
+export const SIDECAR_SCHEMA_VERSION = 7 as const;
 
 export interface RepositoryIdentity {
   readonly topLevel: string;
@@ -32,6 +32,8 @@ export type PendingOperationPhase =
   | 'recovery-needed';
 
 export interface CreateWorktreePendingOperation {
+  /** Workspace directory captured before the Git mutation, relative to targetPath's checkout. */
+  readonly workspacePath?: string;
   readonly id: string;
   readonly type: 'create-worktree';
   readonly phase: PendingOperationPhase;

@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import path from 'node:path';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
@@ -58,21 +59,21 @@ export async function cleanWorktreeTransaction(
         if (record.diskCleanup === 'completed') {
           return;
         }
-        if (await samePhysicalPath(record.absolutePath, gitRoot)) {
+        if (await samePhysicalPath(gitWorktreeRoot(record), gitRoot)) {
           throw providerError('WORKTREE_STATE_CONFLICT', 'The main Worktree cannot be cleaned', {
             workspaceId: input.workspaceId,
             worktreeId: input.worktreeId,
-            targetPath: record.absolutePath,
+            targetPath: gitWorktreeRoot(record),
           });
         }
 
         const liveBefore = await dependencies.git.listWorktrees(gitRoot);
-        const exactBefore = await findExactWorktree(liveBefore, record.absolutePath, record.branch);
+        const exactBefore = await findExactWorktree(liveBefore, gitWorktreeRoot(record), record.branch);
         await assertSafeRemovalPath(dependencies, record, input.workspaceRoot);
-        if (await pathEntryMissing(path.join(record.absolutePath, '.git'))) {
+        if (await pathEntryMissing(path.join(gitWorktreeRoot(record), '.git'))) {
           const pathRegistration = await findWorktreeByPhysicalPath(
             liveBefore,
-            record.absolutePath,
+            gitWorktreeRoot(record),
           );
           if (pathRegistration && !exactBefore) {
             throw providerError(
@@ -81,7 +82,7 @@ export async function cleanWorktreeTransaction(
               {
                 workspaceId: input.workspaceId,
                 worktreeId: input.worktreeId,
-                targetPath: record.absolutePath,
+                targetPath: gitWorktreeRoot(record),
               },
             );
           }
@@ -107,11 +108,11 @@ export async function cleanWorktreeTransaction(
         if (!exactBefore) {
           throw providerError(
             'WORKTREE_IDENTITY_CHANGED',
-            `Worktree is not registered in Git: ${record.absolutePath}`,
+            `Worktree is not registered in Git: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }
@@ -131,7 +132,7 @@ export async function cleanWorktreeTransaction(
         });
 
         try {
-          await dependencies.git.removeWorktree(input.workspaceRoot, record.absolutePath);
+          await dependencies.git.removeWorktree(input.workspaceRoot, gitWorktreeRoot(record));
         } catch (error) {
           return reconcileCleanFailure(dependencies, {
             locked,
@@ -150,35 +151,35 @@ export async function cleanWorktreeTransaction(
           liveAfter = await dependencies.git.listWorktrees(gitRoot);
         } catch (inspectionError) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
-          throw recoveryError(`Unable to verify Git after clean: ${record.absolutePath}`, {
+          throw recoveryError(`Unable to verify Git after clean: ${gitWorktreeRoot(record)}`, {
             workspaceId: input.workspaceId,
             operationId: pending.id,
-            targetPath: record.absolutePath,
+            targetPath: gitWorktreeRoot(record),
             cause: String(inspectionError),
           });
         }
-        if (await findExactWorktree(liveAfter, record.absolutePath, record.branch)) {
+        if (await findExactWorktree(liveAfter, gitWorktreeRoot(record), record.branch)) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
           throw recoveryError(
-            `Git remove did not remove the registered Worktree: ${record.absolutePath}`,
+            `Git remove did not remove the registered Worktree: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }
         let targetExists: boolean;
         try {
-          targetExists = await pathExists(record.absolutePath);
+          targetExists = await pathExists(gitWorktreeRoot(record));
         } catch (inspectionError) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
           throw recoveryError(
-            `Unable to verify the cleaned Worktree path: ${record.absolutePath}`,
+            `Unable to verify the cleaned Worktree path: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               operationId: pending.id,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
               cause: String(inspectionError),
             },
           );
@@ -187,11 +188,11 @@ export async function cleanWorktreeTransaction(
           await markRecovery(locked, pending, 'WORKTREE_IDENTITY_CHANGED');
           throw providerError(
             'WORKTREE_IDENTITY_CHANGED',
-            `Worktree path remains after Git removal: ${record.absolutePath}`,
+            `Worktree path remains after Git removal: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }

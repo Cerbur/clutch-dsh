@@ -196,6 +196,17 @@ The accepted branch supplies the Worktree name, and clicking the dashboard title
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
+For nested Workspaces, `absolutePath` includes the original repository-relative directory.
+The optional `gitRootPath` retains the complete checkout identity for Git and disk cleanup; the Client
+does not derive this path from the native Workspace snapshot. New Sessions and Open In use
+`absolutePath`. Git file previews anchor checkout-relative paths at `gitRootPath` (or
+`absolutePath` for root Workspaces), then use DSH's official `fileAddressFor` with the
+current Session's native cwd, falling back to `absolutePath` if the snapshot has no cwd.
+Files inside that cwd receive relative Session addresses; other checkout files retain
+absolute Session addresses and follow native Host file-access checks. Using the native
+cwd also preserves previews for already-bound legacy Sessions whose cwd is the Git root.
+The active-binding action accepts that legacy root when Host physical validation is
+unavailable; blank unbound Session candidates still match only `absolutePath`.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. Main loads the Workspace-root
 HEAD history directly, skips branch-baseline and comparison-summary controls, and caps committed history at 200 commits.
 When the Workspace root has tracked, staged, unstaged, or untracked changes, the history prepends a live

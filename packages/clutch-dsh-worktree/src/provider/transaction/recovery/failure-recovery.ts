@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import type {
   GitWorktreeInfo,
@@ -135,35 +136,35 @@ export async function reconcileRemoveFailure(
   } catch (inspectionError) {
     await markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
     throw recoveryError(
-      `Unable to inspect Git after remove failure: ${options.record.absolutePath}`,
+      `Unable to inspect Git after remove failure: ${gitWorktreeRoot(options.record)}`,
       {
         workspaceId: options.input.workspaceId,
         operationId: options.pending.id,
-        targetPath: options.record.absolutePath,
+        targetPath: gitWorktreeRoot(options.record),
         cause: String(inspectionError),
       },
     );
   }
-  if (await findExactWorktree(live, options.record.absolutePath, options.record.branch)) {
+  if (await findExactWorktree(live, gitWorktreeRoot(options.record), options.record.branch)) {
     await clearPending(options.locked, options.pending.id);
     throw normalizeGitError(
       'remove worktree',
       options.input.workspaceRoot,
-      options.record.absolutePath,
+      gitWorktreeRoot(options.record),
       options.error,
     );
   }
   let targetExists: boolean;
   try {
-    targetExists = await pathExists(options.record.absolutePath);
+    targetExists = await pathExists(gitWorktreeRoot(options.record));
   } catch (inspectionError) {
     await markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
     throw recoveryError(
-      `Unable to inspect the Worktree path after remove failure: ${options.record.absolutePath}`,
+      `Unable to inspect the Worktree path after remove failure: ${gitWorktreeRoot(options.record)}`,
       {
         workspaceId: options.input.workspaceId,
         operationId: options.pending.id,
-        targetPath: options.record.absolutePath,
+        targetPath: gitWorktreeRoot(options.record),
         cause: String(inspectionError),
       },
     );
@@ -179,11 +180,11 @@ export async function reconcileRemoveFailure(
   }
   await markRecovery(options.locked, options.pending, 'WORKTREE_IDENTITY_CHANGED');
   throw recoveryError(
-    `Git remove failed with an unreconciled Worktree: ${options.record.absolutePath}`,
+    `Git remove failed with an unreconciled Worktree: ${gitWorktreeRoot(options.record)}`,
     {
       workspaceId: options.input.workspaceId,
       operationId: options.pending.id,
-      targetPath: options.record.absolutePath,
+      targetPath: gitWorktreeRoot(options.record),
     },
   );
 }
@@ -206,35 +207,35 @@ export async function reconcileCleanFailure(
   } catch (inspectionError) {
     await markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
     throw recoveryError(
-      `Unable to inspect Git after clean failure: ${options.record.absolutePath}`,
+      `Unable to inspect Git after clean failure: ${gitWorktreeRoot(options.record)}`,
       {
         workspaceId: options.input.workspaceId,
         operationId: options.pending.id,
-        targetPath: options.record.absolutePath,
+        targetPath: gitWorktreeRoot(options.record),
         cause: String(inspectionError),
       },
     );
   }
-  if (await findExactWorktree(live, options.record.absolutePath, options.record.branch)) {
+  if (await findExactWorktree(live, gitWorktreeRoot(options.record), options.record.branch)) {
     await clearPending(options.locked, options.pending.id);
     throw normalizeGitError(
       'clean worktree',
       options.input.workspaceRoot,
-      options.record.absolutePath,
+      gitWorktreeRoot(options.record),
       options.error,
     );
   }
   let targetExists: boolean;
   try {
-    targetExists = await pathExists(options.record.absolutePath);
+    targetExists = await pathExists(gitWorktreeRoot(options.record));
   } catch (inspectionError) {
     await markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
     throw recoveryError(
-      `Unable to inspect the Worktree path after clean failure: ${options.record.absolutePath}`,
+      `Unable to inspect the Worktree path after clean failure: ${gitWorktreeRoot(options.record)}`,
       {
         workspaceId: options.input.workspaceId,
         operationId: options.pending.id,
-        targetPath: options.record.absolutePath,
+        targetPath: gitWorktreeRoot(options.record),
         cause: String(inspectionError),
       },
     );
@@ -250,11 +251,11 @@ export async function reconcileCleanFailure(
   }
   await markRecovery(options.locked, options.pending, 'WORKTREE_IDENTITY_CHANGED');
   throw recoveryError(
-    `Git clean failed with an unreconciled Worktree: ${options.record.absolutePath}`,
+    `Git clean failed with an unreconciled Worktree: ${gitWorktreeRoot(options.record)}`,
     {
       workspaceId: options.input.workspaceId,
       operationId: options.pending.id,
-      targetPath: options.record.absolutePath,
+      targetPath: gitWorktreeRoot(options.record),
     },
   );
 }

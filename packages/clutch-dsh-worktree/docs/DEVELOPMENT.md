@@ -49,6 +49,9 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 
 构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。Typert Host 分析通过 `tsconfig.host.json` 将 DSH Client Locale 和 Workspace 的类型导入映射到 `scripts/typert-client-locale-meta.d.ts` 与 `scripts/typert-client-ui-workspace-meta.d.ts`。这些 build-only projection 只描述 Worktree 实际使用的 Context 服务，避免 Host 生成时递归载入 Client UI 的 API-remotes 类型图；普通 Client 类型检查和运行时类型仍使用 DSH 的真实模块，Worktree Client 仍只通过现有 `/api` Connection 通信。
 
+Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-path` 的官方
+`fileAddressFor`。该 browser-safe helper 随 Client bundle 打包，不新增 Host 注入服务。
+
 ### 3.2 将本地插件添加到 DSH Profile
 
 使用绝对路径将构建出的插件包注册至 DSH 的 web profile 中：

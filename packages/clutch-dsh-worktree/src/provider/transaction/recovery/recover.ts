@@ -79,7 +79,8 @@ export async function recoverWorktreeTransaction(
             const record: WorktreeRecord = {
               worktreeId: pending.worktreeId,
               workspaceId: input.workspaceId,
-              absolutePath: pending.targetPath,
+              absolutePath: pending.workspacePath ?? pending.targetPath,
+              ...(pending.workspacePath === undefined || pending.workspacePath === pending.targetPath ? {} : { gitRootPath: pending.targetPath }),
               branch: pending.branch,
               createdAt: pending.startedAt,
               baseBranch: pending.baseRef ?? pending.branch,

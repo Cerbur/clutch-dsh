@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../contract/index.js';
 import type {
   WorktreeLifecycleInput,
   WorktreeRecord,
@@ -95,7 +96,7 @@ export async function unarchiveWorktree(
           candidate.status !== 'active' ||
           candidate.worktreeId === record.worktreeId ||
           (candidate.branch !== record.branch &&
-            !(await samePhysicalPath(candidate.absolutePath, record.absolutePath)))
+            !(await samePhysicalPath(gitWorktreeRoot(candidate), gitWorktreeRoot(record))))
         ) {
           continue;
         }
@@ -105,7 +106,7 @@ export async function unarchiveWorktree(
       if (conflict) {
         throw providerError(
           'WORKTREE_STATE_CONFLICT',
-          `Another active worktree is using branch ${record.branch} or path ${record.absolutePath}`,
+          `Another active worktree is using branch ${record.branch} or path ${gitWorktreeRoot(record)}`,
           {
             workspaceId: input.workspaceId,
             worktreeId: input.worktreeId,
@@ -140,8 +141,8 @@ export async function unarchiveWorktree(
         let foundInGit = false;
         for (const gw of gitWorktrees) {
           if (
-            path.resolve(gw.absolutePath) === path.resolve(record.absolutePath) ||
-            (await samePhysicalPath(gw.absolutePath, record.absolutePath))
+            path.resolve(gw.absolutePath) === path.resolve(gitWorktreeRoot(record)) ||
+            (await samePhysicalPath(gw.absolutePath, gitWorktreeRoot(record)))
           ) {
             foundInGit = true;
             break;

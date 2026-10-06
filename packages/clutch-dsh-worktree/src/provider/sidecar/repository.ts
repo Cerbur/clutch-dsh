@@ -20,6 +20,7 @@ function sameWorktree(left: WorktreeRecord, right: WorktreeRecord): boolean {
     left.worktreeId === right.worktreeId &&
     left.workspaceId === right.workspaceId &&
     left.absolutePath === right.absolutePath &&
+    left.gitRootPath === right.gitRootPath &&
     left.branch === right.branch &&
     left.source === right.source &&
     left.status === right.status &&

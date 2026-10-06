@@ -97,6 +97,15 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
 
+如果 Workspace 位于仓库子目录，其 Worktree 会保留相同的相对目录。例如，位于
+`/repo/packages/app` 的 Workspace 使用 `<worktree-root>/packages/app` 作为新 Session 的
+运行目录、Dashboard 路径、复制地址和打开应用的目标；Git 操作仍针对整个 checkout。
+如果该目录缺失或解析到了 checkout 外部，Worktree 会显示需要修复，不会回退到 Git 根目录，
+也不会自动创建缺失目录。
+
+已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用。Git 文件预览对当前 Session
+cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
+
 ### 导入已有 Worktree
 
 1. 选择 Workspace，打开它的 `+` 操作，然后切换到 **Import**。
@@ -107,6 +116,10 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 第一版只列出尚未被插件管理、状态 ready、绑定 branch 且不是 repository root 的 Git Worktree。
 Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 仍可在选择本地基线 branch 后
 使用 Git 与变更。
+
+导入遵循同样的 Workspace 相对目录规则，只提供该目录可用的候选项。原 Workspace 可用时，
+已有记录会投影为修正后的地址。已有 DSH Session 保留原始元数据；要从修正后的目录运行，
+请创建新的 Session。
 
 ### 创建并打开 Session
 

@@ -231,7 +231,10 @@ export interface WorktreeRecord {
   readonly baseCommit?: string;
   readonly worktreeId: WorktreeId;
   readonly workspaceId: WorkspaceId;
+  /** Workspace working directory inside this checkout; used for cwd, copying, and Open In. */
   readonly absolutePath: string;
+  /** Git checkout root for nested Workspaces. Otherwise absolutePath is also the Git root. */
+  readonly gitRootPath?: string;
   readonly branch: string;
   readonly source: WorktreeSource;
   readonly status: WorktreeStatus;
@@ -250,6 +253,11 @@ export interface WorktreeRecord {
 export interface WorktreeImportCandidate {
   readonly absolutePath: string;
   readonly branch: string;
+}
+
+/** Git identity and disk lifecycle always target the complete checkout. Browser-safe. */
+export function gitWorktreeRoot(record: { readonly absolutePath: string; readonly gitRootPath?: string }): string {
+  return record.gitRootPath ?? record.absolutePath;
 }
 
 /**

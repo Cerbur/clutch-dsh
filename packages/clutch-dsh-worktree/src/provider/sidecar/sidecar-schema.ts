@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { SessionBinding, WorktreeRecord } from '../../contract/index.js';
 import { createRepositoryFingerprint } from '../git/repository-fingerprint.js';
 import { sameLexicalPath } from '../path-identity.js';
+import { gitWorktreeRoot } from '../../contract/index.js';
 import {
   LEGACY_SIDECAR_SCHEMA_VERSION,
   SIDECAR_SCHEMA_VERSION,
@@ -19,6 +20,7 @@ const WORKTREE_KEYS = ['absolutePath', 'branch', 'source', 'status', 'workspaceI
 // Preserve known development-build metadata without accepting arbitrary fields.
 const V4_OPTIONAL_WORKTREE_KEYS = ['diskCleanup', 'instructions', 'createdAt', 'importedAt', 'baseBranch'];
 const V5_OPTIONAL_WORKTREE_KEYS = [...V4_OPTIONAL_WORKTREE_KEYS, 'baseCommit'];
+const V7_OPTIONAL_WORKTREE_KEYS = [...V5_OPTIONAL_WORKTREE_KEYS, 'gitRootPath'];
 const V6_OPTIONAL_SNAPSHOT_KEYS = [
   'mainInstructions',
   'pendingOperation',
@@ -39,12 +41,13 @@ export const SUPPORTED_SIDECAR_SCHEMA_VERSIONS: readonly number[] = [
   4,
   5,
   6,
+  7,
 ];
 
 /** Versions that persist the acquisition metadata group. */
-const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5, 6]);
+const ACQUISITION_METADATA_SCHEMA_VERSIONS = new Set([4, 5, 6, 7]);
 /** Versions that persist the immutable acquisition commit. */
-const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5, 6]);
+const BASE_COMMIT_SCHEMA_VERSIONS = new Set([5, 6, 7]);
 
 function isSupportedSchemaVersion(schemaVersion: number): boolean {
   return SUPPORTED_SIDECAR_SCHEMA_VERSIONS.includes(schemaVersion);
@@ -52,6 +55,7 @@ function isSupportedSchemaVersion(schemaVersion: number): boolean {
 
 /** Optional Worktree keys for one on-disk schema version. */
 function optionalWorktreeKeys(schemaVersion: number): readonly string[] {
+  if (schemaVersion >= 7) return V7_OPTIONAL_WORKTREE_KEYS;
   if (BASE_COMMIT_SCHEMA_VERSIONS.has(schemaVersion)) return V5_OPTIONAL_WORKTREE_KEYS;
   if (ACQUISITION_METADATA_SCHEMA_VERSIONS.has(schemaVersion)) return V4_OPTIONAL_WORKTREE_KEYS;
   return [];
@@ -119,6 +123,9 @@ function assertWorktreeRecord(
     typeof value.workspaceId !== 'string' ||
     typeof value.absolutePath !== 'string' ||
     !path.isAbsolute(value.absolutePath) ||
+    (value.gitRootPath !== undefined &&
+      (typeof value.gitRootPath !== 'string' || !path.isAbsolute(value.gitRootPath) ||
+        !isInside(value.gitRootPath, value.absolutePath))) ||
     typeof value.branch !== 'string' ||
     (value.status !== 'active' && value.status !== 'removed') ||
     (!legacy && value.source !== 'plugin' && value.source !== 'external')
@@ -159,6 +166,11 @@ function assertRepositoryIdentity(value: unknown, pathname: string): asserts val
   ) {
     throw corrupt(pathname, 'invalid repository identity');
   }
+}
+
+function isInside(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 function assertPendingOperation(
@@ -213,11 +225,15 @@ function assertPendingOperation(
         'branch',
         'repository',
         'repositoryFingerprint',
+        ...(schemaVersion >= 7 ? ['workspacePath'] : []),
       ]) ||
       typeof value.branch !== 'string' ||
       (value.baseCommit !== undefined &&
         (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
-      (value.baseRef !== undefined && typeof value.baseRef !== 'string')
+      (value.baseRef !== undefined && typeof value.baseRef !== 'string') ||
+      (value.workspacePath !== undefined &&
+        (typeof value.workspacePath !== 'string' || !path.isAbsolute(value.workspacePath) ||
+          !isInside(value.targetPath, value.workspacePath)))
     ) {
       throw corrupt(pathname, 'invalid create pending operation');
     }
@@ -276,6 +292,10 @@ function normalizeWorktreeRecord(
     ...record,
     source: record.source ?? 'plugin',
   };
+  if (targetVersion < 7) {
+    normalized.absolutePath = gitWorktreeRoot(record);
+    delete normalized.gitRootPath;
+  }
   if (schemaVersion < 4 && targetVersion >= 4 && record.status === 'removed') {
     normalized.diskCleanup = 'completed';
   }
@@ -305,7 +325,7 @@ function assertGeneratedPluginPath(
     throw corrupt(pathname, 'Worktree record has an invalid generated ID');
   }
   const expectedPath = path.resolve(generatedWorktreeRoot, record.worktreeId);
-  if (!sameLexicalPath(record.absolutePath, expectedPath)) {
+  if (!sameLexicalPath(gitWorktreeRoot(record), expectedPath)) {
     throw corrupt(pathname, 'Worktree path is outside the generated DSH Home root');
   }
 }

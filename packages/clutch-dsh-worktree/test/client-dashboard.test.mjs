@@ -1150,6 +1150,23 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   ]);
   bindings.shift();
   sourceState.sessions.ids = ['current'];
+  target = { ...record, absolutePath: record.absolutePath + '/packages/app', gitRootPath: record.absolutePath };
+  sourceState.sessions.byId.current = { cwd: target.absolutePath };
+  render().onOpenFile('packages/app/src/index.ts', { line: 8 });
+  render().onOpenFile('README.md');
+  assert.deepEqual(calls.splice(0), [
+    ['resource', 'dsh-resource://file/session/current/src/index.ts', { line: 8 }],
+    ['resource', 'dsh-resource://file/session/current//tmp/repo%20with%20spaces/%E6%94%AF%E4%BB%98/README.md', undefined],
+  ]);
+  // A legacy binding keeps the original native cwd, so its relative path includes the package prefix.
+  sourceState.sessions.byId.current = { cwd: record.absolutePath };
+  render().onOpenFile('packages/app/src/index.ts');
+  assert.deepEqual(calls.splice(0), [
+    ['resource', 'dsh-resource://file/session/current/packages/app/src/index.ts', undefined],
+  ]);
+  target = record;
+  delete sourceState.sessions.byId.current;
+  props = render();
   props.onCreateWorktree();
   assert.deepEqual(calls.shift(), [
     'creator',

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { WorktreeRecord } from '../../../contract/index.js';
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import type { GitRepositoryInspection, GitWorktreeInfo, SidecarSnapshot } from '../../types.js';
 import { canonicalPath, samePhysicalPath } from './paths.js';
 import type { TransactionDependencies } from '../dependencies.js';
@@ -32,7 +33,7 @@ export async function findActiveBranchConflict(
   if (candidates.length === 0) return undefined;
   const live = await dependencies.git.listWorktrees(gitRoot);
   for (const candidate of candidates) {
-    const actual = await findWorktreeByPhysicalPath(live, candidate.absolutePath);
+    const actual = await findWorktreeByPhysicalPath(live, gitWorktreeRoot(candidate));
     // Only positive evidence of a different live branch releases a stale claim.
     if (!actual || (!actual.detached && (!actual.branch || actual.branch === branch)))
       return candidate;
@@ -67,7 +68,7 @@ export async function findSidecarWorktreeByPhysicalPath(
   targetPath: string,
 ): Promise<WorktreeRecord | undefined> {
   for (const worktree of worktrees) {
-    if (await samePhysicalPath(worktree.absolutePath, targetPath)) return worktree;
+    if (await samePhysicalPath(gitWorktreeRoot(worktree), targetPath)) return worktree;
   }
   return undefined;
 }

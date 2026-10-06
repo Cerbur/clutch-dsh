@@ -1,4 +1,5 @@
 import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { worktreeSetupCommands } from '../../view/worktree-view.js';
 import styles from '../../worktree.css';
@@ -535,7 +536,7 @@ export function WorktreeCleanDiskDialog({
           ? t('worktree.recovery')
           : t('worktree.cleanDiskDescription', {
               name: worktree.branch,
-              path: worktree.absolutePath,
+              path: gitWorktreeRoot(worktree),
             })
       }
       footer={

@@ -31,6 +31,7 @@ export interface WorktreeSessionTarget {
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly absolutePath: string;
+  readonly gitRootPath?: string;
   readonly status: WorktreeStatus;
   readonly health?: WorktreeHealth;
 }
@@ -206,7 +207,9 @@ export function resolveWorktreeSessionAction(
     }
     if (
       summary.cwd === undefined ||
-      (!input.hostValidatesPhysicalPath && !sameWorktreePath(summary.cwd, input.target.absolutePath))
+      (!input.hostValidatesPhysicalPath &&
+        !sameWorktreePath(summary.cwd, input.target.absolutePath) &&
+        (input.target.gitRootPath === undefined || !sameWorktreePath(summary.cwd, input.target.gitRootPath)))
     ) {
       return {
         kind: 'repair',

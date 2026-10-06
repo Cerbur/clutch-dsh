@@ -94,6 +94,33 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 - `plugin`：在插件管理目录（`$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-chars>`）下新建；
 - `external`：登记已存在的独立 Git linked worktree。
 
+### Git 根目录与 Workspace 工作目录
+
+`WorktreeRecord.absolutePath` 是面向 Workspace 的工作目录，供 Session 创建、运行时 cwd、
+Dashboard 显示、复制地址与 Open In 共用。`gitRootPath` 是完整 Git checkout 根目录，仅在
+Workspace 为仓库子目录时保存；缺省时根目录与工作目录相同。Git 身份校验、仓库读取、分支
+恢复、生成路径边界、归档与磁盘清理统一通过 `gitWorktreeRoot(record)` 获取根目录。
+清理确认展示整个 checkout 根目录，避免让用户误以为只会删除子目录。
+
+创建与导入先以 DSH Workspace root 和 Git top-level 的物理路径计算相对目录，再映射到目标
+checkout；不复制或持久化 DSH 原始 root。目标目录不存在时不创建业务文件、不回退到 Git
+根目录，读取 health 投影为 `repair`，绑定和 cwd 解析失败。目录 realpath 必须位于该
+checkout 内；权限和未知 I/O 错误保持 fail closed。
+
+Sidecar v7 接受 v1–v6 历史记录。新子目录记录同时保存工作目录与 Git 根；create journal
+的 `workspacePath` 捕获工作目录，重启恢复沿用获取时的路径。旧记录仅含 Git 根时，在原
+Workspace/Git 可用时按同一规则进行只读路径投影，不自动改写 Sidecar 或 DSH Session；
+mutation token 仍基于持久记录，避免投影变化破坏生命周期门禁。原 Workspace 缺失时维持
+现有只读降级规则。已绑定旧 Session 的原 Git-root cwd 可用于 Host 权限关系校验，但新绑定
+必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
+
+Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
+`gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
+按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
+使用相对地址，其余 checkout 文件使用 Session 作用域的绝对地址，并遵循 Host 原生访问校验。
+这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
+的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
+
 ### 外部导入（External Import）规则
 
 - 导入操作仅在 Sidecar 中建立索引登记，**严禁对外部目录执行移动、复制、文件修改或 Git 变更**。

@@ -220,6 +220,9 @@ importers:
 
   packages/clutch-dsh-worktree:
     dependencies:
+      '@deepseek-ai/dsh-util-workspace-path':
+        specifier: 0.2.0-rc.1
+        version: 0.2.0-rc.1(@deepseek-ai/cordis@4.0.4)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
