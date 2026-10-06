@@ -312,7 +312,7 @@ test('Settings renders contextual explanations, original diagnostics and safe re
   const store = createWorktreeDiagnostics();
   const source = await readFile(new URL('../src/client/settings/WorktreeSettings.tsx', import.meta.url), 'utf8');
   const h = hookHarness(source, {
-    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button' },
+    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button', SegmentedTabs: 'tabs', Tag: 'tag' },
     '../view/worktree-error-copy.js': { formatWorktreeViewError },
     './diagnostics.js': { worktreeDiagnostics: store },
     './settings.css': { default: {} },

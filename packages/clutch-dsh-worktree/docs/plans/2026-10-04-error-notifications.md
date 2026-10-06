@@ -14,6 +14,9 @@ now appear through native Toast, with no top-of-list error panel or diagnostics 
 - Shared Git root causes deduplicate toasts without dropping per-operation diagnostics.
 - Binding wrappers remain neutral so the cause supplies one consistent recovery instruction.
 - Original diagnostics are visible in settings; no DSH logging is claimed.
+- Settings presentation follows native DSH section spacing, hairline card material,
+  SegmentedTabs, Tag and compact Button controls. All section text and controls consume
+  the native body font-size preference; wrapped content stays readable at larger sizes.
 - Retry keeps known Workspace scope and ready content. Git setup guidance remains local.
 - No Provider data model, Sidecar persistence, Session identity, permissions or cleanup gates change.
 

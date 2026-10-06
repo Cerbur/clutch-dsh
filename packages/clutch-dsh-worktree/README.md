@@ -296,6 +296,9 @@ Records stay in page memory and clear on reload. **Clear history** keeps active 
 Dialogs keep input; failed instruction and baseline saves retain drafts. Git setup guidance
 stays in the creation dialog. Matching Git failures share one toast while keeping separate records.
 
+The Worktree settings section uses DSH's native tabs, status tags and compact controls. Its
+text, actions and diagnostic details follow the font size selected in **Settings → General**.
+
 ### Archive or remove a Worktree
 
 - **Archive Worktree** is non-destructive. It keeps the directory, bindings, instructions, and
