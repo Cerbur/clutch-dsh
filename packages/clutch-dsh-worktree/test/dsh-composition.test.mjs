@@ -142,7 +142,8 @@ test('mounts the Host service through the package bundle patch', async () => {
   assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree['"]/);
   assert.match(patch, /dshHome: !!js dshHomePath\(\)/);
   assert.match(patch, /id: permission/);
-  assert.match(patch, /worktree-full-access/);
+  assert.match(patch, /clutchWorktreePermissionPresets/);
+  assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree\/permission-presets['"]/);
 });
 
 test('generates exactly the browser-safe Worktree Remote descriptors', async () => {

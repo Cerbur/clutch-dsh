@@ -311,7 +311,8 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
   使用独立的前置指示器。视觉上的 Session 排序初始按最新的 `updatedAt` 值排列并只保存在浏览器本地；Main 固定为首行，Worktree 拖拽只
   更新这个本地排序投影，Main 拖拽只有在 DSH 接受后才更新原生 Workspace 顺序。
-- active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。它将
+- active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
+  追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
   不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态；它不能突破
   DSH 宿主设置的 sandbox 上限。
