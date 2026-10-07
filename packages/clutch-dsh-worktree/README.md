@@ -99,6 +99,9 @@ visible and clickable even when the New Session action displays keyboard shortcu
 
 ### Create a Worktree
 
+New Worktree actions use the same branch icon as Worktree rows. The Workspace row button appears
+on hover, keyboard focus, or while its options menu is open, matching the menu button.
+
 1. Open the options menu for Local/Main or an active Worktree and choose **Create Worktree**.
 2. Choose the local base branch. You can also provide a new branch name.
 3. Confirm the dialog. The plugin creates the Git Worktree, records its acquisition facts, and
@@ -119,7 +122,7 @@ subject to DSH's native file-access checks.
 
 ### Import an existing Worktree
 
-1. Select a Workspace, open its `+` action, and switch to **Import**.
+1. Select a Workspace, open its branch-icon **New Worktree** action, and switch to **Import**.
 2. Choose a candidate from the branch-and-path list.
 3. Select **Import Worktree**. The plugin registers the existing directory without moving,
    copying, or changing its files, then uses the same Session flow as a created Worktree.
@@ -134,6 +137,8 @@ Workspace is available. Existing DSH Sessions keep their original metadata; crea
 to run from the corrected directory.
 
 ### Create and open Sessions
+
+The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bubble-plus icon.
 
 - Use **+** on Local/Main for a normal DSH Session whose runtime directory is the Workspace root.
 - Use **+** on a Worktree for a Session whose runtime directory is that Worktree.

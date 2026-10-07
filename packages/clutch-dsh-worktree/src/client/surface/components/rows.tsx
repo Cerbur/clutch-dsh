@@ -8,7 +8,7 @@ import {
   IconEllipsisOutline16,
   IconFolderClose16,
   IconFolderOpen16,
-  IconPlusOutline16,
+  IconNewChatOutline16,
   IconRefreshOutline16,
   IconTrashOutline16,
 } from '../../dsh-icons.js';
@@ -285,7 +285,7 @@ export function WorktreeWorkspaceRow({
             onCreateWorktree();
           }}
         >
-          <IconPlusOutline16 />
+          <IconBranchOutline16 />
         </button>
       </span>
     </div>
@@ -433,7 +433,7 @@ export function WorktreeGroupRow({
                       {
                         id: 'create',
                         label: t('worktree.createNew'),
-                        icon: <IconPlusOutline16 />,
+                        icon: <IconBranchOutline16 />,
                         disabled: menu.disabled || menu.onCreateWorktree === undefined,
                       },
                     ]
@@ -552,7 +552,7 @@ export function WorktreeGroupRow({
               onCreateSession();
             }}
           >
-            <IconPlusOutline16 />
+            <IconNewChatOutline16 />
           </button>
         )}
       </span>

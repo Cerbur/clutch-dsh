@@ -904,6 +904,7 @@
   position: absolute;
   top: 0;
   right: 0;
+  visibility: hidden;
 }
 
 /* Worktree actions flow naturally so the rail matches the controls that exist. */
@@ -979,7 +980,10 @@
 
 .workspaceRow:hover .menuAction,
 .workspaceRow[data-menu-open='true'] .menuAction,
-.workspaceRow:focus-within .menuAction {
+.workspaceRow:focus-within .menuAction,
+.workspaceRow:hover [data-add-worktree],
+.workspaceRow[data-menu-open='true'] [data-add-worktree],
+.workspaceRow:focus-within [data-add-worktree] {
   visibility: visible;
 }
 

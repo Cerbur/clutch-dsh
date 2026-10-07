@@ -15,6 +15,7 @@ export const IconEditOutline16 = createDshIconAlias(exports, 'IconEditOutline16'
 export const IconEllipsisOutline16 = createDshIconAlias(exports, 'IconEllipsisOutline16', 'IconEllipsisOutlineRegular');
 export const IconFolderClose16 = createDshIconAlias(exports, 'IconFolderClose16', 'IconFolderCloseRegular');
 export const IconFolderOpen16 = createDshIconAlias(exports, 'IconFolderOpenRegular', 'IconFolderOpen16');
+export const IconNewChatOutline16 = createDshIconAlias(exports, 'IconNewChatOutlineRegular', 'IconNewChatOutline16');
 export const IconTriangleRightFill14 = createDshIconAlias(exports, 'IconTriangleRightFill14', 'IconTriangleRightFillRegular');
 export const IconPanelLeftOutline16 = createDshIconAlias(exports, 'IconPanelLeftOutline16', 'IconPanelLeftOutlineRegular');
 export const IconPlusOutline16 = createDshIconAlias(exports, 'IconPlusOutline16', 'IconPlusOutlineRegular');

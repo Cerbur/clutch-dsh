@@ -521,7 +521,7 @@ The Worktree surface is additive:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
-- Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
+- Workspace, Main and active Worktree rows reserve one aligned trailing action rail. Main and Worktree new Session buttons prefer native `IconNewChatOutlineRegular` (16px), with the legacy size-named export as fallback; Workspace add Worktree and create Worktree menu entries use the same `IconBranchOutline16` as Worktree rows. The Workspace add Worktree button follows the menu button's hover, focus-within, and menu-open visibility;
 - Session rows derive one native-compatible status presentation from the DSH Session snapshot.
   The existing native `StateDot` is reused directly: running, running-subagent, warning, and
   completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use

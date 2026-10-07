@@ -1863,7 +1863,7 @@ test('offers Local and Worktree creation through shared menu parameters', async 
 
   assert.match(rows, /id: 'create'/);
   assert.match(rows, /label: t\('worktree\.createNew'\)/);
-  assert.match(rows, /icon: <IconPlusOutline16 \/>/);
+  assert.match(rows, /icon: <IconBranchOutline16 \/>/);
   assert.match(rows, /menu\.showCreate/);
   assert.match(rows, /if \(id === 'create' && menu\.showCreate\) menu\.onCreateWorktree\?\.\(\)/);
   assert.match(types, /readonly showCreate: boolean;/);

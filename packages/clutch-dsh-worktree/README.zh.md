@@ -94,6 +94,9 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 
 ### 创建 Worktree
 
+新建 Worktree 操作使用与 Worktree 行相同的分支图标。Workspace 行按钮在 hover、键盘聚焦
+或选项菜单打开时显示，与菜单按钮保持一致。
+
 1. 打开 Local/Main 或 active Worktree 的选项菜单，选择 **Create Worktree**。
 2. 选择本地 base branch，也可以填写新的 branch 名称。
 3. 确认弹窗。插件会创建 Git Worktree，记录获取事实；从该 Worktree 打开 Session 时继续执行
@@ -113,7 +116,7 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 
 ### 导入已有 Worktree
 
-1. 选择 Workspace，打开它的 `+` 操作，然后切换到 **Import**。
+1. 选择 Workspace，打开分支图标的 **新建 Worktree** 操作，然后切换到 **Import**。
 2. 从 branch 和 path 列表中选择候选项。
 3. 选择 **Import Worktree**。插件会原地登记已有目录，不移动、复制或修改其中的文件，随后
    使用与新建 Worktree 相同的 Session 流程。
@@ -127,6 +130,8 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 请创建新的 Session。
 
 ### 创建并打开 Session
+
+Local/Main 和 Worktree 行的新建 Session 按钮使用 DSH 原生的气泡加号图标。
 
 - 在 Local/Main 上使用 **+**，创建运行目录为 Workspace root 的普通 DSH Session。
 - 在 Worktree 上使用 **+**，创建运行目录为该 Worktree 的 Session。
