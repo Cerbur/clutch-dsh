@@ -75,7 +75,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 ### 打开 Worktree 模式
 
 Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
-三角标与 DSH 原生一致。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
+三角标与 DSH 原生一致。包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
+Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
 滚动到末尾；移出后恢复起点。启用减少动态效果时会直接显示末尾。
 
 1. 启动 DSH Web，在 DSH Sidebar 底部选择 **Worktree**。

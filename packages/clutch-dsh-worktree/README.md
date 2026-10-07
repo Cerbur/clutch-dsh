@@ -77,7 +77,9 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 ### Open Worktree mode
 
 The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
-and rotating disclosure triangles match native DSH. Hover over a long Session title or Worktree
+and rotating disclosure triangles match native DSH. An expanded Workspace containing the current
+Session uses the native blue folder; other Workspace folders use the native gray. Hover over a long
+Session title or Worktree
 name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
 tail immediately.
 

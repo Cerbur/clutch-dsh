@@ -767,7 +767,11 @@
 }
 
 .workspaceIcon {
-  color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.workspaceIcon[data-workspace-active='true'] {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .workspaceTitle,

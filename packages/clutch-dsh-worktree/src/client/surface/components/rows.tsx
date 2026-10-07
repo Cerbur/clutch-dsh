@@ -149,6 +149,7 @@ export function WorktreeWorkspaceRow({
   t,
   workspace,
   expanded,
+  containsCurrentSession,
   groupActivityStatus,
   actionPending,
   menuOpen,
@@ -224,7 +225,11 @@ export function WorktreeWorkspaceRow({
       >
         <IconTriangleRightFill14 className={styles.disclosureArrow} />
       </button>
-      <span className={styles.workspaceIcon} aria-hidden="true">
+      <span
+        className={styles.workspaceIcon}
+        data-workspace-active={expanded && containsCurrentSession ? 'true' : undefined}
+        aria-hidden="true"
+      >
         {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
       </span>
       <span className={styles.workspaceTitle}>{workspace.title}</span>
