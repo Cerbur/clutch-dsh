@@ -76,6 +76,11 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ### Open Worktree mode
 
+The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
+and rotating disclosure triangles match native DSH. Hover over a long Session title or Worktree
+name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
+tail immediately.
+
 1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
 2. Search or expand a Workspace in the Worktree tree.
 3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native

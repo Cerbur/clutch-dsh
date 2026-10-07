@@ -506,7 +506,9 @@ The Worktree surface is additive:
   Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
   The plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
-- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
+- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable. `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
+- Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. Workspace and Worktree disclosures use the native filled right triangle with a 150ms, 90-degree rotation; reduced motion disables the transition. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
+- Session titles and Worktree names share `useTitleMarquee`, adapted from DSH `ui-workspace/src/client/rows/Rows.tsx` because that hook is private upstream. It ignores overflow of at most 8px, moves at 30px/s with 12px edge fades, holds the tail until pointer leave, then resets immediately. Reduced motion jumps to the tail. Frames are cancelled on pointer leave and unmount; the existing HoverCards still reveal complete values;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - semantic `data-sidebar-collapsed` and zero-width measurements hide the surface on desktop as well as Web; zero never retains the last expanded width;
 - `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
@@ -536,9 +538,9 @@ The Worktree surface is additive:
   limit are applied. At most one native `StateDot` is rendered in the trailing action rail; pending
   interaction warnings (including waiting approval) take priority over running, and running takes
   priority over completed. Idle Sessions do not contribute a group dot. The activity rail reserves
-  28px for the indicator plus a 4px label gap, and a long Worktree label uses the same forward/return
-  scroll loop while a group status remains active. Expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions without starting a competing scroll loop. Main and Worktree share
+  28px for the indicator plus a 4px label gap. Activity alone leaves long labels at rest;
+  pointer hover uses the shared native title marquee. Expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions. Main and Worktree share
   the same parameterized group-row path.
 - The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
   `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.

@@ -246,6 +246,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
       forkRecoveryError: () => ({ code: 'SESSION_BINDING_FAILED', message: '', retryable: true }),
     },
     './WorkspaceTree.js': { WorkspaceTree: 'tree' },
+    './OverlayScrollbar.js': { OverlayScrollbar: 'scrollbar' },
     './NotificationToasts.js': { NotificationToasts: 'notices' },
     '../notification-queue.js': { failureToastKey },
   });

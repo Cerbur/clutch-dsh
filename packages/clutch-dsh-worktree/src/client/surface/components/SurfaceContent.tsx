@@ -116,6 +116,7 @@ type Input = {
 };
 
 import { WorkspaceTree } from './WorkspaceTree.js';
+import { OverlayScrollbar } from './OverlayScrollbar.js';
 import { NotificationToasts } from './NotificationToasts.js';
 import type { WorktreeNotification } from '../notification-queue.js';
 import { failureToastKey } from '../notification-queue.js';
@@ -264,32 +265,38 @@ export function SurfaceContent({
   }
 
   return (
-    <div
-      ref={expansion.contentRef}
-      className={styles.content}
-      tabIndex={0}
-      data-worktree-scrollport
-    >
-      <NotificationToasts notices={notices} />
-      {readState.status === 'loading' && <p className={styles.message}>{t('status.loading')}</p>}
-      {readState.status === 'ready' ? (
-        <WorkspaceTree
-          props={props}
-          read={read}
-          source={source}
-          expansion={expansion}
-          ordering={ordering}
-          drag={drag}
-          mutation={mutation}
-          menus={menus}
-          registration={registration}
-          native={native}
-          lifecycle={lifecycle}
-          session={session}
-          lifecycleState={lifecycleState}
-        />
-      ) : null}
-
+    <div className={styles.scrollFrame}>
+      <div
+        ref={expansion.contentRef}
+        className={styles.content}
+        tabIndex={0}
+        data-worktree-scrollport
+      >
+        <div className={styles.scrollContent}>
+          <NotificationToasts notices={notices} />
+          {readState.status === 'loading' && (
+            <p className={styles.message}>{t('status.loading')}</p>
+          )}
+          {readState.status === 'ready' ? (
+            <WorkspaceTree
+              props={props}
+              read={read}
+              source={source}
+              expansion={expansion}
+              ordering={ordering}
+              drag={drag}
+              mutation={mutation}
+              menus={menus}
+              registration={registration}
+              native={native}
+              lifecycle={lifecycle}
+              session={session}
+              lifecycleState={lifecycleState}
+            />
+          ) : null}
+        </div>
+      </div>
+      <OverlayScrollbar scrollportRef={expansion.contentRef} />
     </div>
   );
 }
