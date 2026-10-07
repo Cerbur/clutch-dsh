@@ -1475,6 +1475,60 @@ test('does not render a plugin WT rail control when the sidebar collapses', asyn
   assert.doesNotMatch(styleSource, /railContent|railButton/);
 });
 
+test('mounts the overlay scrollbar beside a stable full-width scroll content wrapper', async () => {
+  const source = await readFile(
+    new URL('../src/client/surface/components/SurfaceContent.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /<div className=\{styles\.scrollFrame\}>/);
+  assert.match(source, /ref=\{expansion\.contentRef\}[\s\S]*?data-worktree-scrollport/);
+  assert.match(source, /<div className=\{styles\.scrollContent\}>/);
+  assert.match(source, /<OverlayScrollbar scrollportRef=\{expansion\.contentRef\} \/>/);
+});
+
+test('highlights only the expanded Workspace containing the current Session with native tokens', async () => {
+  const [tree, rows, styles] = await Promise.all([
+    readFile(new URL('../src/client/surface/components/WorkspaceTree.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/surface/components/rows.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(
+    tree,
+    /<WorktreeWorkspaceRow\s[\s\S]*?containsCurrentSession=\{\s*currentSessionId !== undefined &&\s*allWorkspaceSessionIds\.includes\(currentSessionId\)\s*\}/,
+  );
+  assert.match(
+    rows,
+    /data-workspace-active=\{expanded && containsCurrentSession \? 'true' : undefined\}/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceIcon\s*\{[^}]*color: var\(--dsw-alias-label-tertiary\);/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceIcon\[data-workspace-active='true'\]\s*\{[^}]*color: var\(--dsw-alias-state-business-primary\);/,
+  );
+});
+
+test('uses native creation icons and reveals Workspace creation with its menu controls', async () => {
+  const [rows, styles] = await Promise.all([
+    readFile(new URL('../src/client/surface/components/rows.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8'),
+  ]);
+  const addWorktree = rows.match(/data-add-worktree[\s\S]*?<\/button>/)?.[0] ?? '';
+  const addSession = rows.match(/onCreateSession\(\);[\s\S]*?<\/button>/)?.[0] ?? '';
+  assert.match(addWorktree, /<IconBranchOutline16 \/>/);
+  assert.match(addSession, /<IconNewChatOutline16 \/>/);
+  assert.match(
+    styles,
+    /\.workspaceActions > \.iconButton:last-child\s*\{[^}]*visibility: hidden;/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceRow:hover \[data-add-worktree\],\s*\.workspaceRow\[data-menu-open='true'\] \[data-add-worktree\],\s*\.workspaceRow:focus-within \[data-add-worktree\]\s*\{\s*visibility: visible;/,
+  );
+});
+
 test('matches native Workspace interaction, typography, and action rail', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');

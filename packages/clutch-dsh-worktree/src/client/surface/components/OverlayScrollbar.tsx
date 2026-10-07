@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import styles from '../../worktree.css';
 
 /** A themed thumb over the native scrollport: the list keeps its full width. */
@@ -28,7 +28,7 @@ export function OverlayScrollbar({
         height,
         range,
         travel,
-        top: range === 0 ? 0 : (scrollport.scrollTop / range) * travel,
+        top: range === 0 ? 0 : Math.min(travel, Math.max(0, (scrollport.scrollTop / range) * travel)),
       });
     };
     const observer = new ResizeObserver(measure);
@@ -41,6 +41,14 @@ export function OverlayScrollbar({
       scrollport.removeEventListener('scroll', measure);
     };
   }, [scrollportRef]);
+
+  const releaseDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+    setDragging(false);
+  };
 
   return (
     <div
@@ -79,13 +87,8 @@ export function OverlayScrollbar({
         scrollport.scrollTop =
           drag.scrollTop + ((event.clientY - drag.y) / geometry.travel) * geometry.range;
       }}
-      onPointerUp={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        dragRef.current = null;
-        setDragging(false);
-      }}
+      onPointerUp={releaseDrag}
+      onPointerCancel={releaseDrag}
       onLostPointerCapture={() => {
         dragRef.current = null;
         setDragging(false);
