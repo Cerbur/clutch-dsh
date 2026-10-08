@@ -1,5 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { registerWorktreeInstructions, type WorktreeInstructionHost } from './worktree-instructions.js';
+import {
+  registerWorktreeInstructions,
+  type WorktreeInstructionHost,
+} from './worktree-instructions.js';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 
 import type {
@@ -23,10 +26,7 @@ import type {
 import type { GitSubprocessRuntime } from '../provider/types.js';
 import { createWorktreeManager } from '../manage/index.js';
 import type { WorktreeManagerService } from '../manage/index.js';
-import {
-  DshHostReadAdapter,
-  type DshHostReadContext,
-} from './dsh-read-adapter.js';
+import { DshHostReadAdapter, type DshHostReadContext } from './dsh-read-adapter.js';
 import type { WorktreeActivitySource } from './worktree-activity.js';
 import { createWorktreeRemoteProjection } from './remote.js';
 import {
@@ -34,7 +34,8 @@ import {
   type DshWorktreePermissionAdapterOptions,
 } from './worktree-permission.js';
 import { createWorktreePermissionManager } from './worktree-permission-manager.js';
-import { registerWorktreeTools, type WorktreeToolSessionPort } from './worktree-tools.js';
+import { registerWorktreeTools } from './worktree-tools.js';
+import { createWorktreeToolSessionPort } from './worktree-tool-session.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 
@@ -97,14 +98,18 @@ export class WorktreeRemoteService extends TypertRemoteService {
     this.manager = manager;
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     // Optional command composition keeps the read-only Provider adapter unchanged.
-    ctx.inject(['commands', 'tools', 'sessionController'], (toolCtx) => {
-      registerWorktreeTools(toolCtx, {
-        manager, dsh,
-        sessions: toolCtx.get('sessionController') as WorktreeToolSessionPort,
-        changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
-        isDisposed: () => disposed,
-      });
-    });
+    ctx.inject(
+      ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm'],
+      (toolCtx) => {
+        registerWorktreeTools(toolCtx, {
+          manager,
+          dsh,
+          sessions: createWorktreeToolSessionPort(toolCtx),
+          changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+          isDisposed: () => disposed,
+        });
+      },
+    );
     registerWorktreeInstructions(
       ctx as unknown as WorktreeInstructionHost,
       (sessionId) => manager.resolveSessionInstructions(sessionId),
@@ -119,9 +124,12 @@ export class WorktreeRemoteService extends TypertRemoteService {
     // a provider instance; older profiles remain loadable and fail closed.
     const permissionAdapter = createDshWorktreePermissionAdapter({
       sessions: {
-        get: (sessionId) => (ctx as unknown as {
-          readonly sessions: { get(id: string): unknown };
-        }).sessions.get(sessionId),
+        get: (sessionId) =>
+          (
+            ctx as unknown as {
+              readonly sessions: { get(id: string): unknown };
+            }
+          ).sessions.get(sessionId),
       },
       get permissionPresets() {
         return ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'];
@@ -198,12 +206,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
+  listWorktreeCommitFiles(
+    input: WorktreeGitCommitFilesRequest,
+  ): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
     return this.remote.listWorktreeCommitFiles(input);
   }
 
   @Remote
-  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
+  getWorktreeCommitFileDiff(
+    input: WorktreeGitFileDiffRequest,
+  ): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
     return this.remote.getWorktreeCommitFileDiff(input);
   }
 

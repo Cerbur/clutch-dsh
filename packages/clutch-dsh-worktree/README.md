@@ -125,28 +125,64 @@ subject to DSH's native file-access checks.
 ### Enable Agent Worktree tools
 
 Run `/worktree` in a Session belonging to a Workspace or an active managed Worktree.
-The command enables these two tools for that Session's running Agent:
+The command enables these eight tools for that Session's running Agent:
 
-| Tool | Parameters | Behavior |
-| --- | --- | --- |
-| `clutch_new_worktree` | `name`, optional `instructions` | Creates a managed Worktree using the Workspace Main's current local branch as the base. The name becomes its new Git branch; optional instructions are shared with its Sessions. |
-| `clutch_span_worktree` | `name`, `prompt` | Creates a fresh native DSH Session in the named active Worktree, binds it, and submits the prompt. Returns after admission, without waiting for the task to finish. |
+| Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local base branches. Defaults to the calling Workspace.                                                                                          |
+| `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
+| `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
+| `clutch_list_sessions`  | optional `workspaceId`, `worktreeId`                               | Finds existing Sessions, binding state, status and title. Unavailable relations return a diagnostic without reading their history.                                                                                                 |
+| `clutch_read_session`   | `sessionId`, optional `afterCursor`                                | Reads status and recent messages without activating the Session. Pass the returned `cursor` for subsequent incremental reads; repeat while `hasMore`.                                                                              |
+| `clutch_send_message`   | `sessionId`, `prompt`, optional `mode`, `requestId`                | Continues an existing Session. `queue` is the default; `steer` corrects at a native step boundary. Returns admission, not a reply.                                                                                                 |
+| `clutch_wait_sessions`  | `sessionIds`, optional `afterCursors`, `timeoutMs`                 | Waits for messages, turn boundaries, errors or user attention in up to eight Sessions. Returns changed targets or a timeout snapshot; defaults to 30 seconds, at most 60 seconds.                                                  |
 
 For example, ask the Agent to call `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`,
-then `clutch_span_worktree({ name: "feature/demo", prompt: "Implement the feature and report the result." })`.
+then `clutch_span_worktree({ worktreeId: created.worktreeId, prompt: "Implement the feature and report the result." })` using the returned Worktree id.
 The tool name is intentionally `clutch_span_worktree`. Worktree names are exact Git branch names
-within the calling Workspace. Creating a Worktree alone does not create a Session.
+within the calling Workspace; prefer stable `worktreeId` for dispatch. Creating a Worktree alone does not create a Session.
+Only committed state is inherited; staged, unstaged and untracked files are not copied.
+An unhealthy binding never silently falls back to Main. The default captures the calling checkout's
+committed HEAD, including a detached root HEAD. Detached sources return `baseCommit` without inventing
+a `baseBranch`; an explicit local `baseBranch` remains available as an override.
+
+Read the dispatched Session with `clutch_read_session({ sessionId })`, then pass its `cursor`
+as `afterCursors[sessionId]` to `clutch_wait_sessions`. Keep each Session's cursor separately.
+Without a cursor, waiting observes from now and returns already inactive or waiting Sessions
+immediately. A read starts with the last 100 events (`historyOmitted` reports an older prefix),
+returns at most 20 relevant entries and 32,000 text code units, and splits long messages into
+8,000-code-unit fragments without skipping text. `idle` means the turn ended; verify the
+reported changes and tests before treating the task as complete. Approval and question states
+require the human's response; these tools do not answer them.
+
+`model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
+effective selection; an unavailable model or effort fails before creating a Session. Initial
+model routing does not save the deployment default. It is runtime-only until DSH records the
+first request header; after that, DSH restores the model from its own history. Restarting before
+that first request discards the initial routing override. Native Session model changes take precedence.
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
-content. Dispatch keeps the current conversation open and uses DSH's normal new-Session model,
-preset, and permission defaults; it does not automatically grant Worktree Full Access or enable
+content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
+preset and permission defaults; it does not automatically grant Worktree Full Access or enable
 these tools in the dispatched Session. Run `/worktree` again after the Agent or plugin restarts.
-No extra command arguments are accepted.
+No extra command arguments are accepted. All discovery, reads and follow-ups are restricted
+to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
+are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
+Detached bindings must be repaired before reading or sending through these tools.
+Healthy archived Worktrees retain their active bindings and allow Session follow-ups;
+a missing Workspace root still blocks message admission.
 
 If saving instructions, binding, or prompt admission fails after creation, the tool returns the
-created identity and an error (`instructionsSaved: false`, `binding-failed`, or `prompt-failed`).
+created identity and an error (`instructionsSaved: false`, `binding-failed`, `model-failed`,
+`title-failed`, or `prompt-failed`).
 The Worktree and native Session are retained. Repair or open the returned Session before retrying;
-another dispatch creates another Session.
+another dispatch creates another Session. After a successful binding/model setup, retry a failed
+prompt with `clutch_send_message` and the returned `requestId`. Reuse a request id only for the
+same message retry; new follow-ups get fresh ids. `clutch_send_message` also returns `prompt-failed`
+with that id when native admission throws, including when acceptance is uncertain.
+Waiting is cancellable and releases its subscriptions
+on cancellation or plugin/Agent unload. There are no automatic merge, publish or disk-cleanup tools.
 
 ### Import an existing Worktree
 

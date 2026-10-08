@@ -1,7 +1,7 @@
 import type { SessionBinding, WorkspaceId } from '../contract/index.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { assertSessionMatchesWorkspace, requireWorkspace, requireWorkspaceForRead, resolveWorktreeWorkspaceRecord } from './manager-support.js';
+import { assertSessionMatchesWorkspace, requireWorkspace, requireWorkspaceForRead, resolveWorktreeWorkspaceRecord, samePhysicalPath } from './manager-support.js';
 
 /** Return active/detached Session relations for one Workspace. */
 export async function listBindings(
@@ -71,6 +71,27 @@ export async function bindSession(
       snapshot: { ...snapshot, bindings: [binding, ...snapshot.bindings] },
     };
   });
+}
+
+/** Capture HEAD only after revalidating native Session ownership and cwd. */
+export async function readSessionHead(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId; readonly sessionId: string },
+): Promise<string> {
+  const cwd = await resolveRuntimeCwd(context, input);
+  const session = await context.dsh.getSession(input.sessionId);
+  if (!session) throw providerError('SESSION_NOT_FOUND', 'Session not found', { sessionId: input.sessionId });
+  const bindings = (await context.sidecar.read(input.workspaceId)).bindings.filter(
+    (binding) => binding.sessionId === input.sessionId,
+  );
+  const owned = session.workspaceId === input.workspaceId ||
+    (session.workspaceId === undefined && bindings.length === 1 && bindings[0].status === 'active');
+  if (session.sessionId !== input.sessionId || !owned || bindings.length > 1 ||
+      !session.cwd || !(await samePhysicalPath(session.cwd, cwd))) {
+    throw providerError('SESSION_CWD_MISMATCH', 'Session ownership or cwd no longer matches', { sessionId: input.sessionId });
+  }
+  if (!context.git.resolveCommit) throw providerError('GIT_OPERATION_FAILED', 'Git HEAD resolution is unavailable', {});
+  return context.git.resolveCommit(cwd, 'HEAD', { signal: context.signal });
 }
 
 /** Derive one execution cwd from the current Workspace and binding projection. */

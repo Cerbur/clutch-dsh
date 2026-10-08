@@ -105,8 +105,14 @@ Host SessionStore 的 Context declaration merge 引入 Client Session 类型图�
 Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
 
 ```bash
-node --test test/worktree-tools.test.mjs test/worktree-tool-changes.test.mjs
+node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs test/worktree-tool-changes.test.mjs
 ```
+
+工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
+使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
+原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
+该运行时覆盖。模型 hook、取消、增量游标、超长回复、跨 Workspace 拒绝和多目标等待均有
+确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
 
 修改代码后，重新构建插件包并重启 DSH：
 

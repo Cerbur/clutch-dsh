@@ -92,16 +92,45 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 ### Agent Worktree 工具接缝
 
 Host 的可选 `commands/tools/sessionController` composition 提供 `/worktree`，
-并在调用 Agent 的独立工具作用域注册 `clutch_new_worktree` 与
-`clutch_span_worktree`。启用状态只存在于运行时，Agent 或插件销毁后移除，
+并在调用 Agent 的独立工具作用域注册创建、Worktree/Session/模型发现、指派、增量读取、
+继续投递与多 Session 等待八个工具。启用状态只存在于运行时，Agent 或插件销毁后移除，
 不写入 DSH Session metadata、事件或 Sidecar。原生 command/tool 生命周期日志由 DSH
 自行记录。未绑定且没有原生 Workspace 归属的 Session 不根据 cwd 猜测 Project。
 
-创建沿用 Manage 的 Git/Sidecar 事务，随后保存可选共享指令。派发通过原生
-`sessionController.create({ cwd })` 创建新 Session，然后 `bindSession`，
-最后 `sessionController.prompt(..., signal)`；不修改已有 Session 或原生
-Workspace 成员表，不自动调整模型、preset 或权限。失败保留已创建实体并返回
-身份及阶段结果，禁止回滚删除 Session。Provider 的 DSH adapter 继续完全只读。
+创建默认基线来自调用 Session 的 active、健康 Worktree 分支；没有 active binding 时，
+必须确认 Session cwd 对应 Workspace 根 checkout。Host-only `readSessionHead` 再次校验
+原生身份与物理 cwd，固定该 checkout 的 HEAD；`createWorktreeAtCommit` 保留此获取 commit。
+显式 `baseBranch` 可覆盖默认值；损坏绑定不回退 Main。Detached 根 checkout 支持从 HEAD
+创建新分支，仅保存 `baseCommit`，不推测分支；事务 journal 的 `baseRef` 使用
+`<full-commit>^{commit}`，恢复时保留没有 Dashboard 分支基线的事实。
+创建沿用 Manage 的 Git/Sidecar 事务，从固定获取 commit 创建新分支，
+避免分支移动导致记录基线与实际起点不同。未提交文件不会复制，随后保存可选共享指令。
+
+派发通过原生 `sessionController.create({ cwd })` 创建普通 Session，然后 `bindSession`。
+模型省略时继承调用 Session 的有效 provider/model/effort，显式模型通过原生目录和 LLM
+resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
+外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
+Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
+覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
+最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
+后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
+Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
+失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
+Provider 的 DSH adapter 继续完全只读；模型、标题、历史及消息接口仅存在于 Host 的独立 port。
+
+所有 Session 读写先校验调用方 Workspace，再通过原生身份、Sidecar binding 与物理 cwd
+确认目标；任意 `workspaceId` 参数不能扩大作用域。Detached、歧义或错配关系不得读取历史或
+投递。列表可返回不可用关系的诊断。Session 列表表达 Workspace/Worktree 成员关系，
+不建立原生 subagent lineage，也不保存委派来源关系或任务状态。
+继续投递始终经过 `resolveRuntimeCwd` 的严格 Workspace 写入门禁；根目录缺失时拒绝 admission。
+健康的已归档 Worktree 保留 active binding，因此已有 Session 可以继续，只有新派发要求 active Worktree。
+
+历史通过原生 `sessionQuery.observeSession` 取得精确只读 cut，不激活冷 Session。
+输出游标绑定 Session id、下一事件 seq、文本偏移和状态水印；大消息分片保持完整文本，
+分页不跳过回复。运行状态、pending inbox、turn/end、审批审计事件及运行时用户问题共同
+形成只读 projection，idle 仅表示 turn 结束。等待先订阅原生 session/event、Agent 状态和错误，
+再读取基线，并以 revision 防止丢失唤醒；没有定时查询。最多八个目标、60 秒，取消与
+Host/调用 Agent fiber 卸载均释放 timer 和 subscriptions。审批与问题只报告状态，不代为作答。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
 20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
@@ -471,7 +500,6 @@ Refresh scope is determined by the smallest affected identity.
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
 - Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件只在当前 Session 属于目标 Worktree 时通过原生 `openResource` 打开并展开 rightbar，不回退到无关 Session。
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
-
 
 ### 错误通知与恢复入口
 

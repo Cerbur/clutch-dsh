@@ -1,4 +1,4 @@
-import type { WorktreeRecord } from '../../../contract/index.js';
+import { isWorktreeGitCommit, type WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
 import type { RecoverWorktreesInput } from '../types.js';
@@ -83,7 +83,9 @@ export async function recoverWorktreeTransaction(
               ...(pending.workspacePath === undefined || pending.workspacePath === pending.targetPath ? {} : { gitRootPath: pending.targetPath }),
               branch: pending.branch,
               createdAt: pending.startedAt,
-              baseBranch: pending.baseRef ?? pending.branch,
+              ...(pending.baseRef?.endsWith('^{commit}') && isWorktreeGitCommit(pending.baseRef.slice(0, -9))
+                ? {}
+                : { baseBranch: pending.baseRef ?? pending.branch }),
               // The journaled acquisition commit is immutable and always wins.
               // Recovery may run long after the interrupted create, so the live
               // Worktree HEAD can already have advanced past the acquisition point.

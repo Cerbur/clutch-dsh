@@ -119,26 +119,60 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 ### 启用 Agent Worktree 工具
 
 在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/worktree`。
-该指令为当前 Session 运行中的 Agent 启用两个工具：
+该指令为当前 Session 运行中的 Agent 启用八个工具：
 
-| 工具 | 参数 | 行为 |
-| --- | --- | --- |
-| `clutch_new_worktree` | `name`、可选 `instructions` | 以 Workspace Main 当前本地分支为基线创建受管 Worktree。名称作为新 Git 分支名；可选指令供其 Session 共享。 |
-| `clutch_span_worktree` | `name`、`prompt` | 在指定 active Worktree 中创建新的原生 DSH Session，建立绑定并提交 prompt。提交被接受后立即返回，不等待任务结束。 |
+| 工具                    | 参数                                                          | 行为                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 所在的健康 Worktree 分支创建新分支；Local/Main 使用根 checkout 当前分支。显式本地 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
+| `clutch_list_worktrees` | 可选 `workspaceId`                                            | 列出受管 Worktree 的 id、分支、路径、生命周期和健康状态，以及可用的本地基线分支。默认查询调用方 Workspace。                                                               |
+| `clutch_span_worktree`  | `worktreeId` 或旧参数 `name`、`prompt`、可选 `model`、`title` | 创建新的原生 Session、建立绑定、配置初始模型并提交 prompt。返回 `sessionId` 和投递阶段状态。                                                                              |
+| `clutch_list_models`    | 可选 `provider`                                               | 列出原生 provider/model、推理强度和 provider 错误，同时返回当前 Session 模型及部署默认模型。                                                                              |
+| `clutch_list_sessions`  | 可选 `workspaceId`、`worktreeId`                              | 查找已有 Session、绑定状态、运行状态和标题。不可用关系仅返回诊断，不读取其历史。                                                                                          |
+| `clutch_read_session`   | `sessionId`、可选 `afterCursor`                               | 不激活 Session，读取状态和最近消息。后续增量读取使用返回的 `cursor`；`hasMore` 为真时继续读取。                                                                           |
+| `clutch_send_message`   | `sessionId`、`prompt`、可选 `mode`、`requestId`               | 继续已有 Session。默认 `queue`；`steer` 在原生 step 边界加入纠正指令。返回接收结果，不返回回复。                                                                          |
+| `clutch_wait_sessions`  | `sessionIds`、可选 `afterCursors`、`timeoutMs`                | 等待最多八个 Session 的消息、turn 边界、错误或需要用户处理的状态。返回变化目标或超时快照；默认 30 秒，最多 60 秒。                                                        |
 
 例如，让 Agent 调用 `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`，
-再调用 `clutch_span_worktree({ name: "feature/demo", prompt: "Implement the feature and report the result." })`。
+再使用返回的 Worktree id 调用 `clutch_span_worktree({ worktreeId: created.worktreeId, prompt: "Implement the feature and report the result." })`。
 工具名按约定保留为 `clutch_span_worktree`。Worktree 名称是调用方 Workspace 内准确的
-Git 分支名。单独创建 Worktree 不会创建 Session。
+Git 分支名；指派时优先使用稳定的 `worktreeId`。单独创建 Worktree 不会创建 Session。
+仅继承已提交状态；不会复制 staged、unstaged 或 untracked 文件。
+绑定不健康时不会悄悄退回 Main。默认固定调用 checkout 的已提交 HEAD，包括根目录的
+detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
+仍可显式指定本地 `baseBranch` 覆盖默认值。
+
+通过 `clutch_read_session({ sessionId })` 读取派发的 Session，再将返回的 `cursor`
+作为 `afterCursors[sessionId]` 传给 `clutch_wait_sessions`。各 Session 分别保存游标。
+不传游标时，从本次观察开始等待；已经不活跃或等待用户的 Session 立即返回。
+首次读取从最后 100 个事件开始（`historyOmitted` 表示省略了更早的前缀），每次最多返回
+20 条相关记录和 32,000 个文本 code units；长消息按 8,000-code-unit 片段拆分，不跳过文本。
+`idle` 只代表当前 turn 已结束；应验证报告的改动和测试，再判断任务是否完成。
+审批和问题状态需要用户回应，这些工具不会代为回答。
+
+`model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
+有效模型选择；模型或推理强度不可用时，在创建 Session 前失败。初始模型路由不会保存部署
+默认模型。在 DSH 记录首个 request header 前，该覆盖仅存在于运行时；之后由 DSH 根据
+自己的历史恢复模型。首个请求前重启会丢失初始路由覆盖。原生 Session 模型切换优先。
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
-派发保留当前对话，使用 DSH 新 Session 的默认模型、preset 和权限；
-不会自动授予 Worktree Full Access，也不会自动为派发的 Session 启用这两个工具。
+派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
+不会自动授予 Worktree Full Access，也不会自动为派发的 Session 启用这些工具。
 Agent 或插件重启后需要重新执行 `/worktree`。指令不接受额外参数。
+所有发现、读取和补充投递仅限调用方 Workspace；传入其他 `workspaceId` 不会获得额外访问权。
+这些 Session 是普通原生 Session，不是原生 subagent 子会话，也没有持久化的委派任务目录。
+Detached 绑定需要先修复，再通过这些工具读取或发送消息。
+健康的已归档 Worktree 保留 active binding，允许继续其 Session；
+Workspace 根目录缺失时仍拒绝消息投递。
 
 若创建后保存指令、绑定或提交 prompt 失败，工具会返回已创建的身份和错误
-（`instructionsSaved: false`、`binding-failed` 或 `prompt-failed`），保留 Worktree 和
-原生 Session。重试前先修复或打开返回的 Session；再次派发会创建另一个 Session。
+（`instructionsSaved: false`、`binding-failed`、`model-failed`、`title-failed` 或
+`prompt-failed`），保留 Worktree 和原生 Session。重试前先修复或打开返回的 Session；
+再次派发会创建另一个 Session。绑定与模型配置成功后，prompt 失败可使用
+`clutch_send_message` 和返回的 `requestId` 重试。仅同一消息的重试复用 request id；
+新补充消息使用新 id。原生 admission 抛错时，`clutch_send_message` 也返回
+`prompt-failed` 并保留该 id，包括无法确定是否已接收的情况。
+等待可取消，并在取消或插件/Agent 卸载时释放订阅。
+没有自动合并、发布或磁盘清理工具。
 
 ### 导入已有 Worktree
 
