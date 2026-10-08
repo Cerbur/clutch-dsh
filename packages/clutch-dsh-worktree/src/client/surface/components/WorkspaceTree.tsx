@@ -248,6 +248,10 @@ export function WorkspaceTree({
                   t={t}
                   workspace={workspace}
                   expanded={expanded}
+                  containsCurrentSession={
+                    currentSessionId !== undefined &&
+                    allWorkspaceSessionIds.includes(currentSessionId)
+                  }
                   groupActivityStatus={workspaceGroupActivityStatus}
                   actionPending={actionPending}
                   menuOpen={openWorkspaceMenuId === workspace.workspaceId}

@@ -197,15 +197,22 @@ pnpm run check:workspace
 # 2. Cordis patch 校验
 pnpm run check:patches
 
-# 3. TypeScript 类型检查
+# 3. ESLint 检查（包含 src 与 test）
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+
+# 4. TypeScript 类型检查
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 
-# 4. 插件包构建
+# 5. 插件包构建
 pnpm --filter @cerbur/clutch-dsh-worktree build
 
-# 5. 单元测试与集成测试
+# 6. 单元测试与集成测试
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+包级 `lint` 使用 `eslint src test`，同时覆盖源码与测试。ESLint error 必须在提交前修复；
+运行测试、构建或 typecheck 不能替代该检查。例如，Node 测试使用 `URL` 时须从 `node:url`
+显式导入，即使 Node 运行时也提供同名全局变量。
 
 ### README 双语结构与格式校验
 

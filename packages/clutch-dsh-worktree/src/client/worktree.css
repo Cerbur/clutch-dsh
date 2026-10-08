@@ -249,11 +249,57 @@
   font-size: 11px;
 }
 
-.content {
+.scrollFrame {
+  position: relative;
   min-height: 0;
   flex: 1;
+}
+
+.content {
+  height: 100%;
+  box-sizing: border-box;
   overflow: auto;
   padding: 0 10px 12px;
+  scrollbar-width: none;
+}
+
+.content::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollContent {
+  min-width: 0;
+  display: flow-root;
+}
+
+/* The themed thumb floats in the existing right inset. Native scrolling
+   stays on .content; OS scrollbar preferences cannot shift the rows. */
+.overlayScrollbar {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 5px;
+  touch-action: none;
+  user-select: none;
+}
+
+.scrollbarThumb {
+  width: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-scrollbar-bg-l2);
+  opacity: 0;
+}
+
+.scrollFrame:hover .scrollbarThumb,
+.scrollFrame:focus-within .scrollbarThumb,
+.overlayScrollbar[data-dragging='true'] .scrollbarThumb {
+  opacity: 1;
+}
+
+.scrollbarThumb:hover,
+.overlayScrollbar[data-dragging='true'] .scrollbarThumb {
+  background: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .content:focus-visible {
@@ -663,6 +709,25 @@
   display: block;
 }
 
+.disclosureArrow {
+  transition: transform 150ms var(--ds-ease-in-out);
+}
+
+.disclosureButton[aria-expanded='true'] .disclosureArrow {
+  transform: rotate(90deg);
+}
+
+.workspaceDisclosure,
+.worktreeDisclosure {
+  color: var(--dsw-alias-label-caption);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosureArrow {
+    transition: none;
+  }
+}
+
 .disclosureButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -702,7 +767,11 @@
 }
 
 .workspaceIcon {
-  color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.workspaceIcon[data-workspace-active='true'] {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .workspaceTitle,
@@ -722,23 +791,34 @@
   font-weight: 600;
 }
 
-/* A collapsed running row keeps one shared scroll container for its label. */
-.worktreeRow[data-group-activity='true'] .worktreeLabel,
-/* Once the action rail is revealed, allow long branch labels to scroll inline. */
-.worktreeRow:hover .worktreeLabel,
-.worktreeRow[data-menu-open='true'] .worktreeLabel,
-.worktreeRow:focus-within .worktreeLabel {
-  overflow-x: auto;
-  overflow-y: hidden;
-  text-overflow: clip;
-  scrollbar-width: none;
+/* Native title reveal: the span clips its own text and scrolls only while
+   hovered. Activity alone keeps the resting ellipsis. */
+@media (hover: hover) {
+  .worktreeRow:hover .worktreeLabel,
+  .treeSessionRow:hover .sessionLabel {
+    text-overflow: clip;
+  }
 }
 
-.worktreeRow[data-group-activity='true'] .worktreeLabel::-webkit-scrollbar,
-.worktreeRow:hover .worktreeLabel::-webkit-scrollbar,
-.worktreeRow[data-menu-open='true'] .worktreeLabel::-webkit-scrollbar,
-.worktreeRow:focus-within .worktreeLabel::-webkit-scrollbar {
-  display: none;
+.worktreeLabel[data-scrolled],
+.sessionLabel[data-scrolled] {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.worktreeLabel[data-clipped],
+.sessionLabel[data-clipped] {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.worktreeLabel[data-scrolled][data-clipped],
+.sessionLabel[data-scrolled][data-clipped] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 12px,
+    #000 calc(100% - 12px),
+    transparent
+  );
 }
 
 .worktreeHoverTitle {
@@ -824,6 +904,7 @@
   position: absolute;
   top: 0;
   right: 0;
+  visibility: hidden;
 }
 
 /* Worktree actions flow naturally so the rail matches the controls that exist. */
@@ -899,7 +980,10 @@
 
 .workspaceRow:hover .menuAction,
 .workspaceRow[data-menu-open='true'] .menuAction,
-.workspaceRow:focus-within .menuAction {
+.workspaceRow:focus-within .menuAction,
+.workspaceRow:hover [data-add-worktree],
+.workspaceRow[data-menu-open='true'] [data-add-worktree],
+.workspaceRow:focus-within [data-add-worktree] {
   visibility: visible;
 }
 

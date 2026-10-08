@@ -248,6 +248,8 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
+  /** Matches native Workspace folder highlighting for the selected Session. */
+  readonly containsCurrentSession?: boolean;
   /** One selected Session status shown when the Workspace row is collapsed. */
   readonly groupActivityStatus?: SessionStatusPresentation;
   readonly actionPending: boolean;

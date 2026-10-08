@@ -2,19 +2,19 @@ import { HoverCard, Menu, StateDot, writeClipboard } from '@deepseek-ai/dsh-clie
 import {
   IconArchiveOutline20,
   IconBranchOutline16,
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
+  IconTriangleRightFill14,
   IconCopyOutline16,
   IconEditOutline16,
   IconEllipsisOutline16,
   IconFolderClose16,
   IconFolderOpen16,
-  IconPlusOutline16,
+  IconNewChatOutline16,
   IconRefreshOutline16,
   IconTrashOutline16,
 } from '../../dsh-icons.js';
 import type { DragEvent as ReactDragEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useTitleMarquee } from '../state/useTitleMarquee.js';
 import { IconDashboard } from '../../dashboard/dashboard-icon.js';
 import {
   isBlankSession,
@@ -35,30 +35,6 @@ import type {
 function rowHalf(event: ReactDragEvent<HTMLElement>): 'before' | 'after' {
   const rect = event.currentTarget.getBoundingClientRect();
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-}
-
-const WORKTREE_LABEL_SCROLL_START_PAUSE_MS = 800;
-const WORKTREE_LABEL_SCROLL_FORWARD_MS = 3_000;
-const WORKTREE_LABEL_SCROLL_END_PAUSE_MS = 1_000;
-const WORKTREE_LABEL_SCROLL_RETURN_MS = 3_000;
-const WORKTREE_LABEL_SCROLL_CYCLE_MS =
-  WORKTREE_LABEL_SCROLL_START_PAUSE_MS +
-  WORKTREE_LABEL_SCROLL_FORWARD_MS +
-  WORKTREE_LABEL_SCROLL_END_PAUSE_MS +
-  WORKTREE_LABEL_SCROLL_RETURN_MS;
-
-function worktreeLabelScrollProgress(elapsedMs: number): number {
-  const elapsed = elapsedMs % WORKTREE_LABEL_SCROLL_CYCLE_MS;
-  const forwardStart = WORKTREE_LABEL_SCROLL_START_PAUSE_MS;
-  const forwardEnd = forwardStart + WORKTREE_LABEL_SCROLL_FORWARD_MS;
-  const returnStart = forwardEnd + WORKTREE_LABEL_SCROLL_END_PAUSE_MS;
-
-  if (elapsed < forwardStart) return 0;
-  if (elapsed < forwardEnd) {
-    return (elapsed - forwardStart) / WORKTREE_LABEL_SCROLL_FORWARD_MS;
-  }
-  if (elapsed < returnStart) return 1;
-  return 1 - (elapsed - returnStart) / WORKTREE_LABEL_SCROLL_RETURN_MS;
 }
 
 function sessionStatusLabel(
@@ -173,6 +149,7 @@ export function WorktreeWorkspaceRow({
   t,
   workspace,
   expanded,
+  containsCurrentSession,
   groupActivityStatus,
   actionPending,
   menuOpen,
@@ -246,13 +223,13 @@ export function WorktreeWorkspaceRow({
           onToggle();
         }}
       >
-        {expanded ? (
-          <IconChevronDownOutline14 size={18} />
-        ) : (
-          <IconChevronRightOutline14 size={18} />
-        )}
+        <IconTriangleRightFill14 className={styles.disclosureArrow} />
       </button>
-      <span className={styles.workspaceIcon} aria-hidden="true">
+      <span
+        className={styles.workspaceIcon}
+        data-workspace-active={expanded && containsCurrentSession ? 'true' : undefined}
+        aria-hidden="true"
+      >
         {expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
       </span>
       <span className={styles.workspaceTitle}>{workspace.title}</span>
@@ -308,7 +285,7 @@ export function WorktreeWorkspaceRow({
             onCreateWorktree();
           }}
         >
-          <IconPlusOutline16 />
+          <IconBranchOutline16 />
         </button>
       </span>
     </div>
@@ -341,74 +318,7 @@ export function WorktreeGroupRow({
   const worktreeStateVisible = stateLabel !== undefined;
   const dashboardActionVisible = showDashboardAction === true && menu?.onDashboard !== undefined;
   const worktreeLabelRef = useRef<HTMLSpanElement>(null);
-  const labelScrollFrameRef = useRef<number | undefined>(undefined);
-  const worktreeLabelPointerInsideRef = useRef<boolean>(false);
-
-  const stopWorktreeLabelScroll = () => {
-    if (labelScrollFrameRef.current !== undefined) {
-      cancelAnimationFrame(labelScrollFrameRef.current);
-      labelScrollFrameRef.current = undefined;
-    }
-    if (worktreeLabelRef.current !== null) {
-      worktreeLabelRef.current.scrollLeft = 0;
-    }
-  };
-
-  const startWorktreeLabelScroll = () => {
-    if (labelScrollFrameRef.current !== undefined) {
-      return;
-    }
-
-    const labelElement = worktreeLabelRef.current;
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (labelElement === null || prefersReducedMotion) {
-      return;
-    }
-
-    const startedAt = performance.now();
-    const animate = (timestamp: number) => {
-      if (worktreeLabelRef.current !== labelElement) {
-        labelScrollFrameRef.current = undefined;
-        return;
-      }
-
-      const maxScrollLeft = Math.max(0, labelElement.scrollWidth - labelElement.clientWidth);
-      if (maxScrollLeft === 0) {
-        labelElement.scrollLeft = 0;
-        labelScrollFrameRef.current = undefined;
-        return;
-      }
-
-      labelElement.scrollLeft = maxScrollLeft * worktreeLabelScrollProgress(timestamp - startedAt);
-      labelScrollFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    labelScrollFrameRef.current = requestAnimationFrame(animate);
-  };
-
-  const syncWorktreeLabelScroll = () => {
-    if (worktreeLabelPointerInsideRef.current || groupActivityVisible) {
-      startWorktreeLabelScroll();
-    } else {
-      stopWorktreeLabelScroll();
-    }
-  };
-
-  useEffect(() => {
-    syncWorktreeLabelScroll();
-  }, [groupActivityVisible, label]);
-
-  useEffect(() => {
-    return () => {
-      if (labelScrollFrameRef.current !== undefined) {
-        cancelAnimationFrame(labelScrollFrameRef.current);
-        labelScrollFrameRef.current = undefined;
-      }
-    };
-  }, []);
+  const marquee = useTitleMarquee(worktreeLabelRef);
 
   const markerClass =
     drag?.marker === 'before'
@@ -451,14 +361,8 @@ export function WorktreeGroupRow({
       data-worktree-drag={drag?.active ? 'active' : undefined}
       {...dragProps}
       onClick={onToggle}
-      onMouseEnter={() => {
-        worktreeLabelPointerInsideRef.current = true;
-        syncWorktreeLabelScroll();
-      }}
-      onMouseLeave={() => {
-        worktreeLabelPointerInsideRef.current = false;
-        syncWorktreeLabelScroll();
-      }}
+      onPointerEnter={marquee.enter}
+      onPointerLeave={marquee.leave}
     >
       <button
         type="button"
@@ -470,11 +374,7 @@ export function WorktreeGroupRow({
           onToggle();
         }}
       >
-        {expanded ? (
-          <IconChevronDownOutline14 size={18} />
-        ) : (
-          <IconChevronRightOutline14 size={18} />
-        )}
+        <IconTriangleRightFill14 className={styles.disclosureArrow} />
       </button>
       <span className={styles.worktreeIcon} data-worktree-state={state} aria-hidden="true">
         {icon}
@@ -533,7 +433,7 @@ export function WorktreeGroupRow({
                       {
                         id: 'create',
                         label: t('worktree.createNew'),
-                        icon: <IconPlusOutline16 />,
+                        icon: <IconBranchOutline16 />,
                         disabled: menu.disabled || menu.onCreateWorktree === undefined,
                       },
                     ]
@@ -652,7 +552,7 @@ export function WorktreeGroupRow({
               onCreateSession();
             }}
           >
-            <IconPlusOutline16 />
+            <IconNewChatOutline16 />
           </button>
         )}
       </span>
@@ -701,6 +601,8 @@ export function WorktreeSessionRow({
   presentation,
 }: WorktreeSessionRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const marquee = useTitleMarquee(titleRef);
   const markerClass =
     drag.marker === 'before' ? styles.dropBefore : drag.marker === 'after' ? styles.dropAfter : '';
   const sessionMenuItems = [
@@ -751,6 +653,8 @@ export function WorktreeSessionRow({
       data-menu-open={menuOpen || undefined}
       role="treeitem"
       aria-current={current ? 'true' : undefined}
+      onPointerEnter={marquee.enter}
+      onPointerLeave={marquee.leave}
       draggable
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
@@ -771,7 +675,9 @@ export function WorktreeSessionRow({
       }}
     >
       <button type="button" className={styles.treeSessionContent} onClick={onOpen}>
-        <span className={styles.sessionLabel}>{label}</span>
+        <span ref={titleRef} className={styles.sessionLabel}>
+          {label}
+        </span>
       </button>
       {!blank && (
         <span className={styles.sessionTrailing}>

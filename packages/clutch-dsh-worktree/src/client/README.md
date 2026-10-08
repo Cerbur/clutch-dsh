@@ -506,7 +506,10 @@ The Worktree surface is additive:
   Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
   The plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
-- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
+- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable. `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
+  Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
+- Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 150ms, 90-degree rotation; reduced motion disables the transition. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
+- Session titles and Worktree names share `useTitleMarquee`, adapted from DSH `ui-workspace/src/client/rows/Rows.tsx` because that hook is private upstream. It ignores overflow of at most 8px, moves at 30px/s with 12px edge fades, holds the tail until pointer leave, then resets immediately. Reduced motion jumps to the tail. Frames are cancelled on pointer leave and unmount; the existing HoverCards still reveal complete values;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - semantic `data-sidebar-collapsed` and zero-width measurements hide the surface on desktop as well as Web; zero never retains the last expanded width;
 - `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
@@ -519,7 +522,7 @@ The Worktree surface is additive:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
-- Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
+- Workspace, Main and active Worktree rows reserve one aligned trailing action rail. Main and Worktree new Session buttons prefer native `IconNewChatOutlineRegular` (16px), with the legacy size-named export as fallback; Workspace add Worktree and create Worktree menu entries use the same `IconBranchOutline16` as Worktree rows. The Workspace add Worktree button follows the menu button's hover, focus-within, and menu-open visibility;
 - Session rows derive one native-compatible status presentation from the DSH Session snapshot.
   The existing native `StateDot` is reused directly: running, running-subagent, warning, and
   completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use
@@ -536,9 +539,9 @@ The Worktree surface is additive:
   limit are applied. At most one native `StateDot` is rendered in the trailing action rail; pending
   interaction warnings (including waiting approval) take priority over running, and running takes
   priority over completed. Idle Sessions do not contribute a group dot. The activity rail reserves
-  28px for the indicator plus a 4px label gap, and a long Worktree label uses the same forward/return
-  scroll loop while a group status remains active. Expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions without starting a competing scroll loop. Main and Worktree share
+  28px for the indicator plus a 4px label gap. Activity alone leaves long labels at rest;
+  pointer hover uses the shared native title marquee. Expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions. Main and Worktree share
   the same parameterized group-row path.
 - The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
   `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.

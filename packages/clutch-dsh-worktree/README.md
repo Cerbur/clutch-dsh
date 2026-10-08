@@ -76,6 +76,13 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ### Open Worktree mode
 
+The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
+and rotating disclosure triangles match native DSH. An expanded Workspace containing the current
+Session uses the native blue folder; other Workspace folders use the native gray. Hover over a long
+Session title or Worktree
+name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
+tail immediately.
+
 1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
 2. Search or expand a Workspace in the Worktree tree.
 3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native
@@ -91,6 +98,9 @@ On Web, Worktree navigation starts below the native DSH brand row, leaving its S
 visible and clickable even when the New Session action displays keyboard shortcuts.
 
 ### Create a Worktree
+
+New Worktree actions use the same branch icon as Worktree rows. The Workspace row button appears
+on hover, keyboard focus, or while its options menu is open, matching the menu button.
 
 1. Open the options menu for Local/Main or an active Worktree and choose **Create Worktree**.
 2. Choose the local base branch. You can also provide a new branch name.
@@ -112,7 +122,7 @@ subject to DSH's native file-access checks.
 
 ### Import an existing Worktree
 
-1. Select a Workspace, open its `+` action, and switch to **Import**.
+1. Select a Workspace, open its branch-icon **New Worktree** action, and switch to **Import**.
 2. Choose a candidate from the branch-and-path list.
 3. Select **Import Worktree**. The plugin registers the existing directory without moving,
    copying, or changing its files, then uses the same Session flow as a created Worktree.
@@ -127,6 +137,8 @@ Workspace is available. Existing DSH Sessions keep their original metadata; crea
 to run from the corrected directory.
 
 ### Create and open Sessions
+
+The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bubble-plus icon.
 
 - Use **+** on Local/Main for a normal DSH Session whose runtime directory is the Workspace root.
 - Use **+** on a Worktree for a Session whose runtime directory is that Worktree.
@@ -400,10 +412,13 @@ For architecture, local DSH integration, testing, and contribution details, see:
 The focused package commands are:
 
 ```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+Lint checks both source and test files. Resolve ESLint errors before committing.
 
 The bilingual README structure is checked with:
 

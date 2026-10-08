@@ -74,6 +74,11 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ### 打开 Worktree 模式
 
+Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
+三角标与 DSH 原生一致。包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
+Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
+滚动到末尾；移出后恢复起点。启用减少动态效果时会直接显示末尾。
+
 1. 启动 DSH Web，在 DSH Sidebar 底部选择 **Worktree**。
 2. 在 Worktree 树中搜索或展开 Workspace。
 3. 选择 Local/Main 或某个 Worktree 浏览其 Session。这个视角是附加的，DSH 原生的 Workspace
@@ -88,6 +93,9 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 新会话按钮显示快捷键时也不会遮挡顶部栏。
 
 ### 创建 Worktree
+
+新建 Worktree 操作使用与 Worktree 行相同的分支图标。Workspace 行按钮在 hover、键盘聚焦
+或选项菜单打开时显示，与菜单按钮保持一致。
 
 1. 打开 Local/Main 或 active Worktree 的选项菜单，选择 **Create Worktree**。
 2. 选择本地 base branch，也可以填写新的 branch 名称。
@@ -108,7 +116,7 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 
 ### 导入已有 Worktree
 
-1. 选择 Workspace，打开它的 `+` 操作，然后切换到 **Import**。
+1. 选择 Workspace，打开分支图标的 **新建 Worktree** 操作，然后切换到 **Import**。
 2. 从 branch 和 path 列表中选择候选项。
 3. 选择 **Import Worktree**。插件会原地登记已有目录，不移动、复制或修改其中的文件，随后
    使用与新建 Worktree 相同的 Session 流程。
@@ -122,6 +130,8 @@ Detached、bare、prunable、缺失或无效条目会被省略。导入的 Workt
 请创建新的 Session。
 
 ### 创建并打开 Session
+
+Local/Main 和 Worktree 行的新建 Session 按钮使用 DSH 原生的气泡加号图标。
 
 - 在 Local/Main 上使用 **+**，创建运行目录为 Workspace root 的普通 DSH Session。
 - 在 Worktree 上使用 **+**，创建运行目录为该 Worktree 的 Session。
@@ -343,10 +353,13 @@ Worktree 模式跟随 DSH 当前界面语言。入口、树、菜单、弹窗、
 常用的 package 检查命令：
 
 ```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+Lint 同时检查源码与测试文件。提交前必须修复 ESLint error。
 
 中英文 README 的结构通过以下测试校验：
 
