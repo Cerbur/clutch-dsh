@@ -110,19 +110,26 @@ pnpm run check:workspace
 # 2. Cordis patch 检查
 pnpm run check:patches
 
-# 3. 本包 TypeScript 类型检查
+# 3. 本包 ESLint 检查（包含 src 与 test）
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+
+# 4. 本包 TypeScript 类型检查
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 
-# 4. 本包构建
+# 5. 本包构建
 pnpm --filter @cerbur/clutch-dsh-worktree build
 
-# 5. 本包全量单元/集成测试
+# 6. 本包全量单元/集成测试
 pnpm --filter @cerbur/clutch-dsh-worktree test
 
-# 6. README 双语结构校验
+# 7. README 双语结构校验
 cd packages/clutch-dsh-worktree
 node --test test/readme-parity.test.mjs
 ```
+
+ESLint 是提交前独立必过的门禁，覆盖源码和测试文件；测试、构建或 typecheck 通过不能替代 lint。
+所有 ESLint error 必须在提交前修复。Node 测试中使用 `URL` 时须显式从 `node:url` 导入，
+避免运行时测试通过却仍触发 ESLint 的 `no-undef` 报错。
 
 ---
 

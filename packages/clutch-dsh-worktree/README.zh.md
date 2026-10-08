@@ -353,10 +353,13 @@ Worktree 模式跟随 DSH 当前界面语言。入口、树、菜单、弹窗、
 常用的 package 检查命令：
 
 ```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+Lint 同时检查源码与测试文件。提交前必须修复 ESLint error。
 
 中英文 README 的结构通过以下测试校验：
 

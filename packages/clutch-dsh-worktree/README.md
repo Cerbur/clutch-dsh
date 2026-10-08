@@ -412,10 +412,13 @@ For architecture, local DSH integration, testing, and contribution details, see:
 The focused package commands are:
 
 ```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 pnpm --filter @cerbur/clutch-dsh-worktree build
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+Lint checks both source and test files. Resolve ESLint errors before committing.
 
 The bilingual README structure is checked with:
 
