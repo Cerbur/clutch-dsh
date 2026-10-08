@@ -325,6 +325,17 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 
 ## 10. 权限与安全边界 (Permissions & Security)
 
+- **权限列表追加与生命周期**：
+  `cordis.patch.yml` 不再覆盖 `permission.config`。同包的 `./permission-presets` Host
+  入口注册全局 `internal/config` hook，且仅匹配原生 `permission` entry 的 root fiber
+  与 `@deepseek-ai/dsh-permission-presets` 模块名。`clutchWorktreePermissionPresets` 注入门禁
+  保证首次权限服务激活前 hook 已就绪。hook 在 Loader 表达式解析后读取原生 schema 的
+  默认表，构造只追加 `worktree-full-access` 的新 config，保留其余原始字段与已有同名项，
+  不写 Loader 原始配置或 profile 文件；热重载重新追加，fiber 卸载时撤销 hook 与门禁。
+  bundle 移除时重新解析仍存活的原生权限 fiber；旧 Loader 若残留已撤销的注入依赖，
+  仅删除插件自己的运行时门禁，保留 DSH 静态依赖与原始 entry options。贡献自身 HMR 时，
+  配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
+  官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
 - **Worktree Full Access 预设**：
   为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
 - **权限降级与回退**：

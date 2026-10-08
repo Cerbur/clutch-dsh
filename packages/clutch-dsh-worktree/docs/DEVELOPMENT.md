@@ -58,6 +58,12 @@ Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-p
 
 ### 3.2 将本地插件添加到 DSH Profile
 
+bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
+`internal/config` hook 在原生权限 entry 激活前追加 Worktree preset，不替换
+`permission.config`、不复制内置表、不修改官方 Auto review 注册。`--dump-config`
+展示保留的原始权限配置与注入门禁；追加项在运行时 config 中生效。验证权限集成时，应同时
+检查自定义 presets/defaultPreset 保留、Auto review 共存、热重载不重复和卸载撤销。
+
 使用绝对路径将构建出的插件包注册至 DSH 的 web profile 中：
 
 ```bash

@@ -376,8 +376,9 @@ text, actions and diagnostic details follow the font size selected in **Settings
   remains browser-local; Main remains fixed first, Worktree drag updates only this local order projection,
   and Main drag updates native Workspace order only after DSH accepts it.
 - Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
-  confirmation. It combines DSH `danger-full-access` with `ask`, keeps approval prompts enabled,
-  and does not change network or process policy. If unavailable, the plugin falls back to
+  confirmation. The plugin appends this preset while preserving DSH's existing presets, default
+  selection, and official Auto review integration. It combines DSH `danger-full-access` with `ask`,
+  keeps approval prompts enabled, and does not change network or process policy. If unavailable, the plugin falls back to
   `workspace-write + ask` when possible or reports an unverified, retryable state. It cannot
   exceed the sandbox imposed by the host running DSH.
 - Session-to-Worktree bindings and permission checks compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
