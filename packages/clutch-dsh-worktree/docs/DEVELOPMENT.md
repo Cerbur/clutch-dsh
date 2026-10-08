@@ -220,6 +220,27 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 运行测试、构建或 typecheck 不能替代该检查。例如，Node 测试使用 `URL` 时须从 `node:url`
 显式导入，即使 Node 运行时也提供同名全局变量。
 
+### Session 完成提醒回归
+
+完成提醒测试必须跨越真实原生状态 owner，不能只给旧 summary 填 `completed=true`。
+`test/client-native-session-status.test.mjs` 加载已安装的 UiSession Client handoff，使用真实
+Cordis Context、snapshot store 与 SlotRegistry root source，触发 `api-session/status` 和
+mainView retention 的 list 回放，再执行生产 Surface hook 与行/Dashboard JSX。平台 widget 和
+DOM geometry 使用 browser-free adapter；hook scheduler 保留订阅与 memo 依赖，status-only
+用例不更换 `byId`，不靠强制重渲染掩盖缺失订阅。
+
+在 monorepo 根构建，再在包目录运行紧反馈回归：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree build
+cd packages/clutch-dsh-worktree
+node --test test/client-native-session-status.test.mjs
+```
+
+覆盖非当前完成、打开/再次运行清除、冷启动 idle、pending 优先级、折叠 Worktree/Workspace、
+Dashboard、legacy fallback 以及 catalog-only lineage。没有 `dev:web` watcher 时，本地 build
+不会自动更新已运行的生产 GUI；测试回放不表示已部署，不应为验证此回归修改生产 profile 或重启生产。
+
 ### README 双语结构与格式校验
 
 插件包含自动化测试以保证中英文 README 结构严格对齐：

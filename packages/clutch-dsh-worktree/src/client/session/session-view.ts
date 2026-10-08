@@ -18,6 +18,16 @@ export interface SessionSummaryLike {
 
 export type PendingInteractionStatus = 'approval' | 'plan-review' | 'question';
 
+/** Read-only native UiSession facts; completion ownership stays with DSH. */
+export type SessionStatusSnapshotLike = ReadonlyMap<
+  string,
+  {
+    readonly running: boolean | undefined;
+    readonly pendingInteraction: { readonly kind: string } | undefined;
+    readonly completionUnread: boolean;
+  }
+>;
+
 export type SessionStatusState = 'warning' | 'ongoing' | 'done';
 
 export type SessionStatusLabelKey =
@@ -167,29 +177,45 @@ function toLineageSummary(sessionId: string, summary: SessionSummaryLike): Linea
   };
 }
 
-/** Derive row and group activity facts from one retained DSH Session snapshot. */
+/**
+ * Derive one ephemeral row/group projection. An available native status source
+ * owns pending/completion facts, even for absent entries; legacy summary fields
+ * are used only when that source is unavailable. Never infer completion from idle.
+ */
 export function deriveSessionPresentationIndex(
   sessions: Pick<SessionListLike, 'byId'>,
+  sessionStatuses?: SessionStatusSnapshotLike,
 ): Readonly<Record<string, SessionPresentation>> {
+  const statusFacts = (sessionId: string, summary: SessionSummaryLike) => {
+    if (sessionStatuses === undefined) return summary;
+    const native = sessionStatuses.get(sessionId);
+    const kind = native?.pendingInteraction?.kind;
+    return {
+      running: native?.running ?? summary.running,
+      pendingInteraction: isPendingInteractionStatus(kind) ? kind : undefined,
+      completed: native?.completionUnread === true,
+    };
+  };
   const lineageSummaries = Object.fromEntries(
     Object.entries(sessions.byId).map(([sessionId, summary]) => [
       sessionId,
-      toLineageSummary(sessionId, summary),
+      toLineageSummary(sessionId, { ...summary, running: statusFacts(sessionId, summary).running }),
     ]),
   ) as Record<string, LineageSummary>;
   const descendants = indexSubagentDescendants(lineageSummaries);
   return Object.fromEntries(
     Object.entries(sessions.byId).map(([sessionId, summary]) => {
       const runningSubagentCount = descendants.get(sessionId)?.runningCount ?? 0;
-      const status = sessionStatus(summary, runningSubagentCount);
+      const facts = statusFacts(sessionId, summary);
+      const status = sessionStatus(facts, runningSubagentCount);
       return [
         sessionId,
         {
           status,
-          running: summary.running === true,
-          ongoing: summary.running === true || runningSubagentCount > 0,
+          running: facts.running === true,
+          ongoing: facts.running === true || runningSubagentCount > 0,
           runningSubagentCount,
-          completed: summary.completed === true,
+          completed: facts.completed === true,
           ...(validUpdatedAt(summary.updatedAt) ? { updatedAt: summary.updatedAt } : {}),
         },
       ];
@@ -264,9 +290,7 @@ export function aggregateSessionStatus(
 
   if (pending !== undefined) return pending;
   if (ongoing !== undefined) return ongoing;
-  return completed
-    ? { state: 'done', labelKey: 'completed', runningSubagentCount: 0 }
-    : undefined;
+  return completed ? { state: 'done', labelKey: 'completed', runningSubagentCount: 0 } : undefined;
 }
 
 /** Read the native blank flag without inferring blankness from title or id. */

@@ -368,7 +368,11 @@ text, actions and diagnostic details follow the font size selected in **Settings
   and untracked files when requested but are never written back to Git. The Dashboard does not provide
   commit, staging, reset, revert, cherry-pick, fetch, push, pull, pull requests, graph lanes, pagination,
   or syntax highlighting.
-- Session rows use DSH's native status and relative-time presentation. Collapsed Workspace, Main,
+- Session rows and Dashboard cards use DSH's native status and relative-time presentation. The green
+  completion dot is DSH's unread reminder for a Session that stops outside the current main view;
+  opening that Session or running it again clears the reminder. A cold-start idle Session does not
+  count as completed. The reminder remains DSH-owned and is not persisted by this plugin.
+  Collapsed Workspace, Main,
   and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
   approval (and other pending-interaction warnings) takes priority over running, and running
   takes priority over completed. Idle Sessions do not contribute a group dot; Worktree health

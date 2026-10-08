@@ -417,7 +417,16 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 状态指示与活动聚合 (StateDot & Aggregate Activity)
 
-- 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核与已完成等状态；
+- Session 身份、标题与 lineage 读取原生 list；运行、pending interaction 对象的 `kind` 与
+  `completionUnread` 通过独立的 `useSessionStatus` root hook 只读接入。UiSession 是完成未读的
+  唯一 owner：非 mainView 观察到停止时产生，打开/再次运行时清除；插件仅派生瞬时呈现，禁止复制到
+  plugin store、原生 list 或 sidecar，禁止以 `running=false` 推断完成。冷启动 idle 不产生完成提醒。
+- 只有 root hook 不存在的 legacy graph 才读取旧 summary 的 `pendingInteraction` / `completed`；
+  原生 status Map 存在但条目缺失时不回退旧提醒。Surface 同时订阅 list 与 status，memo 依赖
+  `byId` 与 status Map 身份；同一投影用于 Sidebar 行、折叠聚合和 Dashboard，不要求 list 更新。
+- `subagentCatalog` 由原生 Controller 投影成包含 catalog-only children 的 `byId` lineage，
+  插件复用既有关系并优先从 status 读取 child running，不新建 catalog 请求或完成状态 owner。
+- 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核、问题与完成未读等状态；
 - 当 Workspace、Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他 pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。
 
 ### Shell Overlay 呈现
