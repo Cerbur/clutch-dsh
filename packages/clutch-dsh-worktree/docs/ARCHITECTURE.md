@@ -336,6 +336,14 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
   仅删除插件自己的运行时门禁，保留 DSH 静态依赖与原始 entry options。贡献自身 HMR 时，
   配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
   官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
+- **Host 可选权限能力生命周期**：
+  `permissionPresets` 与 `sandboxPolicy` 不加入 required inject；旧 profile 缺少服务时 Host
+  仍可加载。Host 通过 adapter options getter 在每次权限调用时读取所属 Cordis Context 的
+  当前能力，而非在构造时捕获对象。权限 manager 完成 Workspace、binding 与物理 cwd 校验
+  后才进入 adapter；迟挂载、撤销、替换及恢复后的重试均读取当下 provider，不调用已卸载实例。
+  同一个 adapter 保留本运行期的权限所有权记录，不能因 provider 替换清掉用户降权证据。
+  Full Access 仍需显式确认；确认期间服务失效时第二次调用 fail closed 并保持可恢复。
+  这不修改原生 preset/default/Auto catalog、Session 身份或 Sidecar。
 - **Worktree Full Access 预设**：
   为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
 - **权限降级与回退**：

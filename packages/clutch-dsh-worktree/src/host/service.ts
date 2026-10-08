@@ -100,24 +100,21 @@ export class WorktreeRemoteService extends TypertRemoteService {
       () => () => this.manager.close(),
       'clutch-dsh-worktree: Host manager cleanup',
     );
-    // Permission presets are an optional DSH capability. Read them through a
-    // structural seam so an older profile can still mount this plugin and
-    // report `unverified` instead of failing during composition.
-    const optionalServices: Pick<
-      DshWorktreePermissionAdapterOptions,
-      'permissionPresets' | 'sandboxPolicy'
-    > = {
-      permissionPresets: ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'],
-      sandboxPolicy: ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'],
-    };
+    // Optional capabilities can mount late, disappear or be replaced without
+    // remounting this Host. Read the owning Context at call time, never capture
+    // a provider instance; older profiles remain loadable and fail closed.
     const permissionAdapter = createDshWorktreePermissionAdapter({
       sessions: {
         get: (sessionId) => (ctx as unknown as {
           readonly sessions: { get(id: string): unknown };
         }).sessions.get(sessionId),
       },
-      permissionPresets: optionalServices.permissionPresets,
-      sandboxPolicy: optionalServices.sandboxPolicy,
+      get permissionPresets() {
+        return ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'];
+      },
+      get sandboxPolicy() {
+        return ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'];
+      },
     });
     this.remote = createWorktreeRemoteProjection(
       manager,

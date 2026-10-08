@@ -324,8 +324,9 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
   追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
-  不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态；它不能突破
-  DSH 宿主设置的 sandbox 上限。
+  不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
+  可以迟挂载或被替换：重试使用当前可用能力，不需要重启 Worktree Host。服务暂时缺失时
+  绝不授予 Full Access，并保留用户的显式限制；它不能突破 DSH 宿主设置的 sandbox 上限。
 - Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
