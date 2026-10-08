@@ -108,6 +108,11 @@ Agent 工具启用状态属于当前运行时，重启后需重新执行指令�
 node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs test/worktree-tool-changes.test.mjs
 ```
 
+工具实现集中在 `src/tool/`，每个工具一个文件，随主 package 通过 TypeScript 正常构建。
+原生命令入口与 `systemPrompt.assemble({ scope: agent })` 集成测试验证全部八个工具进入
+模型请求。若运行中 `/worktree` 仍返回只列出两个工具的旧文案，应在重新构建后重载或
+重启 DSH Host，再重新启用；页面刷新无法替换服务端已载入的模块。
+
 工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
 使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
 原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去

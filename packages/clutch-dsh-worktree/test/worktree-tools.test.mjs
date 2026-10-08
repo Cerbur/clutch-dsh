@@ -10,10 +10,11 @@ import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
 import Commands from '@deepseek-ai/dsh-commands';
 import Tools from '@deepseek-ai/dsh-tools';
-import { registerWorktreeTools } from '../lib/host/worktree-tools.js';
+import { registerWorktreeTools } from '../lib/tool/index.js';
 import { createWorktreeManager } from '../lib/manage/index.js';
+import { samePhysicalPath } from '../lib/provider/path-identity.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
-import { readToolSession } from '../lib/host/worktree-tool-history.js';
+import { readToolSession } from '../lib/tool/index.js';
 import { setTimeout } from 'node:timers';
 
 const requireTools = createRequire(import.meta.resolve('@deepseek-ai/dsh-tools'));
@@ -138,6 +139,7 @@ async function fixture(t, overrides = {}) {
   const fiber = await ctx.inject(['commands', 'tools'], (inner) => {
     registerWorktreeTools(inner, {
       manager,
+      samePhysicalPath,
       sessions,
       dsh,
       changed: (...ids) => calls.push(['changed', ...ids]),
@@ -215,6 +217,58 @@ test('/worktree registers eight tools only for the receiving Session and cleans 
   assert.equal(f.ctx.tools.schemas(f.agent).length, 8);
   await f.fiber.dispose();
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
+});
+
+test('native /worktree execution names all eight tools and adds them to model prompt assembly', async (t) => {
+  const f = await fixture(t);
+  const events = [];
+  f.agent.session.append = (type, data) => {
+    const event = { seq: events.length, time: 1, type, data };
+    events.push(event);
+    return event;
+  };
+  const before = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  assert.deepEqual(before.tools, []);
+  const executed = await f.ctx.commands.execute(f.agent, '/worktree', [], f.signal);
+  assert.equal(executed.result.kind, 'success');
+  const expected = [
+    'clutch_new_worktree',
+    'clutch_list_worktrees',
+    'clutch_span_worktree',
+    'clutch_list_models',
+    'clutch_list_sessions',
+    'clutch_read_session',
+    'clutch_send_message',
+    'clutch_wait_sessions',
+  ].sort();
+  for (const name of expected) assert.ok(executed.result.text.includes(name), executed.result.text);
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  assert.deepEqual(assembly.tools.map((tool) => tool.name).sort(), expected);
+  assert.deepEqual((await f.ctx.systemPrompt.assemble({ scope: f.other })).tools, []);
+  assert.deepEqual(
+    events.map((event) => event.type),
+    ['command/run', 'command/done'],
+  );
+});
+
+test('/worktree reports registration failure and rolls back partial tools before allowing a retry', async (t) => {
+  const f = await fixture(t);
+  const prototype = Object.getPrototypeOf(f.ctx.tools);
+  const register = prototype.register;
+  let fail = true;
+  prototype.register = function (definition) {
+    if (fail && definition.name === 'clutch_list_models')
+      throw new Error('Tool registration failed');
+    return register.call(this, definition);
+  };
+  t.after(() => {
+    prototype.register = register;
+  });
+  await assert.rejects(f.enable(), /Tool registration failed/);
+  assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
+  fail = false;
+  assert.equal((await f.enable()).kind, 'success');
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 8);
 });
 
 test('creates a managed branch, saves optional instructions, and publishes only its owning identities', async (t) => {

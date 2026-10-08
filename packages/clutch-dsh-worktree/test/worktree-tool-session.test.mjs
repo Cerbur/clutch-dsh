@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { createWorktreeToolSessionPort } from '../lib/host/worktree-tool-session.js';
+import { createWorktreeToolSessionPort } from '../lib/tool/native-session.js';
 
 const requireSession = createRequire(
   import.meta.resolve('@deepseek-ai/dsh-api-session-controller'),

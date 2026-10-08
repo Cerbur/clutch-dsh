@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import type { ToolSessionEvent, ToolSessionSnapshot } from './worktree-tool-session.js';
+import type { ToolSessionEvent, ToolSessionSnapshot } from './native-session.js';
 
 const TEXT_CHUNK = 8000;
 const TEXT_BUDGET = 32000;

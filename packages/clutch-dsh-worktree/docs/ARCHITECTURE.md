@@ -36,6 +36,11 @@ contract  ←  provider
 - **`src/host/`**：
   DSH 服务端组合根（Composition Root）。负责组装 DSH 真实读取适配器与 Manage，创建并通过 Typert Gateway 暴露 `WorktreeRemoteService`。
   向 Cordis 注册生命周期回调以确保资源清理。
+- **`src/tool/`**：
+  Host 使用的内部工具模块。八个工具各在一个文件中定义输入、输出、描述与 handler；
+  `index.ts` 负责命令与注册生命周期，`context.ts` 共享身份校验和 Workspace 作用域，
+  `native-session.ts` 与 `history.ts` 负责原生 Session 接缝与有界历史读取。
+  复用 contract、Manage 和 Provider 的事实与物理路径端口；Provider 不得反向依赖此模块。
 - **`src/client/`**：
   浏览器端消费者（Browser Consumer）。仅通过 DSH 原生客户端连接（`/api` Connection）与 contract 接口调用 Host 能力。
   负责 Worktree 模式视图模型、UI 交互、本地展开状态与 Shell Overlay 呈现。保持 browser-safe，严禁执行 Git 或直接读取 Sidecar 文件。

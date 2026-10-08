@@ -118,6 +118,11 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 
 ### 启用 Agent Worktree 工具
 
+工具集中在 `src/tool/`，每个工具一个文件。成功激活会列出全部八个工具。
+若 `/worktree` 仍显示 `Enabled clutch_new_worktree and clutch_span_worktree for this conversation.`，
+运行中的 Host 载入了旧的两个工具版本。重新构建插件、重载或重启 DSH Host，再执行
+`/worktree`；仅刷新浏览器不会重载 Host 模块。
+
 在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/worktree`。
 该指令为当前 Session 运行中的 Agent 启用八个工具：
 

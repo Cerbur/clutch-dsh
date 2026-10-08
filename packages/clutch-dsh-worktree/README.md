@@ -124,6 +124,11 @@ subject to DSH's native file-access checks.
 
 ### Enable Agent Worktree tools
 
+The tools live in `src/tool/`, with one file per tool. Successful activation names all eight tools.
+If `/worktree` still reports `Enabled clutch_new_worktree and clutch_span_worktree for this conversation.`,
+the running Host has loaded the older two-tool build. Rebuild the plugin, reload or restart the DSH
+Host, then run `/worktree` again. A browser refresh alone does not reload Host modules.
+
 Run `/worktree` in a Session belonging to a Workspace or an active managed Worktree.
 The command enables these eight tools for that Session's running Agent:
 

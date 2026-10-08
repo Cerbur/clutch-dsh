@@ -25,6 +25,13 @@ declaration merging into the Client Session Context graph. Tests exercise real D
 
 ## Delegation behavior (2026-10-09 amendment)
 
+The internal `src/tool/` module owns the tools, with one file per tool containing its input,
+output, description and handler. Shared context, native Session access and bounded history
+reads stay in adjacent helper files; Host only composes it. Native command execution and model
+prompt assembly verify all eight tools. Activation names them explicitly; the legacy two-tool
+success text identifies an older Host build still loaded in memory, which requires Host
+reload/restart after rebuilding.
+
 1. `/worktree` validates native Workspace membership or exactly one active Sidecar binding.
    Unknown ownership is rejected; cwd alone never establishes Project identity.
 2. It enables eight tools: `clutch_new_worktree`, `clutch_list_worktrees`,

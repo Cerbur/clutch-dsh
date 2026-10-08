@@ -24,6 +24,7 @@ import type {
   WorktreeRemoteResult,
 } from '../contract/index.js';
 import type { GitSubprocessRuntime } from '../provider/types.js';
+import { samePhysicalPath } from '../provider/path-identity.js';
 import { createWorktreeManager } from '../manage/index.js';
 import type { WorktreeManagerService } from '../manage/index.js';
 import { DshHostReadAdapter, type DshHostReadContext } from './dsh-read-adapter.js';
@@ -34,8 +35,7 @@ import {
   type DshWorktreePermissionAdapterOptions,
 } from './worktree-permission.js';
 import { createWorktreePermissionManager } from './worktree-permission-manager.js';
-import { registerWorktreeTools } from './worktree-tools.js';
-import { createWorktreeToolSessionPort } from './worktree-tool-session.js';
+import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 
@@ -103,6 +103,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
       (toolCtx) => {
         registerWorktreeTools(toolCtx, {
           manager,
+          samePhysicalPath,
           dsh,
           sessions: createWorktreeToolSessionPort(toolCtx),
           changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
