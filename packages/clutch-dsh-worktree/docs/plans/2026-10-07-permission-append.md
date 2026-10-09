@@ -21,3 +21,12 @@ Validation covers the actual Include patch and Loader activation, custom default
 schema defaults, Auto-style runtime registration, hot reload, removal, identity scoping
 and duplicate prevention. Also run the package's required workspace, patch, typecheck,
 build, full test and README parity checks; verify the real local DSH Auto service separately.
+
+## Follow-up: Host capability lifetime and actual HMR seam
+
+The contribution hook is unchanged. The confirmed defect is the Worktree Host's
+construction-time capture of optional permission services, not a demonstrated hook
+failure. See [permission lifecycle evidence](2026-10-07-permission-lifecycle.md) for
+the real Host red/green regression and the opt-in file-watcher/module-cache HMR
+experiment. An isolated green HMR seam does not establish production profile or
+browser correctness, and does not update the running GUI.

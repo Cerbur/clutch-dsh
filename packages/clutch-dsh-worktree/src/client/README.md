@@ -25,7 +25,10 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   refresh scopes, Session/Workspace data, or the transport graph.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
-  acknowledgement, and fails pending requests closed when the Client fiber is disposed.
+  acknowledgement, and fails pending requests closed when the Client fiber is disposed. The Host
+  resolves optional permission capabilities on each invocation, including the confirmed second call:
+  provider revocation reports unverified/retryable without using an old setter, and recovery/retry
+  retains explicit user restrictions. This controller coverage does not validate DOM/portal rendering.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 

@@ -110,6 +110,31 @@ pnpm dsh web
 
 > **提示：** 若修改了 `package.json`、`cordis.patch.yml` 或 profile bundle 成员，需重新执行一次 `pnpm dsh plugin --profile web add ...`。
 
+Host 的可选权限服务通过调用时 Context getter 读取。权限 provider 迟挂载、撤销或替换
+不要求重启 Worktree Host；服务恢复后重试仍需经过原有绑定检查与显式确认。普通
+fiber restart / Entry.update 测试不等于文件 watcher/module-graph HMR。
+
+权限生命周期定向回归（先构建本包）：
+
+```bash
+node --test test/host-permission-lifecycle.test.mjs test/permission-preset-append.test.mjs
+```
+
+可选真实 HMR 接缝实验需要现有、兼容的 Cordis/Loader/Timer/HMR node_modules 图与
+支持 `--expose-internals` 的 Node（已用 Node 24 验证）：
+
+```bash
+node --expose-internals test/manual/permission-preset-hmr.mjs /absolute/path/to/existing/node_modules
+```
+
+该实验只读取所指定的已安装模块，写入并清理自己创建的临时 fixture 包及链接；不启动
+DSH/GUI，不修改任何现有安装链接或 profile。它使用本包真实子入口 export、贡献实现、
+实际 HMR watcher 和 Node module cache，并连接真实 Host 构造函数与确认 controller；
+native permission/Auto 和外围 I/O 仍是 fixture。已验证 Cordis 4.0.2 / Loader 1.0.3 /
+HMR 1.0.17 的 10 轮贡献与 native 重载、服务替换及卸载；不代表生产完整 profile 或
+DOM 验证。无匹配 watcher、没有重建或生产安装指向另一工作区时，本分支 build 不会更新
+当前 GUI。证据与限制见 [权限生命周期计划](plans/2026-10-07-permission-lifecycle.md)。
+
 ### 3.4 卸载本地插件
 
 ```bash
