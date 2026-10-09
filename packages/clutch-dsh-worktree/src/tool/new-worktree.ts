@@ -6,9 +6,19 @@ import { defaultBase, errorText } from './context.js';
 
 const newArgs = z
   .object({
-    name: text,
-    baseBranch: text.optional(),
-    instructions: z.string().max(32000).optional(),
+    name: text.describe(
+      'Required NEW Git branch name, for example feature/demo; not a path or existing Worktree id.',
+    ),
+    baseBranch: text
+      .optional()
+      .describe(
+        'Existing local branch override. Omit to inherit the caller checkout’s committed HEAD; do not assume main.',
+      ),
+    instructions: z
+      .string()
+      .max(32000)
+      .optional()
+      .describe('Optional shared instructions saved for this Worktree; max 32000 characters.'),
   })
   .strict();
 
@@ -28,6 +38,7 @@ export function registerNewWorktree(context: ToolContext): void {
         baseCommit: output.string,
         instructionsSaved: output.boolean,
         error: output.string,
+        correction: output.string,
       },
       ['workspaceId', 'worktreeId', 'name', 'absolutePath', 'instructionsSaved'],
     ),
@@ -62,7 +73,8 @@ export function registerNewWorktree(context: ToolContext): void {
             expectedInstructions: '',
           });
       } catch (cause) {
-        error = errorText(cause);
+        exec.signal.throwIfAborted();
+        error = errorText(cause).slice(0, 700);
       }
       options.changed(workspaceId, record.worktreeId);
       return {
@@ -73,7 +85,13 @@ export function registerNewWorktree(context: ToolContext): void {
         baseBranch: record.baseBranch,
         baseCommit: record.baseCommit,
         instructionsSaved: error === undefined,
-        ...(error === undefined ? {} : { error }),
+        ...(error === undefined
+          ? {}
+          : {
+              error,
+              correction:
+                'The Worktree already exists. Save its instructions through Worktree management using this worktreeId; do not create the branch again.',
+            }),
       };
     },
   );

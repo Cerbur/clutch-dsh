@@ -4,7 +4,15 @@ import * as output from './outputs.js';
 import { authorize, errorText } from './context.js';
 import { latestToolSessionCursor, readToolSession } from './history.js';
 
-const listSessionsArgs = workspace.extend({ worktreeId: text.optional() }).strict();
+const listSessionsArgs = workspace
+  .extend({
+    worktreeId: text
+      .optional()
+      .describe(
+        'Optional stable Worktree id from new/list. Prefer this filter when locating a task’s Sessions.',
+      ),
+  })
+  .strict();
 
 export function registerListSessions(context: ToolContext): void {
   const { add, options, check, scope } = context;
@@ -24,7 +32,6 @@ export function registerListSessions(context: ToolContext): void {
               cwd: output.string,
               status: output.string,
               title: output.string,
-              cursor: output.string,
               diagnostic: output.string,
             },
             ['sessionId', 'bindingStatus', 'status'],
@@ -57,6 +64,21 @@ export function registerListSessions(context: ToolContext): void {
         const binding = bindings.find((item) => item.sessionId === session.sessionId);
         try {
           await authorize(session.sessionId, workspaceId, options);
+          const snapshot = await options.sessions.snapshot(session.sessionId, exec.signal);
+          check(exec);
+          const value = readToolSession(
+            session.sessionId,
+            snapshot,
+            latestToolSessionCursor(session.sessionId, snapshot),
+          );
+          items.push({
+            sessionId: session.sessionId,
+            worktreeId: binding?.worktreeId,
+            bindingStatus: binding?.status ?? 'main',
+            cwd: session.cwd,
+            status: value.status,
+            title: typeof snapshot.values.title === 'string' ? snapshot.values.title : undefined,
+          });
         } catch (error) {
           check(exec);
           items.push({
@@ -64,25 +86,10 @@ export function registerListSessions(context: ToolContext): void {
             worktreeId: binding?.worktreeId,
             bindingStatus: binding?.status ?? 'main',
             status: 'unavailable',
-            diagnostic: errorText(error),
+            diagnostic: `Cannot inspect this Session: ${errorText(error).slice(0, 500)}. Other Sessions remain available. Repair this Session in DSH; do not repeatedly query the whole list to retry its history migration.`,
           });
           continue;
         }
-        const snapshot = await options.sessions.snapshot(session.sessionId, exec.signal);
-        const value = readToolSession(
-          session.sessionId,
-          snapshot,
-          latestToolSessionCursor(session.sessionId, snapshot),
-        );
-        items.push({
-          sessionId: session.sessionId,
-          worktreeId: binding?.worktreeId,
-          bindingStatus: binding?.status ?? 'main',
-          cwd: session.cwd,
-          status: value.status,
-          title: typeof snapshot.values.title === 'string' ? snapshot.values.title : undefined,
-          cursor: value.cursor,
-        });
       }
       return { workspaceId, sessions: items };
     },

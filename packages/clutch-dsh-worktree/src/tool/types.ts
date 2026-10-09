@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { z } from 'zod';
 import type { WorktreeToolSessionPort } from './native-session.js';
-import type { readToolSession } from './history.js';
 import type { WorktreeManagerService } from '../manage/index.js';
 import type { DshReadAdapter } from '../provider/types.js';
 export type { WorktreeRecord } from '../contract/index.js';
@@ -46,13 +45,10 @@ export interface ToolDefinition {
 export interface ToolContext {
   agent: CallingAgent;
   options: Options;
+  parentSessionId?: string;
+  enableChild?: (sessionId: string, exec: Execution) => Promise<void>;
   check(exec: Execution): void;
   scope(requested?: string): Promise<string>;
-  read(
-    sessionId: string,
-    afterCursor: string | undefined,
-    exec: Execution,
-  ): Promise<{ workspaceId: string } & ReturnType<typeof readToolSession>>;
   add<Schema extends z.ZodType>(
     name: string,
     description: string,

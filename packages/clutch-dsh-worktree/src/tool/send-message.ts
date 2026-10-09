@@ -7,10 +7,22 @@ import { authorize, errorText } from './context.js';
 import { randomUUID } from 'node:crypto';
 const sendArgs = z
   .object({
-    sessionId: text,
+    sessionId: text.describe(
+      'Exact native Session id returned by clutch_span_worktree or clutch_list_sessions; not a Worktree id or path.',
+    ),
     prompt,
-    mode: z.enum(['queue', 'steer']).default('queue'),
-    requestId: text.max(200).optional(),
+    mode: z
+      .enum(['queue', 'steer'])
+      .default('queue')
+      .describe(
+        'queue adds the message after the current turn; steer corrects work at the next step boundary. Omit for queue.',
+      ),
+    requestId: text
+      .max(200)
+      .optional()
+      .describe(
+        'Omit for a new message. Reuse a returned id only to retry the identical prompt after uncertain admission.',
+      ),
   })
   .strict();
 
@@ -28,6 +40,7 @@ export function registerSendMessage(context: ToolContext): void {
         accepted: { const: true, type: 'boolean' },
         status: { type: 'string', enum: ['admitted', 'prompt-failed'] },
         error: output.string,
+        correction: output.string,
         mode: { type: 'string', enum: ['queue', 'steer'] },
       },
       ['workspaceId', 'sessionId', 'requestId', 'status', 'mode'],
@@ -52,7 +65,14 @@ export function registerSendMessage(context: ToolContext): void {
       } catch (error) {
         // Admission may already have committed. Keep its retry identity
         // so native deduplication, not a new message, resolves uncertainty.
-        return { ...identity, status: 'prompt-failed', error: errorText(error) };
+        exec.signal.throwIfAborted();
+        return {
+          ...identity,
+          status: 'prompt-failed',
+          error: errorText(error).slice(0, 700),
+          correction:
+            'Admission may have succeeded. Retry the identical prompt using this sessionId and returned requestId; do not create another Session or use a fresh id.',
+        };
       }
     },
   );

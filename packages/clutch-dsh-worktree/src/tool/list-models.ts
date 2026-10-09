@@ -3,7 +3,15 @@ import type { ToolContext } from './context.js';
 import { text } from './inputs.js';
 import * as output from './outputs.js';
 
-const listModelsArgs = z.object({ provider: text.optional() }).strict();
+const listModelsArgs = z
+  .object({
+    provider: text
+      .optional()
+      .describe(
+        'Optional exact provider group id. Omit to discover available providers; not a model id or display name.',
+      ),
+  })
+  .strict();
 
 export function registerListModels(context: ToolContext): void {
   const { add, agent, options, check, scope } = context;

@@ -98,8 +98,8 @@ pnpm dsh web --port 3088 --no-open
 
 ### 3.3 开发迭代与重载
 
-`/worktree` 的可选 Host 接缝需要原生 `commands`、`tools` 与
-`sessionController` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
+`/worktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
+`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
 真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将
 Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
 Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
@@ -109,14 +109,14 @@ node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs tes
 ```
 
 工具实现集中在 `src/tool/`，每个工具一个文件，随主 package 通过 TypeScript 正常构建。
-原生命令入口与 `systemPrompt.assemble({ scope: agent })` 集成测试验证全部八个工具进入
-模型请求。若运行中 `/worktree` 仍返回只列出两个工具的旧文案，应在重新构建后重载或
+原生命令入口与 `systemPrompt.assemble({ scope: agent })` 集成测试验证调用方六个工具及执行方回报工具进入
+模型请求，并验证普通任务委派指导的作用域。若运行中 `/worktree` 仍返回只列出两个工具的旧文案，应在重新构建后重载或
 重启 DSH Host，再重新启用；页面刷新无法替换服务端已载入的模块。
 
 工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
 使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
 原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
-该运行时覆盖。模型 hook、取消、增量游标、超长回复、跨 Workspace 拒绝和多目标等待均有
+该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
 确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
 
 修改代码后，重新构建插件包并重启 DSH：

@@ -1,5 +1,4 @@
-import type { CallingAgent, Execution, Options, ToolContext, WorktreeRecord } from './types.js';
-import { readToolSession } from './history.js';
+import type { CallingAgent, Options, ToolContext, WorktreeRecord } from './types.js';
 export type { ToolContext } from './types.js';
 export const errorText = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -119,13 +118,5 @@ export function createToolContext(
       throw new Error('Workspace is outside the calling Session scope');
     return workspaceId;
   };
-  const read = async (sessionId: string, afterCursor: string | undefined, exec: Execution) => {
-    const workspaceId = await scope();
-    await authorize(sessionId, workspaceId, options);
-    check(exec);
-    const snapshot = await options.sessions.snapshot(sessionId, exec.signal);
-    check(exec);
-    return { workspaceId, ...readToolSession(sessionId, snapshot, afterCursor) };
-  };
-  return { agent, options, check, add, scope, read };
+  return { agent, options, check, add, scope };
 }

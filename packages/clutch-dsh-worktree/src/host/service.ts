@@ -99,7 +99,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     // Optional command composition keeps the read-only Provider adapter unchanged.
     ctx.inject(
-      ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm'],
+      ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
       (toolCtx) => {
         registerWorktreeTools(toolCtx, {
           manager,

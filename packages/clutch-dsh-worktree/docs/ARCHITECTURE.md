@@ -37,9 +37,9 @@ contract  ←  provider
   DSH 服务端组合根（Composition Root）。负责组装 DSH 真实读取适配器与 Manage，创建并通过 Typert Gateway 暴露 `WorktreeRemoteService`。
   向 Cordis 注册生命周期回调以确保资源清理。
 - **`src/tool/`**：
-  Host 使用的内部工具模块。八个工具各在一个文件中定义输入、输出、描述与 handler；
+  Host 使用的内部工具模块。六个委派工具与一个执行方回报工具各在一个文件中定义输入、输出、描述与 handler；
   `index.ts` 负责命令与注册生命周期，`context.ts` 共享身份校验和 Workspace 作用域，
-  `native-session.ts` 与 `history.ts` 负责原生 Session 接缝与有界历史读取。
+  `native-session.ts` 与 `history.ts` 负责原生 Session 接缝与只读状态投影。
   复用 contract、Manage 和 Provider 的事实与物理路径端口；Provider 不得反向依赖此模块。
 - **`src/client/`**：
   浏览器端消费者（Browser Consumer）。仅通过 DSH 原生客户端连接（`/api` Connection）与 contract 接口调用 Host 能力。
@@ -96,9 +96,9 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ### Agent Worktree 工具接缝
 
-Host 的可选 `commands/tools/sessionController` composition 提供 `/worktree`，
-并在调用 Agent 的独立工具作用域注册创建、Worktree/Session/模型发现、指派、增量读取、
-继续投递与多 Session 等待八个工具。启用状态只存在于运行时，Agent 或插件销毁后移除，
+Host 的可选 `commands/tools/sessionController/sessionQuery/agents/llm/systemPrompt` composition
+提供 `/worktree`，在调用 Agent 的独立作用域注册创建、Worktree/Session/模型发现、指派和
+继续投递六个工具，并通过原生 `systemPrompt.section` 注入跨调用委派指导。启用状态只存在于运行时，Agent 或插件销毁后移除，
 不写入 DSH Session metadata、事件或 Sidecar。原生 command/tool 生命周期日志由 DSH
 自行记录。未绑定且没有原生 Workspace 归属的 Session 不根据 cwd 猜测 Project。
 
@@ -117,7 +117,7 @@ resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `a
 外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
-最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
+先为新 Agent 注册委派工具、固定回报目标及回报指导，再 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
 后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
 Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
 失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
@@ -126,16 +126,24 @@ Provider 的 DSH adapter 继续完全只读；模型、标题、历史及消息�
 所有 Session 读写先校验调用方 Workspace，再通过原生身份、Sidecar binding 与物理 cwd
 确认目标；任意 `workspaceId` 参数不能扩大作用域。Detached、歧义或错配关系不得读取历史或
 投递。列表可返回不可用关系的诊断。Session 列表表达 Workspace/Worktree 成员关系，
-不建立原生 subagent lineage，也不保存委派来源关系或任务状态。
+不建立原生 subagent lineage，不持久化委派来源关系或任务状态；
+回报目标仅保留在新 Agent 工具作用域的闭包中，随 Agent 或插件卸载丢失。
 继续投递始终经过 `resolveRuntimeCwd` 的严格 Workspace 写入门禁；根目录缺失时拒绝 admission。
 健康的已归档 Worktree 保留 active binding，因此已有 Session 可以继续，只有新派发要求 active Worktree。
 
-历史通过原生 `sessionQuery.observeSession` 取得精确只读 cut，不激活冷 Session。
-输出游标绑定 Session id、下一事件 seq、文本偏移和状态水印；大消息分片保持完整文本，
-分页不跳过回复。运行状态、pending inbox、turn/end、审批审计事件及运行时用户问题共同
-形成只读 projection，idle 仅表示 turn 结束。等待先订阅原生 session/event、Agent 状态和错误，
-再读取基线，并以 revision 防止丢失唤醒；没有定时查询。最多八个目标、60 秒，取消与
-Host/调用 Agent fiber 卸载均释放 timer 和 subscriptions。审批与问题只报告状态，不代为作答。
+Session 列表通过原生 `sessionQuery.observeSession` 读取冷历史生成简短状态和标题，
+不激活冷 Session、不返回消息或游标。每个候选的授权与历史读取独立隔离失败，
+单个旧日志迁移错误不会阻止其他条目；取消与作用域销毁仍传播失败。
+模型工具不提供 read/wait，不通过轮询获取委派结果。
+
+新 Session 获得 `clutch_report_result`，用 completed/blocked/failed、短摘要与验证证据
+主动回报。Host 在投递前重新校验执行方与固定接收方的 Workspace、binding 和物理 cwd，
+通过原生 queue admission 发送带来源 Session id 的单条报告；不直接写事件或原始日志。
+摘要与证据各最多 2,000 字符；不推送整份 transcript、不根据 turn/end 或 idle 推断成功。
+回报是模型声明，需要发起方核验。该机制不保证崩溃、停止或尚待审批的 Session 发出报告，
+也不自动代答审批或用户问题。报告投递的不确定失败保留 requestId，允许原样幂等重试。
+Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 表达，字段描述给出来源、
+默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
 20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和

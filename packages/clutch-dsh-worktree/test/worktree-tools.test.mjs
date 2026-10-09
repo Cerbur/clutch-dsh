@@ -15,7 +15,6 @@ import { createWorktreeManager } from '../lib/manage/index.js';
 import { samePhysicalPath } from '../lib/provider/path-identity.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
 import { readToolSession } from '../lib/tool/index.js';
-import { setTimeout } from 'node:timers';
 
 const requireTools = createRequire(import.meta.resolve('@deepseek-ai/dsh-tools'));
 const { default: SystemPrompt } = await import(
@@ -24,6 +23,55 @@ const { default: SystemPrompt } = await import(
 const { createScope } = await import(
   pathToFileURL(requireTools.resolve('@deepseek-ai/dsh-scope')).href
 );
+
+test('delegation catalog avoids transcript polling and schema dialect noise', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const schemas = f.ctx.tools.schemas(f.agent);
+  assert.equal(
+    schemas.some((tool) => /clutch_(read_session|wait_sessions)/.test(tool.name)),
+    false,
+  );
+  assert.equal(JSON.stringify(schemas).includes('$schema'), false);
+});
+
+test('a legacy history observation failure does not hide healthy Sessions', async (t) => {
+  const f = await fixture(t, {
+    sessions: {
+      snapshot: async (id) => {
+        if (id === 'legacy')
+          throw new Error('format v0 contains unknown historical event type discuss/mode');
+        return { events: [], running: false, values: { title: 'Healthy' } };
+      },
+    },
+  });
+  f.headers.set('legacy', { sessionId: 'legacy', workspaceId: 'ws', cwd: '/project' });
+  await f.enable();
+  const result = await f.run('clutch_list_sessions', {});
+  assert.equal(result.sessions.find((item) => item.sessionId === 'caller').title, 'Healthy');
+  const broken = result.sessions.find((item) => item.sessionId === 'legacy');
+  assert.equal(broken.status, 'unavailable');
+  assert.match(broken.diagnostic, /discuss\/mode/);
+});
+
+test('malformed calls explain the mistake and show a correct invocation', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const result = await f.ctx.tools.execute({
+    name: 'clutch_span_worktree',
+    arguments: {},
+    agent: f.agent,
+    callId: 'bad',
+    signal: f.signal,
+  });
+  assert.equal(result.isError, true);
+  const text = JSON.stringify(result.content);
+  assert.match(text, /INVALID_ARGUMENTS/);
+  assert.match(text, /worktreeId/);
+  assert.match(text, /prompt/);
+  assert.match(text, /Example/);
+  assert.deepEqual(f.calls, []);
+});
 
 async function fixture(t, overrides = {}) {
   const ctx = new Context();
@@ -97,7 +145,16 @@ async function fixture(t, overrides = {}) {
     },
     ...overrides.manager,
   };
+  const childAgents = new Map();
   const sessions = {
+    async resolveAgent(id) {
+      if (!childAgents.has(id)) {
+        const child = { id, session: { id } };
+        child.ctx = createScope(ctx, child).ctx;
+        childAgents.set(id, child);
+      }
+      return childAgents.get(id);
+    },
     currentModel: async () => selectedModel,
     validateModel: async (value) => value,
     modelCatalog: async () => ({
@@ -182,6 +239,7 @@ async function fixture(t, overrides = {}) {
     snapshots,
     subscriptions,
     selectedModel,
+    childAgents,
     headers,
     enable,
     run,
@@ -189,7 +247,7 @@ async function fixture(t, overrides = {}) {
   };
 }
 
-test('/worktree registers eight tools only for the receiving Session and cleans up on unload', async (t) => {
+test('/worktree registers six tools only for the receiving Session and cleans up on unload', async (t) => {
   const f = await fixture(t);
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
   assert.equal((await f.enable('unexpected')).kind, 'error');
@@ -205,21 +263,19 @@ test('/worktree registers eight tools only for the receiving Session and cleans 
       'clutch_list_sessions',
       'clutch_list_worktrees',
       'clutch_new_worktree',
-      'clutch_read_session',
       'clutch_send_message',
       'clutch_span_worktree',
-      'clutch_wait_sessions',
     ],
   );
   assert.deepEqual(f.ctx.tools.schemas(f.other), []);
   assert.deepEqual(f.ctx.tools.schemas(), []);
   assert.equal((await f.enable()).kind, 'success');
-  assert.equal(f.ctx.tools.schemas(f.agent).length, 8);
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 6);
   await f.fiber.dispose();
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
 });
 
-test('native /worktree execution names all eight tools and adds them to model prompt assembly', async (t) => {
+test('native /worktree execution names all six tools and adds them to model prompt assembly', async (t) => {
   const f = await fixture(t);
   const events = [];
   f.agent.session.append = (type, data) => {
@@ -237,9 +293,7 @@ test('native /worktree execution names all eight tools and adds them to model pr
     'clutch_span_worktree',
     'clutch_list_models',
     'clutch_list_sessions',
-    'clutch_read_session',
     'clutch_send_message',
-    'clutch_wait_sessions',
   ].sort();
   for (const name of expected) assert.ok(executed.result.text.includes(name), executed.result.text);
   const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
@@ -268,7 +322,7 @@ test('/worktree reports registration failure and rolls back partial tools before
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
   fail = false;
   assert.equal((await f.enable()).kind, 'success');
-  assert.equal(f.ctx.tools.schemas(f.agent).length, 8);
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 6);
 });
 
 test('creates a managed branch, saves optional instructions, and publishes only its owning identities', async (t) => {
@@ -375,7 +429,7 @@ test('dispatch creates a fresh native Session, binds before prompt admission, an
   });
 });
 
-for (const stage of ['binding', 'model', 'title', 'prompt']) {
+for (const stage of ['binding', 'model', 'title', 'reporting', 'prompt']) {
   test(`${stage} failure retains the native Session and returns a repairable partial result`, async (t) => {
     const fail = async () => {
       throw new Error(`${stage} failed`);
@@ -386,8 +440,13 @@ for (const stage of ['binding', 'model', 'title', 'prompt']) {
         ? { manager: { bindSession: fail } }
         : {
             sessions: {
-              [stage === 'model' ? 'configureModel' : stage === 'title' ? 'rename' : 'prompt']:
-                fail,
+              [stage === 'model'
+                ? 'configureModel'
+                : stage === 'title'
+                  ? 'rename'
+                  : stage === 'reporting'
+                    ? 'resolveAgent'
+                    : 'prompt']: fail,
             },
           },
     );
@@ -515,8 +574,10 @@ test('discovery, stable-id dispatch, model override and follow-ups form a delega
     (await f.run('clutch_list_sessions', { worktreeId: created.worktreeId })).sessions[0].sessionId,
     child.sessionId,
   );
-  const first = await f.run('clutch_read_session', { sessionId: child.sessionId });
-  assert.equal(first.status, 'idle');
+  assert.equal(
+    (await f.run('clutch_list_sessions', { worktreeId: created.worktreeId })).sessions[0].status,
+    'idle',
+  );
   const follow = await f.run('clutch_send_message', {
     sessionId: child.sessionId,
     prompt: '  Add tests\n',
@@ -538,11 +599,6 @@ test('discovery, stable-id dispatch, model override and follow-ups form a delega
   assert.equal(
     f.calls.filter(([kind]) => kind === 'prompt').at(-1)[1].content[0].text,
     '  Add tests\n',
-  );
-  assert.equal(
-    (await f.run('clutch_wait_sessions', { sessionIds: [child.sessionId], timeoutMs: 0 }))
-      .sessions[0].status,
-    'idle',
   );
 });
 
@@ -569,11 +625,7 @@ test('cross-Workspace ids, corrupted bindings and mismatched cwd are rejected be
   });
   f.bindings.push({ sessionId: 'foreign', worktreeId: 'wt', status: 'active' });
   for (const id of ['foreign', 'unowned', 'wrong-cwd']) {
-    for (const [tool, args] of [
-      ['clutch_read_session', { sessionId: id }],
-      ['clutch_send_message', { sessionId: id, prompt: 'task' }],
-      ['clutch_wait_sessions', { sessionIds: [id], timeoutMs: 0 }],
-    ])
+    for (const [tool, args] of [['clutch_send_message', { sessionId: id, prompt: 'task' }]])
       await assert.rejects(
         f.ctx.tools.get(tool, f.agent).execute(args, { agent: f.agent, signal: f.signal }),
       );
@@ -678,32 +730,15 @@ test('incremental read splits oversized messages without loss or repeating earli
   assert.throws(() => readToolSession('another', snapshot, value.cursor), /Invalid Session cursor/);
 });
 
-test('long runtime errors keep cursors reusable and detect changes beyond the displayed error', async (t) => {
-  const f = await fixture(t);
-  await f.enable();
-  f.headers.set('target', { sessionId: 'target', workspaceId: 'ws', cwd: '/project' });
+test('long runtime errors keep internal status cursors bounded', () => {
   const snapshot = { events: [], running: false, values: {}, error: 'E'.repeat(100000) };
-  f.snapshots.set('target', snapshot);
-  const first = await f.run('clutch_read_session', { sessionId: 'target' });
+  const first = readToolSession('target', snapshot);
   assert.ok(first.cursor.length < 2048);
   assert.equal(first.error.length, 8000);
-  const next = await f.run('clutch_read_session', {
-    sessionId: 'target',
-    afterCursor: first.cursor,
-  });
+  const next = readToolSession('target', snapshot, first.cursor);
   assert.equal(next.statusChanged, false);
-  const unchanged = await f.run('clutch_wait_sessions', {
-    sessionIds: ['target'],
-    afterCursors: { target: next.cursor },
-    timeoutMs: 0,
-  });
-  assert.equal(unchanged.timedOut, true);
   snapshot.error += 'changed';
-  const changed = await f.run('clutch_read_session', {
-    sessionId: 'target',
-    afterCursor: next.cursor,
-  });
-  assert.equal(changed.statusChanged, true);
+  assert.equal(readToolSession('target', snapshot, next.cursor).statusChanged, true);
 });
 
 test('message admission failure retains its generated identity for a deduplicated retry', async (t) => {
@@ -759,69 +794,6 @@ test('status separates errors, interruption, queued input and unresolved human a
   );
   assert.equal(value([], true, { worktreeToolWaitingForUser: true }).status, 'waiting-for-user');
 });
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 1));
-  }
-  assert.fail('Expected asynchronous state was not reached');
-}
-
-test('wait follows multiple Sessions and returns only the changed target with new results', async (t) => {
-  const f = await fixture(t);
-  await f.enable();
-  for (const id of ['one', 'two']) {
-    f.headers.set(id, { sessionId: id, workspaceId: 'ws', cwd: '/project' });
-    f.snapshots.set(id, { events: [], running: true, values: {} });
-  }
-  const waiting = f.run('clutch_wait_sessions', { sessionIds: ['one', 'two'], timeoutMs: 1000 });
-  await waitUntil(() => f.subscriptions.size === 1);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  f.snapshots.get('two').events.push({
-    seq: 0,
-    time: 1,
-    type: 'assistant/message',
-    data: { message: { content: [{ type: 'text', text: 'Done' }] } },
-  });
-  for (const subscription of f.subscriptions) subscription.changed();
-  const result = await waiting;
-  assert.equal(result.timedOut, false);
-  assert.deepEqual(
-    result.sessions.map((session) => session.sessionId),
-    ['two'],
-  );
-  assert.equal(result.sessions[0].entries[0].text, 'Done');
-  assert.equal(f.subscriptions.size, 0);
-  const next = await f.run('clutch_wait_sessions', {
-    sessionIds: ['two'],
-    afterCursors: { two: result.sessions[0].cursor },
-    timeoutMs: 1,
-  });
-  assert.equal(next.timedOut, true);
-  assert.deepEqual(next.sessions[0].entries, []);
-});
-
-for (const end of ['abort', 'unload']) {
-  test(`wait releases subscriptions and timers on ${end}`, async (t) => {
-    const f = await fixture(t);
-    await f.enable();
-    f.snapshots.set('caller', { events: [], running: true, values: {} });
-    const controller = new globalThis.AbortController();
-    const waiting = f.ctx.tools
-      .get('clutch_wait_sessions', f.agent)
-      .execute(
-        { sessionIds: ['caller'], timeoutMs: 60000 },
-        { agent: f.agent, signal: controller.signal },
-      );
-    const rejection = assert.rejects(waiting);
-    await waitUntil(() => f.subscriptions.size === 1);
-    if (end === 'abort') controller.abort();
-    else await f.fiber.dispose();
-    await rejection;
-    assert.equal(f.subscriptions.size, 0);
-  });
-}
 
 test('Workspace resolution uses an active binding for native Worktree Sessions and rejects missing ownership', async (t) => {
   const f = await fixture(t, {
@@ -1015,4 +987,124 @@ test('real Git and Sidecar create, instruction resolution and dispatch preserve 
     code: 'ENOENT',
   });
   assert.equal(await git('rev-parse', 'HEAD'), originalHead);
+});
+
+test('delegated Session pushes one bounded result through native admission without monitoring', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const created = await f.run('clutch_new_worktree', { name: 'feature/report' });
+  const dispatched = await f.run('clutch_span_worktree', {
+    worktreeId: created.worktreeId,
+    prompt: 'Implement and test',
+  });
+  assert.equal(dispatched.status, 'dispatched');
+  const child = f.childAgents.get(dispatched.sessionId);
+  assert.ok(f.ctx.tools.get('clutch_report_result', child));
+  assert.match((await f.enable('', child)).text, /Enabled 7 Worktree tools.*clutch_report_result/);
+  assert.equal(f.ctx.tools.get('clutch_report_result', f.agent), undefined);
+  const childPrompt = await f.ctx.systemPrompt.assemble({ scope: child });
+  assert.match(JSON.stringify(childPrompt), /clutch_report_result/);
+  assert.match(JSON.stringify(childPrompt), /caller/);
+  const parentPrompt = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  assert.match(JSON.stringify(parentPrompt), /user need not name a tool/);
+  assert.match(JSON.stringify(parentPrompt), /Do not poll/);
+  assert.equal(
+    JSON.stringify(await f.ctx.systemPrompt.assemble({ scope: f.other })).includes(
+      'clutch-worktree:delegation',
+    ),
+    false,
+  );
+  const before = f.calls.filter(([kind]) => kind === 'prompt').length;
+  const report = { status: 'completed', summary: 'Implemented', evidence: 'node --test: 4 passed' };
+  const delivered = await f.run('clutch_report_result', report, child);
+  assert.equal(delivered.status, 'admitted');
+  const message = f.calls.filter(([kind]) => kind === 'prompt').at(-1)[1];
+  assert.equal(message.sessionId, 'caller');
+  assert.equal(message.mode, 'queue');
+  assert.match(message.content[0].text, /"fromSessionId":"child"/);
+  assert.match(message.content[0].text, /4 passed/);
+  assert.ok(message.content[0].text.length < 4500);
+  assert.equal(f.calls.filter(([kind]) => kind === 'prompt').length, before + 1);
+  assert.equal(f.subscriptions.size, 0);
+  for (const args of [
+    { ...report, summary: 'x'.repeat(2001) },
+    { ...report, parentSessionId: 'foreign' },
+    { ...report, status: 'idle' },
+  ]) {
+    await assert.rejects(
+      f.ctx.tools
+        .get('clutch_report_result', child)
+        .execute(args, { agent: child, signal: f.signal }),
+      /INVALID_ARGUMENTS/,
+    );
+  }
+  const after = f.calls.filter(([kind]) => kind === 'prompt').length;
+  f.headers.get('caller').workspaceId = 'foreign';
+  await assert.rejects(
+    f.ctx.tools
+      .get('clutch_report_result', child)
+      .execute(report, { agent: child, signal: f.signal }),
+    /outside/,
+  );
+  assert.equal(f.calls.filter(([kind]) => kind === 'prompt').length, after);
+  await f.fiber.dispose();
+  assert.deepEqual(f.ctx.tools.schemas(child), []);
+  assert.equal(
+    JSON.stringify(await f.ctx.systemPrompt.assemble({ scope: child })).includes(
+      'This Session was delegated by',
+    ),
+    false,
+  );
+});
+
+test('report admission failure preserves a deduplicated retry and reports blockers explicitly', async (t) => {
+  let fail = false;
+  const seen = new Set();
+  const f = await fixture(t, {
+    sessions: {
+      async prompt(input) {
+        if (fail && !seen.has(input.requestId)) {
+          seen.add(input.requestId);
+          throw new Error('transport failed after acceptance');
+        }
+        return { accepted: true };
+      },
+    },
+  });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/report-retry' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  const child = f.childAgents.get(span.sessionId);
+  fail = true;
+  const args = {
+    status: 'blocked',
+    summary: 'Need human approval',
+    evidence: 'No approval was granted automatically.',
+  };
+  const failed = await f.run('clutch_report_result', args, child);
+  assert.equal(failed.status, 'prompt-failed');
+  assert.match(failed.correction, /identical report/);
+  assert.equal(
+    (await f.run('clutch_report_result', { ...args, requestId: failed.requestId }, child)).status,
+    'admitted',
+  );
+});
+
+test('schema exposes target alternatives and fields without a JSON Schema dialect', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const span = f.ctx.tools.get('clutch_span_worktree', f.agent);
+  assert.equal(span.parameters.anyOf.length, 2);
+  assert.ok(span.parameters.anyOf.every((shape) => shape.required.includes('prompt')));
+  assert.ok(span.parameters.anyOf.some((shape) => shape.required.includes('worktreeId')));
+  assert.ok(span.parameters.anyOf.some((shape) => shape.required.includes('name')));
+  assert.match(JSON.stringify(span.parameters), /never a string/);
+  await assert.rejects(
+    span.execute(
+      { worktreeId: 'wt', name: 'demo', prompt: 'Task' },
+      { agent: f.agent, signal: f.signal },
+    ),
+    /exactly one/,
+  );
+  assert.deepEqual(f.calls, []);
 });

@@ -1,3 +1,4 @@
+import type { CallingAgent } from './types.js';
 import type { Context } from '@deepseek-ai/cordis';
 
 export interface ToolModel {
@@ -39,6 +40,7 @@ export interface ToolSessionSnapshot {
 
 /** Host-only native capabilities; never added to the Provider's read adapter. */
 export interface WorktreeToolSessionPort {
+  resolveAgent(sessionId: string, signal: AbortSignal): Promise<CallingAgent>;
   create(input: { cwd: string }): Promise<{ sessionId: string }>;
   prompt(
     input: {
@@ -164,6 +166,13 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
   };
 
   return {
+    resolveAgent: async (sessionId, signal) => {
+      signal.throwIfAborted();
+      const result = await controller.resolveAgent(sessionId);
+      if ('error' in result) throw result.error;
+      signal.throwIfAborted();
+      return result.agent;
+    },
     create: (input) => controller.create(input),
     prompt: (input, signal) => controller.prompt(input, signal),
     rename: (input) => controller.rename(input),

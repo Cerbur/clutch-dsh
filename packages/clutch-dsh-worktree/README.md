@@ -124,13 +124,13 @@ subject to DSH's native file-access checks.
 
 ### Enable Agent Worktree tools
 
-The tools live in `src/tool/`, with one file per tool. Successful activation names all eight tools.
+The tools live in `src/tool/`, with one file per tool. Successful activation names all six delegation tools.
 If `/worktree` still reports `Enabled clutch_new_worktree and clutch_span_worktree for this conversation.`,
 the running Host has loaded the older two-tool build. Rebuild the plugin, reload or restart the DSH
 Host, then run `/worktree` again. A browser refresh alone does not reload Host modules.
 
 Run `/worktree` in a Session belonging to a Workspace or an active managed Worktree.
-The command enables these eight tools for that Session's running Agent:
+The command enables these six tools for that Session's running Agent:
 
 | Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -139,9 +139,7 @@ The command enables these eight tools for that Session's running Agent:
 | `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
 | `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
 | `clutch_list_sessions`  | optional `workspaceId`, `worktreeId`                               | Finds existing Sessions, binding state, status and title. Unavailable relations return a diagnostic without reading their history.                                                                                                 |
-| `clutch_read_session`   | `sessionId`, optional `afterCursor`                                | Reads status and recent messages without activating the Session. Pass the returned `cursor` for subsequent incremental reads; repeat while `hasMore`.                                                                              |
 | `clutch_send_message`   | `sessionId`, `prompt`, optional `mode`, `requestId`                | Continues an existing Session. `queue` is the default; `steer` corrects at a native step boundary. Returns admission, not a reply.                                                                                                 |
-| `clutch_wait_sessions`  | `sessionIds`, optional `afterCursors`, `timeoutMs`                 | Waits for messages, turn boundaries, errors or user attention in up to eight Sessions. Returns changed targets or a timeout snapshot; defaults to 30 seconds, at most 60 seconds.                                                  |
 
 For example, ask the Agent to call `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`,
 then `clutch_span_worktree({ worktreeId: created.worktreeId, prompt: "Implement the feature and report the result." })` using the returned Worktree id.
@@ -152,14 +150,20 @@ An unhealthy binding never silently falls back to Main. The default captures the
 committed HEAD, including a detached root HEAD. Detached sources return `baseCommit` without inventing
 a `baseBranch`; an explicit local `baseBranch` remains available as an override.
 
-Read the dispatched Session with `clutch_read_session({ sessionId })`, then pass its `cursor`
-as `afterCursors[sessionId]` to `clutch_wait_sessions`. Keep each Session's cursor separately.
-Without a cursor, waiting observes from now and returns already inactive or waiting Sessions
-immediately. A read starts with the last 100 events (`historyOmitted` reports an older prefix),
-returns at most 20 relevant entries and 32,000 text code units, and splits long messages into
-8,000-code-unit fragments without skipping text. `idle` means the turn ended; verify the
-reported changes and tests before treating the task as complete. Approval and question states
-require the human's response; these tools do not answer them.
+Newly delegated Sessions automatically receive the six delegation tools plus
+`clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
+to the delegating Session. `status` is `completed`, `blocked`, or `failed`; `summary` and `evidence`
+are each limited to 2,000 characters. Reports arrive as ordinary queued native messages;
+verify their claims and evidence before accepting completion. Reports are model-driven:
+a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
+
+`clutch_read_session` and `clutch_wait_sessions` are removed from the model catalog. Do not
+poll lists or read raw Session logs for progress. Continue independent work or yield after
+dispatch; for an explicit status question, send the executing Session a request to report.
+Activation adds Agent-scoped guidance for choosing delegation from ordinary task descriptions,
+so users need not specify tool names. Schemas describe exact ids, defaults and target alternatives
+without `$schema`; errors explain the cause, correction and a valid invocation. A bad Session
+history returns one `unavailable` diagnostic while keeping healthy list entries available.
 
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection; an unavailable model or effort fails before creating a Session. Initial
@@ -169,25 +173,24 @@ that first request discards the initial routing override. Native Session model c
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
-preset and permission defaults; it does not automatically grant Worktree Full Access or enable
-these tools in the dispatched Session. Run `/worktree` again after the Agent or plugin restarts.
-No extra command arguments are accepted. All discovery, reads and follow-ups are restricted
+preset and permission defaults; it does not automatically grant Worktree Full Access. Run `/worktree` again after the Agent or plugin restarts.
+No extra command arguments are accepted. All discovery, reports and follow-ups are restricted
 to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
 are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
-Detached bindings must be repaired before reading or sending through these tools.
+Detached bindings must be repaired before sending or reporting through these tools.
 Healthy archived Worktrees retain their active bindings and allow Session follow-ups;
 a missing Workspace root still blocks message admission.
 
 If saving instructions, binding, or prompt admission fails after creation, the tool returns the
 created identity and an error (`instructionsSaved: false`, `binding-failed`, `model-failed`,
-`title-failed`, or `prompt-failed`).
+`title-failed`, `reporting-failed`, or `prompt-failed`).
 The Worktree and native Session are retained. Repair or open the returned Session before retrying;
 another dispatch creates another Session. After a successful binding/model setup, retry a failed
 prompt with `clutch_send_message` and the returned `requestId`. Reuse a request id only for the
 same message retry; new follow-ups get fresh ids. `clutch_send_message` also returns `prompt-failed`
 with that id when native admission throws, including when acceptance is uncertain.
-Waiting is cancellable and releases its subscriptions
-on cancellation or plugin/Agent unload. There are no automatic merge, publish or disk-cleanup tools.
+Reporting destinations and activation are runtime-only. Restart discards the destination;
+a resumed Session can enable `/worktree` and use `clutch_send_message` with a known delegator id. There are no automatic merge, publish or disk-cleanup tools.
 
 ### Import an existing Worktree
 
