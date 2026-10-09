@@ -1,13 +1,9 @@
-import type {
-  ConversationHeaderActionOwnerProps,
-} from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type { ConversationHeaderActionOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { SnapshotSelectorHook, SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import type {
-  SidebarFooterActionOwnerProps,
-} from '@deepseek-ai/dsh-client-ui-sidebar/client';
-import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client';
+import type { SidebarFooterActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type { UseSessions, UseSessionStatus } from '@deepseek-ai/dsh-client-ui-session/client';
 
 /**
  * The published UI packages can resolve their type-only SlotMap imports
@@ -45,6 +41,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
   interface GlobalStandardProps {
     useSessions: UseSessions;
+    useSessionStatus: UseSessionStatus;
     useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>;
   }
 
@@ -55,9 +52,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Narrow runtime face used at the renderer compatibility boundary. */
 export type WorktreeSlotRegistry = {
-  readonly inject: (
-    key: string,
-    callback: () => (() => void) | Iterable<() => void>,
-  ) => () => void;
+  readonly inject: (key: string, callback: () => (() => void) | Iterable<() => void>) => () => void;
   readonly register: SlotCore['register'];
 };

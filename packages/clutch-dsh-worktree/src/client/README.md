@@ -523,7 +523,18 @@ The Worktree surface is additive:
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
 - Workspace, Main and active Worktree rows reserve one aligned trailing action rail. Main and Worktree new Session buttons prefer native `IconNewChatOutlineRegular` (16px), with the legacy size-named export as fallback; Workspace add Worktree and create Worktree menu entries use the same `IconBranchOutline16` as Worktree rows. The Workspace add Worktree button follows the menu button's hover, focus-within, and menu-open visibility;
-- Session rows derive one native-compatible status presentation from the DSH Session snapshot.
+- Session rows derive one ephemeral presentation from the DSH Session list plus the independent
+  native `useSessionStatus` root hook.
+  The hook supplies a read-only Map of running, pending-interaction objects (`kind`), and
+  `completionUnread`. DSH UiSession alone owns unread acknowledgement: observed off-main stops
+  produce it; main-view opening or rerunning clears it. Never copy it into a plugin store, list,
+  or sidecar, or infer completion from `running=false`. Only clients without the hook use legacy
+  summary `pendingInteraction` / `completed`; missing native Map entries do not revive legacy
+  reminders. The Surface subscribes independently and memoizes against both `byId` and the status
+  Map, so a status-only update reaches rows, collapsed groups, and Dashboard without a list replay.
+  Existing subagent lineage consumes all native `byId` entries, including catalog-only children;
+  child running uses the same native status facts. The Controller owns `subagentCatalog` projection;
+  Worktree adds no catalog reader or completion owner.
   The existing native `StateDot` is reused directly: running, running-subagent, warning, and
   completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use
   that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
