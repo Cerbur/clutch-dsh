@@ -156,6 +156,9 @@ detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
 Schema 说明准确身份、默认值和目标互斥约束，不携带 `$schema`；报错包含原因、纠正办法和正确示例。
 单个 Session 历史损坏时仅返回该项 `unavailable` 诊断，其余列表结果仍可用。
 
+PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status` 与 `summary`。
+长度限制保留在字段描述中，并在执行时严格校验；互斥的指派目标使用兼容 DSH schema 子集的 `oneOf`。
+
 `model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
 有效模型选择；模型或推理强度不可用时，在创建 Session 前失败。初始模型路由不会保存部署
 默认模型。在 DSH 记录首个 request header 前，该覆盖仅存在于运行时；之后由 DSH 根据

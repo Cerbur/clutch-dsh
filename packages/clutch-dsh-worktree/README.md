@@ -165,6 +165,10 @@ so users need not specify tool names. Schemas describe exact ids, defaults and t
 without `$schema`; errors explain the cause, correction and a valid invocation. A bad Session
 history returns one `unavailable` diagnostic while keeping healthy list entries available.
 
+In PTC mode, the generated SDK exposes concrete argument types, including required report
+`status` and `summary`. Length limits remain in field descriptions and are enforced at execution;
+mutually exclusive dispatch targets use `oneOf` compatible with DSH's schema subset.
+
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection; an unavailable model or effort fails before creating a Session. Initial
 model routing does not save the deployment default. It is runtime-only until DSH records the

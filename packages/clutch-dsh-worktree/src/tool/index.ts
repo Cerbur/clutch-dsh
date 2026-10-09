@@ -1,5 +1,5 @@
 import type { Context, Fiber } from '@deepseek-ai/cordis';
-import { z } from 'zod';
+import type { z } from 'zod';
 import type { CallingAgent, Execution, ToolDefinition, Options } from './types.js';
 import { toolWorkspace, createToolContext } from './context.js';
 import { registerNewWorktree } from './new-worktree.js';
@@ -11,6 +11,7 @@ import { registerSendMessage } from './send-message.js';
 import { registerReportResult } from './report-result.js';
 import { registerToolGuidance } from './guidance.js';
 import { actionableError } from './errors.js';
+import { toolParameters } from './schema.js';
 const jsonProjection = (value: unknown): Record<string, unknown> =>
   JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 export { createWorktreeToolSessionPort } from './native-session.js';
@@ -71,15 +72,10 @@ export function registerWorktreeTools(ctx: Context, options: Options): void {
         outputSchema: unknown,
         execute: (args: z.output<Schema>, exec: Execution) => Promise<unknown>,
       ) => {
-        const { $schema: _dialect, ...parameters } = z.toJSONSchema(schema, {
-          io: 'input',
-          unrepresentable: 'any',
-        });
-        void _dialect;
         registry.register({
           name,
           description,
-          parameters: jsonProjection(parameters),
+          parameters: jsonProjection(toolParameters(schema)),
           output: {
             schema: outputSchema,
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],

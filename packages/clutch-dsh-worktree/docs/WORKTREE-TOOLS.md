@@ -96,6 +96,15 @@ Schemas omit `$schema`; target alternatives expose exact-one id/name validation,
 source/default/limits. Error bodies identify the reason and a corrected call; partial creation
 failures preserve identities and describe repair. No tool grants permissions or answers approvals.
 
+The subsequent native/PTC smoke run completed dispatch, three pushed reports and continuation,
+but both delegates first omitted report `status`. The PTC `ToolArgs` entries had degraded to
+`unknown`: Zod's `minLength`, `maxLength` and `anyOf` exceed DSH's SDK schema vocabulary.
+`src/tool/schema.ts` now projects lengths into descriptions (still enforced by the original
+Zod parser) and converts only disjoint closed-object unions to supported `oneOf`. Unsupported
+keywords and overlapping alternatives fail explicitly. Report guidance names required status
+and summary. Regression tests use DSH's real schema validator and TypeScript SDK generator for
+all seven tools, checking required/optional fields and preserving strict runtime rejection.
+
 `clutch_send_message({ sessionId, prompt, mode?, requestId? })` defaults to queue; steer uses
 native step-boundary admission. New messages get independent ids, while an explicit id retries
 the same message through native deduplication. Native failures return `prompt-failed` with the

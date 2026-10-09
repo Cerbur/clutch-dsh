@@ -38,7 +38,7 @@ export function registerReportResult(context: ToolContext): void {
     throw new Error('Result reporting requires a delegating Session');
   add(
     'clutch_report_result',
-    'Push a concise task result or blocker to the Session that delegated you. The Host fixes the destination; no polling or transcript reads are needed. Include verification evidence. This is your claim, not automatic proof of success. Returns message admission, not a reply.',
+    'Push a concise task result or blocker to the Session that delegated you. Required fields: status (completed, blocked, or failed) and summary; optional evidence and retry requestId. The Host fixes the destination; no polling or transcript reads are needed. Include verification evidence. This is your claim, not automatic proof of success. Returns message admission, not a reply.',
     reportArgs,
     output.object(
       {

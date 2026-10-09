@@ -9,7 +9,12 @@ import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
 import Commands from '@deepseek-ai/dsh-commands';
-import Tools from '@deepseek-ai/dsh-tools';
+import Tools, {
+  assertSupportedJsonSchema,
+  jsonSchemaToTs,
+  renderToolsSdk,
+  validateJsonSchemaValue,
+} from '@deepseek-ai/dsh-tools';
 import { registerWorktreeTools } from '../lib/tool/index.js';
 import { createWorktreeManager } from '../lib/manage/index.js';
 import { samePhysicalPath } from '../lib/provider/path-identity.js';
@@ -33,6 +38,59 @@ test('delegation catalog avoids transcript polling and schema dialect noise', as
     false,
   );
   assert.equal(JSON.stringify(schemas).includes('$schema'), false);
+});
+
+test('native PTC SDK exposes concrete arguments for all seven Worktree tools', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const created = await f.run('clutch_new_worktree', { name: 'feature/sdk' });
+  const dispatched = await f.run('clutch_span_worktree', {
+    worktreeId: created.worktreeId,
+    prompt: 'Task',
+  });
+  const child = f.childAgents.get(dispatched.sessionId);
+  const schemas = f.ctx.tools.schemas(child).map((schema) => ({
+    ...schema,
+    output: f.ctx.tools.get(schema.name, child).output.schema,
+  }));
+  assert.equal(schemas.length, 7);
+  for (const schema of schemas) {
+    assertSupportedJsonSchema(schema.parameters);
+    assertSupportedJsonSchema(schema.output);
+    assert.doesNotMatch(jsonSchemaToTs(schema.parameters), /\bunknown\b/);
+  }
+  const sdk = renderToolsSdk(schemas);
+  assert.doesNotMatch(sdk, /clutch_\w+: unknown;/);
+  const report = schemas.find((schema) => schema.name === 'clutch_report_result');
+  const args = jsonSchemaToTs(report.parameters);
+  assert.match(args, /status: "completed" \| "blocked" \| "failed";/);
+  assert.match(args, /summary: string;/);
+  assert.match(args, /evidence\?: string;/);
+  assert.match(args, /requestId\?: string;/);
+  const send = jsonSchemaToTs(
+    schemas.find((schema) => schema.name === 'clutch_send_message').parameters,
+  );
+  assert.match(send, /sessionId: string;/);
+  assert.match(send, /prompt: string;/);
+  assert.match(send, /mode\?: "queue" \| "steer";/);
+  const span = jsonSchemaToTs(
+    schemas.find((schema) => schema.name === 'clutch_span_worktree').parameters,
+  );
+  assert.match(span, /worktreeId: string;/);
+  assert.match(span, /name: string;/);
+  assert.match(span, /prompt: string;/);
+  assert.match(span, /model\?: \{/);
+  assert.match(args, /2,?000/);
+  const omittedStatus = { summary: 'Implemented', evidence: 'node verification passed' };
+  assert.notEqual(validateJsonSchemaValue(report.parameters, omittedStatus).length, 0);
+  const before = f.calls.length;
+  await assert.rejects(
+    f.ctx.tools
+      .get('clutch_report_result', child)
+      .execute(omittedStatus, { agent: child, signal: f.signal }),
+    /INVALID_ARGUMENTS.*status/,
+  );
+  assert.equal(f.calls.length, before);
 });
 
 test('a legacy history observation failure does not hide healthy Sessions', async (t) => {
@@ -1094,10 +1152,10 @@ test('schema exposes target alternatives and fields without a JSON Schema dialec
   const f = await fixture(t);
   await f.enable();
   const span = f.ctx.tools.get('clutch_span_worktree', f.agent);
-  assert.equal(span.parameters.anyOf.length, 2);
-  assert.ok(span.parameters.anyOf.every((shape) => shape.required.includes('prompt')));
-  assert.ok(span.parameters.anyOf.some((shape) => shape.required.includes('worktreeId')));
-  assert.ok(span.parameters.anyOf.some((shape) => shape.required.includes('name')));
+  assert.equal(span.parameters.oneOf.length, 2);
+  assert.ok(span.parameters.oneOf.every((shape) => shape.required.includes('prompt')));
+  assert.ok(span.parameters.oneOf.some((shape) => shape.required.includes('worktreeId')));
+  assert.ok(span.parameters.oneOf.some((shape) => shape.required.includes('name')));
   assert.match(JSON.stringify(span.parameters), /never a string/);
   await assert.rejects(
     span.execute(

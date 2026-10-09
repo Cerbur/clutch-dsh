@@ -106,6 +106,7 @@ Agent 工具启用状态属于当前运行时，重启后需重新执行指令�
 
 ```bash
 node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs test/worktree-tool-changes.test.mjs
+node --test test/worktree-tool-schema.test.mjs
 ```
 
 工具实现集中在 `src/tool/`，每个工具一个文件，随主 package 通过 TypeScript 正常构建。
@@ -118,6 +119,11 @@ node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs tes
 原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
 该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
 确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
+
+参数 schema 使用 DSH 支持的子集。测试通过真实 `assertSupportedJsonSchema`、
+`jsonSchemaToTs`、`renderToolsSdk` 验证全部工具参数不会退化为 unknown，必填的回报 status/summary
+与可选参数正确呈现；长度限制放在字段描述中，由执行时的 Zod 校验。互斥 target 投影为 oneOf，
+重叠 union 或不支持的未来 schema 关键字必须显式失败，不能静默丢失参数信息。
 
 修改代码后，重新构建插件包并重启 DSH：
 

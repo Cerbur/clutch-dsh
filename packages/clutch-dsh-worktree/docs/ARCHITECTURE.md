@@ -144,6 +144,10 @@ Session 列表通过原生 `sessionQuery.observeSession` 读取冷历史生成�
 也不自动代答审批或用户问题。报告投递的不确定失败保留 requestId，允许原样幂等重试。
 Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 表达，字段描述给出来源、
 默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
+`src/tool/schema.ts` 将参数投影到 DSH 支持的 schema 子集，避免 PTC SDK 参数退化为 unknown。
+字符串 minLength/maxLength 转为字段描述，执行时仍由原始 Zod parser 严格校验；
+只有互不重叠的封闭 object alternatives 才将 anyOf 转为 oneOf，不支持的关键字显式拒绝注册。
+真实 DSH SDK 生成器回归验证全部七个工具的参数、必填回报状态、可选字段与模型结构。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
 20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和

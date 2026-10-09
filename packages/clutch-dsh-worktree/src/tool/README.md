@@ -15,6 +15,9 @@ Each tool file owns its input schema, output schema, description and handler:
 `index.ts` owns activation, automatic delegated-Agent setup and scoped lifetimes.
 `guidance.ts` supplies model-visible workflow guidance through native system prompt sections.
 `errors.ts` explains failures and recovery with correct invocation examples.
+`schema.ts` projects Zod inputs into DSH's native/PTC schema subset; the original parser
+retains strict execution validation. String limits stay visible as descriptions, and exclusive
+closed-object target alternatives use `oneOf`. Unsupported constructs fail explicitly.
 `context.ts` validates ownership; `inputs.ts` and `outputs.ts` hold reusable schema fragments.
 `native-session.ts` wraps native APIs; `history.ts` provides internal read-only status projection.
 `types.ts` reuses existing contract, Manage and Provider types.
