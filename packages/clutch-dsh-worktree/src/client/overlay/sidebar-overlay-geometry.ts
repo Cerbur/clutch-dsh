@@ -48,7 +48,8 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   });
   const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
-    return text === '新会话' || text === 'New Session';
+    if (!text) return false;
+    return text.startsWith('新会话') || text.startsWith('New Session');
   });
   if (visibleLabel !== undefined) return visibleLabel;
   for (const label of labels) {
@@ -58,17 +59,55 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   return undefined;
 }
 
+function directSidebarChild(root: Element, element: Element | null | undefined): Element | undefined {
+  let child = element;
+  while (child && child.parentElement !== root) child = child.parentElement;
+  return child ?? undefined;
+}
+
+function sidebarFooterCandidate(root: Element): Element | undefined {
+  // WorktreeModeAction owns this marker in sidebar.footer.action; no native classes or labels.
+  const action = root.querySelector('[data-worktree-mode-action]');
+  return action ? directSidebarChild(root, action) : (root.lastElementChild ?? undefined);
+}
+
+/** Prefer our footer-slot marker; accept the legacy last child only after layout validation. */
+export function resolveSidebarFooter(
+  root: Element,
+  newSession: Element | undefined,
+): Element | undefined {
+  if (!newSession) return undefined;
+  const children = Array.from(root.children);
+  const content = directSidebarChild(root, newSession);
+  const start = content === undefined ? -1 : children.indexOf(content);
+  if (start < 0) return undefined;
+  const anchorRect = asRect(newSession);
+  const rootRect = asRect(root);
+  const candidate = sidebarFooterCandidate(root);
+  if (!candidate || children.indexOf(candidate) <= start) return undefined;
+  const rect = asRect(candidate);
+  const valid =
+    [anchorRect.top, anchorRect.bottom, rootRect.top, rootRect.bottom, rect.top, rect.bottom].every(
+      Number.isFinite,
+    ) &&
+    anchorRect.bottom > anchorRect.top &&
+    rect.bottom > rect.top &&
+    rect.top >= anchorRect.bottom &&
+    rect.top >= rootRect.top &&
+    rect.bottom <= rootRect.bottom;
+  return valid ? candidate : undefined;
+}
+
 /** Hide only the native content covered by the plugin, keeping chrome and footer alive. */
 export function coveredSidebarChildren(
   root: Element,
   newSession: Element | undefined,
-  footer: Element | null,
+  footer: Element | null | undefined,
 ): HTMLElement[] {
   if (!newSession || !footer) return [];
-  let first = newSession;
-  while (first.parentElement && first.parentElement !== root) first = first.parentElement;
+  const first = directSidebarChild(root, newSession);
   const children = Array.from(root.children ?? []);
-  const start = children.indexOf(first);
+  const start = first === undefined ? -1 : children.indexOf(first);
   const end = children.indexOf(footer);
   if (start < 0 || end <= start) return [];
   return children
@@ -151,9 +190,14 @@ export function useSidebarOverlayGeometry(active: boolean): {
       }
       observedRoot = syncObservedElement(resizeObserver, observedRoot, currentRoot);
       const newSession = findNewSessionAnchor(currentRoot);
-      const footer = currentRoot.lastElementChild;
+      const footer = resolveSidebarFooter(currentRoot, newSession);
       observedNewSession = syncObservedElement(resizeObserver, observedNewSession, newSession);
-      observedFooter = syncObservedElement(resizeObserver, observedFooter, footer);
+      // Keep watching a temporarily invalid/zero-height candidate so resize can recover it.
+      observedFooter = syncObservedElement(
+        resizeObserver,
+        observedFooter,
+        sidebarFooterCandidate(currentRoot),
+      );
       const nextWidth = sidebarElement.getBoundingClientRect().width;
       // macOS has no collapsed rail; zero is a real width, never a missing measurement.
       setWidth(Math.max(0, nextWidth));
@@ -163,7 +207,7 @@ export function useSidebarOverlayGeometry(active: boolean): {
       const nextBounds = computeOverlayBounds(
         asRect(overlayElement),
         newSession === undefined ? undefined : asRect(newSession),
-        footer === null ? undefined : asRect(footer),
+        footer === undefined ? undefined : asRect(footer),
       );
       setBounds(nextCollapsed ? EMPTY_BOUNDS : nextBounds);
       const covered =
