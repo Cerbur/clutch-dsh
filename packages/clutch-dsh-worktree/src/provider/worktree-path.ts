@@ -1,12 +1,23 @@
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { gitWorktreeRoot, type WorktreeRecord } from '../contract/index.js';
-import { sameLexicalPath } from './path-identity.js';
+import { sameLexicalPath, samePhysicalPath } from './path-identity.js';
 import { providerError } from './types.js';
 
 function inside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+/** Only for an already-active binding: DSH retains a legacy Session's Git-root cwd. */
+export async function boundSessionCwdMatchesWorktree(
+  cwd: string,
+  record: Pick<WorktreeRecord, 'absolutePath' | 'gitRootPath'>,
+  compare: (left: string, right: string) => Promise<boolean> = samePhysicalPath,
+): Promise<boolean> {
+  return path.isAbsolute(cwd) &&
+    (await compare(cwd, record.absolutePath) ||
+      (record.gitRootPath !== undefined && await compare(cwd, record.gitRootPath)));
 }
 
 /** Map the authoritative Workspace's physical repository-relative directory into a checkout. */

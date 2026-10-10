@@ -117,7 +117,9 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 如果该目录缺失或解析到了 checkout 外部，Worktree 会显示需要修复，不会回退到 Git 根目录，
 也不会自动创建缺失目录。
 
-已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用。Git 文件预览对当前 Session
+子目录机制升级后，已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用，包括自动工具注入、
+会话发现、继续投递、结果回报，以及默认从自身 checkout 的 HEAD 创建 Worktree。原始 cwd 和历史保持不变；
+新的 Session 绑定仍必须匹配 checkout 内的 Workspace 工作目录。Git 文件预览对当前 Session
 cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
 
 ### 启用 Agent Worktree 工具

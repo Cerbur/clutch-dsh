@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import type {
   WorktreeManager,
   WorktreePermissionManager,
@@ -10,7 +8,7 @@ import type {
 } from '../contract/index.js';
 import type { DshReadAdapter } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
-import { samePhysicalPath } from '../provider/path-identity.js';
+import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 
 export interface WorktreePermissionManagerOptions {
   readonly manager: Pick<WorktreeManager, 'listWorktrees' | 'listBindings'>;
@@ -113,12 +111,7 @@ export function createWorktreePermissionManager(
           sessionId: input.sessionId,
         });
       }
-      const sessionCwdMatches = path.isAbsolute(session.cwd) &&
-        (await samePhysicalPath(session.cwd, worktree.absolutePath) ||
-          // An already-bound legacy Session retains its DSH-owned Git-root cwd.
-          // New bindings are validated against absolutePath by Manage.
-          (worktree.gitRootPath !== undefined &&
-            await samePhysicalPath(session.cwd, worktree.gitRootPath)));
+      const sessionCwdMatches = await boundSessionCwdMatchesWorktree(session.cwd, worktree);
       if (
         (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
         !sessionCwdMatches

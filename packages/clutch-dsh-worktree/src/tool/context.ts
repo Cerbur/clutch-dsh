@@ -1,4 +1,5 @@
 import type { CallingAgent, Options, ToolContext, WorktreeRecord } from './types.js';
+import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 export type { ToolContext } from './types.js';
 export const errorText = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -41,8 +42,8 @@ export async function defaultBase(
     );
     if (!record || !available(record))
       throw new Error('Calling Worktree needs repair; cannot infer its base branch');
-    const cwd = await options.manager.resolveRuntimeCwd({ workspaceId, sessionId });
-    if (!(await options.samePhysicalPath(session.cwd, cwd)))
+    await options.manager.resolveRuntimeCwd({ workspaceId, sessionId });
+    if (!(await boundSessionCwdMatchesWorktree(session.cwd, record, options.samePhysicalPath)))
       throw new Error('Calling Session cwd does not match its Worktree');
     return {
       branch: record.branch,
@@ -92,11 +93,8 @@ export async function authorize(
           (record.health !== undefined && record.health !== 'ready')))
     )
       throw new Error('Session Worktree is unavailable or needs repair');
-    if (!(await options.samePhysicalPath(session.cwd, record.absolutePath))) {
-      const cwd = await options.manager.resolveRuntimeCwd({ workspaceId, sessionId });
-      if (!(await options.samePhysicalPath(session.cwd, cwd)))
-        throw new Error('Session cwd does not match its Worktree');
-    }
+    if (!(await boundSessionCwdMatchesWorktree(session.cwd, record, options.samePhysicalPath)))
+      throw new Error('Session cwd does not match its Worktree');
   } else {
     if (session.workspaceId !== workspaceId)
       throw new Error('Session is outside the calling Workspace or unavailable');

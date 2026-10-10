@@ -122,7 +122,10 @@ Sessions, the Dashboard path, Copy Path, and Open In. Git operations still use t
 If that directory is missing or resolves outside the checkout, the Worktree needs repair; it does
 not fall back to the Git root or create the missing directory.
 
-Already-bound Sessions with a legacy Git-root cwd remain usable. Git file previews use
+Already-bound Sessions with a legacy Git-root cwd remain usable after a subdirectory upgrade,
+including automatic tool injection, Session discovery, follow-ups, result reports and default
+Worktree creation from their own checkout's HEAD. Their original cwd and history remain unchanged;
+new Session bindings still require the Workspace directory inside the checkout. Git file previews use
 relative addresses inside the current Session cwd and absolute addresses for other checkout files,
 subject to DSH's native file-access checks.
 

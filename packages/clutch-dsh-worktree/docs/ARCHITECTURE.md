@@ -181,7 +181,12 @@ Sidecar v7 接受 v1–v6 历史记录。新子目录记录同时保存工作目
 的 `workspacePath` 捕获工作目录，重启恢复沿用获取时的路径。旧记录仅含 Git 根时，在原
 Workspace/Git 可用时按同一规则进行只读路径投影，不自动改写 Sidecar 或 DSH Session；
 mutation token 仍基于持久记录，避免投影变化破坏生命周期门禁。原 Workspace 缺失时维持
-现有只读降级规则。已绑定旧 Session 的原 Git-root cwd 可用于 Host 权限关系校验，但新绑定
+现有只读降级规则。已绑定旧 Session 的原 Git-root cwd 可用于 Host 权限关系校验、Agent
+工具自动注入、发现、投递与回报；Provider 的 `boundSessionCwdMatchesWorktree` 统一比较
+工作目录或该记录的 Git 根的物理身份，只供已验证 active binding 的读取/操作复用。
+`defaultBase` 与 Host-only `readSessionHead` 同样接受旧 cwd，并从已授权 Session 的原始 cwd
+读取实际 checkout HEAD；不得因投影变化读取 Main 或其他 checkout 的 HEAD。Workspace 写入门禁、
+目录可用性、身份、歧义、detached 和 cleaned 检查保持原有规则，任意后代目录不构成匹配。但新绑定
 必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
 
 Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到

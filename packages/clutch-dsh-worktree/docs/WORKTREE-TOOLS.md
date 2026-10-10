@@ -182,6 +182,30 @@ Guidance also makes create-and-fix requests create-and-delegate by default, movi
 setup, edits and checks into the delegated Session. Enabled plugin tools take preference over
 competing Worktree/Session tools unless the user explicitly chooses another workflow.
 
+## Historical Session cwd compatibility (2026-10-10)
+
+The real historical Session failure was reproduced through native prompt assembly with a
+real Git checkout, Sidecar and Manage instance. A root-only historical record is projected
+to the Workspace subdirectory while DSH retains its immutable Git-root Session cwd.
+Automatic injection rejected that valid active binding before the first model request.
+HEAD capture independently rejected the same relation, so changing tool authorization alone
+would leave default Worktree creation broken.
+
+Permission checks, tool authorization/default-base selection and Manage HEAD capture now share
+the Provider's physical cwd rule for already-active bindings: the Workspace directory or that
+record's exact Git root. New bindings still require the Workspace directory. No native header,
+history or legacy path record is rewritten; HEAD is read from the authorized Session cwd.
+Tests cover old and explicit path records, native/PTC first and repeated assemblies, discovery,
+continuation, reports, default creation from a checkout ahead of Main, aliases and archived
+follow-ups. Foreign ownership, sibling directories, missing/escaping paths, unbound/detached/
+cleaned relations and the Workspace-root write gate remain rejected.
+
+Focused reproduction and regression command (after building the package):
+
+```bash
+node --test --test-name-pattern='legacy Git-root|legacy compatibility' test/worktree-tools.test.mjs
+```
+
 ## Notification and refresh design
 
 `watchToolChanges({ afterRevision }, signal)` waits at most 20 seconds and returns a

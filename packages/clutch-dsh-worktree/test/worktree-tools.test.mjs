@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -1328,6 +1328,179 @@ test('real Git and Sidecar create, instruction resolution and dispatch preserve 
     code: 'ENOENT',
   });
   assert.equal(await git('rev-parse', 'HEAD'), originalHead);
+});
+
+async function legacyCwdFixture(t, projected = false, toolMode = 'native') {
+  const temp = await mkdtemp(path.join(tmpdir(), 'clutch-legacy-cwd-'));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const root = path.join(temp, 'project');
+  const nested = path.join(root, 'packages', 'app');
+  const dshHome = path.join(temp, 'home');
+  await mkdir(nested, { recursive: true });
+  const git = async (cwd, ...args) => (await promisify(execFile)('git', args, {
+    cwd, timeout: 10000, maxBuffer: 1024 * 1024,
+  })).stdout.trim();
+  await git(root, 'init', '--initial-branch=main');
+  await writeFile(path.join(nested, 'source.txt'), 'original\n');
+  await git(root, 'add', '.');
+  await git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+    'commit', '-m', 'fixture');
+  let workspaceRoot = root;
+  let f;
+  const dsh = {
+    getWorkspace: async (id) => id === 'ws' ? { workspaceId: id, rootPath: workspaceRoot } : undefined,
+    listWorkspaces: async () => [{ workspaceId: 'ws', rootPath: workspaceRoot }],
+    getSession: async (id) => f?.headers.get(id),
+    listSessions: async () => [...f.headers.values()],
+  };
+  const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
+  const real = createWorktreeManager({ dsh, dshHome, sidecar });
+  t.after(() => real.close());
+  const record = await real.createWorktree({ workspaceId: 'ws', branch: 'main', newBranch: 'feature/legacy' });
+  f = await fixture(t, {
+    dsh,
+    toolMode,
+    manager: Object.fromEntries([
+      'listBindings', 'listBranches', 'listWorktrees', 'createWorktree', 'createWorktreeAtCommit',
+      'readSessionHead', 'updateWorktreeInstructions', 'bindSession', 'resolveRuntimeCwd',
+    ].map((name) => [name, real[name].bind(real)])),
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind !== 'local', tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+  });
+  const header = Object.freeze({ sessionId: 'caller', cwd: record.absolutePath });
+  f.headers.set('caller', header);
+  await real.bindSession({ workspaceId: 'ws', worktreeId: record.worktreeId, sessionId: 'caller' });
+  await writeFile(path.join(record.absolutePath, 'packages', 'app', 'source.txt'), 'legacy commit\n');
+  await git(record.absolutePath, 'add', '.');
+  await git(record.absolutePath, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+    'commit', '-m', 'legacy checkout ahead of Main');
+  workspaceRoot = nested;
+  const worktree = (await real.listWorktrees({ workspaceId: 'ws' }))[0];
+  assert.equal(worktree.gitRootPath, record.absolutePath);
+  assert.equal(worktree.absolutePath, path.join(record.absolutePath, 'packages', 'app'));
+  assert.equal(worktree.health, 'ready');
+  if (projected) {
+    await sidecar.mutate('ws', (snapshot) => ({ result: undefined, snapshot: {
+      ...snapshot, worktrees: snapshot.worktrees.map((item) => ({ ...item,
+        absolutePath: worktree.absolutePath, gitRootPath: worktree.gitRootPath })),
+    } }));
+  }
+  const shardPath = sidecar.getShardPath('ws');
+  const originalShard = await readFile(shardPath, 'utf8');
+  return { ...f, real, sidecar, root, nested, git, record, worktree, header,
+    shardPath, originalShard };
+}
+
+test('legacy Git-root Sessions assemble automatic tools after a subdirectory upgrade', async (t) => {
+  for (const projected of [false, true]) {
+    for (const toolMode of ['native', 'ptc']) {
+      await t.test(`${projected ? 'explicit' : 'projected'} paths / ${toolMode}`, async (t) => {
+        const f = await legacyCwdFixture(t, projected, toolMode);
+        const assemble = () => f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: f.signal });
+        const first = await assemble();
+        if (toolMode === 'ptc') {
+          assert.deepEqual(first.tools.map((tool) => tool.name), ['run_code']);
+          const sdk = first.sections.find((section) => section.name === 'tools:sdk').text;
+          for (const name of WORKTREE_TOOL_IDS) assert.ok(sdk.includes(name), name);
+        } else {
+          assert.deepEqual(first.tools.map((tool) => tool.name).sort(), [...WORKTREE_TOOL_IDS].sort());
+        }
+        assert.deepEqual(await assemble(), first);
+        assert.deepEqual(f.headers.get('caller'), f.header);
+        assert.equal(await readFile(f.shardPath, 'utf8'), f.originalShard);
+      });
+    }
+  }
+});
+
+test('legacy Git-root Sessions remain discoverable, receive follow-ups and delegated reports', async (t) => {
+  const f = await legacyCwdFixture(t);
+  await f.enable();
+  const listed = await f.run('clutch_list_sessions', { worktreeId: f.record.worktreeId });
+  assert.equal(listed.sessions.find((item) => item.sessionId === 'caller').status, 'idle');
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
+  const dispatched = await f.run('clutch_span_worktree', { worktreeId: f.record.worktreeId, prompt: 'Task' });
+  assert.equal(dispatched.status, 'dispatched');
+  assert.equal(f.headers.get(dispatched.sessionId).cwd, f.worktree.absolutePath);
+  const child = f.childAgents.get(dispatched.sessionId);
+  const report = await f.run('clutch_report_result', { status: 'completed', summary: 'Done' }, child);
+  assert.equal(report.status, 'admitted');
+  assert.equal(f.calls.filter(([kind]) => kind === 'prompt').at(-1)[1].sessionId, 'caller');
+  assert.deepEqual(f.headers.get('caller'), f.header);
+});
+
+test('legacy Git-root Session HEAD capture and default creation preserve the caller checkout', async (t) => {
+  const f = await legacyCwdFixture(t);
+  const expectedHead = await f.git(f.record.absolutePath, 'rev-parse', 'HEAD');
+  assert.notEqual(expectedHead, await f.git(f.root, 'rev-parse', 'HEAD'));
+  assert.equal(await f.real.readSessionHead({ workspaceId: 'ws', sessionId: 'caller' }), expectedHead);
+  assert.equal(await readFile(f.shardPath, 'utf8'), f.originalShard);
+  await f.enable();
+  const derived = await f.run('clutch_new_worktree', { name: 'feature/from-legacy' });
+  assert.equal(derived.baseCommit, expectedHead);
+  assert.equal(derived.baseBranch, 'feature/legacy');
+  assert.equal(await f.git(derived.absolutePath, 'rev-parse', 'HEAD'), expectedHead);
+  assert.deepEqual(f.headers.get('caller'), f.header);
+});
+
+test('legacy compatibility accepts a physical Git-root alias but does not admit a new root binding', async (t) => {
+  const f = await legacyCwdFixture(t, true);
+  const alias = path.join(path.dirname(f.root), 'legacy-alias');
+  await symlink(f.record.absolutePath, alias, 'junction');
+  f.headers.set('caller', Object.freeze({ ...f.header, cwd: alias }));
+  await f.enable();
+  assert.equal(await f.real.readSessionHead({ workspaceId: 'ws', sessionId: 'caller' }),
+    await f.git(f.record.absolutePath, 'rev-parse', 'HEAD'));
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
+  f.headers.set('fresh', { sessionId: 'fresh', cwd: alias });
+  await assert.rejects(f.real.bindSession({
+    workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'fresh',
+  }), { code: 'SESSION_CWD_MISMATCH' });
+  assert.equal(await readFile(f.shardPath, 'utf8'), f.originalShard);
+});
+
+test('legacy compatibility retains ownership, exact paths, binding and Workspace write gates', async (t) => {
+  for (const scenario of ['foreign', 'sibling', 'unbound', 'detached', 'cleaned', 'workspace-missing', 'escaping']) {
+    await t.test(scenario, async (t) => {
+      const f = await legacyCwdFixture(t);
+      await f.enable();
+      if (scenario === 'foreign') f.headers.set('caller', { ...f.header, workspaceId: 'foreign' });
+      if (scenario === 'sibling') f.headers.set('caller', { ...f.header, cwd: path.dirname(f.worktree.absolutePath) });
+      if (scenario === 'unbound' || scenario === 'detached' || scenario === 'cleaned') {
+        await f.sidecar.mutate('ws', (snapshot) => ({ result: undefined, snapshot: {
+          ...snapshot,
+          bindings: scenario === 'unbound' ? [] : snapshot.bindings.map((binding) => ({ ...binding, status: 'detached' })),
+          worktrees: scenario === 'cleaned' ? snapshot.worktrees.map((record) => ({
+            ...record, status: 'removed', diskCleanup: 'completed',
+          })) : snapshot.worktrees,
+        } }));
+      }
+      if (scenario === 'workspace-missing') await rm(f.nested, { recursive: true });
+      if (scenario === 'escaping') {
+        await rm(f.worktree.absolutePath, { recursive: true });
+        await symlink(f.nested, f.worktree.absolutePath, 'junction');
+      }
+      const shard = await readFile(f.shardPath, 'utf8');
+      const calls = f.calls.length;
+      await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+        { sessionId: 'caller', prompt: 'Must be rejected' }, { agent: f.agent, signal: f.signal },
+      ));
+      await assert.rejects(f.real.readSessionHead({ workspaceId: 'ws', sessionId: 'caller' }));
+      assert.equal(f.calls.length, calls, 'No native message admission');
+      assert.equal(await readFile(f.shardPath, 'utf8'), shard);
+    });
+  }
+});
+
+test('legacy Git-root Sessions on a healthy archived Worktree still receive follow-ups', async (t) => {
+  const f = await legacyCwdFixture(t);
+  await f.enable();
+  await f.sidecar.mutate('ws', (snapshot) => ({ result: undefined, snapshot: {
+    ...snapshot, worktrees: snapshot.worktrees.map((record) => ({ ...record, status: 'removed' })),
+  } }));
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
 });
 
 test('delegated Session pushes one bounded result through native admission without monitoring', async (t) => {
