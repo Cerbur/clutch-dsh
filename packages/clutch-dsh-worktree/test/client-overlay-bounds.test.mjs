@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import { computeOverlayBounds } from '../lib/client/overlay/overlay-bounds.js';
 import {
-  computeSidebarOverlayBounds,
   findNewSessionAnchor,
   resolveNativeSidebarRoot,
   resolveSidebarFooter,
@@ -113,88 +112,107 @@ test('tracks replacement geometry anchors with the ResizeObserver', () => {
   assert.equal(current, undefined);
 });
 
-test('resolves the direct child containing the worktree mode action as the footer', () => {
-  const root = {
-    firstElementChild: null,
-    lastElementChild: null,
-    querySelector: (selector) => (selector === '[data-worktree-mode-action]' ? actionButton : null),
-  };
-  const header = { parentElement: root };
-  const directChildFooter = { parentElement: root };
-  const actionWrapper = { parentElement: directChildFooter };
-  const actionButton = { parentElement: actionWrapper };
-
-  root.firstElementChild = header;
-  root.lastElementChild = directChildFooter;
-
-  assert.equal(resolveSidebarFooter(root), directChildFooter);
-});
-
-test('resolves real footer and computes positive bounds when desktop shell appends a pseudo-element at root end', () => {
-  const overlay = { top: 100, bottom: 900 };
-  const newSessionRect = { top: 120, bottom: 156 };
-  const realFooterRect = { top: 800, bottom: 840 };
-  const pseudoChildRect = { top: 120, bottom: 120 };
-
-  const actionButton = { parentElement: null };
-  const realFooter = {
+function sidebarFixture() {
+  const element = (top, bottom) => ({
     parentElement: null,
-    getBoundingClientRect: () => realFooterRect,
-  };
-  const pseudoChild = {
-    parentElement: null,
-    getBoundingClientRect: () => pseudoChildRect,
-  };
-  const root = {
-    firstElementChild: null,
-    lastElementChild: pseudoChild,
-    querySelector: (selector) => (selector === '[data-worktree-mode-action]' ? actionButton : null),
-  };
-  const header = { parentElement: root };
-  root.firstElementChild = header;
-  realFooter.parentElement = root;
-  actionButton.parentElement = realFooter;
-  pseudoChild.parentElement = root;
-
-  // Root.lastElementChild would erroneously collapse overlay height to 0
-  const legacyBounds = computeOverlayBounds(overlay, newSessionRect, pseudoChildRect);
-  assert.equal(legacyBounds.height, 0);
-
-  // ResolveSidebarFooter identifies the real footer over the pseudo last element
-  const resolvedFooter = resolveSidebarFooter(root);
-  assert.equal(resolvedFooter, realFooter);
-
-  // Bounds with the resolved footer compute a correct positive height
-  const bounds = computeOverlayBounds(overlay, newSessionRect, realFooterRect);
-  assert.deepEqual(bounds, {
-    ready: true,
-    top: 20,
-    height: 680,
+    getBoundingClientRect: () => ({ top, bottom }),
   });
+  const root = element(100, 900);
+  const header = element(100, 120);
+  const content = element(120, 800);
+  const newSession = element(120, 156);
+  const footer = element(800, 840);
+  const wrapper = element(800, 840);
+  const action = element(800, 840);
+  root.children = [header, content, footer];
+  root.firstElementChild = header;
+  root.lastElementChild = footer;
+  root.querySelector = (selector) => {
+    assert.equal(selector, '[data-worktree-mode-action]');
+    return root.action ?? null;
+  };
+  for (const child of root.children) child.parentElement = root;
+  newSession.parentElement = content;
+  wrapper.parentElement = footer;
+  action.parentElement = wrapper;
+  root.action = action;
+  return { root, content, newSession, footer, action, element };
+}
+
+test('resolves nested footer-slot action without assuming it is the last child', () => {
+  const { root, newSession, footer, element } = sidebarFixture();
+  // A real trailing DOM node, not a CSS pseudo-element (which is not in children).
+  const decoration = element(120, 120);
+  decoration.parentElement = root;
+  root.children.push(decoration);
+  root.lastElementChild = decoration;
+  const resolved = resolveSidebarFooter(root, newSession);
+  assert.equal(resolved, footer);
+  assert.deepEqual(
+    computeOverlayBounds(
+      { top: 100, bottom: 900 },
+      newSession.getBoundingClientRect(),
+      resolved.getBoundingClientRect(),
+    ),
+    { ready: true, top: 20, height: 680 },
+  );
 });
 
-test('safely falls back to lastElementChild when the worktree mode action is absent', () => {
-  const fallbackFooter = {};
-  const root = {
-    firstElementChild: {},
-    lastElementChild: fallbackFooter,
-    querySelector: () => null,
-  };
-  assert.equal(resolveSidebarFooter(root), fallbackFooter);
+test('uses a validated last child when the plugin marker is absent', () => {
+  const { root, newSession, footer } = sidebarFixture();
+  root.action = null;
+  assert.equal(resolveSidebarFooter(root, newSession), footer);
 });
 
-test('safely falls back to lastElementChild when the action is inside the firstElementChild', () => {
-  const fallbackFooter = {};
-  const actionButton = { parentElement: null };
-  const firstChild = { parentElement: null };
-  const root = {
-    firstElementChild: firstChild,
-    lastElementChild: fallbackFooter,
-    querySelector: () => actionButton,
-  };
-  firstChild.parentElement = root;
-  actionButton.parentElement = firstChild;
-  assert.equal(resolveSidebarFooter(root), fallbackFooter);
+test('does not guess a footer when the marker is inside the content subtree', () => {
+  const { root, content, newSession, action } = sidebarFixture();
+  action.parentElement = content;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+for (const [name, rect] of [
+  ['zero-height decoration', { top: 120, bottom: 120 }],
+  ['overlapping anchor', { top: 140, bottom: 840 }],
+  ['outside root', { top: 800, bottom: 950 }],
+  ['non-finite geometry', { top: NaN, bottom: 840 }],
+]) {
+  for (const marked of [true, false]) {
+    test('rejects ' + name + ' as ' + (marked ? 'marked' : 'legacy') + ' footer', () => {
+      const { root, newSession, footer } = sidebarFixture();
+      if (!marked) root.action = null;
+      footer.getBoundingClientRect = () => rect;
+      const resolved = resolveSidebarFooter(root, newSession);
+      assert.equal(resolved, undefined);
+      assert.deepEqual(
+        computeOverlayBounds({ top: 100, bottom: 900 }, newSession.getBoundingClientRect(), resolved),
+        { ready: false, top: 0, height: 0 },
+      );
+    });
+  }
+}
+
+test('rejects a footer before the content in DOM order even if its geometry looks valid', () => {
+  const { root, content, newSession, footer } = sidebarFixture();
+  root.children = [footer, content];
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+  root.action = null;
+  root.lastElementChild = footer;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('does not use the content itself as the last-child fallback', () => {
+  const { root, content, newSession } = sidebarFixture();
+  root.action = null;
+  root.children = [content];
+  root.lastElementChild = content;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('requires a New Session anchor inside the current root', () => {
+  const { root, newSession } = sidebarFixture();
+  assert.equal(resolveSidebarFooter(root, undefined), undefined);
+  newSession.parentElement = null;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
 });
 
 test('matches New Session button when textContent includes keyboard shortcut prefix', () => {
@@ -219,18 +237,4 @@ test('matches New Session button when textContent includes keyboard shortcut pre
   };
   buttonWithShortcutEn.parentElement = rootEn;
   assert.equal(findNewSessionAnchor(rootEn), buttonWithShortcutEn);
-});
-
-test('falls back to root bottom when computed footer bounds collapse to zero height', () => {
-  const overlay = { top: 100, bottom: 900 };
-  const newSession = { top: 120, bottom: 156 };
-  const abnormalFooter = { top: 120, bottom: 120 };
-  const root = { top: 100, bottom: 900 };
-
-  const bounds = computeSidebarOverlayBounds(overlay, newSession, abnormalFooter, root);
-  assert.deepEqual(bounds, {
-    ready: true,
-    top: 20,
-    height: 780,
-  });
 });

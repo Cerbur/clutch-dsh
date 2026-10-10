@@ -96,6 +96,8 @@ keeps no collapsed rail; use the native titlebar control to reopen it. Row anima
 reduced motion and settles immediately during search, drag, and initial loading.
 On Web, Worktree navigation starts below the native DSH brand row, leaving its Sidebar toggle
 visible and clickable even when the New Session action displays keyboard shortcuts.
+If the native Sidebar layout cannot be safely recognized, the plugin leaves native navigation
+visible rather than covering its controls. It retries when the layout changes.
 
 ### Create a Worktree
 

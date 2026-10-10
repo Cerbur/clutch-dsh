@@ -92,6 +92,7 @@ async function assertSidebarGeometry(t, platform) {
   const h = hooks();
   const mutations = [];
   const resizes = [];
+  const observed = new Set();
   const frames = [];
   class Element {
     attributes = new Map();
@@ -118,6 +119,9 @@ async function assertSidebarGeometry(t, platform) {
         this.attributes.has(name) || (name === 'data-sidebar-collapsed' && this.collapsed === true)
       );
     }
+    querySelector() {
+      return this.modeAction ?? null;
+    }
     querySelectorAll() {
       return this.buttons ?? [];
     }
@@ -138,6 +142,7 @@ async function assertSidebarGeometry(t, platform) {
   const surface = new Element();
   const button = new Element();
   button.top = 100;
+  button.bottom = 138;
   const label = platform === 'Web English' ? 'New Session' : '新会话';
   const accessibleLabel = platform === 'Web English' ? 'New session' : '新建会话';
   // Native shortcut glyphs share textContent with the visible label.
@@ -181,9 +186,15 @@ async function assertSidebarGeometry(t, platform) {
       constructor(fn) {
         resizes.push(fn);
       }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe(element) {
+        observed.add(element);
+      }
+      unobserve(element) {
+        observed.delete(element);
+      }
+      disconnect() {
+        observed.clear();
+      }
     },
   );
   stub(
@@ -235,6 +246,47 @@ async function assertSidebarGeometry(t, platform) {
   assert.equal(chrome.style.getPropertyValue('visibility'), '');
   assert.equal(chrome.style.getPropertyValue('opacity'), '');
   assert.equal(footer.getAttribute('inert'), null);
+  // Prefer our footer marker even after native chrome adds a trailing DOM node.
+  const modeAction = new Element();
+  modeAction.parentElement = footer;
+  root.modeAction = modeAction;
+  const decoration = new Element();
+  decoration.top = 100;
+  decoration.bottom = 100;
+  decoration.parentElement = root;
+  root.children.push(decoration);
+  root.lastElementChild = decoration;
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  assert.equal(footer.getAttribute('inert'), null);
+  // A zero-height footer stays observed, allowing recovery without a DOM mutation.
+  footer.top = footer.bottom;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.ready, false);
+  assert.equal(observed.has(footer), true);
+  assert.equal(region.getAttribute('inert'), null);
+  footer.top = 740;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  // Losing both usable anchors must restore native content, not cover to root.bottom.
+  root.modeAction = null;
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.deepEqual(render().bounds, { ready: false, top: 0, height: 0 });
+  assert.equal(render().nativeCovered, false);
+  for (const child of [button, panel, region, footer]) {
+    assert.equal(child.getAttribute('inert'), null);
+    assert.equal(child.style.getPropertyValue('visibility'), '');
+    assert.equal(child.style.getPropertyValue('opacity'), '');
+  }
+  root.modeAction = modeAction;
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  assert.equal(render().nativeCovered, true);
   frame.collapsed = true;
   sidebar.width = 0;
   for (const fn of resizes) fn();
@@ -265,6 +317,7 @@ async function assertSidebarGeometry(t, platform) {
   const nextButton = new Element();
   nextButton.textContent = 'New Session';
   nextButton.top = 100;
+  nextButton.bottom = 138;
   const nextFooter = new Element();
   nextFooter.top = 740;
   replacement.buttons = [nextButton];

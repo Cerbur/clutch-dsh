@@ -137,6 +137,16 @@ Using the brand would cover and conceal the whole logo/toggle row. The exclusion
 native chrome semantics rather than a platform flag, fixed inset or generated class name;
 if only the brand shortcut remains, the overlay has no anchor and yields zero coverage.
 
+Footer resolution prefers the plugin-owned `data-worktree-mode-action` marker rendered in
+`sidebar.footer.action` and walks to its direct child under the current native Sidebar root.
+When the marker is absent, the legacy last child is only a candidate: both paths require
+DOM order after the New Session content child, finite positive-height geometry below the
+New Session button, and containment within the root's vertical bounds. A misplaced or invalid
+marked footer fails closed rather than switching to a positional guess. Missing or invalid
+anchors yield zero coverage and restore native content; they never extend coverage to the root
+bottom. Mutation and resize observation retry resolution when the live layout recovers.
+This intentionally replaces the earlier unconditional last-child/root-bottom fallback.
+
 ### Worktree dashboard
 
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
