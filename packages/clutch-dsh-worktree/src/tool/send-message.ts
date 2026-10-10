@@ -52,6 +52,9 @@ export function registerSendMessage(context: ToolContext): void {
       check(exec);
       const requestId = args.requestId ?? `clutch-worktree:${randomUUID()}`;
       const identity = { workspaceId, sessionId: args.sessionId, requestId, mode: args.mode };
+      if (!context.prepareMessage) throw new Error('Delegation admission control is unavailable');
+      await context.prepareMessage(args.sessionId, requestId, args.prompt, args.mode, exec, args.requestId !== undefined);
+      check(exec);
       try {
         await options.sessions.prompt(
           {

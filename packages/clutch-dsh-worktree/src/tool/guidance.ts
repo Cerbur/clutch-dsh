@@ -49,7 +49,7 @@ export function registerToolGuidance(
         ...(parentSessionId === undefined
           ? []
           : [
-              `This Session was delegated by ${parentSessionId}. Before finishing a task or reporting a blocker/failure, call clutch_report_result({ status, summary, evidence? }). Both status and summary are required; status must be completed, blocked, or failed. Include concise verification evidence. Repeat after follow-up work; do not stream intermediate steps. The destination is fixed by the Host. Never report completed until the requested work and checks are actually done.`,
+              `This Session was delegated by ${parentSessionId}. The Host grants one in-memory report token per active delegated task. Only for that task, call clutch_report_result({ status, summary, evidence? }) once before finishing or reporting a blocker/failure. Both status and summary are required; status must be completed, blocked, or failed. Include concise verification evidence. Successful admission consumes the token; the tool remains visible but rejects calls without active authorization. Later user interaction is independent and must not report to this former parent. Only a new explicit parent dispatch grants another token. On uncertain admission retry only identical content with the returned requestId. Do not stream intermediate steps or use clutch_send_message to contact an ancestor. The destination is fixed by the Host. Never report completed until the requested work and checks are actually done.`,
             ]),
       ].join('\n');
     },

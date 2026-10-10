@@ -211,6 +211,8 @@ async function fixture(t, overrides = {}) {
   const childAgents = new Map();
   const sessions = {
     async resolveAgent(id) {
+      if (id === agent.session.id) return agent;
+      if (id === other.session.id) return other;
       if (!childAgents.has(id)) {
         const child = { id, session: { id } };
         child.ctx = createScope(ctx, child).ctx;
@@ -255,6 +257,18 @@ async function fixture(t, overrides = {}) {
       return { accepted: true };
     },
     ...overrides.sessions,
+  };
+  const nativePrompt = sessions.prompt.bind(sessions);
+  sessions.prompt = async (input, signal) => {
+    const result = await nativePrompt(input, signal);
+    if (!overrides.deferConsumption) {
+      ctx.emit('session/event', { id: input.sessionId }, { type: 'turn/start', data: { turn: 1 } });
+      ctx.emit('session/event', { id: input.sessionId }, {
+        type: 'user/message', surfaceOp: 'append',
+        data: { source: { kind: 'user', rpcId: input.requestId }, content: input.content },
+      });
+    }
+    return result;
   };
   const fiber = await ctx.inject(['commands', 'tools'], (inner) => {
     return registerWorktreeTools(inner, {
@@ -1377,6 +1391,7 @@ async function legacyCwdFixture(t, projected = false, toolMode = 'native') {
   await git(record.absolutePath, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
     'commit', '-m', 'legacy checkout ahead of Main');
   workspaceRoot = nested;
+  f.headers.set('other', { sessionId: 'other', workspaceId: 'ws', cwd: nested });
   const worktree = (await real.listWorktrees({ workspaceId: 'ws' }))[0];
   assert.equal(worktree.gitRootPath, record.absolutePath);
   assert.equal(worktree.absolutePath, path.join(record.absolutePath, 'packages', 'app'));
@@ -1420,7 +1435,9 @@ test('legacy Git-root Sessions remain discoverable, receive follow-ups and deleg
   await f.enable();
   const listed = await f.run('clutch_list_sessions', { worktreeId: f.record.worktreeId });
   assert.equal(listed.sessions.find((item) => item.sessionId === 'caller').status, 'idle');
-  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
+  await f.enable('', f.other);
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' }, f.other)).accepted, true);
+  consume(f, f.agent, 'human-delegation');
   const dispatched = await f.run('clutch_span_worktree', { worktreeId: f.record.worktreeId, prompt: 'Task' });
   assert.equal(dispatched.status, 'dispatched');
   assert.equal(f.headers.get(dispatched.sessionId).cwd, f.worktree.absolutePath);
@@ -1453,7 +1470,8 @@ test('legacy compatibility accepts a physical Git-root alias but does not admit 
   await f.enable();
   assert.equal(await f.real.readSessionHead({ workspaceId: 'ws', sessionId: 'caller' }),
     await f.git(f.record.absolutePath, 'rev-parse', 'HEAD'));
-  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
+  await f.enable('', f.other);
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' }, f.other)).accepted, true);
   f.headers.set('fresh', { sessionId: 'fresh', cwd: alias });
   await assert.rejects(f.real.bindSession({
     workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'fresh',
@@ -1500,7 +1518,8 @@ test('legacy Git-root Sessions on a healthy archived Worktree still receive foll
   await f.sidecar.mutate('ws', (snapshot) => ({ result: undefined, snapshot: {
     ...snapshot, worktrees: snapshot.worktrees.map((record) => ({ ...record, status: 'removed' })),
   } }));
-  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' })).accepted, true);
+  await f.enable('', f.other);
+  assert.equal((await f.run('clutch_send_message', { sessionId: 'caller', prompt: 'Continue' }, f.other)).accepted, true);
 });
 
 test('delegated Session pushes one bounded result through native admission without monitoring', async (t) => {
@@ -1513,6 +1532,7 @@ test('delegated Session pushes one bounded result through native admission witho
   });
   assert.equal(dispatched.status, 'dispatched');
   const child = f.childAgents.get(dispatched.sessionId);
+  const reportTool = f.ctx.tools.get('clutch_report_result', child);
   assert.ok(f.ctx.tools.get('clutch_report_result', child));
   assert.deepEqual(f.ctx.tools.schemas(child).map((tool) => tool.name), ['clutch_report_result']);
   assert.match((await f.enable('', child)).text, /6 added, 6 available/);
@@ -1531,6 +1551,9 @@ test('delegated Session pushes one bounded result through native admission witho
   );
   const before = f.calls.filter(([kind]) => kind === 'prompt').length;
   const report = { status: 'completed', summary: 'Implemented', evidence: 'node --test: 4 passed' };
+  f.headers.get('caller').workspaceId = 'foreign';
+  await assert.rejects(reportTool.execute(report, { agent: child, signal: f.signal }), /outside/);
+  f.headers.get('caller').workspaceId = 'ws';
   const delivered = await f.run('clutch_report_result', report, child);
   assert.equal(delivered.status, 'admitted');
   const message = f.calls.filter(([kind]) => kind === 'prompt').at(-1)[1];
@@ -1547,19 +1570,15 @@ test('delegated Session pushes one bounded result through native admission witho
     { ...report, status: 'idle' },
   ]) {
     await assert.rejects(
-      f.ctx.tools
-        .get('clutch_report_result', child)
-        .execute(args, { agent: child, signal: f.signal }),
+      reportTool.execute(args, { agent: child, signal: f.signal }),
       /INVALID_ARGUMENTS/,
     );
   }
   const after = f.calls.filter(([kind]) => kind === 'prompt').length;
   f.headers.get('caller').workspaceId = 'foreign';
   await assert.rejects(
-    f.ctx.tools
-      .get('clutch_report_result', child)
-      .execute(report, { agent: child, signal: f.signal }),
-    /outside/,
+    reportTool.execute(report, { agent: child, signal: f.signal }),
+    /REPORT_TASK_CLOSED/,
   );
   assert.equal(f.calls.filter(([kind]) => kind === 'prompt').length, after);
   await f.fiber.dispose();
@@ -1570,6 +1589,28 @@ test('delegated Session pushes one bounded result through native admission witho
     ),
     false,
   );
+});
+
+test('delegated reporting closes after an outcome and cannot leak into later user turns', async (t) => {
+  for (const status of ['completed', 'blocked', 'failed']) {
+    await t.test(status, async (t) => {
+      const f = await fixture(t);
+      await f.enable();
+      const wt = await f.run('clutch_new_worktree', { name: 'feature/report-once' });
+      const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+      const child = f.childAgents.get(span.sessionId);
+      const reportTool = f.ctx.tools.get('clutch_report_result', child);
+      await f.run('clutch_report_result', { status, summary: 'Outcome' }, child);
+      const before = f.calls.filter(([kind]) => kind === 'prompt').length;
+      await assert.rejects(reportTool.execute(
+        { status: 'completed', summary: 'Unrelated later user task' },
+        { agent: child, signal: f.signal },
+      ), /REPORT_TASK_CLOSED/);
+      assert.equal(f.calls.filter(([kind]) => kind === 'prompt').length, before);
+      assert.equal(f.ctx.tools.get('clutch_report_result', child), reportTool);
+      assert.match(JSON.stringify(await f.ctx.systemPrompt.assemble({ scope: child })), /in-memory report token/);
+    });
+  }
 });
 
 test('report admission failure preserves a deduplicated retry and reports blockers explicitly', async (t) => {
@@ -1603,6 +1644,259 @@ test('report admission failure preserves a deduplicated retry and reports blocke
     (await f.run('clutch_report_result', { ...args, requestId: failed.requestId }, child)).status,
     'admitted',
   );
+});
+
+async function delegatedFixture(t, overrides = {}) {
+  const f = await fixture(t, overrides);
+  // PTC's callable surface is run_code; use its registered SDK handlers here
+  // to exercise the same implementation while inspecting the assembled SDK.
+  if (overrides.toolMode === 'ptc')
+    f.run = (name, args, owner = f.agent) => f.ctx.tools.get(name, owner).execute(args, { agent: owner, signal: f.signal });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/lifecycle' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  const child = f.childAgents.get(span.sessionId);
+  return { ...f, child, wt, span, reportTool: f.ctx.tools.get('clutch_report_result', child) };
+}
+
+function consume(f, owner, requestId) {
+  f.ctx.emit('session/event', { id: owner.session.id }, { type: 'turn/start', data: { turn: 2 } });
+  f.ctx.emit('session/event', { id: owner.session.id }, {
+    type: 'user/message', surfaceOp: 'append',
+    data: { source: { kind: 'user', rpcId: requestId } },
+  });
+}
+
+test('direct human input closes an unreported task and only parent dispatch reopens it', async (t) => {
+  const f = await delegatedFixture(t);
+  consume(f, f.child, 'human-question');
+  await assert.rejects(f.reportTool.execute({ status: 'completed', summary: 'User work' },
+    { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+  assert.equal(f.ctx.tools.get('clutch_report_result', f.child), f.reportTool);
+  await f.enable('', f.child);
+  assert.equal(f.ctx.tools.get('clutch_report_result', f.child), f.reportTool);
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Explicit follow-up' });
+  assert.ok(f.ctx.tools.get('clutch_report_result', f.child));
+  assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'Follow-up done' }, f.child)).status, 'admitted');
+  // The stable handler reads current authority; exhausted tokens still reject.
+  await assert.rejects(f.reportTool.execute({ status: 'completed', summary: 'Stale handler' },
+    { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+});
+
+test('report-triggered turns block callback dispatch until fresh human input', async (t) => {
+  const f = await delegatedFixture(t);
+  await f.enable('', f.child);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.child).execute(
+    { sessionId: 'caller', prompt: 'Bypass reporting' }, { agent: f.child, signal: f.signal }), /DELEGATION_CYCLE/);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'caller', prompt: 'Self callback' }, { agent: f.agent, signal: f.signal }), /DELEGATION_CYCLE/);
+  await f.run('clutch_report_result', { status: 'completed', summary: 'Done' }, f.child);
+  const before = f.calls.length;
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Automatic acknowledgement' }, { agent: f.agent, signal: f.signal }), /DELEGATION_CALLBACK_BLOCKED/);
+  await assert.rejects(f.ctx.tools.get('clutch_span_worktree', f.agent).execute(
+    { worktreeId: f.wt.worktreeId, prompt: 'Automatic redispatch' }, { agent: f.agent, signal: f.signal }), /DELEGATION_CALLBACK_BLOCKED/);
+  assert.equal(f.calls.length, before);
+  consume(f, f.agent, 'human-follow-up');
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'New requested task' });
+  assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'New task done' }, f.child)).status, 'admitted');
+});
+
+test('queued tasks cannot report before consumption and old dispatch retries cannot reopen them', async (t) => {
+  const f = await delegatedFixture(t, { deferConsumption: true });
+  const args = { status: 'completed', summary: 'Done' };
+  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), /REPORT_TASK_NOT_STARTED/);
+  consume(f, f.child, f.span.requestId);
+  await f.run('clutch_report_result', args, f.child);
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Task', requestId: f.span.requestId });
+  assert.equal(f.ctx.tools.get('clutch_report_result', f.child), f.reportTool);
+  consume(f, f.child, f.span.requestId);
+  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Different', requestId: f.span.requestId },
+    { agent: f.agent, signal: f.signal }), /DELEGATION_RETRY_MISMATCH/);
+});
+
+test('uncertain report admission locks content and rejects duplicate concurrent reports', async (t) => {
+  let release;
+  let started;
+  let reportRequestId;
+  const entered = new Promise((resolve) => { started = resolve; });
+  let fail = true;
+  const f = await delegatedFixture(t, { sessions: { async prompt(input) {
+    if (input.requestId.startsWith('clutch-worktree-report:') && fail) {
+      reportRequestId = input.requestId;
+      started();
+      await new Promise((resolve) => { release = resolve; });
+      throw new Error('uncertain admission');
+    }
+    return { accepted: true };
+  } } });
+  const args = { status: 'blocked', summary: 'Need help' };
+  const first = f.run('clutch_report_result', args, f.child);
+  await entered;
+  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), /REPORT_RETRY_REQUIRED/);
+  await assert.rejects(f.reportTool.execute({ ...args, requestId: reportRequestId },
+    { agent: f.child, signal: f.signal }), /REPORT_IN_PROGRESS/);
+  release();
+  const failed = await first;
+  await assert.rejects(f.reportTool.execute({ ...args, summary: 'Changed', requestId: failed.requestId },
+    { agent: f.child, signal: f.signal }), /REPORT_RETRY_REQUIRED/);
+  fail = false;
+  assert.equal((await f.run('clutch_report_result', { ...args, requestId: failed.requestId }, f.child)).status, 'admitted');
+});
+
+test('ordinary plugin messages cannot authorize callback chains or preserve old reporting', async (t) => {
+  const f = await delegatedFixture(t);
+  f.headers.set('other', { sessionId: 'other', workspaceId: 'ws', cwd: '/project' });
+  await f.enable('', f.other);
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Unrelated message' }, f.other);
+  await assert.rejects(f.reportTool.execute({ status: 'completed', summary: 'Unrelated' },
+    { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+  await f.enable('', f.child);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.child).execute(
+    { sessionId: 'other', prompt: 'Callback' }, { agent: f.child, signal: f.signal }), /DELEGATION_CALLBACK_BLOCKED/);
+  consume(f, f.child, 'clutch-worktree-report:lost-on-restart');
+  await assert.rejects(f.ctx.tools.get('clutch_span_worktree', f.child).execute(
+    { worktreeId: f.wt.worktreeId, prompt: 'Callback' }, { agent: f.child, signal: f.signal }), /DELEGATION_CALLBACK_BLOCKED/);
+});
+
+test('nested delegates cannot message ancestors even after the intermediate Agent is disposed', async (t) => {
+  let f;
+  let counter = 0;
+  f = await fixture(t, { sessions: { async create(input) {
+    const sessionId = `child-${++counter}`;
+    f.headers.set(sessionId, { sessionId, cwd: input.cwd });
+    return { sessionId };
+  } } });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/nested' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  const child = f.childAgents.get(span.sessionId);
+  await f.enable('', child);
+  const nested = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Nested task' }, child);
+  const grandchild = f.childAgents.get(nested.sessionId);
+  await f.enable('', grandchild);
+  f.ctx.emit('agent/disposed', { agent: child });
+  const before = f.calls.length;
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', grandchild).execute(
+    { sessionId: 'caller', prompt: 'Ancestor callback' }, { agent: grandchild, signal: f.signal }), /DELEGATION_CYCLE/);
+  assert.equal(f.calls.length, before);
+});
+
+test('consuming report tokens preserves native and PTC prompt assemblies across follow-ups', async (t) => {
+  for (const toolMode of ['native', 'ptc']) await t.test(toolMode, async (t) => {
+    const f = await delegatedFixture(t, { toolMode });
+    const assemble = () => f.ctx.systemPrompt.assemble({ scope: f.child });
+    const before = await assemble();
+    const tool = f.reportTool;
+    await f.run('clutch_report_result', { status: 'completed', summary: 'Done' }, f.child);
+    assert.deepEqual(await assemble(), before);
+    assert.equal(f.ctx.tools.get('clutch_report_result', f.child), tool);
+    consume(f, f.child, 'human-input');
+    assert.deepEqual(await assemble(), before);
+    consume(f, f.agent, 'human-follow-up');
+    await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Next task' });
+    assert.deepEqual(await assemble(), before);
+    assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'Next done' }, f.child)).status, 'admitted');
+    assert.deepEqual(await assemble(), before);
+  });
+});
+
+test('historical replacements and context do not close tasks; mixed input favors the human', async (t) => {
+  const f = await delegatedFixture(t, { deferConsumption: true });
+  consume(f, f.child, f.span.requestId);
+  for (const event of [
+    { type: 'user/message', surfaceOp: 'replace', data: { source: { kind: 'user', rpcId: 'old-human' } } },
+    { type: 'user/message', surfaceOp: 'append', data: { source: { kind: 'plugin', plugin: 'context' } } },
+    { type: 'turn/end', data: { turn: 2 } },
+  ]) f.ctx.emit('session/event', { id: 'child' }, event);
+  assert.ok(f.ctx.tools.get('clutch_report_result', f.child));
+  const result = await f.run('clutch_report_result', { status: 'completed', summary: 'Done' }, f.child);
+  for (const ids of [[result.requestId, 'human'], ['human', result.requestId]]) {
+    f.ctx.emit('session/event', { id: 'caller' }, { type: 'turn/start', data: { turn: 3 } });
+    for (const rpcId of ids) f.ctx.emit('session/event', { id: 'caller' }, {
+      type: 'user/message', surfaceOp: 'append', data: { source: { kind: 'user', rpcId } },
+    });
+    assert.equal((await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Human follow-up' })).status, 'admitted');
+  }
+  consume(f, f.agent, result.requestId);
+  f.ctx.emit('session/event', { id: 'caller' }, { type: 'turn/start', data: { turn: 4 } });
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Empty-turn callback' }, { agent: f.agent, signal: f.signal }), /DELEGATION_CALLBACK_BLOCKED/);
+});
+
+test('human input during asynchronous reporting setup leaves the stable tool without a token', async (t) => {
+  let f;
+  let childReads = 0;
+  f = await fixture(t, { dsh: { async getSession(id) {
+    if (id === 'child' && ++childReads === 2) consume(f, f.childAgents.get(id), 'human-interruption');
+    return f.headers.get(id);
+  } } });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/setup-race' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  assert.equal(span.status, 'dispatched');
+  const child = f.childAgents.get(span.sessionId);
+  const tool = f.ctx.tools.get('clutch_report_result', child);
+  assert.ok(tool);
+  await assert.rejects(tool.execute({ status: 'completed', summary: 'Stale task' },
+    { agent: child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+});
+
+test('a delayed report settlement cannot spend a newly dispatched token', async (t) => {
+  let release;
+  let entered;
+  const started = new Promise((resolve) => { entered = resolve; });
+  const f = await delegatedFixture(t, { sessions: { async prompt(input) {
+    if (input.requestId.startsWith('clutch-worktree-report:')) {
+      entered();
+      await new Promise((resolve) => { release = resolve; });
+    }
+    return { accepted: true };
+  } } });
+  const old = f.run('clutch_report_result', { status: 'completed', summary: 'Old task' }, f.child);
+  await started;
+  consume(f, f.child, 'human-interruption');
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Replacement task' });
+  release();
+  assert.equal((await old).status, 'admitted');
+  const secondStarted = new Promise((resolve) => { entered = resolve; });
+  const next = f.run('clutch_report_result', { status: 'completed', summary: 'Replacement task' }, f.child);
+  await secondStarted;
+  release();
+  assert.equal((await next).status, 'admitted');
+});
+
+test('report authorization awaits cannot switch an old invocation onto a new token', async (t) => {
+  let f;
+  let freeze = false;
+  let resume;
+  let entered;
+  const frozen = new Promise((resolve) => { entered = resolve; });
+  f = await fixture(t, { dsh: { async getSession(id) {
+    if (id === 'child' && freeze) {
+      freeze = false;
+      entered();
+      await new Promise((resolve) => { resume = resolve; });
+    }
+    return f.headers.get(id);
+  } } });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/report-authorization-race' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  f.child = f.childAgents.get(span.sessionId);
+  f.reportTool = f.ctx.tools.get('clutch_report_result', f.child);
+  freeze = true;
+  const old = f.reportTool.execute({ status: 'completed', summary: 'Old invocation' },
+    { agent: f.child, signal: f.signal });
+  await frozen;
+  consume(f, f.child, 'human-interruption');
+  await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Replacement task' });
+  const rejected = assert.rejects(old, /REPORT_TASK_CLOSED/);
+  resume();
+  await rejected;
+  assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'New task' }, f.child)).status, 'admitted');
 });
 
 test('schema exposes target alternatives and fields without a JSON Schema dialect', async (t) => {

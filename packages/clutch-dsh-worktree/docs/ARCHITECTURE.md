@@ -564,6 +564,56 @@ preferences and requires healthy availability. Detached or ambiguous bindings ne
 Delegated Sessions default to result reporting only; other tools follow explicit preferences or
 command activation. Reporting guidance remains independent of delegation guidance.
 
+### Task-scoped reporting and callback control (2026-10-10)
+
+`src/tool/delegation.ts` owns a runtime-only registry of Agent routes, ancestry, dispatch identities
+and in-memory report tokens. It observes newly appended native `user/message` inputs, using the native
+source `rpcId` to match Host-recorded admission identities; model-authored text never grants authority.
+Tasks become active only after their dispatched input is consumed. A parent follow-up within an
+unfinished task retains that task; a fresh follow-up after closure creates a new task identity.
+Completed dispatch retries do not reopen reporting, and a retry cannot change destination, content
+or mode. Direct human input or an unrelated plugin message closes remaining task authorization.
+
+Each delegated Agent keeps its reporting tool, SDK and conditional guidance for its lifetime,
+preserving the prompt prefix across token consumption and parent follow-ups. The Host issues an
+opaque internal token object; no token is exposed to the model or written to a prompt, Session
+metadata or Sidecar. The stable handler resolves the current token once per invocation, then
+rechecks that same identity after asynchronous ownership/cwd validation. Concurrent calls reserve
+the token synchronously before native admission. All three successful report outcomes consume it,
+clear its attempt/payload and unlink it from the route and every dispatch record. Old in-flight
+settlement cannot consume a replacement token. Calls without a token fail with `REPORT_TASK_CLOSED`.
+Uncertain failure retains one exact requestId/payload attempt for an identical retry; cancellation
+releases the in-flight flag without restoring a fresh report budget. A supplied report retry id
+must belong to this token's prior attempt. Every actual admission still revalidates Workspace
+membership, physical cwd and binding health.
+
+The provenance/dispatch retry registry holds at most 512 entries. Prompt content and mode are
+represented by SHA-256 digests; report payloads are never stored there. When full, it evicts the
+oldest entry without a live token. If all entries refer to live tokens, admission fails explicitly
+with `DELEGATION_CAPACITY`; live input provenance is never silently evicted. A supplied dispatch
+retry id absent from memory fails with `DELEGATION_RETRY_EXPIRED`, so eviction cannot reissue a
+token or allow altered retries. Report source ids use the plugin prefix and need no historical
+report registry entry. Ancestry is bounded to 64 levels. Routes and stable tools last only as long
+as their live Agents; Agent/scope disposal removes route and related dispatch entries and revokes
+child tokens whose parent disappeared. Plugin disposal clears all containers. A WeakSet records
+dead Agent objects without retaining them, preventing asynchronous setup from resurrecting one.
+Registration rollback releases state without marking a still-live native Agent dead. There are
+no cleanup timers or persistent task files. Memory scales with live Agents and bounded ancestry,
+one token/attempt per delegated Agent, and the bounded dispatch registry, rather than report history.
+
+Newly consumed reports and ordinary plugin messages block `clutch_send_message` and
+`clutch_span_worktree` until human input or a valid parent task dispatch supplies new work.
+Report forwarding for a still-active parent task remains one-shot, allowing finite nested result
+chains. Self and ancestor message destinations are rejected; ancestry is captured independently
+of intermediate Agent disposal. Native append events are observed globally and scope registrations
+are installed before admission. Historical surface replacements are ignored. Human input in a
+mixed input batch takes precedence, while the callback block survives empty later turns.
+Unknown native admissions with the plugin's requestId prefixes fail closed after restart.
+These constraints govern this plugin's tools; they do not intercept other plugins or mutate DSH
+metadata, history, Sidecar facts, business files or native message content. Agent/plugin disposal
+clears runtime authority; no listener infers or fabricates task completion. Restart deliberately
+loses tokens; continuing automatic reporting requires a fresh parent dispatch.
+
 The native loop collects prompt providers before its assembly waterfall, then runs pre-step.
 Injection at pre-step therefore misses request 1 and edits the request prefix at request 2.
 The plugin now intercepts `system-prompt/assemble` with a prepended middleware and, only when

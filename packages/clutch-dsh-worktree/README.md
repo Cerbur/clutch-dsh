@@ -195,6 +195,18 @@ Worktree's explicit automatic-injection selection. Reports arrive as ordinary qu
 verify their claims and evidence before accepting completion. Reports are model-driven:
 a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
 
+Reporting is limited to the active delegated task. One successfully admitted `completed`, `blocked`,
+or `failed` report consumes and clears its in-memory token. The reporting tool, SDK and guidance
+stay stable; calls without a token are rejected. Later user input clears any remaining token;
+it does not report to the former parent. An explicit new `clutch_send_message`
+dispatch from that parent opens reporting again after its prompt is consumed. Uncertain report
+admission permits only an identical retry with the returned `requestId`.
+Tokens are never persisted and are lost on Agent/plugin restart. Dispatch retry identities are
+retained in a bounded in-memory cache; expired retries fail explicitly instead of reopening reporting.
+The plugin rejects self/ancestor messages and blocks further message/task dispatch from turns
+triggered solely by reports or ordinary plugin messages. New human input permits dispatch again;
+these guards apply to this plugin's tools in both native and PTC modes.
+
 `clutch_read_session` and `clutch_wait_sessions` are removed from the model catalog. Do not
 poll lists or read raw Session logs for progress. After successful dispatch or follow-up admission,
 acknowledge dispatch and end the turn, waiting for the executing Session's pushed report.
