@@ -293,15 +293,16 @@ const LEGACY_MIGRATION_CASES = [
   { version: 6, createFixture: createV6Fixture },
 ];
 
-function expectedV7Snapshot(fixture) {
+// Independent expected shapes: only source, revision, and legacy cleanup are synthesized.
+function expectedMigratedSnapshot(fixture, targetVersion = 7) {
   return {
     ...structuredClone(fixture),
-    schemaVersion: 7,
-    revision: fixture.revision ?? '0',
+    schemaVersion: targetVersion,
+    ...(targetVersion >= 3 ? { revision: fixture.revision ?? '0' } : {}),
     worktrees: fixture.worktrees.map((record) => ({
       ...record,
       source: record.source ?? 'plugin',
-      ...(fixture.schemaVersion < 4 && record.status === 'removed'
+      ...(targetVersion >= 4 && fixture.schemaVersion < 4 && record.status === 'removed'
         ? { diskCleanup: 'completed' }
         : {}),
     })),
@@ -312,7 +313,7 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
   test(`migration v${version} -> v7 preserves historical fields, bindings, journals, and legacy paths`, () => {
     const fixture = createFixture();
     const before = structuredClone(fixture);
-    const expected = expectedV7Snapshot(fixture);
+    const expected = expectedMigratedSnapshot(fixture);
     const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
     assert.deepEqual(migrated, expected);
     assert.deepEqual(validateSidecarSnapshot(fixture, '/tmp/ws.json'), expected);
@@ -329,7 +330,7 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
     for (let targetVersion = version + 1; targetVersion <= 7; targetVersion++) {
       sequential = migrateSidecarSnapshot(sequential, '/tmp/ws.json', undefined, targetVersion);
     }
-    assert.deepEqual(sequential, expectedV7Snapshot(fixture));
+    assert.deepEqual(sequential, expectedMigratedSnapshot(fixture));
   });
 }
 
@@ -347,7 +348,7 @@ test('migration v3 -> v7 normalizes transitional repository identities without l
   };
   const before = structuredClone(transitional);
   const expected = {
-    ...expectedV7Snapshot(fixture),
+    ...expectedMigratedSnapshot(fixture),
     repositoryFingerprint: createRepositoryFingerprint(identity),
     pendingOperation: { ...legacyPending, repositoryFingerprint: createRepositoryFingerprint(identity) },
   };
@@ -361,13 +362,13 @@ test('migration v6 -> v7 distinguishes disabled Main instructions from an absent
     if (mainInstructions === undefined) delete fixture.mainInstructions;
     else fixture.mainInstructions = mainInstructions;
     const migrated = migrateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
-    assert.deepEqual(migrated, expectedV7Snapshot(fixture));
+    assert.deepEqual(migrated, expectedMigratedSnapshot(fixture));
     assert.equal(Object.hasOwn(migrated, 'mainInstructions'), mainInstructions !== undefined);
   }
 });
 
 // ---------------------------------------------------------------------------
-// 1. v1 -> v2, v3, v4, v5
+// 1. v1 -> v2, v3, v4, v5, v6, v7
 // ---------------------------------------------------------------------------
 
 test('migration v1 -> v2: adds default source "plugin" and produces exact v2 schema shape', () => {
@@ -429,6 +430,66 @@ test('migration v1 -> v4: normalizes legacy removed records to diskCleanup "comp
   // Verify valid v4 validation
   const revalidated = validateSidecarSnapshot(v4, '/tmp/ws.json', undefined, 4);
   assert.deepEqual(revalidated, v4);
+});
+
+test('migration v1 -> v5: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV1Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 5);
+
+  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '0');
+  assert.equal(migrated.worktrees[0].source, 'plugin');
+  assert.equal(migrated.worktrees[1].source, 'plugin');
+  assert.equal(migrated.worktrees[0].diskCleanup, undefined);
+  assert.equal(migrated.worktrees[1].diskCleanup, 'completed');
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 5));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 5), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v1 -> v6: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV1Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 6);
+
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '0');
+  assert.equal(migrated.worktrees[0].source, 'plugin');
+  assert.equal(migrated.worktrees[1].source, 'plugin');
+  assert.equal(migrated.worktrees[0].diskCleanup, undefined);
+  assert.equal(migrated.worktrees[1].diskCleanup, 'completed');
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 6));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 6), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v1 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV1Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '0');
+  assert.equal(migrated.worktrees[0].source, 'plugin');
+  assert.equal(migrated.worktrees[1].source, 'plugin');
+  assert.equal(migrated.worktrees[0].diskCleanup, undefined);
+  assert.equal(migrated.worktrees[1].diskCleanup, 'completed');
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
 });
 
 test('keeps every supported schema version readable when the current version advances', () => {
@@ -535,7 +596,7 @@ test('migration v1 -> current: migrates legacy v1 directly to the current schema
 });
 
 // ---------------------------------------------------------------------------
-// 2. v2 -> v3, v4, v5
+// 2. v2 -> v3, v4, v5, v6, v7
 // ---------------------------------------------------------------------------
 
 test('migration v2 -> v3: preserves explicit sources and initializes revision to "0"', () => {
@@ -591,8 +652,46 @@ test('migration v2 -> v5: migrates v2 to v5 preserving explicit sources and mark
   assert.equal(migratedToV6.worktrees[0].baseCommit, v5.worktrees[0].baseCommit);
 });
 
+test('migration v2 -> v6: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV2Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 6);
+
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '0');
+  assert.equal(migrated.worktrees[0].source, 'plugin');
+  assert.equal(migrated.worktrees[1].source, 'external');
+  assert.equal(migrated.worktrees[2].diskCleanup, 'completed');
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 6));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 6), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v2 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV2Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '0');
+  assert.equal(migrated.worktrees[0].source, 'plugin');
+  assert.equal(migrated.worktrees[1].source, 'external');
+  assert.equal(migrated.worktrees[2].diskCleanup, 'completed');
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
 // ---------------------------------------------------------------------------
-// 3. v3 -> v4, v5 (then v6 preserves historical fields)
+// 3. v3 -> v4, v5, v6, v7
 // ---------------------------------------------------------------------------
 
 test('migration v3 -> v4: preserves revision, converts transitional repository, marks removed as cleaned', () => {
@@ -657,8 +756,48 @@ test('migration v3 -> v5: migrates v3 to v5 preserving revision, fingerprint, pe
   assert.deepEqual(revalidated, v5);
 });
 
+test('migration v3 -> v6: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV3Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 6);
+
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '42');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.equal(migrated.worktrees[0].source, 'external');
+  assert.equal(migrated.worktrees[1].diskCleanup, 'completed');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 6));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 6), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v3 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV3Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '42');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.equal(migrated.worktrees[0].source, 'external');
+  assert.equal(migrated.worktrees[1].diskCleanup, 'completed');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
 // ---------------------------------------------------------------------------
-// 4. v4 -> v5 (v6 target is covered by the current-schema migration)
+// 4. v4 -> v5, v6, v7
 // ---------------------------------------------------------------------------
 
 test('migration v4 -> v5: preserves all acquisition metadata and archived active bindings', () => {
@@ -692,8 +831,141 @@ test('migration v4 -> v5: preserves all acquisition metadata and archived active
   assert.deepEqual(revalidated, v5);
 });
 
+test('migration v4 -> v6: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV4Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 6);
+
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '99');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.deepEqual(migrated.worktrees, fixture.worktrees);
+  assert.equal(migrated.worktrees[0].instructions, 'pnpm test before commit');
+  assert.equal(migrated.worktrees[0].baseBranch, 'main');
+  assert.equal(migrated.worktrees[0].createdAt, '2026-09-10T12:00:00.000Z');
+  assert.equal(migrated.worktrees[1].importedAt, '2026-09-10T13:00:00.000Z');
+  assert.equal(migrated.worktrees[1].diskCleanup, undefined);
+  assert.equal(migrated.bindings[1].status, 'active');
+  assert.equal(migrated.worktrees[2].diskCleanup, 'completed');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 6));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 6), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v4 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV4Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '99');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.deepEqual(migrated.worktrees, fixture.worktrees);
+  assert.equal(migrated.worktrees[0].instructions, 'pnpm test before commit');
+  assert.equal(migrated.worktrees[0].baseBranch, 'main');
+  assert.equal(migrated.worktrees[0].createdAt, '2026-09-10T12:00:00.000Z');
+  assert.equal(migrated.worktrees[1].importedAt, '2026-09-10T13:00:00.000Z');
+  assert.equal(migrated.worktrees[1].diskCleanup, undefined);
+  assert.equal(migrated.bindings[1].status, 'active');
+  assert.equal(migrated.worktrees[2].diskCleanup, 'completed');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'baseCommit'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
 // ---------------------------------------------------------------------------
-// 5. Transitive migration equivalence (stepwise vs direct historical targets)
+// 5. v5 -> v6, v7
+// ---------------------------------------------------------------------------
+
+test('migration v5 -> v6: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV5Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 6);
+
+  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '99');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.deepEqual(migrated.worktrees, fixture.worktrees);
+  assert.equal(migrated.worktrees[0].baseCommit, 'a'.repeat(40));
+  assert.equal(migrated.worktrees[1].baseCommit, 'b'.repeat(64));
+  assert.equal(migrated.bindings[1].status, 'active');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.equal(migrated.pendingOperation.baseCommit, 'c'.repeat(40));
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 6));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 6), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+test('migration v5 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV5Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '99');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.deepEqual(migrated.worktrees, fixture.worktrees);
+  assert.equal(migrated.worktrees[0].baseCommit, 'a'.repeat(40));
+  assert.equal(migrated.worktrees[1].baseCommit, 'b'.repeat(64));
+  assert.equal(migrated.bindings[1].status, 'active');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.equal(migrated.pendingOperation.baseCommit, 'c'.repeat(40));
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  assert.equal(Object.hasOwn(migrated, 'mainInstructions'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+// ---------------------------------------------------------------------------
+// 6. v6 -> v7
+// ---------------------------------------------------------------------------
+
+test('migration v6 -> v7: preserves historical snapshot fields without inventing new metadata', () => {
+  const fixture = createV6Fixture();
+  const before = structuredClone(fixture);
+  const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, 7);
+
+  assert.equal(migrated.schemaVersion, 7);
+  assert.equal(migrated.workspaceId, 'ws_mig');
+  assert.equal(migrated.revision, '99');
+  assert.equal(migrated.repositoryFingerprint, fixture.repositoryFingerprint);
+  assert.equal(migrated.mainInstructions, fixture.mainInstructions);
+  assert.deepEqual(migrated.worktrees, fixture.worktrees);
+  assert.equal(migrated.worktrees[0].baseCommit, 'a'.repeat(40));
+  assert.equal(migrated.worktrees[1].baseCommit, 'b'.repeat(64));
+  assert.equal(migrated.bindings[1].status, 'active');
+  assert.deepEqual(migrated.pendingOperation, fixture.pendingOperation);
+  assert.equal(migrated.pendingOperation.baseCommit, 'c'.repeat(40));
+  assert.deepEqual(migrated.recoveryIssues, fixture.recoveryIssues);
+  for (const record of migrated.worktrees) assert.equal(Object.hasOwn(record, 'gitRootPath'), false);
+  assert.equal(Object.hasOwn(migrated.pendingOperation, 'workspacePath'), false);
+  assert.deepEqual(migrated.bindings, fixture.bindings);
+  assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, 7));
+  assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, 7), migrated);
+  assert.deepEqual(fixture, before, 'migration must not mutate the input');
+});
+
+// ---------------------------------------------------------------------------
+// 7. Transitive migration equivalence (stepwise vs direct historical targets)
 // ---------------------------------------------------------------------------
 
 test('transitive migration equivalence: v1 -> v2 -> v3 -> v4 -> v5 equals direct v1 -> v5', () => {
@@ -729,8 +1001,49 @@ test('transitive migration equivalence: v3 -> v4 -> v5 equals direct v3 -> v5', 
   assert.deepEqual(stepV5, directV5);
 });
 
+for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
+  for (const targetVersion of [6, 7]) {
+    if (targetVersion <= version + 1) continue;
+    const chain = Array.from({ length: targetVersion - version + 1 }, (_, index) => `v${version + index}`);
+    test(`transitive migration equivalence: ${chain.join(' -> ')} equals direct v${version} -> v${targetVersion}`, () => {
+      const fixture = createFixture();
+      const before = structuredClone(fixture);
+      const direct = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, targetVersion);
+      let stepwise = fixture;
+      for (let nextVersion = version + 1; nextVersion <= targetVersion; nextVersion++) {
+        stepwise = validateSidecarSnapshot(stepwise, '/tmp/ws.json', undefined, nextVersion);
+      }
+
+      assert.equal(stepwise.schemaVersion, targetVersion);
+      assert.deepEqual(stepwise, direct);
+      assert.deepEqual(direct, expectedMigratedSnapshot(fixture, targetVersion));
+      assert.deepEqual(fixture, before, 'stepwise and direct migrations must not mutate the input');
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
-// 6. Downgrade and unsupported version rejections
+// 8. All-pairs migration matrix (all 21 combinations with 1 <= from < to <= 7)
+// ---------------------------------------------------------------------------
+
+for (const { version: fromVersion, createFixture } of LEGACY_MIGRATION_CASES) {
+  for (let toVersion = fromVersion + 1; toVersion <= 7; toVersion++) {
+    test(`all-pairs migration matrix: v${fromVersion} -> v${toVersion} validates the exact target shape without mutating input`, () => {
+      const fixture = createFixture();
+      const before = structuredClone(fixture);
+      const migrated = validateSidecarSnapshot(fixture, '/tmp/ws.json', undefined, toVersion);
+
+      assert.equal(migrated.schemaVersion, toVersion);
+      assert.equal(migrated.workspaceId, fixture.workspaceId);
+      assert.deepEqual(migrated, expectedMigratedSnapshot(fixture, toVersion));
+      assert.deepEqual(validateSidecarSnapshot(migrated, '/tmp/ws.json', undefined, toVersion), migrated);
+      assert.deepEqual(fixture, before, 'migration must not mutate the input');
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 9. Downgrade and unsupported version rejections
 // ---------------------------------------------------------------------------
 
 test('rejects downgrading schema version', () => {
@@ -784,7 +1097,7 @@ test('rejects unsupported target versions', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. WorkspaceShardedSidecarRepository integration with legacy shard files
+// 10. WorkspaceShardedSidecarRepository integration with legacy shard files
 // ---------------------------------------------------------------------------
 
 function withGeneratedPaths(fixture, worktreeRoot) {
@@ -812,7 +1125,7 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
       delete readyFixture.pendingOperation;
       delete readyFixture.recoveryIssues;
       const fixture = withGeneratedPaths(readyFixture, worktreeRoot);
-      const expected = expectedV7Snapshot(fixture);
+      const expected = expectedMigratedSnapshot(fixture);
       const shardPath = repository.getShardPath(fixture.workspaceId);
       const originalText = JSON.stringify(fixture, null, 2);
       await mkdir(path.dirname(shardPath), { recursive: true });
@@ -853,7 +1166,7 @@ for (const { version, createFixture } of LEGACY_MIGRATION_CASES) {
       const repository = new WorkspaceShardedSidecarRepository({ dshHome: tempDir });
       const worktreeRoot = path.join(tempDir, 'clutch-dsh-worktree', 'worktree');
       const fixture = withGeneratedPaths(createFixture(`ws_pending_v${version}`), worktreeRoot);
-      const expected = expectedV7Snapshot(fixture);
+      const expected = expectedMigratedSnapshot(fixture);
       const shardPath = repository.getShardPath(fixture.workspaceId);
       const originalText = JSON.stringify(fixture, null, 2);
       await mkdir(path.dirname(shardPath), { recursive: true });
