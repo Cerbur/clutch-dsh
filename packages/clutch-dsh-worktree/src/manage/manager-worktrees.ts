@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { gitWorktreeRoot } from '../contract/index.js';
+import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
 import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
 import { readWorktreeStatus } from '../provider/git/worktree-status.js';
@@ -243,7 +243,7 @@ export async function listBranches(
 /** Create a Git Worktree first, then commit its external relation to the sidecar. */
 export async function createWorktree(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string; readonly baseCommit?: string },
 ): Promise<WorktreeRecord> {
   let baseId = '';
   for (let attempt = 0n; ; attempt++) {
@@ -261,7 +261,7 @@ export async function createWorktree(
 
 async function createWorktreeAttempt(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string; readonly baseCommit?: string },
   worktreeId: string,
 ): Promise<WorktreeRecord> {
   const workspace = await requireWorkspace(context, input.workspaceId);
@@ -278,6 +278,10 @@ async function createWorktreeAttempt(
   }
 
   const baseBranch = input.branch.trim();
+  if (input.baseCommit !== undefined && (!isWorktreeGitCommit(input.baseCommit) || input.newBranch === undefined)) {
+    throw providerError('GIT_OPERATION_FAILED', 'A captured commit requires a full Git hash and a new branch', {});
+  }
+  const detachedBase = input.baseCommit !== undefined && baseBranch === `${input.baseCommit}^{commit}`;
   if (input.newBranch !== undefined && typeof input.newBranch !== 'string') {
     throw providerError('GIT_OPERATION_FAILED', 'A new branch name must be a string', {
       workspaceRoot: workspace.rootPath,
@@ -301,7 +305,7 @@ async function createWorktreeAttempt(
   const targetBranch = newBranch ?? baseBranch;
   if (!transactional) {
     const branches = await context.git.listBranches(workspace.rootPath);
-    if (!branches.includes(baseBranch)) {
+    if (!detachedBase && !branches.includes(baseBranch)) {
       throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: baseBranch,
@@ -341,7 +345,8 @@ async function createWorktreeAttempt(
       workspaceRoot: workspace.rootPath,
       targetPath,
       worktreeId,
-      baseBranch,
+      ...(detachedBase ? {} : { baseBranch }),
+      ...(input.baseCommit === undefined ? {} : { baseCommit: input.baseCommit }),
       newBranch,
       targetBranch,
     });
@@ -357,17 +362,18 @@ async function createWorktreeAttempt(
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {
-    await context.git.createWorktree(workspace.rootPath, targetPath, baseBranch, newBranch);
+    await context.git.createWorktree(workspace.rootPath, targetPath, input.baseCommit ?? baseBranch, newBranch);
   } catch (error) {
     throw asGitError('create worktree', workspace.rootPath, targetPath, error);
   }
 
-  let capturedBaseCommit: string | undefined;
+  let capturedBaseCommit = input.baseCommit;
   if (context.git.resolveCommit) {
     try {
       // Read the Worktree's actual HEAD after Git has created it. The base
       // branch may have moved during the preflight/create window.
-      capturedBaseCommit = await context.git.resolveCommit(targetPath, 'HEAD', { signal: context.signal });
+      const actualHead = await context.git.resolveCommit(targetPath, 'HEAD', { signal: context.signal });
+      capturedBaseCommit ??= actualHead;
     } catch (error) {
       try {
         await context.git.removeWorktree(workspace.rootPath, targetPath);
@@ -396,7 +402,7 @@ async function createWorktreeAttempt(
     branch: targetBranch,
     source: 'plugin',
     createdAt: new Date().toISOString(),
-    baseBranch,
+    ...(detachedBase ? {} : { baseBranch }),
     ...(capturedBaseCommit !== undefined ? { baseCommit: capturedBaseCommit } : {}),
     status: 'active',
   };

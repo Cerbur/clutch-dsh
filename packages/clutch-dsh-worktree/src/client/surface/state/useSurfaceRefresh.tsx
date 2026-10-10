@@ -18,7 +18,7 @@ type Input = {
   >;
   props: Pick<
     WorktreeSurfaceProps,
-    'manager' | 'viewReader' | 'invalidateWorktreeContext' | 'syncSessionWorkspaces'
+    'manager' | 'viewReader' | 'invalidateWorktreeContext' | 'syncSessionWorkspaces' | 'subscribeToolChanges'
   >;
   registrationState: Pick<
     ReturnType<typeof useRegistrationState>,
@@ -120,7 +120,9 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       await Promise.allSettled(
         selectedWorkspaceIds.map(async (workspaceId) => {
           const guard = guardFor(workspaceId);
-          viewReader.invalidate(workspaceId, { reuseInFlight: options.reuseInFlight });
+          if (!options.alreadyInvalidated) {
+            viewReader.invalidate(workspaceId, { reuseInFlight: options.reuseInFlight });
+          }
           const contextRefresh =
             options.invalidateContext === false
               ? undefined
@@ -181,6 +183,15 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     },
     [invalidateWorktreeContext, manager, viewReader],
   );
+  useEffect(() => props.subscribeToolChanges?.(({ workspaceId }) => {
+    if (mode !== 'worktree') return;
+    void refresh({
+      scope: { kind: 'workspace', workspaceId },
+      preserveCurrent: true,
+      alreadyInvalidated: true,
+      invalidateContext: false,
+    });
+  }), [props.subscribeToolChanges, mode, refresh]);
   const loadModalWorktreeView = useCallback(
     (workspaceId: string): void => {
       setModalReadError(undefined);

@@ -8,6 +8,8 @@ import {
 } from '../lib/client/worktree-connection.js';
 
 const METHODS = [
+  ['getToolSettings', { scope: { kind: 'general' } }, { enabled: false, tools: [] }],
+  ['updateToolSettings', { scope: { kind: 'general' }, selection: { enabled: true, tools: [] }, expected: { enabled: false, tools: [] } }, { enabled: false, tools: [] }],
   ['getWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1' }, 'Use tests'],
   ['updateWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1', instructions: 'Use tests', expectedInstructions: '' }, 'Use tests'],
   ['updateWorktreeBaseBranch', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main', expectedBaseBranch: 'old' }, 'main'],
@@ -75,6 +77,9 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     })),
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/getToolSettings',
+    'worktreeManager/updateToolSettings',
+    'worktreeManager/watchToolChanges',
     'worktreeManager/listWorktrees',
     'worktreeManager/listWorktreeCommits',
     'worktreeManager/listWorktreeCommitFiles',

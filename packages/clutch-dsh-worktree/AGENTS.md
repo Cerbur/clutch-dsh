@@ -11,6 +11,7 @@
   - 架构与设计：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
   - 本地开发与联调：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
   - 浏览器客户端接缝：[`src/client/README.md`](src/client/README.md)
+  - Agent 指令与工具接缝：[`docs/WORKTREE-TOOLS.md`](docs/WORKTREE-TOOLS.md)
   - 发布与版本参数：[`docs/RELEASING.md`](docs/RELEASING.md)（通用发布流程见根目录 [`../../docs/RELEASING.md`](../../docs/RELEASING.md)）
 
 ---

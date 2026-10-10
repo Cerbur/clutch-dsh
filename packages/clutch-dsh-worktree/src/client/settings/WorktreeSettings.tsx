@@ -4,20 +4,24 @@ import type { WorktreeTranslate } from '../surface/types.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { worktreeDiagnostics } from './diagnostics.js';
 import styles from './settings.css';
+import { ToolSettings } from './ToolSettings.js';
+import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
 
 export function WorktreeSettings({
   t,
   close,
+  manager,
 }: {
   readonly t: WorktreeTranslate;
   readonly close: () => void;
+  readonly manager?: WorktreeToolSettingsManager;
 }) {
   const entries = useSyncExternalStore(
     worktreeDiagnostics.subscribe,
     worktreeDiagnostics.getSnapshot,
     worktreeDiagnostics.getSnapshot,
   );
-  const [tab, setTab] = useState<'overview' | 'errors'>('errors');
+  const [tab, setTab] = useState<'general' | 'errors'>(entries.some((entry) => entry.status === 'active') ? 'errors' : 'general');
   const id = useId();
   return (
     <section className={styles.settings} data-worktree-settings>
@@ -29,9 +33,9 @@ export function WorktreeSettings({
         onChange={setTab}
         items={[
           {
-            value: 'overview',
-            label: t('settings.overview'),
-            id: id + 'overview',
+            value: 'general',
+            label: t('settings.general'),
+            id: id + 'general',
             panelId: id + 'panel',
           },
           {
@@ -48,8 +52,8 @@ export function WorktreeSettings({
         id={id + 'panel'}
         aria-labelledby={id + tab}
       >
-        {tab === 'overview' ? (
-          <p className={styles.settingsDescription}>{t('settings.description')}</p>
+        {tab === 'general' ? (
+          <ToolSettings manager={manager} scope={{ kind: 'general' }} t={t} />
         ) : (
           <>
             <div className={styles.settingsToolbar}>

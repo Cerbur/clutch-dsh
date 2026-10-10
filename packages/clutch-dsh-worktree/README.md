@@ -6,13 +6,14 @@
 Sessions as Workspace → Worktree → Session while keeping DSH as the source of truth for
 Workspace identity, Session metadata, native lists, messages, and conversation history.
 
-The plugin stores Worktree relationships, acquisition facts, shared Worktree instructions, and Workspace-root
+Tool preferences are stored in separate Host-owned files, outside relationship indexes and native
+Session metadata. The plugin stores Worktree relationships, acquisition facts, shared Worktree instructions, and Workspace-root
 Main instructions in its own sidecar. Managed Worktrees expose a read-only baseline-relative Git & Changes dashboard, while Main exposes
 its Workspace-root HEAD history; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
 > Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
-> Derived Worktrees, Settings, and other unfinished actions remain marked
+> Derived Worktrees and other unfinished actions remain marked
 > **Coming soon**.
 
 ## Installation
@@ -66,11 +67,14 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Features
 
+The tool settings previews below use the production panels in an isolated UI fixture.
+
 | Feature                         | Preview                                                                                                                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
-| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees, Settings, and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
+| **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-tool-general.jpg" width="420" alt="General tool settings panel preview"><br><img src="assets/screenshots/screenshots-tool-auto.jpg" width="420" alt="Local/Main automatic injection settings panel preview"> | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
 
@@ -101,6 +105,8 @@ visible rather than covering its controls. It retries when the layout changes.
 
 ### Create a Worktree
 
+You can also enable Agent tools with `/cluworktree`; see the next section.
+
 New Worktree actions use the same branch icon as Worktree rows. The Workspace row button appears
 on hover, keyboard focus, or while its options menu is open, matching the menu button.
 
@@ -118,9 +124,124 @@ Sessions, the Dashboard path, Copy Path, and Open In. Git operations still use t
 If that directory is missing or resolves outside the checkout, the Worktree needs repair; it does
 not fall back to the Git root or create the missing directory.
 
-Already-bound Sessions with a legacy Git-root cwd remain usable. Git file previews use
+Already-bound Sessions with a legacy Git-root cwd remain usable after a subdirectory upgrade,
+including automatic tool injection, Session discovery, follow-ups, result reports and default
+Worktree creation from their own checkout's HEAD. Their original cwd and history remain unchanged;
+new Session bindings still require the Workspace directory inside the checkout. Git file previews use
 relative addresses inside the current Session cwd and absolute addresses for other checkout files,
 subject to DSH's native file-access checks.
+
+### Enable Agent Worktree tools
+
+Open **Settings → Worktree → General** and turn on **Worktree tools**, then select the
+capabilities you want. Both tool switches start off. Run `/cluworktree` in a Session belonging to a
+Workspace or an active managed Worktree to enable your selected capabilities. Turning the general
+switch off removes the command; deselecting every capability turns the switch off automatically.
+
+For automatic injection, open **Dashboard → Settings** for Local/Main or a managed Worktree and select
+capabilities under **Automatically inject Worktree tools**. Local/Main settings apply only to unbound
+Sessions in that Workspace root; Worktree settings apply only to Sessions bound to that Worktree.
+Each configuration is stored separately. Selected tools are assembled before the first model request,
+including after an Agent restart; ordinary prompt presets also include delegation guidance and,
+in PTC mode, their SDK.
+These selections are independent of General:
+if General selects capabilities 1, 2, 3 and automatic injection selects 2, 3, 4, running
+`/cluworktree` adds only capability 1. Already enabled tools remain until that Agent ends; changing
+preferences affects future injection.
+
+The Worktree entry in Settings uses the same branch icon as the sidebar.
+Both settings use a card with the main switch at the top. Turning it on reveals tool selections
+and their descriptions below a divider; turning it off collapses them and retains your selection.
+Injection and reporting notes sit directly under the tool-selection explanation.
+The command and automatic-injection settings carry DSH's native **Experimental** badge.
+The settings explain each capability in plain language. Command results use DSH's native command
+presentation and report how many capabilities were added or already available.
+In a new Session, running `/cluworktree` immediately opens the conversation page and shows
+the command outcome, without first sending a message to the model.
+
+With delegation enabled, a request to create a feature Worktree and implement or fix something
+defaults to creating the Worktree and assigning the work to its own Session. That Session handles
+code edits, dependency setup and verification; creating the directory alone does not start the task.
+Guidance prefers the enabled plugin tools over other Worktree/Session tools, while respecting
+explicit requests to only create a Worktree, work in the current Session or use a different tool.
+
+The six selectable capabilities correspond to these tools:
+
+| Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local base branches. Defaults to the calling Workspace.                                                                                          |
+| `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
+| `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
+| `clutch_list_sessions`  | optional `workspaceId`, `worktreeId`                               | Finds existing Sessions, binding state, status and title. Unavailable relations return a diagnostic without reading their history.                                                                                                 |
+| `clutch_send_message`   | `sessionId`, `prompt`, optional `mode`, `requestId`                | Continues an existing Session. `queue` is the default; `steer` corrects at a native step boundary. Returns admission, not a reply.                                                                                                 |
+
+For example, ask the Agent to call `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`,
+then `clutch_span_worktree({ worktreeId: created.worktreeId, prompt: "Implement the feature and report the result." })` using the returned Worktree id.
+The tool name is intentionally `clutch_span_worktree`. Worktree names are exact Git branch names
+within the calling Workspace; prefer stable `worktreeId` for dispatch. Creating a Worktree alone does not create a Session.
+Only committed state is inherited; staged, unstaged and untracked files are not copied.
+An unhealthy binding never silently falls back to Main. The default captures the calling checkout's
+committed HEAD, including a detached root HEAD. Detached sources return `baseCommit` without inventing
+a `baseBranch`; an explicit local `baseBranch` remains available as an override.
+
+Newly delegated Sessions automatically receive only
+`clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
+to the delegating Session. `status` is `completed`, `blocked`, or `failed`; `summary` and `evidence`
+are each limited to 2,000 characters. The other six capabilities require `/cluworktree` or the
+Worktree's explicit automatic-injection selection. Reports arrive as ordinary queued native messages;
+verify their claims and evidence before accepting completion. Reports are model-driven:
+a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
+
+`clutch_read_session` and `clutch_wait_sessions` are removed from the model catalog. Do not
+poll lists or read raw Session logs for progress. After successful dispatch or follow-up admission,
+acknowledge dispatch and end the turn, waiting for the executing Session's pushed report.
+Continue only separate independent work already requested by the user. Do not check the delegated
+task through agent lists, terminal commands, Git, files or tests, and do not edit or commit it yourself.
+An explicit user progress/investigation request or a concrete admission failure permits a targeted action.
+Evaluate a report's supplied evidence rather than automatically rerunning checks; investigate only
+when requested or when the evidence has a concrete gap or inconsistency.
+Complete prompt presets such as **minimal** omit extra prompt sections; critical handoff and
+model-selection rules also appear in native tool descriptions, preserving that preset's complete prompt.
+Activation adds Agent-scoped guidance for choosing delegation from ordinary task descriptions,
+so users need not specify tool names. Schemas describe exact ids, defaults and target alternatives
+without `$schema`; errors explain the cause, correction and a valid invocation. A bad Session
+history returns one `unavailable` diagnostic while keeping healthy list entries available.
+
+In PTC mode, the generated SDK exposes concrete argument types, including required report
+`status` and `summary`. Length limits remain in field descriptions and are enforced at execution;
+mutually exclusive dispatch targets use `oneOf` compatible with DSH's schema subset.
+
+`model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
+effective selection, including reasoning effort; no catalog lookup is required for that default.
+When the user specifies a different model or asks to choose one for the task, discover supported
+routes with `clutch_list_models` if enabled and pass the selected object explicitly.
+Unknown routes require discovery or user clarification, never invented ids or a deployment-default fallback.
+An unavailable model or effort fails before creating a Session. Initial
+model routing does not save the deployment default. It is runtime-only until DSH records the
+first request header; after that, DSH restores the model from its own history. Restarting before
+that first request discards the initial routing override. Native Session model changes take precedence.
+
+Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
+content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
+preset and permission defaults; it does not automatically grant Worktree Full Access. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
+No extra command arguments are accepted. All discovery, reports and follow-ups are restricted
+to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
+are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
+Detached bindings must be repaired before sending or reporting through these tools.
+Healthy archived Worktrees retain their active bindings and allow Session follow-ups;
+a missing Workspace root still blocks message admission.
+
+If saving instructions, binding, or prompt admission fails after creation, the tool returns the
+created identity and an error (`instructionsSaved: false`, `binding-failed`, `model-failed`,
+`title-failed`, `reporting-failed`, or `prompt-failed`).
+The Worktree and native Session are retained. Repair or open the returned Session before retrying;
+another dispatch creates another Session. After a successful binding/model setup, retry a failed
+prompt with `clutch_send_message` and the returned `requestId`. Reuse a request id only for the
+same message retry; new follow-ups get fresh ids. `clutch_send_message` also returns `prompt-failed`
+with that id when native admission throws, including when acceptance is uncertain.
+Reporting destinations and activation are runtime-only. Restart discards the destination;
+a resumed Session can enable `/cluworktree` and use `clutch_send_message` with a known delegator id. There are no automatic merge, publish or disk-cleanup tools.
 
 ### Import an existing Worktree
 
@@ -175,7 +296,7 @@ Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to clo
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
 path, open the recorded directory in VS Code, and inspect Git & Changes.
-Derived Worktrees, Settings, and other marked quick actions remain placeholders. VS Code must be
+Derived Worktrees and other marked quick actions remain placeholders. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
 

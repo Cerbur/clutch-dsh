@@ -31,6 +31,14 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   retains explicit user restrictions. This controller coverage does not validate DOM/portal rendering.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
+- `command-activity.ts` registers a private native Conversation activity target for
+  `command/run` records named `cluworktree`. Ordinary native Chat command nodes do not
+  activate the blank-session shell, whereas `compact` has a distinct active Node kind.
+  The plugin target makes the existing native result row visible immediately, including
+  errors and history replay; it adds no tab or duplicate row. A coalesced Session-list
+  subscription activates only already-retained bindings and tracks each binding generation.
+  Disposal removes both Definitions and cancels queued activation. Session metadata,
+  transcript, command execution, and native Chat Definitions remain DSH-owned.
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
@@ -66,6 +74,12 @@ snapshot with the current sidecar bindings, and restores the original methods on
 never writes DSH Workspace state or exposes the projection as a new Controller or transport.
 
 ## Shared Worktree views and refresh scopes
+
+Agent tool mutations arrive through `watchToolChanges` on the existing `/api` adapter.
+One cancellable long-poll loop belongs to the Client fiber. Each notification invalidates only
+its Workspace reader generation; the current matching Context and visible Surface share the
+replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
+This runtime notification carries identities only and does not add another data store.
 
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
@@ -392,7 +406,12 @@ are announced once while present; resolved entries leave the queue and a later r
 can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
 notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
 unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
-The native settings.section seat exposes Overview and Errors & recovery tabs. Browser-memory
+The native settings.section seat exposes General and Errors & recovery tabs. The Worktree
+navigation entry reuses the sidebar's `IconBranchOutline16`. Because the current DSH shell has
+no section-icon slot, a browser overlay portals the native icon into the uniquely labelled
+Worktree row inside the settings modal and hides its default gear with a scoped marker.
+Closing the modal or disposing the overlay releases the portal and restores native presentation.
+Ambiguous labels or changed shell markup retain the default icon. Browser-memory
 diagnostics outlive toast dismissal and source unmount. Each entry includes contextual names/paths,
 localized problem/recovery copy, original code/message/details (including Git stderr) and live
 scoped actions. Unmounted sources become inactive and revoke callbacks; absence of a reported
@@ -614,3 +633,19 @@ Connection, Gateway and unexpected Worktree domain failures remain visible as re
 errors rather than being converted to an empty list. Recognized Git readiness failures are
 Workspace-local setup states, not transport failures. Client disposal must abort pending
 Connection calls and release browser-local membership projections.
+
+## Tool preference UI
+
+Settings → Worktree → General and Local/Main or managed Dashboard → Settings share `ToolSettings`.
+Local/Main addresses `{ kind: 'local', workspaceId }`; managed Worktrees address
+`{ kind: 'worktree', workspaceId, worktreeId }`. These configurations are independent.
+The existing `/api` adapter owns `getToolSettings` and `updateToolSettings`; Host files stay
+outside the browser boundary. Native switches expose localized capability names and descriptions.
+Both tool-settings headers use the native `Tag` with `tone="info"` for the localized Experimental
+badge, matching the official plugin manager.
+Both surfaces use a bordered settings card: the main switch and summary occupy the header,
+and enabled selections appear below a divider with scope-specific guidance. Injection and reporting
+notes are combined in the tool-selection explanation before the individual switches. When the main switch
+is off, the entire selection section is absent; toggling it back on retains the saved selection.
+Writes use expected values, disable concurrent edits, and preserve saved content on failure.
+Retry reloads the latest selection. Configuration changes do not invalidate Workspace projections.

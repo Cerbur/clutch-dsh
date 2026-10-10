@@ -35,12 +35,14 @@ import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
+import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
+import { ToolSettings } from '../settings/ToolSettings.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
 
 export interface WorktreeDashboardProps {
-  readonly manager?: WorktreeManager;
+  readonly manager?: WorktreeManager & Partial<WorktreeToolSettingsManager>;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
   readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
   readonly branches?: readonly BranchRecord[];
@@ -1001,6 +1003,17 @@ export function WorktreeDashboard({
               }
             >
               {sessionList(sessionIds)}
+            </Card>
+          ) : tab === 'settings' ? (
+            <Card title={tabLabel('settings')} icon={<DashboardIcon kind="settings" />}>
+              <ToolSettings
+                key={JSON.stringify([record.workspaceId, record.worktreeId])}
+                manager={manager}
+                scope={isMainWorktreeId(record.worktreeId)
+                  ? { kind: 'local', workspaceId: record.workspaceId }
+                  : { kind: 'worktree', workspaceId: record.workspaceId, worktreeId: record.worktreeId }}
+                t={t}
+              />
             </Card>
           ) : (
             <section className={styles.dashboardTabPlaceholder}>

@@ -262,6 +262,7 @@ export async function statusRenderers() {
     './vscode-url.js': {},
     './OpenInAppButton.js': { OpenInAppButton: 'OpenInAppButton' },
     './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
+    '../settings/ToolSettings.js': { ToolSettings: 'ToolSettings' },
     './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
     './git/WorktreeGitOverview.js': {
       useWorktreeGitOverview: () => ({ status: 'unavailable' }),

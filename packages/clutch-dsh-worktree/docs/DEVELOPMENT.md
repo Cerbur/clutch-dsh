@@ -98,6 +98,32 @@ pnpm dsh web --port 3088 --no-open
 
 ### 3.3 开发迭代与重载
 
+`/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
+`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
+真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将
+Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
+Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
+
+```bash
+node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs test/worktree-tool-changes.test.mjs
+node --test test/worktree-tool-schema.test.mjs
+```
+
+工具实现集中在 `src/tool/`，每个工具一个文件，随主 package 通过 TypeScript 正常构建。
+原生命令入口与 `systemPrompt.assemble({ scope: agent })` 集成测试验证调用方六个工具及执行方回报工具进入
+模型请求，并验证普通任务委派指导的作用域。Host 模块需重新构建后重载或重启；页面刷新无法替换服务端已载入的模块。
+
+工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
+使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
+原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
+该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
+确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
+
+参数 schema 使用 DSH 支持的子集。测试通过真实 `assertSupportedJsonSchema`、
+`jsonSchemaToTs`、`renderToolsSdk` 验证全部工具参数不会退化为 unknown，必填的回报 status/summary
+与可选参数正确呈现；长度限制放在字段描述中，由执行时的 Zod 校验。互斥 target 投影为 oneOf，
+重叠 union 或不支持的未来 schema 关键字必须显式失败，不能静默丢失参数信息。
+
 修改代码后，重新构建插件包并重启 DSH：
 
 ```bash
@@ -315,3 +341,9 @@ description:
 ```
 
 外部准入指标（如 GitHub 仓库 topic `dsh-plugin`、仓库注册时间、commit 数量等）由市场维护规范决定。
+
+工具偏好回归覆盖通用指令注册开关、Local/Main 与 Worktree 自动注入及隔离、交集去重、派生 Session 仅回报默认值、
+首轮 prompt/SDK/指导完整性与第二轮稳定性、并发组装、取消、下游 waterfall 单次变换和创建后默认委派指导，
+独立配置文件、并发冲突与损坏文件保护。`node --test test/tool-settings.test.mjs test/worktree-tools.test.mjs`
+可定向运行；两处 UI 使用同一 browser-safe 配置接口，不读本地文件。配置修改无需重启，Host 更新通用
+命令注册，Agent 在执行前按当前绑定读取 Local/Main 或 Worktree 配置；已加载工具保留至 Agent 结束。
