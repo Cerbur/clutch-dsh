@@ -19,9 +19,15 @@ its Workspace-root HEAD history; the plugin does not copy transcripts or rewrite
 ## Installation
 
 After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
-server and refresh the page, to load the plugin Host. If the Client loads while the Host is
-still unavailable, a native toast reminds you once per Client load. Network failures and
-Workspace errors do not trigger the reminder.
+server and refresh the page, to load the plugin Host and permission configuration. Finish
+active tasks before restarting. If the Client loads while the Host is still unavailable, a
+native toast reminds you once per Client load. If a Worktree Session permission check reports
+that **Worktree Full Access** is unavailable and falls back to `workspace-write`, a separate
+once-per-load toast gives the same restart guidance for a recent install or update. The
+permission recovery message retains this guidance after the toast closes. Network failures,
+Workspace errors, unverified permissions, and explicit user restrictions do not trigger the
+missing-preset reminder. The reminder does not reload services or grant Full Access; if the
+preset remains unavailable after restarting, check the DSH plugin and permission configuration.
 
 ### Install from npm
 

@@ -18,8 +18,12 @@ Main 指令。受管理的 Worktree 提供可选择本地 branch 基线的只读
 ## 安装
 
 向运行中的 DSH 安装插件后，请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以加载
-插件 Host。如果 Client 已加载而 Host 尚未挂载，原生 toast 会在每次 Client 加载期间提醒
-一次。网络故障和 Workspace 错误不会触发重启提示。
+插件 Host 与权限配置。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
+原生 toast 会在每次 Client 加载期间提醒一次。如果 Worktree Session 权限检查确认
+**Worktree Full Access** 预设不可用并降级为 `workspace-write`，另一条每次加载至多一次的
+toast 会提示在刚安装或更新插件后重启。toast 关闭后，权限修复说明仍保留重启指引。网络故障、
+Workspace 错误、无法确认的权限与用户的显式权限限制不会触发预设缺失提醒。提醒不会重载服务
+或授予完全访问；若重启后预设仍不可用，请检查 DSH 的插件与权限配置。
 
 ### 从 npm 安装
 

@@ -1,4 +1,7 @@
 import type { WorktreeHostProbeResult } from './worktree-connection.js';
+import type { WorktreePermissionResult } from '../contract/index.js';
+
+export type RestartNoticeReason = 'host-unavailable' | 'permission-preset-unavailable';
 
 const MISSING_HOST_CODES = new Set([
   'gateway/service-unavailable',
@@ -8,20 +11,46 @@ const MISSING_HOST_CODES = new Set([
 
 /** A transient reminder owned by one Client fiber, independent of ready view content. */
 export class RestartNotice {
-  private visible = false;
-  private notified = false;
+  private reason?: RestartNoticeReason;
+  private readonly notified = new Set<RestartNoticeReason>();
   private disposed = false;
   private pending?: AbortController;
   private readonly listeners = new Set<() => void>();
 
   constructor(private readonly probe: (signal: AbortSignal) => Promise<WorktreeHostProbeResult>) {}
 
-  getSnapshot = (): boolean => this.visible;
+  getSnapshot = (): boolean => this.reason !== undefined;
+  getReasonSnapshot = (): RestartNoticeReason | undefined => this.reason;
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
-  dismiss = (): void => this.setVisible(false);
+  dismiss = (): void => this.setReason(undefined);
+  dismissReason = (reason: RestartNoticeReason): void => {
+    if (this.reason === reason) this.dismiss();
+  };
+
+  /** Only this domain result establishes that the named preset is missing. */
+  reportPermissionResult(result: WorktreePermissionResult): void {
+    if (this.disposed) return;
+    if (
+      result.status === 'fallback-workspace-write' ||
+      result.status === 'full-applied' || result.status === 'already-full'
+    ) {
+      // These native results are newer evidence of a live Host. A pending probe
+      // must not overwrite them with an earlier missing-Host response.
+      this.pending?.abort();
+      if (this.reason === 'host-unavailable') this.dismiss();
+    }
+    if (result.status === 'fallback-workspace-write') {
+      this.show('permission-preset-unavailable');
+    } else if (
+      this.reason === 'permission-preset-unavailable' &&
+      (result.status === 'full-applied' || result.status === 'already-full')
+    ) {
+      this.dismiss();
+    }
+  }
 
   async check(): Promise<void> {
     if (this.disposed) return;
@@ -33,10 +62,10 @@ export class RestartNotice {
       const result = await this.probe(controller.signal);
       if (this.disposed || controller.signal.aborted || this.pending !== controller) return;
       if (result.ok) {
-        this.dismiss();
-      } else if (!this.notified && MISSING_HOST_CODES.has(result.error?.code ?? '')) {
-        this.notified = true;
-        this.setVisible(true);
+        // Host composition does not establish native preset availability.
+        if (this.reason === 'host-unavailable') this.dismiss();
+      } else if (MISSING_HOST_CODES.has(result.error?.code ?? '')) {
+        this.show('host-unavailable');
       }
     } catch {
       // A transport failure does not establish that a restart is needed.
@@ -48,13 +77,20 @@ export class RestartNotice {
 
   dispose(): void {
     this.disposed = true;
+    this.reason = undefined;
     this.pending?.abort();
     this.listeners.clear();
   }
 
-  private setVisible(visible: boolean): void {
-    if (this.visible === visible || this.disposed) return;
-    this.visible = visible;
+  private show(reason: RestartNoticeReason): void {
+    if (this.disposed || this.notified.has(reason)) return;
+    this.notified.add(reason);
+    this.setReason(reason);
+  }
+
+  private setReason(reason: RestartNoticeReason | undefined): void {
+    if (this.reason === reason || this.disposed) return;
+    this.reason = reason;
     for (const listener of this.listeners) listener();
   }
 }
