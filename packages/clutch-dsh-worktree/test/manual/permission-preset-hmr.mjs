@@ -20,12 +20,14 @@ const resolve = (name) => pathToFileURL(installed.resolve(name)).href;
 const { Context } = await import(resolve('@deepseek-ai/cordis'));
 const { default: Loader } = await import(resolve('@deepseek-ai/cordis-plugin-loader'));
 const { default: Timer } = await import(resolve('@deepseek-ai/cordis-plugin-timer'));
-const { default: Hmr } = await import(resolve('@deepseek-ai/cordis-plugin-hmr'));
+let hmrName = '@deepseek-ai/cordis-plugin-hmr';
+try { installed.resolve(hmrName); } catch { hmrName = '@deepseek-ai/dsh-hmr'; }
+const { default: Hmr } = await import(resolve(hmrName));
 const versions = {};
 for (const name of [
   '@deepseek-ai/cordis',
   '@deepseek-ai/cordis-plugin-loader',
-  '@deepseek-ai/cordis-plugin-hmr',
+  hmrName,
 ]) {
   versions[name] = JSON.parse(
     await readFile(installed.resolve(name + '/package.json'), 'utf8'),
@@ -193,6 +195,11 @@ try {
   );
   await ctx.loader.root.update(rows);
   await ctx.loader.await();
+  assert.equal(
+    (await ctx.loader.import('@cerbur/clutch-dsh-worktree/permission-presets')).apply,
+    (await ctx.loader.import(contributionUrl.href)).apply,
+    'package export and file URL must resolve to the same module identity',
+  );
   await ctx.plugin({
     inject: ['permissionPresets'],
     apply(child) {

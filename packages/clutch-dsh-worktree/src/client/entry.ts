@@ -214,6 +214,7 @@ export function apply(ctx: Context): void {
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
   const viewReader = createWorktreeViewReader(manager);
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
+  const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
@@ -225,6 +226,7 @@ export function apply(ctx: Context): void {
     },
     result: WorktreePermissionResult,
   ): void => {
+    restartNotice.reportPermissionResult(result);
     const visible = result.status === 'fallback-workspace-write' ||
       result.status === 'user-restricted' ||
       result.status === 'unverified';
@@ -241,7 +243,7 @@ export function apply(ctx: Context): void {
     'clutch-dsh-worktree: settings icon cleanup',
   );
   ctx.effect(() => {
-    const notice = new RestartNotice((signal) => manager.probeHost(signal));
+    const notice = restartNotice;
     const check = () => void notice.check();
     const reset = ctx.on('connection/reset', check);
     const overlay = slots.inject('shell.overlay', () =>

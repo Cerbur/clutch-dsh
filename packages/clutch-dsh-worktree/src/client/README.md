@@ -34,8 +34,16 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   Only `gateway/service-unavailable`, `gateway/definition-unavailable`, and
   `gateway/invocation-unavailable` show the native restart toast, once per Client fiber. Rechecks
   abort superseded probes, disposal aborts pending probes, and stale responses never update the
-  reminder. The reminder uses its own `shell.overlay` registration and does not change ready views,
-  refresh scopes, Session/Workspace data, or the transport graph.
+  reminder. The same controller also consumes the existing permission-result callback: only
+  `fallback-workspace-write` establishes the missing Full Access preset and shows a separate
+  once-per-fiber reminder with conditional install/update restart guidance. Host success does
+  not dismiss this reason; a confirmed Full Access result does. Native permission results
+  invalidate older in-flight Host probes. The native Toast consumes a reason snapshot so a
+  reason change updates its copy/lifetime even while visibility stays true. Completion is
+  reason-scoped so an older Toast cannot dismiss a newer reason; persistent recovery
+  copy retains the guidance after dismissal. Unverified results and explicit restrictions do not
+  request restart. The reminder uses its own `shell.overlay` registration and does not change
+  ready views, refresh scopes, Session/Workspace data, the transport graph or native services.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
   acknowledgement, and fails pending requests closed when the Client fiber is disposed. The Host

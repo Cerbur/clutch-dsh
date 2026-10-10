@@ -7,7 +7,13 @@ export function RestartToast({
   notice,
   t,
 }: PropsRuntime<'shell.overlay'> & PropsLocale<'worktree'> & { readonly notice: RestartNotice }) {
-  const visible = useSyncExternalStore(notice.subscribe, notice.getSnapshot, notice.getSnapshot);
-  if (!visible) return null;
-  return <Toast text={t('restartRequired')} holdMs={8_000} onDone={notice.dismiss} />;
+  const reason = useSyncExternalStore(notice.subscribe, notice.getReasonSnapshot, notice.getReasonSnapshot);
+  if (reason === undefined) return null;
+  const presetMissing = reason === 'permission-preset-unavailable';
+  return <Toast
+    key={reason}
+    text={t(presetMissing ? 'permission.presetRestartRequired' : 'restartRequired')}
+    holdMs={presetMissing ? 12_000 : 8_000}
+    onDone={() => notice.dismissReason(reason)}
+  />;
 }

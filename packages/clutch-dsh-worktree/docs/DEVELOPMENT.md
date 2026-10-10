@@ -156,10 +156,28 @@ node --expose-internals test/manual/permission-preset-hmr.mjs /absolute/path/to/
 该实验只读取所指定的已安装模块，写入并清理自己创建的临时 fixture 包及链接；不启动
 DSH/GUI，不修改任何现有安装链接或 profile。它使用本包真实子入口 export、贡献实现、
 实际 HMR watcher 和 Node module cache，并连接真实 Host 构造函数与确认 controller；
-native permission/Auto 和外围 I/O 仍是 fixture。已验证 Cordis 4.0.2 / Loader 1.0.3 /
-HMR 1.0.17 的 10 轮贡献与 native 重载、服务替换及卸载；不代表生产完整 profile 或
-DOM 验证。无匹配 watcher、没有重建或生产安装指向另一工作区时，本分支 build 不会更新
-当前 GUI。证据与限制见 [权限生命周期计划](plans/2026-10-07-permission-lifecycle.md)。
+native permission/Auto 和外围 I/O 仍是 fixture。实验同时支持旧版
+`@deepseek-ai/cordis-plugin-hmr` 与 Desktop 的 `@deepseek-ai/dsh-hmr`，并检查包名子入口
+与绝对 file URL 的模块身份一致。已验证旧图 Cordis 4.0.2 / Loader 1.0.3 / HMR 1.0.17，
+以及实际 Desktop Electron Node 24.18.1 / Cordis 4.0.4 / Loader 1.0.5 / DSH HMR 0.2.0-rc.2
+的 10 轮贡献与 native fixture 重载、服务替换及卸载；不代表生产完整 profile 或 DOM
+验证。无匹配 watcher、没有重建或生产安装指向另一工作区时，本分支 build 不会更新
+当前 GUI。历史证据见 [权限生命周期计划](plans/2026-10-07-permission-lifecycle.md)。
+
+热安装问题的三条独立诊断命令（先构建本包）如下。这些是**故意红色**的可选 repro，
+不属于默认单元测试：
+
+```bash
+node test/manual/permission-preset-market.mjs /absolute/path/to/dshmarket/lib/hot.js
+node test/manual/permission-preset-late-install.mjs
+node --expose-internals test/manual/permission-preset-native.mjs /absolute/path/to/existing/node_modules
+```
+
+最后一条使用真实 native permission provider/schema，但外围 Session/projection/I/O 是
+隔离端口；它反证直接 `fiber.update(raw, true)` 在已有 Auto Session 时的重配安全性。
+Desktop ASAR 图需以对应 Electron 可执行文件的 `ELECTRON_RUN_AS_NODE=1` 模式运行。
+实际命令、结果、修复阻塞及所需原生扩展接缝见
+[Desktop 热安装诊断](plans/2026-10-10-permission-presets-hot-install-diagnosis.md)。
 
 ### 3.4 卸载本地插件
 
