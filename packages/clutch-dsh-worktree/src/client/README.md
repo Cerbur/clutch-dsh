@@ -6,6 +6,19 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
+- `layout/app-frame.ts` is the shared browser-only layout seam for Sidebar, Dashboard and future
+  Worktree overlays. Resolve the triggering surface's closest `[data-shell-overlay]`, then trace
+  `[data-worktree-mode-action]` (or `[data-pane="sidebar"]`) to a direct frame child for the Sidebar.
+  Resolve the optional right column with `[data-rightbar-col]`; `data-rightbar-collapsed` excludes it
+  from placement and open-state projection. CenterColumn has no public marker: exclude known slots
+  and accept only one remaining child whose finite rectangle spans the content track to the overlay
+  bottom, leaving caption bands and resize handles intact. No first/last child or sibling adjacency
+  is part of the contract, and no private shell classes are consulted.
+  The Sidebar root is the lowest measurable common ancestor of New Session and the footer action;
+  footer placement requires that action, never an unmarked trailing child. Missing, ambiguous or
+  invalid anchors restore native content. Both consumers re-resolve after layout mutations, track
+  replacement anchors, retain invalid geometry candidates for resize recovery, and disconnect on
+  disposal. These rules supersede positional anchor assumptions in historical layout plans.
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
   `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
   outer/inner error normalization. Instruction reads use `getWorktreeInstructions`; Git endpoints are `listWorktreeCommits`,

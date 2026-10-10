@@ -6,6 +6,7 @@ import test from 'node:test';
 import { setImmediate } from 'node:timers';
 import { URL } from 'node:url';
 import ts from 'typescript';
+import { FrameElement as FakeElement, appFrameFixture } from './app-frame-fixture.mjs';
 import {
   createMainWorktreeRecord,
   isMainWorktreeId,
@@ -1383,33 +1384,6 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   assert.deepEqual(calls, []);
 });
 
-class FakeElement {
-  constructor() {
-    this.attributes = new Map();
-    const styles = new Map();
-    this.style = {
-      getPropertyValue: (key) => styles.get(key)?.[0] ?? '',
-      getPropertyPriority: (key) => styles.get(key)?.[1] ?? '',
-      setProperty: (key, value, priority = '') => styles.set(key, [value, priority]),
-      removeProperty: (key) => styles.delete(key),
-    };
-    this.rect = { left: 0, right: 1200, width: 1200, height: 800 };
-    this.isConnected = true;
-  }
-  getAttribute(key) {
-    return this.attributes.get(key) ?? null;
-  }
-  setAttribute(key, value) {
-    this.attributes.set(key, value);
-  }
-  removeAttribute(key) {
-    this.attributes.delete(key);
-  }
-  getBoundingClientRect() {
-    return this.rect;
-  }
-}
-
 test('background restoration preserves existing visibility, inert, and aria attributes', () => {
   const element = new FakeElement();
   element.style.setProperty('visibility', 'collapse', 'important');
@@ -1460,18 +1434,7 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     },
   });
   try {
-    const [frame, sidebar, center, right, overlay, surface] = Array.from(
-      { length: 6 },
-      () => new FakeElement(),
-    );
-    frame.firstElementChild = sidebar;
-    sidebar.nextElementSibling = center;
-    center.nextElementSibling = right;
-    right.nextElementSibling = overlay;
-    overlay.parentElement = frame;
-    surface.closest = () => overlay;
-    sidebar.rect.right = 280;
-    right.rect.left = 960;
+    const { sidebar, center, right, overlay, surface } = appFrameFixture();
     let placement;
     let rightSidebarOpen = false;
     const dispose = mountDashboardOverlay(
@@ -1500,6 +1463,8 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     assert.equal(right.getAttribute('inert'), null);
     assert.equal(right.style.getPropertyValue('visibility'), '');
     sidebar.rect.right = 64;
+    center.rect.left = 64;
+    center.rect.width = 896;
     observers[0].callback();
     pending();
     assert.equal(placement.left, 68);
@@ -1507,6 +1472,8 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     // macOS hides the column completely; the bar's title clears native chrome,
     // while the native leading seat remains outside the concealed center.
     sidebar.rect.right = 0;
+    center.rect.left = 0;
+    center.rect.width = 960;
     observers[0].callback();
     pending();
     assert.equal(placement.left, 4);
@@ -1514,18 +1481,21 @@ test('overlay tracks Sidebar width, restores on anchor loss, and cleans observer
     // Windows keeps its caption row above the native center. Dashboard content
     // must neither cover that row nor exceed the remaining center height.
     center.rect.top = 32;
+    center.rect.height = 768;
     overlay.rect.top = 0;
     observers[0].callback();
     pending();
     assert.equal(placement.top, 32);
     assert.equal(placement.height, 768);
-    right.nextElementSibling = undefined;
+    // Actual center loss must fail closed; sibling adjacency is not a contract.
+    const centerParent = center.parentElement;
+    center.remove();
     observers[1].callback();
     pending();
     assert.equal(placement, undefined);
     assert.equal(center.getAttribute('inert'), null);
     assert.equal(right.style.getPropertyValue('visibility'), '');
-    right.nextElementSibling = overlay;
+    centerParent.append(center);
     observers[1].callback();
     pending();
     assert.equal(center.getAttribute('inert'), '');
@@ -1546,16 +1516,7 @@ test('page-level Dashboard mounts when the native rightbar is absent', () => {
     MutationObserver: undefined,
   });
   try {
-    const [frame, sidebar, center, overlay, surface] = Array.from(
-      { length: 5 },
-      () => new FakeElement(),
-    );
-    frame.firstElementChild = sidebar;
-    sidebar.nextElementSibling = center;
-    center.nextElementSibling = overlay;
-    overlay.parentElement = frame;
-    surface.closest = () => overlay;
-    sidebar.rect.right = 280;
+    const { center, surface } = appFrameFixture({ rightbar: false });
     let placement;
     const dispose = mountDashboardOverlay(surface, (next) => {
       placement = next;

@@ -514,6 +514,14 @@ Refresh scope is determined by the smallest affected identity.
 
 ### Shell Overlay 呈现
 
+- Sidebar 与 Dashboard 共用 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
+  `[data-shell-overlay]`，再从插件 footer action 或公开 Sidebar pane 回溯 frame 直属侧栏；
+  右栏只按 `[data-rightbar-col]` 和 `data-rightbar-collapsed` 定位，不要求物理相邻。Center
+  无公开 marker，通过排除已知栏目及插槽、验证唯一覆盖内容轨道并延伸至 overlay 底部的有限矩形定位，
+  不遮蔽标题栏和 resize handle。Sidebar root 由 New Session 与 footer action 的共同祖先确定，
+  footer 必须有功能插槽锚点；不再猜测首尾子节点。合法的额外壳层节点与栏目 DOM 排序不影响定位。
+  布局变动重新解析锚点，替换时释放旧遮蔽及观察；暂时无尺寸的候选保持观察以支持 resize 恢复。
+  缺失、歧义或无效几何均恢复原生内容。此规则取代历史计划中的位置推断，不改变数据所有权和刷新作用域。
 - Worktree 导航浮层随原生 `data-sidebar-collapsed` 状态同步隐藏，0px 是 desktop 的有效收起宽度，不能回退到旧展开宽度。当前 Sidebar root 与 New Session/footer 锚点动态重测；锚点丢失时浮层零覆盖并恢复原生内容。
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。

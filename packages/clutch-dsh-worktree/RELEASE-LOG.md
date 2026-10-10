@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## Unreleased
+
+### 中文
+
+#### 修复
+
+- 基于通用 AppFrame 语义锚点和拓扑回溯统一侧栏与 Dashboard 布局定位，修复额外标题栏或非紧邻壳层节点导致的导航零高度和看板无法打开，并加固折叠、锚点替换及布局恢复。
+
+### English
+
+#### Fixed
+
+- Unify Sidebar and Dashboard layout resolution around public AppFrame anchors and ancestry, fixing zero-height navigation and Dashboards that fail to open with extra titlebars or nonadjacent shell nodes, while hardening collapse, anchor replacement, and layout recovery.
+
 ## 0.1.16 — 2026-10-02
 
 ### 中文
