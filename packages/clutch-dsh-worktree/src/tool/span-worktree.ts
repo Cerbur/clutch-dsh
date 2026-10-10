@@ -3,6 +3,7 @@ import type { ToolContext } from './context.js';
 import { text, prompt, model } from './inputs.js';
 import * as output from './outputs.js';
 import { available, errorText } from './context.js';
+import { delegationHandoff, delegationModel } from './guidance.js';
 
 import { randomUUID } from 'node:crypto';
 const common = {
@@ -33,7 +34,7 @@ export function registerSpanWorktree(context: ToolContext): void {
   const { add, agent, options, check, scope } = context;
   add(
     'clutch_span_worktree',
-    'Delegate implementation and verification to a fresh ordinary DSH Session in a healthy managed Worktree. Use after clutch_new_worktree for requests to create a feature Worktree and implement/fix something; pass a self-contained prompt including requirements, acceptance criteria and checks. Prefer worktreeId; legacy exact branch name is accepted, but provide only one. model defaults to the caller’s provider/model/effort without changing the deployment default. Automatically enables only result reporting by default; other capabilities require /cluworktree or explicit Worktree automatic-injection preferences. Returns admission, not completion; results are pushed back to you. Do not poll. Partial failures preserve the Session; repair it before retrying.',
+    `Delegate implementation and verification to a fresh ordinary DSH Session in a healthy managed Worktree. Use after clutch_new_worktree for requests to create a feature Worktree and implement/fix something; pass a self-contained prompt including requirements, acceptance criteria and checks. Prefer worktreeId; legacy exact branch name is accepted, but provide only one. ${delegationModel} Automatically enables only result reporting by default; other capabilities require /cluworktree or explicit Worktree automatic-injection preferences. Returns admission, not completion. ${delegationHandoff} Partial failures preserve the Session; repair it before retrying.`,
     spanArgs,
     output.object(
       {

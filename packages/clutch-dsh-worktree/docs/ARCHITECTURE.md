@@ -564,6 +564,15 @@ Guidance prefers enabled `clutch_*` capabilities for managed Worktree operations
 request defaults to `clutch_new_worktree` followed by `clutch_span_worktree`, delegating edits,
 setup and verification. Creation-only selections explain missing delegation instead of substituting
 another plugin's tools. Explicit user workflow or tool choices take precedence.
+Successful delegation/follow-up admission ends the delegator's current turn after acknowledgement,
+unless the user requested other independent work. Until a pushed report arrives, guidance prohibits
+substitute monitoring via agent lists, shell/Git/file checks, tests, edits or commits. Explicit human
+status/investigation requests and concrete admission failures permit targeted action. Report evidence
+is evaluated without automatically rerunning verification, except for a human request or concrete gap.
+Model selection remains explicit or inherited; it does not impose catalog discovery on default dispatch.
+The scoped section uses the native registry; critical handoff/model rules are also in tool descriptions
+because complete personas such as minimal suppress extra sections. The plugin does not append to,
+rewrite, or bypass the preset's complete prompt.
 
 The browser's private Conversation activity target observes only native `cluworktree`
 command-run records. It lets new Sessions leave the Hero before any model Turn while native

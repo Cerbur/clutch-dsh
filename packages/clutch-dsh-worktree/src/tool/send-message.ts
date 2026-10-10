@@ -3,6 +3,7 @@ import type { ToolContext } from './context.js';
 import { text, prompt } from './inputs.js';
 import * as output from './outputs.js';
 import { authorize, errorText } from './context.js';
+import { delegationHandoff } from './guidance.js';
 
 import { randomUUID } from 'node:crypto';
 const sendArgs = z
@@ -30,7 +31,7 @@ export function registerSendMessage(context: ToolContext): void {
   const { add, options, check, scope } = context;
   add(
     'clutch_send_message',
-    'Continue an existing Session in the calling Workspace. queue (default) runs after the current turn; steer corrects at a native step boundary. Returns admitted or prompt-failed, retaining requestId on failure. Each call gets a fresh requestId; provide the returned requestId only to retry that same message.',
+    `Continue an existing Session in the calling Workspace. queue (default) runs after the current turn; steer corrects at a native step boundary. Returns admitted or prompt-failed, retaining requestId on failure. Each call gets a fresh requestId; provide the returned requestId only to retry that same message. ${delegationHandoff}`,
     sendArgs,
     output.object(
       {

@@ -136,8 +136,10 @@ switch off removes the command; deselecting every capability turns the switch of
 For automatic injection, open **Dashboard → Settings** for Local/Main or a managed Worktree and select
 capabilities under **Automatically inject Worktree tools**. Local/Main settings apply only to unbound
 Sessions in that Workspace root; Worktree settings apply only to Sessions bound to that Worktree.
-Each configuration is stored separately. Selected tools, their SDK and delegation guidance are
-present in the first model request, including after an Agent restart. These selections are independent of General:
+Each configuration is stored separately. Selected tools are assembled before the first model request,
+including after an Agent restart; ordinary prompt presets also include delegation guidance and,
+in PTC mode, their SDK.
+These selections are independent of General:
 if General selects capabilities 1, 2, 3 and automatic injection selects 2, 3, 4, running
 `/cluworktree` adds only capability 1. Already enabled tools remain until that Agent ends; changing
 preferences affects future injection.
@@ -187,8 +189,15 @@ verify their claims and evidence before accepting completion. Reports are model-
 a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
 
 `clutch_read_session` and `clutch_wait_sessions` are removed from the model catalog. Do not
-poll lists or read raw Session logs for progress. Continue independent work or yield after
-dispatch; for an explicit status question, send the executing Session a request to report.
+poll lists or read raw Session logs for progress. After successful dispatch or follow-up admission,
+acknowledge dispatch and end the turn, waiting for the executing Session's pushed report.
+Continue only separate independent work already requested by the user. Do not check the delegated
+task through agent lists, terminal commands, Git, files or tests, and do not edit or commit it yourself.
+An explicit user progress/investigation request or a concrete admission failure permits a targeted action.
+Evaluate a report's supplied evidence rather than automatically rerunning checks; investigate only
+when requested or when the evidence has a concrete gap or inconsistency.
+Complete prompt presets such as **minimal** omit extra prompt sections; critical handoff and
+model-selection rules also appear in native tool descriptions, preserving that preset's complete prompt.
 Activation adds Agent-scoped guidance for choosing delegation from ordinary task descriptions,
 so users need not specify tool names. Schemas describe exact ids, defaults and target alternatives
 without `$schema`; errors explain the cause, correction and a valid invocation. A bad Session
@@ -199,7 +208,11 @@ In PTC mode, the generated SDK exposes concrete argument types, including requir
 mutually exclusive dispatch targets use `oneOf` compatible with DSH's schema subset.
 
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
-effective selection; an unavailable model or effort fails before creating a Session. Initial
+effective selection, including reasoning effort; no catalog lookup is required for that default.
+When the user specifies a different model or asks to choose one for the task, discover supported
+routes with `clutch_list_models` if enabled and pass the selected object explicitly.
+Unknown routes require discovery or user clarification, never invented ids or a deployment-default fallback.
+An unavailable model or effort fails before creating a Session. Initial
 model routing does not save the deployment default. It is runtime-only until DSH records the
 first request header; after that, DSH restores the model from its own history. Restarting before
 that first request discards the initial routing override. Native Session model changes take precedence.

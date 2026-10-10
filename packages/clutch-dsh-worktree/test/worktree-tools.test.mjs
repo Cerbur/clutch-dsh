@@ -419,6 +419,40 @@ test('create-and-fix guidance delegates implementation and prefers enabled plugi
   assert.doesNotMatch(guidance, /prefer[^\n]*other_create_worktree/);
 });
 
+test('delegation handoff rules survive a complete minimal persona in native tool descriptions', async (t) => {
+  const f = await fixture(t);
+  f.ctx.systemPrompt.section({ name: 'preset:minimal', order: 0, complete: true,
+    text: 'You are a helpful software engineer assistant.' });
+  await f.enable();
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  assert.deepEqual(assembly.sections.map((section) => section.name), ['preset:minimal']);
+  for (const name of ['clutch_span_worktree', 'clutch_send_message']) {
+    const description = assembly.tools.find((tool) => tool.name === name).description;
+    assert.match(description, /end the turn/);
+    assert.match(description, /list_agents.*wait_agent.*bash.*run_code/);
+    assert.match(description, /Git\/file checks.*tests.*commit/);
+    assert.match(description, /pushed report/);
+    assert.match(description, /explicit human request/);
+  }
+  const span = assembly.tools.find((tool) => tool.name === 'clutch_span_worktree');
+  assert.match(span.description, /provider, model and reasoning effort/);
+  assert.match(span.description, /clutch_list_models.*enabled/);
+  assert.match(renderToolsSdk(assembly.tools), /end the turn/);
+});
+
+test('scoped guidance stops delegated-task checks and explains model selection without requiring discovery', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  const text = assembly.sections.find((section) => section.name === 'clutch-worktree:delegation').text;
+  assert.match(text, /end the turn/);
+  assert.match(text, /list_agents.*wait_agent.*bash.*run_code/);
+  assert.match(text, /do not automatically rerun/);
+  assert.match(text, /clutch_list_models.*enabled/);
+  assert.match(text, /Do not invent model ids/);
+  assert.match(text, /do not query the catalog merely/);
+});
+
 test('creation-only selection explains that it cannot start or delegate implementation', async (t) => {
   const f = await fixture(t, {
     settings: {

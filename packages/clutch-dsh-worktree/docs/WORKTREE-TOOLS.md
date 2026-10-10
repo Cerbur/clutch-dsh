@@ -97,7 +97,18 @@ Session's unavailable diagnostic instead of aborting the list. No source log is 
 
 Activation installs scoped `systemPrompt.section` guidance: infer delegation from user intent,
 create isolated Worktrees for independent tasks, use returned stable ids, inherit base/model unless
-overridden, then do independent work or yield while reports arrive. Do not poll or mine .dsh logs.
+overridden, then acknowledge admission and end the turn while reports arrive. Continue only
+separate independent work already requested by the human. Do not substitute native agent lists,
+terminal Git/file checks, tests, edits or commits for removed monitoring tools. Progress/investigation
+requires an explicit human request; concrete admission failures permit targeted recovery.
+Evaluate supplied report evidence without routinely rerunning checks; further verification requires
+a human request or a concrete evidence gap/inconsistency.
+Model guidance explains default inheritance (including effort), explicit catalog-backed selection
+for user model/task-based requirements, and disabled-discovery handling without invented routes.
+Critical handoff and model rules are shared by the scoped section and native tool descriptions.
+DSH's minimal persona has `complete: true`, so it intentionally drops extra prompt sections.
+The plugin preserves that contract instead of concatenating text onto the complete system prompt;
+native tool descriptions still convey the rules, and PTC SDK rendering retains those descriptions.
 Schemas omit `$schema`; target alternatives expose exact-one id/name validation, all fields explain
 source/default/limits. Error bodies identify the reason and a corrected call; partial creation
 failures preserve identities and describe repair. No tool grants permissions or answers approvals.
