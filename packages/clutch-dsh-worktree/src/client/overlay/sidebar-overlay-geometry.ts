@@ -48,7 +48,8 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   });
   const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
-    return text === '新会话' || text === 'New Session';
+    if (!text) return false;
+    return text.startsWith('新会话') || text.startsWith('New Session');
   });
   if (visibleLabel !== undefined) return visibleLabel;
   for (const label of labels) {
@@ -58,11 +59,48 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   return undefined;
 }
 
+export function resolveSidebarFooter(
+  root: Element,
+  actionSelector = '[data-worktree-mode-action]',
+): Element | undefined {
+  const action =
+    typeof root.querySelector === 'function' ? root.querySelector(actionSelector) : null;
+  if (action !== null && action !== undefined) {
+    let node: Element = action;
+    while (node.parentElement && node.parentElement !== root) {
+      node = node.parentElement;
+    }
+    if (node.parentElement === root && node !== root.firstElementChild) {
+      return node;
+    }
+  }
+  return root.lastElementChild ?? undefined;
+}
+
+export function computeSidebarOverlayBounds(
+  overlay: RectLike,
+  newSession: RectLike | undefined,
+  footer: RectLike | undefined,
+  root?: RectLike,
+): OverlayBounds {
+  const bounds = computeOverlayBounds(overlay, newSession, footer);
+  if (bounds.height <= 0 && root !== undefined) {
+    const fallbackBounds = computeOverlayBounds(overlay, newSession, {
+      top: root.bottom,
+      bottom: root.bottom,
+    });
+    if (fallbackBounds.height > 0) {
+      return fallbackBounds;
+    }
+  }
+  return bounds;
+}
+
 /** Hide only the native content covered by the plugin, keeping chrome and footer alive. */
 export function coveredSidebarChildren(
   root: Element,
   newSession: Element | undefined,
-  footer: Element | null,
+  footer: Element | null | undefined,
 ): HTMLElement[] {
   if (!newSession || !footer) return [];
   let first = newSession;
@@ -151,7 +189,7 @@ export function useSidebarOverlayGeometry(active: boolean): {
       }
       observedRoot = syncObservedElement(resizeObserver, observedRoot, currentRoot);
       const newSession = findNewSessionAnchor(currentRoot);
-      const footer = currentRoot.lastElementChild;
+      const footer = resolveSidebarFooter(currentRoot);
       observedNewSession = syncObservedElement(resizeObserver, observedNewSession, newSession);
       observedFooter = syncObservedElement(resizeObserver, observedFooter, footer);
       const nextWidth = sidebarElement.getBoundingClientRect().width;
@@ -160,10 +198,11 @@ export function useSidebarOverlayGeometry(active: boolean): {
       const nextCollapsed =
         frame?.hasAttribute('data-sidebar-collapsed') === true || nextWidth <= 64;
       setCollapsed(nextCollapsed);
-      const nextBounds = computeOverlayBounds(
+      const nextBounds = computeSidebarOverlayBounds(
         asRect(overlayElement),
         newSession === undefined ? undefined : asRect(newSession),
-        footer === null ? undefined : asRect(footer),
+        footer === undefined ? undefined : asRect(footer),
+        asRect(currentRoot),
       );
       setBounds(nextCollapsed ? EMPTY_BOUNDS : nextBounds);
       const covered =

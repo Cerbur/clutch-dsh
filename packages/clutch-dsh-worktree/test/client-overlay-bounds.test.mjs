@@ -3,8 +3,10 @@ import test from 'node:test';
 
 import { computeOverlayBounds } from '../lib/client/overlay/overlay-bounds.js';
 import {
+  computeSidebarOverlayBounds,
   findNewSessionAnchor,
   resolveNativeSidebarRoot,
+  resolveSidebarFooter,
   syncObservedElement,
 } from '../lib/client/overlay/sidebar-overlay-geometry.js';
 
@@ -109,4 +111,126 @@ test('tracks replacement geometry anchors with the ResizeObserver', () => {
   assert.deepEqual(observer.observed, [first, second]);
   assert.deepEqual(observer.unobserved, [first, second]);
   assert.equal(current, undefined);
+});
+
+test('resolves the direct child containing the worktree mode action as the footer', () => {
+  const root = {
+    firstElementChild: null,
+    lastElementChild: null,
+    querySelector: (selector) => (selector === '[data-worktree-mode-action]' ? actionButton : null),
+  };
+  const header = { parentElement: root };
+  const directChildFooter = { parentElement: root };
+  const actionWrapper = { parentElement: directChildFooter };
+  const actionButton = { parentElement: actionWrapper };
+
+  root.firstElementChild = header;
+  root.lastElementChild = directChildFooter;
+
+  assert.equal(resolveSidebarFooter(root), directChildFooter);
+});
+
+test('resolves real footer and computes positive bounds when desktop shell appends a pseudo-element at root end', () => {
+  const overlay = { top: 100, bottom: 900 };
+  const newSessionRect = { top: 120, bottom: 156 };
+  const realFooterRect = { top: 800, bottom: 840 };
+  const pseudoChildRect = { top: 120, bottom: 120 };
+
+  const actionButton = { parentElement: null };
+  const realFooter = {
+    parentElement: null,
+    getBoundingClientRect: () => realFooterRect,
+  };
+  const pseudoChild = {
+    parentElement: null,
+    getBoundingClientRect: () => pseudoChildRect,
+  };
+  const root = {
+    firstElementChild: null,
+    lastElementChild: pseudoChild,
+    querySelector: (selector) => (selector === '[data-worktree-mode-action]' ? actionButton : null),
+  };
+  const header = { parentElement: root };
+  root.firstElementChild = header;
+  realFooter.parentElement = root;
+  actionButton.parentElement = realFooter;
+  pseudoChild.parentElement = root;
+
+  // Root.lastElementChild would erroneously collapse overlay height to 0
+  const legacyBounds = computeOverlayBounds(overlay, newSessionRect, pseudoChildRect);
+  assert.equal(legacyBounds.height, 0);
+
+  // ResolveSidebarFooter identifies the real footer over the pseudo last element
+  const resolvedFooter = resolveSidebarFooter(root);
+  assert.equal(resolvedFooter, realFooter);
+
+  // Bounds with the resolved footer compute a correct positive height
+  const bounds = computeOverlayBounds(overlay, newSessionRect, realFooterRect);
+  assert.deepEqual(bounds, {
+    ready: true,
+    top: 20,
+    height: 680,
+  });
+});
+
+test('safely falls back to lastElementChild when the worktree mode action is absent', () => {
+  const fallbackFooter = {};
+  const root = {
+    firstElementChild: {},
+    lastElementChild: fallbackFooter,
+    querySelector: () => null,
+  };
+  assert.equal(resolveSidebarFooter(root), fallbackFooter);
+});
+
+test('safely falls back to lastElementChild when the action is inside the firstElementChild', () => {
+  const fallbackFooter = {};
+  const actionButton = { parentElement: null };
+  const firstChild = { parentElement: null };
+  const root = {
+    firstElementChild: firstChild,
+    lastElementChild: fallbackFooter,
+    querySelector: () => actionButton,
+  };
+  firstChild.parentElement = root;
+  actionButton.parentElement = firstChild;
+  assert.equal(resolveSidebarFooter(root), fallbackFooter);
+});
+
+test('matches New Session button when textContent includes keyboard shortcut prefix', () => {
+  const buttonWithShortcutZh = {
+    textContent: '新会话Ctrl+Alt+N',
+    parentElement: null,
+    getAttribute: () => null,
+  };
+  const rootZh = {
+    querySelectorAll: () => [buttonWithShortcutZh],
+  };
+  buttonWithShortcutZh.parentElement = rootZh;
+  assert.equal(findNewSessionAnchor(rootZh), buttonWithShortcutZh);
+
+  const buttonWithShortcutEn = {
+    textContent: 'New Session (Ctrl+N)',
+    parentElement: null,
+    getAttribute: () => null,
+  };
+  const rootEn = {
+    querySelectorAll: () => [buttonWithShortcutEn],
+  };
+  buttonWithShortcutEn.parentElement = rootEn;
+  assert.equal(findNewSessionAnchor(rootEn), buttonWithShortcutEn);
+});
+
+test('falls back to root bottom when computed footer bounds collapse to zero height', () => {
+  const overlay = { top: 100, bottom: 900 };
+  const newSession = { top: 120, bottom: 156 };
+  const abnormalFooter = { top: 120, bottom: 120 };
+  const root = { top: 100, bottom: 900 };
+
+  const bounds = computeSidebarOverlayBounds(overlay, newSession, abnormalFooter, root);
+  assert.deepEqual(bounds, {
+    ready: true,
+    top: 20,
+    height: 780,
+  });
 });
