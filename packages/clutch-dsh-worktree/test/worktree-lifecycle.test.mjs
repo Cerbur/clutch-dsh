@@ -169,8 +169,20 @@ test('v6 stores Main instructions while v5 rejects the new field', () => {
   );
 });
 
+test('v7 accepts a valid current-schema snapshot', () => {
+  const snapshot = {
+    schemaVersion: 7,
+    workspaceId: 'ws1',
+    revision: '0',
+    worktrees: [],
+    bindings: [],
+  };
+  assert.doesNotThrow(() => validateSidecarSnapshot(snapshot, '/tmp/ws1.json'));
+  assert.deepEqual(validateSidecarSnapshot(snapshot, '/tmp/ws1.json'), snapshot);
+});
+
 test('unsupported schema versions are rejected', () => {
-  for (const v of [0, 7, 99, -1]) {
+  for (const v of [0, SIDECAR_SCHEMA_VERSION + 1, 99, -1]) {
     assert.throws(
       () =>
         validateSidecarSnapshot(
