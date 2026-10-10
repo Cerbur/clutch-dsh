@@ -20,6 +20,8 @@ import { createWorktreeManager } from '../lib/manage/index.js';
 import { samePhysicalPath } from '../lib/provider/path-identity.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
 import { readToolSession } from '../lib/tool/index.js';
+import { WorktreeToolSettings } from '../lib/host/tool-settings.js';
+import { WORKTREE_TOOL_IDS } from '../lib/contract/tool-settings.js';
 
 const requireTools = createRequire(import.meta.resolve('@deepseek-ai/dsh-tools'));
 const { default: SystemPrompt } = await import(
@@ -49,6 +51,8 @@ test('native PTC SDK exposes concrete arguments for all seven Worktree tools', a
     prompt: 'Task',
   });
   const child = f.childAgents.get(dispatched.sessionId);
+  assert.deepEqual(f.ctx.tools.schemas(child).map((tool) => tool.name), ['clutch_report_result']);
+  await f.enable('', child);
   const schemas = f.ctx.tools.schemas(child).map((schema) => ({
     ...schema,
     output: f.ctx.tools.get(schema.name, child).output.schema,
@@ -135,7 +139,8 @@ async function fixture(t, overrides = {}) {
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   await ctx.plugin(SystemPrompt, {});
-  await ctx.plugin(Tools);
+  if (overrides.toolMode === 'ptc') ctx.provide('ptcRuntime', { language: 'typescript' });
+  await ctx.plugin(Tools, { mode: overrides.toolMode ?? 'native' });
   await ctx.plugin(Commands);
   const calls = [];
   const records = [];
@@ -252,13 +257,14 @@ async function fixture(t, overrides = {}) {
     ...overrides.sessions,
   };
   const fiber = await ctx.inject(['commands', 'tools'], (inner) => {
-    registerWorktreeTools(inner, {
+    return registerWorktreeTools(inner, {
       manager,
       samePhysicalPath,
       sessions,
       dsh,
       changed: (...ids) => calls.push(['changed', ...ids]),
       isDisposed: () => false,
+      settings: overrides.settings,
     });
   });
   const agent = { id: 'caller', session: { id: 'caller' } };
@@ -269,7 +275,7 @@ async function fixture(t, overrides = {}) {
   });
   const signal = new globalThis.AbortController().signal;
   const enable = (rawInput = '', owner = agent) =>
-    ctx.commands.find(owner, 'worktree').handler({
+    ctx.commands.find(owner, 'cluworktree').handler({
       agent: owner,
       rawInput,
       signal,
@@ -302,10 +308,253 @@ async function fixture(t, overrides = {}) {
     enable,
     run,
     signal,
+    step: async (owner = agent, decision = { kind: 'enter', messages: [] }) => {
+      // Keep the native ordering: assemble first, then run the admission middleware.
+      await ctx.systemPrompt.assemble({ agent: owner, scope: owner, signal });
+      return ctx.waterfall(owner, 'agent/pre-step', { agent: owner, signal }, async () => decision);
+    },
   };
 }
 
-test('/worktree registers six tools only for the receiving Session and cleans up on unload', async (t) => {
+test('automatic tools and delegation guidance are present in the first native prompt assembly', async (t) => {
+  const f = await fixture(t, {
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind === 'local', tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+  });
+  // The native loop assembles before agent/pre-step; f.step() cannot establish the first request.
+  const first = await f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: f.signal });
+  assert.deepEqual(first.tools.map((tool) => tool.name).sort(), [...WORKTREE_TOOL_IDS].sort());
+  assert.ok(first.sections.some((section) => section.name === 'clutch-worktree:delegation'));
+  await f.step();
+  const second = await f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: f.signal });
+  assert.deepEqual(second, first, 'Automatic injection must not change the second request prefix');
+  assert.equal(renderToolsSdk(second.tools), renderToolsSdk(first.tools));
+});
+
+test('simultaneous initial assemblies refresh the same catalog once per request without a late edit', async (t) => {
+  const f = await fixture(t, {
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind === 'local', tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+  });
+  const context = { agent: f.agent, scope: f.agent, signal: f.signal };
+  const [first, other] = await Promise.all([
+    f.ctx.systemPrompt.assemble(context), f.ctx.systemPrompt.assemble(context),
+  ]);
+  assert.deepEqual(first.tools.map((tool) => tool.name).sort(), [...WORKTREE_TOOL_IDS].sort());
+  assert.deepEqual(other, first);
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 6);
+  const global = await f.ctx.systemPrompt.assemble();
+  assert.equal(global.tools.length, 0);
+  const unowned = await f.ctx.systemPrompt.assemble({ agent: f.other, scope: f.other });
+  assert.equal(unowned.tools.length, 0);
+});
+
+test('PTC request 1 contains the enabled Worktree SDK and has no request-2 prefix change', async (t) => {
+  const f = await fixture(t, {
+    toolMode: 'ptc',
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind === 'local', tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+  });
+  const context = { agent: f.agent, scope: f.agent, signal: f.signal };
+  const first = await f.ctx.systemPrompt.assemble(context);
+  assert.deepEqual(first.tools.map((tool) => tool.name), ['run_code']);
+  const sdk = first.sections.find((section) => section.name === 'tools:sdk').text;
+  for (const name of WORKTREE_TOOL_IDS) assert.ok(sdk.includes(name), name);
+  const guidance = first.sections.find((section) => section.name === 'clutch-worktree:delegation').text;
+  assert.match(guidance, /create AND delegate/);
+  await f.step();
+  const second = await f.ctx.systemPrompt.assemble(context);
+  assert.deepEqual(second, first);
+});
+
+test('assembly refresh runs downstream transformations once and honors invocation cancellation', async (t) => {
+  const f = await fixture(t, {
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind === 'local', tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+  });
+  let transformed = 0;
+  f.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    const result = await next();
+    transformed++;
+    return { ...result, variables: { ...result.variables, check: 'retained' } };
+  });
+  const first = await f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: f.signal });
+  assert.equal(transformed, 1);
+  assert.equal(first.variables.check, 'retained');
+  const controller = new globalThis.AbortController();
+  controller.abort(new Error('Cancelled initial assembly'));
+  await assert.rejects(
+    f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: controller.signal }),
+    /Cancelled initial assembly/,
+  );
+  assert.equal(transformed, 1);
+});
+
+test('create-and-fix guidance delegates implementation and prefers enabled plugin tools', async (t) => {
+  const f = await fixture(t);
+  f.agent.ctx.get('tools').register({
+    name: 'other_create_worktree',
+    description: 'Another plugin can create worktrees.',
+    parameters: { type: 'object', properties: {} },
+    output: { schema: { type: 'object', properties: {} }, render: () => [] },
+    execute: async () => ({ content: [] }),
+  });
+  await f.enable();
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  const guidance = assembly.sections.find((section) => section.name === 'clutch-worktree:delegation').text;
+  assert.match(guidance, /create AND delegate/);
+  assert.match(guidance, /clutch_new_worktree.*clutch_span_worktree/s);
+  assert.match(guidance, /delegate code edits, dependency setup, builds and tests/);
+  assert.match(guidance, /another plugin's similarly named Worktree\/Session tools/);
+  assert.match(guidance, /only create a Worktree.*take precedence/);
+  assert.match(guidance, /explicit user choice of a different tool/);
+  assert.doesNotMatch(guidance, /prefer[^\n]*other_create_worktree/);
+});
+
+test('creation-only selection explains that it cannot start or delegate implementation', async (t) => {
+  const f = await fixture(t, {
+    settings: {
+      read: async () => ({ enabled: true, tools: ['clutch_new_worktree'] }),
+      subscribe: () => () => {},
+    },
+  });
+  await f.enable();
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  const guidance = assembly.sections.find((section) => section.name === 'clutch-worktree:delegation').text;
+  assert.match(guidance, /does not create a Session or execute work/);
+  assert.match(guidance, /Delegation is not enabled/);
+  assert.doesNotMatch(guidance, /create AND delegate|then dispatch with clutch_span_worktree/);
+  assert.deepEqual(assembly.tools.map((tool) => tool.name), ['clutch_new_worktree']);
+});
+
+test('General switch controls command discovery and disabling every tool removes the command', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'clutch-tool-general-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const settings = new WorktreeToolSettings(root);
+  const f = await fixture(t, { settings });
+  assert.equal(f.ctx.commands.find(f.agent, 'worktree'), undefined);
+  assert.equal(f.ctx.commands.find(f.agent, 'cluworktree'), undefined);
+  const initial = await settings.read({ kind: 'general' });
+  const selection = { enabled: true, tools: WORKTREE_TOOL_IDS.slice(0, 3) };
+  await settings.update({ kind: 'general' }, selection, initial);
+  assert.ok(f.ctx.commands.find(f.agent, 'cluworktree'));
+  assert.match((await f.enable()).text, /3 added, 3 available/);
+  await settings.update({ kind: 'general' }, { enabled: true, tools: [] }, selection);
+  assert.equal(f.ctx.commands.find(f.agent, 'cluworktree'), undefined);
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 3);
+});
+
+test('automatic selection 2/3/4 and command selection 1/2/3 form a deduplicated union', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'clutch-tool-union-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const settings = new WorktreeToolSettings(root);
+  await settings.update({ kind: 'general' }, { enabled: true, tools: WORKTREE_TOOL_IDS.slice(0, 3) },
+    await settings.read({ kind: 'general' }));
+  const scope = { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' };
+  await settings.update(scope, { enabled: true, tools: WORKTREE_TOOL_IDS.slice(1, 4) }, await settings.read(scope));
+  const f = await fixture(t, { settings });
+  f.records.push({ workspaceId: 'ws', worktreeId: 'wt', branch: 'feature/demo',
+    status: 'active', health: 'ready', absolutePath: '/worktree' });
+  f.bindings.push({ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'caller', status: 'active' });
+  f.headers.set('caller', { sessionId: 'caller', workspaceId: 'ws', cwd: '/worktree' });
+  await f.step();
+  assert.deepEqual(f.ctx.tools.schemas(f.agent).map((tool) => tool.name).sort(),
+    [...WORKTREE_TOOL_IDS.slice(1, 4)].sort());
+  assert.match((await f.enable()).text, /1 added, 4 available/);
+  await Promise.all([f.enable(), f.enable(), f.step()]);
+  assert.deepEqual(f.ctx.tools.schemas(f.agent).map((tool) => tool.name).sort(),
+    [...WORKTREE_TOOL_IDS.slice(0, 4)].sort());
+  assert.deepEqual(f.ctx.tools.schemas(f.other), []);
+  await f.step(f.other, { kind: 'reject' });
+  assert.deepEqual(f.ctx.tools.schemas(f.other), []);
+});
+
+test('partial tool selections do not guide the Agent toward disabled creation or follow-ups', async (t) => {
+  const f = await fixture(t, {
+    settings: {
+      read: async () => ({ enabled: true, tools: ['clutch_span_worktree'] }),
+      subscribe: () => () => {},
+    },
+  });
+  await f.enable();
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
+  const guidance = assembly.sections.find((section) => section.name === 'clutch-worktree:delegation').text;
+  assert.match(guidance, /existing managed Worktree/);
+  assert.doesNotMatch(guidance, /create one Worktree|send a message asking/);
+  assert.deepEqual(assembly.tools.map((tool) => tool.name), ['clutch_span_worktree']);
+});
+
+test('Local injection follows native Workspace membership and remains isolated from Worktree preferences', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'clutch-tool-local-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const settings = new WorktreeToolSettings(root);
+  const local = { kind: 'local', workspaceId: 'ws' };
+  const worktree = { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' };
+  const general = { kind: 'general' };
+  for (const [scope, tools] of [
+    [local, WORKTREE_TOOL_IDS.slice(1, 4)],
+    [worktree, [WORKTREE_TOOL_IDS[5]]],
+    [general, WORKTREE_TOOL_IDS.slice(0, 3)],
+  ]) await settings.update(scope, { enabled: true, tools }, await settings.read(scope));
+  const f = await fixture(t, { settings: new WorktreeToolSettings(root) });
+  f.records.push({ workspaceId: 'ws', worktreeId: 'wt', branch: 'feature/demo',
+    status: 'active', health: 'ready', absolutePath: '/worktree' });
+  f.headers.set('other', { sessionId: 'other', workspaceId: 'ws', cwd: '/worktree' });
+  f.bindings.push({ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'other', status: 'active' });
+  await f.step();
+  await f.step(f.other);
+  assert.deepEqual(f.ctx.tools.schemas(f.agent).map((tool) => tool.name).sort(),
+    [...WORKTREE_TOOL_IDS.slice(1, 4)].sort());
+  assert.deepEqual(f.ctx.tools.schemas(f.other).map((tool) => tool.name), [WORKTREE_TOOL_IDS[5]]);
+  assert.match((await f.enable()).text, /1 added, 4 available/);
+  await f.step();
+  assert.equal(f.ctx.tools.schemas(f.agent).length, 4);
+});
+
+test('Local automatic injection skips detached bindings and rejects a mismatched runtime cwd', async (t) => {
+  const settings = {
+    read: async (scope) => ({ enabled: scope.kind === 'local', tools: [WORKTREE_TOOL_IDS[0]] }),
+    subscribe: () => () => {},
+  };
+  const f = await fixture(t, { settings });
+  f.bindings.push({ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'caller', status: 'detached' });
+  await f.step();
+  assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
+  f.bindings.length = 0;
+  f.headers.set('caller', { sessionId: 'caller', workspaceId: 'ws', cwd: '/elsewhere' });
+  await assert.rejects(f.step(), /cwd does not match/);
+  assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
+});
+
+test('delegates get only reporting by default, then explicit Worktree automatic selection', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'clutch-tool-child-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const settings = new WorktreeToolSettings(root);
+  const scope = { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' };
+  await settings.update(scope, { enabled: true, tools: [WORKTREE_TOOL_IDS[3]] }, await settings.read(scope));
+  const general = { kind: 'general' };
+  await settings.update(general, { enabled: true, tools: WORKTREE_TOOL_IDS }, await settings.read(general));
+  const f = await fixture(t, { settings });
+  await f.enable();
+  const wt = await f.run('clutch_new_worktree', { name: 'feature/selected' });
+  const span = await f.run('clutch_span_worktree', { worktreeId: wt.worktreeId, prompt: 'Task' });
+  const child = f.childAgents.get(span.sessionId);
+  assert.deepEqual(f.ctx.tools.schemas(child).map((tool) => tool.name).sort(),
+    ['clutch_list_models', 'clutch_report_result']);
+  const assembly = await f.ctx.systemPrompt.assemble({ scope: child });
+  assert.match(JSON.stringify(assembly), /This Session was delegated by caller/);
+  assert.doesNotMatch(JSON.stringify(assembly), /dispatch with clutch_span_worktree/);
+});
+
+test('/cluworktree registers six tools only for the receiving Session and cleans up on unload', async (t) => {
   const f = await fixture(t);
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
   assert.equal((await f.enable('unexpected')).kind, 'error');
@@ -333,7 +582,7 @@ test('/worktree registers six tools only for the receiving Session and cleans up
   assert.deepEqual(f.ctx.tools.schemas(f.agent), []);
 });
 
-test('native /worktree execution names all six tools and adds them to model prompt assembly', async (t) => {
+test('native /cluworktree execution acknowledges activation and adds them to model prompt assembly', async (t) => {
   const f = await fixture(t);
   const events = [];
   f.agent.session.append = (type, data) => {
@@ -343,7 +592,7 @@ test('native /worktree execution names all six tools and adds them to model prom
   };
   const before = await f.ctx.systemPrompt.assemble({ scope: f.agent });
   assert.deepEqual(before.tools, []);
-  const executed = await f.ctx.commands.execute(f.agent, '/worktree', [], f.signal);
+  const executed = await f.ctx.commands.execute(f.agent, '/cluworktree', [], f.signal);
   assert.equal(executed.result.kind, 'success');
   const expected = [
     'clutch_new_worktree',
@@ -353,7 +602,7 @@ test('native /worktree execution names all six tools and adds them to model prom
     'clutch_list_sessions',
     'clutch_send_message',
   ].sort();
-  for (const name of expected) assert.ok(executed.result.text.includes(name), executed.result.text);
+  assert.match(executed.result.text, /6 added, 6 available/);
   const assembly = await f.ctx.systemPrompt.assemble({ scope: f.agent });
   assert.deepEqual(assembly.tools.map((tool) => tool.name).sort(), expected);
   assert.deepEqual((await f.ctx.systemPrompt.assemble({ scope: f.other })).tools, []);
@@ -363,7 +612,7 @@ test('native /worktree execution names all six tools and adds them to model prom
   );
 });
 
-test('/worktree reports registration failure and rolls back partial tools before allowing a retry', async (t) => {
+test('/cluworktree reports registration failure and rolls back partial tools before allowing a retry', async (t) => {
   const f = await fixture(t);
   const prototype = Object.getPrototypeOf(f.ctx.tools);
   const register = prototype.register;
@@ -547,7 +796,7 @@ test('invalid arguments, unavailable or ambiguous names, cross-Session calls and
   }
   await assert.rejects(
     newTool.execute({ name: 'demo' }, { ...exec, agent: f.other }),
-    /Use \/worktree/,
+    /Use \/cluworktree/,
   );
   await assert.rejects(
     newTool.execute({ name: 'demo' }, { ...exec, signal: globalThis.AbortSignal.abort() }),
@@ -1058,7 +1307,8 @@ test('delegated Session pushes one bounded result through native admission witho
   assert.equal(dispatched.status, 'dispatched');
   const child = f.childAgents.get(dispatched.sessionId);
   assert.ok(f.ctx.tools.get('clutch_report_result', child));
-  assert.match((await f.enable('', child)).text, /Enabled 7 Worktree tools.*clutch_report_result/);
+  assert.deepEqual(f.ctx.tools.schemas(child).map((tool) => tool.name), ['clutch_report_result']);
+  assert.match((await f.enable('', child)).text, /6 added, 6 available/);
   assert.equal(f.ctx.tools.get('clutch_report_result', f.agent), undefined);
   const childPrompt = await f.ctx.systemPrompt.assemble({ scope: child });
   assert.match(JSON.stringify(childPrompt), /clutch_report_result/);

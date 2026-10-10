@@ -6,12 +6,13 @@
 → Session 组织会话，同时保留 DSH 对 Workspace 身份、Session 元数据、原生列表、消息和会话
 历史的事实来源地位。
 
+工具偏好存储在 Host 自有的独立配置文件中，与关系索引和原生 Session 元数据隔离。
 插件只在自己的 sidecar 中保存 Worktree 关系、获取事实、共享 Worktree 指令以及 Workspace 根目录的
 Main 指令。受管理的 Worktree 提供可选择本地 branch 基线的只读 Git 与变更 Dashboard，Main 提供 Workspace 根目录 HEAD history；
 不会复制 transcript 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期操作、
-> Session 操作、Worktree/Main 指令以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。派生 Worktree、设置和
+> Session 操作、Worktree/Main 指令以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。派生 Worktree 和
 > 其他未完成操作仍标记为**即将推出**。
 
 ## 安装
@@ -64,11 +65,14 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ## 功能
 
+下方工具设置预览使用隔离 UI 测试环境中的实际生产面板。
+
 | 功能                    | 预览                                                                                                                                 | 作用                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
-| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree、设置和其他未完成卡片仍标记为**即将推出**。                                                                                         |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 和其他未完成卡片仍标记为**即将推出**。                                                                                         |
+| **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-tool-general.jpg" width="420" alt="通用工具设置面板预览"><br><img src="assets/screenshots/screenshots-tool-auto.jpg" width="420" alt="Local/Main 自动注入设置面板预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
 
@@ -94,7 +98,7 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 
 ### 创建 Worktree
 
-也可以通过 `/worktree` 启用 Agent 工具，见下一节。
+也可以通过 `/cluworktree` 启用 Agent 工具，见下一节。
 
 新建 Worktree 操作使用与 Worktree 行相同的分支图标。Workspace 行按钮在 hover、键盘聚焦
 或选项菜单打开时显示，与菜单按钮保持一致。
@@ -118,13 +122,30 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 
 ### 启用 Agent Worktree 工具
 
-工具集中在 `src/tool/`，每个工具一个文件。成功激活会列出全部六个委派工具。
-若 `/worktree` 仍显示 `Enabled clutch_new_worktree and clutch_span_worktree for this conversation.`，
-运行中的 Host 载入了旧的两个工具版本。重新构建插件、重载或重启 DSH Host，再执行
-`/worktree`；仅刷新浏览器不会重载 Host 模块。
+打开 **设置 → Worktree → 通用**，开启 **Worktree 工具**并选择需要的能力。两处工具开关默认关闭。
+在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/cluworktree`，即可启用所选能力。
+关闭通用开关后不再提供该指令；取消全部能力时会自动关闭总开关。
 
-在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/worktree`。
-该指令为当前 Session 运行中的 Agent 启用六个工具：
+若需自动注入，打开 Local/Main 或受管 Worktree 的 **Dashboard → 设置**，
+开启 **自动注入 Worktree 工具**并选择能力。Local/Main 配置仅适用于此 Workspace 根目录中
+未绑定 Worktree 的会话；Worktree 配置仅适用于绑定到该 Worktree 的会话，各自独立保存。
+所选工具、SDK 与委派指导在首个模型请求中就可用，Agent 重启后也按对应配置恢复。
+此选择与通用设置独立：通用选择 1、2、3，自动注入选择 2、3、4 时，输入 `/cluworktree`
+只补齐能力 1。已经启用的工具保留到当前 Agent 结束；配置修改影响后续注入。
+
+设置中的 Worktree 入口与侧边栏使用相同的分支图标。
+两处设置均使用分组卡片，总开关位于顶部。开启后在分割线下展开工具选择与说明；
+关闭后收起工具选项并保留选择。设置用功能名称与说明介绍每一项能力；
+注入与回报提示集中在工具选择说明下方。
+指令与自动注入设置均标有 DSH 原生的**实验性**标签。
+指令沿用 DSH 原生展示，简短提示新增与当前可用数量。
+新建会话中执行 `/cluworktree` 后立即进入对话页面并显示指令结果，无需先向模型发送消息。
+
+开启委派能力后，“新建 feature Worktree 并实现或修复问题”默认先创建 Worktree，
+再将任务交给其中的独立 Session，由它修改代码、安装依赖和完成验证；仅创建目录不代表任务已开始。
+指导优先使用本插件已启用的工具，并尊重用户“仅创建”、在当前会话执行或使用其他工具的明确要求。
+
+六项可选能力对应以下工具：
 
 | 工具                    | 参数                                                          | 行为                                                                                                                                                                      |
 | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -144,10 +165,11 @@ Git 分支名；指派时优先使用稳定的 `worktreeId`。单独创建 Workt
 detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
 仍可显式指定本地 `baseBranch` 覆盖默认值。
 
-新委派的 Session 自动获得六个委派工具及
+新委派的 Session 默认仅自动获得
 `clutch_report_result({ status, summary, evidence?, requestId? })`。Host 将回报目标固定为
 发起委派的 Session。`status` 为 `completed`、`blocked` 或 `failed`；`summary` 与
-`evidence` 各限 2,000 字符。报告作为普通原生消息排队投递，应核验其声明和证据再接受完成。
+`evidence` 各限 2,000 字符。其余六项能力需通过 `/cluworktree` 或此 Worktree 显式配置的自动注入开启。
+报告作为普通原生消息排队投递，应核验其声明和证据再接受完成。
 回报由模型主动调用；进程崩溃、Agent 停止或等待用户审批时可能无法回报。`idle` 不代表成功。
 
 模型工具列表已移除 `clutch_read_session` 和 `clutch_wait_sessions`。派发后继续独立工作或
@@ -167,7 +189,7 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
 不会自动授予 Worktree Full Access。
-Agent 或插件重启后需要重新执行 `/worktree`。指令不接受额外参数。
+Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。指令不接受额外参数。
 所有发现、回报和补充投递仅限调用方 Workspace；传入其他 `workspaceId` 不会获得额外访问权。
 这些 Session 是普通原生 Session，不是原生 subagent 子会话，也没有持久化的委派任务目录。
 Detached 绑定需要先修复，再通过这些工具发送消息或回报。
@@ -182,7 +204,7 @@ Workspace 根目录缺失时仍拒绝消息投递。
 新补充消息使用新 id。原生 admission 抛错时，`clutch_send_message` 也返回
 `prompt-failed` 并保留该 id，包括无法确定是否已接收的情况。
 回报目标和启用状态只存在于运行时，重启会丢失目标；恢复后的 Session 可以启用
-`/worktree`，再用 `clutch_send_message` 向已知的委派方 id 手动回报。
+`/cluworktree`，再用 `clutch_send_message` 向已知的委派方 id 手动回报。
 没有自动合并、发布或磁盘清理工具。
 
 ### 导入已有 Worktree
@@ -233,7 +255,7 @@ macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
-中打开记录的目录以及查看 Git 与变更。派生 Worktree、设置和其他标记的快捷操作仍是占位内容。VS Code
+中打开记录的目录以及查看 Git 与变更。派生 Worktree 和其他标记的快捷操作仍是占位内容。VS Code
 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
 
 ### 在应用中打开记录的目录

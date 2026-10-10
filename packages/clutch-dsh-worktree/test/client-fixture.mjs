@@ -222,6 +222,7 @@ export async function loadClientEntry({
     },
   };
   const fakeSessions = {
+    binding: () => undefined,
     list: sessionList,
     async create(input) {
       createdSessions.push(input);
@@ -240,6 +241,10 @@ export async function loadClientEntry({
   const nativeFork = fakeSessions.fork;
 
   const fakeContext = {
+    uiConversation: {
+      events: { register: () => () => {} },
+      views: { register: () => () => {} },
+    },
     on(event, listener) {
       const listeners = eventListeners.get(event) ?? new Set();
       listeners.add(listener);

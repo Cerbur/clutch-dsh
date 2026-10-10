@@ -248,6 +248,7 @@ function renderHarness(writeClipboard) {
           }),
         },
         './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
+        '../settings/ToolSettings.js': { ToolSettings: 'ToolSettings' },
         './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
         './git/WorktreeGitOverview.js': {
           useWorktreeGitOverview: () => ({ status: 'unavailable' }),
@@ -321,6 +322,20 @@ const historicalHints = (node, t) =>
     node,
     (item) => item.type === 'span' && item.props.children === t['dashboard.historicalUnavailable'],
   );
+
+test('Local and managed Dashboard settings address independent automatic injection scopes', () => {
+  for (const selected of [record, createMainWorktreeRecord({ workspaceId: 'ws-local', path: '/project' }, 'main')]) {
+    const harness = renderHarness(async () => true);
+    let node = harness.render({ record: selected });
+    byRole(node, 'tab')[4].props.onClick();
+    node = harness.render();
+    const panel = findAll(node, (item) => item.type === 'ToolSettings')[0];
+    assert.deepEqual(panel.props.scope, isMainWorktreeId(selected.worktreeId)
+      ? { kind: 'local', workspaceId: selected.workspaceId }
+      : { kind: 'worktree', workspaceId: selected.workspaceId, worktreeId: selected.worktreeId });
+    harness.dispose();
+  }
+});
 
 test('Dashboard renders separate ahead-behind, committed, and uncommitted metric rows', () => {
   const harness = renderHarness(async () => true);

@@ -97,8 +97,9 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 ### Agent Worktree 工具接缝
 
 Host 的可选 `commands/tools/sessionController/sessionQuery/agents/llm/systemPrompt` composition
-提供 `/worktree`，在调用 Agent 的独立作用域注册创建、Worktree/Session/模型发现、指派和
-继续投递六个工具，并通过原生 `systemPrompt.section` 注入跨调用委派指导。启用状态只存在于运行时，Agent 或插件销毁后移除，
+提供 `/cluworktree`，通用工具开关开启时注册指令，并在调用 Agent 的独立作用域按用户选择注册
+创建、Worktree/Session/模型发现、指派和继续投递能力，通过原生 `systemPrompt.section` 注入对应指导。
+Local/Main 与 Worktree 的独立配置可在执行前自动注入所选能力；指令只补齐缺项。启用状态只存在于运行时，Agent 或插件销毁后移除，
 不写入 DSH Session metadata、事件或 Sidecar。原生 command/tool 生命周期日志由 DSH
 自行记录。未绑定且没有原生 Workspace 归属的 Session 不根据 cwd 猜测 Project。
 
@@ -117,7 +118,8 @@ resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `a
 外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
-先为新 Agent 注册委派工具、固定回报目标及回报指导，再 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
+先为新 Agent 默认仅注册结果回报工具、固定回报目标及回报指导，再按目标 Worktree 的显式配置
+补齐自动注入能力，最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
 后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
 Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
 失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
@@ -532,3 +534,39 @@ Toast 不截断恢复文案，并给出「设置 → Worktree → 报错与修�
 已知 Workspace 的重试保持目标作用域，只有初始读取、全局重试或无法确定作用域时使用 global。
 错误通知不清空 ready projection，不改变 Session/Workspace 原始数据、Sidecar 持久化边界或
 破坏性操作确认门禁。
+
+## Tool preference isolation (2026-10-10)
+
+Tool settings are Host-owned preferences stored under `clutch-dsh-worktree/tool-settings/`,
+separate from Workspace relationship shards. `general.json` controls `/cluworktree` registration
+and selection; `locals/ws-<encoded-workspace-id>.json` controls Local/Main automatic injection,
+and per-Workspace/per-Worktree files control bound Worktree injection independently.
+All default off, and empty selection disables the switch. No Session metadata or business
+files are changed. Updates serialize with expected-value checks and atomic, file-synced publication.
+Agent registrations are runtime-only and additive: automatic selection and command selection
+form a deduplicated union. Changing settings affects future injection, with active tools retained
+until Agent disposal. Prompt-assembly injection validates native ownership and physical cwd. Unbound
+Sessions at the Workspace root use Local/Main preferences; an active binding uses that Worktree's
+preferences and requires healthy availability. Detached or ambiguous bindings never use Local preferences.
+Delegated Sessions default to result reporting only; other tools follow explicit preferences or
+command activation. Reporting guidance remains independent of delegation guidance.
+
+The native loop collects prompt providers before its assembly waterfall, then runs pre-step.
+Injection at pre-step therefore misses request 1 and edits the request prefix at request 2.
+The plugin now intercepts `system-prompt/assemble` with a prepended middleware and, only when
+registration changes, reassembles once using an invocation-local Symbol marker. This refreshes
+schemas, PTC SDK and guidance together before the first request; downstream transformers run
+once on the fresh assembly. Concurrent requests have independent markers and compare the catalog
+size across initialization. No caller signal is retained across turns. Explicit later capability
+changes can still change the request prefix.
+
+Guidance prefers enabled `clutch_*` capabilities for managed Worktree operations. A create-and-fix
+request defaults to `clutch_new_worktree` followed by `clutch_span_worktree`, delegating edits,
+setup and verification. Creation-only selections explain missing delegation instead of substituting
+another plugin's tools. Explicit user workflow or tool choices take precedence.
+
+The browser's private Conversation activity target observes only native `cluworktree`
+command-run records. It lets new Sessions leave the Hero before any model Turn while native
+Chat owns the sole result row. Already-retained binding generations activate this target;
+unload removes its Definitions and pending activation. No Session metadata, history,
+Host lifecycle events, or Sidecar facts are written by this presentation projection.

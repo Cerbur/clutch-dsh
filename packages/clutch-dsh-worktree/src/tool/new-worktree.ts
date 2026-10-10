@@ -26,7 +26,7 @@ export function registerNewWorktree(context: ToolContext): void {
   const { add, agent, options, check, scope } = context;
   add(
     'clutch_new_worktree',
-    'Create a managed Worktree with a new branch. By default captures the calling Session’s healthy Worktree HEAD, or its Workspace root HEAD (including detached HEAD). An explicit local baseBranch overrides this. Uncommitted files are not copied. Returns acquisition baseCommit and baseBranch when branch-attached. Does not create a Session.',
+    'Create a managed Worktree with a new branch. By default captures the calling Session’s healthy Worktree HEAD, or its Workspace root HEAD (including detached HEAD). An explicit local baseBranch overrides this. Uncommitted files are not copied. Returns acquisition baseCommit and baseBranch when branch-attached. Does not create a Session or start the requested work. When the user asks to create a Worktree and implement/fix something, follow with clutch_span_worktree using the returned worktreeId if delegation is enabled; let that Session implement and verify the task.',
     newArgs,
     output.object(
       {

@@ -162,6 +162,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/createWorktree',
       'worktreeManager/ensureWorktreePermission',
       'worktreeManager/forgetWorktree',
+      'worktreeManager/getToolSettings',
       'worktreeManager/getWorktreeCommitFileDiff',
       'worktreeManager/getWorktreeInstructions',
       'worktreeManager/importWorktree',
@@ -176,6 +177,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
       'worktreeManager/unarchiveWorktree',
+      'worktreeManager/updateToolSettings',
       'worktreeManager/updateWorktreeBaseBranch',
       'worktreeManager/updateWorktreeInstructions',
       'worktreeManager/watchToolChanges',
@@ -404,6 +406,8 @@ test('carries missing Git from Provider through Host projection and /api Client 
 
 test('canonical upstream Host Gateway claims Worktree endpoints on the shared /api channel', () => {
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/getToolSettings',
+    'worktreeManager/updateToolSettings',
     'worktreeManager/watchToolChanges',
     'worktreeManager/listWorktrees',
     'worktreeManager/listWorktreeCommits',

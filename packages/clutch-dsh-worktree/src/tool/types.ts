@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import type { WorktreeToolSessionPort } from './native-session.js';
 import type { WorktreeManagerService } from '../manage/index.js';
 import type { DshReadAdapter } from '../provider/types.js';
+import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 export type { WorktreeRecord } from '../contract/index.js';
 
 export interface CallingAgent {
@@ -14,6 +15,10 @@ export interface Execution {
   signal: AbortSignal;
 }
 export interface Options {
+  settings?: {
+    read(scope: WorktreeToolSettingsScope): Promise<WorktreeToolSelection>;
+    subscribe(listener: (scope: WorktreeToolSettingsScope, selection: WorktreeToolSelection) => void): () => void;
+  };
   manager: Pick<
     WorktreeManagerService,
     | 'listWorktrees'

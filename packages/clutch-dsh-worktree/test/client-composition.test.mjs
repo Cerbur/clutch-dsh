@@ -1201,6 +1201,10 @@ test('disposes Client slot contributions through a real Cordis Client context', 
   });
 
   const ctx = new Context();
+  ctx.provide('uiConversation', {
+    events: { register: () => () => {} },
+    views: { register: () => () => {} },
+  });
   let rightExpanded = true;
   const openedResources = [];
   const rightbarFiber = ctx.plugin((provider) => provider.provide('sidebarRight', {
@@ -1310,7 +1314,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 1);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
     assert.equal(ctx.slots.entries('settings.section').length, 1);
-    assert.equal(ctx.slots.entries('shell.overlay').length, 2);
+    assert.equal(ctx.slots.entries('shell.overlay').length, 3);
 
     await clientFiber.dispose();
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 0);

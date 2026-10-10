@@ -8,6 +8,7 @@ import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js
 import { WORKTREE_ERROR_CODES } from '../lib/contract/index.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { en, zh } from '../lib/client/locales.js';
+import { WORKTREE_TOOL_IDS } from '../lib/contract/tool-settings.js';
 
 test('every contract error has translated problem and recovery copy, without raw diagnostics', () => {
   for (const locale of [en, zh]) {
@@ -316,6 +317,7 @@ test('Settings renders contextual explanations, original diagnostics and safe re
     '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button', SegmentedTabs: 'tabs', Tag: 'tag' },
     '../view/worktree-error-copy.js': { formatWorktreeViewError },
     './diagnostics.js': { worktreeDiagnostics: store },
+    './ToolSettings.js': { ToolSettings: 'ToolSettings' },
     './settings.css': { default: {} },
   });
   let retried = 0, closed = 0;
@@ -341,6 +343,101 @@ test('Settings renders contextual explanations, original diagnostics and safe re
   assert.ok(nodes(node).some(item => item.type === 'pre'));
   assert.ok(!nodes(node).some(item => item.type === 'button' && item.props.children === en['action.retry']));
   assert.ok(nodes(node).some(item => item.props?.children === en['settings.reopen']));
+  h.dispose();
+});
+
+test('tool preferences expose capabilities, persist selected switches and disable an empty selection', async () => {
+  const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
+  for (const scope of [{ kind: 'general' }, { kind: 'local', workspaceId: 'ws' }, { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' }]) {
+    let selection = { enabled: false, tools: [...WORKTREE_TOOL_IDS] };
+    const writes = [];
+    const manager = {
+      getToolSettings: async () => selection,
+      updateToolSettings: async (input) => {
+        writes.push(input);
+        selection = input.selection;
+        return selection;
+      },
+    };
+    const h = hookHarness(source, {
+      '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
+      '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
+      './settings.css': { default: {} },
+    });
+    const input = { scope, manager, t: (key) => zh[key] };
+    h.render('ToolSettings', input);
+    await Promise.resolve();
+    let node = h.render('ToolSettings', input);
+    const switches = () => nodes(node).filter((item) => item.type === 'switch');
+    assert.equal(switches().length, 1);
+    assert.equal(switches()[0].props.checked, false);
+    assert.ok(!nodes(node).some((item) => item.props?.['data-worktree-tool-options'] !== undefined));
+    assert.doesNotMatch(JSON.stringify(node), /clutch_(new|list|span|send)_/);
+    switches()[0].props.onChange(true);
+    await Promise.resolve();
+    node = h.render('ToolSettings', input);
+    assert.equal(switches().length, 7);
+    assert.ok(nodes(node).some((item) => item.props?.['data-worktree-tool-options'] !== undefined));
+    assert.ok(switches().every((item) => item.props.checked));
+    switches()[1].props.onChange(false);
+    await Promise.resolve();
+    node = h.render('ToolSettings', input);
+    switches()[0].props.onChange(false);
+    await Promise.resolve();
+    node = h.render('ToolSettings', input);
+    assert.equal(switches().length, 1);
+    assert.deepEqual(selection.tools, WORKTREE_TOOL_IDS.slice(1));
+    switches()[0].props.onChange(true);
+    await Promise.resolve();
+    node = h.render('ToolSettings', input);
+    assert.equal(switches().length, 7);
+    assert.equal(switches()[1].props.checked, false);
+    assert.ok(switches().slice(2).every((item) => item.props.checked));
+    for (let i = 2; i <= 6; i++) {
+      switches()[i].props.onChange(false);
+      await Promise.resolve();
+      node = h.render('ToolSettings', input);
+    }
+    assert.equal(switches()[0].props.checked, false);
+    assert.equal(switches().length, 1);
+    assert.deepEqual(writes.at(-1).selection, { enabled: false, tools: [] });
+    assert.deepEqual(writes[0].scope, scope);
+    assert.deepEqual(writes[0].expected, { enabled: false, tools: [...WORKTREE_TOOL_IDS] });
+    h.dispose();
+  }
+});
+
+test('tool settings preserve ready content after a failed save and retry reads the latest value', async () => {
+  const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
+  let reads = 0;
+  const manager = {
+    getToolSettings: async () => {
+      reads++;
+      return { enabled: true, tools: [WORKTREE_TOOL_IDS[0]] };
+    },
+    updateToolSettings: async () => { throw new Error('Concurrent edit'); },
+  };
+  const h = hookHarness(source, {
+    '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
+    '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
+    './settings.css': { default: {} },
+  });
+  const input = { scope: { kind: 'general' }, manager, t: (key) => en[key] };
+  h.render('ToolSettings', input);
+  await Promise.resolve();
+  let node = h.render('ToolSettings', input);
+  nodes(node).find((item) => item.type === 'switch').props.onChange(false);
+  await Promise.resolve();
+  node = h.render('ToolSettings', input);
+  assert.equal(nodes(node).filter((item) => item.type === 'switch').length, 7);
+  assert.equal(nodes(node).find((item) => item.type === 'switch').props.checked, true);
+  nodes(node).find((item) => item.type === 'button').props.onClick();
+  node = h.render('ToolSettings', input);
+  assert.equal(nodes(node).filter((item) => item.type === 'switch').length, 7);
+  await Promise.resolve();
+  node = h.render('ToolSettings', input);
+  assert.equal(reads, 2);
+  assert.ok(!nodes(node).some((item) => item.props?.role === 'alert'));
   h.dispose();
 });
 

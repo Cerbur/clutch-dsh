@@ -31,6 +31,8 @@ import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
 import { WorktreeSettings } from './settings/WorktreeSettings.js';
+import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
+import { installWorktreeCommandActivity } from './command-activity.js';
 import { worktreeDiagnostics } from './settings/diagnostics.js';
 import { openWorktreeErrorSettings } from './settings/settings-navigation.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
@@ -185,13 +187,14 @@ function workspaceMembershipSignature(
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
 export function apply(ctx: Context): void {
+  installWorktreeCommandActivity(ctx);
   const locale = ctx.locale as unknown as {
     register(
       namespace: typeof WORKTREE_NS,
@@ -229,6 +232,14 @@ export function apply(ctx: Context): void {
   };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  ctx.effect(
+    () => slots.inject('shell.overlay', () => slots.register({
+      name: 'shell.overlay',
+      id: 'clutch-dsh-worktree-settings-icon',
+      locale: WORKTREE_NS,
+    }, WorktreeSettingsNavIcon)),
+    'clutch-dsh-worktree: settings icon cleanup',
+  );
   ctx.effect(() => {
     const notice = new RestartNotice((signal) => manager.probeHost(signal));
     const check = () => void notice.check();
@@ -293,7 +304,7 @@ export function apply(ctx: Context): void {
       order: 36,
       locale: WORKTREE_NS,
       label: () => ctx.locale.bind(WORKTREE_NS)('settings.title'),
-    }, WorktreeSettings),
+    }, (props) => createElement(WorktreeSettings, { ...props, manager })),
   );
   ctx.effect(() => () => worktreeDiagnostics.dispose(), 'clutch-dsh-worktree: diagnostics cleanup');
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);

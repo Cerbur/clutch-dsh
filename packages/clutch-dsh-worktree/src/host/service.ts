@@ -38,6 +38,8 @@ import { createWorktreePermissionManager } from './worktree-permission-manager.j
 import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
+import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
+import { WorktreeToolSettings } from './tool-settings.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -67,8 +69,10 @@ export class WorktreeRemoteService extends TypertRemoteService {
   static inject = ['workspaceRegistry', 'sessions', 'sessionPersistence'];
 
   private readonly manager: WorktreeManagerService;
+  private readonly dsh: DshHostReadAdapter;
   private readonly remote: WorktreeRemoteManager;
   private readonly toolChanges = new WorktreeToolChanges();
+  private readonly toolSettings: WorktreeToolSettings;
 
   /**
    * 为当前 Cordis fiber 建立一次 Host 组合，并复用同一个 Remote projection 处理调用。
@@ -77,6 +81,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
+    this.toolSettings = new WorktreeToolSettings(config.dshHome);
     let disposed = false;
     ctx.effect(
       () => () => {
@@ -89,6 +94,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
       activitySource,
       isDisposed: () => disposed,
     });
+    this.dsh = dsh;
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
     const manager = createWorktreeManager({
       dsh,
@@ -101,13 +107,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.inject(
       ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
       (toolCtx) => {
-        registerWorktreeTools(toolCtx, {
+        return registerWorktreeTools(toolCtx, {
           manager,
           samePhysicalPath,
           dsh,
           sessions: createWorktreeToolSessionPort(toolCtx),
           changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
           isDisposed: () => disposed,
+          settings: this.toolSettings,
         });
       },
     );
@@ -154,6 +161,35 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  async getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+    await this.validateToolSettingsScope(input.scope);
+    return { ok: true, value: await this.toolSettings.read(input.scope) };
+  }
+
+  @Remote
+  async updateToolSettings(input: {
+    scope: WorktreeToolSettingsScope;
+    selection: WorktreeToolSelection;
+    expected: WorktreeToolSelection;
+  }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+    await this.validateToolSettingsScope(input.scope);
+    return { ok: true, value: await this.toolSettings.update(input.scope, input.selection, input.expected) };
+  }
+
+  private async validateToolSettingsScope(scope: WorktreeToolSettingsScope): Promise<void> {
+    if (scope.kind === 'general') return;
+    if (scope.kind === 'local') {
+      if (!scope.workspaceId || !(await this.dsh.getWorkspace(scope.workspaceId)))
+        throw new Error('Workspace is unavailable. Reopen its Dashboard.');
+      return;
+    }
+    if (scope.kind !== 'worktree') throw new Error('Invalid tool settings scope');
+    const records = await this.manager.listWorktrees({ workspaceId: scope.workspaceId });
+    if (!records.some((record) => record.worktreeId === scope.worktreeId && record.status === 'active'))
+      throw new Error('Worktree is unavailable. Reopen its Dashboard.');
+  }
+
   @Remote
   async watchToolChanges(
     input: { readonly afterRevision: number },

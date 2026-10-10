@@ -28,15 +28,21 @@ declaration merging into the Client Session Context graph. Tests exercise real D
 The internal `src/tool/` module owns the tools, with one file per tool containing its input,
 output, description and handler. Shared context, native Session access and read-only status
 projection stay in adjacent helper files; Host only composes it. Native command execution and model
-prompt assembly verify all six delegation tools and the delegated-Agent report tool. Activation names them explicitly; the legacy two-tool
-success text identifies an older Host build still loaded in memory, which requires Host
-reload/restart after rebuilding.
+prompt assembly verify all six delegation tools and the delegated-Agent report tool. Activation uses DSH's native command lifecycle and a concise capability-count acknowledgement.
 
-1. `/worktree` validates native Workspace membership or exactly one active Sidecar binding.
+2026-10-10 presentation amendment: native Chat considers an ordinary command Node insufficient
+to leave the blank-session Hero, while `/compact` receives a separate active Node kind.
+The browser contributes a private Conversation activity target matching only
+`command/run` for `cluworktree`, activated on already-retained Session bindings.
+This displays DSH's existing command row immediately without opening a model Turn,
+rewriting Session metadata, or adding transcript events. Errors, repeated invocation,
+history replay, binding generations and plugin disposal use the same native lifecycle.
+
+1. `/cluworktree` validates native Workspace membership or exactly one active Sidecar binding.
    Unknown ownership is rejected; cwd alone never establishes Project identity.
-2. It enables six tools: `clutch_new_worktree`, `clutch_list_worktrees`,
+2. General preferences select a subset of the six tools: `clutch_new_worktree`, `clutch_list_worktrees`,
    `clutch_span_worktree`, `clutch_list_models`, `clutch_list_sessions`, and `clutch_send_message`.
-   Repeated invocation is idempotent. The command accepts no arguments.
+   Repeated invocation adds only missing registrations, including those already automatically injected. The command accepts no arguments and is registered only while General is enabled.
 3. `clutch_new_worktree({ name, baseBranch?, instructions? })` creates a new branch from
    the calling Session's healthy active Worktree branch, or the root checkout's current branch
    when its physical cwd matches Local/Main. An explicit local base overrides this. Broken
@@ -46,7 +52,7 @@ reload/restart after rebuilding.
    instructions. It returns the Worktree identity and path and creates no Session.
 4. `clutch_span_worktree({ worktreeId?, name?, prompt, model?, title? })` resolves an exact active, healthy managed target
    within that Project, creates a native Session with its ordinary creation-time cwd,
-   binds it, configures the initial model, optionally renames it through the native API, enables its tools and fixed-destination reporting, and
+   binds it, configures the initial model, optionally renames it through the native API, enables only fixed-destination reporting and reporting guidance by default, and
    admits the exact prompt in queue mode. Prefer the stable id; specify exactly one id or name.
    It returns the native Session identity, selected model, request id and stage after admission,
    without waiting for model execution or changing the current UI focus.
@@ -120,8 +126,50 @@ Reports are model-driven and may not arrive after crashes/stops or while awaitin
 They are claims requiring verification; no turn/end listener invents task success. The caller
 must not auto-reply to each report. Follow-up work can send a fresh report. Admission failure
 preserves requestId for identical retries. Plugin/Agent restart removes routing and guidance;
-a resumed Session may enable `/worktree` and manually use `clutch_send_message` with the known
+a resumed Session may enable `/cluworktree` and manually use `clutch_send_message` with the known
 delegator id. Existing Sessions are not retroactively assigned a reporting destination.
+
+## Tool preferences (2026-10-10 amendment)
+
+General, per-Workspace Local/Main and per-Worktree switches default to off. Each selection normalizes the final
+deselection to disabled. Settings show localized capability names and descriptions, without
+internal tool names. General controls command discovery and activation; Worktree selection
+controls automatic injection independently. Local/Main has a separate Workspace-scoped selection,
+which applies only to native-member Sessions at that Workspace root with no Worktree binding.
+
+Host preferences live under `clutch-dsh-worktree/tool-settings/general.json` and
+`tool-settings/worktrees/ws-<encoded-workspace-id>/wt-<encoded-worktree-id>.json`.
+Local/Main preferences use `tool-settings/locals/ws-<encoded-workspace-id>.json`.
+Local preference access validates the native Workspace identity without reading relationship shards.
+Each versioned file contains only an enabled flag and the selected capability ids.
+They never share relationship shards or native Session metadata. Updates use a Host-local
+serialized queue, expected-value conflict detection, writable-handle fsync, atomic rename and
+best-effort directory sync. Invalid files remain untouched; a missing file is an off selection.
+
+The Agent-scoped catalog incrementally registers missing capabilities and rolls back a failed
+addition without losing previous registrations. A prompt-assembly middleware selects Local/Main preferences
+when there is no binding, or the active Worktree's preferences when bound. Detached or ambiguous
+bindings never fall back to Local. It verifies native ownership, physical cwd and Worktree availability before injection; this handles binding
+after Agent creation and restoration after restart. Native assembly collects providers before
+its waterfall, so a changed registration triggers one fresh assembly with an invocation-local
+recursion marker before any model request. This includes schemas, the PTC SDK and delegation
+guidance from request 1, instead of adding them at pre-step for request 2. Concurrent assemblies
+refresh independently and ordinary downstream transformers run once on the fresh result.
+Existing registrations persist to Agent
+disposal. Preferences do not trigger Workspace list refreshes.
+
+Delegated Agents receive only `clutch_report_result` and reporting guidance by default.
+Explicit Worktree preferences can add selected delegation capabilities before prompt admission;
+`/cluworktree` adds the General selection without replacing fixed-destination reporting.
+Reporting destinations remain runtime-only. This supersedes the original all-tools child policy.
+
+The 2026-10-10 real-session timing correction supersedes pre-step tool injection:
+in a real-session reproduction, the initial system message at seq 10
+had no Worktree tool text, while seq 29 at step 2 added it. The deterministic regression follows
+the native assemble-before-pre-step order and requires equal first/second request assemblies.
+Guidance also makes create-and-fix requests create-and-delegate by default, moving dependency
+setup, edits and checks into the delegated Session. Enabled plugin tools take preference over
+competing Worktree/Session tools unless the user explicitly chooses another workflow.
 
 ## Notification and refresh design
 
