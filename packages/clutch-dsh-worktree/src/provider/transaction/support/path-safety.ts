@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import path from 'node:path';
 import { lstat } from 'node:fs/promises';
 import type { WorktreeRecord } from '../../../contract/index.js';
@@ -33,7 +34,7 @@ export async function assertSafeRemovalPath(
   record: WorktreeRecord,
   workspaceRoot: string,
 ): Promise<void> {
-  const targetPath = path.resolve(record.absolutePath);
+  const targetPath = path.resolve(gitWorktreeRoot(record));
   if (record.source === 'plugin') {
     const generatedRoot = path.join(dependencies.dshHome, 'clutch-dsh-worktree', 'worktree');
     if (!isInside(generatedRoot, targetPath) || isInside(workspaceRoot, targetPath)) {
@@ -42,7 +43,7 @@ export async function assertSafeRemovalPath(
         'Managed Worktree path moved outside its trusted root',
         {
           worktreeId: record.worktreeId,
-          targetPath: record.absolutePath,
+          targetPath: gitWorktreeRoot(record),
         },
       );
     }
@@ -103,7 +104,7 @@ export async function assertNotSymlink(pathname: string, record: WorktreeRecord)
     if ((await lstat(pathname)).isSymbolicLink()) {
       throw providerError('WORKTREE_IDENTITY_CHANGED', `Worktree path is a symlink: ${pathname}`, {
         worktreeId: record.worktreeId,
-        targetPath: record.absolutePath,
+        targetPath: gitWorktreeRoot(record),
       });
     }
   } catch (error) {

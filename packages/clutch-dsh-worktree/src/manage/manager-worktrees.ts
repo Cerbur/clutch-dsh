@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
+import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
 import { readWorktreeStatus } from '../provider/git/worktree-status.js';
 import type { GitWorktreeInfo } from '../provider/types.js';
@@ -82,8 +84,9 @@ export async function listWorktrees(
   };
 
   let gitWorktrees: readonly GitWorktreeInfo[] | undefined;
+  let gitRoot: string | undefined;
   try {
-    const gitRoot = context.git.resolveRepositoryRoot
+    gitRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath)
       : workspace.rootPath;
     gitWorktrees = await context.git.listWorktrees(gitRoot);
@@ -92,7 +95,17 @@ export async function listWorktrees(
   }
 
   const nextRecords: WorktreeRecord[] = [];
-  for (const record of records) {
+  for (const storedRecord of records) {
+    let record = storedRecord;
+    let workspaceAvailable = true;
+    if (gitRoot !== undefined) {
+      try {
+        record = await projectWorktreePath(storedRecord, workspace.rootPath, gitRoot);
+        workspaceAvailable = await worktreeWorkspaceAvailable(record);
+      } catch {
+        workspaceAvailable = false;
+      }
+    }
     const activity = await getActivity(record);
     const recordRecoveryNeeded =
       (snapshot.pendingOperation !== undefined &&
@@ -122,11 +135,11 @@ export async function listWorktrees(
     let currentBranch: string | null | undefined;
     for (const gitWorktree of gitWorktrees) {
       if (
-        path.resolve(gitWorktree.absolutePath) === path.resolve(record.absolutePath) ||
-        (await samePhysicalPath(gitWorktree.absolutePath, record.absolutePath))
+        path.resolve(gitWorktree.absolutePath) === path.resolve(gitWorktreeRoot(record)) ||
+        (await samePhysicalPath(gitWorktree.absolutePath, gitWorktreeRoot(record)))
       ) {
         const status = await readWorktreeStatus(gitWorktree);
-        ready = status === 'ready' || status === 'detached';
+        ready = workspaceAvailable && (status === 'ready' || status === 'detached');
         currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
         break;
       }
@@ -141,7 +154,11 @@ export async function listWorktrees(
       ...(currentBranch === undefined ? {} : { currentBranch }),
     });
   }
-  return nextRecords;
+  const storedById = new Map(records.map((record) => [record.worktreeId, record]));
+  return nextRecords.map((record) => ({
+    ...record,
+    mutationToken: createWorktreeMutationToken(snapshot, storedById.get(record.worktreeId)!),
+  }));
 }
 
 /** List branch-attached Git Worktrees that have no sidecar record at the same physical path. */
@@ -165,12 +182,14 @@ export async function listImportCandidates(
     if (await readWorktreeStatus(worktree) !== 'ready') continue;
     let managed = false;
     for (const record of snapshot.worktrees) {
-      if (await samePhysicalPath(worktree.absolutePath, record.absolutePath)) {
+      if (await samePhysicalPath(worktree.absolutePath, gitWorktreeRoot(record))) {
         managed = true;
         break;
       }
     }
     if (!managed) {
+      const workspacePath = await workspacePathInWorktree(workspace.rootPath, gitRoot, worktree.absolutePath);
+      if (!(await worktreeWorkspaceAvailable({ absolutePath: workspacePath, gitRootPath: worktree.absolutePath }))) continue;
       candidates.push({ absolutePath: await canonicalPath(worktree.absolutePath), branch: worktree.branch });
     }
   }
@@ -224,7 +243,7 @@ export async function listBranches(
 /** Create a Git Worktree first, then commit its external relation to the sidecar. */
 export async function createWorktree(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string; readonly baseCommit?: string },
 ): Promise<WorktreeRecord> {
   let baseId = '';
   for (let attempt = 0n; ; attempt++) {
@@ -242,12 +261,15 @@ export async function createWorktree(
 
 async function createWorktreeAttempt(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string },
+  input: { readonly workspaceId: WorkspaceId; readonly branch: string; readonly newBranch?: string; readonly baseCommit?: string },
   worktreeId: string,
 ): Promise<WorktreeRecord> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   const transactional = context.sidecar.runExclusive !== undefined;
   if (!transactional) await context.git.validateRepository(workspace.rootPath);
+  const repositoryRoot = !transactional && context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+    : workspace.rootPath;
 
   if (typeof input.branch !== 'string' || input.branch.length === 0) {
     throw providerError('GIT_OPERATION_FAILED', 'A local branch is required', {
@@ -256,6 +278,10 @@ async function createWorktreeAttempt(
   }
 
   const baseBranch = input.branch.trim();
+  if (input.baseCommit !== undefined && (!isWorktreeGitCommit(input.baseCommit) || input.newBranch === undefined)) {
+    throw providerError('GIT_OPERATION_FAILED', 'A captured commit requires a full Git hash and a new branch', {});
+  }
+  const detachedBase = input.baseCommit !== undefined && baseBranch === `${input.baseCommit}^{commit}`;
   if (input.newBranch !== undefined && typeof input.newBranch !== 'string') {
     throw providerError('GIT_OPERATION_FAILED', 'A new branch name must be a string', {
       workspaceRoot: workspace.rootPath,
@@ -279,7 +305,7 @@ async function createWorktreeAttempt(
   const targetBranch = newBranch ?? baseBranch;
   if (!transactional) {
     const branches = await context.git.listBranches(workspace.rootPath);
-    if (!branches.includes(baseBranch)) {
+    if (!detachedBase && !branches.includes(baseBranch)) {
       throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: baseBranch,
@@ -319,12 +345,14 @@ async function createWorktreeAttempt(
       workspaceRoot: workspace.rootPath,
       targetPath,
       worktreeId,
-      baseBranch,
+      ...(detachedBase ? {} : { baseBranch }),
+      ...(input.baseCommit === undefined ? {} : { baseCommit: input.baseCommit }),
       newBranch,
       targetBranch,
     });
   }
 
+  const absolutePath = await workspacePathInWorktree(workspace.rootPath, repositoryRoot, targetPath);
   await assertGeneratedNameAvailable(
     worktreeId,
     targetPath,
@@ -334,17 +362,18 @@ async function createWorktreeAttempt(
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {
-    await context.git.createWorktree(workspace.rootPath, targetPath, baseBranch, newBranch);
+    await context.git.createWorktree(workspace.rootPath, targetPath, input.baseCommit ?? baseBranch, newBranch);
   } catch (error) {
     throw asGitError('create worktree', workspace.rootPath, targetPath, error);
   }
 
-  let capturedBaseCommit: string | undefined;
+  let capturedBaseCommit = input.baseCommit;
   if (context.git.resolveCommit) {
     try {
       // Read the Worktree's actual HEAD after Git has created it. The base
       // branch may have moved during the preflight/create window.
-      capturedBaseCommit = await context.git.resolveCommit(targetPath, 'HEAD', { signal: context.signal });
+      const actualHead = await context.git.resolveCommit(targetPath, 'HEAD', { signal: context.signal });
+      capturedBaseCommit ??= actualHead;
     } catch (error) {
       try {
         await context.git.removeWorktree(workspace.rootPath, targetPath);
@@ -368,11 +397,12 @@ async function createWorktreeAttempt(
   const record: WorktreeRecord = {
     worktreeId,
     workspaceId: input.workspaceId,
-    absolutePath: targetPath,
+    absolutePath,
+    ...(absolutePath === targetPath ? {} : { gitRootPath: targetPath }),
     branch: targetBranch,
     source: 'plugin',
     createdAt: new Date().toISOString(),
-    baseBranch,
+    ...(detachedBase ? {} : { baseBranch }),
     ...(capturedBaseCommit !== undefined ? { baseCommit: capturedBaseCommit } : {}),
     status: 'active',
   };
@@ -393,7 +423,7 @@ async function createWorktreeAttempt(
       if (branchClaims.length > 0) {
         const live = await context.git.listWorktrees(workspace.rootPath);
         for (const claim of branchClaims) {
-          const actual = await findGitWorktreeByPhysicalPath(live, claim.absolutePath);
+          const actual = await findGitWorktreeByPhysicalPath(live, gitWorktreeRoot(claim));
           if (!actual || (!actual.detached && (!actual.branch || actual.branch === targetBranch))) {
             throw providerError('WORKTREE_BRANCH_CONFLICT', `Branch is already recorded as active: ${targetBranch}`, {
               branch: targetBranch, worktreeId: claim.worktreeId,
@@ -450,17 +480,24 @@ export async function importWorktree(
     });
   }
   if (context.sidecar.runExclusive) {
-    return context.transaction.import({
+    const record = await context.transaction.import({
       workspaceId: input.workspaceId,
       workspaceRoot: workspace.rootPath,
       absolutePath: requestedPath,
       worktreeId: generatedId(context.idFactory),
     });
+    const gitRoot = context.git.resolveRepositoryRoot
+      ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+      : workspace.rootPath;
+    return projectWorktreePath(record, workspace.rootPath, gitRoot);
   }
   await context.git.validateRepository(workspace.rootPath);
+  const gitRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+    : workspace.rootPath;
   const gitWorktrees = await context.git.listWorktrees(workspace.rootPath);
   const gitWorktree = await findGitWorktreeByPhysicalPath(gitWorktrees, requestedPath);
-  if (!gitWorktree || !gitWorktree.branch || await readWorktreeStatus(gitWorktree) !== 'ready' || await samePhysicalPath(gitWorktree.absolutePath, workspace.rootPath)) {
+  if (!gitWorktree || !gitWorktree.branch || await readWorktreeStatus(gitWorktree) !== 'ready' || await samePhysicalPath(gitWorktree.absolutePath, gitRoot)) {
     throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${requestedPath}`, {
       workspaceId: input.workspaceId,
       absolutePath: requestedPath,
@@ -470,7 +507,7 @@ export async function importWorktree(
   const normalizedPath = await canonicalPath(gitWorktree.absolutePath);
   const current = await context.sidecar.read(input.workspaceId);
   const existing = await findSidecarWorktreeByPhysicalPath(current.worktrees, normalizedPath);
-  if (existing) return importConflictOrExisting(existing, input.workspaceId, normalizedPath);
+  if (existing) return projectWorktreePath(importConflictOrExisting(existing, input.workspaceId, normalizedPath), workspace.rootPath, gitRoot);
 
   const worktreeId = generatedId(context.idFactory);
   try {
@@ -484,7 +521,7 @@ export async function importWorktree(
         !liveWorktree ||
         !liveWorktree.branch ||
         await readWorktreeStatus(liveWorktree) !== 'ready' ||
-        await samePhysicalPath(liveWorktree.absolutePath, workspace.rootPath)
+        await samePhysicalPath(liveWorktree.absolutePath, gitRoot)
       ) {
         throw providerError('WORKTREE_IMPORT_INVALID', `Path is not an importable Worktree: ${normalizedPath}`, {
           workspaceId: input.workspaceId,
@@ -492,15 +529,24 @@ export async function importWorktree(
         });
       }
       const livePath = await canonicalPath(liveWorktree.absolutePath);
+      const absolutePath = await workspacePathInWorktree(workspace.rootPath, gitRoot, livePath);
+      if (!(await worktreeWorkspaceAvailable({ absolutePath, gitRootPath: livePath }))) {
+        throw providerError('WORKTREE_IMPORT_INVALID', 'Workspace directory is unavailable in this Worktree', { absolutePath });
+      }
       const concurrent = await findSidecarWorktreeByPhysicalPath(snapshot.worktrees, normalizedPath);
-      if (concurrent) return { result: importConflictOrExisting(concurrent, input.workspaceId, normalizedPath), snapshot, changed: false };
+      if (concurrent) return {
+        result: await projectWorktreePath(importConflictOrExisting(concurrent, input.workspaceId, normalizedPath), workspace.rootPath, gitRoot),
+        snapshot,
+        changed: false,
+      };
       if (snapshot.worktrees.some((candidate) => candidate.worktreeId === worktreeId)) {
         throw providerError('SIDECAR_CORRUPT', `Generated Worktree ID is already recorded: ${worktreeId}`, { worktreeId });
       }
       const record: WorktreeRecord = {
         worktreeId,
         workspaceId: input.workspaceId,
-        absolutePath: livePath,
+        absolutePath,
+        ...(absolutePath === livePath ? {} : { gitRootPath: livePath }),
         branch: liveWorktree.branch,
         source: 'external',
         importedAt: new Date().toISOString(),
@@ -530,7 +576,10 @@ async function findSidecarWorktreeByPhysicalPath(
   worktrees: readonly WorktreeRecord[],
   absolutePath: string,
 ): Promise<WorktreeRecord | undefined> {
-  return findGitWorktreeByPhysicalPath(worktrees, absolutePath);
+  for (const worktree of worktrees) {
+    if (await samePhysicalPath(gitWorktreeRoot(worktree), absolutePath)) return worktree;
+  }
+  return undefined;
 }
 
 function importConflictOrExisting(

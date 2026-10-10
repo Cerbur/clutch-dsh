@@ -10,7 +10,7 @@ function t(key, params = {}) {
   return values.length === 0 ? key : key + ':' + values;
 }
 
-test('formats plugin-owned binding errors with translated copy and raw reason', () => {
+test('formats plugin-owned binding errors with translated copy and localized recovery reason', () => {
   assert.equal(
     formatWorktreeViewError(
       {
@@ -21,11 +21,11 @@ test('formats plugin-owned binding errors with translated copy and raw reason', 
       },
       t,
     ),
-    'error.sessionBindingFailed:sessionId=session-1,reason=sidecar unavailable',
+    'error.sessionBindingFailed:sessionId=session-1,reason=error.worktreeDataUnavailable',
   );
 });
 
-test('formats adapter-owned retryable errors with endpoint and raw reason', () => {
+test('formats adapter-owned retryable errors with localized connection guidance', () => {
   assert.equal(
     formatWorktreeViewError(
       {
@@ -36,7 +36,7 @@ test('formats adapter-owned retryable errors with endpoint and raw reason', () =
       },
       t,
     ),
-    'error.connectionFailed:endpoint=worktreeManager/listWorktrees,reason=socket closed',
+    'error.connectionFailed',
   );
 });
 
@@ -51,7 +51,7 @@ test('uses translated fallback copy when a known wrapper has no raw reason', () 
       },
       t,
     ),
-    'error.connectionFailed:endpoint=worktreeManager/listWorktrees,reason=error.worktreeDataUnavailable',
+    'error.connectionFailed',
   );
   assert.equal(
     formatWorktreeViewError(
@@ -110,7 +110,7 @@ test('formats a confirmed-missing Workspace root with the localized path copy', 
   );
 });
 
-test('keeps the accurate message for WORKSPACE_NOT_FOUND causes that are not a missing root', () => {
+test('localizes inaccessible Workspace causes without claiming the directory is missing', () => {
   const causes = [
     {
       message: 'Workspace is missing or has a non-absolute root: ws1',
@@ -136,7 +136,7 @@ test('keeps the accurate message for WORKSPACE_NOT_FOUND causes that are not a m
         },
         t,
       ),
-      cause.message,
+      'error.workspaceNotFound',
     );
   }
 });
@@ -186,7 +186,7 @@ test('formats mutation safety errors with localized recovery copy', () => {
   }
 });
 
-test('keeps an unknown DSH or Host message unchanged', () => {
+test('gives unknown DSH or Host errors localized recovery guidance and a support code', () => {
   assert.equal(
     formatWorktreeViewError(
       {
@@ -196,7 +196,7 @@ test('keeps an unknown DSH or Host message unchanged', () => {
       },
       t,
     ),
-    'repository is not a Git repository',
+    'error.unexpected:code=HOST_DOMAIN_ERROR',
   );
 });
 

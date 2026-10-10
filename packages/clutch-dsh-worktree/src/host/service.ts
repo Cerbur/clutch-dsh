@@ -1,5 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { registerWorktreeInstructions, type WorktreeInstructionHost } from './worktree-instructions.js';
+import {
+  registerWorktreeInstructions,
+  type WorktreeInstructionHost,
+} from './worktree-instructions.js';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 
 import type {
@@ -21,12 +24,10 @@ import type {
   WorktreeRemoteResult,
 } from '../contract/index.js';
 import type { GitSubprocessRuntime } from '../provider/types.js';
+import { samePhysicalPath } from '../provider/path-identity.js';
 import { createWorktreeManager } from '../manage/index.js';
 import type { WorktreeManagerService } from '../manage/index.js';
-import {
-  DshHostReadAdapter,
-  type DshHostReadContext,
-} from './dsh-read-adapter.js';
+import { DshHostReadAdapter, type DshHostReadContext } from './dsh-read-adapter.js';
 import type { WorktreeActivitySource } from './worktree-activity.js';
 import { createWorktreeRemoteProjection } from './remote.js';
 import {
@@ -34,6 +35,11 @@ import {
   type DshWorktreePermissionAdapterOptions,
 } from './worktree-permission.js';
 import { createWorktreePermissionManager } from './worktree-permission-manager.js';
+import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
+import { WorktreeToolChanges } from './worktree-tool-changes.js';
+import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
+import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
+import { WorktreeToolSettings } from './tool-settings.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -63,7 +69,10 @@ export class WorktreeRemoteService extends TypertRemoteService {
   static inject = ['workspaceRegistry', 'sessions', 'sessionPersistence'];
 
   private readonly manager: WorktreeManagerService;
+  private readonly dsh: DshHostReadAdapter;
   private readonly remote: WorktreeRemoteManager;
+  private readonly toolChanges = new WorktreeToolChanges();
+  private readonly toolSettings: WorktreeToolSettings;
 
   /**
    * 为当前 Cordis fiber 建立一次 Host 组合，并复用同一个 Remote projection 处理调用。
@@ -72,6 +81,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
+    this.toolSettings = new WorktreeToolSettings(config.dshHome);
     let disposed = false;
     ctx.effect(
       () => () => {
@@ -84,6 +94,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
       activitySource,
       isDisposed: () => disposed,
     });
+    this.dsh = dsh;
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
     const manager = createWorktreeManager({
       dsh,
@@ -91,6 +102,22 @@ export class WorktreeRemoteService extends TypertRemoteService {
       subprocess,
     });
     this.manager = manager;
+    ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
+    // Optional command composition keeps the read-only Provider adapter unchanged.
+    ctx.inject(
+      ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
+      (toolCtx) => {
+        return registerWorktreeTools(toolCtx, {
+          manager,
+          samePhysicalPath,
+          dsh,
+          sessions: createWorktreeToolSessionPort(toolCtx),
+          changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+          isDisposed: () => disposed,
+          settings: this.toolSettings,
+        });
+      },
+    );
     registerWorktreeInstructions(
       ctx as unknown as WorktreeInstructionHost,
       (sessionId) => manager.resolveSessionInstructions(sessionId),
@@ -100,24 +127,24 @@ export class WorktreeRemoteService extends TypertRemoteService {
       () => () => this.manager.close(),
       'clutch-dsh-worktree: Host manager cleanup',
     );
-    // Permission presets are an optional DSH capability. Read them through a
-    // structural seam so an older profile can still mount this plugin and
-    // report `unverified` instead of failing during composition.
-    const optionalServices: Pick<
-      DshWorktreePermissionAdapterOptions,
-      'permissionPresets' | 'sandboxPolicy'
-    > = {
-      permissionPresets: ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'],
-      sandboxPolicy: ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'],
-    };
+    // Optional capabilities can mount late, disappear or be replaced without
+    // remounting this Host. Read the owning Context at call time, never capture
+    // a provider instance; older profiles remain loadable and fail closed.
     const permissionAdapter = createDshWorktreePermissionAdapter({
       sessions: {
-        get: (sessionId) => (ctx as unknown as {
-          readonly sessions: { get(id: string): unknown };
-        }).sessions.get(sessionId),
+        get: (sessionId) =>
+          (
+            ctx as unknown as {
+              readonly sessions: { get(id: string): unknown };
+            }
+          ).sessions.get(sessionId),
       },
-      permissionPresets: optionalServices.permissionPresets,
-      sandboxPolicy: optionalServices.sandboxPolicy,
+      get permissionPresets() {
+        return ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'];
+      },
+      get sandboxPolicy() {
+        return ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'];
+      },
     });
     this.remote = createWorktreeRemoteProjection(
       manager,
@@ -134,6 +161,43 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  async getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+    await this.validateToolSettingsScope(input.scope);
+    return { ok: true, value: await this.toolSettings.read(input.scope) };
+  }
+
+  @Remote
+  async updateToolSettings(input: {
+    scope: WorktreeToolSettingsScope;
+    selection: WorktreeToolSelection;
+    expected: WorktreeToolSelection;
+  }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+    await this.validateToolSettingsScope(input.scope);
+    return { ok: true, value: await this.toolSettings.update(input.scope, input.selection, input.expected) };
+  }
+
+  private async validateToolSettingsScope(scope: WorktreeToolSettingsScope): Promise<void> {
+    if (scope.kind === 'general') return;
+    if (scope.kind === 'local') {
+      if (!scope.workspaceId || !(await this.dsh.getWorkspace(scope.workspaceId)))
+        throw new Error('Workspace is unavailable. Reopen its Dashboard.');
+      return;
+    }
+    if (scope.kind !== 'worktree') throw new Error('Invalid tool settings scope');
+    const records = await this.manager.listWorktrees({ workspaceId: scope.workspaceId });
+    if (!records.some((record) => record.worktreeId === scope.worktreeId && record.status === 'active'))
+      throw new Error('Worktree is unavailable. Reopen its Dashboard.');
+  }
+
+  @Remote
+  async watchToolChanges(
+    input: { readonly afterRevision: number },
+    signal: AbortSignal,
+  ): Promise<WorktreeRemoteResult<WorktreeToolChangeBatch>> {
+    return { ok: true, value: await this.toolChanges.watch(input.afterRevision, signal) };
+  }
+
   @Remote
   getWorktreeInstructions(input: {
     workspaceId: string;
@@ -179,12 +243,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
+  listWorktreeCommitFiles(
+    input: WorktreeGitCommitFilesRequest,
+  ): Promise<WorktreeRemoteResult<WorktreeGitCommitFiles>> {
     return this.remote.listWorktreeCommitFiles(input);
   }
 
   @Remote
-  getWorktreeCommitFileDiff(input: WorktreeGitFileDiffRequest): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
+  getWorktreeCommitFileDiff(
+    input: WorktreeGitFileDiffRequest,
+  ): Promise<WorktreeRemoteResult<WorktreeGitFileDiff>> {
     return this.remote.getWorktreeCommitFileDiff(input);
   }
 

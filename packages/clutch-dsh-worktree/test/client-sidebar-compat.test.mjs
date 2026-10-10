@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import test from 'node:test';
 import ts from 'typescript';
+import { FrameElement } from './app-frame-fixture.mjs';
 
 async function loadSource(file, dependencies = {}) {
   const source = await readFile(new URL('../src/client/' + file, import.meta.url), 'utf8');
@@ -92,16 +93,9 @@ async function assertSidebarGeometry(t, platform) {
   const h = hooks();
   const mutations = [];
   const resizes = [];
+  const observed = new Set();
   const frames = [];
-  class Element {
-    attributes = new Map();
-    declarations = new Map();
-    style = {
-      getPropertyValue: (name) => this.declarations.get(name) ?? '',
-      getPropertyPriority: () => '',
-      setProperty: (name, value) => this.declarations.set(name, value),
-      removeProperty: (name) => this.declarations.delete(name),
-    };
+  class Element extends FrameElement {
     width = 280;
     top = 0;
     bottom = 800;
@@ -118,9 +112,6 @@ async function assertSidebarGeometry(t, platform) {
         this.attributes.has(name) || (name === 'data-sidebar-collapsed' && this.collapsed === true)
       );
     }
-    querySelectorAll() {
-      return this.buttons ?? [];
-    }
     getAttribute(name) {
       return this.attributes.get(name) ?? null;
     }
@@ -136,8 +127,9 @@ async function assertSidebarGeometry(t, platform) {
   const root = new Element();
   const overlay = new Element();
   const surface = new Element();
-  const button = new Element();
+  const button = new Element('button');
   button.top = 100;
+  button.bottom = 138;
   const label = platform === 'Web English' ? 'New Session' : '新会话';
   const accessibleLabel = platform === 'Web English' ? 'New session' : '新建会话';
   // Native shortcut glyphs share textContent with the visible label.
@@ -150,22 +142,30 @@ async function assertSidebarGeometry(t, platform) {
   chrome.attributes.set('data-window-drag', '');
   // Web's clickable brand is also a New Session shortcut. macOS has no
   // brand button; both platforms retain the dedicated action below chrome.
-  const brand = new Element();
+  const brand = new Element('button');
   brand.top = 10;
   brand.textContent = 'DSH 本地构建';
   brand.attributes.set('aria-label', accessibleLabel);
-  brand.parentElement = chrome;
+  if (platform !== 'desktop') chrome.append(brand);
   const panel = new Element();
   const region = new Element();
   region.attributes.set('aria-hidden', 'false');
-  root.children = [chrome, button, panel, region, footer];
-  for (const child of root.children) child.parentElement = root;
-  root.buttons = platform === 'desktop' ? [button] : [brand, button];
-  root.lastElementChild = footer;
-  sidebar.firstElementChild = root;
-  frame.firstElementChild = sidebar;
-  overlay.parentElement = frame;
-  surface.closest = () => overlay;
+  const modeAction = new Element('button');
+  modeAction.setAttribute('data-worktree-mode-action', '');
+  footer.append(modeAction);
+  root.append(chrome, button, panel, region, footer);
+  const slotWrapper = new Element();
+  slotWrapper.width = 0;
+  slotWrapper.bottom = 0;
+  slotWrapper.append(root);
+  const decorationBeforeRoot = new Element();
+  decorationBeforeRoot.bottom = 32;
+  sidebar.append(decorationBeforeRoot, slotWrapper);
+  const titlebar = new Element();
+  titlebar.bottom = 32;
+  frame.append(titlebar, sidebar, overlay);
+  overlay.setAttribute('data-shell-overlay', '');
+  overlay.append(surface);
   function stub(name, value) {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
@@ -181,9 +181,15 @@ async function assertSidebarGeometry(t, platform) {
       constructor(fn) {
         resizes.push(fn);
       }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe(element) {
+        observed.add(element);
+      }
+      unobserve(element) {
+        observed.delete(element);
+      }
+      disconnect() {
+        observed.clear();
+      }
     },
   );
   stub(
@@ -202,10 +208,14 @@ async function assertSidebarGeometry(t, platform) {
   });
   stub('cancelAnimationFrame', () => {});
   const bounds = await loadSource('overlay/overlay-bounds.ts');
+  const layout = await loadSource('layout/app-frame.ts');
   const geometry = await loadSource('overlay/sidebar-overlay-geometry.ts', {
     react: h.react,
     './overlay-bounds.js': bounds,
-    '../dashboard/dashboard-overlay.js': await loadSource('dashboard/dashboard-overlay.ts'),
+    '../layout/app-frame.js': layout,
+    '../dashboard/dashboard-overlay.js': await loadSource('dashboard/dashboard-overlay.ts', {
+      '../layout/app-frame.js': layout,
+    }),
   });
   const render = () =>
     h.render(() => {
@@ -235,6 +245,42 @@ async function assertSidebarGeometry(t, platform) {
   assert.equal(chrome.style.getPropertyValue('visibility'), '');
   assert.equal(chrome.style.getPropertyValue('opacity'), '');
   assert.equal(footer.getAttribute('inert'), null);
+  // Prefer our footer marker even after native chrome adds a trailing DOM node.
+  const decoration = new Element();
+  decoration.top = 100;
+  decoration.bottom = 100;
+  root.append(decoration);
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  assert.equal(footer.getAttribute('inert'), null);
+  // A zero-height footer stays observed, allowing recovery without a DOM mutation.
+  footer.top = footer.bottom;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.ready, false);
+  assert.equal(observed.has(footer), true);
+  assert.equal(region.getAttribute('inert'), null);
+  footer.top = 740;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  // Losing both usable anchors must restore native content, not cover to root.bottom.
+  modeAction.remove();
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.deepEqual(render().bounds, { ready: false, top: 0, height: 0 });
+  assert.equal(render().nativeCovered, false);
+  for (const child of [button, panel, region, footer]) {
+    assert.equal(child.getAttribute('inert'), null);
+    assert.equal(child.style.getPropertyValue('visibility'), '');
+    assert.equal(child.style.getPropertyValue('opacity'), '');
+  }
+  footer.append(modeAction);
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
+  assert.equal(render().nativeCovered, true);
   frame.collapsed = true;
   sidebar.width = 0;
   for (const fn of resizes) fn();
@@ -262,25 +308,49 @@ async function assertSidebarGeometry(t, platform) {
   assert.equal(reopened.collapsed, false);
   // A replacement native root must release the old rows, not conceal detached content forever.
   const replacement = new Element();
-  const nextButton = new Element();
+  const nextButton = new Element('button');
   nextButton.textContent = 'New Session';
   nextButton.top = 100;
+  nextButton.bottom = 138;
   const nextFooter = new Element();
   nextFooter.top = 740;
-  replacement.buttons = [nextButton];
-  replacement.lastElementChild = nextFooter;
-  replacement.children = [nextButton, nextFooter];
-  for (const child of replacement.children) child.parentElement = replacement;
-  sidebar.firstElementChild = replacement;
+  nextFooter.append(modeAction);
+  replacement.append(nextButton, nextFooter);
+  root.remove();
+  slotWrapper.append(replacement);
   for (const fn of mutations) fn();
   while (frames.length) frames.shift()();
   render();
   assert.equal(region.getAttribute('aria-hidden'), 'false');
   assert.equal(nextButton.getAttribute('inert'), '');
+  // Replacing the whole column still resolves by the footer slot rather than its position.
+  const nextSidebar = new Element();
+  nextSidebar.width = 300;
+  nextSidebar.append(replacement);
+  sidebar.remove();
+  frame.append(nextSidebar);
+  for (const fn of mutations) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().width, 300);
+  assert.equal(render().bounds.height, 640);
+  assert.equal(observed.has(sidebar), false);
+  assert.equal(observed.has(nextSidebar), true);
+  // A zero-size root remains observable and recovers on resize alone.
+  replacement.bottom = 0;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.ready, false);
+  assert.equal(observed.has(replacement), true);
+  replacement.bottom = 800;
+  for (const fn of resizes) fn();
+  while (frames.length) frames.shift()();
+  assert.equal(render().bounds.height, 640);
   h.dispose();
   assert.equal(nextButton.getAttribute('inert'), null);
   assert.equal(nextButton.style.getPropertyValue('visibility'), '');
   assert.equal(nextButton.style.getPropertyValue('opacity'), '');
+  for (const fn of [...resizes, ...mutations]) fn();
+  assert.equal(frames.length, 0, 'queued observer deliveries cannot revive a disposed overlay');
 }
 for (const platform of ['desktop', 'Web Chinese', 'Web English']) {
   test(platform + ' keeps native brand/toggle above Worktree and restores collapse geometry', (t) =>

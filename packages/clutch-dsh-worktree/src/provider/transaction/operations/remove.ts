@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import { randomUUID } from 'node:crypto';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
@@ -54,20 +55,20 @@ export async function removeWorktreeTransaction(
           );
         }
         assertMutationToken(current, record, input.mutationToken);
-        if (await samePhysicalPath(record.absolutePath, gitRoot)) {
+        if (await samePhysicalPath(gitWorktreeRoot(record), gitRoot)) {
           throw providerError('WORKTREE_STATE_CONFLICT', 'The main Worktree cannot be removed', {
             workspaceId: input.workspaceId,
             worktreeId: input.worktreeId,
-            targetPath: record.absolutePath,
+            targetPath: gitWorktreeRoot(record),
           });
         }
 
         const liveBefore = await dependencies.git.listWorktrees(gitRoot);
-        const exactBefore = await findExactWorktree(liveBefore, record.absolutePath, record.branch);
+        const exactBefore = await findExactWorktree(liveBefore, gitWorktreeRoot(record), record.branch);
         if (!exactBefore) {
           const pathRegistration = await findWorktreeByPhysicalPath(
             liveBefore,
-            record.absolutePath,
+            gitWorktreeRoot(record),
           );
           const branchRegistration = liveBefore.find(
             (worktree) => worktree.branch === record.branch,
@@ -75,7 +76,7 @@ export async function removeWorktreeTransaction(
           if (
             !pathRegistration &&
             !branchRegistration &&
-            !(await pathExists(record.absolutePath))
+            !(await pathExists(gitWorktreeRoot(record)))
           ) {
             // A legacy caller may have completed Git removal before the v3
             // journal was introduced. With no path or matching registration
@@ -104,7 +105,7 @@ export async function removeWorktreeTransaction(
               phase: 'recovery-needed',
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
               branch: record.branch,
               source: record.source,
               repositoryFingerprint: createRepositoryFingerprint(repository.identity),
@@ -114,11 +115,11 @@ export async function removeWorktreeTransaction(
           );
           throw providerError(
             'WORKTREE_IDENTITY_CHANGED',
-            `Worktree identity changed: ${record.absolutePath}`,
+            `Worktree identity changed: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }
@@ -138,7 +139,7 @@ export async function removeWorktreeTransaction(
         });
 
         try {
-          await dependencies.git.removeWorktree(input.workspaceRoot, record.absolutePath);
+          await dependencies.git.removeWorktree(input.workspaceRoot, gitWorktreeRoot(record));
         } catch (error) {
           return reconcileRemoveFailure(dependencies, {
             locked,
@@ -157,35 +158,35 @@ export async function removeWorktreeTransaction(
           liveAfter = await dependencies.git.listWorktrees(gitRoot);
         } catch (inspectionError) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
-          throw recoveryError(`Unable to verify Git after remove: ${record.absolutePath}`, {
+          throw recoveryError(`Unable to verify Git after remove: ${gitWorktreeRoot(record)}`, {
             workspaceId: input.workspaceId,
             operationId: pending.id,
-            targetPath: record.absolutePath,
+            targetPath: gitWorktreeRoot(record),
             cause: String(inspectionError),
           });
         }
-        if (await findExactWorktree(liveAfter, record.absolutePath, record.branch)) {
+        if (await findExactWorktree(liveAfter, gitWorktreeRoot(record), record.branch)) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
           throw recoveryError(
-            `Git remove did not remove the registered Worktree: ${record.absolutePath}`,
+            `Git remove did not remove the registered Worktree: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }
         let targetExists: boolean;
         try {
-          targetExists = await pathExists(record.absolutePath);
+          targetExists = await pathExists(gitWorktreeRoot(record));
         } catch (inspectionError) {
           await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
           throw recoveryError(
-            `Unable to verify the removed Worktree path: ${record.absolutePath}`,
+            `Unable to verify the removed Worktree path: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               operationId: pending.id,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
               cause: String(inspectionError),
             },
           );
@@ -194,11 +195,11 @@ export async function removeWorktreeTransaction(
           await markRecovery(locked, pending, 'WORKTREE_IDENTITY_CHANGED');
           throw providerError(
             'WORKTREE_IDENTITY_CHANGED',
-            `Worktree path remains after Git removal: ${record.absolutePath}`,
+            `Worktree path remains after Git removal: ${gitWorktreeRoot(record)}`,
             {
               workspaceId: input.workspaceId,
               worktreeId: input.worktreeId,
-              targetPath: record.absolutePath,
+              targetPath: gitWorktreeRoot(record),
             },
           );
         }

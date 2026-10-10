@@ -23,6 +23,7 @@ import {
   bindSession,
   listBindings,
   resolveRuntimeCwd,
+  readSessionHead,
 } from './manager-sessions.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import {
@@ -257,6 +258,24 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly newBranch?: string;
   }): Promise<WorktreeRecord> {
     return this.afterRecovery(() => createWorktree(this.context, input));
+  }
+
+  createWorktreeAtCommit(input: {
+    workspaceId: string;
+    baseBranch?: string;
+    baseCommit: string;
+    newBranch: string;
+  }): Promise<WorktreeRecord> {
+    return this.afterRecovery(() => createWorktree(this.context, {
+      workspaceId: input.workspaceId,
+      branch: input.baseBranch ?? `${input.baseCommit}^{commit}`,
+      baseCommit: input.baseCommit,
+      newBranch: input.newBranch,
+    }));
+  }
+
+  readSessionHead(input: { workspaceId: string; sessionId: string }): Promise<string> {
+    return this.afterRecovery(() => readSessionHead(this.context, input));
   }
 
   importWorktree(input: {

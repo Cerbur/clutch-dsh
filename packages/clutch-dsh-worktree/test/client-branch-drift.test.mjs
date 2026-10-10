@@ -143,7 +143,7 @@ test('active and archived menu opens share the owning Workspace read', async () 
   await Promise.all(pending);
 });
 
-test('adoption failures are visible inside the dialog with a refresh action', async () => {
+test('adoption failures keep confirmation disabled and offer refresh without an inline alert', async () => {
   const text = await readFile(
     new URL('../src/client/surface/components/dialogs.tsx', import.meta.url),
     'utf8',
@@ -165,6 +165,7 @@ test('adoption failures are visible inside the dialog with a refresh action', as
       React,
       Modal: 'modal',
       Button: 'button',
+      ErrorToast: 'error-notice',
       styles: {},
       formatWorktreeViewError: (error) => error.message,
     },
@@ -189,14 +190,15 @@ test('adoption failures are visible inside the dialog with a refresh action', as
   }
   walk(element);
   const alert = nodes.find((node) => node.props.role === 'alert');
-  assert.ok(alert, 'error must be rendered in the modal');
-  const retry = nodes.find((node) => node.props.onClick && node.props.children === 'action.retry');
+  assert.equal(alert, undefined, 'the Surface toast owns failure copy');
+  const notice = nodes.find((node) => node.type === 'error-notice');
+  const retry = notice.props.actions[0];
   assert.ok(retry, 'failed confirmation must offer refresh before reconfirmation');
   assert.equal(
     React.Children.toArray(element.props.footer.props.children).at(-1).props.disabled,
     true,
   );
-  retry.props.onClick();
+  retry.onClick();
   assert.equal(refreshed, true);
 });
 
@@ -396,7 +398,7 @@ test('production adoption dialog names the accepted and current branches before 
   );
   const render = evaluate(
     `${fn.getText(file).replace('export ', '')}; return WorktreeAdoptBranchDialog;`,
-    { React, Modal: 'modal', Button: 'button' },
+    { React, Modal: 'modal', Button: 'button', ErrorToast: 'error-notice' },
   );
   const element = render({
     t: (key, values) => ({ key, values }),

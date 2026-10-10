@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import path from 'node:path';
 import type { AdoptWorktreeBranchInput } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
@@ -47,15 +48,15 @@ export async function adoptBranchWorktreeTransaction(
           );
         }
         await assertSafeRemovalPath(dependencies, record, input.workspaceRoot);
-        const targetRepository = await resolveRepository(dependencies, record.absolutePath);
+        const targetRepository = await resolveRepository(dependencies, gitWorktreeRoot(record));
         if (
           !(await samePhysicalPath(
             targetRepository.identity.commonDirectory,
             repository.identity.commonDirectory,
           )) ||
-          !(await samePhysicalPath(targetRepository.identity.topLevel, record.absolutePath)) ||
-          (await samePhysicalPath(record.absolutePath, repository.identity.topLevel)) ||
-          (await pathEntryMissing(path.join(record.absolutePath, '.git')))
+          !(await samePhysicalPath(targetRepository.identity.topLevel, gitWorktreeRoot(record))) ||
+          (await samePhysicalPath(gitWorktreeRoot(record), repository.identity.topLevel)) ||
+          (await pathEntryMissing(path.join(gitWorktreeRoot(record), '.git')))
         ) {
           throw providerError(
             'WORKTREE_IDENTITY_CHANGED',
@@ -64,7 +65,7 @@ export async function adoptBranchWorktreeTransaction(
           );
         }
         const live = await dependencies.git.listWorktrees(repository.identity.topLevel);
-        const actual = await findWorktreeByPhysicalPath(live, record.absolutePath);
+        const actual = await findWorktreeByPhysicalPath(live, gitWorktreeRoot(record));
         if (
           !actual ||
           actual.detached ||

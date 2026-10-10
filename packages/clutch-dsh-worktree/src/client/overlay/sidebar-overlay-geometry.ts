@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import { computeOverlayBounds } from './overlay-bounds.js';
 import type { OverlayBounds, RectLike } from './overlay-bounds.js';
 import { concealDashboardBackground as concealNativeContent } from '../dashboard/dashboard-overlay.js';
+import { directChildWithin, resolveAppFrame } from '../layout/app-frame.js';
 
 const EMPTY_BOUNDS: OverlayBounds = { ready: false, top: 0, height: 0 };
 
@@ -24,12 +25,24 @@ export function syncObservedElement(
 }
 
 export function resolveNativeSidebarRoot(sidebar: Element): Element | undefined {
-  const directChild = sidebar.firstElementChild;
-  if (directChild === null) return undefined;
-
-  const directRect = directChild.getBoundingClientRect();
-  if (directRect.width > 0 || directRect.height > 0) return directChild;
-  return directChild.firstElementChild ?? directChild;
+  const newSession = findNewSessionAnchor(sidebar);
+  const action = sidebar.querySelector('[data-worktree-mode-action]');
+  if (!newSession || !action) return undefined;
+  let candidate: Element | undefined;
+  // The lowest measurable common ancestor separates the functional content and
+  // footer slots, skipping display:contents wrappers without guessing child order.
+  for (let root = newSession.parentElement; root; root = root.parentElement) {
+    const content = directChildWithin(root, newSession);
+    const footer = directChildWithin(root, action);
+    const rect = root.getBoundingClientRect();
+    if (content && footer && content !== footer) {
+      candidate ??= root;
+      if (rect.width > 0 && rect.height > 0) return root;
+    }
+    if (root === sidebar) break;
+  }
+  // Keep an unmeasurable common root observable so a resize can recover it.
+  return candidate;
 }
 
 export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
@@ -48,7 +61,8 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   });
   const visibleLabel = buttons.find((button) => {
     const text = button.textContent?.trim();
-    return text === '新会话' || text === 'New Session';
+    if (!text) return false;
+    return text.startsWith('新会话') || text.startsWith('New Session');
   });
   if (visibleLabel !== undefined) return visibleLabel;
   for (const label of labels) {
@@ -58,17 +72,49 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
   return undefined;
 }
 
+function sidebarFooterCandidate(root: Element): Element | undefined {
+  // WorktreeModeAction owns this marker in sidebar.footer.action; no native classes or labels.
+  const action = root.querySelector('[data-worktree-mode-action]');
+  return directChildWithin(root, action);
+}
+
+/** Resolve the footer slot semantically, then validate its content boundary. */
+export function resolveSidebarFooter(
+  root: Element,
+  newSession: Element | undefined,
+): Element | undefined {
+  if (!newSession) return undefined;
+  const children = Array.from(root.children);
+  const content = directChildWithin(root, newSession);
+  const start = content === undefined ? -1 : children.indexOf(content);
+  if (start < 0) return undefined;
+  const anchorRect = asRect(newSession);
+  const rootRect = asRect(root);
+  const candidate = sidebarFooterCandidate(root);
+  if (!candidate || children.indexOf(candidate) <= start) return undefined;
+  const rect = asRect(candidate);
+  const valid =
+    [anchorRect.top, anchorRect.bottom, rootRect.top, rootRect.bottom, rect.top, rect.bottom].every(
+      Number.isFinite,
+    ) &&
+    anchorRect.bottom > anchorRect.top &&
+    rect.bottom > rect.top &&
+    rect.top >= anchorRect.bottom &&
+    rect.top >= rootRect.top &&
+    rect.bottom <= rootRect.bottom;
+  return valid ? candidate : undefined;
+}
+
 /** Hide only the native content covered by the plugin, keeping chrome and footer alive. */
 export function coveredSidebarChildren(
   root: Element,
   newSession: Element | undefined,
-  footer: Element | null,
+  footer: Element | null | undefined,
 ): HTMLElement[] {
   if (!newSession || !footer) return [];
-  let first = newSession;
-  while (first.parentElement && first.parentElement !== root) first = first.parentElement;
+  const first = directChildWithin(root, newSession);
   const children = Array.from(root.children ?? []);
-  const start = children.indexOf(first);
+  const start = first === undefined ? -1 : children.indexOf(first);
   const end = children.indexOf(footer);
   if (start < 0 || end <= start) return [];
   return children
@@ -107,63 +153,72 @@ export function useSidebarOverlayGeometry(active: boolean): {
   useLayoutEffect(() => {
     if (!active) {
       setBounds(EMPTY_BOUNDS);
+      setNativeCovered(false);
       return;
     }
 
     const surface = ref.current;
     const overlay = surface?.closest('[data-shell-overlay]');
     const frame = overlay?.parentElement;
-    const sidebar = frame?.firstElementChild;
-    const nativeRoot =
-      sidebar === null || sidebar === undefined ? undefined : resolveNativeSidebarRoot(sidebar);
-    if (
-      !(overlay instanceof HTMLElement) ||
-      !(sidebar instanceof HTMLElement) ||
-      !(nativeRoot instanceof HTMLElement)
-    ) {
+    if (!(overlay instanceof HTMLElement) || !frame || !surface) {
       setBounds(EMPTY_BOUNDS);
       return;
     }
     const overlayElement = overlay;
-    const sidebarElement = sidebar;
-    const nativeRootElement = nativeRoot;
 
     let frameHandle: number | undefined;
+    let disposed = false;
     let observedNewSession: Element | undefined;
     let observedFooter: Element | undefined;
     let observedRoot: Element | undefined;
+    let observedSidebar: Element | undefined;
     const hidden = new Map<HTMLElement, () => void>();
     function restore(): void {
       for (const cleanup of hidden.values()) cleanup();
       hidden.clear();
     }
     function update(): void {
-      const currentRoot = resolveNativeSidebarRoot(sidebarElement);
+      if (disposed) return;
+      const anchors = resolveAppFrame(surface!);
+      const sidebarElement = anchors?.sidebar;
+      const currentRoot = sidebarElement && resolveNativeSidebarRoot(sidebarElement);
+      observedSidebar = syncObservedElement(resizeObserver, observedSidebar, sidebarElement);
+      observedRoot = syncObservedElement(resizeObserver, observedRoot, currentRoot);
+      const nextWidth = sidebarElement?.getBoundingClientRect().width;
+      const nextCollapsed =
+        frame?.hasAttribute('data-sidebar-collapsed') === true ||
+        (nextWidth !== undefined && nextWidth <= 64);
+      setCollapsed(nextCollapsed);
+      // macOS has no collapsed rail; zero is a real width, never a missing measurement.
+      if (nextWidth !== undefined && Number.isFinite(nextWidth)) setWidth(Math.max(0, nextWidth));
       if (
+        anchors?.frame !== frame ||
+        anchors?.overlay !== overlayElement ||
         !(currentRoot instanceof HTMLElement) ||
-        overlayElement.isConnected === false ||
-        frame?.firstElementChild !== sidebarElement
+        !sidebarElement ||
+        nextWidth === undefined ||
+        !Number.isFinite(nextWidth)
       ) {
+        observedNewSession = syncObservedElement(resizeObserver, observedNewSession, undefined);
+        observedFooter = syncObservedElement(resizeObserver, observedFooter, undefined);
         restore();
         setNativeCovered(false);
         setBounds(EMPTY_BOUNDS);
         return;
       }
-      observedRoot = syncObservedElement(resizeObserver, observedRoot, currentRoot);
       const newSession = findNewSessionAnchor(currentRoot);
-      const footer = currentRoot.lastElementChild;
+      const footer = resolveSidebarFooter(currentRoot, newSession);
       observedNewSession = syncObservedElement(resizeObserver, observedNewSession, newSession);
-      observedFooter = syncObservedElement(resizeObserver, observedFooter, footer);
-      const nextWidth = sidebarElement.getBoundingClientRect().width;
-      // macOS has no collapsed rail; zero is a real width, never a missing measurement.
-      setWidth(Math.max(0, nextWidth));
-      const nextCollapsed =
-        frame?.hasAttribute('data-sidebar-collapsed') === true || nextWidth <= 64;
-      setCollapsed(nextCollapsed);
+      // Keep watching a temporarily invalid/zero-height candidate so resize can recover it.
+      observedFooter = syncObservedElement(
+        resizeObserver,
+        observedFooter,
+        sidebarFooterCandidate(currentRoot),
+      );
       const nextBounds = computeOverlayBounds(
         asRect(overlayElement),
         newSession === undefined ? undefined : asRect(newSession),
-        footer === null ? undefined : asRect(footer),
+        footer === undefined ? undefined : asRect(footer),
       );
       setBounds(nextCollapsed ? EMPTY_BOUNDS : nextBounds);
       const covered =
@@ -182,7 +237,7 @@ export function useSidebarOverlayGeometry(active: boolean): {
       setNativeCovered(covered.length > 0);
     }
     function scheduleUpdate(): void {
-      if (frameHandle !== undefined) return;
+      if (disposed || frameHandle !== undefined) return;
       frameHandle = requestAnimationFrame(() => {
         frameHandle = undefined;
         update();
@@ -192,7 +247,7 @@ export function useSidebarOverlayGeometry(active: boolean): {
     const resizeObserver: ResizeObserver | undefined =
       typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleUpdate) : undefined;
 
-    for (const element of [overlayElement, sidebarElement, nativeRootElement]) {
+    for (const element of [overlayElement, frame]) {
       resizeObserver?.observe(element);
     }
     update();
@@ -205,11 +260,18 @@ export function useSidebarOverlayGeometry(active: boolean): {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['data-sidebar-collapsed'],
+      attributeFilter: [
+        'data-sidebar-collapsed',
+        'data-worktree-mode-action',
+        'data-pane',
+        'data-shell-overlay',
+        'data-window-drag',
+      ],
     });
     if (frame?.parentElement) mutationObserver?.observe(frame.parentElement, { childList: true });
 
     return () => {
+      disposed = true;
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
       if (frameHandle !== undefined) cancelAnimationFrame(frameHandle);

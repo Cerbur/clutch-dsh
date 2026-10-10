@@ -86,6 +86,7 @@ test('publishes the generated Host and Client Remote contribution entries', () =
       '@deepseek-ai/dsh-client-ui-layout',
       '@deepseek-ai/dsh-client-ui-renderer',
       '@deepseek-ai/dsh-client-ui-session',
+      '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-ui-sidebar',
       '@deepseek-ai/dsh-client-ui-workspace',
     ],
@@ -141,7 +142,8 @@ test('mounts the Host service through the package bundle patch', async () => {
   assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree['"]/);
   assert.match(patch, /dshHome: !!js dshHomePath\(\)/);
   assert.match(patch, /id: permission/);
-  assert.match(patch, /worktree-full-access/);
+  assert.match(patch, /clutchWorktreePermissionPresets/);
+  assert.match(patch, /name: ['"]@cerbur\/clutch-dsh-worktree\/permission-presets['"]/);
 });
 
 test('generates exactly the browser-safe Worktree Remote descriptors', async () => {
@@ -160,6 +162,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/createWorktree',
       'worktreeManager/ensureWorktreePermission',
       'worktreeManager/forgetWorktree',
+      'worktreeManager/getToolSettings',
       'worktreeManager/getWorktreeCommitFileDiff',
       'worktreeManager/getWorktreeInstructions',
       'worktreeManager/importWorktree',
@@ -174,8 +177,10 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
       'worktreeManager/recoverWorktrees',
       'worktreeManager/removeWorktree',
       'worktreeManager/unarchiveWorktree',
+      'worktreeManager/updateToolSettings',
       'worktreeManager/updateWorktreeBaseBranch',
       'worktreeManager/updateWorktreeInstructions',
+      'worktreeManager/watchToolChanges',
     ],
   );
   const descriptors = new Set(
@@ -273,6 +278,21 @@ test('loads the package and calls its Host Remote through the real DSH compositi
       result: { ok: true, value: { ok: true, value: [] } },
     });
     assert.equal(subprocessCalls.some(({ type }) => type === 'spawn'), true);
+    const watchReply = await fetchHandler.fetch(
+      new globalThis.Request('http://localhost/api/worktreeManager/watchToolChanges', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request', rpcId: 'rpc-worktree-watch',
+          method: 'worktreeManager/watchToolChanges',
+          payload: { args: { input: { afterRevision: 1 } } },
+        }),
+      }),
+    );
+    assert.equal(watchReply.status, 200);
+    assert.deepEqual((await watchReply.json()).result, {
+      ok: true, value: { ok: true, value: { revision: 0, changes: [] } },
+    });
     const callsBeforeProbe = subprocessCalls.length;
     const probeAdapter = createWorktreeConnectionAdapter({
       async call(channel, endpoint, payload) {
@@ -386,6 +406,9 @@ test('carries missing Git from Provider through Host projection and /api Client 
 
 test('canonical upstream Host Gateway claims Worktree endpoints on the shared /api channel', () => {
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/getToolSettings',
+    'worktreeManager/updateToolSettings',
+    'worktreeManager/watchToolChanges',
     'worktreeManager/listWorktrees',
     'worktreeManager/listWorktreeCommits',
     'worktreeManager/listWorktreeCommitFiles',

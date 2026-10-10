@@ -1,3 +1,7 @@
+import { NotificationToasts } from '../../surface/components/NotificationToasts.js';
+import { toWorktreeViewError } from '../../view/worktree-view.js';
+import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
+import { failureToastKey } from '../../surface/notification-queue.js';
 import { useRef } from 'react';
 import type {
   WorktreeGitCommit,
@@ -32,6 +36,7 @@ export interface WorktreeGitPanelProps {
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
   readonly currentBranch?: string;
+  readonly context?: string;
   /** The record captured an acquisition commit the Manager can use implicitly. */
   readonly capturedBaseline?: boolean;
   readonly onOpenFile?: (path: string) => void;
@@ -107,6 +112,7 @@ export function WorktreeGitPanel({
   worktreeId,
   defaultBaselineBranch,
   currentBranch,
+  context,
   capturedBaseline,
   onOpenFile,
   t,
@@ -163,6 +169,51 @@ export function WorktreeGitPanel({
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
+      <NotificationToasts
+        notices={[
+          ['branches', branchError],
+          [
+            'history',
+            state.history.status === 'error' || state.history.status === 'ready'
+              ? state.history.error
+              : undefined,
+          ],
+          [
+            'files',
+            state.files.status === 'error' || state.files.status === 'ready'
+              ? state.files.error
+              : undefined,
+          ],
+          ['diff', state.diff.status === 'error' ? state.diff.error : undefined],
+        ].flatMap(([scope, error]) => {
+          if (!(error instanceof Error)) return [];
+          const diagnostic = toWorktreeViewError(error);
+          const text = formatWorktreeViewError(diagnostic, t);
+          return [
+            {
+              key: JSON.stringify([workspaceId, worktreeId, scope, diagnostic.code, diagnostic.details]),
+              toastKey: failureToastKey(diagnostic, [workspaceId, worktreeId]),
+              error: toWorktreeViewError(error),
+              context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),
+              describe: (translate) => translate('settings.git', {
+                operation: translate(scope === 'branches' ? 'dashboard.base'
+                  : scope === 'history' ? 'dashboard.git.commits'
+                  : scope === 'files' ? 'dashboard.git.changedFiles' : 'dashboard.git.diff'),
+              }) + ' · ' + (context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · ')),
+              text,
+              actions: [
+                {
+                  label: t('dashboard.git.retry'),
+                  onClick: () => {
+                    if (scope === 'branches') void state.loadBranches();
+                    else void state.refresh();
+                  },
+                },
+              ],
+            },
+          ];
+        })}
+      />
       <header className={styles.gitPanelHeader}>
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
@@ -259,12 +310,6 @@ export function WorktreeGitPanel({
         </button>
       </header>
 
-      {branchError !== undefined && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(branchError, t) })}</p>
-          <button type="button" onClick={() => void state.loadBranches()}>{t('dashboard.git.retry')}</button>
-        </div>
-      )}
 
       {!isMain && unavailable === 'baseline-unselected' && (
         <div className={styles.gitBaselinePrompt} data-dashboard-git-baseline-prompt>
@@ -275,18 +320,6 @@ export function WorktreeGitPanel({
 
       {state.history.status === 'loading' && (
         <div className={styles.gitLoading} role="status">{t('dashboard.git.loading')}</div>
-      )}
-      {state.history.status === 'error' && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.loadFailed', { reason: errorText(state.history.error, t) })}</p>
-          <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
-        </div>
-      )}
-      {state.history.status === 'ready' && state.history.error !== undefined && (
-        <div className={styles.gitError} role="alert">
-          <p>{t('dashboard.git.refreshFailed', { reason: errorText(state.history.error, t) })}</p>
-          <button type="button" onClick={() => void state.refresh()}>{t('dashboard.git.retry')}</button>
-        </div>
       )}
 
       {state.history.status === 'ready' && historyValue !== undefined && unavailable !== undefined && (
@@ -408,12 +441,9 @@ export function WorktreeGitPanel({
             ) : state.files.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryFiles') : t('dashboard.git.loadingFiles')}</div>
             ) : state.files.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
+              null
             ) : (
               <>
-                {state.files.status === 'ready' && state.files.error !== undefined && (
-                  <div className={styles.gitError} role="alert">{errorText(state.files.error, t)}</div>
-                )}
                 {state.files.status === 'ready' && state.files.value.truncated === true && (
                   <div className={styles.gitEmpty} role="status" data-dashboard-git-files-truncated>
                     {t('dashboard.git.truncatedFiles')}
@@ -452,7 +482,7 @@ export function WorktreeGitPanel({
             {state.diff.status === 'loading' ? (
               <div className={styles.gitLoading} role="status">{state.view === 'summary' ? t('dashboard.git.loadingSummaryDiff') : t('dashboard.git.loadingDiff')}</div>
             ) : state.diff.status === 'error' ? (
-              <div className={styles.gitError} role="alert">{errorText(state.diff.error, t)}</div>
+              null
             ) : (
               <GitDiffView diff={diff} onOpenFile={onOpenFile} t={t} />
             )}
@@ -502,8 +532,4 @@ function GitSplitter({ split, orientation, axis, label }: GitSplitterProps) {
       onKeyDown={split.onKeyDown}
     />
   );
-}
-
-function errorText(error: Error, t: WorktreeTranslate): string {
-  return error.message || t('dashboard.unknownError');
 }

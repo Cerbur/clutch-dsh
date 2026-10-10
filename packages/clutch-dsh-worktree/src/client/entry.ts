@@ -20,6 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { WorktreeLocaleKey } from './locales.js';
 import { WORKTREE_NS, en, zh } from './locales.js';
 import { createWorktreeConnectionAdapter } from './worktree-connection.js';
+import { createWorktreeToolChangeMonitor } from './worktree-tool-changes.js';
 import { RestartNotice } from './restart-notice.js';
 import { RestartToast } from './surface/components/RestartToast.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
@@ -29,6 +30,11 @@ import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
+import { WorktreeSettings } from './settings/WorktreeSettings.js';
+import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
+import { installWorktreeCommandActivity } from './command-activity.js';
+import { worktreeDiagnostics } from './settings/diagnostics.js';
+import { openWorktreeErrorSettings } from './settings/settings-navigation.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
 import { createWorktreeSessionOrderStore } from './session/worktree-session-order.js';
@@ -181,13 +187,14 @@ function workspaceMembershipSignature(
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
  * with that fiber, so slot consumers share one manager and one request lifetime.
  */
 export function apply(ctx: Context): void {
+  installWorktreeCommandActivity(ctx);
   const locale = ctx.locale as unknown as {
     register(
       namespace: typeof WORKTREE_NS,
@@ -207,6 +214,7 @@ export function apply(ctx: Context): void {
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
   const viewReader = createWorktreeViewReader(manager);
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
+  const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
@@ -218,6 +226,7 @@ export function apply(ctx: Context): void {
     },
     result: WorktreePermissionResult,
   ): void => {
+    restartNotice.reportPermissionResult(result);
     const visible = result.status === 'fallback-workspace-write' ||
       result.status === 'user-restricted' ||
       result.status === 'unverified';
@@ -225,8 +234,16 @@ export function apply(ctx: Context): void {
   };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  ctx.effect(
+    () => slots.inject('shell.overlay', () => slots.register({
+      name: 'shell.overlay',
+      id: 'clutch-dsh-worktree-settings-icon',
+      locale: WORKTREE_NS,
+    }, WorktreeSettingsNavIcon)),
+    'clutch-dsh-worktree: settings icon cleanup',
+  );
   ctx.effect(() => {
-    const notice = new RestartNotice((signal) => manager.probeHost(signal));
+    const notice = restartNotice;
     const check = () => void notice.check();
     const reset = ctx.on('connection/reset', check);
     const overlay = slots.inject('shell.overlay', () =>
@@ -254,6 +271,18 @@ export function apply(ctx: Context): void {
     viewReader,
     storeFactory: createSnapshotStore,
   });
+  const toolChanges = createWorktreeToolChangeMonitor({
+    read: (revision, signal) => manager.watchToolChanges(revision, signal),
+    changed: ({ workspaceId }) => {
+      viewReader.invalidate(workspaceId);
+      if (contextProjection.store.getSnapshot().workspaceId === workspaceId) {
+        void contextProjection.refresh();
+      }
+    },
+  });
+  ctx.effect(() => () => toolChanges.dispose(), 'clutch-dsh-worktree: tool notification cleanup');
+  ctx.on('connection/reset', () => toolChanges.reset());
+  if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
   ctx.effect(
@@ -270,6 +299,16 @@ export function apply(ctx: Context): void {
   );
   void contextProjection.refresh();
   const viewStore = createWorktreeViewStore();
+  slots.inject('settings.section', () =>
+    slots.register({
+      name: 'settings.section',
+      id: 'clutch-dsh-worktree',
+      order: 36,
+      locale: WORKTREE_NS,
+      label: () => ctx.locale.bind(WORKTREE_NS)('settings.title'),
+    }, (props) => createElement(WorktreeSettings, { ...props, manager })),
+  );
+  ctx.effect(() => () => worktreeDiagnostics.dispose(), 'clutch-dsh-worktree: diagnostics cleanup');
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);
   const sessionOrder = createWorktreeSessionOrderStore(createSnapshotStore);
   ctx.effect(() => () => sessionOrder.dispose(), 'clutch-dsh-worktree: Session order cleanup');
@@ -508,6 +547,7 @@ export function apply(ctx: Context): void {
         locale: WORKTREE_NS,
         inject: () => ({
           available: true,
+          openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);
             if (sidebar && typeof sidebar.openResource === 'function') {
@@ -537,6 +577,7 @@ export function apply(ctx: Context): void {
           hooks: { worktreeContext: contextProjection.store },
           manager,
           viewReader,
+          subscribeToolChanges: toolChanges.subscribe,
           permission: permissionManager,
           confirmFullAccess: permissionManager === undefined
             ? undefined

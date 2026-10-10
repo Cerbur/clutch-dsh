@@ -257,7 +257,7 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   assert.match(coordinator, /previousWorkspaceIdsRef/);
   assert.match(coordinator, /addedWorkspaceIds/);
   assert.match(coordinator, /mergeWorktreeViews\(current\.views, workspaceIds, \[\]\)/);
-  assert.match(coordinator, /data-worktree-target-error/);
+  assert.match(coordinator, /key: 'target:'/);
 });
 
 test('records the minimum-scope refresh invariant in package instructions', async () => {
@@ -1028,7 +1028,7 @@ test('keeps modal candidate state current without blanking ready Worktrees', asy
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
   const source = await readSurfaceSource();
-  assert.match(source, /data-worktree-error/);
+  assert.match(source, /NotificationToasts notices/);
   assert.match(source, /t\('action\.retry'\)/);
   assert.match(source, /status === 'error'/);
   assert.match(source, /executeWorktreeAction/);
@@ -1058,8 +1058,8 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   const source = (await readSurfaceSources()).combined;
 
   assert.match(source, /import \{ formatWorktreeViewError \}/);
-  assert.match(source, /\{formatWorktreeViewError\(actionError, t\)\}/);
-  assert.match(source, /\{formatWorktreeViewError\(readState\.error, t\)\}/);
+  assert.match(source, /formatWorktreeViewError\(error, t\)/);
+  assert.match(source, /const error = readState\.error/);
   assert.match(source, /code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKTREE_RECORD_MISSING'/);
   assert.doesNotMatch(source, /message: t\('error\.workspaceOrderingUnavailable'\)/);
@@ -1070,7 +1070,7 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKSPACE_DELETE_UNAVAILABLE'/);
   assert.match(source, /code: 'SESSION_RENAME_UNAVAILABLE'/);
-  assert.match(source, /formatWorktreeViewError\(error, t\)/);
+  assert.match(source, /ErrorToast error=\{error\}/);
   assert.match(source, /WorktreeWorkspaceRenameDialog/);
   assert.match(source, /WorktreeWorkspaceDeleteDialog/);
   assert.match(source, /WorktreeSessionRenameDialog/);
@@ -1179,7 +1179,7 @@ test('refreshes the ready Worktree projection after fork binding and exposes rec
   const source = await readSurfaceSource();
   assert.match(source, /forkRecovery/);
   assert.match(source, /retryForkSession/);
-  assert.match(source, /data-fork-recovery/);
+  assert.match(source, /key: 'fork:'/);
   assert.match(source, /refresh\(\{[\s\S]*preserveCurrent: true/);
   assert.match(source, /forkRecoverySnapshot\.affectedWorkspaceIds\.length === 0\) return/);
   assert.match(source, /scope: \{[\s\S]*kind: 'workspaces',[\s\S]*affectedWorkspaceIds/);
@@ -1277,13 +1277,16 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
     /\.then\(\(\) =>\s*refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\),?\s*\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
-  assert.match(source, /\{actionError\.retryable && \(/);
+  assert.match(source, /error\.retryable \?/);
 });
 
 test('preserves the Worktree projection for action refreshes', async () => {
   const source = await readSurfaceSource();
 
-  const runMutationSource = await readSurfaceDeclaration('actions/useSurfaceMutation.tsx', 'runMutation');
+  const runMutationSource = await readSurfaceDeclaration(
+    'actions/useSurfaceMutation.tsx',
+    'runMutation',
+  );
   assert.match(runMutationSource, /refreshOptions/);
 
   const registrationSource = await readSurfaceDeclaration(
@@ -1317,19 +1320,20 @@ test('preserves the Worktree projection for action refreshes', async () => {
     /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
   );
 
-  const actionRetryStart = source.indexOf('{actionError.retryable && (');
+  const actionRetryStart = source.indexOf('...(error.retryable ?');
   const actionRetryEnd = source.indexOf("{readState.status === 'loading'", actionRetryStart);
   assert.notEqual(actionRetryStart, -1);
   assert.notEqual(actionRetryEnd, -1);
   assert.match(source.slice(actionRetryStart, actionRetryEnd), /kind: 'global'/);
 
   const readErrorStart = source.indexOf(
-    "{readState.status === 'error' && readState.error !== undefined ?",
+    "if (readState.status === 'error' && readState.error !== undefined)",
   );
   const readErrorEnd = source.indexOf("{readState.status === 'ready' ?", readErrorStart);
   assert.notEqual(readErrorStart, -1);
   assert.notEqual(readErrorEnd, -1);
-  assert.match(source.slice(readErrorStart, readErrorEnd), /kind: 'global'/);
+  assert.match(source.slice(readErrorStart, readErrorEnd), /retryRead\(\)/);
+  assert.match(source, /workspaceIds === undefined \? \{ kind: 'global' \}/);
 });
 
 test('keeps targeted refresh errors local and retryable', async () => {
@@ -1337,7 +1341,7 @@ test('keeps targeted refresh errors local and retryable', async () => {
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  const targetErrorStart = source.indexOf('{readState.targetError !== undefined && (');
+  const targetErrorStart = source.indexOf('if (readState.targetError !== undefined)');
   const targetErrorEnd = source.indexOf("{readState.status === 'loading'", targetErrorStart);
 
   assert.match(
@@ -1349,9 +1353,10 @@ test('keeps targeted refresh errors local and retryable', async () => {
   assert.match(refreshSource, /if \(!workspaceIdsRef\.current\.includes\(workspaceId\)\) return/);
   assert.notEqual(targetErrorStart, -1);
   assert.notEqual(targetErrorEnd, -1);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /data-worktree-target-error/);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /kind: 'workspaces'/);
-  assert.match(source.slice(targetErrorStart, targetErrorEnd), /preserveCurrent: true/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /key: 'target:'/);
+  assert.match(source.slice(targetErrorStart, targetErrorEnd), /retryRead\(workspaceIds\)/);
+  assert.match(source, /kind: 'workspaces', workspaceIds/);
+  assert.match(source, /preserveCurrent: true/);
 });
 
 test('renders transient Worktree health through semantic icon colors', async () => {
@@ -1359,10 +1364,7 @@ test('renders transient Worktree health through semantic icon colors', async () 
 
   assert.match(rows, /data-worktree-state=\{state\}/);
   assert.match(rows, /const worktreeStateVisible = stateLabel !== undefined;/);
-  assert.match(
-    rows,
-    /<span className=\{styles\.worktreeStateLabel\}>\{stateLabel\}<\/span>/,
-  );
+  assert.match(rows, /<span className=\{styles\.worktreeStateLabel\}>\{stateLabel\}<\/span>/);
   assert.doesNotMatch(rows, /worktreeStateVisible = state !== undefined/);
   assert.doesNotMatch(rows, /title=\{stateLabel\}/);
   assert.match(combined, /['"]warning['"]/);
@@ -1424,7 +1426,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   assert.match(coordinator, /readError=\{modalReadError\}/);
   assert.match(coordinator, /onRetry=\{\(\) =>/);
   assert.match(dialogs, /!canCreate/);
-  assert.match(dialogs, /formatWorktreeViewError\(readError, t\)/);
+  assert.match(dialogs, /ErrorToast error=\{readError\}/);
   assert.match(dialogs, /t\('action\.retry'\)/);
   assert.match(types, /readonly readError\?: WorktreeViewError/);
 });
@@ -1473,6 +1475,60 @@ test('does not render a plugin WT rail control when the sidebar collapses', asyn
   assert.doesNotMatch(styleSource, /railContent|railButton/);
 });
 
+test('mounts the overlay scrollbar beside a stable full-width scroll content wrapper', async () => {
+  const source = await readFile(
+    new URL('../src/client/surface/components/SurfaceContent.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /<div className=\{styles\.scrollFrame\}>/);
+  assert.match(source, /ref=\{expansion\.contentRef\}[\s\S]*?data-worktree-scrollport/);
+  assert.match(source, /<div className=\{styles\.scrollContent\}>/);
+  assert.match(source, /<OverlayScrollbar scrollportRef=\{expansion\.contentRef\} \/>/);
+});
+
+test('highlights only the expanded Workspace containing the current Session with native tokens', async () => {
+  const [tree, rows, styles] = await Promise.all([
+    readFile(new URL('../src/client/surface/components/WorkspaceTree.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/surface/components/rows.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(
+    tree,
+    /<WorktreeWorkspaceRow\s[\s\S]*?containsCurrentSession=\{\s*currentSessionId !== undefined &&\s*allWorkspaceSessionIds\.includes\(currentSessionId\)\s*\}/,
+  );
+  assert.match(
+    rows,
+    /data-workspace-active=\{expanded && containsCurrentSession \? 'true' : undefined\}/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceIcon\s*\{[^}]*color: var\(--dsw-alias-label-tertiary\);/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceIcon\[data-workspace-active='true'\]\s*\{[^}]*color: var\(--dsw-alias-state-business-primary\);/,
+  );
+});
+
+test('uses native creation icons and reveals Workspace creation with its menu controls', async () => {
+  const [rows, styles] = await Promise.all([
+    readFile(new URL('../src/client/surface/components/rows.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8'),
+  ]);
+  const addWorktree = rows.match(/data-add-worktree[\s\S]*?<\/button>/)?.[0] ?? '';
+  const addSession = rows.match(/onCreateSession\(\);[\s\S]*?<\/button>/)?.[0] ?? '';
+  assert.match(addWorktree, /<IconBranchOutline16 \/>/);
+  assert.match(addSession, /<IconNewChatOutline16 \/>/);
+  assert.match(
+    styles,
+    /\.workspaceActions > \.iconButton:last-child\s*\{[^}]*visibility: hidden;/,
+  );
+  assert.match(
+    styles,
+    /\.workspaceRow:hover \[data-add-worktree\],\s*\.workspaceRow\[data-menu-open='true'\] \[data-add-worktree\],\s*\.workspaceRow:focus-within \[data-add-worktree\]\s*\{\s*visibility: visible;/,
+  );
+});
+
 test('matches native Workspace interaction, typography, and action rail', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
@@ -1487,8 +1543,11 @@ test('matches native Workspace interaction, typography, and action rail', async 
     rowSource,
     /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.workspaceDisclosure\}`\}/,
   );
-  assert.match(rowSource, /IconChevronDownOutline14 size=\{18\}/);
-  assert.match(rowSource, /IconChevronRightOutline14 size=\{18\}/);
+  assert.match(rowSource, /IconTriangleRightFill14 className=\{styles\.disclosureArrow\}/);
+  assert.match(
+    styles,
+    /\[aria-expanded='true'\] \.disclosureArrow\s*\{\s*transform: rotate\(90deg\)/,
+  );
   assert.match(
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onCreateWorktree\(\);/,
@@ -1544,8 +1603,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     rowSource,
     /className=\{`\$\{styles\.disclosureButton\} \$\{styles\.worktreeDisclosure\}`\}/,
   );
-  assert.match(rowSource, /IconChevronDownOutline14 size=\{18\}/);
-  assert.match(rowSource, /IconChevronRightOutline14 size=\{18\}/);
+  assert.match(rowSource, /IconTriangleRightFill14 className=\{styles\.disclosureArrow\}/);
   assert.match(
     rowSource,
     /data-add-session=\{main \? undefined : 'true'\}[\s\S]*onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);/,
@@ -1574,7 +1632,10 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
 test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
-  const rowProps = await readFile(new URL('../src/client/surface/types.ts', import.meta.url), 'utf8');
+  const rowProps = await readFile(
+    new URL('../src/client/surface/types.ts', import.meta.url),
+    'utf8',
+  );
   const rowStart = source.indexOf('function WorktreeGroupRow');
   const rowEnd = source.indexOf('/** Worktree-mode Session row', rowStart);
   assert.notEqual(rowStart, -1);
@@ -1590,14 +1651,9 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
   assert.match(rowSource, /data-dashboard-action/);
   assert.match(rowSource, /aria-label=\{t\('dashboard\.title'\)\}/);
   assert.match(rowSource, /const worktreeLabelRef = useRef<HTMLSpanElement>\(null\)/);
-  assert.match(rowSource, /const labelScrollFrameRef = useRef<number \| undefined>\(undefined\)/);
-  assert.match(rowSource, /onMouseEnter=\{\(\) => \{/);
-  assert.match(rowSource, /onMouseLeave=\{\(\) => \{/);
-  assert.match(source, /function worktreeLabelScrollProgress/);
-  assert.match(source, /labelElement\.scrollWidth - labelElement\.clientWidth/);
-  assert.match(source, /labelElement\.scrollLeft = 0/);
-  assert.match(source, /requestAnimationFrame\(animate\)/);
-  assert.match(source, /cancelAnimationFrame\(/);
+  assert.match(rowSource, /useTitleMarquee\(worktreeLabelRef\)/);
+  assert.match(rowSource, /onPointerEnter=\{marquee\.enter\}/);
+  assert.match(rowSource, /onPointerLeave=\{marquee\.leave\}/);
   assert.match(
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
@@ -1621,7 +1677,7 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeLabel,[\s\S]*\.worktreeRow:focus-within \.worktreeLabel[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
+    /\.worktreeRow:hover \.worktreeLabel,[\s\S]*\.treeSessionRow:hover \.sessionLabel[\s\S]*text-overflow: clip;/,
   );
   assert.match(
     styles,
@@ -1659,6 +1715,7 @@ test('dispatches Dashboard from an empty Worktree row button and menu', async ()
       'IconBranchOutline16',
       'IconChevronDownOutline14',
       'IconChevronRightOutline14',
+      'IconTriangleRightFill14',
       'IconCopyOutline16',
       'IconEditOutline16',
       'IconEllipsisOutline16',
@@ -1671,10 +1728,7 @@ test('dispatches Dashboard from an empty Worktree row button and menu', async ()
       'StateDot',
     ].map((name) => [name, function Primitive() {}]),
   );
-  const styles = new Proxy(
-    {},
-    { get: (_target, key) => String(key) },
-  );
+  const styles = new Proxy({}, { get: (_target, key) => String(key) });
   const react = {
     useEffect: () => {},
     useRef: (current) => ({ current }),
@@ -1688,6 +1742,8 @@ test('dispatches Dashboard from an empty Worktree row button and menu', async ()
       if (name === '@deepseek-ai/dsh-client-ui-primitives')
         return { ...primitives, writeClipboard: () => {} };
       if (name === '../../dsh-icons.js') return primitives;
+      if (name === '../state/useTitleMarquee.js')
+        return { useTitleMarquee: () => ({ enter() {}, leave() {} }) };
       if (name === '../../dashboard/dashboard-icon.js')
         return { IconDashboard: function IconDashboard() {} };
       if (name === '../../session/session-view.js')
@@ -1745,7 +1801,7 @@ test('dispatches Dashboard from an empty Worktree row button and menu', async ()
   assert.deepEqual(calls, [record, record]);
 });
 
-test('separates collapsed running activity and coordinates it with hover scrolling', async () => {
+test('separates collapsed running activity from native pointer-only title scrolling', async () => {
   const source = (await readSurfaceSources()).combined;
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const rowStart = source.indexOf('function WorktreeGroupRow');
@@ -1754,21 +1810,10 @@ test('separates collapsed running activity and coordinates it with hover scrolli
   assert.notEqual(rowEnd, -1);
   const rowSource = source.slice(rowStart, rowEnd);
 
-  assert.match(rowSource, /const worktreeLabelPointerInsideRef = useRef<boolean>\(false\)/);
-  assert.match(rowSource, /const syncWorktreeLabelScroll = \(\) =>/);
-  assert.match(rowSource, /worktreeLabelPointerInsideRef\.current \|\| groupActivityVisible/);
-  assert.match(
-    rowSource,
-    /useEffect\(\(\) => \{\s*syncWorktreeLabelScroll\(\);\s*\}, \[groupActivityVisible, label\]\)/,
-  );
-  assert.match(
-    rowSource,
-    /onMouseEnter=\{\(\) => \{\s*worktreeLabelPointerInsideRef\.current = true;\s*syncWorktreeLabelScroll\(\);\s*\}\}/,
-  );
-  assert.match(
-    rowSource,
-    /onMouseLeave=\{\(\) => \{\s*worktreeLabelPointerInsideRef\.current = false;\s*syncWorktreeLabelScroll\(\);\s*\}\}/,
-  );
+  assert.match(rowSource, /useTitleMarquee\(worktreeLabelRef\)/);
+  assert.match(rowSource, /onPointerEnter=\{marquee\.enter\}/);
+  assert.match(rowSource, /onPointerLeave=\{marquee\.leave\}/);
+  assert.doesNotMatch(rowSource, /syncWorktreeLabelScroll|worktreeLabelPointerInsideRef/);
 
   const activityRailStart = styles.indexOf(
     ".worktreeRow[data-group-activity='true'] .treeActionSlot {",
@@ -1779,10 +1824,7 @@ test('separates collapsed running activity and coordinates it with hover scrolli
     styles.slice(activityRailStart, activityRailEnd + 1),
     /flex: 0 0 32px;[\s\S]*width: 32px;/,
   );
-  assert.match(
-    styles,
-    /\.worktreeRow\[data-group-activity='true'\] \.worktreeLabel,[\s\S]*overflow-x: auto;[\s\S]*text-overflow: clip;/,
-  );
+  assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.worktreeLabel/);
   const hoverRailStart = styles.indexOf('.worktreeRow:hover .treeActionSlot');
   assert.ok(hoverRailStart > activityRailStart);
 });
@@ -1875,7 +1917,7 @@ test('offers Local and Worktree creation through shared menu parameters', async 
 
   assert.match(rows, /id: 'create'/);
   assert.match(rows, /label: t\('worktree\.createNew'\)/);
-  assert.match(rows, /icon: <IconPlusOutline16 \/>/);
+  assert.match(rows, /icon: <IconBranchOutline16 \/>/);
   assert.match(rows, /menu\.showCreate/);
   assert.match(rows, /if \(id === 'create' && menu\.showCreate\) menu\.onCreateWorktree\?\.\(\)/);
   assert.match(types, /readonly showCreate: boolean;/);

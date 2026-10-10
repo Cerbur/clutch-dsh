@@ -1,3 +1,4 @@
+import { SIDECAR_SCHEMA_VERSION } from '../lib/provider/types.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateSidecarSnapshot } from '../lib/provider/sidecar/sidecar-schema.js';
@@ -43,7 +44,7 @@ test('legacy removed remains cleaned and detached', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 6);
+  assert.equal(snapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(snapshot.revision, '7');
   assert.equal(snapshot.worktrees[0].diskCleanup, 'completed');
   assert.equal(snapshot.bindings[0].status, 'detached');
@@ -82,7 +83,7 @@ test('v1 source normalizes to plugin', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 6);
+  assert.equal(snapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(snapshot.revision, '0');
   assert.equal(snapshot.worktrees[0].source, 'plugin');
 });
@@ -104,7 +105,7 @@ test('v2 retains explicit source and defaults revision to 0', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 6);
+  assert.equal(snapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(snapshot.revision, '0');
   assert.equal(snapshot.worktrees[0].source, 'external');
 });
@@ -129,7 +130,7 @@ test('v3 preserves revision and repository fingerprint', () => {
     },
     '/tmp/ws1.json',
   );
-  assert.equal(snapshot.schemaVersion, 6);
+  assert.equal(snapshot.schemaVersion, SIDECAR_SCHEMA_VERSION);
   assert.equal(snapshot.revision, '42');
   assert.equal(snapshot.repositoryFingerprint, fingerprint);
   assert.equal(snapshot.worktrees[0].diskCleanup, undefined);
@@ -168,8 +169,20 @@ test('v6 stores Main instructions while v5 rejects the new field', () => {
   );
 });
 
+test('v7 accepts a valid current-schema snapshot', () => {
+  const snapshot = {
+    schemaVersion: 7,
+    workspaceId: 'ws1',
+    revision: '0',
+    worktrees: [],
+    bindings: [],
+  };
+  assert.doesNotThrow(() => validateSidecarSnapshot(snapshot, '/tmp/ws1.json'));
+  assert.deepEqual(validateSidecarSnapshot(snapshot, '/tmp/ws1.json'), snapshot);
+});
+
 test('unsupported schema versions are rejected', () => {
-  for (const v of [0, 7, 99, -1]) {
+  for (const v of [0, SIDECAR_SCHEMA_VERSION + 1, 99, -1]) {
     assert.throws(
       () =>
         validateSidecarSnapshot(

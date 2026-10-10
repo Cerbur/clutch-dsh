@@ -23,6 +23,7 @@ type Input = {
     | 'available'
     | 'manager'
     | 'useSessions'
+    | 'useSessionStatus'
     | 'useWorkspaces'
     | 'forkRecovery'
     | 'expandState'
@@ -38,6 +39,7 @@ export function useSurfaceSources({ props }: Input) {
     available,
     manager,
     useSessions,
+    useSessionStatus,
     useWorkspaces,
     forkRecovery,
     expandState,
@@ -48,6 +50,8 @@ export function useSurfaceSources({ props }: Input) {
   const preferredMode = useStore((state) => state.viewMode);
   const mode = effectiveViewMode(preferredMode, available && manager !== undefined);
   const sessions = useSessions((state) => state) as SessionListLike;
+  // Root hook is absent on legacy clients; do not create a second unread owner.
+  const sessionStatuses = useSessionStatus?.((state) => state);
   const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
   const forkRecoveryStore = forkRecovery ?? EMPTY_FORK_RECOVERY_STORE;
   const forkRecoverySnapshot = useSyncExternalStore(
@@ -93,8 +97,8 @@ export function useSurfaceSources({ props }: Input) {
     sessionOrder.getSnapshot,
   );
   const sessionPresentations = useMemo(
-    () => deriveSessionPresentationIndex(sessions),
-    [sessions.byId],
+    () => deriveSessionPresentationIndex(sessions, sessionStatuses),
+    [sessions.byId, sessionStatuses],
   );
   const { ref, width, bounds, collapsed, nativeCovered } = useSidebarOverlayGeometry(
     mode === 'worktree',

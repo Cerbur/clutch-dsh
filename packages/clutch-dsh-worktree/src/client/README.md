@@ -6,6 +6,19 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
+- `layout/app-frame.ts` is the shared browser-only layout seam for Sidebar, Dashboard and future
+  Worktree overlays. Resolve the triggering surface's closest `[data-shell-overlay]`, then trace
+  `[data-worktree-mode-action]` (or `[data-pane="sidebar"]`) to a direct frame child for the Sidebar.
+  Resolve the optional right column with `[data-rightbar-col]`; `data-rightbar-collapsed` excludes it
+  from placement and open-state projection. CenterColumn has no public marker: exclude known slots
+  and accept only one remaining child whose finite rectangle spans the content track to the overlay
+  bottom, leaving caption bands and resize handles intact. No first/last child or sibling adjacency
+  is part of the contract, and no private shell classes are consulted.
+  The Sidebar root is the lowest measurable common ancestor of New Session and the footer action;
+  footer placement requires that action, never an unmarked trailing child. Missing, ambiguous or
+  invalid anchors restore native content. Both consumers re-resolve after layout mutations, track
+  replacement anchors, retain invalid geometry candidates for resize recovery, and disconnect on
+  disposal. These rules supersede positional anchor assumptions in historical layout plans.
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
   `worktreeManager/<method>` endpoint strings, `{ args: { input } }` payloads, cancellation and
   outer/inner error normalization. Instruction reads use `getWorktreeInstructions`; Git endpoints are `listWorktreeCommits`,
@@ -21,13 +34,32 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   Only `gateway/service-unavailable`, `gateway/definition-unavailable`, and
   `gateway/invocation-unavailable` show the native restart toast, once per Client fiber. Rechecks
   abort superseded probes, disposal aborts pending probes, and stale responses never update the
-  reminder. The reminder uses its own `shell.overlay` registration and does not change ready views,
-  refresh scopes, Session/Workspace data, or the transport graph.
+  reminder. The same controller also consumes the existing permission-result callback: only
+  `fallback-workspace-write` establishes the missing Full Access preset and shows a separate
+  once-per-fiber reminder with conditional install/update restart guidance. Host success does
+  not dismiss this reason; a confirmed Full Access result does. Native permission results
+  invalidate older in-flight Host probes. The native Toast consumes a reason snapshot so a
+  reason change updates its copy/lifetime even while visibility stays true. Completion is
+  reason-scoped so an older Toast cannot dismiss a newer reason; persistent recovery
+  copy retains the guidance after dismissal. Unverified results and explicit restrictions do not
+  request restart. The reminder uses its own `shell.overlay` registration and does not change
+  ready views, refresh scopes, Session/Workspace data, the transport graph or native services.
 - Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
-  acknowledgement, and fails pending requests closed when the Client fiber is disposed.
+  acknowledgement, and fails pending requests closed when the Client fiber is disposed. The Host
+  resolves optional permission capabilities on each invocation, including the confirmed second call:
+  provider revocation reports unverified/retryable without using an old setter, and recovery/retry
+  retains explicit user restrictions. This controller coverage does not validate DOM/portal rendering.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
+- `command-activity.ts` registers a private native Conversation activity target for
+  `command/run` records named `cluworktree`. Ordinary native Chat command nodes do not
+  activate the blank-session shell, whereas `compact` has a distinct active Node kind.
+  The plugin target makes the existing native result row visible immediately, including
+  errors and history replay; it adds no tab or duplicate row. A coalesced Session-list
+  subscription activates only already-retained bindings and tracks each binding generation.
+  Disposal removes both Definitions and cancels queued activation. Session metadata,
+  transcript, command execution, and native Chat Definitions remain DSH-owned.
 
 The Client does not read `ctx.remote.worktreeManager`, import or traverse the generated `./remote` artifact, call `ctx.remote.$mount()`, or create a second RPC/transport. The Host-side `WorktreeRemoteService` and Typert Gateway remain the server composition; the browser reuses the existing DSH `/api` channel.
 
@@ -63,6 +95,12 @@ snapshot with the current sidecar bindings, and restores the original methods on
 never writes DSH Workspace state or exposes the projection as a new Controller or transport.
 
 ## Shared Worktree views and refresh scopes
+
+Agent tool mutations arrive through `watchToolChanges` on the existing `/api` adapter.
+One cancellable long-poll loop belongs to the Client fiber. Each notification invalidates only
+its Workspace reader generation; the current matching Context and visible Surface share the
+replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
+This runtime notification carries identities only and does not add another data store.
 
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
@@ -134,6 +172,16 @@ Using the brand would cover and conceal the whole logo/toggle row. The exclusion
 native chrome semantics rather than a platform flag, fixed inset or generated class name;
 if only the brand shortcut remains, the overlay has no anchor and yields zero coverage.
 
+Footer resolution prefers the plugin-owned `data-worktree-mode-action` marker rendered in
+`sidebar.footer.action` and walks to its direct child under the current native Sidebar root.
+When the marker is absent, the legacy last child is only a candidate: both paths require
+DOM order after the New Session content child, finite positive-height geometry below the
+New Session button, and containment within the root's vertical bounds. A misplaced or invalid
+marked footer fails closed rather than switching to a positional guess. Missing or invalid
+anchors yield zero coverage and restore native content; they never extend coverage to the root
+bottom. Mutation and resize observation retry resolution when the live layout recovers.
+This intentionally replaces the earlier unconditional last-child/root-bottom fallback.
+
 ### Worktree dashboard
 
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
@@ -147,7 +195,7 @@ menu refreshes retain ready facts; updated and forgotten records project normall
 An external header request can precede the initial view read. Missing target facts are not
 treated as removal until that Workspace view arrives; Session changes and confirmed missing
 identities still dismiss the request. `DashboardRequest` occupies the same center bounds while
-loading or showing a retryable read error; retry reads only the requested Workspace. Neither
+loading, with failures announced by toast and retries in Worktree settings; retry reads only the requested Workspace. Neither
 the request nor the ready Dashboard expands the native Sidebar.
 The shared row receives a caller-controlled `showDashboardAction` flag from Local/Main and
 active/archived Worktree callers. It exposes a hover-only Dashboard icon in the existing action rail,
@@ -196,6 +244,17 @@ The accepted branch supplies the Worktree name, and clicking the dashboard title
 branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
+For nested Workspaces, `absolutePath` includes the original repository-relative directory.
+The optional `gitRootPath` retains the complete checkout identity for Git and disk cleanup; the Client
+does not derive this path from the native Workspace snapshot. New Sessions and Open In use
+`absolutePath`. Git file previews anchor checkout-relative paths at `gitRootPath` (or
+`absolutePath` for root Workspaces), then use DSH's official `fileAddressFor` with the
+current Session's native cwd, falling back to `absolutePath` if the snapshot has no cwd.
+Files inside that cwd receive relative Session addresses; other checkout files retain
+absolute Session addresses and follow native Host file-access checks. Using the native
+cwd also preserves previews for already-bound legacy Sessions whose cwd is the Git root.
+The active-binding action accepts that legacy root when Host physical validation is
+unavailable; blank unbound Session candidates still match only `absolutePath`.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. Main loads the Workspace-root
 HEAD history directly, skips branch-baseline and comparison-summary controls, and caps committed history at 200 commits.
 When the Workspace root has tracked, staged, unstaged, or untracked changes, the history prepends a live
@@ -365,9 +424,29 @@ only in current-page memory; after a refresh, the first available application is
 Surface operation, permission, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
 are announced once while present; resolved entries leave the queue and a later recurrence
-can announce again. Toast disposal is owned by React unmount. Full diagnostics and recovery
-buttons remain in one collapsed native details element; no Session recovery is tied to the
-toast timer. Dialog validation and scoped Git setup guidance remain local.
+can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
+notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
+unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
+The native settings.section seat exposes General and Errors & recovery tabs. The Worktree
+navigation entry reuses the sidebar's `IconBranchOutline16`. Because the current DSH shell has
+no section-icon slot, a browser overlay portals the native icon into the uniquely labelled
+Worktree row inside the settings modal and hides its default gear with a scoped marker.
+Closing the modal or disposing the overlay releases the portal and restores native presentation.
+Ambiguous labels or changed shell markup retain the default icon. Browser-memory
+diagnostics outlive toast dismissal and source unmount. Each entry includes contextual names/paths,
+localized problem/recovery copy, original code/message/details (including Git stderr) and live
+scoped actions. Unmounted sources become inactive and revoke callbacks; absence of a reported
+error moves the record into history, not proof that a retry succeeded. Only inactive history is
+bounded to 100 entries; Clear history preserves active recoveries, and page reload clears all.
+The toast's sole action opens the Worktree section through the native rc.1 Settings shell's
+shared viewing store (the winning sidebar.settings ledger entry); it keeps operation dialogs
+mounted so their retry controls remain live. An unavailable store falls back to the written
+settings navigation path. Settings navigation changes only browser viewing state.
+Git command argv is excluded from toast grouping when shared stderr identifies the root cause;
+independent operations retain their own records. Toasts include the settings navigation path.
+Known contract codes have exhaustive bilingual copy; retained binding failures add only a neutral
+wrapper around the cause guidance. Dialogs retain input; retries live in settings, while scoped Git
+setup guidance stays local. The plugin does not log original diagnostics to DSH.
 The shared Worktree HoverCard adds status-specific repair guidance and the path for unhealthy
 active rows, and is suppressed during menus and dragging. These changes do not mutate Git,
 sidecar state, Session bindings, or permissions.
@@ -443,7 +522,7 @@ a branch is adopted, while forget and archive retain their existing lifecycle se
 
 Sibling creation uses the observed `currentBranch`, falling back to the accepted branch only
 when the runtime field is unavailable; detached HEAD does not expose that action. Adoption
-errors stay inside the confirmation dialog and disable submission until Retry reloads the
+errors are announced by toast and disable confirmation submission until Retry in Worktree settings reloads the
 branch and token for explicit reconfirmation. Retry retains unrelated ready views, and late
 retry results are ignored after the dialog closes or the Client mode/manager changes.
 Read-only menu refreshes share an equivalent in-flight Workspace read and do not invalidate
@@ -480,7 +559,10 @@ The Worktree surface is additive:
   Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
   The plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
-- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable;
+- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable. `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
+  Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
+- Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 150ms, 90-degree rotation; reduced motion disables the transition. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
+- Session titles and Worktree names share `useTitleMarquee`, adapted from DSH `ui-workspace/src/client/rows/Rows.tsx` because that hook is private upstream. It ignores overflow of at most 8px, moves at 30px/s with 12px edge fades, holds the tail until pointer leave, then resets immediately. Reduced motion jumps to the tail. Frames are cancelled on pointer leave and unmount; the existing HoverCards still reveal complete values;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - semantic `data-sidebar-collapsed` and zero-width measurements hide the surface on desktop as well as Web; zero never retains the last expanded width;
 - `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
@@ -493,8 +575,19 @@ The Worktree surface is additive:
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - each group initially shows five rows and uses Expand more/Collapse when needed;
-- Workspace, Main and active Worktree rows reserve one aligned trailing action rail;
-- Session rows derive one native-compatible status presentation from the DSH Session snapshot.
+- Workspace, Main and active Worktree rows reserve one aligned trailing action rail. Main and Worktree new Session buttons prefer native `IconNewChatOutlineRegular` (16px), with the legacy size-named export as fallback; Workspace add Worktree and create Worktree menu entries use the same `IconBranchOutline16` as Worktree rows. The Workspace add Worktree button follows the menu button's hover, focus-within, and menu-open visibility;
+- Session rows derive one ephemeral presentation from the DSH Session list plus the independent
+  native `useSessionStatus` root hook.
+  The hook supplies a read-only Map of running, pending-interaction objects (`kind`), and
+  `completionUnread`. DSH UiSession alone owns unread acknowledgement: observed off-main stops
+  produce it; main-view opening or rerunning clears it. Never copy it into a plugin store, list,
+  or sidecar, or infer completion from `running=false`. Only clients without the hook use legacy
+  summary `pendingInteraction` / `completed`; missing native Map entries do not revive legacy
+  reminders. The Surface subscribes independently and memoizes against both `byId` and the status
+  Map, so a status-only update reaches rows, collapsed groups, and Dashboard without a list replay.
+  Existing subagent lineage consumes all native `byId` entries, including catalog-only children;
+  child running uses the same native status facts. The Controller owns `subagentCatalog` projection;
+  Worktree adds no catalog reader or completion owner.
   The existing native `StateDot` is reused directly: running, running-subagent, warning, and
   completed states occupy the trailing metadata slot instead of relative time. Idle Sessions use
   that slot for native relative-time buckets based on DSH `updatedAt`; blank rows have no
@@ -510,9 +603,9 @@ The Worktree surface is additive:
   limit are applied. At most one native `StateDot` is rendered in the trailing action rail; pending
   interaction warnings (including waiting approval) take priority over running, and running takes
   priority over completed. Idle Sessions do not contribute a group dot. The activity rail reserves
-  28px for the indicator plus a 4px label gap, and a long Worktree label uses the same forward/return
-  scroll loop while a group status remains active. Expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions without starting a competing scroll loop. Main and Worktree share
+  28px for the indicator plus a 4px label gap. Activity alone leaves long labels at rest;
+  pointer hover uses the shared native title marquee. Expansion, hover/focus, and menu-open state yield
+  the rail to its existing actions. Main and Worktree share
   the same parameterized group-row path.
 - The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
   `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.
@@ -561,3 +654,19 @@ Connection, Gateway and unexpected Worktree domain failures remain visible as re
 errors rather than being converted to an empty list. Recognized Git readiness failures are
 Workspace-local setup states, not transport failures. Client disposal must abort pending
 Connection calls and release browser-local membership projections.
+
+## Tool preference UI
+
+Settings → Worktree → General and Local/Main or managed Dashboard → Settings share `ToolSettings`.
+Local/Main addresses `{ kind: 'local', workspaceId }`; managed Worktrees address
+`{ kind: 'worktree', workspaceId, worktreeId }`. These configurations are independent.
+The existing `/api` adapter owns `getToolSettings` and `updateToolSettings`; Host files stay
+outside the browser boundary. Native switches expose localized capability names and descriptions.
+Both tool-settings headers use the native `Tag` with `tone="info"` for the localized Experimental
+badge, matching the official plugin manager.
+Both surfaces use a bordered settings card: the main switch and summary occupy the header,
+and enabled selections appear below a divider with scope-specific guidance. Injection and reporting
+notes are combined in the tool-selection explanation before the individual switches. When the main switch
+is off, the entire selection section is absent; toggling it back on retains the saved selection.
+Writes use expected values, disable concurrent edits, and preserve saved content on failure.
+Retry reloads the latest selection. Configuration changes do not invalidate Workspace projections.

@@ -1,4 +1,4 @@
-import type { WorktreeRecord } from '../../../contract/index.js';
+import { isWorktreeGitCommit, type WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
 import type { CreateWorktreeTransactionInput } from '../types.js';
@@ -20,11 +20,16 @@ import { assertGeneratedTarget } from '../support/path-safety.js';
 import { publishCreated, markRecovery } from '../support/publication.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
+import { workspacePathInWorktree } from '../../worktree-path.js';
 
 export async function createWorktreeTransaction(
   dependencies: Pick<TransactionDependencies, 'dshHome' | 'git' | 'repositoryLock' | 'sidecar'>,
   input: CreateWorktreeTransactionInput,
 ): Promise<WorktreeRecord> {
+  if (input.baseBranch === undefined && (!isWorktreeGitCommit(input.baseCommit) || input.newBranch === undefined)) {
+    throw providerError('GIT_OPERATION_FAILED', 'Commit-based creation requires a full Git hash and a new branch', {});
+  }
+  const baseRef = input.baseCommit ?? input.baseBranch!;
   return withShardLock(dependencies, input.workspaceId, async (locked) => {
     await dependencies.git.validateRepository(input.workspaceRoot);
     const repository = await resolveRepository(dependencies, input.workspaceRoot);
@@ -43,7 +48,7 @@ export async function createWorktreeTransaction(
         if (dependencies.git.listBranchesWithWorktreePaths) {
           const branches = await dependencies.git.listBranchesWithWorktreePaths(gitRoot);
           const baseBranch = branches.find((branch) => branch.name === input.baseBranch);
-          if (!baseBranch) {
+          if (input.baseBranch !== undefined && !baseBranch) {
             throw providerError(
               'GIT_OPERATION_FAILED',
               `Local branch does not exist: ${input.baseBranch}`,
@@ -63,7 +68,7 @@ export async function createWorktreeTransaction(
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.newBranch,
-                baseBranch: input.baseBranch,
+                baseBranch: input.baseBranch ?? baseRef,
               },
             );
           }
@@ -78,13 +83,13 @@ export async function createWorktreeTransaction(
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.targetBranch,
-                baseBranch: input.baseBranch,
+                baseBranch: input.baseBranch ?? baseRef,
               },
             );
           }
         } else {
           const branches = await dependencies.git.listBranches(gitRoot);
-          if (!branches.includes(input.baseBranch)) {
+          if (input.baseBranch !== undefined && !branches.includes(input.baseBranch)) {
             throw providerError(
               'GIT_OPERATION_FAILED',
               `Local branch does not exist: ${input.baseBranch}`,
@@ -101,7 +106,7 @@ export async function createWorktreeTransaction(
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.newBranch,
-                baseBranch: input.baseBranch,
+                baseBranch: input.baseBranch ?? baseRef,
               },
             );
           }
@@ -113,7 +118,7 @@ export async function createWorktreeTransaction(
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.targetBranch,
-                baseBranch: input.baseBranch,
+                baseBranch: input.baseBranch ?? baseRef,
               },
             );
           }
@@ -122,7 +127,7 @@ export async function createWorktreeTransaction(
           input.worktreeId,
           input.targetPath,
           current,
-          existingGitWorktrees ?? await dependencies.git.listWorktrees(gitRoot),
+          existingGitWorktrees ?? (await dependencies.git.listWorktrees(gitRoot)),
         );
         const sidecarConflict = await findActiveBranchConflict(
           dependencies,
@@ -147,11 +152,17 @@ export async function createWorktreeTransaction(
         // so a Worktree that already advanced past its creation point is never
         // recorded as its own baseline.
         const capturedBaseCommit = dependencies.git.resolveCommit
-          ? await dependencies.git.resolveCommit(gitRoot, input.baseBranch)
-          : undefined;
-        const transactionInput = capturedBaseCommit === undefined
-          ? input
-          : { ...input, baseCommit: capturedBaseCommit };
+          ? await dependencies.git.resolveCommit(gitRoot, baseRef)
+          : input.baseCommit;
+        const transactionInput = {
+          ...input,
+          workspacePath: await workspacePathInWorktree(
+            input.workspaceRoot,
+            gitRoot,
+            input.targetPath,
+          ),
+          ...(capturedBaseCommit === undefined ? {} : { baseCommit: capturedBaseCommit }),
+        };
         const record = recordForCreate(transactionInput);
         const pending = pendingCreate(transactionInput, repository.identity);
         await locked.mutate((snapshot) => {
@@ -171,7 +182,9 @@ export async function createWorktreeTransaction(
           await dependencies.git.createWorktree(
             input.workspaceRoot,
             input.targetPath,
-            input.baseBranch,
+            input.newBranch === undefined
+              ? input.baseBranch!
+              : (capturedBaseCommit ?? baseRef),
             input.newBranch,
           );
         } catch (error) {
@@ -211,10 +224,17 @@ export async function createWorktreeTransaction(
             },
           );
         }
-        const publishedRecord = record.baseCommit !== undefined || exact.headCommit === undefined
-          ? record
-          : { ...record, baseCommit: exact.headCommit };
-        await publishCreated(dependencies, locked, pending.id, publishedRecord, repository.identity);
+        const publishedRecord =
+          record.baseCommit !== undefined || exact.headCommit === undefined
+            ? record
+            : { ...record, baseCommit: exact.headCommit };
+        await publishCreated(
+          dependencies,
+          locked,
+          pending.id,
+          publishedRecord,
+          repository.identity,
+        );
         return publishedRecord;
       },
     );

@@ -18,6 +18,7 @@ import type {
   WorktreePermissionManager,
   WorktreePermissionResult,
   WorktreeRecord,
+  WorktreeToolChange,
 } from '../../contract/index.js';
 import type { DashboardRecord, DashboardSelection } from '../dashboard/dashboard-selection.js';
 import type {} from '../dsh-slot-contract.js';
@@ -66,6 +67,7 @@ export interface WorktreePermissionNotice {
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
+  readonly openErrorSettings?: () => boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
   readonly openResource?: (address: string, options?: { line?: number }) => boolean;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
@@ -81,6 +83,7 @@ export interface WorktreeSurfaceInjected {
   readonly sessionOrder: WorktreeSessionOrderStore;
   readonly manager?: WorktreeManager;
   readonly viewReader: WorktreeViewReader;
+  readonly subscribeToolChanges?: (listener: (change: WorktreeToolChange) => void) => () => void;
   readonly permission?: Pick<
     WorktreePermissionManager,
     'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
@@ -183,6 +186,8 @@ export interface TargetedWorktreeReadError {
 }
 
 export interface RefreshOptions {
+  /** A Host tool notification already retired the shared reader generation. */
+  readonly alreadyInvalidated?: boolean;
   readonly preserveCurrent?: boolean;
   /** Only read-only triggers may reuse reads started before this refresh. */
   readonly reuseInFlight?: boolean;
@@ -193,6 +198,7 @@ export interface RefreshOptions {
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
   readonly permissionRequired?: boolean;
+  readonly error?: WorktreeViewError;
 }
 
 export interface SessionRenameTarget {
@@ -246,6 +252,8 @@ export interface WorktreeWorkspaceRowProps {
   readonly t: WorktreeTranslate;
   readonly workspace: WorkspaceLike;
   readonly expanded: boolean;
+  /** Matches native Workspace folder highlighting for the selected Session. */
+  readonly containsCurrentSession?: boolean;
   /** One selected Session status shown when the Workspace row is collapsed. */
   readonly groupActivityStatus?: SessionStatusPresentation;
   readonly actionPending: boolean;

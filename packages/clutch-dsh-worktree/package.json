@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-worktree",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Adds a Worktree view to DSH Web UI that groups Sessions by Git worktree while keeping DSH as the source of truth.",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,10 @@
       "types": "./lib/index.d.ts",
       "import": "./lib/index.js",
       "default": "./lib/index.js"
+    },
+    "./permission-presets": {
+      "types": "./lib/host/permission-preset-append.d.ts",
+      "default": "./lib/host/permission-preset-append.js"
     },
     "./contract": {
       "types": "./lib/contract/index.d.ts",
@@ -55,7 +59,7 @@
   "scripts": {
     "prepare": "pnpm run build",
     "build": "tsc -p tsconfig.json && node scripts/generate-typert.mjs && node scripts/build-client.mjs",
-    "lint": "eslint src",
+    "lint": "eslint src test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "pnpm run build && tsc -p tsconfig.remote-test.json && node --test test/*.test.mjs"
   },
@@ -73,6 +77,7 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-workspace"
       ],
@@ -85,9 +90,12 @@
     "serviceDefinition": "@cerbur/clutch-dsh-worktree"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-util-workspace-path": "0.2.0-rc.1",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-commands": ">=0.2.0-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-api-session-controller": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-api-workspace-controller": ">=0.2.0-rc.1",
@@ -99,6 +107,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-session": ">=0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-workspace": ">=0.2.0-rc.1",
@@ -109,6 +118,8 @@
     "@deepseek-ai/dsh-workspace": ">=0.2.0-rc.1"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-commands": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.1",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-loader": "1.0.2",
     "@deepseek-ai/dsh-api-gateway": "0.2.0-rc.1",
@@ -122,6 +133,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-session": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.1",
     "@deepseek-ai/dsh-client-ui-workspace": "0.2.0-rc.1",

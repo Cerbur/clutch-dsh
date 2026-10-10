@@ -1,4 +1,4 @@
-import type { WorktreeManager } from '../contract/index.js';
+import type { WorktreeManager, WorktreeRecord } from '../contract/index.js';
 import type {
   DshReadAdapter,
   GitWorktreeAdapter,
@@ -51,6 +51,17 @@ export interface WorktreeManagerService extends WorktreeManager {
    * Re-derives cwd from the DSH Workspace and sidecar on every call; a broken active relation fails explicitly instead of silently falling back.
    */
   resolveRuntimeCwd(input: RuntimeCwdInput): Promise<string>;
+
+  /** Capture the authorized native Session's current committed HEAD. */
+  readSessionHead(input: RuntimeCwdInput): Promise<string>;
+
+  /** Host-only creation from a captured HEAD, including a detached source. */
+  createWorktreeAtCommit(input: {
+    workspaceId: string;
+    baseBranch?: string;
+    baseCommit: string;
+    newBranch: string;
+  }): Promise<WorktreeRecord>;
 
   /** Reconcile durable Git/sidecar operation markers for one Workspace. */
   recoverWorktrees(input: { workspaceId: string }): Promise<void>;

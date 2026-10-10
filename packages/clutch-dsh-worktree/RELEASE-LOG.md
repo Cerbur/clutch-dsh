@@ -1,5 +1,49 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.17 — 2026-10-11
+
+### 中文
+
+#### 新增
+
+- 提供 Agent 原生 Worktree 工具集（`clutch_new_worktree`、`clutch_list_worktrees`、`clutch_span_worktree`、`clutch_list_models`、`clutch_list_sessions`、`clutch_send_message`）与斜杠命令，支持多 Worktree 任务派发、主动结果报告与会话状态联动。
+- 支持位于 Git 仓库子目录中的 Workspace 根目录，引入 v7 Sidecar schema 准确识别 Git 根路径与子目录相对层级。
+- 新增设置页错误恢复面板与诊断历史记录，并通过 Toast 通知呈现界面异常与可操作的恢复指引。
+- 通过配置钩子和生命周期事件动态管理权限预设，并在预设未就绪时提供主动的 Host 重启指引。
+- 侧栏导航新增平滑浮动滚动条（Overlay Scrollbar）与长标题 hover 跑马灯动效。
+
+#### 优化
+
+- 基于原生 DSH turn 记录精准解析并展示会话完成与运行状态指示点。
+- 对齐侧栏行操作图标、高亮选中的工作区文件夹图标，并统一设置面板与原生控件的排版和字号缩放。
+- 将委托任务结果通知由轮询转为主动推送机制，并严格约束派发控制与令牌生命周期。
+
+#### 修复
+
+- 基于通用 AppFrame 语义锚点和拓扑回溯统一侧栏与 Dashboard 布局定位，修复额外标题栏或非紧邻壳层节点导致的导航零高度和看板无法打开，加固桌面外壳（Desktop shell）底栏锚点与布局恢复。
+- 修复子目录 Workspace 下 Session 真实 cwd 别名解析与历史 Session 预览丢失问题。
+
+### English
+
+#### Added
+
+- Provide native Agent Worktree tools (`clutch_new_worktree`, `clutch_list_worktrees`, `clutch_span_worktree`, `clutch_list_models`, `clutch_list_sessions`, `clutch_send_message`) and slash commands, enabling multi-worktree task delegation, pushed result reports, and session state coordination.
+- Support Workspace roots located in Git repository subdirectories, introducing a v7 Sidecar schema to accurately resolve Git roots and relative subdirectory paths.
+- Add an error recovery panel and diagnostics history in Settings, and surface interface errors with actionable recovery guidance via toast notifications.
+- Manage permission presets dynamically via configuration hooks and lifecycle events, offering proactive Host restart guidance when presets require activation.
+- Add an overlay scrollbar and hover title marquee animation to the sidebar navigation.
+
+#### Improved
+
+- Resolve session completion and running status indicators directly from native DSH turn records.
+- Align sidebar row action icons, active workspace folder icon highlights, and settings panel styling and font-size scaling with native controls.
+- Transition delegated task result reporting from transcript polling to a pushed reporting model with strict delegation control and token lifecycle guards.
+
+#### Fixed
+
+- Unify Sidebar and Dashboard layout resolution around public AppFrame anchors and topological ancestry, fixing zero-height navigation and Dashboards failing to open with extra titlebars or nonadjacent shell nodes, while hardening desktop shell footer anchoring and layout recovery.
+- Fix session cwd alias validation and preserve legacy session previews for subdirectory workspace roots.
+
 ## 0.1.16 — 2026-10-02
 
 ### 中文

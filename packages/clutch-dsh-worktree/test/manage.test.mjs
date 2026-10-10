@@ -541,7 +541,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalized = await sidecar.read('ws_one');
-    assert.equal(normalized.schemaVersion, 6);
+    assert.equal(normalized.schemaVersion, SIDECAR_SCHEMA_VERSION);
     assert.equal(normalized.revision, '0');
     assert.equal(normalized.worktrees[0].source, 'plugin');
 
@@ -552,7 +552,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       source: 'plugin',
     });
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 6);
+    assert.equal(persisted.schemaVersion, SIDECAR_SCHEMA_VERSION);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal('pendingOperation' in persisted, false);
 
@@ -570,7 +570,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
     })}\n`);
 
     const normalizedV2 = await sidecar.read('ws_one');
-    assert.equal(normalizedV2.schemaVersion, 6);
+    assert.equal(normalizedV2.schemaVersion, SIDECAR_SCHEMA_VERSION);
     assert.equal(normalizedV2.revision, '0');
     assert.deepEqual(normalizedV2.worktrees, [v2Record]);
 
@@ -580,7 +580,7 @@ test('reads v1 and v2 sidecars and upgrades the first mutation to v3 atomically'
       absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_legacy_v2_new'),
     });
     const persistedV2 = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persistedV2.schemaVersion, 6);
+    assert.equal(persistedV2.schemaVersion, SIDECAR_SCHEMA_VERSION);
     assert.equal(typeof persistedV2.revision, 'string');
     assert.equal('pendingOperation' in persistedV2, false);
   });
@@ -1307,6 +1307,9 @@ test('filters the repository root when listing import candidates for a subdirect
   await withGitFixture(async ({ dshHome, workspaceRoot, tempRoot }) => {
     const importedRoot = path.join(workspaceRoot, 'packages', 'nested');
     await mkdir(importedRoot, { recursive: true });
+    await writeFile(path.join(importedRoot, 'tracked.txt'), 'nested workspace\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Add nested workspace']);
     const externalPath = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/subdir-candidate');
     const provider = createWorktreeManager({
       dsh: createDshReader({ rootPath: importedRoot }),
@@ -1433,7 +1436,150 @@ test('uses combined branch checkout facts for a subdirectory Workspace when avai
   });
 });
 
-test('uses the resolved repository root when projecting Worktree health for a subdirectory Workspace', async () => {
+test('preserves the Workspace subdirectory in created Worktree cwd and public path', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
+    const relativeDirectory = path.join('packages', 'nested');
+    const nestedRoot = path.join(workspaceRoot, relativeDirectory);
+    await mkdir(nestedRoot, { recursive: true });
+    await writeFile(path.join(nestedRoot, 'tracked.txt'), 'nested workspace\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Add nested workspace']);
+    const dsh = createDshReader({ rootPath: nestedRoot });
+    const provider = createWorktreeManager({ dsh, dshHome, sidecar });
+    const record = await provider.createWorktree({
+      workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-cwd',
+    });
+    const expectedCwd = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId, relativeDirectory);
+    assert.equal(record.absolutePath, expectedCwd);
+    assert.equal(record.gitRootPath, path.dirname(path.dirname(expectedCwd)));
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].absolutePath, expectedCwd);
+    dsh.addSession({ sessionId: 'nested_session', workspaceId: 'ws_one', cwd: expectedCwd });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'nested_session' });
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'nested_session' }), expectedCwd);
+    assert.equal((await sidecar.read('ws_one')).worktrees[0].absolutePath, expectedCwd);
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'ready');
+    assert.ok(Array.isArray((await provider.listWorktreeCommits({ workspaceId: 'ws_one', worktreeId: record.worktreeId })).commits));
+    // Both lifecycle steps must target the checkout root, not the nested cwd.
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    await provider.cleanWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: await mutationTokenFor(provider, 'ws_one', record.worktreeId) });
+    await assert.rejects(stat(record.gitRootPath), { code: 'ENOENT' });
+    assert.equal((await dsh.getSession('nested_session')).cwd, expectedCwd);
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'nested_session' }), nestedRoot);
+  });
+});
+
+test('maps imported and legacy Worktrees to a symlinked nested Workspace without rewriting DSH or legacy paths', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, tempRoot, sidecar }) => {
+    const nested = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, 'tracked.txt'), 'nested\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Nested fixture']);
+    const alias = path.join(tempRoot, 'workspace-alias');
+    await symlink(nested, alias, 'dir');
+    const dsh = createDshReader({ rootPath: alias });
+    const provider = createWorktreeManager({ dsh, dshHome, sidecar });
+    const external = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/nested-import');
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: external });
+    assert.equal(imported.absolutePath, path.join(await realpath(external), 'packages', 'nested'));
+    assert.equal(imported.gitRootPath, await realpath(external));
+    assert.deepEqual(await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: external }), imported);
+    assert.deepEqual(await provider.listImportCandidates({ workspaceId: 'ws_one' }), []);
+    // Emulate a pre-v7 record and its already-bound DSH Session at the Git root.
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: { ...snapshot, worktrees: snapshot.worktrees.map(({ gitRootPath, ...record }) => ({ ...record, absolutePath: gitRootPath })) },
+    }));
+    await sidecar.upsertBinding(makeBinding({ worktreeId: imported.worktreeId, sessionId: 'legacy_nested' }));
+    dsh.addSession({ sessionId: 'legacy_nested', workspaceId: 'ws_one', cwd: imported.gitRootPath });
+    const before = await sidecar.read('ws_one');
+    const projected = (await provider.listWorktrees({ workspaceId: 'ws_one' }))[0];
+    assert.equal(projected.absolutePath, imported.absolutePath);
+    assert.equal(projected.health, 'ready');
+    assert.equal(await provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'legacy_nested' }), imported.absolutePath);
+    assert.deepEqual(await sidecar.read('ws_one'), before);
+    assert.equal((await dsh.getSession('legacy_nested')).cwd, imported.gitRootPath);
+    assert.equal((await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: external })).absolutePath, imported.absolutePath);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: imported.worktreeId, mutationToken: projected.mutationToken });
+  });
+});
+
+test('rejects a missing or escaping nested cwd without falling back to the checkout root', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, tempRoot, sidecar }) => {
+    const nested = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, 'tracked.txt'), 'nested\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Nested fixture']);
+    const dsh = createDshReader({ rootPath: nested });
+    const provider = createWorktreeManager({ dsh, dshHome, sidecar });
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-missing' });
+    dsh.addSession({ sessionId: 'missing_nested', workspaceId: 'ws_one', cwd: record.absolutePath });
+    await provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'missing_nested' });
+    await rm(record.absolutePath, { recursive: true });
+    await expectCode(provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'missing_nested' }), 'WORKTREE_NOT_FOUND');
+    const outside = path.join(tempRoot, 'outside');
+    await mkdir(outside);
+    await symlink(outside, record.absolutePath, 'dir');
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'repair');
+    await expectCode(provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'missing_nested' }), 'WORKTREE_NOT_FOUND');
+  });
+});
+
+test('recovers a captured nested Workspace directory after interrupted create publication', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
+    const nested = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, 'tracked.txt'), 'nested\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Nested fixture']);
+    const provider = createWorktreeManager({ dsh: createDshReader({ rootPath: nested }), dshHome, sidecar });
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-recovery' });
+    const repository = await new LocalGitAdapter().resolveRepositoryIdentity(nested);
+    await sidecar.mutate('ws_one', (snapshot) => ({
+      result: undefined,
+      snapshot: {
+        ...snapshot, worktrees: [],
+        pendingOperation: {
+          id: 'nested-create-interrupted', type: 'create-worktree', phase: 'executing',
+          workspaceId: 'ws_one', worktreeId: record.worktreeId,
+          targetPath: record.gitRootPath, workspacePath: record.absolutePath,
+          branch: record.branch, baseRef: 'main', baseCommit: record.baseCommit,
+          repositoryFingerprint: createRepositoryFingerprint(repository.identity),
+          startedAt: record.createdAt,
+        },
+      },
+    }));
+    await provider.recoverWorktrees({ workspaceId: 'ws_one' });
+    const recovered = await sidecar.read('ws_one');
+    assert.equal(recovered.pendingOperation, undefined);
+    assert.deepEqual(recovered.worktrees, [record]);
+    assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].health, 'ready');
+  });
+});
+
+test('preserves the nested directory through compatibility create and import stores', async () => {
+  await withGitFixture(async ({ dshHome, workspaceRoot, tempRoot, sidecar }) => {
+    const nested = path.join(workspaceRoot, 'packages', 'nested');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, 'tracked.txt'), 'nested\n');
+    await runGit(workspaceRoot, ['add', '.']);
+    await runGit(workspaceRoot, ['commit', '-m', 'Nested fixture']);
+    const provider = createWorktreeManager({
+      dsh: createDshReader({ rootPath: nested }), dshHome,
+      sidecar: { read: (...args) => sidecar.read(...args), mutate: (...args) => sidecar.mutate(...args) },
+    });
+    const created = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-compat' });
+    assert.equal(created.absolutePath, path.join(created.gitRootPath, 'packages', 'nested'));
+    const external = await addExternalWorktree(workspaceRoot, tempRoot, 'feature/nested-compat-import');
+    const imported = await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: external });
+    assert.equal(imported.absolutePath, path.join(imported.gitRootPath, 'packages', 'nested'));
+    assert.deepEqual(await provider.importWorktree({ workspaceId: 'ws_one', absolutePath: external }), imported);
+    assert.ok((await provider.listWorktrees({ workspaceId: 'ws_one' })).every((row) => row.health === 'ready'));
+  });
+});
+
+test('uses the resolved repository root and reports a missing Workspace subdirectory as repair', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, sidecar }) => {
     const importedRoot = path.join(workspaceRoot, 'packages', 'nested');
     await mkdir(importedRoot, { recursive: true });
@@ -1466,7 +1612,8 @@ test('uses the resolved repository root when projecting Worktree health for a su
       ['resolveRepositoryRoot', importedRoot],
       ['listWorktrees', workspaceRoot],
     ]);
-    assert.equal(result[0].health, 'ready');
+    assert.equal(result[0].health, 'repair');
+    assert.equal(result[0].absolutePath, path.join(record.absolutePath, 'packages', 'nested'));
   });
 });
 
@@ -2145,7 +2292,7 @@ test('normalizes v1 reads and writes source-aware schema v6 on mutation', async 
 
     await sidecar.mutate('ws_one', (snapshot) => ({ result: undefined, snapshot }));
     const persisted = JSON.parse(await readFile(shardPath, 'utf8'));
-    assert.equal(persisted.schemaVersion, 6);
+    assert.equal(persisted.schemaVersion, SIDECAR_SCHEMA_VERSION);
     assert.equal(typeof persisted.revision, 'string');
     assert.equal(persisted.worktrees[0].source, 'plugin');
   });
@@ -2633,9 +2780,28 @@ test('reports an explicit error for an active binding whose Worktree path disapp
     await sidecar.upsertBinding(makeBinding({ worktreeId: 'wt_missing', sessionId: 'session_missing_path' }));
     dsh.addSession({ sessionId: 'session_missing_path', workspaceId: 'ws_one', cwd: workspaceRoot });
 
-    await expectCode(
+    await assert.rejects(
       provider.resolveRuntimeCwd({ workspaceId: 'ws_one', sessionId: 'session_missing_path' }),
-      'WORKTREE_NOT_FOUND',
+      (error) => {
+        assert.equal(error.code, 'WORKTREE_NOT_FOUND');
+        assert.deepEqual(error.details, {
+          workspaceId: 'ws_one', worktreeId: 'wt_missing',
+          sessionId: 'session_missing_path', absolutePath: missingPath,
+        });
+        return true;
+      },
+    );
+    dsh.addSession({ sessionId: 'session_bind_missing_path', workspaceId: 'ws_one', cwd: missingPath });
+    await assert.rejects(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: 'wt_missing', sessionId: 'session_bind_missing_path' }),
+      (error) => {
+        assert.equal(error.code, 'WORKTREE_NOT_FOUND');
+        assert.deepEqual(error.details, {
+          workspaceId: 'ws_one', worktreeId: 'wt_missing',
+          sessionId: 'session_bind_missing_path', absolutePath: missingPath,
+        });
+        return true;
+      },
     );
   });
 });

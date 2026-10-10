@@ -1,28 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FrameElement, appFrameFixture } from './app-frame-fixture.mjs';
 
 import { computeOverlayBounds } from '../lib/client/overlay/overlay-bounds.js';
 import {
   findNewSessionAnchor,
   resolveNativeSidebarRoot,
+  resolveSidebarFooter,
   syncObservedElement,
 } from '../lib/client/overlay/sidebar-overlay-geometry.js';
 
 test('unwraps the display-contents sidebar slot before measuring the native root', () => {
-  const nativeRoot = {
-    firstElementChild: null,
-    getBoundingClientRect: () => ({ width: 280, height: 813 }),
-  };
-  const slotWrapper = {
-    firstElementChild: nativeRoot,
-    getBoundingClientRect: () => ({ width: 0, height: 0 }),
-  };
-  const sidebar = {
-    firstElementChild: slotWrapper,
-    getBoundingClientRect: () => ({ width: 280, height: 813 }),
-  };
-
-  assert.equal(resolveNativeSidebarRoot(sidebar), nativeRoot);
+  const { sidebar, root } = appFrameFixture();
+  const slotWrapper = new FrameElement();
+  slotWrapper.rect = { ...slotWrapper.rect, width: 0, height: 0 };
+  slotWrapper.append(root);
+  sidebar.append(slotWrapper);
+  assert.equal(resolveNativeSidebarRoot(sidebar), root);
 });
 
 test('prefers the visible New Session button when the logo shortcut shares its label', () => {
@@ -109,4 +103,137 @@ test('tracks replacement geometry anchors with the ResizeObserver', () => {
   assert.deepEqual(observer.observed, [first, second]);
   assert.deepEqual(observer.unobserved, [first, second]);
   assert.equal(current, undefined);
+});
+
+test('bounds never extend past the shell overlay or contain non-finite metrics', () => {
+  assert.deepEqual(computeOverlayBounds(
+    { top: 100, bottom: 700 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: true, top: 160, height: 440 });
+  assert.deepEqual(computeOverlayBounds(
+    { top: NaN, bottom: 900 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: false, top: 0, height: 0 });
+  assert.deepEqual(computeOverlayBounds(
+    { top: 100, bottom: 100 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: false, top: 0, height: 0 });
+});
+
+function sidebarFixture() {
+  const element = (top, bottom) => ({
+    parentElement: null,
+    getBoundingClientRect: () => ({ top, bottom }),
+  });
+  const root = element(100, 900);
+  const header = element(100, 120);
+  const content = element(120, 800);
+  const newSession = element(120, 156);
+  const footer = element(800, 840);
+  const wrapper = element(800, 840);
+  const action = element(800, 840);
+  root.children = [header, content, footer];
+  root.firstElementChild = header;
+  root.lastElementChild = footer;
+  root.querySelector = (selector) => {
+    assert.equal(selector, '[data-worktree-mode-action]');
+    return root.action ?? null;
+  };
+  for (const child of root.children) child.parentElement = root;
+  newSession.parentElement = content;
+  wrapper.parentElement = footer;
+  action.parentElement = wrapper;
+  root.action = action;
+  return { root, content, newSession, footer, action, element };
+}
+
+test('resolves nested footer-slot action without assuming it is the last child', () => {
+  const { root, newSession, footer, element } = sidebarFixture();
+  // A real trailing DOM node, not a CSS pseudo-element (which is not in children).
+  const decoration = element(120, 120);
+  decoration.parentElement = root;
+  root.children.push(decoration);
+  root.lastElementChild = decoration;
+  const resolved = resolveSidebarFooter(root, newSession);
+  assert.equal(resolved, footer);
+  assert.deepEqual(
+    computeOverlayBounds(
+      { top: 100, bottom: 900 },
+      newSession.getBoundingClientRect(),
+      resolved.getBoundingClientRect(),
+    ),
+    { ready: true, top: 20, height: 680 },
+  );
+});
+
+test('does not guess the footer from an unmarked last child', () => {
+  const { root, newSession } = sidebarFixture();
+  root.action = null;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('does not guess a footer when the marker is inside the content subtree', () => {
+  const { root, content, newSession, action } = sidebarFixture();
+  action.parentElement = content;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+for (const [name, rect] of [
+  ['zero-height decoration', { top: 120, bottom: 120 }],
+  ['overlapping anchor', { top: 140, bottom: 840 }],
+  ['outside root', { top: 800, bottom: 950 }],
+  ['non-finite geometry', { top: NaN, bottom: 840 }],
+]) {
+  test('rejects ' + name + ' as a marked footer', () => {
+    const { root, newSession, footer } = sidebarFixture();
+    footer.getBoundingClientRect = () => rect;
+    const resolved = resolveSidebarFooter(root, newSession);
+    assert.equal(resolved, undefined);
+    assert.deepEqual(
+      computeOverlayBounds({ top: 100, bottom: 900 }, newSession.getBoundingClientRect(), resolved),
+      { ready: false, top: 0, height: 0 },
+    );
+  });
+}
+
+test('rejects a footer before the content in DOM order even if its geometry looks valid', () => {
+  const { root, content, newSession, footer } = sidebarFixture();
+  root.children = [footer, content];
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('does not use unmarked content as a footer', () => {
+  const { root, content, newSession } = sidebarFixture();
+  root.action = null;
+  root.children = [content];
+  root.lastElementChild = content;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('requires a New Session anchor inside the current root', () => {
+  const { root, newSession } = sidebarFixture();
+  assert.equal(resolveSidebarFooter(root, undefined), undefined);
+  newSession.parentElement = null;
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
+});
+
+test('matches New Session button when textContent includes keyboard shortcut prefix', () => {
+  const buttonWithShortcutZh = {
+    textContent: '新会话Ctrl+Alt+N',
+    parentElement: null,
+    getAttribute: () => null,
+  };
+  const rootZh = {
+    querySelectorAll: () => [buttonWithShortcutZh],
+  };
+  buttonWithShortcutZh.parentElement = rootZh;
+  assert.equal(findNewSessionAnchor(rootZh), buttonWithShortcutZh);
+
+  const buttonWithShortcutEn = {
+    textContent: 'New Session (Ctrl+N)',
+    parentElement: null,
+    getAttribute: () => null,
+  };
+  const rootEn = {
+    querySelectorAll: () => [buttonWithShortcutEn],
+  };
+  buttonWithShortcutEn.parentElement = rootEn;
+  assert.equal(findNewSessionAnchor(rootEn), buttonWithShortcutEn);
 });

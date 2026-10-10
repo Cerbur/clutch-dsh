@@ -36,6 +36,11 @@ contract  ←  provider
 - **`src/host/`**：
   DSH 服务端组合根（Composition Root）。负责组装 DSH 真实读取适配器与 Manage，创建并通过 Typert Gateway 暴露 `WorktreeRemoteService`。
   向 Cordis 注册生命周期回调以确保资源清理。
+- **`src/tool/`**：
+  Host 使用的内部工具模块。六个委派工具与一个执行方回报工具各在一个文件中定义输入、输出、描述与 handler；
+  `index.ts` 负责命令与注册生命周期，`context.ts` 共享身份校验和 Workspace 作用域，
+  `native-session.ts` 与 `history.ts` 负责原生 Session 接缝与只读状态投影。
+  复用 contract、Manage 和 Provider 的事实与物理路径端口；Provider 不得反向依赖此模块。
 - **`src/client/`**：
   浏览器端消费者（Browser Consumer）。仅通过 DSH 原生客户端连接（`/api` Connection）与 contract 接口调用 Host 能力。
   负责 Worktree 模式视图模型、UI 交互、本地展开状态与 Shell Overlay 呈现。保持 browser-safe，严禁执行 Git 或直接读取 Sidecar 文件。
@@ -89,10 +94,107 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ## 4. 关系模型与运行时 cwd
 
+### Agent Worktree 工具接缝
+
+Host 的可选 `commands/tools/sessionController/sessionQuery/agents/llm/systemPrompt` composition
+提供 `/cluworktree`，通用工具开关开启时注册指令，并在调用 Agent 的独立作用域按用户选择注册
+创建、Worktree/Session/模型发现、指派和继续投递能力，通过原生 `systemPrompt.section` 注入对应指导。
+Local/Main 与 Worktree 的独立配置可在执行前自动注入所选能力；指令只补齐缺项。启用状态只存在于运行时，Agent 或插件销毁后移除，
+不写入 DSH Session metadata、事件或 Sidecar。原生 command/tool 生命周期日志由 DSH
+自行记录。未绑定且没有原生 Workspace 归属的 Session 不根据 cwd 猜测 Project。
+
+创建默认基线来自调用 Session 的 active、健康 Worktree 分支；没有 active binding 时，
+必须确认 Session cwd 对应 Workspace 根 checkout。Host-only `readSessionHead` 再次校验
+原生身份与物理 cwd，固定该 checkout 的 HEAD；`createWorktreeAtCommit` 保留此获取 commit。
+显式 `baseBranch` 可覆盖默认值；损坏绑定不回退 Main。Detached 根 checkout 支持从 HEAD
+创建新分支，仅保存 `baseCommit`，不推测分支；事务 journal 的 `baseRef` 使用
+`<full-commit>^{commit}`，恢复时保留没有 Dashboard 分支基线的事实。
+创建沿用 Manage 的 Git/Sidecar 事务，从固定获取 commit 创建新分支，
+避免分支移动导致记录基线与实际起点不同。未提交文件不会复制，随后保存可选共享指令。
+
+派发通过原生 `sessionController.create({ cwd })` 创建普通 Session，然后 `bindSession`。
+模型省略时继承调用 Session 的有效 provider/model/effort，显式模型通过原生目录和 LLM
+resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
+外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
+Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
+覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
+先为新 Agent 默认仅注册结果回报工具、固定回报目标及回报指导，再按目标 Worktree 的显式配置
+补齐自动注入能力，最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
+后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
+Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
+失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
+Provider 的 DSH adapter 继续完全只读；模型、标题、历史及消息接口仅存在于 Host 的独立 port。
+
+所有 Session 读写先校验调用方 Workspace，再通过原生身份、Sidecar binding 与物理 cwd
+确认目标；任意 `workspaceId` 参数不能扩大作用域。Detached、歧义或错配关系不得读取历史或
+投递。列表可返回不可用关系的诊断。Session 列表表达 Workspace/Worktree 成员关系，
+不建立原生 subagent lineage，不持久化委派来源关系或任务状态；
+回报目标仅保留在新 Agent 工具作用域的闭包中，随 Agent 或插件卸载丢失。
+继续投递始终经过 `resolveRuntimeCwd` 的严格 Workspace 写入门禁；根目录缺失时拒绝 admission。
+健康的已归档 Worktree 保留 active binding，因此已有 Session 可以继续，只有新派发要求 active Worktree。
+
+Session 列表通过原生 `sessionQuery.observeSession` 读取冷历史生成简短状态和标题，
+不激活冷 Session、不返回消息或游标。每个候选的授权与历史读取独立隔离失败，
+单个旧日志迁移错误不会阻止其他条目；取消与作用域销毁仍传播失败。
+模型工具不提供 read/wait，不通过轮询获取委派结果。
+
+新 Session 获得 `clutch_report_result`，用 completed/blocked/failed、短摘要与验证证据
+主动回报。Host 在投递前重新校验执行方与固定接收方的 Workspace、binding 和物理 cwd，
+通过原生 queue admission 发送带来源 Session id 的单条报告；不直接写事件或原始日志。
+摘要与证据各最多 2,000 字符；不推送整份 transcript、不根据 turn/end 或 idle 推断成功。
+回报是模型声明，需要发起方核验。该机制不保证崩溃、停止或尚待审批的 Session 发出报告，
+也不自动代答审批或用户问题。报告投递的不确定失败保留 requestId，允许原样幂等重试。
+Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 表达，字段描述给出来源、
+默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
+`src/tool/schema.ts` 将参数投影到 DSH 支持的 schema 子集，避免 PTC SDK 参数退化为 unknown。
+字符串 minLength/maxLength 转为字段描述，执行时仍由原始 Zod parser 严格校验；
+只有互不重叠的封闭 object alternatives 才将 anyOf 转为 oneOf，不支持的关键字显式拒绝注册。
+真实 DSH SDK 生成器回归验证全部七个工具的参数、必填回报状态、可选字段与模型结构。
+
+`watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
+20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
+内存 revision，绝不持久化到 Sidecar。Client fiber 共享一个通知循环，
+先使该 Workspace 的 reader generation 失效，再共享 Context/Surface 的定向读取，
+保持其他 ready Workspace 可见。没有新变更时不读取 Git 或 Worktree 列表。
+
+研究证据、具体限制和验证方案见 [WORKTREE-TOOLS.md](WORKTREE-TOOLS.md)。
+
 `WorktreeRecord.source` 记录来源类型：
 
 - `plugin`：在插件管理目录（`$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-chars>`）下新建；
 - `external`：登记已存在的独立 Git linked worktree。
+
+### Git 根目录与 Workspace 工作目录
+
+`WorktreeRecord.absolutePath` 是面向 Workspace 的工作目录，供 Session 创建、运行时 cwd、
+Dashboard 显示、复制地址与 Open In 共用。`gitRootPath` 是完整 Git checkout 根目录，仅在
+Workspace 为仓库子目录时保存；缺省时根目录与工作目录相同。Git 身份校验、仓库读取、分支
+恢复、生成路径边界、归档与磁盘清理统一通过 `gitWorktreeRoot(record)` 获取根目录。
+清理确认展示整个 checkout 根目录，避免让用户误以为只会删除子目录。
+
+创建与导入先以 DSH Workspace root 和 Git top-level 的物理路径计算相对目录，再映射到目标
+checkout；不复制或持久化 DSH 原始 root。目标目录不存在时不创建业务文件、不回退到 Git
+根目录，读取 health 投影为 `repair`，绑定和 cwd 解析失败。目录 realpath 必须位于该
+checkout 内；权限和未知 I/O 错误保持 fail closed。
+
+Sidecar v7 接受 v1–v6 历史记录。新子目录记录同时保存工作目录与 Git 根；create journal
+的 `workspacePath` 捕获工作目录，重启恢复沿用获取时的路径。旧记录仅含 Git 根时，在原
+Workspace/Git 可用时按同一规则进行只读路径投影，不自动改写 Sidecar 或 DSH Session；
+mutation token 仍基于持久记录，避免投影变化破坏生命周期门禁。原 Workspace 缺失时维持
+现有只读降级规则。已绑定旧 Session 的原 Git-root cwd 可用于 Host 权限关系校验、Agent
+工具自动注入、发现、投递与回报；Provider 的 `boundSessionCwdMatchesWorktree` 统一比较
+工作目录或该记录的 Git 根的物理身份，只供已验证 active binding 的读取/操作复用。
+`defaultBase` 与 Host-only `readSessionHead` 同样接受旧 cwd，并从已授权 Session 的原始 cwd
+读取实际 checkout HEAD；不得因投影变化读取 Main 或其他 checkout 的 HEAD。Workspace 写入门禁、
+目录可用性、身份、歧义、detached 和 cleaned 检查保持原有规则，任意后代目录不构成匹配。但新绑定
+必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
+
+Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
+`gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
+按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
+使用相对地址，其余 checkout 文件使用 Session 作用域的绝对地址，并遵循 Host 原生访问校验。
+这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
+的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
 
 ### 外部导入（External Import）规则
 
@@ -298,6 +400,25 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 
 ## 10. 权限与安全边界 (Permissions & Security)
 
+- **权限列表追加与生命周期**：
+  `cordis.patch.yml` 不再覆盖 `permission.config`。同包的 `./permission-presets` Host
+  入口注册全局 `internal/config` hook，且仅匹配原生 `permission` entry 的 root fiber
+  与 `@deepseek-ai/dsh-permission-presets` 模块名。`clutchWorktreePermissionPresets` 注入门禁
+  保证首次权限服务激活前 hook 已就绪。hook 在 Loader 表达式解析后读取原生 schema 的
+  默认表，构造只追加 `worktree-full-access` 的新 config，保留其余原始字段与已有同名项，
+  不写 Loader 原始配置或 profile 文件；热重载重新追加，fiber 卸载时撤销 hook 与门禁。
+  bundle 移除时重新解析仍存活的原生权限 fiber；旧 Loader 若残留已撤销的注入依赖，
+  仅删除插件自己的运行时门禁，保留 DSH 静态依赖与原始 entry options。贡献自身 HMR 时，
+  配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
+  官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
+- **Host 可选权限能力生命周期**：
+  `permissionPresets` 与 `sandboxPolicy` 不加入 required inject；旧 profile 缺少服务时 Host
+  仍可加载。Host 通过 adapter options getter 在每次权限调用时读取所属 Cordis Context 的
+  当前能力，而非在构造时捕获对象。权限 manager 完成 Workspace、binding 与物理 cwd 校验
+  后才进入 adapter；迟挂载、撤销、替换及恢复后的重试均读取当下 provider，不调用已卸载实例。
+  同一个 adapter 保留本运行期的权限所有权记录，不能因 provider 替换清掉用户降权证据。
+  Full Access 仍需显式确认；确认期间服务失效时第二次调用 fail closed 并保持可恢复。
+  这不修改原生 preset/default/Auto catalog、Session 身份或 Sidecar。
 - **Worktree Full Access 预设**：
   为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
 - **权限降级与回退**：
@@ -379,14 +500,31 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 状态指示与活动聚合 (StateDot & Aggregate Activity)
 
-- 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核与已完成等状态；
+- Session 身份、标题与 lineage 读取原生 list；运行、pending interaction 对象的 `kind` 与
+  `completionUnread` 通过独立的 `useSessionStatus` root hook 只读接入。UiSession 是完成未读的
+  唯一 owner：非 mainView 观察到停止时产生，打开/再次运行时清除；插件仅派生瞬时呈现，禁止复制到
+  plugin store、原生 list 或 sidecar，禁止以 `running=false` 推断完成。冷启动 idle 不产生完成提醒。
+- 只有 root hook 不存在的 legacy graph 才读取旧 summary 的 `pendingInteraction` / `completed`；
+  原生 status Map 存在但条目缺失时不回退旧提醒。Surface 同时订阅 list 与 status，memo 依赖
+  `byId` 与 status Map 身份；同一投影用于 Sidebar 行、折叠聚合和 Dashboard，不要求 list 更新。
+- `subagentCatalog` 由原生 Controller 投影成包含 catalog-only children 的 `byId` lineage，
+  插件复用既有关系并优先从 status 读取 child running，不新建 catalog 请求或完成状态 owner。
+- 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核、问题与完成未读等状态；
 - 当 Workspace、Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他 pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。
 
 ### Shell Overlay 呈现
 
+- Sidebar 与 Dashboard 共用 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
+  `[data-shell-overlay]`，再从插件 footer action 或公开 Sidebar pane 回溯 frame 直属侧栏；
+  右栏只按 `[data-rightbar-col]` 和 `data-rightbar-collapsed` 定位，不要求物理相邻。Center
+  无公开 marker，通过排除已知栏目及插槽、验证唯一覆盖内容轨道并延伸至 overlay 底部的有限矩形定位，
+  不遮蔽标题栏和 resize handle。Sidebar root 由 New Session 与 footer action 的共同祖先确定，
+  footer 必须有功能插槽锚点；不再猜测首尾子节点。合法的额外壳层节点与栏目 DOM 排序不影响定位。
+  布局变动重新解析锚点，替换时释放旧遮蔽及观察；暂时无尺寸的候选保持观察以支持 resize 恢复。
+  缺失、歧义或无效几何均恢复原生内容。此规则取代历史计划中的位置推断，不改变数据所有权和刷新作用域。
 - Worktree 导航浮层随原生 `data-sidebar-collapsed` 状态同步隐藏，0px 是 desktop 的有效收起宽度，不能回退到旧展开宽度。当前 Sidebar root 与 New Session/footer 锚点动态重测；锚点丢失时浮层零覆盖并恢复原生内容。
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
-- 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载/可重试错误，重试保持 Workspace 作用域，且不展开导航。
+- 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
 - Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
@@ -394,3 +532,113 @@ Refresh scope is determined by the smallest affected identity.
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
 - Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件只在当前 Session 属于目标 Worktree 时通过原生 `openResource` 打开并展开 rightbar，不回退到无关 Session。
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
+
+### 错误通知与恢复入口
+
+Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
+消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并
+附带错误码，原始错误对象继续保留诊断信息。列表顶部不渲染报错窗口或诊断抽屉。
+
+Toast 不截断恢复文案，并给出「设置 → Worktree → 报错与修复」路径。原生 settings.section
+提供概览和报错与修复 Tab，记录包含上下文名称/路径、错误说明、原始诊断与对应重试/恢复操作。
+记录仅存在于浏览器页面内存，最多保留 100 条非活动历史；活动恢复不因历史上限或清除历史丢失。
+源组件卸载时保留诊断但撤销旧回调，并提示重新打开操作视图。错误不再报告时转入历史，不能将此
+等同于操作已修复。Git 相同根因合并 toast，受影响读取各自保留诊断。插件不写入 DSH 日志。
+已知 Workspace 的重试保持目标作用域，只有初始读取、全局重试或无法确定作用域时使用 global。
+错误通知不清空 ready projection，不改变 Session/Workspace 原始数据、Sidecar 持久化边界或
+破坏性操作确认门禁。
+
+## Tool preference isolation (2026-10-10)
+
+Tool settings are Host-owned preferences stored under `clutch-dsh-worktree/tool-settings/`,
+separate from Workspace relationship shards. `general.json` controls `/cluworktree` registration
+and selection; `locals/ws-<encoded-workspace-id>.json` controls Local/Main automatic injection,
+and per-Workspace/per-Worktree files control bound Worktree injection independently.
+All default off, and empty selection disables the switch. No Session metadata or business
+files are changed. Updates serialize with expected-value checks and atomic, file-synced publication.
+Agent registrations are runtime-only and additive: automatic selection and command selection
+form a deduplicated union. Changing settings affects future injection, with active tools retained
+until Agent disposal. Prompt-assembly injection validates native ownership and physical cwd. Unbound
+Sessions at the Workspace root use Local/Main preferences; an active binding uses that Worktree's
+preferences and requires healthy availability. Detached or ambiguous bindings never use Local preferences.
+Delegated Sessions default to result reporting only; other tools follow explicit preferences or
+command activation. Reporting guidance remains independent of delegation guidance.
+
+### Task-scoped reporting and callback control (2026-10-10)
+
+`src/tool/delegation.ts` owns a runtime-only registry of Agent routes, ancestry, dispatch identities
+and in-memory report tokens. It observes newly appended native `user/message` inputs, using the native
+source `rpcId` to match Host-recorded admission identities; model-authored text never grants authority.
+Tasks become active only after their dispatched input is consumed. A parent follow-up within an
+unfinished task retains that task; a fresh follow-up after closure creates a new task identity.
+Completed dispatch retries do not reopen reporting, and a retry cannot change destination, content
+or mode. Direct human input or an unrelated plugin message closes remaining task authorization.
+
+Each delegated Agent keeps its reporting tool, SDK and conditional guidance for its lifetime,
+preserving the prompt prefix across token consumption and parent follow-ups. The Host issues an
+opaque internal token object; no token is exposed to the model or written to a prompt, Session
+metadata or Sidecar. The stable handler resolves the current token once per invocation, then
+rechecks that same identity after asynchronous ownership/cwd validation. Concurrent calls reserve
+the token synchronously before native admission. All three successful report outcomes consume it,
+clear its attempt/payload and unlink it from the route and every dispatch record. Old in-flight
+settlement cannot consume a replacement token. Calls without a token fail with `REPORT_TASK_CLOSED`.
+Uncertain failure retains one exact requestId/payload attempt for an identical retry; cancellation
+releases the in-flight flag without restoring a fresh report budget. A supplied report retry id
+must belong to this token's prior attempt. Every actual admission still revalidates Workspace
+membership, physical cwd and binding health.
+
+The provenance/dispatch retry registry holds at most 512 entries. Prompt content and mode are
+represented by SHA-256 digests; report payloads are never stored there. When full, it evicts the
+oldest entry without a live token. If all entries refer to live tokens, admission fails explicitly
+with `DELEGATION_CAPACITY`; live input provenance is never silently evicted. A supplied dispatch
+retry id absent from memory fails with `DELEGATION_RETRY_EXPIRED`, so eviction cannot reissue a
+token or allow altered retries. Report source ids use the plugin prefix and need no historical
+report registry entry. Ancestry is bounded to 64 levels. Routes and stable tools last only as long
+as their live Agents; Agent/scope disposal removes route and related dispatch entries and revokes
+child tokens whose parent disappeared. Plugin disposal clears all containers. A WeakSet records
+dead Agent objects without retaining them, preventing asynchronous setup from resurrecting one.
+Registration rollback releases state without marking a still-live native Agent dead. There are
+no cleanup timers or persistent task files. Memory scales with live Agents and bounded ancestry,
+one token/attempt per delegated Agent, and the bounded dispatch registry, rather than report history.
+
+Newly consumed reports and ordinary plugin messages block `clutch_send_message` and
+`clutch_span_worktree` until human input or a valid parent task dispatch supplies new work.
+Report forwarding for a still-active parent task remains one-shot, allowing finite nested result
+chains. Self and ancestor message destinations are rejected; ancestry is captured independently
+of intermediate Agent disposal. Native append events are observed globally and scope registrations
+are installed before admission. Historical surface replacements are ignored. Human input in a
+mixed input batch takes precedence, while the callback block survives empty later turns.
+Unknown native admissions with the plugin's requestId prefixes fail closed after restart.
+These constraints govern this plugin's tools; they do not intercept other plugins or mutate DSH
+metadata, history, Sidecar facts, business files or native message content. Agent/plugin disposal
+clears runtime authority; no listener infers or fabricates task completion. Restart deliberately
+loses tokens; continuing automatic reporting requires a fresh parent dispatch.
+
+The native loop collects prompt providers before its assembly waterfall, then runs pre-step.
+Injection at pre-step therefore misses request 1 and edits the request prefix at request 2.
+The plugin now intercepts `system-prompt/assemble` with a prepended middleware and, only when
+registration changes, reassembles once using an invocation-local Symbol marker. This refreshes
+schemas, PTC SDK and guidance together before the first request; downstream transformers run
+once on the fresh assembly. Concurrent requests have independent markers and compare the catalog
+size across initialization. No caller signal is retained across turns. Explicit later capability
+changes can still change the request prefix.
+
+Guidance prefers enabled `clutch_*` capabilities for managed Worktree operations. A create-and-fix
+request defaults to `clutch_new_worktree` followed by `clutch_span_worktree`, delegating edits,
+setup and verification. Creation-only selections explain missing delegation instead of substituting
+another plugin's tools. Explicit user workflow or tool choices take precedence.
+Successful delegation/follow-up admission ends the delegator's current turn after acknowledgement,
+unless the user requested other independent work. Until a pushed report arrives, guidance prohibits
+substitute monitoring via agent lists, shell/Git/file checks, tests, edits or commits. Explicit human
+status/investigation requests and concrete admission failures permit targeted action. Report evidence
+is evaluated without automatically rerunning verification, except for a human request or concrete gap.
+Model selection remains explicit or inherited; it does not impose catalog discovery on default dispatch.
+The scoped section uses the native registry; critical handoff/model rules are also in tool descriptions
+because complete personas such as minimal suppress extra sections. The plugin does not append to,
+rewrite, or bypass the preset's complete prompt.
+
+The browser's private Conversation activity target observes only native `cluworktree`
+command-run records. It lets new Sessions leave the Hero before any model Turn while native
+Chat owns the sole result row. Already-retained binding generations activate this target;
+unload removes its Definitions and pending activation. No Session metadata, history,
+Host lifecycle events, or Sidecar facts are written by this presentation projection.

@@ -39,6 +39,10 @@ pnpm run build
 
 ### 3.1 构建插件包
 
+Client 的 Worktree 设置入口依赖原生 `@deepseek-ai/dsh-client-ui-settings`（rc.1 基线）。
+`dsh-slot-contract.ts` 收敛其 `settings.section` 的最小 owner 契约，避免 Host 生成加载
+设置包的 Remote 类型图；运行时通过 DSH 现有 slot 注册，不新增 Host 设置存储。
+
 在 `clutch-dsh` monorepo 根目录执行：
 
 ```bash
@@ -49,7 +53,16 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 
 构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。Typert Host 分析通过 `tsconfig.host.json` 将 DSH Client Locale 和 Workspace 的类型导入映射到 `scripts/typert-client-locale-meta.d.ts` 与 `scripts/typert-client-ui-workspace-meta.d.ts`。这些 build-only projection 只描述 Worktree 实际使用的 Context 服务，避免 Host 生成时递归载入 Client UI 的 API-remotes 类型图；普通 Client 类型检查和运行时类型仍使用 DSH 的真实模块，Worktree Client 仍只通过现有 `/api` Connection 通信。
 
+Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-path` 的官方
+`fileAddressFor`。该 browser-safe helper 随 Client bundle 打包，不新增 Host 注入服务。
+
 ### 3.2 将本地插件添加到 DSH Profile
+
+bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
+`internal/config` hook 在原生权限 entry 激活前追加 Worktree preset，不替换
+`permission.config`、不复制内置表、不修改官方 Auto review 注册。`--dump-config`
+展示保留的原始权限配置与注入门禁；追加项在运行时 config 中生效。验证权限集成时，应同时
+检查自定义 presets/defaultPreset 保留、Auto review 共存、热重载不重复和卸载撤销。
 
 使用绝对路径将构建出的插件包注册至 DSH 的 web profile 中：
 
@@ -85,6 +98,32 @@ pnpm dsh web --port 3088 --no-open
 
 ### 3.3 开发迭代与重载
 
+`/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
+`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
+真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将
+Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
+Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
+
+```bash
+node --test test/worktree-tools.test.mjs test/worktree-tool-session.test.mjs test/worktree-tool-changes.test.mjs
+node --test test/worktree-tool-schema.test.mjs
+```
+
+工具实现集中在 `src/tool/`，每个工具一个文件，随主 package 通过 TypeScript 正常构建。
+原生命令入口与 `systemPrompt.assemble({ scope: agent })` 集成测试验证调用方六个工具及执行方回报工具进入
+模型请求，并验证普通任务委派指导的作用域。Host 模块需重新构建后重载或重启；页面刷新无法替换服务端已载入的模块。
+
+工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
+使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
+原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
+该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
+确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
+
+参数 schema 使用 DSH 支持的子集。测试通过真实 `assertSupportedJsonSchema`、
+`jsonSchemaToTs`、`renderToolsSdk` 验证全部工具参数不会退化为 unknown，必填的回报 status/summary
+与可选参数正确呈现；长度限制放在字段描述中，由执行时的 Zod 校验。互斥 target 投影为 oneOf，
+重叠 union 或不支持的未来 schema 关键字必须显式失败，不能静默丢失参数信息。
+
 修改代码后，重新构建插件包并重启 DSH：
 
 ```bash
@@ -96,6 +135,49 @@ pnpm dsh web
 ```
 
 > **提示：** 若修改了 `package.json`、`cordis.patch.yml` 或 profile bundle 成员，需重新执行一次 `pnpm dsh plugin --profile web add ...`。
+
+Host 的可选权限服务通过调用时 Context getter 读取。权限 provider 迟挂载、撤销或替换
+不要求重启 Worktree Host；服务恢复后重试仍需经过原有绑定检查与显式确认。普通
+fiber restart / Entry.update 测试不等于文件 watcher/module-graph HMR。
+
+权限生命周期定向回归（先构建本包）：
+
+```bash
+node --test test/host-permission-lifecycle.test.mjs test/permission-preset-append.test.mjs
+```
+
+可选真实 HMR 接缝实验需要现有、兼容的 Cordis/Loader/Timer/HMR node_modules 图与
+支持 `--expose-internals` 的 Node（已用 Node 24 验证）：
+
+```bash
+node --expose-internals test/manual/permission-preset-hmr.mjs /absolute/path/to/existing/node_modules
+```
+
+该实验只读取所指定的已安装模块，写入并清理自己创建的临时 fixture 包及链接；不启动
+DSH/GUI，不修改任何现有安装链接或 profile。它使用本包真实子入口 export、贡献实现、
+实际 HMR watcher 和 Node module cache，并连接真实 Host 构造函数与确认 controller；
+native permission/Auto 和外围 I/O 仍是 fixture。实验同时支持旧版
+`@deepseek-ai/cordis-plugin-hmr` 与 Desktop 的 `@deepseek-ai/dsh-hmr`，并检查包名子入口
+与绝对 file URL 的模块身份一致。已验证旧图 Cordis 4.0.2 / Loader 1.0.3 / HMR 1.0.17，
+以及实际 Desktop Electron Node 24.18.1 / Cordis 4.0.4 / Loader 1.0.5 / DSH HMR 0.2.0-rc.2
+的 10 轮贡献与 native fixture 重载、服务替换及卸载；不代表生产完整 profile 或 DOM
+验证。无匹配 watcher、没有重建或生产安装指向另一工作区时，本分支 build 不会更新
+当前 GUI。历史证据见 [权限生命周期计划](plans/2026-10-07-permission-lifecycle.md)。
+
+热安装问题的三条独立诊断命令（先构建本包）如下。这些是**故意红色**的可选 repro，
+不属于默认单元测试：
+
+```bash
+node test/manual/permission-preset-market.mjs /absolute/path/to/dshmarket/lib/hot.js
+node test/manual/permission-preset-late-install.mjs
+node --expose-internals test/manual/permission-preset-native.mjs /absolute/path/to/existing/node_modules
+```
+
+最后一条使用真实 native permission provider/schema，但外围 Session/projection/I/O 是
+隔离端口；它反证直接 `fiber.update(raw, true)` 在已有 Auto Session 时的重配安全性。
+Desktop ASAR 图需以对应 Electron 可执行文件的 `ELECTRON_RUN_AS_NODE=1` 模式运行。
+实际命令、结果、修复阻塞及所需原生扩展接缝见
+[Desktop 热安装诊断](plans/2026-10-10-permission-presets-hot-install-diagnosis.md)。
 
 ### 3.4 卸载本地插件
 
@@ -190,15 +272,43 @@ pnpm run check:workspace
 # 2. Cordis patch 校验
 pnpm run check:patches
 
-# 3. TypeScript 类型检查
+# 3. ESLint 检查（包含 src 与 test）
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+
+# 4. TypeScript 类型检查
 pnpm --filter @cerbur/clutch-dsh-worktree typecheck
 
-# 4. 插件包构建
+# 5. 插件包构建
 pnpm --filter @cerbur/clutch-dsh-worktree build
 
-# 5. 单元测试与集成测试
+# 6. 单元测试与集成测试
 pnpm --filter @cerbur/clutch-dsh-worktree test
 ```
+
+包级 `lint` 使用 `eslint src test`，同时覆盖源码与测试。ESLint error 必须在提交前修复；
+运行测试、构建或 typecheck 不能替代该检查。例如，Node 测试使用 `URL` 时须从 `node:url`
+显式导入，即使 Node 运行时也提供同名全局变量。
+
+### Session 完成提醒回归
+
+完成提醒测试必须跨越真实原生状态 owner，不能只给旧 summary 填 `completed=true`。
+`test/client-native-session-status.test.mjs` 加载已安装的 UiSession Client handoff，使用真实
+Cordis Context、snapshot store 与 SlotRegistry root source，触发 `api-session/status` 和
+mainView retention 的 list 回放，再执行生产 Surface hook 与行/Dashboard JSX。平台 widget 和
+DOM geometry 使用 browser-free adapter；hook scheduler 保留订阅与 memo 依赖，status-only
+用例不更换 `byId`，不靠强制重渲染掩盖缺失订阅。
+
+在 monorepo 根构建，再在包目录运行紧反馈回归：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree build
+cd packages/clutch-dsh-worktree
+node --test test/client-native-session-status.test.mjs
+```
+
+覆盖非当前完成、打开/再次运行清除、冷启动 idle、pending 优先级、折叠 Worktree/Workspace、
+Dashboard、legacy fallback 以及 catalog-only lineage。没有 `dev:web` watcher 时，本地 build
+不会自动更新已运行的生产 GUI；测试回放不表示已部署，不应为验证此回归修改生产 profile 或重启生产。
 
 ### README 双语结构与格式校验
 
@@ -249,3 +359,9 @@ description:
 ```
 
 外部准入指标（如 GitHub 仓库 topic `dsh-plugin`、仓库注册时间、commit 数量等）由市场维护规范决定。
+
+工具偏好回归覆盖通用指令注册开关、Local/Main 与 Worktree 自动注入及隔离、交集去重、派生 Session 仅回报默认值、
+首轮 prompt/SDK/指导完整性与第二轮稳定性、并发组装、取消、下游 waterfall 单次变换和创建后默认委派指导，
+独立配置文件、并发冲突与损坏文件保护。`node --test test/tool-settings.test.mjs test/worktree-tools.test.mjs`
+可定向运行；两处 UI 使用同一 browser-safe 配置接口，不读本地文件。配置修改无需重启，Host 更新通用
+命令注册，Agent 在执行前按当前绑定读取 Local/Main 或 Worktree 配置；已加载工具保留至 Agent 结束。

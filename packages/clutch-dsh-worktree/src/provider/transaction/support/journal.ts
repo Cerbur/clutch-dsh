@@ -1,3 +1,4 @@
+import { gitWorktreeRoot } from '../../../contract/index.js';
 import { randomUUID } from 'node:crypto';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
@@ -51,10 +52,11 @@ export function recordForCreate(input: CreateWorktreeTransactionInput): Worktree
   return {
     worktreeId: input.worktreeId,
     workspaceId: input.workspaceId,
-    absolutePath: input.targetPath,
+    absolutePath: input.workspacePath ?? input.targetPath,
+    ...(input.workspacePath === undefined || input.workspacePath === input.targetPath ? {} : { gitRootPath: input.targetPath }),
     branch: input.targetBranch,
     createdAt: new Date().toISOString(),
-    baseBranch: input.baseBranch,
+    ...(input.baseBranch === undefined ? {} : { baseBranch: input.baseBranch }),
     ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
     source: 'plugin',
     status: 'active',
@@ -72,8 +74,9 @@ export function pendingCreate(
     workspaceId: input.workspaceId,
     worktreeId: input.worktreeId,
     targetPath: input.targetPath,
+    ...(input.workspacePath === undefined ? {} : { workspacePath: input.workspacePath }),
     branch: input.targetBranch,
-    ...(input.newBranch !== undefined ? { baseRef: input.baseBranch } : {}),
+    ...(input.newBranch !== undefined ? { baseRef: input.baseBranch ?? `${input.baseCommit}^{commit}` } : {}),
     ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
     repositoryFingerprint: createRepositoryFingerprint(repository),
     startedAt: new Date().toISOString(),
@@ -91,7 +94,7 @@ export function pendingRemove(
     phase: 'executing',
     workspaceId: input.workspaceId,
     worktreeId: input.worktreeId,
-    targetPath: record.absolutePath,
+    targetPath: gitWorktreeRoot(record),
     branch: record.branch,
     source: record.source,
     repositoryFingerprint: createRepositoryFingerprint(repository),
@@ -110,7 +113,7 @@ export function pendingClean(
     phase: 'executing',
     workspaceId: input.workspaceId,
     worktreeId: input.worktreeId,
-    targetPath: record.absolutePath,
+    targetPath: gitWorktreeRoot(record),
     branch: record.branch,
     source: record.source,
     repositoryFingerprint: createRepositoryFingerprint(repository),

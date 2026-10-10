@@ -1,7 +1,7 @@
 import { lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { WorktreeRecord } from '../contract/index.js';
+import type { WorktreeErrorDetails, WorktreeRecord } from '../contract/index.js';
 import {
   type DshSessionSummary,
   type DshWorkspaceSummary,
@@ -12,6 +12,7 @@ import {
 } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { samePhysicalPath } from '../provider/path-identity.js';
+import { projectWorktreePath, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 
 export { samePhysicalPath };
 
@@ -285,6 +286,28 @@ export async function assertSessionMatchesWorkspace(
       sessionProjectId: session.projectId ?? '',
     });
   }
+}
+
+/** Resolve old Git-root records through current DSH/Git facts; new records already capture the directory. */
+export async function resolveWorktreeWorkspaceRecord(
+  context: WorktreeManagerContext,
+  workspace: DshWorkspaceSummary,
+  record: WorktreeRecord,
+  details: WorktreeErrorDetails = {},
+): Promise<WorktreeRecord> {
+  const repositoryRoot = record.gitRootPath === undefined && context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+    : workspace.rootPath;
+  const projected = await projectWorktreePath(record, workspace.rootPath, repositoryRoot);
+  if (!(await worktreeWorkspaceAvailable(projected))) {
+    throw providerError('WORKTREE_NOT_FOUND', 'Workspace directory is unavailable inside the Worktree', {
+      ...details,
+      workspaceId: workspace.workspaceId,
+      worktreeId: record.worktreeId,
+      absolutePath: projected.absolutePath,
+    });
+  }
+  return projected;
 }
 
 export type { SidecarSnapshot };

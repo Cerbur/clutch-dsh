@@ -68,14 +68,15 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
         preserveCurrent: true,
       });
     } catch (error) {
-      if (error instanceof WorktreeSessionBindingError && error.retryable) {
-        setPendingSessionBinding({ ...input, sessionId: error.sessionId });
+      if (error instanceof WorktreeSessionBindingError) {
+        setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: toWorktreeViewError(error) });
       }
       if (error instanceof WorktreeSessionPermissionError && error.retryable) {
         setPendingSessionBinding({
           ...input,
           sessionId: error.sessionId,
           permissionRequired: true,
+          error: toWorktreeViewError(error),
         });
       }
       setActionError(toWorktreeViewError(error));
@@ -84,7 +85,8 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     }
   };
   const retrySessionBinding = async (): Promise<void> => {
-    if (manager === undefined || pendingSessionBinding === undefined || pendingSessionArchived)
+    if (manager === undefined || pendingSessionBinding === undefined || pendingSessionArchived ||
+      pendingSessionBinding.error?.retryable === false)
       return;
     const pending = pendingSessionBinding;
     setActionPending(true);
@@ -108,9 +110,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
         preserveCurrent: true,
       });
     } catch (error) {
-      if (error instanceof WorktreeSessionBindingError && !error.retryable) {
-        setPendingSessionBinding(undefined);
-      }
+      setPendingSessionBinding({ ...pending, error: toWorktreeViewError(error) });
       setActionError(toWorktreeViewError(error));
     } finally {
       setActionPending(false);
