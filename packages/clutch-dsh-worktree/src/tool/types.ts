@@ -4,6 +4,7 @@ import type { WorktreeToolSessionPort } from './native-session.js';
 import type { WorktreeManagerService } from '../manage/index.js';
 import type { DshReadAdapter } from '../provider/types.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
+import type { DelegationControl } from './delegation.js';
 export type { WorktreeRecord } from '../contract/index.js';
 
 export interface CallingAgent {
@@ -50,8 +51,9 @@ export interface ToolDefinition {
 export interface ToolContext {
   agent: CallingAgent;
   options: Options;
-  parentSessionId?: string;
-  enableChild?: (sessionId: string, exec: Execution) => Promise<void>;
+  delegation: DelegationControl;
+  enableChild?: (sessionId: string, requestId: string, prompt: string, mode: string, exec: Execution) => Promise<void>;
+  prepareMessage?: (sessionId: string, requestId: string, prompt: string, mode: string, exec: Execution, retry: boolean) => Promise<void>;
   check(exec: Execution): void;
   scope(requested?: string): Promise<string>;
   add<Schema extends z.ZodType>(
@@ -60,5 +62,5 @@ export interface ToolContext {
     schema: Schema,
     outputSchema: unknown,
     execute: (args: z.output<Schema>, exec: Execution) => Promise<unknown>,
-  ): void;
+  ): () => void;
 }

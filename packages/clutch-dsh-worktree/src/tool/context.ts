@@ -109,6 +109,7 @@ export function createToolContext(
   options: Options,
   check: ToolContext['check'],
   add: ToolContext['add'],
+  delegation: ToolContext['delegation'],
 ): ToolContext {
   const scope = async (requested?: string) => {
     const workspaceId = await toolWorkspace(agent.session.id, options);
@@ -116,5 +117,5 @@ export function createToolContext(
       throw new Error('Workspace is outside the calling Session scope');
     return workspaceId;
   };
-  return { agent, options, check, add, scope };
+  return { agent, options, check, add, scope, delegation };
 }

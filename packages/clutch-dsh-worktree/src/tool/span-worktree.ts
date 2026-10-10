@@ -60,6 +60,7 @@ export function registerSpanWorktree(context: ToolContext): void {
       ['workspaceId', 'worktreeId', 'sessionId', 'status', 'model', 'requestId'],
     ),
     async (args, exec) => {
+      context.delegation.assertDispatch(agent);
       const workspaceId = await scope();
       const worktreeId = 'worktreeId' in args ? args.worktreeId : undefined;
       const name = 'name' in args ? args.name : undefined;
@@ -76,6 +77,7 @@ export function registerSpanWorktree(context: ToolContext): void {
         exec.signal,
       );
       check(exec);
+      context.delegation.assertDispatch(agent);
       const { sessionId } = await options.sessions.create({ cwd: record.absolutePath });
       let status = 'binding-failed';
       let error: string | undefined;
@@ -98,7 +100,7 @@ export function registerSpanWorktree(context: ToolContext): void {
         status = 'reporting-failed';
         if (!context.enableChild)
           throw new Error('Delegated Session reporting setup is unavailable');
-        await context.enableChild(sessionId, exec);
+        await context.enableChild(sessionId, requestId, args.prompt, 'queue', exec);
         status = 'prompt-failed';
         check(exec);
         await options.sessions.prompt(

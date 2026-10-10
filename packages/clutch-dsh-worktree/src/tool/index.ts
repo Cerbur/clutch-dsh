@@ -15,6 +15,7 @@ import { registerReportResult } from './report-result.js';
 import { registerToolGuidance } from './guidance.js';
 import { actionableError } from './errors.js';
 import { toolParameters } from './schema.js';
+import { DelegationControl } from './delegation.js';
 const jsonProjection = (value: unknown): Record<string, unknown> =>
   JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 export { createWorktreeToolSessionPort } from './native-session.js';
@@ -29,10 +30,12 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     parentSessionId?: string;
   };
   const enabled = new Map<CallingAgent, State>();
+  const delegation = new DelegationControl();
   const lifetime = new AbortController();
   ctx.effect(
     () => async () => {
       lifetime.abort(new Error('Worktree plugin is disposed'));
+      delegation.clear();
       await Promise.all([...enabled.values()].map(({ fiber }) => fiber.dispose()));
       enabled.clear();
     },
@@ -40,11 +43,17 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
   );
   (
     ctx as unknown as {
-      on(event: 'agent/disposed', listener: (input: { agent: CallingAgent }) => void): unknown;
+      on(event: 'agent/disposed', listener: (input: { agent: CallingAgent }) => void, options: { global: true }): unknown;
     }
-  ).on('agent/disposed', ({ agent }) => {
+  ).on('agent/disposed', async ({ agent }) => {
+    const state = enabled.get(agent);
+    delegation.dispose(agent);
     enabled.delete(agent);
-  });
+    await state?.fiber.dispose();
+  }, { global: true });
+  (ctx as unknown as {
+    on(event: 'session/event', listener: (session: { id: string }, event: { type: string; data: unknown; surfaceOp?: string }) => void, options: { global: true }): unknown;
+  }).on('session/event', (session, event) => delegation.event(session.id, event), { global: true });
 
   const enable = async (
     agent: CallingAgent,
@@ -53,15 +62,18 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     parentSessionId?: string,
   ): Promise<number> => {
     signal.throwIfAborted();
+    delegation.assertAlive(agent);
     if (lifetime.signal.aborted || options.isDisposed())
       throw new Error('Worktree plugin is disposed');
     await toolWorkspace(agent.session.id, options);
     signal.throwIfAborted();
+    delegation.assertAlive(agent);
     const existing = enabled.get(agent);
     if (existing) {
       await existing.fiber;
       signal.throwIfAborted();
       lifetime.signal.throwIfAborted();
+      delegation.assertAlive(agent);
       return existing.add!(names, parentSessionId);
     }
     const state = { names: new Set<string>(), parentSessionId } as State;
@@ -109,14 +121,34 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
           },
         });
         transaction.push(dispose);
+        return dispose;
       };
-      const context = createToolContext(agent, options, check, add);
-      context.enableChild = async (sessionId, exec) => {
+      const context = createToolContext(agent, options, check, add, delegation);
+      delegation.register(agent);
+      scoped.effect(() => () => {
+        delegation.release(agent);
+        if (enabled.get(agent) === state) enabled.delete(agent);
+      }, 'clutch-dsh-worktree: token cleanup');
+      context.enableChild = async (sessionId, requestId, prompt, mode, exec) => {
         check(exec);
         const child = await options.sessions.resolveAgent(sessionId, exec.signal);
+        // Initialize the scope before installing a task-bound reporting handler.
+        await enable(child, exec.signal, []);
+        delegation.prepareTask(agent, child, requestId, prompt, mode);
         await enable(child, exec.signal, ['clutch_report_result'], agent.session.id);
         await autoEnable(child, exec.signal);
         check(exec);
+      };
+      context.prepareMessage = async (sessionId, requestId, prompt, mode, exec, retry) => {
+        delegation.assertDispatch(agent, sessionId);
+        if (retry) delegation.assertRetry(requestId);
+        if (delegation.child(agent, sessionId))
+          await context.enableChild!(sessionId, requestId, prompt, mode, exec);
+        else {
+          const target = await options.sessions.resolveAgent(sessionId, exec.signal);
+          await enable(target, exec.signal, []);
+          delegation.trackMessage(agent, sessionId, requestId, prompt, mode);
+        }
       };
       const registrations: Record<WorktreeToolId, (input: typeof context) => void> = {
         clutch_new_worktree: registerNewWorktree,
@@ -138,7 +170,6 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         const previousParent = state.parentSessionId;
         try {
           if (parent !== undefined) state.parentSessionId = parent;
-          context.parentSessionId = state.parentSessionId;
           for (const name of missing) {
             if (name === 'clutch_report_result') registerReportResult(context);
             else registrations[name as WorktreeToolId](context);
@@ -148,7 +179,6 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         } catch (error) {
           for (const dispose of transaction.reverse()) dispose();
           state.parentSessionId = previousParent;
-          context.parentSessionId = previousParent;
           throw error;
         }
       };
@@ -160,9 +190,11 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
       signal.throwIfAborted();
       if (lifetime.signal.aborted || options.isDisposed())
         throw new Error('Worktree plugin is disposed');
+      delegation.assertAlive(agent);
       return state.add!(names, parentSessionId);
     } catch (error) {
       enabled.delete(agent);
+      delegation.release(agent);
       await fiber.dispose();
       throw error;
     }

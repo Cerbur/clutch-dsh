@@ -127,16 +127,19 @@ native step-boundary admission. New messages get independent ids, while an expli
 the same message through native deduplication. Native failures return `prompt-failed` with the
 retry id even when acceptance is uncertain. Acceptance is not execution or task completion.
 
-`clutch_report_result({ status, summary, evidence?, requestId? })` is registered only for newly
-delegated Agents. Its fixed destination lives in the Agent-scoped registration closure; no native
+`clutch_report_result({ status, summary, evidence?, requestId? })` is registered for delegated
+Agents. Its destination and one-shot authority come from the current in-memory token; no native
 lineage or Sidecar task facts are written. Before admission, both source and recipient are
 reauthorized in the same Workspace, including binding, physical cwd and the strict root gate.
 The report is a normal queued native message with a Host-authored source id and the Agent's
 completed/blocked/failed claim. Summary and evidence are each capped at 2,000 characters.
 Reports are model-driven and may not arrive after crashes/stops or while awaiting human input.
 They are claims requiring verification; no turn/end listener invents task success. The caller
-must not auto-reply to each report. Follow-up work can send a fresh report. Admission failure
-preserves requestId for identical retries. Plugin/Agent restart removes routing and guidance;
+must not auto-reply to each report. Successful admission of any outcome consumes and clears the
+token; the reporting tool, SDK and guidance stay stable. Only a new parent dispatch can open reporting again;
+direct user interaction closes old authorization. Admission failure preserves requestId and exact
+payload for identical retries, with a synchronous reservation preventing concurrent duplicates.
+Plugin/Agent restart removes routing and guidance;
 a resumed Session may enable `/cluworktree` and manually use `clutch_send_message` with the known
 delegator id. Existing Sessions are not retroactively assigned a reporting destination.
 
@@ -173,6 +176,37 @@ Delegated Agents receive only `clutch_report_result` and reporting guidance by d
 Explicit Worktree preferences can add selected delegation capabilities before prompt admission;
 `/cluworktree` adds the General selection without replacing fixed-destination reporting.
 Reporting destinations remain runtime-only. This supersedes the original all-tools child policy.
+
+## Task-scoped report and callback amendment (2026-10-10)
+
+This supersedes the 2026-10-09 Agent-lifetime reporting policy and its instruction to report after
+every follow-up. A task must consume its native dispatch input before reporting, and has one report
+admission budget for `completed`, `blocked` or `failed`. Human input and unrelated plugin messages
+invalidate that budget. Explicit parent follow-ups rearm closed tasks; retries of old dispatches
+never do. Native input source `rpcId` matches Host-recorded request identities without modifying
+native messages or reading transcripts to poll task progress.
+
+Code rejects message destinations that are the caller or any ancestor. A turn consuming only
+reports or ordinary plugin messages cannot dispatch more messages/tasks through these tools;
+fresh human input or a valid parent task restores dispatch. An active nested task can forward its
+own result once. Historical surface replacement is ignored; callback blocking survives empty turns,
+and unknown plugin requestId prefixes after restart remain blocked. Both native and PTC execution
+use the same guards, including stale tool handles. Other plugins' tools are outside this boundary.
+The registry and guards are documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Regression coverage exercises outcome closure, direct human interaction, parent follow-up rearming,
+old dispatch retries, exact report retries, concurrent report reservation, input consumption,
+unrelated messages, ancestor cycles and stable native/PTC prompt assemblies across token consumption.
+
+The in-memory-token refinement supersedes tool removal: issued tokens never enter prompts or
+persisted data. Consumed tokens and report bodies are unlinked immediately. A report invocation
+captures its token before awaits and reserves it atomically before admission, so delayed validation
+or settlement cannot use/spend a replacement token. One uncertain attempt retains only its exact
+retry payload. Agent disposal (including a parent) revokes associated tokens; plugin unload clears
+all state. Dispatch retry provenance is bounded to 512 entries and stores prompt/mode digests,
+with no spent-token references. Live token entries are protected; full capacity fails explicitly.
+Expired retry ids fail closed, and ancestry is limited to 64 levels. Stress tests run thousands of
+report cycles and inspect retaining containers, alongside disposal and concurrency race tests.
 
 The 2026-10-10 real-session timing correction supersedes pre-step tool injection:
 in a real-session reproduction, the initial system message at seq 10
