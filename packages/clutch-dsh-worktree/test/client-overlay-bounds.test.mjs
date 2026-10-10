@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FrameElement, appFrameFixture } from './app-frame-fixture.mjs';
 
 import { computeOverlayBounds } from '../lib/client/overlay/overlay-bounds.js';
 import {
@@ -10,20 +11,12 @@ import {
 } from '../lib/client/overlay/sidebar-overlay-geometry.js';
 
 test('unwraps the display-contents sidebar slot before measuring the native root', () => {
-  const nativeRoot = {
-    firstElementChild: null,
-    getBoundingClientRect: () => ({ width: 280, height: 813 }),
-  };
-  const slotWrapper = {
-    firstElementChild: nativeRoot,
-    getBoundingClientRect: () => ({ width: 0, height: 0 }),
-  };
-  const sidebar = {
-    firstElementChild: slotWrapper,
-    getBoundingClientRect: () => ({ width: 280, height: 813 }),
-  };
-
-  assert.equal(resolveNativeSidebarRoot(sidebar), nativeRoot);
+  const { sidebar, root } = appFrameFixture();
+  const slotWrapper = new FrameElement();
+  slotWrapper.rect = { ...slotWrapper.rect, width: 0, height: 0 };
+  slotWrapper.append(root);
+  sidebar.append(slotWrapper);
+  assert.equal(resolveNativeSidebarRoot(sidebar), root);
 });
 
 test('prefers the visible New Session button when the logo shortcut shares its label', () => {
@@ -112,6 +105,18 @@ test('tracks replacement geometry anchors with the ResizeObserver', () => {
   assert.equal(current, undefined);
 });
 
+test('bounds never extend past the shell overlay or contain non-finite metrics', () => {
+  assert.deepEqual(computeOverlayBounds(
+    { top: 100, bottom: 700 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: true, top: 160, height: 440 });
+  assert.deepEqual(computeOverlayBounds(
+    { top: NaN, bottom: 900 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: false, top: 0, height: 0 });
+  assert.deepEqual(computeOverlayBounds(
+    { top: 100, bottom: 100 }, { top: 260, bottom: 298 }, { top: 820, bottom: 900 },
+  ), { ready: false, top: 0, height: 0 });
+});
+
 function sidebarFixture() {
   const element = (top, bottom) => ({
     parentElement: null,
@@ -158,10 +163,10 @@ test('resolves nested footer-slot action without assuming it is the last child',
   );
 });
 
-test('uses a validated last child when the plugin marker is absent', () => {
-  const { root, newSession, footer } = sidebarFixture();
+test('does not guess the footer from an unmarked last child', () => {
+  const { root, newSession } = sidebarFixture();
   root.action = null;
-  assert.equal(resolveSidebarFooter(root, newSession), footer);
+  assert.equal(resolveSidebarFooter(root, newSession), undefined);
 });
 
 test('does not guess a footer when the marker is inside the content subtree', () => {
@@ -176,31 +181,25 @@ for (const [name, rect] of [
   ['outside root', { top: 800, bottom: 950 }],
   ['non-finite geometry', { top: NaN, bottom: 840 }],
 ]) {
-  for (const marked of [true, false]) {
-    test('rejects ' + name + ' as ' + (marked ? 'marked' : 'legacy') + ' footer', () => {
-      const { root, newSession, footer } = sidebarFixture();
-      if (!marked) root.action = null;
-      footer.getBoundingClientRect = () => rect;
-      const resolved = resolveSidebarFooter(root, newSession);
-      assert.equal(resolved, undefined);
-      assert.deepEqual(
-        computeOverlayBounds({ top: 100, bottom: 900 }, newSession.getBoundingClientRect(), resolved),
-        { ready: false, top: 0, height: 0 },
-      );
-    });
-  }
+  test('rejects ' + name + ' as a marked footer', () => {
+    const { root, newSession, footer } = sidebarFixture();
+    footer.getBoundingClientRect = () => rect;
+    const resolved = resolveSidebarFooter(root, newSession);
+    assert.equal(resolved, undefined);
+    assert.deepEqual(
+      computeOverlayBounds({ top: 100, bottom: 900 }, newSession.getBoundingClientRect(), resolved),
+      { ready: false, top: 0, height: 0 },
+    );
+  });
 }
 
 test('rejects a footer before the content in DOM order even if its geometry looks valid', () => {
   const { root, content, newSession, footer } = sidebarFixture();
   root.children = [footer, content];
   assert.equal(resolveSidebarFooter(root, newSession), undefined);
-  root.action = null;
-  root.lastElementChild = footer;
-  assert.equal(resolveSidebarFooter(root, newSession), undefined);
 });
 
-test('does not use the content itself as the last-child fallback', () => {
+test('does not use unmarked content as a footer', () => {
   const { root, content, newSession } = sidebarFixture();
   root.action = null;
   root.children = [content];

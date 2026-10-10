@@ -1,3 +1,5 @@
+import { resolveAppFrame, resolveFrameContent } from '../layout/app-frame.js';
+
 export interface DashboardPlacement {
   readonly left: number;
   readonly top: number;
@@ -42,23 +44,13 @@ export function isRightSidebarOpenFromDom(
   frame: HTMLElement,
   rightbar: HTMLElement | undefined,
 ): boolean {
-  if (typeof frame.querySelector === 'function') {
-    if (frame.querySelector('[data-sidebar-right-open]') !== null) {
-      return true;
-    }
-    if (frame.hasAttribute('data-rightbar-collapsed')) {
-      return false;
-    }
-  }
-  if (frame.getAttribute?.('data-rightbar-collapsed') !== null) {
-    return false;
-  }
-  if (rightbar instanceof HTMLElement) {
-    if (rightbar.getAttribute?.('data-sidebar-right-open') !== null) {
-      return true;
-    }
-  }
-  return false;
+  return (
+    !frame.hasAttribute('data-rightbar-collapsed') &&
+    rightbar instanceof HTMLElement &&
+    frame.contains(rightbar) &&
+    (rightbar.hasAttribute('data-sidebar-right-open') ||
+      rightbar.querySelector('[data-sidebar-right-open]') !== null)
+  );
 }
 
 /** Layout seam shared with the existing Sidebar overlay; fail closed on frame/center loss. */
@@ -93,33 +85,23 @@ export function mountDashboardOverlay(
   const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(schedule);
   const update = () => {
     if (disposed) return;
-    // AppFrame owns Sidebar | CenterColumn | [RightbarColumn] | shell.overlay.
-    // The native rightbar is absent on a page with no current Session, but the
-    // Dashboard still needs the same center-to-frame placement in that layout.
-    // Do not depend on generated CSS class names or mutate slot registrations.
-    const sidebar = frame.firstElementChild;
-    const center = sidebar?.nextElementSibling;
-    const rightbar = center?.nextElementSibling;
-    const hasRightbar =
-      rightbar instanceof HTMLElement &&
-      rightbar !== overlay &&
-      rightbar.nextElementSibling === overlay;
-    const hasNoRightbar = rightbar === overlay;
-    const valid =
-      overlay.isConnected &&
-      overlay.parentElement === frame &&
-      sidebar instanceof HTMLElement &&
-      center instanceof HTMLElement &&
-      (hasRightbar || hasNoRightbar);
-    const nextObserved: Element[] = valid
-      ? hasRightbar
-        ? [overlay, sidebar, center, rightbar]
-        : [overlay, sidebar, center]
-      : [frame];
+    const anchors = resolveAppFrame(surface);
+    const content =
+      anchors?.frame === frame && anchors.overlay === overlay
+        ? resolveFrameContent(frame, overlay, anchors.sidebar)
+        : undefined;
+    // Watch candidates even while geometry is invalid or a column is collapsed.
+    // A resize alone must be sufficient to recover after a zero-size transition.
+    const nextObserved: Element[] = [
+      frame,
+      overlay,
+      ...Array.from(frame.children),
+      ...Array.from(frame.querySelectorAll('[data-rightbar-col]')),
+    ];
     for (const old of observed) if (!nextObserved.includes(old)) resize?.unobserve(old);
     for (const next of nextObserved) if (!observed.includes(next)) resize?.observe(next);
     observed = nextObserved;
-    if (!valid) {
+    if (!anchors || !content) {
       restore();
       onPlacement(undefined);
       if (lastRightSidebarOpen) {
@@ -128,16 +110,24 @@ export function mountDashboardOverlay(
       }
       return;
     }
+    const { sidebar } = anchors;
+    const { center, rightbar } = content;
     const box = overlay.getBoundingClientRect();
     const boundary = sidebar.getBoundingClientRect();
     const rightBoundary =
-      hasRightbar && rightbar instanceof HTMLElement
-        ? rightbar.getBoundingClientRect().left
-        : box.right;
+      rightbar instanceof HTMLElement ? rightbar.getBoundingClientRect().left : box.right;
     const left = Math.max(0, boundary.right - box.left + SIDEBAR_RESIZE_HANDLE_HALF_WIDTH);
     const rightEdge = Math.min(box.right, rightBoundary);
     const width = rightEdge - box.left - left;
     if (width <= 0 || box.height <= 0) {
+      restore();
+      onPlacement(undefined);
+      return;
+    }
+    const centerBox = center.getBoundingClientRect();
+    const top = Math.max(0, centerBox.top - box.top);
+    const height = Math.min(box.bottom, centerBox.bottom) - box.top - top;
+    if (height <= 0) {
       restore();
       onPlacement(undefined);
       return;
@@ -149,19 +139,11 @@ export function mountDashboardOverlay(
       }
     }
     if (!hidden.has(center)) hidden.set(center, concealDashboardBackground(center));
-    // The Windows caption strip is outside the native center. Never cover it;
-    // macOS's hidden titlebar belongs to our own marked top bar instead.
-    const top = Math.max(0, (center.getBoundingClientRect().top ?? 0) - (box.top ?? 0));
-    if (top >= box.height) {
-      restore();
-      onPlacement(undefined);
-      return;
-    }
-    onPlacement({ left, top, width, height: box.height - top });
+    onPlacement({ left, top, width, height });
     const isRightSidebarOpen =
       options?.isRightSidebarExpanded !== undefined
         ? options.isRightSidebarExpanded()
-        : isRightSidebarOpenFromDom(frame, hasRightbar ? rightbar : undefined);
+        : isRightSidebarOpenFromDom(frame, rightbar);
     if (lastRightSidebarOpen !== isRightSidebarOpen) {
       lastRightSidebarOpen = isRightSidebarOpen;
       options?.onRightSidebarChange?.(isRightSidebarOpen);
@@ -178,6 +160,12 @@ export function mountDashboardOverlay(
         'data-rightbar-collapsed',
         'data-sidebar-right-open',
         'data-sidebar-right-panel',
+        'data-rightbar-col',
+        'data-worktree-mode-action',
+        'data-pane',
+        'data-window-drag',
+        'data-shell-leading',
+        'data-shell-overlay',
       ],
     });
   } catch {

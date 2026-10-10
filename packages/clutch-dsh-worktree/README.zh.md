@@ -96,6 +96,8 @@ Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Wor
 Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可点击的 Sidebar 按钮；
 新会话按钮显示快捷键时也不会遮挡顶部栏。
 如果无法安全识别原生 Sidebar 布局，插件会保留原生导航，不覆盖其控件；布局变化后会重新尝试定位。
+Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入额外标题栏或壳层控件的 AppFrame
+布局，并保持这些控件可用。
 
 ### 创建 Worktree
 

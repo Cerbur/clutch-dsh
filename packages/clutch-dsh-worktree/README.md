@@ -102,6 +102,8 @@ On Web, Worktree navigation starts below the native DSH brand row, leaving its S
 visible and clickable even when the New Session action displays keyboard shortcuts.
 If the native Sidebar layout cannot be safely recognized, the plugin leaves native navigation
 visible rather than covering its controls. It retries when the layout changes.
+Worktree navigation and Dashboard support AppFrame layouts with extra titlebar or shell controls
+before, between, or after the native columns, while keeping those controls accessible.
 
 ### Create a Worktree
 
