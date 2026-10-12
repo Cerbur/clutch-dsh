@@ -11,6 +11,7 @@ interface BranchPickerProps {
   readonly onChange: (value: string) => void;
   readonly t: WorktreeTranslate;
   readonly disabled?: boolean;
+  readonly loading?: boolean;
   readonly onClose?: () => void;
   readonly emptyLabel?: string;
   readonly onFetch?: () => Promise<readonly BranchRecord[]>;
@@ -32,7 +33,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, ...pro
   }, []);
   const branches = fetched?.source === source ? fetched.branches : source;
   const fetchBranches = async () => {
-    if (!onFetch || pending.current || props.disabled) return;
+    if (!onFetch || pending.current || props.disabled || props.loading) return;
     clearTimeout(resetTimer.current);
     pending.current = true;
     setStatus('pending');
@@ -54,13 +55,14 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, ...pro
   const action = onFetch === undefined ? undefined : <button type="button" className={styles.branchFetch}
     data-branch-fetch data-fetch-status={status} title={actionLabel}
     aria-label={actionLabel} aria-live="polite" aria-busy={status === 'pending'}
-    disabled={props.disabled || status === 'pending' || status === 'success'} onClick={() => void fetchBranches()}>
+    disabled={props.disabled || props.loading || status === 'pending' || status === 'success'} onClick={() => void fetchBranches()}>
     {status === 'success' ? t('branch.fetched') : status === 'error'
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
   return { status, picker: {
     ...props,
+    loadingLabel: t('select.loading'),
     searchLabel: t('dashboard.searchBranches'),
     noMatchesLabel: t('dashboard.noMatchingBranches'),
     allLabel: t('branch.all'),

@@ -969,7 +969,7 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   assert.match(dialogs, /t\('worktree\.import'\)/);
   assert.match(dialogs, /t\('worktree\.importDescription'/);
   assert.match(dialogs, /t\('worktree\.importEmpty'\)/);
-  assert.match(dialogs, /t\('worktree\.importLoading'\)/);
+  assert.match(dialogs, /loading=\{importCandidates\.status === 'idle' \|\| importCandidates\.status === 'loading'\}/);
   assert.match(dialogs, /t\('action\.retry'\)/);
 
   assert.match(

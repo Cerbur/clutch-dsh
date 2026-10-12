@@ -260,6 +260,7 @@ export function WorktreeCreateDialog({
   readError,
   setupStatus,
   canCreate,
+  branchesLoading = view === undefined && setupStatus === undefined && readError === undefined,
   mode,
   importCandidates,
   selectedImportPath,
@@ -348,9 +349,6 @@ export function WorktreeCreateDialog({
       </div>
       {importing ? (
         <div className={styles.worktreeImportCandidates} role="tabpanel">
-          {importCandidates.status === 'loading' && importCandidates.candidates.length === 0 && (
-            <p className={styles.message}>{t('worktree.importLoading')}</p>
-          )}
           {importCandidates.status === 'error' && (
             <div className={styles.recoveryActions}>
               <ErrorToast
@@ -365,18 +363,17 @@ export function WorktreeCreateDialog({
           {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
             <p className={styles.message}>{t('worktree.importEmpty')}</p>
           )}
-          {importCandidates.candidates.length > 0 && (
-            <div className={styles.modalField}>
-              {t('worktree.tabImport')}
-              <WorktreeSelector
-                t={t}
-                candidates={importCandidates.candidates}
-                value={selectedImportPath ?? ''}
-                disabled={actionPending}
-                onChange={onSelectedImportPathChange}
-              />
-            </div>
-          )}
+          <div className={styles.modalField}>
+            {t('worktree.tabImport')}
+            <WorktreeSelector
+              t={t}
+              candidates={importCandidates.candidates}
+              value={selectedImportPath ?? ''}
+              disabled={actionPending}
+              loading={importCandidates.status === 'idle' || importCandidates.status === 'loading'}
+              onChange={onSelectedImportPathChange}
+            />
+          </div>
         </div>
       ) : readError !== undefined ? (
         <div className={styles.gitReadiness} data-worktree-readiness="error">
@@ -385,7 +382,7 @@ export function WorktreeCreateDialog({
             actions={readError.retryable && onRetry !== undefined
               ? [{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }] : []} />
         </div>
-      ) : canCreate ? (
+      ) : canCreate || (branchesLoading && setupStatus === undefined) ? (
         <>
           <div className={styles.modalField}>
             {t('worktree.baseBranch')}
@@ -395,6 +392,7 @@ export function WorktreeCreateDialog({
               label={t('worktree.baseBranch')}
               value={selectedBranch}
               disabled={actionPending}
+              loading={branchesLoading}
               onChange={onSelectedBranchChange}
               onFetch={onFetchBranches}
             />

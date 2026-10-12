@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 import ts from 'typescript';
 import { en } from '../lib/client/locales.js';
 
-const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector']
+const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
 
 function harness() {
@@ -32,12 +32,18 @@ function harness() {
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': {
         Input: (props) => jsx('input', props), MenuSurface: (props) => jsx('native-menu-surface', props),
+        Button: (props) => jsx('button', props), Modal: (props) => jsx('native-modal', props),
       },
       '../dsh-icons.js': Object.fromEntries(['IconBranchOutline16', 'IconCheckOutline16', 'IconSearchOutline16', 'IconChevronDownOutline14', 'IconDownloadOutline16', 'IconLoadingOutline16']
         .map((icon) => [icon, () => jsx('svg', { icon })])),
       './single-select.css': { default: {} }, './git-branch.css': { default: {} },
       '../select/SearchableSingleSelect.js': modules['select/SearchableSingleSelect'],
       './SearchableSingleSelect.js': modules['select/SearchableSingleSelect'],
+      '../../branch/GitBranchSelector.js': modules['branch/GitBranchSelector'],
+      '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
+      '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
+      './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
+      '../../worktree.css': { default: {} },
     })[id] ?? {}, exports);
     modules[name] = exports;
   }
@@ -99,6 +105,98 @@ test('import Worktree searches branch and path and returns the exact candidate p
   search(node).props.onKeyDown(key('Enter'));
   assert.deepEqual(chosen, ['/work/beta']);
   assert.equal(search(render()), undefined);
+});
+
+test('dropdown stays open when internal non-focusable content takes focus and closes after selection or Escape', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { label: 'Branch', searchLabel: 'Search', noMatchesLabel: 'Empty', value: 'main',
+    options: [{ value: 'main', label: 'Main' }, { value: 'develop', label: 'Develop' }],
+    onChange: (value) => chosen.push(value) };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SearchableSingleSelect'], props);
+  const open = () => find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  open();
+  let node = render();
+  // Clicking an unfocusable heading or empty space blurs the search input with no related target.
+  node.props.onBlur?.({ currentTarget: { contains: () => false }, relatedTarget: null });
+  node = render();
+  assert.ok(search(node));
+  assert.deepEqual(chosen, []);
+  options(node)[1].props.onClick();
+  assert.deepEqual(chosen, ['develop']);
+  assert.equal(search(render()), undefined);
+  open();
+  search(render()).props.onKeyDown(key('Escape'));
+  assert.equal(search(render()), undefined);
+});
+
+test('loading does not block opening, hide retained rows, reset search or allow premature selection', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { label: 'Branch', searchLabel: 'Search', noMatchesLabel: 'Empty', loadingLabel: 'Loading branches',
+    loading: true, value: 'main', options: [{ value: 'main', label: 'Main' }], onChange: (value) => chosen.push(value) };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SearchableSingleSelect'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  let node = render();
+  assert.equal(find(node, (item) => item.props?.['data-single-select-loading'] !== undefined).length, 1);
+  assert.equal(options(node).length, 1);
+  options(node)[0].props.onClick();
+  search(node).props.onKeyDown(key('Enter'));
+  assert.deepEqual(chosen, []);
+  search(node).props.onChange({ currentTarget: { value: 'remote' } });
+  node = render();
+  assert.equal(find(node, (item) => item.props?.['data-single-select-empty'] !== undefined).length, 0);
+  props.loading = false;
+  props.options = [{ value: 'origin/remote', label: 'Origin remote' }];
+  node = render();
+  assert.equal(search(node).props.value, 'remote');
+  assert.equal(options(node)[0].props['data-single-select-option'], 'origin/remote');
+  search(node).props.onKeyDown(key('Enter'));
+  assert.deepEqual(chosen, ['origin/remote']);
+  assert.equal(search(render()), undefined);
+});
+
+function registrationProps() {
+  return { t: (name) => en[name], workspace: { workspaceId: 'ws', title: 'Repo', path: '/repo' },
+    view: undefined, canCreate: false, branchesLoading: true, mode: 'create',
+    importCandidates: { status: 'idle', candidates: [] }, selectedBranch: '', newBranch: '',
+    actionPending: false, onClose() {}, onModeChange() {}, onRetryImportCandidates() {},
+    onSelectedBranchChange() {}, onSelectedImportPathChange() {}, onNewBranchChange() {}, onSubmit() {} };
+}
+
+test('creation branch picker opens before the Workspace callback and refreshes without losing search', () => {
+  const h = harness();
+  const chosen = [];
+  const props = registrationProps();
+  props.onSelectedBranchChange = (branch) => chosen.push(branch);
+  const render = () => h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  let node = render();
+  assert.equal(find(node, (item) => item.props?.['data-single-select-loading'] !== undefined).length, 1);
+  search(node).props.onChange({ currentTarget: { value: 'origin' } });
+  props.view = { readiness: { status: 'ready' }, branches: [{ name: 'main' }, { name: 'origin/main', kind: 'remote' }] };
+  props.canCreate = true;
+  props.branchesLoading = false;
+  node = render();
+  assert.equal(search(node).props.value, 'origin');
+  assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['origin/main']);
+  options(node)[0].props.onClick();
+  assert.deepEqual(chosen, ['origin/main']);
+});
+
+test('import picker opens before candidate callback and updates in place', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { ...registrationProps(), mode: 'import', onSelectedImportPathChange: (path) => chosen.push(path) };
+  const render = () => h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  assert.equal(find(render(), (item) => item.props?.['data-single-select-loading'] !== undefined).length, 1);
+  search(render()).props.onChange({ currentTarget: { value: 'checkout' } });
+  props.importCandidates = { status: 'ready', candidates: [{ branch: 'feature', absolutePath: '/repo/checkout' }] };
+  const node = render();
+  assert.equal(search(node).props.value, 'checkout');
+  options(node)[0].props.onClick();
+  assert.deepEqual(chosen, ['/repo/checkout']);
 });
 
 test('fetch is available with no remote rows, preserves selection, and restores its icon after two seconds', async (t) => {

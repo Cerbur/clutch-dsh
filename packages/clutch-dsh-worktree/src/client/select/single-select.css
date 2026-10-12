@@ -20,6 +20,10 @@
 }
 .singleSelectPicker { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .singleSelectSearch { box-sizing: border-box; width: 100%; min-width: 0; }
+.singleSelectLoading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 80px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.singleSelectLoading svg { width: 16px; height: 16px; animation: singleSelectSpin 1s linear infinite; }
+@keyframes singleSelectSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .singleSelectLoading svg { animation: none; } }
 .singleSelectFilters { display: flex; flex-wrap: wrap; gap: 4px; }
 .singleSelectFilters button {
   border: 0; border-radius: var(--dsw-radius-md, 8px); padding: 4px 8px; background: transparent;

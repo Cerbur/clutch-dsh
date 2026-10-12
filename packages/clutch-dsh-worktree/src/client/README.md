@@ -659,6 +659,13 @@ Connection calls and release browser-local membership projections.
 
 `select/SearchableSingleSelect` owns the domain-neutral options, text search, optional group filters,
 listbox navigation, bounded scrolling, popup placement, outside-pointer dismissal and focus return.
+Blur alone never dismisses the dropdown: internal headings, empty space, search, filters and fetch
+actions keep it open. Option selection, an outside pointer, Escape or the trigger dismisses it.
+Loading is separate from disabled: the trigger opens synchronously, and the picker shows a localized
+spinner until the caller supplies fresh candidates. Search/filter state survives data replacement;
+retained rows stay visible during refresh but cannot be committed until loading finishes. Creation
+renders its branch field while the first Workspace read is pending, import renders its field even
+before candidates arrive, and Git comparison passes its branch load state without disabling the trigger.
 It uses native DSH `Input` and `MenuSurface`, including background blur and the macOS backing;
 no raw translucent menu fill is applied to the popup or scroll viewport. Row geometry and elevation
 follow the native menu tokens. `SingleSelectPicker` embeds the same list without a dropdown shell.

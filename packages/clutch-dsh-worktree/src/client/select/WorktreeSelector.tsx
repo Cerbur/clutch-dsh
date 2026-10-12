@@ -9,6 +9,7 @@ interface WorktreeSelectorProps {
   readonly onChange: (path: string) => void;
   readonly t: WorktreeTranslate;
   readonly disabled?: boolean;
+  readonly loading?: boolean;
 }
 
 /** Path is the selection identity; both branch and path participate in search. */
@@ -16,6 +17,7 @@ export function WorktreeSelector({ candidates, t, ...props }: WorktreeSelectorPr
   return <SearchableSingleSelect {...props}
     label={t('worktree.tabImport')} placeholder={t('worktree.importPlaceholder')}
     searchLabel={t('worktree.searchWorktrees')} noMatchesLabel={t('worktree.noMatchingWorktrees')}
+    loadingLabel={t('worktree.importLoading')}
     icon={<IconBranchOutline16 />}
     options={candidates.map((candidate) => ({
       value: candidate.absolutePath, label: candidate.branch, description: candidate.absolutePath,

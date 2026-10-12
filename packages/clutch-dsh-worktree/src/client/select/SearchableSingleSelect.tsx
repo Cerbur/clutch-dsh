@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { Input, MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives';
-import { IconCheckOutline16, IconChevronDownOutline14, IconSearchOutline16 } from '../dsh-icons.js';
+import { IconCheckOutline16, IconChevronDownOutline14, IconLoadingOutline16, IconSearchOutline16 } from '../dsh-icons.js';
 import styles from './single-select.css';
 
 export interface SingleSelectOption {
@@ -30,12 +30,14 @@ export interface SingleSelectPickerProps {
   readonly searchLabel: string;
   readonly noMatchesLabel: string;
   readonly disabled?: boolean;
+  readonly loading?: boolean;
+  readonly loadingLabel?: string;
   readonly onClose?: () => void;
 }
 
 /** Domain-neutral single selection. Arrow navigation never commits a value. */
 export function SingleSelectPicker({ options, groups = [], allLabel, value, onChange,
-  searchLabel, noMatchesLabel, disabled, onClose }: SingleSelectPickerProps) {
+  searchLabel, noMatchesLabel, disabled, loading = false, loadingLabel = 'Loading…', onClose }: SingleSelectPickerProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [highlight, setHighlight] = useState(value);
@@ -51,7 +53,7 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
   ];
   const visible = sections.flatMap((section) => section.options);
   const active = Math.max(0, visible.findIndex((option) => option.value === highlight));
-  const choose = (next: string) => { if (!disabled) onChange(next); };
+  const choose = (next: string) => { if (!disabled && !loading) onChange(next); };
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent?.isComposing) return;
     if (event.key === 'Escape' && onClose !== undefined) {
@@ -72,7 +74,7 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
       className={styles.singleSelectOption} role="option" tabIndex={-1}
       title={[option.label, option.description].filter(Boolean).join(' — ')}
       data-single-select-option={option.value} data-highlighted={index === active ? true : undefined}
-      aria-selected={option.value === value} disabled={disabled}
+      aria-selected={option.value === value} disabled={disabled || loading}
       onMouseEnter={() => setHighlight(option.value)} onMouseDown={(event) => event.preventDefault()}
       onClick={() => choose(option.value)}>
       {option.icon}
@@ -84,7 +86,7 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
       {option.value === value && <IconCheckOutline16 />}
     </button>;
   };
-  return <div className={styles.singleSelectPicker} data-single-select-picker>
+  return <div className={styles.singleSelectPicker} data-single-select-picker aria-busy={loading}>
     <Input icon={<IconSearchOutline16 />} className={styles.singleSelectSearch}
       data-modal-autofocus disabled={disabled} role="combobox" aria-label={searchLabel} placeholder={searchLabel}
       aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={visible.length > 0}
@@ -100,6 +102,9 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
         </button>)}
     </div>}
     <div className={styles.singleSelectViewport} data-single-select-options>
+      {loading && <div className={styles.singleSelectLoading} data-single-select-loading role="status">
+        <IconLoadingOutline16 /><span>{loadingLabel}</span>
+      </div>}
       {visible.length > 0 || sections.some((section) => section.action && (filter === undefined || filter === section.value)) ? <div id={id + '-options'} role="listbox" aria-label={searchLabel}>
         {sections.filter((section) => section.options.length > 0 || (section.action && (filter === undefined || filter === section.value))).map((section) =>
           <div key={section.value ?? 'ungrouped'} role={section.label ? 'group' : undefined}
@@ -110,7 +115,7 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
             {section.options.map(row)}
           </div>)}
       </div> : null}
-      {visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
+      {!loading && visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
     </div>
   </div>;
 }
@@ -171,8 +176,6 @@ export function SearchableSingleSelect({ label, placeholder, icon, size = 'stand
       if (open && event.key === 'Escape' && !event.nativeEvent.isComposing) {
         event.preventDefault(); event.stopPropagation(); close();
       }
-    }} onBlur={(event) => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close(false);
     }}>
     <button ref={trigger} type="button" className={styles.singleSelectTrigger}
       aria-label={label} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}

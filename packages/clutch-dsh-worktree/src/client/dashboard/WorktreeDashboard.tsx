@@ -45,6 +45,7 @@ export interface WorktreeDashboardProps {
   readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
   readonly onFetchBranches?: () => Promise<readonly BranchRecord[]>;
   readonly branches?: readonly BranchRecord[];
+  readonly branchesLoading?: boolean;
   readonly record: DashboardRecord;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
@@ -143,6 +144,7 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
 function WorktreeBaselineEditor({
   value,
   branches,
+  loading,
   currentBranch,
   onSave,
   onFetch,
@@ -152,6 +154,7 @@ function WorktreeBaselineEditor({
 }: {
   readonly value?: string;
   readonly branches: readonly BranchRecord[];
+  readonly loading: boolean;
   readonly currentBranch?: string;
   readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
   readonly onFetch?: () => Promise<readonly BranchRecord[]>;
@@ -201,6 +204,7 @@ function WorktreeBaselineEditor({
       busy.current ||
       draft === undefined ||
       onSave === undefined ||
+      loading ||
       !options.some((branch) => branch.name === draft)
     )
       return;
@@ -275,7 +279,7 @@ function WorktreeBaselineEditor({
             <Button
               variant="primary"
               data-dashboard-baseline-save
-              disabled={pending || disabled || !options.some((branch) => branch.name === draft)}
+              disabled={pending || disabled || loading || !options.some((branch) => branch.name === draft)}
               onClick={() => void save()}
             >
               {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
@@ -286,7 +290,7 @@ function WorktreeBaselineEditor({
         <div className={styles.dashboardBaselinePicker} data-dashboard-baseline-modal>
           {draft !== undefined && <GitBranchPicker
             branches={options} value={draft} onChange={setDraft} t={t}
-            disabled={pending || disabled} onClose={closeEditor}
+            disabled={pending || disabled} loading={loading} onClose={closeEditor}
             onFetch={onFetch === undefined ? undefined : async () => {
               const next = await onFetch();
               if (alive.current) setFetched({ source: branches, branches: next });
@@ -343,6 +347,7 @@ export function WorktreeDashboard({
   onSaveBaseline,
   onFetchBranches,
   branches = [],
+  branchesLoading = false,
 }: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -704,6 +709,7 @@ export function WorktreeDashboard({
                   context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
                   branches={branches}
+                  loading={branchesLoading}
                   currentBranch={baselineCurrentBranch}
                   onSave={persistBaseline}
                   onFetch={onFetchBranches}

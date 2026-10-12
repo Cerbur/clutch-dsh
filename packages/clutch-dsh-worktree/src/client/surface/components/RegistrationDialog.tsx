@@ -21,6 +21,7 @@ type Input = {
   registrationState: Pick<
     ReturnType<typeof useRegistrationState>,
     | 'modalReadError'
+    | 'modalReadLoading'
     | 'worktreeModalMode'
     | 'importCandidates'
     | 'selectedImportPath'
@@ -57,6 +58,7 @@ export function RegistrationDialog({
   } = registration;
   const {
     modalReadError,
+    modalReadLoading,
     worktreeModalMode,
     importCandidates,
     selectedImportPath,
@@ -81,6 +83,7 @@ export function RegistrationDialog({
         readError={modalReadError}
         setupStatus={modalSetupStatus}
         canCreate={modalCanCreate}
+        branchesLoading={modalReadLoading || modalView === undefined}
         mode={worktreeModalMode}
         importCandidates={importCandidates}
         selectedImportPath={selectedImportPath}

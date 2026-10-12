@@ -124,7 +124,11 @@ on hover, keyboard focus, or while its options menu is open, matching the menu b
 Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
 and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
 Dropdowns use DSH’s native menu material in light and dark themes. Search ignores case; use Arrow Up/Down to move,
-Enter to choose, and Escape to close. The current local branch is preferred by default. Remote refs are read
+Enter to choose, and Escape to close. Clicking within the dropdown keeps it open, including headings,
+empty space, search, filters, and fetch controls; selecting an option or clicking outside closes it.
+Branch and import selectors open immediately while candidates load, show a loading indicator inside,
+and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
+The current local branch is preferred by default. Remote refs are read
 from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
 remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;
 it preserves your current selection, local branches, tags and working files, and does not prune deleted refs.

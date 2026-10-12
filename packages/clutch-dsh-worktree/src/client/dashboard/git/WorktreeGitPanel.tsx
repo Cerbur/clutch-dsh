@@ -229,7 +229,8 @@ export function WorktreeGitPanel({
                 emptyLabel={t('dashboard.git.selectBaseline')}
                 branches={branchOptions}
                 value={state.baselineBranch ?? ''}
-                disabled={state.branches.status === 'loading'}
+                loading={state.branches.status === 'idle' || state.branches.status === 'loading'
+                  || (state.branches.status === 'ready' && state.branches.refreshing === true)}
                 onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
                   try {
                     return (await manager.fetchRemoteBranches!({ workspaceId }))

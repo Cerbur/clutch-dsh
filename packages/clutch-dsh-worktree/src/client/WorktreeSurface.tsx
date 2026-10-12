@@ -443,6 +443,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               : undefined
           }
           branches={dashboardView?.branches ?? []}
+          branchesLoading={dashboardView === undefined && read.readState.status === 'loading'}
           onFetchBranches={props.manager?.fetchRemoteBranches === undefined ? undefined : async () => {
             try {
               return await props.manager!.fetchRemoteBranches({ workspaceId: dashboardRecord.workspaceId });
