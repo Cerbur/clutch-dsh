@@ -32,7 +32,7 @@
 }
 .singleSelectPopup .singleSelectViewport { height: auto; max-height: clamp(120px, calc(100dvh - 160px), 300px); }
 .singleSelectPopup .singleSelectEmpty { min-height: 80px; }
-.singleSelectGroup { padding: 6px 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 15px; }
+.singleSelectGroup { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 15px; }
 .singleSelectOption {
   display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px;
   padding: 6px 8px; border: 0; border-radius: var(--dsw-radius-md, 8px); background: transparent;

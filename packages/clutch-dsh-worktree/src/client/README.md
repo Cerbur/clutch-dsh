@@ -663,12 +663,16 @@ It uses native DSH `Input` and `MenuSurface`, including background blur and the 
 no raw translucent menu fill is applied to the popup or scroll viewport. Row geometry and elevation
 follow the native menu tokens. `SingleSelectPicker` embeds the same list without a dropdown shell.
 
-`branch/GitBranchSelector` adapts `BranchRecord` into names, local/remote groups and checkout markers.
+`branch/GitBranchSelector` adapts `BranchRecord` into names, local/remote groups and checkout markers. Its optional fetch callback is shared by all three branch consumers; the remote heading
+keeps the native download icon visible even without remote candidates. The branch adapter owns busy/error
+feedback and in-flight click suppression; generic groups expose only an action slot. Fetch results preserve
+search/filter/selection and stale completions after unmount are ignored. Callers refresh only the affected
+Workspace (or the active Git controller); creation preserves its ready form and guards a closed/replaced
+modal before invalidating its cached view.
 Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
 `select/WorktreeSelector` adapts import candidates into branch labels and secondary path descriptions;
 absolute paths are selection identities and both branch and path participate in search.
-The callers own async loading, selection, saves and pending state. No Git reads, transport or persistent
-state live in these components. Arrow keys highlight, Enter/click selects, and Escape closes.
+The callers own async loading, selection, saves and pending state. Git execution remains in Host/Provider; these components have no persistent state or direct transport. Arrow keys highlight, Enter/click selects, and Escape closes.
 Missing `BranchRecord.kind` denotes a local branch for older adapters. Creation keeps its existing
 recommended new local name for either branch kind; remote refs cannot be checked out directly.
 

@@ -216,6 +216,8 @@ export interface GitWorktreeAdapter {
     options?: GitCommandOptions,
   ): Promise<readonly GitBranchWorktreeInfo[]>;
   listBranches(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly string[]>;
+  /** Explicit user-triggered network read; writes only fetched Git metadata. */
+  fetchRemoteBranches?(workspaceRoot: string, options?: GitCommandOptions): Promise<void>;
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
   /** Resolve one commit object without exposing a generic object reader. */
   resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;

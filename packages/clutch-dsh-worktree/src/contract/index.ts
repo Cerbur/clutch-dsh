@@ -366,6 +366,8 @@ export interface WorktreeManager {
    * Lists local branches together with their main-Workspace and any-worktree checkout state.
    */
   listBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
+  /** Explicitly fetch all configured remotes' branch heads and return refreshed branch facts. */
+  fetchRemoteBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
 
   /**
    * 从已有本地分支创建路径受管的 Worktree；当 base branch 已 checkout 时，`newBranch`
@@ -455,6 +457,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'getWorktreeCommitFileDiff',
   'listImportCandidates',
   'listBranches',
+  'fetchRemoteBranches',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -521,6 +524,10 @@ export interface WorktreeRemoteManager {
   }): Promise<WorktreeRemoteResult<readonly WorktreeImportCandidate[]>>;
 
   listBranches(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
+
+  fetchRemoteBranches(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
 

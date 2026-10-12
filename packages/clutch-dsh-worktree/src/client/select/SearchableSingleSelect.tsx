@@ -17,6 +17,7 @@ export interface SingleSelectOption {
 export interface SingleSelectGroup {
   readonly value: string;
   readonly label: string;
+  readonly action?: ReactNode;
 }
 
 export interface SingleSelectPickerProps {
@@ -30,11 +31,12 @@ export interface SingleSelectPickerProps {
   readonly noMatchesLabel: string;
   readonly disabled?: boolean;
   readonly onClose?: () => void;
+  readonly feedback?: ReactNode;
 }
 
 /** Domain-neutral single selection. Arrow navigation never commits a value. */
 export function SingleSelectPicker({ options, groups = [], allLabel, value, onChange,
-  searchLabel, noMatchesLabel, disabled, onClose }: SingleSelectPickerProps) {
+  searchLabel, noMatchesLabel, disabled, onClose, feedback }: SingleSelectPickerProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [highlight, setHighlight] = useState(value);
@@ -45,7 +47,7 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
     (filter === undefined || option.group === filter) &&
     (option.searchText ?? [option.label, option.description].join(' ')).toLocaleLowerCase().includes(search));
   const sections = [
-    { value: undefined, label: undefined, options: matched.filter((option) => option.group === undefined || !groups.some((group) => group.value === option.group)) },
+    { value: undefined, label: undefined, action: undefined, options: matched.filter((option) => option.group === undefined || !groups.some((group) => group.value === option.group)) },
     ...groups.map((group) => ({ ...group, options: matched.filter((option) => option.group === group.value) })),
   ];
   const visible = sections.flatMap((section) => section.options);
@@ -99,15 +101,19 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
         </button>)}
     </div>}
     <div className={styles.singleSelectViewport} data-single-select-options>
-      {visible.length > 0 ? <div id={id + '-options'} role="listbox" aria-label={searchLabel}>
-        {sections.filter((section) => section.options.length > 0).map((section) =>
+      {visible.length > 0 || sections.some((section) => section.action && (filter === undefined || filter === section.value)) ? <div id={id + '-options'} role="listbox" aria-label={searchLabel}>
+        {sections.filter((section) => section.options.length > 0 || (section.action && (filter === undefined || filter === section.value))).map((section) =>
           <div key={section.value ?? 'ungrouped'} role={section.label ? 'group' : undefined}
             aria-labelledby={section.label ? id + '-group-' + section.value : undefined}>
-            {section.label && <div id={id + '-group-' + section.value} className={styles.singleSelectGroup}>{section.label}</div>}
+            {section.label && <div className={styles.singleSelectGroup}>
+              <span id={id + '-group-' + section.value}>{section.label}</span>{section.action}
+            </div>}
             {section.options.map(row)}
           </div>)}
-      </div> : <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
+      </div> : null}
+      {visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
     </div>
+    {feedback}
   </div>;
 }
 

@@ -197,8 +197,53 @@ test('wraps non-ENOENT Workspace root stat failures with Workspace error details
 });
 
 async function runGit(cwd, args) {
-  return execFile('git', args, { cwd, encoding: 'utf8' });
+  return execFile('git', args, { cwd, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
 }
+
+test('explicit fetch updates all remotes without configured local/tag mappings, pruning or sidecar writes', async () => {
+  const source = await createGitWorkspace();
+  try {
+    await runGit(source.workspaceRoot, ['branch', 'incoming']);
+    await runGit(source.workspaceRoot, ['tag', 'remote-tag']);
+    await withGitFixture(async ({ workspaceRoot, provider, sidecar }) => {
+      for (const remote of ['origin', 'upstream']) {
+        await runGit(workspaceRoot, ['remote', 'add', remote, source.workspaceRoot]);
+        await runGit(workspaceRoot, ['config', '--replace-all', 'remote.' + remote + '.fetch', '+refs/heads/*:refs/heads/injected/*']);
+        await runGit(workspaceRoot, ['config', '--add', 'remote.' + remote + '.fetch', '+refs/tags/*:refs/tags/*']);
+      }
+      await runGit(workspaceRoot, ['config', 'fetch.prune', 'true']);
+      await runGit(workspaceRoot, ['config', 'fetch.pruneTags', 'true']);
+      await runGit(workspaceRoot, ['tag', 'keep-local-tag']);
+      await runGit(workspaceRoot, ['update-ref', 'refs/remotes/origin/stale', 'HEAD']);
+      await writeFile(path.join(workspaceRoot, 'README.md'), 'uncommitted edit\n');
+      const before = await sidecar.read('ws_one');
+      const head = (await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout;
+      const rows = await provider.fetchRemoteBranches({ workspaceId: 'ws_one' });
+      for (const remote of ['origin', 'upstream']) {
+        assert.ok(rows.some((row) => row.name === remote + '/incoming' && row.kind === 'remote'));
+      }
+      assert.ok(rows.some((row) => row.name === 'origin/stale'));
+      assert.equal((await runGit(workspaceRoot, ['for-each-ref', '--format=%(refname)', 'refs/heads/'])).stdout, 'refs/heads/main\n');
+      assert.equal((await runGit(workspaceRoot, ['tag', '--list'])).stdout, 'keep-local-tag\n');
+      assert.equal((await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout, head);
+      assert.equal(await readFile(path.join(workspaceRoot, 'README.md'), 'utf8'), 'uncommitted edit\n');
+      assert.deepEqual(await sidecar.read('ws_one'), before);
+      await expectCode(provider.fetchRemoteBranches({ workspaceId: 'unknown' }), 'WORKSPACE_NOT_FOUND');
+      await provider.close();
+    });
+  } finally { await rm(source.tempRoot, { recursive: true, force: true }); }
+});
+
+test('failed fetch reports a Git error and can be retried after fixing the remote', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, provider }) => {
+    await runGit(workspaceRoot, ['remote', 'add', 'origin', path.join(tempRoot, 'missing-remote')]);
+    await expectCode(provider.fetchRemoteBranches({ workspaceId: 'ws_one' }), 'GIT_OPERATION_FAILED');
+    assert.ok((await provider.listBranches({ workspaceId: 'ws_one' })).some((row) => row.name === 'main'));
+    await runGit(workspaceRoot, ['remote', 'set-url', 'origin', workspaceRoot]);
+    assert.ok((await provider.fetchRemoteBranches({ workspaceId: 'ws_one' })).some((row) => row.name === 'origin/main'));
+    await provider.close();
+  });
+});
 
 test('instructions persist with acquisition facts, reject stale edits, and follow active bindings', async () => {
   await withGitFixture(async ({ provider, sidecar, dsh, dshHome, workspaceRoot }) => {

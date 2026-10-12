@@ -157,6 +157,29 @@ test('runs Git through the injected DSH subprocess runtime with explicit direct 
   }
 });
 
+test('concurrent fetch shares subprocess work and retry clears failed in-flight state', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-fetch-'));
+  try {
+    const runtime = createFakeRuntime({ responses: [{ stdout: 'origin\r\nupstream\r\n' }] });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+    await Promise.all([git.fetchRemoteBranches(workspaceRoot), git.fetchRemoteBranches(workspaceRoot)]);
+    assert.equal(runtime.spawnCalls.length, 3);
+    for (const spec of runtime.spawnCalls.slice(1)) {
+      assert.equal(spec.cwd, workspaceRoot);
+      assert.equal(spec.env.GIT_TERMINAL_PROMPT, '0');
+      assert.ok(spec.argv.includes('--refmap='));
+      assert.ok(spec.argv.includes('--no-tags'));
+      assert.ok(spec.argv.includes('--no-prune'));
+      assert.ok(spec.argv.includes('core.hooksPath=' + gitNullDevice));
+    }
+    const failed = new LocalGitAdapter({ subprocess: createFakeRuntime({ responses: [
+      { stdout: 'origin\n' }, { outcome: { exitCode: 1, signal: null } }, { stdout: '' },
+    ] }) });
+    await assert.rejects(failed.fetchRemoteBranches(workspaceRoot), { code: 'GIT_OPERATION_FAILED' });
+    await failed.fetchRemoteBranches(workspaceRoot);
+  } finally { await rm(workspaceRoot, { recursive: true, force: true }); }
+});
+
 test('reads branch checkout paths with one NUL-delimited for-each-ref invocation', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   try {

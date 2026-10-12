@@ -244,6 +244,21 @@ export async function listBranches(
   }));
 }
 
+/** Explicit fetch has no sidecar writes and returns the current branch projection. */
+export async function fetchRemoteBranches(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<readonly BranchRecord[]> {
+  const workspace = await requireWorkspace(context, input.workspaceId);
+  await context.sidecar.read(input.workspaceId);
+  await context.git.validateRepository(workspace.rootPath);
+  const gitRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath) : workspace.rootPath;
+  if (!context.git.fetchRemoteBranches) throw providerError('GIT_OPERATION_FAILED', 'Git adapter does not support fetching remote branches', { operation: 'fetch remote branches' });
+  await context.git.fetchRemoteBranches(gitRoot, { signal: context.signal });
+  return listBranches(context, input);
+}
+
 /** Create a Git Worktree first, then commit its external relation to the sidecar. */
 export async function createWorktree(
   context: WorktreeManagerContext,

@@ -1,6 +1,7 @@
 import { lstat, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { isSafeBranchName } from './branch-name.js';
 
 import {
   GitCommandError,
@@ -544,11 +545,10 @@ function isUnsupportedWorktreePathAtom(error: unknown): boolean {
 
 /**
  * 本地 Git worktree adapter：所有命令都以 DSH Workspace 根目录为 cwd，并仅使用固定的
- * 本地子命令；不使用 `--force`，也不访问 remote。
+ * 子命令；只有显式 fetchRemoteBranches 会访问已配置的 remote。
  *
  * Local Git worktree adapter: every command runs with the DSH Workspace root as
- * cwd and uses a fixed local-only subcommand; it never uses `--force` or accesses
- * remotes.
+ * cwd and uses fixed subcommands. Only explicit fetchRemoteBranches contacts remotes.
  */
 export class LocalGitAdapter implements GitWorktreeAdapter {
   private readonly executable: string;
@@ -559,6 +559,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   private readonly maxOutputBytes: number;
   private readonly defaultSignal?: AbortSignal;
   private readonly subprocess?: GitSubprocessRuntime;
+  private readonly fetches = new Map<string, Promise<void>>();
 
   constructor(options: LocalGitAdapterOptions = {}) {
     this.executable = options.executable ?? 'git';
@@ -1486,11 +1487,33 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     );
   }
 
-  /**
-   * 列出本地分支与已获取的远端分支；NUL 分隔避免依赖面向人的展示格式或空白切分。
-   * Lists local and fetched remote branches; NUL delimiting avoids
-   * depending on human-facing formatting or whitespace tokenization.
-   */
+  /** Fetch branch heads into remote-tracking refs, ignoring configured local/tag refspecs. */
+  async fetchRemoteBranches(workspaceRoot: string, options: GitCommandOptions = {}): Promise<void> {
+    const existing = this.fetches.get(workspaceRoot);
+    if (existing) return existing;
+    const task = (async () => {
+      try {
+        const result = await this.run(['remote'], workspaceRoot, options);
+        const remotes = result.stdout.split(/\r?\n/u).filter(Boolean);
+        for (const remote of remotes) {
+          if (!isSafeBranchName(remote)) throw providerError('GIT_OPERATION_FAILED', 'Invalid configured Git remote name', { operation: 'fetch remote branches' });
+        }
+        for (const remote of remotes) {
+          await this.run([
+            '-c', 'core.hooksPath=' + GIT_NULL_DEVICE,
+            'fetch', '--refmap=', '--no-tags', '--no-prune', '--no-recurse-submodules', '--no-auto-gc',
+            '--', remote, '+refs/heads/*:refs/remotes/' + remote + '/*',
+          ], workspaceRoot, options, false);
+        }
+      } catch (error) {
+        throw operationError('fetch remote branches', workspaceRoot, undefined, undefined, error);
+      }
+    })();
+    this.fetches.set(workspaceRoot, task);
+    try { await task; } finally { if (this.fetches.get(workspaceRoot) === task) this.fetches.delete(workspaceRoot); }
+  }
+
+  /** Lists local and fetched remote refs using NUL delimiters. */
   async listBranches(workspaceRoot: string, options: GitCommandOptions = {}): Promise<readonly string[]> {
     try {
       const result = await this.run(

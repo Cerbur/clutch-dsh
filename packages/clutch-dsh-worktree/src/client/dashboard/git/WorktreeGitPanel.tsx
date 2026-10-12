@@ -32,7 +32,7 @@ export interface WorktreeGitPanelProps {
   readonly manager?: Pick<
     WorktreeManager,
     'listBranches' | 'listWorktreeCommits' | 'listWorktreeCommitFiles' | 'getWorktreeCommitFileDiff'
-  >;
+  > & Partial<Pick<WorktreeManager, 'fetchRemoteBranches'>>;
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
@@ -230,6 +230,14 @@ export function WorktreeGitPanel({
                 branches={branchOptions}
                 value={state.baselineBranch ?? ''}
                 disabled={state.branches.status === 'loading'}
+                onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
+                  try {
+                    return (await manager.fetchRemoteBranches!({ workspaceId }))
+                      .filter((branch) => branch.name !== currentBranch);
+                  } finally {
+                    await state.refresh();
+                  }
+                }}
                 onChange={(value) => state.selectBaselineBranch(value || undefined)}
               />
             </div>

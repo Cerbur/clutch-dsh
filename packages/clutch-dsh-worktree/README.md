@@ -125,7 +125,11 @@ Creation, saved baselines, and Git comparison use the same searchable selector, 
 and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
 Dropdowns use DSH’s native menu material in light and dark themes. Search ignores case; use Arrow Up/Down to move,
 Enter to choose, and Escape to close. The current local branch is preferred by default. Remote refs are read
-from the local repository; fetch them in Git before selecting them. The plugin never fetches or contacts a remote.
+from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
+remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;
+it preserves your current selection, local branches, tags and working files, and does not prune deleted refs.
+A busy state prevents repeated clicks; failures retain the list and offer a retry through the same button.
+Listing branches never contacts a remote automatically.
 Remote baselines require a new local branch when creating a Worktree; symbolic remote HEAD entries are excluded.
 
 Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
@@ -514,7 +518,7 @@ text, actions and diagnostic details follow the font size selected in **Settings
   (optionally including one fresh baseline-to-working-tree projection), one **Uncommitted changes**
   snapshot, changed files, and one unified diff at a time. These projections combine staged, unstaged,
   and untracked files when requested but are never written back to Git. The Dashboard does not provide
-  commit, staging, reset, revert, cherry-pick, fetch, push, pull, pull requests, graph lanes, pagination,
+  commit, staging, reset, revert, cherry-pick, push, pull, pull requests, graph lanes, pagination,
   or syntax highlighting.
 - Session rows and Dashboard cards use DSH's native status and relative-time presentation. The green
   completion dot is DSH's unread reminder for a Session that stops outside the current main view;

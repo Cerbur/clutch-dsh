@@ -1,0 +1,9 @@
+.branchFetch { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 4px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.branchFetch:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.branchFetch:disabled { opacity: .4; cursor: default; }
+.branchFetch svg { width: 16px; height: 16px; }
+.branchFetch[aria-busy='true'] svg { animation: branchFetchSpin 1s linear infinite; }
+@keyframes branchFetchSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .branchFetch[aria-busy='true'] svg { animation: none; } }
+.branchFetchStatus { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.branchFetchStatus[role='alert'] { color: var(--dsw-alias-state-error-primary); }

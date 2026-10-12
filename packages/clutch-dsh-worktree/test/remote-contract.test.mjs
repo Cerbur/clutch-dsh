@@ -30,6 +30,7 @@ test('publishes the browser-safe Worktree Manager method names', () => {
     'getWorktreeCommitFileDiff',
     'listImportCandidates',
     'listBranches',
+  'fetchRemoteBranches',
     'createWorktree',
     'importWorktree',
     'removeWorktree',

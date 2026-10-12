@@ -28,6 +28,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   getWorktreeCommitFileDiff: 'worktreeManager/getWorktreeCommitFileDiff',
   listImportCandidates: 'worktreeManager/listImportCandidates',
   listBranches: 'worktreeManager/listBranches',
+  fetchRemoteBranches: 'worktreeManager/fetchRemoteBranches',
   createWorktree: 'worktreeManager/createWorktree',
   importWorktree: 'worktreeManager/importWorktree',
   removeWorktree: 'worktreeManager/removeWorktree',
@@ -225,6 +226,7 @@ export function createWorktreeConnectionAdapter(
     getWorktreeCommitFileDiff: (input) => invoke('getWorktreeCommitFileDiff', input),
     listImportCandidates: (input) => invoke('listImportCandidates', input),
     listBranches: (input) => invoke('listBranches', input),
+    fetchRemoteBranches: (input) => invoke('fetchRemoteBranches', input),
     createWorktree: (input) => invoke('createWorktree', input),
     importWorktree: (input) => invoke('importWorktree', input),
     async removeWorktree(input): Promise<void> {

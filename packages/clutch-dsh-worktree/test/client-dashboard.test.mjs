@@ -239,7 +239,7 @@ function renderHarness(writeClipboard) {
       IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
       IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
       IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
-    }, '../select/SearchableSingleSelect.js': selectExports,
+    }, './git-branch.css': { default: {} }, '../select/SearchableSingleSelect.js': selectExports,
   })[name] ?? {}, branchExports);
   const exports = {};
   new Function('require', 'exports', output)(
@@ -634,7 +634,7 @@ test('shared baseline picker searches remote branches and saves only confirmed s
   });
   findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
   node = harness.render();
-  assert.deepEqual(byRole(node, 'group').filter((group) => group.props['aria-labelledby']).map((group) => group.props.children[0].props.children), [
+  assert.deepEqual(byRole(node, 'group').filter((group) => group.props['aria-labelledby']).map((group) => group.props.children[0].props.children[0].props.children), [
     en['branch.local'], en['branch.remote'],
   ]);
   let search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
@@ -676,6 +676,29 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   assert.equal(options[0].props['data-single-select-option'], 'branch-00');
   assert.equal(options[0].props['aria-selected'], true);
   assert.equal(options.at(-1).props['data-single-select-option'], 'branch-23');
+  harness.dispose();
+});
+
+test('saved baseline can immediately select a newly fetched branch while excluding its own branch', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({ branches: [{ name: 'main' }], record: { ...record, baseBranch: 'main' },
+    onFetchBranches: async () => [{ name: 'main' }, { name: record.branch }, { name: 'origin/new', kind: 'remote' }],
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['main', 'origin/new']);
+  byRole(node, 'option')[1].props.onClick();
+  node = harness.render();
+  const save = findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0];
+  assert.equal(save.props.disabled, false);
+  save.props.onClick();
+  await tick();
+  assert.deepEqual(calls, [{ branch: 'origin/new', expected: 'main' }]);
   harness.dispose();
 });
 

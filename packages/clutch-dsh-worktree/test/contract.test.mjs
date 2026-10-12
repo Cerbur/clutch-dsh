@@ -108,6 +108,7 @@ test('exposes the approved Manager and Remote methods', () => {
     'getWorktreeCommitFileDiff',
     'listImportCandidates',
     'listBranches',
+  'fetchRemoteBranches',
     'createWorktree',
     'importWorktree',
     'removeWorktree',

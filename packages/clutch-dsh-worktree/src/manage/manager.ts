@@ -33,6 +33,7 @@ import {
   importWorktree,
   insertWorktreeBefore,
   listBranches,
+  fetchRemoteBranches,
   listImportCandidates,
   listWorktrees,
   removeWorktree,
@@ -250,6 +251,10 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
     return this.afterRecovery(() => listBranches(this.context, input));
+  }
+
+  fetchRemoteBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
+    return this.afterRecovery(() => fetchRemoteBranches(this.context, input));
   }
 
   createWorktree(input: {

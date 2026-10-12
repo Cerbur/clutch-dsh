@@ -33,9 +33,9 @@ function harness() {
       '@deepseek-ai/dsh-client-ui-primitives': {
         Input: (props) => jsx('input', props), MenuSurface: (props) => jsx('native-menu-surface', props),
       },
-      '../dsh-icons.js': Object.fromEntries(['IconBranchOutline16', 'IconCheckOutline16', 'IconSearchOutline16', 'IconChevronDownOutline14']
+      '../dsh-icons.js': Object.fromEntries(['IconBranchOutline16', 'IconCheckOutline16', 'IconSearchOutline16', 'IconChevronDownOutline14', 'IconDownloadOutline16', 'IconLoadingOutline16']
         .map((icon) => [icon, () => jsx('svg', { icon })])),
-      './single-select.css': { default: {} },
+      './single-select.css': { default: {} }, './git-branch.css': { default: {} },
       '../select/SearchableSingleSelect.js': modules['select/SearchableSingleSelect'],
       './SearchableSingleSelect.js': modules['select/SearchableSingleSelect'],
     })[id] ?? {}, exports);
@@ -99,6 +99,58 @@ test('import Worktree searches branch and path and returns the exact candidate p
   search(node).props.onKeyDown(key('Enter'));
   assert.deepEqual(chosen, ['/work/beta']);
   assert.equal(search(render()), undefined);
+});
+
+test('fetch is available with no remote rows, deduplicates clicks, and preserves search and selection', async () => {
+  const h = harness();
+  let resolve;
+  let calls = 0;
+  const chosen = [];
+  const props = { t: (name) => en[name], value: 'main', branches: [{ name: 'main' }],
+    onChange: (value) => chosen.push(value), onFetch: () => {
+      calls++;
+      return new Promise((done) => { resolve = done; });
+    } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  const fetchButton = (node) => find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
+  let node = render();
+  find(node, (item) => item.type === 'button' && item.props.children === en['branch.remote'])[0].props.onClick();
+  search(render()).props.onChange({ currentTarget: { value: 'new' } });
+  node = render();
+  assert.equal(options(node).length, 0);
+  assert.ok(fetchButton(node));
+  fetchButton(node).props.onClick();
+  fetchButton(node).props.onClick();
+  node = render();
+  assert.equal(calls, 1);
+  assert.equal(fetchButton(node).props.disabled, true);
+  assert.equal(fetchButton(node).props['aria-busy'], true);
+  resolve([{ name: 'main' }, { name: 'origin/new', kind: 'remote', remote: 'origin' }]);
+  await Promise.resolve();
+  node = render();
+  assert.equal(search(node).props.value, 'new');
+  assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['origin/new']);
+  assert.deepEqual(chosen, []);
+  assert.equal(fetchButton(node).props.disabled, false);
+});
+
+test('fetch failure keeps old branch rows and exposes a retryable localized error', async () => {
+  const h = harness();
+  let calls = 0;
+  const props = { t: (name) => en[name], value: 'origin/main', branches: [{ name: 'origin/main', kind: 'remote' }],
+    onChange() {}, onFetch: async () => { if (++calls === 1) throw new Error('auth'); return props.branches; } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  const fetchButton = (node) => find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
+  fetchButton(render()).props.onClick();
+  await Promise.resolve();
+  let node = render();
+  assert.equal(find(node, (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchFailed']);
+  assert.equal(options(node)[0].props['aria-selected'], true);
+  fetchButton(node).props.onClick();
+  await Promise.resolve();
+  node = render();
+  assert.equal(calls, 2);
+  assert.equal(find(node, (item) => item.props?.role === 'alert').length, 0);
 });
 
 test('empty results and disabled selection cannot commit, Escape calls the owner', () => {

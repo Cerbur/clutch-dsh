@@ -331,13 +331,18 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 ### 远端基线与统一分支选择器（2026-10-12）
 
 本次扩展取代历史计划中仅本地分支的基线限制。Provider 在本地枚举 `refs/heads/` 与
-`refs/remotes/`，过滤 symref 与远端 `/HEAD`，不 fetch、不连接远端。BranchRecord 增加可选
+`refs/remotes/`，过滤 symref 与远端 `/HEAD`，普通枚举不 fetch、不连接远端。BranchRecord 增加可选
 `kind`、`remote`；旧 adapter 的缺省 kind 保持 local 语义。Provider 事实同时携带精确 ref，
 解析基线 SHA 时使用该 ref，避免同名 tag 的 DWIM 歧义；local 与 remote 同名时 remote 显示为
 `remotes/<remote>/<branch>`。创建必须为 remote 基线指定新 local branch，校验在 Git/Sidecar
 副作用前完成。新 branch 冲突与创建恢复仅检查 local refs，remote refs 不占用 local branch 名。
 事务仍固定获取 SHA 并通过 journal 发布，保存基线仍只 CAS 更新 `baseBranch`，保留 `baseCommit`。
-分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段或 RPC。
+分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段。显式 `fetchRemoteBranches` RPC 获取全部已配置远端，Provider 使用固定 argv、
+关闭 hooks/自动 gc/submodule 递归，并通过显式 refspec 与空 refmap 限定更新 `refs/remotes/`，
+忽略 remote 配置中的本地分支/tag fetch 映射，不 prune、不合并、不 checkout。复用 runner 的
+非交互认证、输出限制、命令与清理超时、Host disposal signal；同一 adapter/根目录的并发 fetch
+共用任务。部分远端失败时返回错误，已获取的事实不回滚，Client 保留列表并允许重试。
+成功返回当前分支 projection，Client 仅使所属 Workspace/当前 Git controller 的投影失效。
 
 Client 的 `select/SearchableSingleSelect` / `SingleSelectPicker` 提供领域无关的搜索、分组过滤、
 单选键盘导航、固定滚动区和浮层生命周期，浮层复用 DSH `MenuSurface` 的模糊材质与 macOS 底衬。

@@ -43,6 +43,7 @@ export interface WorktreeDashboardProps {
   readonly manager?: WorktreeManager & Partial<WorktreeToolSettingsManager>;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
   readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly onFetchBranches?: () => Promise<readonly BranchRecord[]>;
   readonly branches?: readonly BranchRecord[];
   readonly record: DashboardRecord;
   readonly workspaceTitle: string;
@@ -144,6 +145,7 @@ function WorktreeBaselineEditor({
   branches,
   currentBranch,
   onSave,
+  onFetch,
   t,
   disabled,
   context,
@@ -152,6 +154,7 @@ function WorktreeBaselineEditor({
   readonly branches: readonly BranchRecord[];
   readonly currentBranch?: string;
   readonly onSave?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
+  readonly onFetch?: () => Promise<readonly BranchRecord[]>;
   readonly t: WorktreeTranslate;
   readonly disabled: boolean;
   readonly context?: string;
@@ -165,7 +168,9 @@ function WorktreeBaselineEditor({
   const trigger = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const expected = useRef(value);
-  const options = branches.filter((branch) => branch.name !== currentBranch);
+  const [fetched, setFetched] = useState<{ source: readonly BranchRecord[]; branches: readonly BranchRecord[] }>();
+  const options = (fetched?.source === branches ? fetched.branches : branches)
+    .filter((branch) => branch.name !== currentBranch);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -282,6 +287,11 @@ function WorktreeBaselineEditor({
           {draft !== undefined && <GitBranchPicker
             branches={options} value={draft} onChange={setDraft} t={t}
             disabled={pending || disabled} onClose={closeEditor}
+            onFetch={onFetch === undefined ? undefined : async () => {
+              const next = await onFetch();
+              if (alive.current) setFetched({ source: branches, branches: next });
+              return next.filter((branch) => branch.name !== currentBranch);
+            }}
           />}
           <NotificationToasts
             notices={
@@ -331,6 +341,7 @@ export function WorktreeDashboard({
   onOpenFile,
   onSaveInstructions,
   onSaveBaseline,
+  onFetchBranches,
   branches = [],
 }: WorktreeDashboardProps) {
   const surface = useRef<HTMLElement>(null);
@@ -695,6 +706,7 @@ export function WorktreeDashboard({
                   branches={branches}
                   currentBranch={baselineCurrentBranch}
                   onSave={persistBaseline}
+                  onFetch={onFetchBranches}
                   t={t}
                   disabled={record.status !== 'active' || record.health === 'recovery-needed'}
                 />

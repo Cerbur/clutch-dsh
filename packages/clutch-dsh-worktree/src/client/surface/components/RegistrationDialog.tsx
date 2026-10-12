@@ -6,7 +6,7 @@ import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 import type { useWorktreeRegistration } from '../actions/useWorktreeRegistration.js';
 
 type Input = {
-  props: Pick<WorktreeSurfaceProps, 't'>;
+  props: Pick<WorktreeSurfaceProps, 't' | 'manager'>;
   registration: Pick<
     ReturnType<typeof useWorktreeRegistration>,
     | 'modalWorkspace'
@@ -28,12 +28,13 @@ type Input = {
     | 'newBranch'
     | 'worktreeModalWorkspaceId'
     | 'modalReadViewRef'
+    | 'modalWorkspaceIdRef'
     | 'setSelectedBranch'
     | 'setNewBranch'
     | 'setSelectedImportPath'
   >;
   mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'actionPending'>;
-  read: Pick<ReturnType<typeof useSurfaceRefresh>, 'loadModalWorktreeView'>;
+  read: Pick<ReturnType<typeof useSurfaceRefresh>, 'loadModalWorktreeView' | 'refresh'>;
 };
 
 export function RegistrationDialog({
@@ -63,6 +64,7 @@ export function RegistrationDialog({
     newBranch,
     worktreeModalWorkspaceId,
     modalReadViewRef,
+    modalWorkspaceIdRef,
     setSelectedBranch,
     setNewBranch,
     setSelectedImportPath,
@@ -101,6 +103,16 @@ export function RegistrationDialog({
         }}
         onSelectedImportPathChange={setSelectedImportPath}
         onSelectedBranchChange={setSelectedBranch}
+        onFetchBranches={props.manager?.fetchRemoteBranches === undefined || worktreeModalWorkspaceId === undefined ? undefined : async () => {
+          const workspaceId = worktreeModalWorkspaceId;
+          try {
+            return await props.manager!.fetchRemoteBranches({ workspaceId });
+          } finally {
+            if (modalWorkspaceIdRef.current === workspaceId) modalReadViewRef.current = undefined;
+            await read.refresh({ preserveCurrent: true, invalidateContext: false,
+              scope: { kind: 'workspace', workspaceId } });
+          }
+        }}
         onNewBranchChange={setNewBranch}
         onSubmit={submitWorktree}
       />

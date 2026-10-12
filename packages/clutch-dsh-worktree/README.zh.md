@@ -116,8 +116,10 @@ Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入
 创建、保存基线和 Git 对比共用同一个可搜索选择器，按**本地分支**和**远端分支**分组，
 并标注当前与已检出状态，支持全部、本地、远端分支过滤。
 下拉框在亮色与暗色主题下均使用 DSH 原生菜单材质。搜索不区分大小写；方向键移动、Enter 选择、Escape 关闭。
-默认优先选择当前本地分支。远端列表来自本地仓库已有的引用，请先自行通过 Git fetch 获取；
-插件不会 fetch 或连接远端。基于远端创建 Worktree 必须使用新的本地分支，远端 HEAD 条目不会列出。
+默认优先选择当前本地分支。远端列表来自本地仓库已有的引用；点击**远端分支**标题旁的
+下载箭头可获取全部已配置远端的分支，即使远端列表为空也能使用。Fetch 更新远端分支引用并刷新
+当前 Workspace，保留已选值、本地分支、tag 和工作区文件，不清理已删除的引用。
+获取期间禁止重复点击；失败保留列表，可点击同一按钮重试。分支列表读取不会自动连接远端。基于远端创建 Worktree 必须使用新的本地分支，远端 HEAD 条目不会列出。
 
 Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
@@ -437,7 +439,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - Git Dashboard 只实现 commit history、只读的**基线汇总**（可选包含一次从基线到工作区的
   新鲜 projection）、顶部的只读**未提交的改动**快照、changed files 和一次一个 unified diff。
   按请求启用时，这些 projection 会合并 staged、unstaged 和 untracked 文件，但不会写回 Git。
-  Dashboard 不提供 commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull request、
+  Dashboard 不提供 commit、staging、reset、revert、cherry-pick、push、pull、pull request、
   graph lanes、pagination 或 syntax highlighting。
 - Session 行和 Dashboard 卡片使用 DSH 原生的状态和相对时间展示。绿色完成 dot 是 DSH 对非当前
   主视图中停止的 Session 的未读提醒；打开该 Session 或再次运行时清除。冷启动时的 idle Session

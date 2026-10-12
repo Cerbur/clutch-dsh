@@ -272,6 +272,7 @@ export function WorktreeCreateDialog({
   onRetryImportCandidates,
   onSelectedImportPathChange,
   onSelectedBranchChange,
+  onFetchBranches,
   onNewBranchChange,
   onSubmit,
 }: WorktreeCreateDialogProps) {
@@ -395,6 +396,7 @@ export function WorktreeCreateDialog({
               value={selectedBranch}
               disabled={actionPending}
               onChange={onSelectedBranchChange}
+              onFetch={onFetchBranches}
             />
           </div>
           <label className={styles.modalField}>
