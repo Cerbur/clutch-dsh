@@ -52,6 +52,7 @@ export interface WorktreeGitStateController {
   readonly subscribe: (listener: () => void) => () => void;
   readonly loadBranches: (refresh?: boolean) => Promise<void>;
   readonly readFreshBranches: () => Promise<readonly BranchRecord[]>;
+  readonly acceptBranches: (branches: readonly BranchRecord[]) => void;
   readonly loadHistory: () => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly selectBaselineBranch: (branch: string | undefined) => void;
@@ -654,11 +655,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       return branches.status === 'ready' ? branches.value : [];
     },
     loadHistory: () => loadHistory(false),
-    refresh: () => {
-      const branchesTask = branchesLoaded ? loadBranches(true) : Promise.resolve();
-      const historyTask = loadHistory(true);
-      return Promise.all([branchesTask, historyTask]).then(() => undefined);
+    acceptBranches: (branches) => {
+      if (disposed) return;
+      ++branchesRequest;
+      branchesLoaded = true;
+      branchesInFlight = undefined;
+      update({ ...state, branches: { status: 'ready', value: branches } });
     },
+    refresh: () => loadHistory(true),
     selectBaselineBranch,
     selectView,
     selectSummary,
@@ -704,6 +708,7 @@ export function useWorktreeGitState(input: UseWorktreeGitStateInput): WorktreeGi
     ...snapshot,
     loadBranches: controller.loadBranches,
     readFreshBranches: controller.readFreshBranches,
+    acceptBranches: controller.acceptBranches,
     loadHistory: controller.loadHistory,
     refresh: controller.refresh,
     selectBaselineBranch: controller.selectBaselineBranch,

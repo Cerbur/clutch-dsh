@@ -277,8 +277,10 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 checkout 识别发生在读取投影时，不监听 terminal 命令或 Git 文件变更。`listWorktrees` 比较
 受管理目录的实际分支与登记分支；Local/Main 通过 `getWorkspaceGitState` 单独读取根 checkout
 当前分支和 Git 就绪状态（detached 为 null），无需枚举完整 refs。这些事实只保留在运行时。
-Workspace 导航与刷新不读取完整 branch list；仅创建默认值和打开分支选择器时调用 `listBranches`。
-Git 页签初次只读历史，选择器使用过后显式刷新才同时更新分支候选。Client 的旧注入 adapter
+Workspace 导航、新建弹窗打开、窗口焦点/可见性变化和 Git 页刷新不读取完整 branch list；
+仅打开分支选择器时调用 `listBranches`。Fetch 在 Host 获取完成后读取一次并返回候选，Client
+直接消费返回列表，不重复调用；错误的显式重试仍可重读。创建默认值使用已知当前分支或 HEAD。
+Git 页只刷新历史，Fetch 返回列表直接更新其分支状态。Client 的旧注入 adapter
 缺少轻量接口时保留兼容回退，随包 Host/Remote/Connection 使用轻量接口。
 
 ### 分支同步（adoptWorktreeBranch）

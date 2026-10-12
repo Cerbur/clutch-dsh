@@ -708,6 +708,41 @@ test('saved baseline can immediately select a newly fetched branch while excludi
   harness.dispose();
 });
 
+test('baseline Fetch retains its roster across lightweight Workspace refreshes without another branch read', async () => {
+  const harness = renderHarness(async () => true);
+  const before = [{ name: 'origin/main', kind: 'remote', remote: 'origin' }];
+  const after = [...before, { name: 'origin/new', kind: 'remote', remote: 'origin' }];
+  let finishFetch;
+  let reads = 0;
+  const props = { branches: [], record: { ...record, baseBranch: 'origin/main' },
+    onLoadBranches: async () => { reads++; return before; },
+    onFetchBranches: () => new Promise((resolve) => { finishFetch = resolve; }),
+    onSaveBaseline: async (branch) => branch };
+  let node = harness.render(props);
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  harness.render();
+  await tick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['branch.remote'])[0].props.onClick();
+  findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.onChange({ currentTarget: { value: 'origin' } });
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  node = harness.render({ branches: [] });
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['origin/main']);
+  finishFetch(after);
+  await tick();
+  // Workspace reads contain no branch catalog and replace the empty array after Fetch.
+  node = harness.render({ branches: [] });
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['origin/main', 'origin/new']);
+  assert.equal(findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.value, 'origin');
+  assert.equal(findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props['data-fetch-status'], 'success');
+  assert.equal(byRole(node, 'option')[0].props['aria-selected'], true);
+  assert.equal(reads, 1);
+  byRole(node, 'option')[1].props.onClick();
+  assert.equal(findAll(harness.render(), (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+  harness.dispose();
+});
+
 test('baseline editor delegates list behavior to the shared branch picker', () => {
   assert.match(source, /<GitBranchPicker/);
   assert.match(dashboardCssSource, /width: min\(440px, calc\(100vw - 48px\)\);/);

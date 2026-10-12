@@ -134,9 +134,10 @@ Branch and import selectors open immediately while candidates load, show a loadi
 and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
 Even with cached candidates, the dropdown paints its loading shell before preparing the list. Large lists
 render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
-Opening any branch selector rereads local Git refs, including changes made in a terminal. An open selector
-also revalidates when you return to the browser. This refresh does not contact remotes; use Fetch to update remote refs.
-The full branch list is loaded only for creation defaults or an open branch picker. Workspace navigation
+Opening any branch selector rereads local Git refs, including changes made in a terminal. Returning to
+the browser does not reload candidates. Fetch reads the updated list once and supplies it directly to the selector.
+Opening the New Worktree dialog does not preload branches; its default comes from the current branch or HEAD.
+The full branch list is loaded only when a picker opens or Fetch completes. Workspace navigation
 reads Git readiness and the current root-checkout branch separately; entering Git & Changes loads history without preloading branches.
 The current local branch is preferred by default. Remote refs are read
 from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured

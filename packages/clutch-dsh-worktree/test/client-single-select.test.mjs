@@ -184,7 +184,8 @@ test('branch filters intersect text search without changing the selected value',
   assert.deepEqual(chosen, ['origin/main']);
 });
 
-test('reopening a branch dropdown rereads local refs after terminal changes without fetching remotes', async () => {
+test('reopening a branch dropdown rereads local refs after terminal changes without fetching remotes', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();
   let reads = 0;
   let fetches = 0;
@@ -215,13 +216,59 @@ test('reopening a branch dropdown rereads local refs after terminal changes with
   assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['main']);
   assert.equal(fetches, 0);
   h.focus(); h.focus();
-  assert.equal(reads, 3);
-  resolve([{ name: 'focus/new' }]);
-  await Promise.resolve(); await Promise.resolve();
-  assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['focus/new']);
+  t.mock.timers.tick(200);
+  assert.equal(reads, 2);
+  assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['main']);
   search(render()).props.onKeyDown(key('Escape'));
   render(); h.focus();
-  assert.equal(reads, 3);
+  assert.equal(reads, 2);
+});
+
+test('returning from DevTools never reads branches and the first Fetch click fetches', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  let reads = 0;
+  let fetches = 0;
+  let finishFetch;
+  const props = { t: (name) => en[name], value: 'origin/main', branches: [{ name: 'origin/main', kind: 'remote' }],
+    onChange() {}, onLoad: async () => { reads++; return props.branches; },
+    onFetch: () => { fetches++; return new Promise((resolve) => { finishFetch = resolve; }); } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  render(); await Promise.resolve(); await Promise.resolve();
+  render();
+  assert.equal(reads, 1);
+  // Clicking back into the page first focuses the window, before pointerdown and click.
+  h.focus();
+  let node = render();
+  const fetchButton = find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
+  assert.equal(fetchButton.props.disabled, false);
+  find(node, (item) => item.props?.['data-single-select-picker'] !== undefined)[0]
+    .props.onPointerDownCapture?.({ target: { closest: () => ({}) } });
+  fetchButton.props.onClick();
+  t.mock.timers.tick(200);
+  node = render();
+  assert.equal(reads, 1);
+  assert.equal(fetches, 1);
+  assert.equal(find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props['data-fetch-status'], 'pending');
+  finishFetch(props.branches);
+  await Promise.resolve();
+  render();
+});
+
+test('opening a branch picker while Workspace readiness is loading still starts its one candidate read', async () => {
+  const h = harness();
+  let reads = 0;
+  const props = { t: (name) => en[name], label: 'Branch', value: 'HEAD', branches: [], loading: true,
+    onChange() {}, onLoad: async () => { reads++; return [{ name: 'main', isCurrent: true }]; } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchSelector'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  render();
+  assert.equal(reads, 1);
+  await Promise.resolve(); await Promise.resolve();
+  props.loading = false;
+  const node = render();
+  assert.equal(reads, 1);
+  assert.deepEqual(options(node).map((option) => option.props['data-single-select-option']), ['main']);
 });
 
 test('large lists keep all candidates searchable and make offscreen keyboard selections available', () => {

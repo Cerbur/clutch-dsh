@@ -234,8 +234,9 @@ export function WorktreeGitPanel({
                   || (state.branches.status === 'ready' && state.branches.refreshing === true)}
                 onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
                   try {
-                    return (await manager.fetchRemoteBranches!({ workspaceId }))
-                      .filter((branch) => branch.name !== currentBranch);
+                    const branches = await manager.fetchRemoteBranches!({ workspaceId });
+                    state.acceptBranches(branches);
+                    return branches.filter((branch) => branch.name !== currentBranch);
                   } finally {
                     await state.refresh();
                   }

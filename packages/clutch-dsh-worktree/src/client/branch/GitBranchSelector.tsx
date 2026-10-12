@@ -42,7 +42,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   }, []);
   const branches = fetched?.source === source ? fetched.branches : source;
   const reload = (): Promise<void> => {
-    if (!onLoad || props.disabled || props.loading || pending.current) return Promise.resolve();
+    if (!onLoad || props.disabled || pending.current) return Promise.resolve();
     if (readRequest.current?.source === source) return readRequest.current.promise;
     setReading(true);
     setReadError(undefined);

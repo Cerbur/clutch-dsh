@@ -47,7 +47,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('Git history and refresh do not preload branches before the selector is used', async () => {
+test('Git history refresh never reads branches, including after selector use and Fetch', async () => {
   let branchReads = 0;
   const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt',
     defaultBaselineBranch: 'base-a', manager: {
@@ -61,7 +61,11 @@ test('Git history and refresh do not preload branches before the selector is use
   await controller.readFreshBranches();
   assert.equal(branchReads, 1);
   await controller.refresh();
-  assert.equal(branchReads, 2);
+  assert.equal(branchReads, 1);
+  controller.acceptBranches([{ name: 'origin/fetched', kind: 'remote' }]);
+  await controller.refresh();
+  assert.equal(branchReads, 1);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'origin/fetched', kind: 'remote' }]);
   controller.dispose();
 });
 

@@ -174,9 +174,10 @@ function WorktreeBaselineEditor({
   const trigger = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const expected = useRef(value);
-  const [fetched, setFetched] = useState<{ source: readonly BranchRecord[]; branches: readonly BranchRecord[] }>();
+  // Workspace projections omit the branch catalog; this editor owns on-demand results.
+  const [fetched, setFetched] = useState<readonly BranchRecord[]>();
   const [reading, setReading] = useState(false);
-  const roster = fetched?.source === branches ? fetched.branches : branches;
+  const roster = fetched ?? branches;
   const options = useMemo(() => roster.filter((branch) => branch.name !== currentBranch), [roster, currentBranch]);
   useEffect(() => {
     alive.current = true;
@@ -300,7 +301,7 @@ function WorktreeBaselineEditor({
               setReading(true);
               try {
                 const next = await onLoad();
-                if (alive.current) setFetched({ source: branches, branches: next });
+                if (alive.current) setFetched(next);
                 return next.filter((branch) => branch.name !== currentBranch);
               } finally {
                 if (alive.current) setReading(false);
@@ -308,7 +309,7 @@ function WorktreeBaselineEditor({
             }}
             onFetch={onFetch === undefined ? undefined : async () => {
               const next = await onFetch();
-              if (alive.current) setFetched({ source: branches, branches: next });
+              if (alive.current) setFetched(next);
               return next.filter((branch) => branch.name !== currentBranch);
             }}
           />}

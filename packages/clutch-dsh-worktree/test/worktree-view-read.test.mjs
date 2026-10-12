@@ -55,17 +55,18 @@ test('Workspace reads inspect current HEAD without loading the branch catalog', 
   reader.dispose();
 });
 
-test('only opening creation loads branch candidates, independent of a cached Workspace view', async () => {
+test('opening creation reads lightweight Workspace state without preloading branch candidates', async () => {
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const manager = createManager(calls);
   manager.getWorkspaceGitState = async () => ({ currentBranch: 'main' });
   const reader = createWorktreeViewReader(manager);
   await reader.read('ws1');
-  const modal = createWorktreeModalViewLoader(reader, manager);
+  const modal = createWorktreeModalViewLoader(reader);
   let result;
   await modal.load('ws1', (view) => { result = view; }, (error) => { throw error; });
-  assert.deepEqual(calls.listBranches, ['ws1']);
-  assert.equal(result.branches[0].name, 'branch-ws1-1');
+  assert.deepEqual(calls.listBranches, []);
+  assert.deepEqual(result.branches, []);
+  assert.equal(result.currentBranch, 'main');
   assert.equal((await reader.read('ws1')).branches.length, 0);
   modal.invalidate(); reader.dispose();
 });

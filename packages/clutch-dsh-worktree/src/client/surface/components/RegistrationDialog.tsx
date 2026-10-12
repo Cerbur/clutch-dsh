@@ -1,4 +1,5 @@
 import { WorktreeCreateDialog } from './dialogs.js';
+import type { BranchRecord } from '../../../contract/index.js';
 import type { WorktreeSurfaceProps } from '../types.js';
 import type { useRegistrationState } from '../state/useRegistrationState.js';
 import type { useSurfaceMutation } from '../actions/useSurfaceMutation.js';
@@ -30,6 +31,7 @@ type Input = {
     | 'worktreeModalWorkspaceId'
     | 'modalReadViewRef'
     | 'modalWorkspaceIdRef'
+    | 'setModalBranches'
     | 'setSelectedBranch'
     | 'setNewBranch'
     | 'setSelectedImportPath'
@@ -67,12 +69,17 @@ export function RegistrationDialog({
     worktreeModalWorkspaceId,
     modalReadViewRef,
     modalWorkspaceIdRef,
+    setModalBranches,
     setSelectedBranch,
     setNewBranch,
     setSelectedImportPath,
   } = registrationState;
   const { actionPending } = mutation;
   const { loadModalWorktreeView } = read;
+  const acceptBranches = (workspaceId: string, branches: readonly BranchRecord[]) => {
+    if (modalWorkspaceIdRef.current !== workspaceId) return;
+    setModalBranches(branches);
+  };
 
   return (
     <>
@@ -107,13 +114,18 @@ export function RegistrationDialog({
         onSelectedImportPathChange={setSelectedImportPath}
         onSelectedBranchChange={setSelectedBranch}
         onLoadBranches={props.manager === undefined || worktreeModalWorkspaceId === undefined ? undefined
-          : () => props.manager!.listBranches({ workspaceId: worktreeModalWorkspaceId })}
+          : async () => {
+            const branches = await props.manager!.listBranches({ workspaceId: worktreeModalWorkspaceId });
+            acceptBranches(worktreeModalWorkspaceId, branches);
+            return branches;
+          }}
         onFetchBranches={props.manager?.fetchRemoteBranches === undefined || worktreeModalWorkspaceId === undefined ? undefined : async () => {
           const workspaceId = worktreeModalWorkspaceId;
           try {
-            return await props.manager!.fetchRemoteBranches({ workspaceId });
+            const branches = await props.manager!.fetchRemoteBranches({ workspaceId });
+            acceptBranches(workspaceId, branches);
+            return branches;
           } finally {
-            if (modalWorkspaceIdRef.current === workspaceId) loadModalWorktreeView(workspaceId);
             await read.refresh({ preserveCurrent: true, invalidateContext: false,
               scope: { kind: 'workspace', workspaceId } });
           }

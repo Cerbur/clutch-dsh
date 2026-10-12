@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { BranchRecord } from '../../../contract/index.js';
 import {
   createWorktreeModalViewLoader,
   createWorktreeRefreshGuard,
@@ -18,6 +19,7 @@ export function useRegistrationState({ props }: Input) {
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
   const [modalReadLoading, setModalReadLoading] = useState(false);
+  const [modalBranches, setModalBranches] = useState<readonly BranchRecord[]>();
   const [worktreeModalMode, setWorktreeModalMode] = useState<WorktreeRegistrationMode>('create');
   const [importCandidates, setImportCandidates] = useState<ImportCandidatesState>({
     status: 'idle',
@@ -26,7 +28,7 @@ export function useRegistrationState({ props }: Input) {
   const [selectedImportPath, setSelectedImportPath] = useState<string | undefined>();
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranch, setNewBranch] = useState('');
-  const modalReadLoader = useRef(createWorktreeModalViewLoader(viewReader, props.manager));
+  const modalReadLoader = useRef(createWorktreeModalViewLoader(viewReader));
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
   const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);
@@ -38,6 +40,8 @@ export function useRegistrationState({ props }: Input) {
     setModalReadError,
     modalReadLoading,
     setModalReadLoading,
+    modalBranches,
+    setModalBranches,
     worktreeModalMode,
     setWorktreeModalMode,
     importCandidates,

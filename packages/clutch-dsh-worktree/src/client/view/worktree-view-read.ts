@@ -313,28 +313,13 @@ export async function loadWorktreeView(
 /** Isolate modal-target callbacks while sharing the Client Workspace reader. */
 export function createWorktreeModalViewLoader(
   reader: WorktreeViewReader,
-  manager?: WorktreeManager,
 ): WorktreeModalViewLoader {
   const guard = createWorktreeRefreshGuard();
   return {
     invalidate: guard.invalidate,
     load(workspaceId, onSuccess, onError) {
       return guard.run(
-        async () => {
-          const [viewResult, branchesResult] = await Promise.allSettled([
-            reader.read(workspaceId), manager?.listBranches({ workspaceId }),
-          ]);
-          if (viewResult.status === 'rejected') throw viewResult.reason;
-          const view = viewResult.value;
-          if (branchesResult.status === 'rejected') {
-            const readiness = readinessFromBranchError(branchesResult.reason);
-            if (readiness) return { ...view, branches: [], readiness };
-            throw branchesResult.reason;
-          }
-          const branches = branchesResult.value;
-          return branches === undefined ? view : { ...view, branches,
-            readiness: branches.length > 0 ? { status: 'ready' as const } : { status: 'noLocalBranch' as const } };
-        },
+        () => reader.read(workspaceId),
         onSuccess,
         (error) => onError(toWorktreeViewError(error)),
       );

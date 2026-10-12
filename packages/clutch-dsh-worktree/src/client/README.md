@@ -694,17 +694,23 @@ cancelled on unmount, and no status row appears below the list. Generic groups e
 search/filter/selection and stale completions after unmount are ignored. Callers refresh only the affected
 Workspace (or the active Git controller); creation preserves its ready form and guards a closed/replaced
 modal before invalidating its cached view.
+The saved-baseline editor owns its fetched roster for the mounted Worktree identity, independently
+of parent Workspace branch-array references. A lightweight Workspace refresh returns no catalog;
+it must not invalidate or erase the editor's ready candidates. Fetch results also update the editor's
+save validation, so newly fetched branches can be saved without a follow-up branch read.
 Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
-All three supply a local-ref read callback. Opening the picker or returning to a visible browser with
-it open revalidates candidates through `listBranches`, independently of remote Fetch. Dropdown reads
-start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
+All three supply a local-ref read callback. Opening the picker reads candidates through `listBranches`;
+window focus and visibility changes never reload them. Fetch already reads the catalog once in Host
+and returns it; clients consume that result directly without a second `listBranches` RPC.
+Dropdown reads start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
 keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
 branch reads by Workspace but never caches settled results. Git comparison uses its controller's
 forced branch read, retaining ready state and avoiding history/file/diff refreshes.
 Workspace view reads use `getWorkspaceGitState` for readiness and the root checkout's current branch,
-without listing refs. Creation's modal loader requests `listBranches` separately for defaults and
-new-name collision checks. Git tab mount loads history only; explicit refresh reloads branches only
-after its selector has requested them. Legacy injected managers without the lightweight method retain
+without listing refs. Creation's modal loader reads only this projection; an empty branch array means
+the catalog has not been requested, not that Git has no branches. Defaults use the known current branch
+or HEAD and known names; final collision checks remain in Host. Git tab mount and explicit refresh
+load history only. Its controller accepts the Fetch roster directly. Legacy injected managers without the lightweight method retain
 the branch-read fallback, while the bundled Host and Connection always expose the lightweight endpoint.
 `select/WorktreeSelector` adapts import candidates into branch labels and secondary path descriptions;
 absolute paths are selection identities and both branch and path participate in search.

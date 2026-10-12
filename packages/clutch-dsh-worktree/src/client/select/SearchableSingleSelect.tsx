@@ -37,7 +37,7 @@ export interface SingleSelectPickerProps {
   readonly onClose?: () => void;
   /** Opening shells defer candidate work until the browser has painted. */
   readonly preparing?: boolean;
-  /** Revalidate domain data after opening and when returning to an open picker. */
+  /** Load domain data once after opening. */
   readonly onRefresh?: () => void;
 }
 
@@ -57,17 +57,7 @@ export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, valu
   const canRefresh = onRefresh !== undefined;
   useEffect(() => {
     if (preparing || !canRefresh) return;
-    const revalidate = () => {
-      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') refresh.current?.();
-    };
-    revalidate();
-    if (typeof window === 'undefined') return;
-    window.addEventListener('focus', revalidate);
-    document.addEventListener('visibilitychange', revalidate);
-    return () => {
-      window.removeEventListener('focus', revalidate);
-      document.removeEventListener('visibilitychange', revalidate);
-    };
+    refresh.current?.();
   }, [preparing, canRefresh]);
   const search = query.trim().toLocaleLowerCase();
   const busy = loading || preparing;
@@ -168,7 +158,8 @@ export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, valu
             style={virtual ? { position: 'absolute', top: section.top, height: section.height, width: '100%' } : undefined}
             aria-labelledby={section.label ? id + '-group-' + section.value : undefined}>
             {section.label && <div className={styles.singleSelectGroup}>
-              <span id={id + '-group-' + section.value}>{section.label}</span>{section.action}
+              <span id={id + '-group-' + section.value}>{section.label}</span>
+              {section.action}
             </div>}
             {section.rows.filter((row) => renderedIndexes.has(row.index)).map((item) => row(item, section.top))}
           </div>)}
