@@ -148,6 +148,58 @@ test('an exact local ref remains an attached checkout despite a same-named remot
   }
 });
 
+for (const stage of ['before Git', 'after Git']) {
+  test(`interrupted creation preserves the exact local acquisition ref beside its same-named remote (${stage})`, async () => {
+    class InterruptedGit extends LocalGitAdapter {
+      interrupted = false;
+      async createWorktree(...args) {
+        if (stage === 'after Git') await super.createWorktree(...args);
+        this.interrupted = true;
+        if (stage === 'before Git') throw new Error('interrupted before Git creation');
+      }
+      async listWorktrees(...args) {
+        if (this.interrupted) throw new Error('interrupted before publication');
+        return super.listWorktrees(...args);
+      }
+    }
+    const git = new InterruptedGit();
+    const fixture = await createFixture({ git });
+    try {
+      const root = fixture.repositoryRoot;
+      const remoteCommit = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+      await runGit(root, ['update-ref', 'refs/remotes/origin/main', remoteCommit]);
+      await runGit(root, ['commit', '--allow-empty', '-m', 'local acquisition']);
+      const baseCommit = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+      await runGit(root, ['branch', 'origin/main', baseCommit]);
+      await assert.rejects(fixture.manager.createWorktree({
+        workspaceId: 'ws_dashboard', branch: 'refs/heads/origin/main',
+      }), { code: 'WORKTREE_RECOVERY_REQUIRED' });
+      const pending = (await fixture.sidecar.read('ws_dashboard')).pendingOperation;
+      assert.equal(pending.baseBranch, 'refs/heads/origin/main');
+      assert.equal(pending.baseRef, undefined, 'existing branch must not acquire the new-branch marker');
+      assert.equal(pending.baseCommit, baseCommit);
+      // The checkout can advance before recovery; the acquisition commit must not.
+      if (stage === 'after Git') await runGit(pending.targetPath, ['commit', '--allow-empty', '-m', 'after interruption']);
+      git.interrupted = false;
+      await fixture.manager.recoverWorktrees({ workspaceId: 'ws_dashboard' });
+      const snapshot = await fixture.sidecar.read('ws_dashboard');
+      assert.equal(snapshot.pendingOperation, undefined);
+      if (stage === 'before Git') {
+        assert.deepEqual(snapshot.worktrees, []);
+        assert.equal(snapshot.recoveryIssues, undefined, 'an existing local branch does not imply ambiguous new-branch creation');
+        return;
+      }
+      assert.equal(snapshot.worktrees[0].baseBranch, 'refs/heads/origin/main');
+      assert.equal(snapshot.worktrees[0].baseCommit, baseCommit);
+      assert.notEqual(snapshot.worktrees[0].baseCommit, remoteCommit);
+      assert.notEqual(snapshot.worktrees[0].baseCommit, (await runGit(pending.targetPath, ['rev-parse', 'HEAD'])).stdout.trim());
+    } finally {
+      await fixture.manager.close();
+      await rm(fixture.tempRoot, { recursive: true, force: true });
+    }
+  });
+}
+
 test('creates a local branch with the same short name as its remote baseline before checking local conflicts', async () => {
   const fixture = await createFixture();
   try {

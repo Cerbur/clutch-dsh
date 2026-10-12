@@ -41,7 +41,7 @@ function harness({ deferPreparation = false, geometry } = {}) {
       const index = cursor++;
       const previous = state[index];
       if (!previous || dependencies.some((value, i) => value !== previous.dependencies[i])) {
-        state[index] = { dependencies };
+        state[index] = { dependencies, callback };
         effects.push(() => { previous?.cleanup?.(); state[index].cleanup = callback(); });
       }
     },
@@ -97,7 +97,11 @@ function harness({ deferPreparation = false, geometry } = {}) {
     frames.clear();
     pending.forEach((callback) => callback());
   };
-  return { advanceFrame, diagnostics, dispose() {
+  return { advanceFrame, diagnostics, replayEffects({ childFirst = false } = {}) {
+    const mounted = state.filter((entry) => entry?.callback);
+    mounted.forEach((entry) => entry.cleanup?.());
+    (childFirst ? mounted.reverse() : mounted).forEach((entry) => { entry.cleanup = entry.callback(); });
+  }, dispose() {
     state.splice(0).forEach((entry) => entry?.cleanup?.());
     for (const entry of diagnostics.getSnapshot()) diagnostics.deactivate(entry.source);
   }, focus: () => listeners.get('focus')?.(),
@@ -282,6 +286,54 @@ test('opening a branch picker while Workspace readiness is loading still starts 
   assert.equal(reads, 1);
   assert.deepEqual(options(node).map((option) => option.props['data-single-select-option']), ['main']);
 });
+
+for (const outcome of ['success', 'failure']) {
+  for (const order of ['old first', 'latest first']) {
+    for (const childFirst of [false, true]) {
+      test(`StrictMode replay replaces delayed branch reads and releases loading after ${outcome} (${order}, child first: ${childFirst})`, async (t) => {
+        const h = harness();
+        t.after(() => h.dispose());
+        const requests = [];
+        const chosen = [];
+        let fetches = 0;
+        const props = { t: (name) => en[name], value: 'main', branches: [{ name: 'main' }],
+          onChange: (value) => chosen.push(value),
+          onLoad: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+          onFetch: async () => { fetches++; return [{ name: 'recovered' }]; } };
+        const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+        render();
+        assert.equal(requests.length, 1);
+        h.replayEffects({ childFirst });
+        assert.equal(requests.length, 2);
+        if (order === 'old first') requests[0].resolve([{ name: 'obsolete' }]);
+        await Promise.resolve(); await Promise.resolve();
+        let node = render();
+        assert.equal(find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props.disabled, true);
+        assert.equal(options(node).some((item) => item.props['data-single-select-option'] === 'obsolete'), false);
+        if (outcome === 'success') requests[1].resolve([{ name: 'latest' }]);
+        else requests[1].reject(new Error('latest failed'));
+        await Promise.resolve(); await Promise.resolve();
+        if (order === 'latest first') {
+          requests[0].resolve([{ name: 'obsolete' }]);
+          await Promise.resolve(); await Promise.resolve();
+        }
+        node = render();
+        const expected = outcome === 'success' ? 'latest' : 'main';
+        const option = options(node).find((item) => item.props['data-single-select-option'] === expected);
+        assert.ok(option);
+        assert.equal(option.props.disabled, false);
+        option.props.onClick();
+        assert.deepEqual(chosen, [expected]);
+        const fetch = find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
+        assert.equal(fetch.props.disabled, false);
+        fetch.props.onClick();
+        await Promise.resolve(); await Promise.resolve();
+        assert.equal(fetches, 1);
+        assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['recovered']);
+      });
+    }
+  }
+}
 
 test('large lists keep all candidates searchable and make offscreen keyboard selections available', () => {
   const h = harness();

@@ -183,7 +183,7 @@ const singleSelectSource = await readFile(
   new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
 );
 
-function renderHarness(writeClipboard) {
+function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
   const state = [];
   const effects = [];
   let cursor = 0;
@@ -313,7 +313,8 @@ function renderHarness(writeClipboard) {
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
-        '../branch/GitBranchSelector.js': branchExports,
+        '../branch/GitBranchSelector.js': stubBranchPicker
+          ? { GitBranchPicker: (props) => jsx('baseline-picker', props) } : branchExports,
       })[name] ?? {},
     exports,
   );
@@ -766,6 +767,60 @@ test('baseline Fetch retains its roster across lightweight Workspace refreshes w
   assert.equal(findAll(harness.render(), (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
   harness.dispose();
 });
+
+for (const operation of ['onLoad', 'onFetch']) {
+  for (const settlement of ['resolve', 'reject']) {
+    for (const batched of [false, true]) {
+      test(`baseline ${operation} ignores ${settlement} from a closed modal after a newer request (batched: ${batched})`, async () => {
+        const harness = renderHarness(async () => true, { stubBranchPicker: true });
+        const requests = [];
+        const read = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
+        let node = harness.render({ branches: [{ name: 'main' }], record: { ...record, baseBranch: 'main' },
+          onLoadBranches: read, onFetchBranches: read, onSaveBaseline: async (branch) => branch });
+        const open = () => {
+          findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+          node = harness.render();
+          return findAll(node, (item) => item.type === 'baseline-picker')[0].props;
+        };
+        const oldPicker = open();
+        const old = oldPicker[operation]().catch(() => {});
+        node = harness.render();
+        byRole(node, 'dialog')[0].props.onClose();
+        if (!batched) node = harness.render();
+        const picker = open();
+        await oldPicker[operation]();
+        assert.equal(requests.length, 1, 'callbacks from the closed modal cannot start reads');
+        const latest = picker.onLoad();
+        node = harness.render();
+        // An obsolete completion must not release the new read's Save gate.
+        if (settlement === 'reject') requests[0].reject(new Error('obsolete'));
+        else requests[0].resolve([{ name: 'obsolete' }]);
+        await old;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, true);
+        requests[1].resolve([{ name: 'main' }, { name: 'latest' }]);
+        await latest;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main', 'latest']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+        // Same modal, new request first; the previous callback settles last.
+        const current = findAll(node, (item) => item.type === 'baseline-picker')[0].props;
+        const earlier = current[operation]().catch(() => {});
+        const newer = current.onLoad();
+        requests[3].resolve([{ name: 'main' }, { name: 'newest' }]);
+        await newer;
+        if (settlement === 'reject') requests[2].reject(new Error('earlier'));
+        else requests[2].resolve([{ name: 'obsolete' }]);
+        await earlier;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main', 'newest']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+        harness.dispose();
+      });
+    }
+  }
+}
 
 test('baseline editor delegates list behavior to the shared branch picker', () => {
   assert.match(source, /<GitBranchPicker/);

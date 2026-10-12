@@ -85,7 +85,9 @@ export async function recoverWorktreeTransaction(
               ...(pending.workspacePath === undefined || pending.workspacePath === pending.targetPath ? {} : { gitRootPath: pending.targetPath }),
               branch: pending.branch,
               createdAt: pending.startedAt,
-              ...(pending.baseRef?.endsWith('^{commit}') && isWorktreeGitCommit(pending.baseRef.slice(0, -9))
+              ...(pending.baseBranch !== undefined
+                ? { baseBranch: pending.baseBranch }
+                : pending.baseRef?.endsWith('^{commit}') && isWorktreeGitCommit(pending.baseRef.slice(0, -9))
                 ? {}
                 : { baseBranch: pending.baseRef ?? pending.branch }),
               // The journaled acquisition commit is immutable and always wins.

@@ -132,6 +132,8 @@ Search ignores case; use Arrow Up/Down to move, Enter to choose, and Escape to c
 empty space, search, filters, and fetch controls; selecting an option or clicking outside closes it.
 Branch and import selectors open immediately while candidates load, show a loading indicator inside,
 and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
+Closing and reopening the baseline editor discards pending results from the previous dialog.
+Only the latest branch read or Fetch can update its candidates and loading state.
 Even with cached candidates, the dropdown paints its loading shell before preparing the list. Large lists
 render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
 Opening any branch selector rereads local Git refs, including changes made in a terminal. Returning to

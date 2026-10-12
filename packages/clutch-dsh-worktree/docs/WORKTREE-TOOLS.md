@@ -73,6 +73,8 @@ There are no merge/publish/remove/cleanup tools and no native parent/subagent li
 
 `clutch_list_worktrees({ workspaceId? })` returns managed facts and local and fetched remote branch candidates;
 Git failure is reported as `branchesUnavailable` while preserving a sidecar-supported list.
+Its branch output schema declares optional `ref`, `kind` (`local` or `remote`) and `remote`.
+Native DSH output validation accepts both exact-ref facts and older adapters omitting these fields.
 `clutch_list_sessions({ workspaceId?, worktreeId? })` discovers existing native Sessions and
 relations, including unavailable diagnostics without loading unauthorized history. Explicit
 Workspace ids must equal the calling Workspace. Every send/report target is reauthorized

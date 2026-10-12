@@ -15,7 +15,14 @@ export function registerListWorktrees(context: ToolContext): void {
         worktrees: output.array(output.worktree),
         branches: output.array(
           output.object(
-            { name: output.string, isCurrent: output.boolean, checkedOut: output.boolean },
+            {
+              name: output.string,
+              ref: output.string,
+              kind: { type: 'string', enum: ['local', 'remote'] },
+              remote: output.string,
+              isCurrent: output.boolean,
+              checkedOut: output.boolean,
+            },
             ['name', 'isCurrent', 'checkedOut'],
           ),
         ),

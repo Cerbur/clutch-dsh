@@ -226,11 +226,13 @@ function assertPendingOperation(
         'repository',
         'repositoryFingerprint',
         ...(schemaVersion >= 7 ? ['workspacePath'] : []),
+        ...(schemaVersion >= 7 ? ['baseBranch'] : []),
       ]) ||
       typeof value.branch !== 'string' ||
       (value.baseCommit !== undefined &&
         (typeof value.baseCommit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(value.baseCommit))) ||
       (value.baseRef !== undefined && typeof value.baseRef !== 'string') ||
+      (value.baseBranch !== undefined && typeof value.baseBranch !== 'string') ||
       (value.workspacePath !== undefined &&
         (typeof value.workspacePath !== 'string' || !path.isAbsolute(value.workspacePath) ||
           !isInside(value.targetPath, value.workspacePath)))

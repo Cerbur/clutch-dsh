@@ -177,6 +177,9 @@ function WorktreeBaselineEditor({
   // Workspace projections omit the branch catalog; this editor owns on-demand results.
   const [fetched, setFetched] = useState<readonly BranchRecord[]>();
   const [reading, setReading] = useState(false);
+  const editorOpen = useRef(false);
+  const editorGeneration = useRef(0);
+  const requestGeneration = useRef(0);
   const roster = fetched ?? branches;
   const options = useMemo(() => roster.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch), [roster, currentBranch]);
   const draftMatches = options.filter((branch) => (branch.ref ?? branch.name) === draft ||
@@ -187,6 +190,8 @@ function WorktreeBaselineEditor({
     alive.current = true;
     return () => {
       alive.current = false;
+      editorGeneration.current++;
+      requestGeneration.current++;
     };
   }, []);
   useEffect(() => {
@@ -200,13 +205,36 @@ function WorktreeBaselineEditor({
 
   const closeEditor = () => {
     if (pending) return;
+    editorOpen.current = false;
+    editorGeneration.current++;
+    requestGeneration.current++;
+    setReading(false);
     setDraft(undefined);
     setError(undefined);
   };
   const openEditor = () => {
+    editorOpen.current = true;
+    editorGeneration.current++;
+    requestGeneration.current++;
+    setReading(false);
     expected.current = saved;
     setDraft(saved ?? '');
     setError(undefined);
+  };
+  const lifetime = editorGeneration.current;
+  const readBranches = async (read: () => Promise<readonly BranchRecord[]>) => {
+    if (!alive.current || !editorOpen.current || editorGeneration.current !== lifetime) return options;
+    const request = ++requestGeneration.current;
+    const isCurrent = () => alive.current && editorOpen.current &&
+      editorGeneration.current === lifetime && requestGeneration.current === request;
+    setReading(true);
+    try {
+      const next = await read();
+      if (isCurrent()) setFetched(next);
+      return next.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
+    } finally {
+      if (isCurrent()) setReading(false);
+    }
   };
   const save = async () => {
     if (
@@ -226,6 +254,9 @@ function WorktreeBaselineEditor({
       if (alive.current) {
         setSaved(result);
         expected.current = result;
+        editorOpen.current = false;
+        editorGeneration.current++;
+        requestGeneration.current++;
         setDraft(undefined);
       }
     } catch (cause) {
@@ -299,23 +330,11 @@ function WorktreeBaselineEditor({
       >
         <div className={styles.dashboardBaselinePicker} data-dashboard-baseline-modal>
           {draft !== undefined && <GitBranchPicker
+            key={lifetime}
             branches={options} value={draft} onChange={setDraft} t={t}
             disabled={pending || disabled} loading={loading} onClose={closeEditor}
-            onLoad={onLoad === undefined ? undefined : async () => {
-              setReading(true);
-              try {
-                const next = await onLoad();
-                if (alive.current) setFetched(next);
-                return next.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
-              } finally {
-                if (alive.current) setReading(false);
-              }
-            }}
-            onFetch={onFetch === undefined ? undefined : async () => {
-              const next = await onFetch();
-              if (alive.current) setFetched(next);
-              return next.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
-            }}
+            onLoad={onLoad === undefined ? undefined : () => readBranches(onLoad)}
+            onFetch={onFetch === undefined ? undefined : () => readBranches(onFetch)}
           />}
           <NotificationToasts
             notices={

@@ -350,6 +350,10 @@ Host 仅解析已枚举的 `refs/heads/`、`refs/remotes/` 分支，避免同名
 目标冲突按实际 local ref 判断，校验在 Git/Sidecar
 副作用前完成。新 branch 冲突与创建恢复仅检查 local refs，remote refs 不占用 local branch 名。
 事务仍固定获取 SHA 并通过 journal 发布，保存基线仍只 CAS 更新 `baseBranch`，保留 `baseCommit`。
+Create journal 以可选 `baseBranch` 原样保存获取时的基线身份，包括没有 newBranch 时的完整
+local ref。恢复优先使用该字段；旧 journal 仍使用 `baseRef` 或目标 branch 的兼容回退，
+commit-only 获取仍不推测 branch。`baseRef` 仅在创建新分支时写入，其存在性继续承担旧恢复逻辑的
+新建分支标记，不因新增获取身份而改变。获取 `baseCommit` 始终优先于恢复时已移动的 HEAD。
 分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段。显式 `fetchRemoteBranches` RPC 获取全部已配置远端，Provider 使用固定 argv、
 关闭 hooks/自动 gc/submodule 递归，并通过显式 refspec 与空 refmap 限定更新 `refs/remotes/`，
 忽略 remote 配置中的本地分支/tag fetch 映射，不 prune、不合并、不 checkout。复用 runner 的
@@ -366,6 +370,11 @@ Client 的 `select/SearchableSingleSelect` / `SingleSelectPicker` 提供领域�
 单选键盘导航、固定滚动区和浮层生命周期，浮层复用 DSH `MenuSurface` 的模糊材质与 macOS 底衬。
 `branch/GitBranchSelector` 将分支事实映射为选项、local/remote 分组与 checkout 标记，
 供创建与临时比较接入；基线确认弹窗通过 `GitBranchPicker` 嵌入同一面板。
+基线编辑器独立校验弹窗生命周期与 list/Fetch 请求代次，关闭、重开或新请求启动同步淘汰旧回调；
+旧成功、失败和 finally 不得覆盖候选或释放新请求的 reading。
+弹窗代次同时作为 picker key，确保批量关闭重开时也淘汰 picker 自有回调。选择器读取去重匹配来源与
+generation；StrictMode effect replay 淘汰旧请求并由 replay 的 picker effect 发起必要的新读取，
+父 setup 也补发仍必要的读取以兼容子 effect 先执行的顺序；当前请求成功或失败均释放 loading。
 `select/WorktreeSelector` 将导入候选映射为分支名与路径副标题，以 absolutePath 作为选择身份，
 支持按分支名或路径搜索，不再使用原生 HTML select。加载、保存、pending 状态仍由调用方持有。
 默认优先当前 local branch，缺省 kind 视为 local，当前 Worktree branch 仍从比较候选中过滤。

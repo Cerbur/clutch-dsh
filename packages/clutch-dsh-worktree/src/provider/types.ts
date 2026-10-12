@@ -41,6 +41,8 @@ export interface CreateWorktreePendingOperation {
   readonly worktreeId: WorktreeId;
   readonly targetPath: string;
   readonly branch: string;
+  /** Acquisition identity, independent of baseRef's legacy new-branch marker. */
+  readonly baseBranch?: string;
   readonly baseRef?: string;
   readonly baseCommit?: string;
   readonly repositoryFingerprint: string;

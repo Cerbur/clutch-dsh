@@ -707,6 +707,12 @@ The saved-baseline editor owns its fetched roster for the mounted Worktree ident
 of parent Workspace branch-array references. A lightweight Workspace refresh returns no catalog;
 it must not invalidate or erase the editor's ready candidates. Fetch results also update the editor's
 save validation, so newly fetched branches can be saved without a follow-up branch read.
+The editor advances its modal lifetime on open/close and its request generation on every list/Fetch.
+The modal lifetime keys its picker, so batched close/reopen also retires the picker's own callbacks.
+Only callbacks matching both may publish candidates or release reading; old success, failure and
+finally callbacks cannot affect a reopened modal or a newer request. Picker read deduplication also
+checks its effect generation. StrictMode cleanup retires the old request; replay starts a replacement
+from the picker or parent setup, regardless of their effect order. Success and failure release loading.
 Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
 All three supply a local-ref read callback. Opening the picker reads candidates through `listBranches`;
 window focus and visibility changes never reload them. Fetch already reads the catalog once in Host

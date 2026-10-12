@@ -31,15 +31,21 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   const [readError, setReadError] = useState<WorktreeViewError>();
   const [fetchError, setFetchError] = useState<WorktreeViewError>();
   const generation = useRef(0);
-  const readRequest = useRef<{ source: readonly BranchRecord[]; promise: Promise<void> }>();
+  const readRequest = useRef<{ source: readonly BranchRecord[]; generation: number; promise: Promise<void> }>();
   const latestSource = useRef(source);
+  const latestReload = useRef<() => Promise<void>>();
   latestSource.current = source;
   const scope = useId();
   useEffect(() => {
     alive.current = true;
+    // Child picker effects may replay before this parent's setup restores alive.
+    // Recover the retired read here too; generation-aware sharing avoids duplicates.
+    if (readRequest.current && readRequest.current.generation !== generation.current)
+      void latestReload.current?.();
     return () => {
       alive.current = false;
       generation.current++;
+      pending.current = false;
       clearTimeout(resetTimer.current);
     };
   }, []);
@@ -50,11 +56,12 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     : legacyMatches.length === 1 ? legacyMatches[0]!.ref ?? legacyMatches[0]!.name : props.value;
   const reload = (): Promise<void> => {
     if (!alive.current || !onLoad || props.disabled || pending.current) return Promise.resolve();
-    if (readRequest.current?.source === source) return readRequest.current.promise;
+    if (readRequest.current?.source === source && readRequest.current.generation === generation.current)
+      return readRequest.current.promise;
     setReading(true);
     setReadError(undefined);
-    const request = { source, promise: Promise.resolve() };
     const token = generation.current;
+    const request = { source, generation: token, promise: Promise.resolve() };
     readRequest.current = request;
     request.promise = (async () => {
       try {
@@ -67,14 +74,15 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
           setReadError(toWorktreeViewError(error));
         }
       } finally {
-        if (readRequest.current === request) {
+        if (readRequest.current === request && generation.current === token) {
           readRequest.current = undefined;
-          if (alive.current && generation.current === token) setReading(false);
+          if (alive.current) setReading(false);
         }
       }
     })();
     return request.promise;
   };
+  latestReload.current = reload;
   const fetchBranches = async () => {
     if (!alive.current || !onFetch || pending.current || reading || status === 'success' || props.disabled || props.loading) return;
     const token = generation.current;
