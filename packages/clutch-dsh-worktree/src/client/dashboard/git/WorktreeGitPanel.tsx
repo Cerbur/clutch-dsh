@@ -151,7 +151,7 @@ export function WorktreeGitPanel({
   const unavailable = historyValue?.unavailableReason;
   const branchRoster = state.branches.status === 'ready' ? state.branches.value : undefined;
   const branchOptions = useMemo(() => (branchRoster ?? [])
-    .filter((branch) => branch.name !== currentBranch), [branchRoster, currentBranch]);
+    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch), [branchRoster, currentBranch]);
   const branchError = state.branches.status === 'error'
     ? state.branches.error
     : state.branches.status === 'ready'
@@ -236,7 +236,7 @@ export function WorktreeGitPanel({
                   try {
                     const branches = await manager.fetchRemoteBranches!({ workspaceId });
                     state.acceptBranches(branches);
-                    return branches.filter((branch) => branch.name !== currentBranch);
+                    return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
                   } finally {
                     await state.refresh();
                   }
@@ -244,7 +244,7 @@ export function WorktreeGitPanel({
                 onChange={(value) => state.selectBaselineBranch(value || undefined)}
                 onLoad={manager?.listBranches === undefined ? undefined
                   : async () => (await state.readFreshBranches())
-                    .filter((branch) => branch.name !== currentBranch)}
+                    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
               />
             </div>
           )}
@@ -255,7 +255,7 @@ export function WorktreeGitPanel({
                 <dd>
                   {baselineRef !== undefined ? (
                     <>
-                      {baselineRef}
+                      {baselineRef.replace(/^refs\/(heads|remotes)\//u, '')}
                       <code>@ {shortCommit(baselineCommit)}</code>
                     </>
                   ) : (

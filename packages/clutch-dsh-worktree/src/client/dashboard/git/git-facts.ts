@@ -22,7 +22,7 @@ export function normalizeBaselineBranch(
   currentBranch: string | undefined,
 ): string | undefined {
   const baseline = normalizeBranch(value);
-  return baseline === undefined || baseline === currentBranch ? undefined : baseline;
+  return baseline === undefined || baseline === currentBranch || baseline === 'refs/heads/' + currentBranch ? undefined : baseline;
 }
 
 export interface GitLineTotals {

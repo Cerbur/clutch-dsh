@@ -532,11 +532,7 @@ function parseBranchWorktreePaths(output: string): readonly GitBranchWorktreeInf
       ...(kind === 'local' && worktreePath ? { worktreePath } : {}),
     });
   }
-  // A local branch named origin/main and its remote counterpart need distinct,
-  // stable picker identities. Tags never influence these identities.
-  const locals = new Set(branches.filter((branch) => branch.kind === 'local').map((branch) => branch.name));
-  return branches.map((branch) => branch.kind === 'remote' && locals.has(branch.name)
-    ? { ...branch, name: 'remotes/' + branch.name } : branch);
+  return branches;
 }
 
 function isUnsupportedWorktreePathAtom(error: unknown): boolean {

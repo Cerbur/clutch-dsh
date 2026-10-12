@@ -29,6 +29,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   const resetTimer = useRef<ReturnType<typeof setTimeout>>();
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<WorktreeViewError>();
+  const [fetchError, setFetchError] = useState<WorktreeViewError>();
+  const generation = useRef(0);
   const readRequest = useRef<{ source: readonly BranchRecord[]; promise: Promise<void> }>();
   const latestSource = useRef(source);
   latestSource.current = source;
@@ -37,68 +39,86 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     alive.current = true;
     return () => {
       alive.current = false;
+      generation.current++;
       clearTimeout(resetTimer.current);
     };
   }, []);
   const branches = fetched?.source === source ? fetched.branches : source;
+  const legacyMatches = branches.filter((branch) => branch.name === props.value ||
+    (branch.kind === 'remote' && 'remotes/' + branch.name === props.value));
+  const value = props.value.startsWith('refs/') ? props.value
+    : legacyMatches.length === 1 ? legacyMatches[0]!.ref ?? legacyMatches[0]!.name : props.value;
   const reload = (): Promise<void> => {
-    if (!onLoad || props.disabled || pending.current) return Promise.resolve();
+    if (!alive.current || !onLoad || props.disabled || pending.current) return Promise.resolve();
     if (readRequest.current?.source === source) return readRequest.current.promise;
     setReading(true);
     setReadError(undefined);
     const request = { source, promise: Promise.resolve() };
+    const token = generation.current;
     readRequest.current = request;
     request.promise = (async () => {
       try {
         const next = await onLoad();
-        if (alive.current && readRequest.current === request && latestSource.current === source) {
+        if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
           setFetched({ source, branches: next });
         }
       } catch (error) {
-        if (alive.current && readRequest.current === request && latestSource.current === source) {
+        if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
           setReadError(toWorktreeViewError(error));
         }
       } finally {
         if (readRequest.current === request) {
           readRequest.current = undefined;
-          if (alive.current) setReading(false);
+          if (alive.current && generation.current === token) setReading(false);
         }
       }
     })();
     return request.promise;
   };
   const fetchBranches = async () => {
-    if (!onFetch || pending.current || reading || props.disabled || props.loading) return;
+    if (!alive.current || !onFetch || pending.current || reading || status === 'success' || props.disabled || props.loading) return;
+    const token = generation.current;
     clearTimeout(resetTimer.current);
     pending.current = true;
     setStatus('pending');
     try {
       const next = await onFetch();
-      if (alive.current) {
+      if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
+        setFetchError(undefined);
         setStatus('success');
         resetTimer.current = setTimeout(() => {
-          if (alive.current) setStatus('idle');
+          if (alive.current && generation.current === token) setStatus('idle');
         }, 2000);
       }
-    } catch {
-      if (alive.current) setStatus('error');
-    } finally { pending.current = false; }
+    } catch (error) {
+      if (alive.current && generation.current === token) {
+        setFetchError(toWorktreeViewError(error));
+        setStatus('error');
+      }
+    } finally { if (generation.current === token) pending.current = false; }
   };
   const actionLabel = t(status === 'pending' ? 'branch.fetching' : status === 'success' ? 'branch.fetched'
     : status === 'error' ? 'branch.fetchFailed' : 'branch.fetch');
   const action = onFetch === undefined ? undefined : <button type="button" className={styles.branchFetch}
-    data-branch-fetch data-fetch-status={status} title={actionLabel}
+    data-branch-fetch data-fetch-status={status} title={fetchError === undefined ? actionLabel
+      : [actionLabel, fetchError.code, fetchError.message,
+        fetchError.details === undefined ? undefined : JSON.stringify(fetchError.details, null, 2)].filter(Boolean).join('\n')}
     aria-label={actionLabel} aria-live="polite" aria-busy={status === 'pending'}
     disabled={props.disabled || props.loading || reading || status === 'pending' || status === 'success'} onClick={() => void fetchBranches()}>
     {status === 'success' ? t('branch.fetched') : status === 'error'
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
-  return { status, notice: <ErrorToast error={readError} t={t} scope={'branch-read:' + scope}
+  return { status, notice: <><ErrorToast error={readError} t={t} scope={'branch-read:' + scope}
     context={t('dashboard.searchBranches')}
-    actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />, picker: {
+    actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />
+    <ErrorToast error={fetchError} t={t} scope={'branch-fetch:' + scope}
+      context={t('branch.fetch')}
+      actions={[{ label: t('branch.fetchRetry'), disabled: props.disabled || props.loading || reading || status === 'pending',
+        onClick: () => void fetchBranches() }]} /></>, picker: {
     ...props,
+    value,
     loading: props.loading || reading,
     onRefresh: onLoad === undefined ? undefined : () => { void reload(); },
     loadingLabel: t('select.loading'),
@@ -109,7 +129,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     options: [
       ...(emptyLabel !== undefined ? [{ value: '', label: emptyLabel, icon: <IconBranchOutline16 /> }] : []),
       ...branches.map((branch) => ({
-        value: branch.name, label: branch.name, group: branch.kind === 'remote' ? 'remote' : 'local',
+        value: branch.ref ?? branch.name, label: branch.name, group: branch.kind === 'remote' ? 'remote' : 'local',
         icon: <IconBranchOutline16 />,
         badge: branch.kind === 'remote' ? branch.remote
           : branch.isCurrent ? t('branch.current') : branch.checkedOut ? t('branch.checkedOut') : undefined,

@@ -27,3 +27,25 @@ export function localBranchExists(branches: readonly GitBranchWorktreeInfo[], na
   return branches.some((branch) => branch.kind !== 'remote' &&
     (branch.ref === undefined ? branch.name === name : branch.ref === 'refs/heads/' + name));
 }
+
+/** Resolve exact refs or unambiguous legacy names; never let a new local ref steal a baseline. */
+export function findBranchIdentity(
+  branches: readonly GitBranchWorktreeInfo[],
+  identity: string,
+): GitBranchWorktreeInfo | undefined {
+  const matches = branches.filter((branch) => identity.startsWith('refs/')
+    ? branch.ref === identity
+    : branch.name === identity || (branch.kind === 'remote' && 'remotes/' + branch.name === identity));
+  if (matches.length > 1) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Baseline branch identity is ambiguous; select an exact branch ref', {
+      baseBranch: identity,
+      refs: matches.map((branch) => branch.ref ?? branch.name).join(', '),
+    });
+  }
+  return matches[0];
+}
+
+/** Normalize remote aliases when writing new baseline facts; leave legacy local names compatible. */
+export function canonicalBranchIdentity(branch: GitBranchWorktreeInfo, requested: string): string {
+  return branch.kind === 'remote' ? branch.ref ?? requested : requested;
+}

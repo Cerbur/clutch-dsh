@@ -1319,9 +1319,20 @@ test('legacy sidecar creation enforces a new local branch for remote bases', asy
       const record = await legacy.createWorktree({
         workspaceId: 'ws_one', branch: 'origin/main', newBranch: 'legacy/remote',
       });
-      assert.equal(record.baseBranch, 'origin/main');
+      assert.equal(record.baseBranch, 'refs/remotes/origin/main');
       assert.equal(record.baseCommit, head);
       assert.equal((await runGit(record.absolutePath, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim(), 'legacy/remote');
+      const sameName = await legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'origin/main', newBranch: 'origin/main',
+      });
+      assert.equal(sameName.branch, 'origin/main');
+      assert.equal(sameName.baseBranch, 'refs/remotes/origin/main');
+      assert.equal(sameName.baseCommit, head);
+      const before = await sidecar.read('ws_one');
+      await expectCode(legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'refs/remotes/origin/main', newBranch: 'origin/main',
+      }), 'WORKTREE_BRANCH_CONFLICT');
+      assert.deepEqual(await sidecar.read('ws_one'), before);
     } finally {
       await legacy.close();
     }
@@ -1365,7 +1376,7 @@ test('marks the containing Git Worktree branch current for an imported subdirect
     });
 
     assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
-      { name: 'main', kind: 'local', isCurrent: true, checkedOut: true },
+      { name: 'main', ref: 'refs/heads/main', kind: 'local', isCurrent: true, checkedOut: true },
     ]);
   });
 });

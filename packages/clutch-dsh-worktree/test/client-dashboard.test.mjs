@@ -659,6 +659,30 @@ test('shared baseline picker searches remote branches and saves only confirmed s
   harness.dispose();
 });
 
+test('baseline editor saves an exact remote ref even when its display name matches the current local branch', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({ record: { ...record, branch: 'origin/main', currentBranch: 'origin/main', baseBranch: 'main' },
+    branches: [{ name: 'origin/main', ref: 'refs/heads/origin/main', kind: 'local' },
+      { name: 'origin/main', ref: 'refs/remotes/origin/main', kind: 'remote', remote: 'origin' }],
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  const options = byRole(node, 'option');
+  assert.equal(options.length, 1);
+  assert.equal(options[0].props['data-single-select-option'], 'refs/remotes/origin/main');
+  options[0].props.onClick();
+  node = harness.render();
+  const save = findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0];
+  assert.equal(save.props.disabled, false);
+  save.props.onClick();
+  await tick();
+  assert.deepEqual(calls, [{ branch: 'refs/remotes/origin/main', expected: 'main' }]);
+  assert.equal(findAll(harness.render(), (item) => item.props?.['data-dashboard-baseline-value'])[0].props.children, 'origin/main');
+  harness.dispose();
+});
+
 test('baseline picker keeps a long branch roster in one scrollable list', () => {
   const harness = renderHarness(async (branch) => branch);
   const branches = Array.from({ length: 240 }, (_, index) => ({

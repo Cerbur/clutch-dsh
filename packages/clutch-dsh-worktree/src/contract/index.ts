@@ -267,7 +267,9 @@ export function gitWorktreeRoot(record: { readonly absolutePath: string; readonl
  * Git projection for branch selection; `isCurrent` identifies the main Workspace and `checkedOut` covers any registered worktree.
  */
 export interface BranchRecord {
+  /** Display name only. Use ref as the stable selection identity when available. */
   readonly name: string;
+  readonly ref?: string;
   /** Missing kind denotes a local branch for older injected adapters. */
   readonly kind?: 'local' | 'remote';
   readonly remote?: string;

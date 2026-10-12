@@ -4,11 +4,20 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
 import { en } from '../lib/client/locales.js';
+import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
+import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 
 const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
 
 function harness({ deferPreparation = false, geometry } = {}) {
+  const diagnostics = createWorktreeDiagnostics();
+  const errorToast = (props) => {
+    diagnostics.publish(props.scope, props.error === undefined ? [] : [{
+      key: props.scope + ':' + props.error.code, text: props.error.message, error: props.error, actions: props.actions,
+    }]);
+    return jsx('error-toast', props);
+  };
   const state = [];
   const frames = new Map();
   const effects = [];
@@ -74,8 +83,8 @@ function harness({ deferPreparation = false, geometry } = {}) {
       '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
       './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
-      '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
-      '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ code: error.code ?? 'FAILED', message: error.message, retryable: true }) },
+      '../surface/components/NotificationToasts.js': { ErrorToast: errorToast },
+      '../view/worktree-view.js': { toWorktreeViewError },
       '../../worktree.css': { default: {} },
     })[id] ?? {}, exports,
     (callback) => { frames.set(++frameId, callback); return frameId; },
@@ -88,7 +97,10 @@ function harness({ deferPreparation = false, geometry } = {}) {
     frames.clear();
     pending.forEach((callback) => callback());
   };
-  return { advanceFrame, focus: () => listeners.get('focus')?.(),
+  return { advanceFrame, diagnostics, dispose() {
+    state.splice(0).forEach((entry) => entry?.cleanup?.());
+    for (const entry of diagnostics.getSnapshot()) diagnostics.deactivate(entry.source);
+  }, focus: () => listeners.get('focus')?.(),
     resize: (height) => { browserWindow.innerHeight = height; listeners.get('resize')?.(); },
     render(component, props) {
     const render = () => {
@@ -514,13 +526,104 @@ test('fetch failure keeps old branch rows and exposes an inline retryable locali
   await Promise.resolve();
   let node = render();
   assert.equal(find(fetchButton(node), (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchRetry']);
-  assert.equal(fetchButton(node).props.title, en['branch.fetchFailed']);
+  assert.ok(fetchButton(node).props.title.includes(en['branch.fetchFailed']));
   assert.equal(options(node)[0].props['aria-selected'], true);
   fetchButton(node).props.onClick();
   await Promise.resolve();
   node = render();
   assert.equal(calls, 2);
   assert.equal(find(node, (item) => item.props?.role === 'alert').length, 0);
+});
+
+test('Fetch retains diagnostic details and retry history until recovery without a status row', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  const failure = { code: 'GIT_OPERATION_FAILED', message: 'remote authentication failed', retryable: true,
+    details: { gitStderr: 'Permission denied (publickey)', gitExitCode: 128, remote: 'origin' } };
+  let finish;
+  let calls = 0;
+  const props = { t: (name) => en[name], value: 'main', branches: [{ name: 'main' }], onChange() {},
+    onFetch: () => { calls++; return new Promise((resolve, reject) => { finish = { resolve, reject }; }); } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  const button = () => find(render(), (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
+  button().props.onClick();
+  finish.reject(failure);
+  await Promise.resolve();
+  const failed = button();
+  assert.ok(failed.props.title.includes(failure.code));
+  assert.ok(failed.props.title.includes(failure.message));
+  assert.ok(failed.props.title.includes(failure.details.gitStderr));
+  assert.equal(h.diagnostics.getSnapshot().length, 1);
+  assert.deepEqual(h.diagnostics.getSnapshot()[0].error, failure);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
+  const retry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  retry(); retry();
+  assert.equal(calls, 2);
+  assert.equal(button().props['data-fetch-status'], 'pending');
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
+  assert.equal(h.diagnostics.getSnapshot()[0].actions[0].disabled, true);
+  finish.resolve([{ name: 'main' }, { name: 'origin/new', kind: 'remote' }]);
+  await Promise.resolve();
+  assert.equal(button().props['data-fetch-status'], 'success');
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'resolved');
+  assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
+  retry();
+  assert.equal(calls, 2);
+  assert.equal(find(render(), (item) => item.props?.role === 'status').length, 0);
+  t.mock.timers.tick(2000);
+  button().props.onClick();
+  finish.reject(failure);
+  await Promise.resolve();
+  render();
+  const staleRetry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  h.dispose();
+  staleRetry();
+  assert.equal(calls, 3);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'inactive');
+});
+
+test('branch option identity uses full refs while labels remain short and legacy adapters keep names', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { t: (name) => en[name], value: 'refs/heads/origin/main', onChange: (value) => chosen.push(value), branches: [
+    { name: 'origin/main', ref: 'refs/heads/origin/main' },
+    { name: 'origin/main', kind: 'remote', ref: 'refs/remotes/origin/main' },
+    { name: 'legacy' },
+  ] };
+  const node = h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  const rows = options(node);
+  assert.deepEqual(rows.map((row) => row.props['data-single-select-option']), ['refs/heads/origin/main', 'legacy', 'refs/remotes/origin/main']);
+  assert.equal(rows[0].props['aria-selected'], true);
+  assert.equal(rows[2].props['aria-selected'], false);
+  rows[2].props.onClick();
+  assert.deepEqual(chosen, ['refs/remotes/origin/main']);
+  assert.equal(find(node, (item) => item.props?.title === 'origin/main').length, 2);
+});
+
+test('legacy picker values highlight only unique short-name or remote-alias matches without changing caller state', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { t: (name) => en[name], label: 'Branch', value: 'main', onChange: (value) => chosen.push(value), branches: [
+    { name: 'main', ref: 'refs/heads/main' },
+    { name: 'origin/main', ref: 'refs/remotes/origin/main', kind: 'remote' },
+  ] };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchSelector'], props);
+  const trigger = () => find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0];
+  assert.ok(find(trigger(), (item) => item.type === 'span' && item.props?.children === 'main').length > 0);
+  trigger().props.onClick();
+  assert.deepEqual(options(render()).filter((row) => row.props['aria-selected']).map((row) => row.props['data-single-select-option']), ['refs/heads/main']);
+  for (const legacy of ['origin/main', 'remotes/origin/main']) {
+    props.value = legacy;
+    assert.deepEqual(options(render()).filter((row) => row.props['aria-selected']).map((row) => row.props['data-single-select-option']), ['refs/remotes/origin/main']);
+    assert.equal(props.value, legacy);
+  }
+  props.branches = [...props.branches, { name: 'origin/main', ref: 'refs/heads/origin/main' }];
+  props.value = 'origin/main';
+  assert.equal(options(render()).filter((row) => row.props['aria-selected']).length, 0);
+  assert.deepEqual(chosen, []);
+  const remote = options(render()).find((row) => row.props['data-single-select-option'] === 'refs/remotes/origin/main');
+  remote.props.onClick();
+  assert.deepEqual(chosen, ['refs/remotes/origin/main']);
 });
 
 test('empty results and disabled selection cannot commit, Escape calls the owner', () => {

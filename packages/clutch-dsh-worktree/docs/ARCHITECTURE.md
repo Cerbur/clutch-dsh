@@ -341,9 +341,13 @@ Git 页只刷新历史，Fetch 返回列表直接更新其分支状态。Client 
 
 本次扩展取代历史计划中仅本地分支的基线限制。Provider 在本地枚举 `refs/heads/` 与
 `refs/remotes/`，过滤 symref 与远端 `/HEAD`，普通枚举不 fetch、不连接远端。BranchRecord 增加可选
-`kind`、`remote`；旧 adapter 的缺省 kind 保持 local 语义。Provider 事实同时携带精确 ref，
-解析基线 SHA 时使用该 ref，避免同名 tag 的 DWIM 歧义；local 与 remote 同名时 remote 显示为
-`remotes/<remote>/<branch>`。创建必须为 remote 基线指定新 local branch，校验在 Git/Sidecar
+`kind`、`remote`、`ref`；旧 adapter 的缺省 kind 保持 local 语义。Provider 事实同时携带精确 ref，
+Client 用 `ref ?? name` 作为稳定选择身份，`name` 只用于短名展示，不因同名 local 分支增删而变化。
+Host 仅解析已枚举的 `refs/heads/`、`refs/remotes/` 分支，避免同名 tag 的 DWIM 歧义。
+旧短名及历史 `remotes/<remote>/<branch>` alias 仅在唯一匹配时兼容；有歧义时返回
+`WORKTREE_STATE_CONFLICT`，禁止静默选择另一个 ref。新保存/获取的 remote `baseBranch` 使用完整远端 ref；
+显式完整 local ref 同样保留身份。创建必须为 remote 基线指定新 local branch，短名可以与 remote 基线相同，
+目标冲突按实际 local ref 判断，校验在 Git/Sidecar
 副作用前完成。新 branch 冲突与创建恢复仅检查 local refs，remote refs 不占用 local branch 名。
 事务仍固定获取 SHA 并通过 journal 发布，保存基线仍只 CAS 更新 `baseBranch`，保留 `baseCommit`。
 分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段。显式 `fetchRemoteBranches` RPC 获取全部已配置远端，Provider 使用固定 argv、
@@ -351,7 +355,12 @@ Git 页只刷新历史，Fetch 返回列表直接更新其分支状态。Client 
 忽略 remote 配置中的本地分支/tag fetch 映射，不 prune、不合并、不 checkout。复用 runner 的
 非交互认证、输出限制、命令与清理超时、Host disposal signal；同一 adapter/根目录的并发 fetch
 共用任务。部分远端失败时返回错误，已获取的事实不回滚，Client 保留列表并允许重试。
-成功返回当前分支 projection，Client 仅使所属 Workspace/当前 Git controller 的投影失效。
+成功返回当前分支 projection，Client 直接消费候选，不重复 listBranches，仅使所属 Workspace/当前 Git controller 的投影失效。
+Fetch 失败保留 code/message/details，按钮详情与现有报错与修复记录共享诊断和重试生命周期，列表底部不新增状态行。
+创建弹窗以生命周期代次淘汰关闭、同 Workspace 重开、替换或切换模式前的 list/Fetch 回调，
+旧结果不得覆盖新弹窗的候选、选择、loading/error 状态或触发新弹窗刷新。
+弹窗 state owner 在 open/close 时同步推进代次，覆盖同一次 React 更新中无中间 render 的关闭重开；
+Dialog 还按 manager/模式替换推进视图代次，以 key 重挂选择器淘汰旧 loading/error 状态。
 
 Client 的 `select/SearchableSingleSelect` / `SingleSelectPicker` 提供领域无关的搜索、分组过滤、
 单选键盘导航、固定滚动区和浮层生命周期，浮层复用 DSH `MenuSurface` 的模糊材质与 macOS 底衬。
@@ -371,7 +380,8 @@ Client 的 `select/SearchableSingleSelect` / `SingleSelectPicker` 提供领域�
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
 Git Tab 首次挂载时，Main 直接读取 Workspace root `HEAD` 的有界 commit history，并按需读取 root 的 changed-path projection；它不读取 branch 列表、
-不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，客户端读取 Workspace 的本地与已获取的远端 branch 列表；
+不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，挂载时直接读取 history，不预加载分支列表；
+只有打开选择器才读取本地与已获取的远端 branch 候选，Fetch 直接消费 Host 返回的候选；
 如果 Worktree 记录存在持久化的 `baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择；否则在记录带有不可变获取
 commit（`baseCommit`）时，以该 commit 作为隐式基线读取并把解析出的 commit 显示为 Base fact。
 只有既无可用已保存基线、也无获取 commit 的 Worktree 才保持未选择并提示用户。受管理 Worktree 的 Overview
@@ -423,8 +433,9 @@ Git magic pathspec。包含 live working tree 的 summary 不复用 committed-su
 既没有可用已保存基线、也没有获取 commit 的旧 managed/imported Worktree 返回明确的
 `baseline-unselected` projection，而不是用移动的 ref 猜测比较点；带有获取 commit 的记录以该不可变
 commit 作为隐式比较点，不再返回 `baseline-unselected`。已选本地或远端 branch 不复存在时降级为 honest
-unavailable projection，而不是泛化 Git 失败；完整 ref 路径、tag 或 revision expression 仍被直接
-拒绝，只有枚举出的本地或已获取的远端 branch 名可以被选择。选择无效、无法解析或 Worktree HEAD 不可用时同样返回 honest
+unavailable projection，而不是泛化 Git 失败；只有已枚举的本地或已获取的远端分支身份可以被选择，
+任意其它 ref 路径、tag 或 revision expression 仍被拒绝。有歧义的旧名称显式失败，不降级为其它 ref。
+选择无效、无法解析或 Worktree HEAD 不可用时同样返回 honest
 unavailable projection。运行时 derived/captured 兼容结果不会自动写回 Sidecar；只有用户明确保存 Dashboard
 facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar 损坏或恢复未完成时，Git
 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。

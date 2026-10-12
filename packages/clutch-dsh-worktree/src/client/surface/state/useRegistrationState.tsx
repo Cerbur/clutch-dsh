@@ -32,6 +32,7 @@ export function useRegistrationState({ props }: Input) {
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
   const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);
+  const modalGenerationRef = useRef(0);
   modalWorkspaceIdRef.current = worktreeModalWorkspaceId;
   return {
     worktreeModalWorkspaceId,
@@ -56,5 +57,6 @@ export function useRegistrationState({ props }: Input) {
     modalReadViewRef,
     importCandidatesGuard,
     modalWorkspaceIdRef,
+    modalGenerationRef,
   };
 }

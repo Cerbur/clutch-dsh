@@ -71,6 +71,107 @@ async function createFixture(options = {}) {
   return { tempRoot, dshHome, workspaceRoot, repositoryRoot, sidecar, manager };
 }
 
+test('saved remote identity survives colliding local refs appearing and disappearing', async () => {
+  const fixture = await createFixture();
+  try {
+    const root = fixture.repositoryRoot;
+    const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['update-ref', 'refs/remotes/origin/main', base]);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/identity',
+    });
+    const identity = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId };
+    const saved = await fixture.manager.updateWorktreeBaseBranch({
+      ...identity, baseBranch: 'origin/main', expectedBaseBranch: 'main',
+    });
+    assert.equal(saved, 'refs/remotes/origin/main');
+    await writeFile(path.join(root, 'later.txt'), 'later\n');
+    await runGit(root, ['add', '.']);
+    await runGit(root, ['commit', '-m', 'different local tip']);
+    const other = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['branch', 'origin/main', other]);
+    await runGit(root, ['branch', 'remotes/origin/main', other]);
+    const branches = await fixture.manager.listBranches({ workspaceId: 'ws_dashboard' });
+    const identities = branches.map((branch) => branch.kind === 'remote' ? branch.ref : branch.name);
+    assert.equal(new Set(identities).size, branches.length);
+    assert.equal(branches.find((branch) => branch.kind === 'remote').name, 'origin/main');
+    assert.equal((await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: saved })).baseline.commit, base);
+    for (const legacy of ['origin/main', 'remotes/origin/main']) {
+      await assert.rejects(fixture.manager.listWorktreeCommits({ ...identity, baseBranch: legacy }), {
+        code: 'WORKTREE_STATE_CONFLICT',
+      });
+      await assert.rejects(fixture.manager.updateWorktreeBaseBranch({
+        ...identity, baseBranch: legacy, expectedBaseBranch: saved,
+      }), { code: 'WORKTREE_STATE_CONFLICT' });
+    }
+    // Client sends the saved pre-ref value back for branch-selected reads.
+    await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({ result: undefined,
+      snapshot: { ...snapshot, worktrees: snapshot.worktrees.map((item) => ({ ...item, baseBranch: 'origin/main' })) },
+    }));
+    const legacyRecord = (await fixture.sidecar.read('ws_dashboard')).worktrees[0];
+    await assert.rejects(fixture.manager.listWorktreeCommits({ ...identity, baseBranch: legacyRecord.baseBranch }), {
+      code: 'WORKTREE_STATE_CONFLICT',
+    });
+    assert.equal(await fixture.manager.updateWorktreeBaseBranch({
+      ...identity, baseBranch: saved, expectedBaseBranch: 'origin/main',
+    }), saved);
+    const localHistory = await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: 'refs/heads/origin/main' });
+    assert.equal(localHistory.baseline.commit, other);
+    await runGit(root, ['branch', '-D', 'origin/main']);
+    await runGit(root, ['branch', '-D', 'remotes/origin/main']);
+    assert.equal((await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: saved })).baseline.commit, base);
+    await runGit(root, ['branch', 'origin/main', other]);
+    await runGit(root, ['update-ref', '-d', 'refs/remotes/origin/main']);
+    assert.equal((await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: saved })).unavailableReason, 'baseline-unknown');
+    const stored = (await fixture.sidecar.read('ws_dashboard')).worktrees[0];
+    assert.equal(stored.baseBranch, saved);
+    assert.equal(stored.baseCommit, record.baseCommit);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an exact local ref remains an attached checkout despite a same-named remote baseline', async () => {
+  const fixture = await createFixture();
+  try {
+    await runGit(fixture.repositoryRoot, ['branch', 'origin/main']);
+    await runGit(fixture.repositoryRoot, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'refs/heads/origin/main',
+    });
+    assert.equal(record.branch, 'origin/main');
+    assert.equal((await runGit(record.absolutePath, ['symbolic-ref', 'HEAD'])).stdout.trim(), 'refs/heads/origin/main');
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('creates a local branch with the same short name as its remote baseline before checking local conflicts', async () => {
+  const fixture = await createFixture();
+  try {
+    const root = fixture.repositoryRoot;
+    const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['update-ref', 'refs/remotes/origin/main', base]);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'origin/main', newBranch: 'origin/main',
+    });
+    assert.equal(record.branch, 'origin/main');
+    assert.equal(record.baseBranch, 'refs/remotes/origin/main');
+    assert.equal(record.baseCommit, base);
+    const before = await fixture.sidecar.read('ws_dashboard');
+    await assert.rejects(fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'refs/remotes/origin/main', newBranch: 'origin/main',
+    }), { code: 'WORKTREE_BRANCH_CONFLICT' });
+    assert.deepEqual(await fixture.sidecar.read('ws_dashboard'), before);
+    assert.equal((await runGit(record.absolutePath, ['symbolic-ref', 'HEAD'])).stdout.trim(), 'refs/heads/origin/main');
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('enumerates fetched remote branches, excludes symbolic HEAD and creates an attached local branch', async () => {
   const fixture = await createFixture({ workspaceSubdirectory: 'packages/app' });
   try {
@@ -85,8 +186,8 @@ test('enumerates fetched remote branches, excludes symbolic HEAD and creates an 
     await runGit(fixture.repositoryRoot, ['update-ref', 'refs/remotes/upstream/HEAD', base]);
     const branches = await fixture.manager.listBranches({ workspaceId: 'ws_dashboard' });
     assert.deepEqual(branches.filter((branch) => branch.kind === 'remote'), [
-      { name: 'origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false },
-      { name: 'upstream/feature/x', kind: 'remote', remote: 'upstream', isCurrent: false, checkedOut: false },
+      { name: 'origin/main', ref: 'refs/remotes/origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false },
+      { name: 'upstream/feature/x', ref: 'refs/remotes/upstream/feature/x', kind: 'remote', remote: 'upstream', isCurrent: false, checkedOut: false },
     ]);
     assert.equal(branches.find((branch) => branch.name === 'main').isCurrent, true);
     for (const branch of ['origin/main', 'refs/remotes/origin/main', '-bad', 'main~1', 'origin/HEAD']) {
@@ -98,7 +199,7 @@ test('enumerates fetched remote branches, excludes symbolic HEAD and creates an 
     const record = await fixture.manager.createWorktree({
       workspaceId: 'ws_dashboard', branch: 'origin/main', newBranch: 'feature/remote-base',
     });
-    assert.equal(record.baseBranch, 'origin/main');
+    assert.equal(record.baseBranch, 'refs/remotes/origin/main');
     assert.equal(record.baseCommit, base);
     assert.equal(record.branch, 'feature/remote-base');
     assert.ok(record.absolutePath.endsWith(path.join('packages', 'app')));
@@ -119,11 +220,11 @@ test('local/remote name collisions remain separately selectable and only local n
     await runGit(root, ['branch', 'origin/main']);
     const branches = await fixture.manager.listBranches({ workspaceId: 'ws_dashboard' });
     assert.equal(branches.find((branch) => branch.name === 'origin/main').kind, 'local');
-    assert.equal(branches.find((branch) => branch.name === 'remotes/origin/main').kind, 'remote');
+    assert.equal(branches.find((branch) => branch.ref === 'refs/remotes/origin/main').kind, 'remote');
     const record = await fixture.manager.createWorktree({
       workspaceId: 'ws_dashboard', branch: 'remotes/origin/main', newBranch: 'feature/collision',
     });
-    assert.equal(record.baseBranch, 'remotes/origin/main');
+    assert.equal(record.baseBranch, 'refs/remotes/origin/main');
     assert.equal(record.baseCommit, base);
     // A fetched remote named upstream/topic does not occupy the local branch name.
     await runGit(root, ['update-ref', 'refs/remotes/upstream/topic', base]);
@@ -166,11 +267,11 @@ test('remote baselines save with CAS, resolve exact refs despite tags, and proje
     const identity = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId };
     assert.equal(await fixture.manager.updateWorktreeBaseBranch({
       ...identity, baseBranch: 'origin/main', expectedBaseBranch: 'main',
-    }), 'origin/main');
+    }), 'refs/remotes/origin/main');
     await assert.rejects(fixture.manager.updateWorktreeBaseBranch({
       ...identity, baseBranch: 'main', expectedBaseBranch: 'main',
     }), { code: 'WORKTREE_STATE_CONFLICT' });
-    for (const baseBranch of ['refs/remotes/origin/main', 'origin/main~1', '-bad']) {
+    for (const baseBranch of ['refs/tags/origin/main', 'origin/main~1', '-bad']) {
       await assert.rejects(fixture.manager.listWorktreeCommits({ ...identity, baseBranch }), {
         code: 'WORKTREE_STATE_CONFLICT',
       });
@@ -189,7 +290,7 @@ test('remote baselines save with CAS, resolve exact refs despite tags, and proje
     assert.match(diff.patch, /\+feature/u);
     const before = await fixture.sidecar.read('ws_dashboard');
     assert.equal(before.worktrees[0].baseCommit, base);
-    assert.equal(before.worktrees[0].baseBranch, 'origin/main');
+    assert.equal(before.worktrees[0].baseBranch, 'refs/remotes/origin/main');
     // A temporary Git baseline never saves to the sidecar.
     await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: 'main' });
     assert.deepEqual(await fixture.sidecar.read('ws_dashboard'), before);
@@ -295,7 +396,7 @@ test('captures an immutable baseline and serves commit history, files, and a fil
       fixture.manager.listWorktreeCommits({
         workspaceId: 'ws_dashboard',
         worktreeId: record.worktreeId,
-        baseBranch: 'refs/heads/dashboard-baseline',
+        baseBranch: 'refs/tags/dashboard-baseline',
       }),
       { code: 'WORKTREE_STATE_CONFLICT' },
     );

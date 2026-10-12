@@ -133,8 +133,10 @@ Fetch 完成后读取一次更新后的分支列表，并直接提供给选择�
 下载箭头可获取全部已配置远端的分支，即使远端列表为空也能使用。Fetch 更新远端分支引用并刷新
 当前 Workspace，保留已选值、本地分支、tag 和工作区文件，不清理已删除的引用。
 获取期间按钮显示加载图标并禁止重复点击；成功后原位显示**远端分支已更新**，2 秒后恢复下载图标。
-失败保留列表，在同一按钮上显示重试入口，列表底部不额外添加提示行。
-分支列表读取不会自动连接远端。基于远端创建 Worktree 必须使用新的本地分支，远端 HEAD 条目不会列出。
+失败保留列表，在同一按钮上显示重试入口；按钮详情保留错误码、message 与诊断信息，
+并可在**报错与修复**中查看，列表底部不额外添加提示行。
+分支列表读取不会自动连接远端。基于远端创建 Worktree 必须使用新的本地分支；
+若该本地分支不存在，其短名可以与远端基线同名。远端 HEAD 条目不会列出。
 
 Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
@@ -327,7 +329,8 @@ branch，或带有作为隐式基线的获取 commit 的 managed Worktree，Over
 （当前工作区）的文件行数。这是临时 projection，不是 watcher，也不会写入 Worktree 记录。Main 没有 Worktree 基线
 比较，因此 Overview 对 ahead/behind 事实仍显示 **待接入**，但 Git Tab 可以展示 Main history。不可用或未选择基线的
 managed 视图会诚实显示 **待接入**。打开 Overview 不会加载 branch 列表；
-第一次进入 Git Tab 时才加载本地和已获取的远端 branch，并在基线解析后加载 commit history。要替换基线，可以点击
+Git Tab 挂载时直接按已保存分支或获取 commit 读取 history。只有打开选择器才加载分支候选，
+Fetch 直接消费返回的候选列表。要替换基线，可以点击
 Base fact 旁的铅笔图标打开 branch 选择器：搜索框固定在选择器顶部，下方是有固定高度的 branch 列表
 （默认展示约七条），超出部分在列表内滚动，因此过滤 branch 时整个弹窗尺寸保持不变。选择除当前
 Worktree branch 之外的任一本地或已获取的远端 branch，再保存。
@@ -344,8 +347,10 @@ Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base 
 也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。Main 跳过这个仅用于比较的汇总，但使用相同的已提交 history 与多选行为；Workspace 根目录有改动时也展示实时工作区目标。
 选择**未提交的改动**会比较当前 Workspace 根目录与 `HEAD`，不会创建基线或写入 Git 状态。
 
-所选 branch 每次读取都会重新解析。浏览器只能选择列表中的本地或已获取的远端 branch 名，不能直接选择 commit SHA 或
-任意 Git ref：完整 ref 路径、tag 或 revision expression 会被直接拒绝，而已选 branch 不复存在时会显示
+所选 branch 每次读取都会重新解析。选择器展示短名，以枚举出的 `refs/heads/...` 或
+`refs/remotes/...` 作为稳定身份。新保存的远端基线保留精确远端 ref，新增或删除同名本地分支不会改变基线。
+旧短名仅在无歧义时兼容；有歧义的已保存值返回 `WORKTREE_STATE_CONFLICT`，需要重新选择目标分支。
+commit SHA、tag 和任意 revision expression 仍被拒绝。已选精确分支不复存在时会显示
 诚实的不可用状态，而不是泛化的 Git 失败。`baseCommit` 是不可变的获取元数据，永远不能由用户直接选择，
 并在没有可用已保存 branch 基线时作为隐式基线；创建恢复也绝不会改写它。当 managed Worktree 或 Main Workspace 根目录存在 staged、unstaged 或 untracked 文件时，列表顶部会加入**未提交的改动**；
 选择它会将对应的当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。

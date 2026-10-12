@@ -137,8 +137,9 @@ export function createWorktreeRefreshGuard() {
 
 /** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
 export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
-  return branches.find((branch) => branch.kind !== 'remote' && branch.isCurrent)?.name
-    ?? branches.find((branch) => branch.kind !== 'remote')?.name ?? branches[0]?.name ?? '';
+  const branch = branches.find((branch) => branch.kind !== 'remote' && branch.isCurrent)
+    ?? branches.find((branch) => branch.kind !== 'remote') ?? branches[0];
+  return branch?.ref ?? branch?.name ?? '';
 }
 
 /** Keep a valid user choice across branch-list refreshes, otherwise choose the current branch. */
@@ -146,7 +147,11 @@ export function reconcileBaseBranchSelection(
   selectedBranch: string,
   branches: readonly BranchRecord[],
 ): string {
-  if (branches.some((branch) => branch.name === selectedBranch)) return selectedBranch;
+  if (branches.some((branch) => (branch.ref ?? branch.name) === selectedBranch)) return selectedBranch;
+  // The picker resolves unique legacy aliases for presentation. An ambiguous name
+  // remains unselected until the user explicitly chooses a complete ref.
+  if (branches.some((branch) => branch.name === selectedBranch ||
+      (branch.kind === 'remote' && 'remotes/' + branch.name === selectedBranch))) return selectedBranch;
   return selectDefaultBaseBranch(branches);
 }
 

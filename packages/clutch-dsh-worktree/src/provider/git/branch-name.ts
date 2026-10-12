@@ -6,3 +6,9 @@ export function isSafeBranchName(branch: string): boolean {
   return branch.split('/').every((part) => part.length > 0 && !part.startsWith('.') &&
     !part.endsWith('.') && !part.endsWith('.lock'));
 }
+
+/** Only exact branch namespaces are accepted, and callers must also enumerate the ref. */
+export function isSafeBranchIdentity(branch: string): boolean {
+  const prefix = ['refs/heads/', 'refs/remotes/'].find((value) => branch.startsWith(value));
+  return isSafeBranchName(prefix === undefined ? branch : branch.slice(prefix.length));
+}

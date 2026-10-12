@@ -178,7 +178,11 @@ function WorktreeBaselineEditor({
   const [fetched, setFetched] = useState<readonly BranchRecord[]>();
   const [reading, setReading] = useState(false);
   const roster = fetched ?? branches;
-  const options = useMemo(() => roster.filter((branch) => branch.name !== currentBranch), [roster, currentBranch]);
+  const options = useMemo(() => roster.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch), [roster, currentBranch]);
+  const draftMatches = options.filter((branch) => (branch.ref ?? branch.name) === draft ||
+    (!draft?.startsWith('refs/') && (branch.name === draft ||
+      (branch.kind === 'remote' && 'remotes/' + branch.name === draft))));
+  const validDraft = draftMatches.length === 1;
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -211,7 +215,7 @@ function WorktreeBaselineEditor({
       onSave === undefined ||
       loading ||
       reading ||
-      !options.some((branch) => branch.name === draft)
+      !validDraft
     )
       return;
     busy.current = true;
@@ -266,7 +270,7 @@ function WorktreeBaselineEditor({
         {saved === undefined ? (
           <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
         ) : (
-          <span data-dashboard-baseline-value>{saved}</span>
+          <span data-dashboard-baseline-value title={saved}>{saved.replace(/^refs\/(heads|remotes)\//u, '')}</span>
         )}
       </DashboardFactRow>
       <Modal
@@ -285,7 +289,7 @@ function WorktreeBaselineEditor({
             <Button
               variant="primary"
               data-dashboard-baseline-save
-              disabled={pending || disabled || loading || reading || !options.some((branch) => branch.name === draft)}
+              disabled={pending || disabled || loading || reading || !validDraft}
               onClick={() => void save()}
             >
               {t(pending ? 'dashboard.savingBase' : 'dashboard.saveBase')}
@@ -302,7 +306,7 @@ function WorktreeBaselineEditor({
               try {
                 const next = await onLoad();
                 if (alive.current) setFetched(next);
-                return next.filter((branch) => branch.name !== currentBranch);
+                return next.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
               } finally {
                 if (alive.current) setReading(false);
               }
@@ -310,7 +314,7 @@ function WorktreeBaselineEditor({
             onFetch={onFetch === undefined ? undefined : async () => {
               const next = await onFetch();
               if (alive.current) setFetched(next);
-              return next.filter((branch) => branch.name !== currentBranch);
+              return next.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
             }}
           />}
           <NotificationToasts
@@ -736,7 +740,7 @@ export function WorktreeDashboard({
                 />
               ) : (
                 <DashboardFactRow label={t('dashboard.base')} baseline>
-                  {displayedBaseline ?? (
+                  {displayedBaseline?.replace(/^refs\/(heads|remotes)\//u, '') ?? (
                     <span className={styles.dashboardHistorical}>
                       {t('dashboard.historicalUnavailable')}
                     </span>
@@ -859,7 +863,7 @@ export function WorktreeDashboard({
                     </DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.branch')}>{liveBranch}</DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.base')}>
-                      {displayedBaseline ?? (
+                      {displayedBaseline?.replace(/^refs\/(heads|remotes)\//u, '') ?? (
                         <span className={styles.dashboardHistorical}>
                           {t('dashboard.historicalUnavailable')}
                         </span>

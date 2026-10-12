@@ -145,9 +145,11 @@ remotes, including when the remote list is empty. Fetch updates remote branch re
 it preserves your current selection, local branches, tags and working files, and does not prune deleted refs.
 The button shows a loading icon during fetch, then displays **Remote branches updated** in place for two
 seconds before restoring the download icon. Failures retain the list and show a retry on the same button;
+the button details retain the error code, message, and diagnostics, also available in **Errors & Repair**.
 no extra status row is added beneath the list.
 Listing branches never contacts a remote automatically.
-Remote baselines require a new local branch when creating a Worktree; symbolic remote HEAD entries are excluded.
+Remote baselines require a new local branch when creating a Worktree; its short name may match the remote baseline
+when that local branch does not exist. Symbolic remote HEAD entries are excluded.
 
 Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
@@ -372,8 +374,9 @@ existing `/api` Connection. It shows ahead/behind commit counts plus separate
 committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
 projection, not a watcher or a Worktree-record field. Main has no Worktree baseline comparison, so Overview remains
 **Not connected** for ahead/behind facts while its Git tab still exposes Main history. Unavailable or baseline-unselected
-managed views honestly remain **Not connected**. Opening Overview does not load the branch list; the first Git tab
-activation loads local and fetched remote branches and, once a baseline is resolved, managed Worktree commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
+managed views honestly remain **Not connected**. Opening Overview does not load the branch list; mounting the Git tab
+reads history against the saved branch or captured acquisition commit. Branch candidates load only when a
+selector opens; Fetch supplies its returned candidates directly. To replace that baseline, click the pencil icon beside the Base fact to open the branch
 picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
 scrolls internally, so the dialog keeps one size while you filter. Choose any local or fetched remote branch except the
 current Worktree branch and save.
@@ -394,9 +397,12 @@ changes** when you need a narrower target. Main skips this comparison-only summa
 Workspace root has changes. Selecting **Uncommitted changes** compares the current Workspace root with `HEAD`; it does not
 create a baseline or write any Git state.
 
-The selected local or fetched remote branch is resolved again for each read. The browser can choose only an enumerated branch
-name, not a raw commit SHA or arbitrary Git ref: a full ref path, tag, or revision expression is rejected
-outright, while a selected branch that no longer exists shows the honest unavailable state instead of a
+The selected local or fetched remote branch is resolved again for each read. Selectors display short names and
+use the enumerated `refs/heads/...` or `refs/remotes/...` as stable identities. New remote baseline saves retain
+the exact remote ref, so adding or removing a same-named local branch cannot change the baseline.
+Legacy short names are accepted only when unambiguous; an ambiguous saved value reports
+`WORKTREE_STATE_CONFLICT` and requires selecting the intended branch again. Raw commit SHAs, tags, and
+arbitrary revision expressions remain rejected. A selected exact branch that no longer exists shows the honest unavailable state instead of a
 generic Git failure. `baseCommit` is immutable acquisition metadata, is never user-selectable directly, and
 is the implicit baseline whenever no saved branch baseline is usable; creation recovery never overwrites
 it. When a managed Worktree or Main Workspace root has staged, unstaged, or untracked files, the list prepends an
