@@ -180,6 +180,7 @@ export interface GitCommitHistoryRead {
  * of letting an unbounded payload or a generic failure reach the browser.
  */
 export interface GitChangedFileRead {
+  /** Internal Provider coordinate system: path and oldPath are Git checkout-relative. */
   readonly files: readonly WorktreeGitChangedFile[];
   readonly truncated: boolean;
 }

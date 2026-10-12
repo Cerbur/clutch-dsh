@@ -2005,13 +2005,14 @@ test('reads Main commit diffs when the Workspace root is nested inside the repos
       worktreeId: 'main:ws_dashboard',
       commit: firstCommit,
     });
-    assert.deepEqual(files.files.map((file) => file.path), [changedPath]);
+    const workspacePath = '../clutch-dsh-title/README.md';
+    assert.deepEqual(files.files.map((file) => file.path), [workspacePath]);
 
     const diff = await fixture.manager.getWorktreeCommitFileDiff({
       workspaceId: 'ws_dashboard',
       worktreeId: 'main:ws_dashboard',
       commit: firstCommit,
-      path: changedPath,
+      path: workspacePath,
     });
     assert.match(diff.patch, /\+# sibling package change/u);
 
@@ -2020,13 +2021,13 @@ test('reads Main commit diffs when the Workspace root is nested inside the repos
       worktreeId: 'main:ws_dashboard',
       selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
     });
-    assert.deepEqual(aggregateFiles.files.map((file) => file.path), [changedPath]);
+    assert.deepEqual(aggregateFiles.files.map((file) => file.path), [workspacePath]);
 
     const aggregateDiff = await fixture.manager.getWorktreeCommitFileDiff({
       workspaceId: 'ws_dashboard',
       worktreeId: 'main:ws_dashboard',
       selection: { kind: 'commits', commits: [firstCommit, secondCommit] },
-      path: changedPath,
+      path: workspacePath,
     });
     assert.deepEqual(aggregateDiff.segments.map((segment) => segment.commit), [firstCommit, secondCommit]);
     assert.match(aggregateDiff.segments[0].patch, /\+# sibling package change/u);
@@ -2036,6 +2037,88 @@ test('reads Main commit diffs when the Workspace root is nested inside the repos
     await rm(fixture.tempRoot, { recursive: true, force: true });
   }
 });
+
+for (const mode of ['main', 'managed', 'legacy']) {
+  test(`Workspace-relative paths round-trip commit, rename, working tree and summary for ${mode}`, async () => {
+    const fixture = await createFixture({ workspaceSubdirectory: 'packages/app' });
+    try {
+      await writeFile(path.join(fixture.workspaceRoot, 'old.txt'), 'unchanged rename content\n');
+      await runGit(fixture.repositoryRoot, ['add', '.']);
+      await runGit(fixture.repositoryRoot, ['commit', '-m', 'nested baseline']);
+      const record = mode === 'main' ? undefined : await fixture.manager.createWorktree({
+        workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'nested-' + mode,
+      });
+      const checkout = record?.gitRootPath ?? fixture.repositoryRoot;
+      const cwd = record?.absolutePath ?? fixture.workspaceRoot;
+      if (mode === 'legacy') {
+        const { gitRootPath: _root, ...legacy } = record;
+        void _root;
+        await fixture.sidecar.mutate('ws_dashboard', (snapshot) => ({
+          result: undefined,
+          snapshot: { ...snapshot, worktrees: [{ ...legacy, absolutePath: checkout }] },
+        }));
+      }
+      const input = { workspaceId: 'ws_dashboard', worktreeId: record?.worktreeId ?? 'main:ws_dashboard' };
+      await mkdir(path.join(checkout, 'packages/sibling'), { recursive: true });
+      await runGit(checkout, ['mv', 'packages/app/old.txt', 'packages/sibling/renamed.txt']);
+      await writeFile(path.join(cwd, 'inside.txt'), 'inside commit\n');
+      await writeFile(path.join(checkout, 'README.md'), '# root commit\n');
+      await runGit(checkout, ['add', '.']);
+      await runGit(checkout, ['commit', '-m', 'nested and outside changes']);
+      const commit = (await runGit(checkout, ['rev-parse', 'HEAD'])).stdout.trim();
+      const files = await fixture.manager.listWorktreeCommitFiles({ ...input, commit });
+      assert.deepEqual(files.files.map((file) => file.path).toSorted(),
+        ['../../README.md', '../sibling/renamed.txt', 'inside.txt']);
+      const renamed = files.files.find((file) => file.status === 'renamed');
+      assert.equal(renamed.oldPath, 'old.txt');
+      for (const file of files.files) {
+        const diff = await fixture.manager.getWorktreeCommitFileDiff({ ...input, commit, path: file.path });
+        assert.equal(diff.path, file.path);
+        assert.ok(diff.patch.length > 0);
+      }
+      const oldNameDiff = await fixture.manager.getWorktreeCommitFileDiff({ ...input, commit, path: 'old.txt' });
+      assert.equal(oldNameDiff.path, 'old.txt');
+      assert.match(oldNameDiff.patch, /\+unchanged rename content/u);
+      const selection = { kind: 'commits', commits: [commit] };
+      const aggregate = await fixture.manager.listWorktreeCommitFiles({ ...input, selection });
+      assert.deepEqual(aggregate.files, files.files.map((file) => ({ ...file, commits: [commit] })));
+      const aggregateDiff = await fixture.manager.getWorktreeCommitFileDiff({ ...input, selection, path: '../sibling/renamed.txt' });
+      assert.equal(aggregateDiff.path, '../sibling/renamed.txt');
+      assert.match(aggregateDiff.segments[0].patch, /packages\/sibling\/renamed.txt/u);
+      // Neither coordinate guessing nor traversal outside the checkout may reach a Git diff.
+      for (const value of ['packages/app/inside.txt', '../../../secret', '/etc/passwd', './inside.txt', 'inside.txt/../inside.txt', 'inside.txt\0']) {
+        await assert.rejects(fixture.manager.getWorktreeCommitFileDiff({ ...input, commit, path: value }),
+          { code: 'WORKTREE_STATE_CONFLICT' });
+      }
+      await writeFile(path.join(cwd, 'inside.txt'), 'inside commit\ninside live\n');
+      await writeFile(path.join(cwd, 'untracked.txt'), 'inside untracked\n');
+      await writeFile(path.join(checkout, 'root-untracked.txt'), 'outside untracked\n');
+      await writeFile(path.join(checkout, 'README.md'), '# root live\n');
+      const live = await fixture.manager.listWorktreeCommitFiles({ ...input, commit: WORKTREE_GIT_WORKING_TREE });
+      assert.deepEqual(live.files.map((file) => file.path).toSorted(),
+        ['../../README.md', '../../root-untracked.txt', 'inside.txt', 'untracked.txt']);
+      for (const file of live.files) {
+        const diff = await fixture.manager.getWorktreeCommitFileDiff({ ...input, commit: WORKTREE_GIT_WORKING_TREE, path: file.path });
+        assert.equal(diff.path, file.path);
+        assert.ok(diff.patch.length > 0);
+      }
+      if (record) {
+        const summary = { kind: 'summary', includeWorkingTree: true };
+        const read = await fixture.manager.listWorktreeCommitFiles({ ...input, selection: summary });
+        assert.ok(read.files.some((file) => file.path === 'inside.txt'));
+        assert.ok(read.files.some((file) => file.path === '../../root-untracked.txt'));
+        for (const file of read.files) {
+          const diff = await fixture.manager.getWorktreeCommitFileDiff({ ...input, selection: summary, path: file.path });
+          assert.equal(diff.path, file.path);
+          assert.ok(diff.patch.length > 0);
+        }
+      }
+    } finally {
+      await fixture.manager.close();
+      await rm(fixture.tempRoot, { recursive: true, force: true });
+    }
+  });
+}
 
 test('serves Main multi-commit selections with exact file unions and diff segments', async () => {
   const fixture = await createFixture();

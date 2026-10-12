@@ -262,8 +262,9 @@ results after branch/path changes or unmount are ignored.
 For nested Workspaces, `absolutePath` includes the original repository-relative directory.
 The optional `gitRootPath` retains the complete checkout identity for Git and disk cleanup; the Client
 does not derive this path from the native Workspace snapshot. New Sessions and Open In use
-`absolutePath`. Git file previews anchor checkout-relative paths at `gitRootPath` (or
-`absolutePath` for root Workspaces), then use DSH's official `fileAddressFor` with the
+`absolutePath`. Manager file lists, rename paths, Diff requests and titles use Workspace-relative
+paths, including `../` for other checkout directories. Git file previews anchor them at
+`absolutePath`, enforce the checkout boundary at `gitRootPath`, then use DSH's official `fileAddressFor` with the
 current Session's native cwd, falling back to `absolutePath` if the snapshot has no cwd.
 Files inside that cwd receive relative Session addresses; other checkout files produce
 an explicit IDE/Git-root Session prompt. Using the native

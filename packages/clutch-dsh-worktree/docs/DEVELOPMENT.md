@@ -148,6 +148,8 @@ node --test test/sidecar-data-migration.test.mjs
 
 第一组通过真实临时 Git 仓库验证嵌套 Workspace、linked checkout 路径别名、branch/精确 Tag/
 detached Commit、从捕获 HEAD 创建、文件地址和 Sidebar 回调，以及 Main 的菜单与状态展示。
+Git 路径语义回归见 `test/git-dashboard.test.mjs`：公开列表与 Diff 请求从 Workspace 工作目录起算，
+Provider 保留 Git 根坐标；测试包含 Main/托管/旧记录、commit/summary/working-tree、rename 和边界拒绝。
 Windows drive、extended prefix 与 UNC 在浏览器路径单测中验证；这些测试不等于 Windows
 宿主或运行中 DSH 的端到端联调。第二组覆盖 v1–v7 历史 Sidecar 迁移；本次 checkout 投影
 不升级 v7 schema，HEAD 观察值不可写入 Sidecar。布局还应在 Chromium 窄屏和宽屏检查长引用、

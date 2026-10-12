@@ -113,6 +113,7 @@ export interface WorktreeGitRequestContext {
 
 export type WorktreeGitCommitFilesRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest;
 export type WorktreeGitFileDiffRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest & {
+  /** Canonical Workspace-relative path returned by listWorktreeCommitFiles; ../ may name other checkout files. */
   readonly path: string;
 };
 
@@ -148,7 +149,9 @@ export type WorktreeGitFileStatus =
   | 'type-changed';
 
 export interface WorktreeGitChangedFile {
+  /** Relative to this Worktree's Workspace directory, not the Git checkout root. */
   readonly path: string;
+  /** Previous name in the same Workspace coordinates, including cross-directory renames. */
   readonly oldPath?: string;
   readonly status: WorktreeGitFileStatus;
   /** Added text lines; omitted when Git reports a binary file. */
@@ -179,6 +182,7 @@ export interface WorktreeGitDiffSegment {
 export interface WorktreeGitFileDiff {
   /** The requested commit for legacy reads, or the synthetic summary/first selected commit id. */
   readonly commit: string;
+  /** The requested Workspace-relative changed-file identity. Patch text retains Git's native headers. */
   readonly path: string;
   readonly patch: string;
   readonly binary: boolean;

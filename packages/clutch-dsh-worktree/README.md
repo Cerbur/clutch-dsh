@@ -444,7 +444,9 @@ exclusive with committed multi-selection. **Open in Sidebar** is available in th
 existing changed-file rows. It uses the current Session when it belongs to the Dashboard group,
 otherwise the group's first visible Session, and explicitly expands the native right sidebar.
 With no target Session it prompts you to create one; the Overview's empty Session card includes **New Session**.
-Checkout-relative file paths are resolved against the real Git root, including for a Main subdirectory.
+File-tree paths, Diff titles and file requests are relative to the Workspace directory, for both Main and
+managed Worktrees. At `/repo/packages/app`, `src/index.ts` names `/repo/packages/app/src/index.ts`;
+repository-root `README.md` appears as `../../README.md`. The view retains changes across the checkout.
 Files outside the target Session cwd show a prompt instead of an invalid resource address.
 
 Main shows a local checkout status and omits derived Worktree creation-time and baseline facts.

@@ -20,6 +20,8 @@ import type { GitBranchWorktreeInfo, GitChangedFileRead, GitCommitHistoryRead, G
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
+import { projectWorktreePath } from '../provider/worktree-path.js';
+import { workspaceGitPaths } from './manager-git-paths.js';
 
 /** Shared with Contract/Provider/Client so commit-SHA validation cannot drift. */
 const COMMIT_PATTERN = WORKTREE_GIT_COMMIT_PATTERN;
@@ -665,7 +667,7 @@ export async function listWorktreeCommits(
 ): Promise<WorktreeGitHistory> {
   const resolved = await resolveWorktree(context, input);
   if (resolved.main) {
-    const history = await listMainCommits(context, resolved.workspaceRoot, input.worktreeId);
+    const history = await listMainCommits(context, resolved.repositoryRoot, input.worktreeId);
     return {
       headCommit: history.headCommit,
       commits: history.commits,
@@ -1099,17 +1101,17 @@ async function aggregateFileDiff(
   );
 }
 
-export async function listWorktreeCommitFiles(
+async function listCheckoutCommitFiles(
   context: WorktreeManagerContext,
   input: WorktreeGitCommitFilesRequest,
+  resolved: Awaited<ReturnType<typeof resolveWorktree>>,
 ): Promise<WorktreeGitCommitFiles> {
-  const resolved = await resolveWorktree(context, input);
   const requested = requestedDiff(input, input.worktreeId);
   if (resolved.main) {
     if (requested.kind === 'aggregate') {
       return listMainAggregateFiles(
         context,
-        resolved.workspaceRoot,
+        resolved.repositoryRoot,
         resolved.repositoryRoot,
         input.worktreeId,
         requested.selection,
@@ -1117,7 +1119,7 @@ export async function listWorktreeCommitFiles(
     }
     if (requested.commit === WORKTREE_GIT_WORKING_TREE) {
       const listWorkingTreeFiles = gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
-      const read = await listWorkingTreeFiles(resolved.workspaceRoot, { signal: context.signal });
+      const read = await listWorkingTreeFiles(resolved.repositoryRoot, { signal: context.signal });
       return {
         commit: WORKTREE_GIT_WORKING_TREE,
         files: read.files,
@@ -1126,7 +1128,7 @@ export async function listWorktreeCommitFiles(
     }
     const commit = await authorizeMainCommit(
       context,
-      resolved.workspaceRoot,
+      resolved.repositoryRoot,
       input.worktreeId,
       requested.commit,
     );
@@ -1169,11 +1171,11 @@ export async function listWorktreeCommitFiles(
   };
 }
 
-export async function getWorktreeCommitFileDiff(
+async function getCheckoutCommitFileDiff(
   context: WorktreeManagerContext,
   input: WorktreeGitFileDiffRequest,
+  resolved: Awaited<ReturnType<typeof resolveWorktree>>,
 ): Promise<WorktreeGitFileDiff> {
-  const resolved = await resolveWorktree(context, input);
   const requested = requestedDiff(input, input.worktreeId);
   if (resolved.main) {
     if (requested.kind === 'aggregate') {
@@ -1184,7 +1186,7 @@ export async function getWorktreeCommitFileDiff(
       }
       return aggregateMainFileDiff(
         context,
-        resolved.workspaceRoot,
+        resolved.repositoryRoot,
         resolved.repositoryRoot,
         input.worktreeId,
         requested.selection,
@@ -1200,7 +1202,7 @@ export async function getWorktreeCommitFileDiff(
       const readWorkingTreeFileDiff = gitRead(context, 'readWorkingTreeFileDiff', input.worktreeId);
       const readChangedPaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
         ?? gitRead(context, 'listWorkingTreeFiles', input.worktreeId);
-      const readPaths = await readChangedPaths(resolved.workspaceRoot, { signal: context.signal });
+      const readPaths = await readChangedPaths(resolved.repositoryRoot, { signal: context.signal });
       const changedFile = findChangedFile(readPaths.files, input.path);
       if (changedFile === undefined) {
         throw providerError('WORKTREE_STATE_CONFLICT', 'The requested path is not changed in the Main working tree', {
@@ -1210,7 +1212,7 @@ export async function getWorktreeCommitFileDiff(
         });
       }
       const diff = await readWorkingTreeFileDiff(
-        resolved.workspaceRoot,
+        resolved.repositoryRoot,
         changedFile.path,
         { signal: context.signal },
       );
@@ -1218,7 +1220,7 @@ export async function getWorktreeCommitFileDiff(
     }
     const commit = await authorizeMainCommit(
       context,
-      resolved.workspaceRoot,
+      resolved.repositoryRoot,
       input.worktreeId,
       requested.commit,
     );
@@ -1310,4 +1312,32 @@ export async function getWorktreeCommitFileDiff(
     commit: authorized.commit,
     path: input.path,
   };
+}
+
+async function pathsFor(resolved: Awaited<ReturnType<typeof resolveWorktree>>) {
+  if (resolved.main) return workspaceGitPaths(resolved.repositoryRoot, resolved.workspaceRoot);
+  const { record, workspaceRoot, repositoryRoot } = resolved.value;
+  const projected = await projectWorktreePath(record, workspaceRoot, repositoryRoot);
+  return workspaceGitPaths(gitWorktreeRoot(projected), projected.absolutePath);
+}
+
+/** Public changed-file identities always start at the Workspace directory, including ../ siblings. */
+export async function listWorktreeCommitFiles(
+  context: WorktreeManagerContext,
+  input: WorktreeGitCommitFilesRequest,
+): Promise<WorktreeGitCommitFiles> {
+  const resolved = await resolveWorktree(context, input);
+  const paths = await pathsFor(resolved);
+  return paths.projectFiles(await listCheckoutCommitFiles(context, input, resolved));
+}
+
+/** Translate exactly once, then keep the existing changed-file authorization in checkout coordinates. */
+export async function getWorktreeCommitFileDiff(
+  context: WorktreeManagerContext,
+  input: WorktreeGitFileDiffRequest,
+): Promise<WorktreeGitFileDiff> {
+  const resolved = await resolveWorktree(context, input);
+  const paths = await pathsFor(resolved);
+  const diff = await getCheckoutCommitFileDiff(context, { ...input, path: paths.toCheckout(input.path) }, resolved);
+  return { ...diff, path: input.path };
 }

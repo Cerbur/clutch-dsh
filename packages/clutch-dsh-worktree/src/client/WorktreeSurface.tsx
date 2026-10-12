@@ -295,11 +295,12 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         address = buildSessionFileAddress(
           targetSessionId,
           filePath,
-          dashboardRecord.gitRootPath ?? dashboardRecord.absolutePath,
+          dashboardRecord.absolutePath,
           isMainWorktreeId(dashboardRecord.worktreeId) &&
             source.sessions.byId[targetSessionId]?.cwd === dashboardWorkspace?.path
             ? dashboardRecord.absolutePath
             : source.sessions.byId[targetSessionId]?.cwd ?? dashboardRecord.absolutePath,
+          dashboardRecord.gitRootPath ?? dashboardRecord.absolutePath,
         );
       } catch (error) {
         if (!(error instanceof GitFileAddressError)) throw error;

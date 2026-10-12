@@ -205,12 +205,21 @@ mutation token 仍基于持久记录，避免投影变化破坏生命周期门�
 目录可用性、身份、歧义、detached 和 cleaned 检查保持原有规则，任意后代目录不构成匹配。但新绑定
 必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
 
-Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
-`gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
+Git Dashboard 的公开路径统一为 Workspace-relative，Main 与 managed Worktree 均相对其工作目录。
+文件树、rename oldPath、Diff 请求和返回 path 使用同一坐标；目录外的 checkout 文件保留为
+`../` 路径（例如 `../../README.md`），不静默过滤。Provider Git adapter 内部仍使用
+checkout-relative 路径。Manager 在唯一边界转换列表与请求，并保留原有 changed-file 成员授权；
+请求必须规范且不能越出 checkout，不自动猜测旧 root-relative 路径，以免重名时读取错误文件。
+原始 patch 文本保留 Git headers，避免改写真实 diff 内容。Main 的 tracked/untracked 读取统一在
+Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。旧 v7 前记录仍通过只读工作目录投影转换。
+原生文件预览先将公开路径锚定到工作目录，校验 Git 根边界，再通过 DSH 官方 `fileAddressFor`
 按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
 使用相对地址；其余 checkout 文件显式提示使用 IDE 或 Git-root Session，不构造越出 cwd 的地址。
 这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
 的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
+
+此变更只调整运行时路径契约，不升级 Sidecar v7 schema，也不持久化路径 projection。
+仓库根 Workspace 的公开路径不变；子目录 API 调用方必须使用当前文件列表返回的路径请求 Diff。
 
 ### 外部导入（External Import）规则
 

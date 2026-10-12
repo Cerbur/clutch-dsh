@@ -11,14 +11,14 @@ import { loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
 import { createMainWorktreeRecord } from '../lib/client/dashboard/dashboard-selection.js';
 import { buildSessionFileAddress } from '../lib/client/dashboard/git/file-address.js';
 
-test('Main in a monorepo subdirectory uses the checkout root for file addresses', () => {
+test('Main in a monorepo subdirectory uses Workspace-relative file addresses', () => {
   const record = createMainWorktreeRecord(
     { workspaceId: 'ws', path: '/repo/packages/plugin' },
     'main',
     '',
     { gitRootPath: '/repo' },
   );
-  const address = buildSessionFileAddress('session', 'packages/plugin/src/index.ts', record.gitRootPath ?? record.absolutePath, record.absolutePath);
+  const address = buildSessionFileAddress('session', 'src/index.ts', record.absolutePath, record.absolutePath, record.gitRootPath);
   assert.equal(address, 'dsh-resource://file/session/session/src/index.ts');
 });
 
@@ -62,7 +62,7 @@ test('real nested checkout projects branch, exact tags and detached commits with
     assert.equal(view.checkout.currentHead.kind, 'tag');
     const main = createMainWorktreeRecord({ workspaceId: 'ws', path: working }, null, '', view.checkout);
     assert.equal(main.currentBranch, null);
-    assert.equal(buildSessionFileAddress('s', 'packages/app/index.ts', main.gitRootPath, main.absolutePath),
+    assert.equal(buildSessionFileAddress('s', 'index.ts', main.absolutePath, main.absolutePath, main.gitRootPath),
       'dsh-resource://file/session/s/index.ts');
     const created = await manager.createWorktree({ workspaceId: 'ws', branch: 'HEAD', fromHead: true, newBranch: 'from-tag' });
     assert.equal(created.baseCommit, commit);
@@ -149,7 +149,7 @@ test('Main resolves the owning linked checkout through a nested Workspace path a
     assert.equal(checkout.currentHead.name, 'linked-tag');
     assert.notEqual(checkout.currentHead.commit, (await git(repo, ['rev-parse', 'HEAD'])).stdout.trim());
     const main = createMainWorktreeRecord({ workspaceId: 'ws', path: workspace.rootPath }, undefined, '', checkout);
-    const address = parseFileAddress(buildSessionFileAddress('s', 'packages/app/index.ts', main.gitRootPath, main.absolutePath));
+    const address = parseFileAddress(buildSessionFileAddress('s', 'index.ts', main.absolutePath, main.absolutePath, main.gitRootPath));
     assert.equal(address.scope, 'session');
     assert.equal(address.path, 'index.ts');
     assert.equal(await readFile(path.join(workspace.rootPath, address.path), 'utf8'), '// linked\n');

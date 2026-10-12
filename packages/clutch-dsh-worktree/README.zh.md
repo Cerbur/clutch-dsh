@@ -384,7 +384,9 @@ commit。变更文件栏标题会展示当前目标（基线汇总、所选 comm
 `-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。Diff 工具栏和仍存在的
 变更文件行均提供 **在侧栏打开**。当前 Session 属于 Dashboard 分组时优先使用，否则回退到该分组
 首个可见 Session，并显式展开原生右侧栏。没有目标 Session 时提示先创建会话，概览的空会话卡片
-也提供 **新建会话**。包括 Main 子目录在内，checkout-relative 文件路径统一以真实 Git 根目录解析；
+也提供 **新建会话**。Main 和托管 Worktree 的文件树路径、Diff 标题和文件请求均相对 Workspace
+工作目录。在 `/repo/packages/app` 中，`src/index.ts` 指向 `/repo/packages/app/src/index.ts`；
+仓库根目录的 `README.md` 显示为 `../../README.md`。视图保留整个 checkout 范围的变更。
 目标 Session cwd 外的文件会显示提示，不会生成无效资源地址。
 
 Main 显示本地 checkout 状态，省略派生 Worktree 的创建时间与基线事实。
