@@ -15,6 +15,7 @@ import type { WorktreeLocaleKey } from '../../locales.js';
 import { isMainWorktreeId, normalizeBaselineBranch, sumLineTotals } from './git-facts.js';
 import { GitChangedFiles } from './GitChangedFiles.js';
 import { GitLineStats } from './GitLineStats.js';
+import { GitCommitStats } from './GitCommitStats.js';
 import { GitCommitList } from './GitCommitList.js';
 import { GitDiffView } from './GitDiffView.js';
 import {
@@ -280,14 +281,7 @@ export function WorktreeGitPanel({
                     <div>
                       <dt>{t('dashboard.aheadBehind')}</dt>
                       <dd>
-                        <GitLineStats
-                          additions={historyValue.ahead}
-                          deletions={historyValue.behind}
-                          ariaLabel={t('dashboard.git.aheadBehindStats', {
-                            ahead: historyValue.ahead,
-                            behind: historyValue.behind,
-                          })}
-                        />
+                        <GitCommitStats ahead={historyValue.ahead} behind={historyValue.behind} t={t} />
                       </dd>
                     </div>
                   )}
@@ -468,7 +462,7 @@ export function WorktreeGitPanel({
                       : t('dashboard.git.noFiles')}
                   </div>
                 ) : (
-                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
                 )}
               </>
             )}

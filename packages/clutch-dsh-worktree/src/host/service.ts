@@ -7,6 +7,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 
 import type {
   BranchRecord,
+  WorkspaceCheckout,
   SessionBinding,
   WorktreeGitCommitFiles,
   WorktreeGitCommitFilesRequest,
@@ -284,10 +285,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  getWorkspaceCheckout(input: { readonly workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceCheckout>> {
+    return this.remote.getWorkspaceCheckout(input);
+  }
+
+  @Remote
   createWorktree(input: {
     readonly workspaceId: string;
     readonly branch: string;
     readonly newBranch?: string;
+    readonly fromHead?: boolean;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>> {
     return this.remote.createWorktree(input);
   }

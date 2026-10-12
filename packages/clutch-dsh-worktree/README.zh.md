@@ -152,7 +152,9 @@ Fetch 完成后读取一次更新后的分支列表，并直接提供给选择�
 分支列表读取不会自动连接远端。基于远端创建 Worktree 必须使用新的本地分支；
 若该本地分支不存在，其短名可以与远端基线同名。远端 HEAD 条目不会列出。
 
-Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
+Git repository 和 initial commit 必须可用。可选择本地 branch，或选择 **HEAD**，从 Main 当前
+checkout（包括精确 Tag 或游离 Commit）创建新分支。Main 会显示当前 branch、精确 Tag 或短 Commit，
+游离时仍保留创建入口。如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
 
 如果 Workspace 位于仓库子目录，其 Worktree 会保留相同的相对目录。例如，位于
@@ -164,7 +166,8 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 子目录机制升级后，已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用，包括自动工具注入、
 会话发现、继续投递、结果回报，以及默认从自身 checkout 的 HEAD 创建 Worktree。原始 cwd 和历史保持不变；
 新的 Session 绑定仍必须匹配 checkout 内的 Workspace 工作目录。Git 文件预览对当前 Session
-cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
+cwd 内的文件使用相对地址。cwd 外的文件会提示使用 IDE 或仓库根目录的 Session；已绑定的旧
+Git-root Session 保留原有预览范围。
 
 ### 启用 Agent Worktree 工具
 
@@ -354,7 +357,7 @@ Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，
 和 Overview 会改用 Worktree 不可变的获取 commit 读取，并将该解析出的 commit 显示为 Base fact；只有
 既无可用已保存基线、也无获取 commit 的 Worktree 才会保持未选择状态并提示用户选择。当所选 branch
 已分叉时，Git 会解析两个 branch head 的共同先祖；
-Worktree 在共同先祖之后的 commit 计为 `+N` 领先，base branch 在共同先祖之后的 commit 计为 `-N` 落后，
+Worktree 在共同先祖之后的 commit 计为 `↑ N` 领先，base branch 在共同先祖之后的 commit 计为 `↓ N` 落后，
 history 和文件读取仍然可用。如果两个 head 没有共同先祖，则基线汇总退化为 base branch head 与
 Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base head 独有的 commit。
 在有效的 managed Worktree 基线加载后，Git 与变更 Tab 初始会选择**基线汇总**，而不是第一个 commit；切换基线 branch
@@ -378,9 +381,15 @@ Diff。点击 commit 会展示该 commit 自己的 Diff；对于 managed Worktre
 集合收敛回当前聚焦的 commit。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
-`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。汇总 Diff 工具栏中的
-**在侧栏打开**会使用当前 Session 在原生右侧栏中显示当前文件，但前提是该 Session 属于 Dashboard
-对应的 Worktree。空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
+`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。Diff 工具栏和仍存在的
+变更文件行均提供 **在侧栏打开**。当前 Session 属于 Dashboard 分组时优先使用，否则回退到该分组
+首个可见 Session，并显式展开原生右侧栏。没有目标 Session 时提示先创建会话，概览的空会话卡片
+也提供 **新建会话**。包括 Main 子目录在内，checkout-relative 文件路径统一以真实 Git 根目录解析；
+目标 Session cwd 外的文件会显示提示，不会生成无效资源地址。
+
+Main 显示本地 checkout 状态，省略派生 Worktree 的创建时间与基线事实。
+Ahead/Behind 使用中性的提交计数（`↑ N` / `↓ N`），代码增删行数保留绿色/红色计数。
+粘性顶栏将长引用名称截断为单行，只有引用文本本身触发复制。
 
 managed Worktree 和 Main history 都最多展示 200 个 commit，更多内容会标记为 truncated；超过 Git adapter 输出上限的变更文件列表
 也会显式标记为 truncated，而不是报泛化错误。commit 详情使用 first-parent 比较，root

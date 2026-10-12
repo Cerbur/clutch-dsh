@@ -452,7 +452,7 @@ export function WorktreeDashboard({
     return () => {
       branchCopyGeneration.current += 1;
     };
-  }, [record.branch]);
+  }, [record.branch, record.currentBranch, record.currentHead?.name]);
   const copyPath = async () => {
     if (copyPending.current) return;
     copyPending.current = true;
@@ -467,15 +467,17 @@ export function WorktreeDashboard({
       if (generation === copyGeneration.current) copyPending.current = false;
     }
   };
-  const branchAvailable = record.branch.length > 0;
-  const displayBranch = branchAvailable ? record.branch : t('dashboard.branchUnavailable');
+  const isMain = isMainWorktreeId(record.worktreeId);
+  const refName = record.currentHead?.name ?? record.currentBranch ?? record.branch;
+  const branchAvailable = refName.length > 0;
+  const displayBranch = branchAvailable ? refName : t('dashboard.branchUnavailable');
   const copyBranch = async () => {
     if (!branchAvailable || branchCopyPending.current) return;
     branchCopyPending.current = true;
     const generation = branchCopyGeneration.current;
     setBranchCopyState('pending');
     try {
-      const copied = await writeClipboard(record.branch);
+      const copied = await writeClipboard(refName);
       if (generation === branchCopyGeneration.current)
         setBranchCopyState(copied ? 'copied' : 'failed');
     } catch {
@@ -485,7 +487,7 @@ export function WorktreeDashboard({
     }
   };
   const healthKey =
-    record.health === 'ready'
+    isMain ? 'dashboard.mainReady' : record.health === 'ready'
       ? 'worktree.ready'
       : record.health === 'repair'
         ? 'worktree.repair'
@@ -497,10 +499,10 @@ export function WorktreeDashboard({
               ? 'dashboard.cleaned'
               : 'dashboard.unknown';
   const liveBranch =
-    record.currentBranch === null
+    record.currentHead?.name ?? (record.currentBranch === null
       ? t('dashboard.detached')
       : (record.currentBranch ??
-        (branchAvailable ? record.branch : t('dashboard.branchUnavailable')));
+        (branchAvailable ? record.branch : t('dashboard.branchUnavailable'))));
   const baselineCurrentBranch =
     record.currentBranch === undefined ? record.branch : (record.currentBranch ?? undefined);
   const persistBaseline =
@@ -539,6 +541,8 @@ export function WorktreeDashboard({
     ids.length === 0 ? (
       <div className={styles.dashboardEmpty}>
         <p>{t('dashboard.noSessions')}</p>
+        {onCreateSession !== undefined && <button type="button" className={styles.dashboardButton}
+          disabled={actionPending} onClick={onCreateSession}>{t('dashboard.newSession')}</button>}
       </div>
     ) : (
       <ul className={styles.dashboardSessions}>
@@ -661,31 +665,24 @@ export function WorktreeDashboard({
       <div className={styles.dashboardPage}>
         <header className={styles.dashboardHeader}>
           <div className={styles.dashboardIdentity}>
-            <div
-              className={styles.dashboardTitleRow}
-              data-dashboard-copy="branch"
-              role={branchAvailable ? 'button' : undefined}
-              tabIndex={branchAvailable ? 0 : undefined}
-              aria-label={branchAvailable ? t('dashboard.copyBranch') : undefined}
-              title={branchAvailable ? t('dashboard.copyBranch') : undefined}
-              aria-busy={branchAvailable && branchCopyState === 'pending' ? true : undefined}
-              onClick={branchAvailable ? () => void copyBranch() : undefined}
-              onKeyDown={
-                branchAvailable
-                  ? (event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        void copyBranch();
-                      }
-                    }
-                  : undefined
-              }
-            >
+            <div className={styles.dashboardTitleRow}>
               <IconBranchOutline16 />
               <h1 id={`${id}-title`} ref={heading} tabIndex={-1}>
-                {displayBranch}
+                <button
+                  type="button"
+                  className={styles.dashboardRefButton}
+                  data-dashboard-copy="branch"
+                  disabled={!branchAvailable}
+                  aria-label={branchAvailable ? t('dashboard.copyBranch') : undefined}
+                  title={branchAvailable ? t('dashboard.copyBranch') : undefined}
+                  aria-busy={branchAvailable && branchCopyState === 'pending' ? true : undefined}
+                  onClick={branchAvailable ? () => void copyBranch() : undefined}
+                >
+                  {displayBranch}
+                </button>
               </h1>
-              <span className={styles.dashboardHealth} data-health={record.health ?? 'unknown'}>
+              {record.currentHead?.kind !== undefined && record.currentHead.kind !== 'branch' && <span className={styles.dashboardSoon}>{record.currentHead.kind === 'tag' ? 'Tag' : 'Commit'}</span>}
+              <span className={styles.dashboardHealth} data-health={isMain ? 'local' : record.health ?? 'unknown'}>
                 <span aria-hidden="true">●</span>
                 {t(healthKey)}
               </span>
@@ -733,7 +730,7 @@ export function WorktreeDashboard({
           </div>
           <div className={styles.dashboardHeaderAside}>
             <dl className={styles.dashboardFacts}>
-              <DashboardFactRow label={t(acquisitionLabel)}>
+              {!isMain && <DashboardFactRow label={t(acquisitionLabel)}>
                 {acquisitionFacts.timestamp ? (
                   <time dateTime={acquisitionFacts.timestamp}>
                     {new Date(acquisitionFacts.timestamp).toLocaleString()}
@@ -743,8 +740,8 @@ export function WorktreeDashboard({
                     {t('dashboard.historicalUnavailable')}
                   </span>
                 )}
-              </DashboardFactRow>
-              {!isMainWorktreeId(record.worktreeId) && persistBaseline !== undefined ? (
+              </DashboardFactRow>}
+              {!isMain && (persistBaseline !== undefined ? (
                 <WorktreeBaselineEditor
                   context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
@@ -765,7 +762,7 @@ export function WorktreeDashboard({
                     </span>
                   )}
                 </DashboardFactRow>
-              )}
+              ))}
               <DashboardFactRow label={t('dashboard.source')}>
                 {isMainWorktreeId(record.worktreeId)
                   ? t('worktree.main')
@@ -881,13 +878,13 @@ export function WorktreeDashboard({
                       {t(healthKey)}
                     </DashboardFactRow>
                     <DashboardFactRow label={t('dashboard.branch')}>{liveBranch}</DashboardFactRow>
-                    <DashboardFactRow label={t('dashboard.base')}>
+                    {!isMain && <DashboardFactRow label={t('dashboard.base')}>
                       {displayedBaseline?.replace(/^refs\/(heads|remotes)\//u, '') ?? (
                         <span className={styles.dashboardHistorical}>
                           {t('dashboard.historicalUnavailable')}
                         </span>
                       )}
-                    </DashboardFactRow>
+                    </DashboardFactRow>}
                     <DashboardFactRow label={t('dashboard.aheadBehind')}>
                       <WorktreeGitOverviewValue state={gitOverview} metric="aheadBehind" t={t} />
                     </DashboardFactRow>
@@ -941,9 +938,9 @@ export function WorktreeDashboard({
               defaultBaselineBranch={displayedBaseline}
               currentBranch={baselineCurrentBranch}
               capturedBaseline={record.baseCommit !== undefined}
-              onOpenFile={(filePath) => {
+              onOpenFile={onOpenFile === undefined ? undefined : (filePath) => {
                 onOpenFile?.(filePath);
-                setRightSidebarOpen(true);
+                setRightSidebarOpen(isRightSidebarExpanded?.() ?? false);
               }}
               t={t}
             />

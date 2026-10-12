@@ -1,6 +1,9 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  'dashboard.mainReady': '本地 checkout',
+  'dashboard.git.sessionRequired': '请先为此工作目录新建会话，再在侧栏打开文件。',
+  'dashboard.git.outsideSession': '文件位于此会话工作目录之外。请在 IDE 中打开，或使用仓库根目录的会话。',
   'tools.experimental': '实验性',
   'tools.loading': '正在加载工具设置…',
   "settings.general": "通用",
@@ -79,7 +82,7 @@ export const zh = {
   'dashboard.git.workingTree': '工作区',
   'dashboard.git.changedFiles': '变更文件',
   'dashboard.git.lineStats': '+{additions} 行，-{deletions} 行',
-  'dashboard.git.aheadBehindStats': '+{ahead} 领先，-{behind} 落后',
+  'dashboard.git.aheadBehindStats': '领先 {ahead} 个提交，落后 {behind} 个提交',
   'dashboard.git.diff': 'Diff',
   'dashboard.git.resizeRows': '拖动调整上下两栏高度，双击恢复默认',
   'dashboard.git.resizeColumns': '拖动调整左右两栏宽度，双击恢复默认',
@@ -416,6 +419,9 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  'dashboard.mainReady': 'Local checkout',
+  'dashboard.git.sessionRequired': 'Create a Session for this working directory before opening files in the sidebar.',
+  'dashboard.git.outsideSession': 'This file is outside the Session working directory. Open it in an IDE or use a Session at the repository root.',
   'tools.experimental': 'Experimental',
   'tools.loading': 'Loading tool settings…',
   "settings.general": "General",
@@ -494,7 +500,7 @@ export const en = {
   'dashboard.git.workingTree': 'Working tree',
   'dashboard.git.changedFiles': 'Changed files',
   'dashboard.git.lineStats': '+{additions} lines, -{deletions} lines',
-  'dashboard.git.aheadBehindStats': '+{ahead} ahead, -{behind} behind',
+  'dashboard.git.aheadBehindStats': '{ahead} commits ahead, {behind} commits behind',
   'dashboard.git.diff': 'Diff',
   'dashboard.git.resizeRows': 'Drag to resize the stacked panes; double-click to reset',
   'dashboard.git.resizeColumns': 'Drag to resize the side-by-side panes; double-click to reset',

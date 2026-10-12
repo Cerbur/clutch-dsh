@@ -133,6 +133,7 @@ export function createWorktreeContextProjection(
       currentWorkspaceId: identity.workspaceId,
       workspaces: input.workspaces.getSnapshot().items,
       branches: data.branches,
+      checkout: data.checkout,
       worktrees: data.worktrees,
       bindings: data.bindings,
     });

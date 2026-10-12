@@ -18,7 +18,7 @@
 .dashboardSurface *::after {
   box-sizing: border-box;
 }
-.dashboardSurface button {
+.dashboardSurface button:not(.dashboardRefButton) {
   font: inherit;
 }
 .dashboardSurface svg {
@@ -104,7 +104,7 @@
   top: 0;
   z-index: 3;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 20px;
@@ -128,7 +128,8 @@
 }
 .dashboardToplineActions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   margin-inline-start: auto;
@@ -167,7 +168,7 @@ html[data-platform='darwin']
 }
 .dashboardHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 225px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.45fr);
   gap: 32px;
   margin-bottom: 15px;
 }
@@ -191,8 +192,22 @@ html[data-platform='darwin']
   line-height: 1.3;
   font-weight: 650;
   margin: 0;
-  overflow-wrap: anywhere;
+  flex: 0 1 auto;
+  overflow: hidden;
   min-width: 0;
+}
+.dashboardRefButton {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
 }
 .dashboardTitleRow[role='button'] {
   cursor: pointer;
@@ -456,6 +471,8 @@ html[data-platform='darwin']
 }
 .dashboardEmpty {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
   align-items: center;
   justify-content: center;
   min-height: 78px;
@@ -473,7 +490,7 @@ html[data-platform='darwin']
 }
 .dashboardFacts > div {
   display: grid;
-  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr) 29px;
+  grid-template-columns: minmax(70px, 0.65fr) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 11px 0;
@@ -499,6 +516,14 @@ html[data-platform='darwin']
   overflow-wrap: break-word;
   word-break: normal;
 }
+.dashboardFacts > div:has(.dashboardFactAction > *) {
+  grid-template-columns: minmax(70px, 0.65fr) minmax(0, 1fr) 29px;
+}
+.dashboardFacts dd > span {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .dashboardFactAction {
   display: flex;
   grid-column: 3;
@@ -507,6 +532,7 @@ html[data-platform='darwin']
   min-width: 29px;
   min-height: 29px;
 }
+.dashboardFactAction:empty { display: none; }
 .dashboardHeaderAside .dashboardFacts > div {
   padding: 4px 0;
   border: 0;

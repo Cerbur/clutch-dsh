@@ -218,9 +218,24 @@ export interface WorktreeLifecycleInput {
  */
 export type BindingStatus = 'active' | 'detached';
 
+/** Observed checkout HEAD; never a local-branch selector or durable sidecar fact. */
+export interface GitCheckoutHead {
+  readonly kind: 'branch' | 'tag' | 'commit';
+  readonly name: string;
+  readonly commit: string;
+}
+
+/** Git paths use this root; Session cwd remains the DSH Workspace working directory. */
+export interface WorkspaceCheckout {
+  readonly gitRootPath: string;
+  /** Physical Workspace directory, paired with the physical checkout root. */
+  readonly workspacePath?: string;
+  readonly currentHead?: GitCheckoutHead;
+}
+
 /**
- * 插件 sidecar 持久化的 Worktree 元数据，不包含 DSH Workspace 或 Session 内容。
- * Worktree metadata persisted by the plugin sidecar; it contains no DSH Workspace or Session content.
+ * 插件 sidecar 的 Worktree 元数据及显式标记为 runtime-only 的只读投影，不包含 DSH 原始数据。
+ * Sidecar metadata plus explicitly marked runtime-only projections; contains no original DSH data.
  */
 export interface WorktreeRecord {
   /** User-authored shared instructions; empty or absent disables injection. */
@@ -246,6 +261,8 @@ export interface WorktreeRecord {
   readonly health?: WorktreeHealth;
   /** Runtime-only Git branch; null means detached HEAD, undefined means unavailable. */
   readonly currentBranch?: string | null;
+  /** Runtime-only observed HEAD; never written to the sidecar. */
+  readonly currentHead?: GitCheckoutHead;
   /** Runtime-only; never written to the sidecar. */
   readonly activity?: WorktreeActivity;
   /** Opaque runtime-only snapshot token for destructive-action stale-state checks. */
@@ -376,6 +393,8 @@ export interface WorktreeManager {
   listBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
   /** Explicitly fetch all configured remotes' branch heads and return refreshed branch facts. */
   fetchRemoteBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
+  /** Optional for older injected managers; the local Host always implements this read. */
+  getWorkspaceCheckout?(input: { workspaceId: WorkspaceId }): Promise<WorkspaceCheckout>;
 
   /**
    * 从已有本地分支创建路径受管的 Worktree；当 base branch 已 checkout 时，`newBranch`
@@ -388,6 +407,8 @@ export interface WorktreeManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+    /** Create a new branch from the Workspace checkout's captured HEAD. */
+    fromHead?: boolean;
   }): Promise<WorktreeRecord>;
 
   importWorktree(input: {
@@ -467,6 +488,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'listImportCandidates',
   'listBranches',
   'fetchRemoteBranches',
+  'getWorkspaceCheckout',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -497,6 +519,7 @@ export type WorktreeRemoteResult<Value> =
  * Browser-safe Host projection containing only domain values and serializable results, never Provider objects.
  */
 export interface WorktreeRemoteManager {
+  getWorkspaceCheckout(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceCheckout>>;
   getWorktreeInstructions(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
@@ -545,6 +568,7 @@ export interface WorktreeRemoteManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+    fromHead?: boolean;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
 
   importWorktree(input: {

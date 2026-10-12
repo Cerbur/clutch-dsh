@@ -84,6 +84,44 @@ test('sibling creation follows the live branch and excludes detached HEAD', () =
   }
 });
 
+test('Main menu displays and creates from branch, Tag and detached Commit checkouts', async () => {
+  const text = await readSurfaceSource(['components/WorkspaceTree.tsx']);
+  const tree = ts.createSourceFile('tree.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const actionProperty = find((node) => ts.isPropertyAssignment(node) &&
+    node.name.getText(tree) === 'onCreateWorktree' &&
+    node.initializer.getText(tree).includes('mainRef'), tree);
+  const showCreate = actionProperty.parent.properties.find((node) => node.name?.getText(tree) === 'showCreate');
+  const declarationFor = (name) => {
+    const node = find((candidate) => ts.isVariableDeclaration(candidate) &&
+      candidate.name.getText(tree) === name, tree);
+    return `const ${node.getText(tree)};`;
+  };
+  for (const head of [
+    { kind: 'branch', name: 'main' },
+    { kind: 'tag', name: 'v1.0.0' },
+    { kind: 'commit', name: 'abcdef1' },
+    undefined,
+  ]) {
+    const view = { branches: head?.kind === 'branch' ? [{ name: 'main', isCurrent: true }] : [],
+      checkout: head === undefined ? undefined : { currentHead: head } };
+    const facts = evaluate(`${['currentBranch', 'currentHead', 'mainRef', 'mainLabel'].map(declarationFor).join('\n')}
+      return { currentBranch, currentHead, mainRef, mainLabel };`, {
+      view,
+      t: (key, args) => args ? `Main · ${args.branch}` : key,
+    });
+    assert.equal(facts.mainLabel, head ? `Main · ${head.name}` : 'worktree.main');
+    let defaults;
+    const workspace = { workspaceId: 'ws', path: '/repo/app' };
+    const context = { ...facts, workspace, workspaceWorktreeNames: [],
+      createNumberedWorktreeName: (name) => name + '-2',
+      openWorktreeCreator: (target, options) => { assert.equal(target, workspace); defaults = options; } };
+    assert.equal(evaluate(`return (${showCreate.initializer.getText(tree)});`, context), head !== undefined);
+    const action = evaluate(`return (${actionProperty.initializer.getText(tree)});`, context);
+    action?.();
+    assert.deepEqual(defaults, head ? { baseBranch: head.kind === 'branch' ? head.name : 'HEAD', newBranch: head.name + '-2' } : undefined);
+  }
+});
+
 test('active and archived menu opens share the owning Workspace read', async () => {
   const properties = [];
   function collect(node) {
@@ -311,6 +349,8 @@ test('production branch menu selects confirmation, displays detached HEAD, and t
   assert.equal(selected, record);
   assert.equal(branchLabel(record), 'feature/foo → merge/foo');
   assert.equal(branchActions({ ...record, currentBranch: null }).onAdoptBranch, undefined);
+  assert.equal(branchLabel({ ...record, currentBranch: null, currentHead: { kind: 'tag', name: 'v1.0.0', commit: 'a'.repeat(40) } }),
+    'feature/foo → v1.0.0');
   assert.equal(
     branchLabel({ ...record, currentBranch: null }),
     'feature/foo → worktree.detachedHead',

@@ -249,11 +249,14 @@ identity close the dashboard. No native Session or Workspace data is mutated by 
 Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
 time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
 including while opening an empty Dashboard. File preview uses the current Session only after checking
-its membership in the target Worktree, and native `openResource` reveals the rightbar. An unavailable
+its membership in the target Worktree, falling back to that group's first visible Session. No Session
+produces a creation prompt. Native `openResource` is followed by an explicit rightbar expansion. An unavailable
 rightbar service does not prevent page-level navigation.
 
-The accepted branch supplies the Worktree name, and clicking the dashboard title copies that
-branch. `absolutePath` supplies the displayed and copied cwd. Clipboard success requires
+The observed HEAD supplies the Dashboard reference when available; branch, exact Tag and short Commit
+are separate projection kinds. Only the reference text copies it. `absolutePath` supplies the displayed
+and copied cwd. Main uses the Host's physical Workspace/checkout path pair from `getWorkspaceCheckout`;
+the original native Session cwd is never rewritten. Clipboard success requires
 `writeClipboard` to return true; failures are visible, concurrent clicks coalesce, and late
 results after branch/path changes or unmount are ignored.
 For nested Workspaces, `absolutePath` includes the original repository-relative directory.
@@ -262,8 +265,8 @@ does not derive this path from the native Workspace snapshot. New Sessions and O
 `absolutePath`. Git file previews anchor checkout-relative paths at `gitRootPath` (or
 `absolutePath` for root Workspaces), then use DSH's official `fileAddressFor` with the
 current Session's native cwd, falling back to `absolutePath` if the snapshot has no cwd.
-Files inside that cwd receive relative Session addresses; other checkout files retain
-absolute Session addresses and follow native Host file-access checks. Using the native
+Files inside that cwd receive relative Session addresses; other checkout files produce
+an explicit IDE/Git-root Session prompt. Using the native
 cwd also preserves previews for already-bound legacy Sessions whose cwd is the Git root.
 The active-binding action accepts that legacy root when Host physical validation is
 unavailable; blank unbound Session candidates still match only `absolutePath`.

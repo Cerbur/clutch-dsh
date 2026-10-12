@@ -38,6 +38,7 @@ function createMockHarness(sourceCode) {
       if (name === 'react') return react;
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
       if (name === '@deepseek-ai/dsh-client-ui-primitives') return primitivesMock;
+      if (name === '../../dsh-icons.js') return primitivesMock;
       if (name === './worktree-git.css') return { default: {} };
       if (name === './GitFileTypeIcon.js') return { GitFileTypeIcon: ({ path }) => jsx('span', { 'data-file-icon': path }) };
       if (name === './GitLineStats.js') return { GitLineStats: () => null };
@@ -65,7 +66,7 @@ function findAll(node, predicate) {
 
 const t = (key) => en[key] ?? key;
 
-test('GitChangedFiles stays a plain selectable tree without row actions or status markers', async () => {
+test('GitChangedFiles selects diffs and opens existing files through a separate row action', async () => {
   const source = await readFile(changedFilesUrl, 'utf8');
   const { GitChangedFiles } = createMockHarness(source);
 
@@ -75,16 +76,22 @@ test('GitChangedFiles stays a plain selectable tree without row actions or statu
   ];
 
   let selectedPath;
+  let openedPath;
   const node = GitChangedFiles({
     files,
     selectedPath: 'src/index.ts',
     onSelect: (path) => { selectedPath = path; },
+    onOpenFile: (path) => { openedPath = path; },
     t,
   });
 
-  // Opening a changed file is now the summary diff toolbar's action only, and the
-  // row status is carried by color, so no marker element is rendered.
-  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-git-open-file']).length, 0);
+  // The independent open action must not change the selected diff. Status color
+  // and accessible copy remain on the selection button without a marker element.
+  const openButtons = findAll(node, (item) => item.props?.['data-dashboard-git-open-file']);
+  assert.equal(openButtons.length, 1);
+  openButtons[0].props.onClick();
+  assert.equal(openedPath, 'src/index.ts');
+  assert.equal(selectedPath, undefined);
   assert.equal(findAll(node, (item) => item.props?.['data-dashboard-git-status']).length, 0);
 
   const rows = findAll(node, (item) => item.props?.['data-dashboard-git-file']);

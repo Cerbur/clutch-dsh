@@ -128,9 +128,11 @@ export function useWorktreeRegistration({
       setNewBranch('');
       return;
     }
-    setSelectedBranch((current) => modalView.branches.length > 0
-      ? reconcileBaseBranchSelection(current, modalView.branches)
-      : current || modalView.currentBranch || 'HEAD');
+    setSelectedBranch((current) => current === 'HEAD' && modalView.checkout?.currentHead !== undefined
+      ? current : modalView.checkout?.currentHead?.kind !== 'branch' && modalView.checkout?.currentHead !== undefined && current === ''
+        ? 'HEAD' : modalView.branches.length > 0
+          ? reconcileBaseBranchSelection(current, modalView.branches)
+          : current || modalView.currentBranch || 'HEAD');
     setNewBranch((current) => {
       if (current.length > 0) return current;
       const existingNames = [
@@ -198,7 +200,8 @@ export function useWorktreeRegistration({
       loadModalWorktreeView(workspace.workspaceId);
       return;
     }
-    setSelectedBranch(defaults.baseBranch ?? selectDefaultBaseBranch(view.branches));
+    setSelectedBranch(defaults.baseBranch ?? (view.checkout?.currentHead !== undefined && view.checkout.currentHead.kind !== 'branch'
+      ? 'HEAD' : selectDefaultBaseBranch(view.branches)));
     setNewBranch(
       defaults.newBranch ??
         createDefaultWorktreeName([
@@ -286,6 +289,7 @@ export function useWorktreeRegistration({
               input: {
                 workspaceId: modalWorkspace.workspaceId,
                 branch: selectedBranch,
+                ...(selectedBranch === 'HEAD' ? { fromHead: true } : {}),
                 newBranch: worktreeName,
               },
             })

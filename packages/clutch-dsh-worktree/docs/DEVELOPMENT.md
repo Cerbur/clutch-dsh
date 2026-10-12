@@ -139,6 +139,20 @@ pnpm dsh web --port 3088 --no-open
 
 ### 3.3 开发迭代与重载
 
+Main/子目录 checkout 回归（先构建本包）：
+
+```bash
+node --test test/main-checkout.test.mjs test/file-address.test.mjs test/client-git-open-file.test.mjs test/client-dashboard.test.mjs test/client-branch-drift.test.mjs
+node --test test/sidecar-data-migration.test.mjs
+```
+
+第一组通过真实临时 Git 仓库验证嵌套 Workspace、linked checkout 路径别名、branch/精确 Tag/
+detached Commit、从捕获 HEAD 创建、文件地址和 Sidebar 回调，以及 Main 的菜单与状态展示。
+Windows drive、extended prefix 与 UNC 在浏览器路径单测中验证；这些测试不等于 Windows
+宿主或运行中 DSH 的端到端联调。第二组覆盖 v1–v7 历史 Sidecar 迁移；本次 checkout 投影
+不升级 v7 schema，HEAD 观察值不可写入 Sidecar。布局还应在 Chromium 窄屏和宽屏检查长引用、
+多位数统计与空 Git 面板，使用隔离组件 fixture 时需与实机联调结果区分。
+
 `/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
 `sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
 真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将

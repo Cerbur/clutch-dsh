@@ -401,7 +401,7 @@ test('dashboard renders real identity and explicit placeholders in both language
         return locale[key];
       },
     });
-    assert.equal(findAll(node, (item) => item.type === 'h1')[0].props.children, record.branch);
+    assert.equal(copyBranchTitle(node).props.children, record.branch);
     const topbar = findAll(node, (item) => item.props?.['data-dashboard-topbar'])[0];
     assert.equal(topbar.type, 'header');
     assert.equal(topbar.props['data-window-drag'], true);
@@ -1026,7 +1026,7 @@ test('copy uses the complete cwd, coalesces pending clicks, and reports boolean 
   harness.dispose();
 });
 
-test('dashboard title copies the accepted branch and coalesces keyboard activation', async () => {
+test('dashboard ref button copies the reference and coalesces activation without including the health badge', async () => {
   const calls = [];
   let complete;
   const harness = renderHarness((value) => {
@@ -1035,14 +1035,12 @@ test('dashboard title copies the accepted branch and coalesces keyboard activati
       complete = resolve;
     });
   });
-  let prevented = 0;
   const title = copyBranchTitle(harness.render());
   title.props.onClick();
   title.props.onClick();
-  title.props.onKeyDown({ key: 'Enter', preventDefault: () => prevented++ });
-  title.props.onKeyDown({ key: ' ', preventDefault: () => prevented++ });
+  assert.equal(title.type, 'button');
+  assert.equal(title.props.children, record.branch);
   assert.deepEqual(calls, [record.branch]);
-  assert.equal(prevented, 2);
   assert.equal(copyBranchTitle(harness.render()).props['aria-busy'], true);
   complete(true);
   await tick();
@@ -1211,7 +1209,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const { createNumberedWorktreeName } = await import('../lib/client/view/worktree-view.js');
-  const { buildSessionFileAddress } = await import('../lib/client/dashboard/git/file-address.js');
+  const { buildSessionFileAddress, GitFileAddressError } = await import('../lib/client/dashboard/git/file-address.js');
   const calls = [];
   const refs = [];
   let refCursor = 0;
@@ -1263,7 +1261,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
         isManagedDashboardRecord: (record) => !isMainWorktreeId(record.worktreeId),
       };
     if (name.endsWith('dashboard-sessions.js')) return { dashboardSessionIds };
-    if (name.endsWith('file-address.js')) return { buildSessionFileAddress };
+    if (name.endsWith('file-address.js')) return { buildSessionFileAddress, GitFileAddressError };
     if (name.endsWith('dashboard-navigation.js'))
       return { prepareDashboardNavigation, settlePendingDashboardNavigation };
     if (name.endsWith('worktree-view.js')) return { createNumberedWorktreeName };
@@ -1324,6 +1322,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     openSession: (id) => calls.push(['nativeOpen', id]),
     closeRightSidebar: () => calls.push(['closeRightSidebar']),
     openResource: (...args) => calls.push(['resource', ...args]),
+    openRightSidebar: () => calls.push(['openRightSidebar']),
     dashboardStore: undefined,
   };
   const renderTree = (resetSelected = true) => {
@@ -1348,6 +1347,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   render().onOpenFile('src/index.ts', { line: 7 });
   assert.deepEqual(calls.splice(0), [
     ['resource', 'dsh-resource://file/session/current/src/index.ts', { line: 7 }],
+    ['openRightSidebar'],
   ]);
   bindings.shift();
   sourceState.sessions.ids = ['current'];
@@ -1357,13 +1357,15 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   render().onOpenFile('README.md');
   assert.deepEqual(calls.splice(0), [
     ['resource', 'dsh-resource://file/session/current/src/index.ts', { line: 8 }],
-    ['resource', 'dsh-resource://file/session/current//tmp/repo%20with%20spaces/%E6%94%AF%E4%BB%98/README.md', undefined],
+    ['openRightSidebar'],
+    ['error', { code: 'GIT_FILE_OUTSIDE_SESSION', message: en['dashboard.git.outsideSession'], retryable: false }],
   ]);
   // A legacy binding keeps the original native cwd, so its relative path includes the package prefix.
   sourceState.sessions.byId.current = { cwd: record.absolutePath };
   render().onOpenFile('packages/app/src/index.ts');
   assert.deepEqual(calls.splice(0), [
     ['resource', 'dsh-resource://file/session/current/packages/app/src/index.ts', undefined],
+    ['openRightSidebar'],
   ]);
   target = record;
   delete sourceState.sessions.byId.current;
@@ -1510,7 +1512,16 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     sessionId: undefined,
   });
   findAll(renderTree(false), (item) => item.type === 'Dashboard')[0].props.onOpenFile('README.md');
-  assert.deepEqual(calls, [['closeRightSidebar']]);
+  assert.deepEqual(calls, [['closeRightSidebar'], ['error', {
+    code: 'GIT_FILE_SESSION_REQUIRED', message: en['dashboard.git.sessionRequired'], retryable: false,
+  }]]);
+  calls.splice(0);
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt-d', sessionId: 'preferred', status: 'active' }];
+  sourceState.sessions.ids.push('preferred');
+  findAll(renderTree(false), (item) => item.type === 'Dashboard')[0].props.onOpenFile('README.md');
+  assert.deepEqual(calls.splice(0), [
+    ['resource', 'dsh-resource://file/session/preferred/README.md', undefined], ['openRightSidebar'],
+  ]);
   assert.equal(
     findAll(renderTree(false), (item) => item.type === 'Dashboard').length,
     1,
@@ -1560,6 +1571,20 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   props.onCreateWorktree();
   props.onArchiveWorktree();
   assert.deepEqual(calls, []);
+});
+
+test('Main Tag projection renders a local status and omits derived acquisition and baseline facts', () => {
+  const harness = renderHarness(async () => true);
+  const main = createMainWorktreeRecord({ workspaceId: 'ws', path: '/repo/packages/app' }, null, '', {
+    gitRootPath: '/repo', currentHead: { kind: 'tag', name: 'v1.0.0', commit: 'a'.repeat(40) },
+  });
+  const node = harness.render({ record: main });
+  assert.equal(copyBranchTitle(node).props.children, 'v1.0.0');
+  assert.equal(historicalHints(node, en).length, 0);
+  assert.equal(findAll(node, (item) => item.props?.['data-health'] === 'unknown').length, 0);
+  assert.equal(findAll(node, (item) => item.props?.['data-health'] === 'local').length, 1);
+  assert.equal(findAll(node, (item) => item.type === 'dt' && [en['dashboard.created'], en['dashboard.base']].includes(item.props.children)).length, 0);
+  harness.dispose();
 });
 
 test('background restoration preserves existing visibility, inert, and aria attributes', () => {

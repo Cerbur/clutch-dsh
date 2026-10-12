@@ -1576,7 +1576,24 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         workspaceRoot,
         options,
       );
-      return parseWorktrees(result.stdout);
+      const worktrees = parseWorktrees(result.stdout);
+      return await mapInChunks(worktrees, STAT_READ_CONCURRENCY, async (worktree) => {
+        const commit = worktree.headCommit;
+        if (worktree.prunable || worktree.bare || !commit || !COMMIT_PATTERN.test(commit) || /^0+$/u.test(commit)) return worktree;
+        if (worktree.branch && !worktree.detached) {
+          return { ...worktree, currentHead: { kind: 'branch' as const, name: worktree.branch, commit } };
+        }
+        // Probe the captured object through the known repository, rather than
+        // running processes in missing or untrusted linked checkout paths.
+        let tag: string | undefined;
+        try {
+          tag = (await this.run(['describe', '--tags', '--exact-match', commit], workspaceRoot, options)).stdout.trim() || undefined;
+        } catch (error) {
+          if (!(error instanceof GitCommandError) || error.exitCode !== 128 || error.aborted || error.timedOut || error.outputTruncated || error.processTreeDidNotExit) throw error;
+        }
+        const name = tag ?? (await this.run(['rev-parse', '--short', commit], workspaceRoot, options)).stdout.trim();
+        return { ...worktree, currentHead: { kind: tag ? 'tag' as const : 'commit' as const, name, commit } };
+      });
     } catch (error) {
       throw operationError('list worktrees', workspaceRoot, undefined, undefined, error);
     }

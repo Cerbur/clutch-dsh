@@ -58,6 +58,10 @@ export function createWorktreeRemoteProjection(
   permissions?: WorktreePermissionManager,
 ): WorktreeRemoteManager {
   return {
+    getWorkspaceCheckout: (input) => project(() => {
+      if (!manager.getWorkspaceCheckout) throw new Error('Workspace checkout read unavailable');
+      return manager.getWorkspaceCheckout(input);
+    }),
     getWorktreeInstructions: (input) =>
       project(() => manager.getWorktreeInstructions(input)),
     updateWorktreeInstructions: (input) => project(() => manager.updateWorktreeInstructions(input)),

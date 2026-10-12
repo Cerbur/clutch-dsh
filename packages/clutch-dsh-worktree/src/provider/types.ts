@@ -137,6 +137,7 @@ export interface DshReadAdapter {
  * detached HEAD may have no local branch.
  */
 export interface GitWorktreeInfo {
+  readonly currentHead?: import('../contract/index.js').GitCheckoutHead;
   readonly prunable?: boolean;
   readonly locked?: boolean;
   readonly bare?: boolean;

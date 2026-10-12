@@ -282,6 +282,16 @@ export function WorktreeCreateDialog({
   if (workspace === undefined) return null;
   const setupCommands = setupStatus === undefined ? [] : worktreeSetupCommands(setupStatus);
   const importing = mode === 'import';
+  const branchOptions = [
+    ...(view?.checkout?.currentHead !== undefined
+      ? [{
+          name: 'HEAD',
+          isCurrent: false,
+          checkedOut: false,
+        }]
+      : []),
+    ...(view?.branches ?? []),
+  ];
   const importBlocked =
     actionPending || importCandidates.status === 'loading' || selectedImportPath === undefined;
 
@@ -394,7 +404,7 @@ export function WorktreeCreateDialog({
               <GitBranchSelector
                 key={pickerKey}
                 t={t}
-                branches={view?.branches ?? []}
+                branches={branchOptions}
                 label={t('worktree.baseBranch')}
                 value={selectedBranch}
                 disabled={actionPending}

@@ -166,6 +166,22 @@ Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 
 
 ### Git 根目录与 Workspace 工作目录
 
+Main 与 managed Worktree 共用 checkout projection：工作目录与 Git checkout 根目录独立，
+`currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
+不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
+detached 时对捕获的 commit 做 exact-tag 探测，无 tag 再读取短 hash。读取采用有界并发、
+结构化 argv 和既有 subprocess 超时/取消规则，缺失或可 prune 的 checkout 不获得虚构引用。
+`getWorkspaceCheckout` 在既有 `/api` transport 上提供物理 `gitRootPath`、物理 `workspacePath`
+与 `currentHead`，Client 的 Main 使用同一物理路径对，避免子目录和 `/var`/`/private/var`
+等别名重复拼接；DSH 原始 Workspace/Session cwd 从不改写。该 projection 复用 Workspace
+reader 的 generation、共享请求及最小刷新作用域，不建立第二数据源。
+
+Sidecar schema 仍为 v7，v1–v6 的迁移链保持不变。`currentHead` 和 `currentBranch` 均只在
+运行时返回，upsert 必须剥离它们，mutation token 继续只依据持久事实。managed Worktree
+detached 时仍显示 branch drift 并保留既有清理/分支接纳门禁，但展示具体 Tag 或 Commit。
+Main 新建支持显式 `fromHead`：Host 在已验证 Workspace 中捕获 HEAD full commit，再复用已有
+固定 commit 的创建事务、获取事实和恢复 journal；不把 Tag 当成本地 branch，不放宽基线选择器。
+
 `WorktreeRecord.absolutePath` 是面向 Workspace 的工作目录，供 Session 创建、运行时 cwd、
 Dashboard 显示、复制地址与 Open In 共用。`gitRootPath` 是完整 Git checkout 根目录，仅在
 Workspace 为仓库子目录时保存；缺省时根目录与工作目录相同。Git 身份校验、仓库读取、分支
@@ -192,7 +208,7 @@ mutation token 仍基于持久记录，避免投影变化破坏生命周期门�
 Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
 `gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
 按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
-使用相对地址，其余 checkout 文件使用 Session 作用域的绝对地址，并遵循 Host 原生访问校验。
+使用相对地址；其余 checkout 文件显式提示使用 IDE 或 Git-root Session，不构造越出 cwd 的地址。
 这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
 的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
 
@@ -583,7 +599,8 @@ Refresh scope is determined by the smallest affected identity.
 - Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
-- Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件只在当前 Session 属于目标 Worktree 时通过原生 `openResource` 打开并展开 rightbar，不回退到无关 Session。
+- Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件优先使用目标分组的当前 Session，否则回退该分组首个可见 Session；无目标时提供创建提示。调用原生 `openResource` 后显式展开 rightbar，不回退到无关分组。
+- Main 的健康展示为本地 checkout，不展示派生 Worktree 的获取时间与基线。HEAD 引用文本独立承载复制交互；Topline 单行截断，Ahead/Behind 使用中性提交计数，代码行数继续使用增删配色。窄屏空 Git pane 缩小高度；这些 UI 调整取代历史 Dashboard 计划中的旧展示规则，历史计划保持只读。
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
 
 ### 错误通知与恢复入口

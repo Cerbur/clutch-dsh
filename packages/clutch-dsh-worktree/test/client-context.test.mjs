@@ -24,6 +24,14 @@ test('resolves the current local branch for an unbound Session', () => {
   });
 });
 
+test('Main Tag and detached Commit remain available to header and Hero context', () => {
+  for (const kind of ['tag', 'commit']) {
+    assert.deepEqual(resolveWorktreeSessionContext(baseInput({ branches: [], checkout: {
+      gitRootPath: '/repo', workspacePath: '/repo/app', currentHead: { kind, name: kind === 'tag' ? 'v1' : 'abc1234', commit: 'a'.repeat(40) },
+    } })), { kind: 'main', workspaceId: 'ws1', label: kind === 'tag' ? 'v1' : 'abc1234', source: 'current-head' });
+  }
+});
+
 test('resolves the bound active Worktree branch for the current Session', () => {
   assert.deepEqual(resolveWorktreeSessionContext(baseInput({
     worktrees: [{

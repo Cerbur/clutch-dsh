@@ -166,7 +166,10 @@ Listing branches never contacts a remote automatically.
 Remote baselines require a new local branch when creating a Worktree; its short name may match the remote baseline
 when that local branch does not exist. Symbolic remote HEAD entries are excluded.
 
-Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
+Git must have a usable repository and initial commit. Choose a local branch, or choose **HEAD** to
+create a new branch from Main's current checkout, including an exact Tag or detached Commit.
+Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
+If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
 
 When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
@@ -179,8 +182,8 @@ Already-bound Sessions with a legacy Git-root cwd remain usable after a subdirec
 including automatic tool injection, Session discovery, follow-ups, result reports and default
 Worktree creation from their own checkout's HEAD. Their original cwd and history remain unchanged;
 new Session bindings still require the Workspace directory inside the checkout. Git file previews use
-relative addresses inside the current Session cwd and absolute addresses for other checkout files,
-subject to DSH's native file-access checks.
+relative addresses inside the target Session cwd. Files outside that cwd show a prompt to use an IDE
+or a Session at the repository root; already-bound Git-root Sessions keep their original preview scope.
 
 ### Enable Agent Worktree tools
 
@@ -402,8 +405,8 @@ history, changed files, and diffs without another Worktree-record write. If no u
 immutable captured acquisition commit and show that resolved commit as the Base fact; only a Worktree with
 neither a usable saved baseline nor a captured commit stays baseline-unselected and prompts you to choose
 one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
-Git & Changes view reports Worktree commits after that ancestor as `+N` ahead and base-branch commits after it
-as `-N` behind; history and file reads remain available. If the two heads have no common ancestor, the
+Git & Changes view reports Worktree commits after that ancestor as `↑ N` ahead and base-branch commits after it
+as `↓ N` behind; history and file reads remain available. If the two heads have no common ancestor, the
 committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
 history uses the Worktree commits not reachable from that base tip.
 With a valid managed Worktree baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
@@ -437,10 +440,16 @@ records the contributing commits, and each selected commit is rendered as its ow
 not an implicit range and does not include unselected commits. The changed-files column header shows the
 aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
 commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
-exclusive with committed multi-selection. The **Open in Sidebar** action in the summary diff toolbar
-reveals the current file in the native right sidebar using the current Session, only when that Session
-belongs to the Dashboard Worktree. An empty Worktree
-or an unrelated current Session cannot open a file through this action.
+exclusive with committed multi-selection. **Open in Sidebar** is available in the diff toolbar and on
+existing changed-file rows. It uses the current Session when it belongs to the Dashboard group,
+otherwise the group's first visible Session, and explicitly expands the native right sidebar.
+With no target Session it prompts you to create one; the Overview's empty Session card includes **New Session**.
+Checkout-relative file paths are resolved against the real Git root, including for a Main subdirectory.
+Files outside the target Session cwd show a prompt instead of an invalid resource address.
+
+Main shows a local checkout status and omits derived Worktree creation-time and baseline facts.
+Ahead/Behind uses neutral commit counts (`↑ N` / `↓ N`), while added/deleted code lines keep their green/red counts.
+The sticky top bar truncates long references on one line, and only the reference text copies to the clipboard.
 
 Managed Worktree and Main history are each capped at 200 commits and mark longer histories as truncated. A changed-file list larger
 than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
