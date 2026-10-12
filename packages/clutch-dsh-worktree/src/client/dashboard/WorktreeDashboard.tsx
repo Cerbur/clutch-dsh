@@ -2,10 +2,9 @@ import { NotificationToasts } from '../surface/components/NotificationToasts.js'
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   Button,
-  Input,
   Modal,
   StateDot,
   Tooltip,
@@ -13,11 +12,9 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   IconBranchOutline16,
-  IconCheckOutline16,
   IconCopyOutline16,
   IconEditOutline16,
   IconPanelLeftOutline16,
-  IconSearchOutline16,
 } from '../dsh-icons.js';
 import type { DashboardRecord } from './dashboard-selection.js';
 import type { WorktreeTranslate } from '../surface/types.js';
@@ -36,6 +33,7 @@ import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
 import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
+import { GitBranchPicker } from '../branch/GitBranchSelector.js';
 import { ToolSettings } from '../settings/ToolSettings.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
@@ -160,16 +158,13 @@ function WorktreeBaselineEditor({
 }) {
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
-  const [search, setSearch] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<WorktreeViewError>();
   const busy = useRef(false);
   const alive = useRef(true);
-  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const trigger = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const expected = useRef(value);
-  const pickerId = useId();
   const options = branches.filter((branch) => branch.name !== currentBranch);
   useEffect(() => {
     alive.current = true;
@@ -189,52 +184,13 @@ function WorktreeBaselineEditor({
   const closeEditor = () => {
     if (pending) return;
     setDraft(undefined);
-    setSearch('');
     setError(undefined);
   };
   const openEditor = () => {
     expected.current = saved;
     setDraft(saved ?? '');
-    setSearch('');
     setError(undefined);
   };
-  const query = search.trim().toLowerCase();
-  const filteredOptions =
-    query.length === 0
-      ? options
-      : options.filter((branch) => branch.name.toLowerCase().includes(query));
-  const activeIndex = filteredOptions.findIndex((branch) => branch.name === draft);
-  // The list is a permanent, fixed-height region: filtering swaps its rows but
-  // never changes its height, so the modal frame stays put.
-  const listOpen = filteredOptions.length > 0;
-
-  const selectOption = (index: number) => {
-    if (pending) return;
-    const branch = filteredOptions[index];
-    if (branch === undefined) return;
-    setDraft(branch.name);
-  };
-  const moveOption = (offset: 1 | -1) => {
-    if (filteredOptions.length === 0) return;
-    const nextIndex =
-      activeIndex < 0
-        ? offset > 0
-          ? 0
-          : filteredOptions.length - 1
-        : (activeIndex + offset + filteredOptions.length) % filteredOptions.length;
-    selectOption(nextIndex);
-    optionRefs.current[nextIndex]?.scrollIntoView({ block: 'nearest' });
-  };
-  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveOption(event.key === 'ArrowDown' ? 1 : -1);
-    } else if (event.key === 'Enter' && filteredOptions.length > 0) {
-      event.preventDefault();
-      selectOption(activeIndex < 0 ? 0 : activeIndex);
-    }
-  };
-
   const save = async () => {
     if (
       busy.current ||
@@ -252,7 +208,6 @@ function WorktreeBaselineEditor({
         setSaved(result);
         expected.current = result;
         setDraft(undefined);
-        setSearch('');
       }
     } catch (cause) {
       if (alive.current) setError(toWorktreeViewError(cause));
@@ -324,65 +279,10 @@ function WorktreeBaselineEditor({
         }
       >
         <div className={styles.dashboardBaselinePicker} data-dashboard-baseline-modal>
-          <Input
-            icon={<IconSearchOutline16 />}
-            className={styles.dashboardBaselineSearch}
-            aria-label={t('dashboard.searchBranches')}
-            role="combobox"
-            aria-autocomplete="list"
-            aria-controls={listOpen ? `${pickerId}-options` : undefined}
-            aria-expanded={listOpen}
-            aria-haspopup="listbox"
-            aria-activedescendant={
-              listOpen && activeIndex >= 0 ? `${pickerId}-option-${activeIndex}` : undefined
-            }
-            data-dashboard-baseline-search
-            disabled={pending || disabled}
-            placeholder={t('dashboard.searchBranches')}
-            value={search}
-            onKeyDown={onSearchKeyDown}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-          />
-          <div className={styles.dashboardBaselineOptions} data-dashboard-baseline-options>
-            {listOpen ? (
-              <div
-                id={`${pickerId}-options`}
-                className={styles.dashboardBaselineList}
-                role="listbox"
-                aria-label={t('dashboard.searchBranches')}
-              >
-                {filteredOptions.map((branch, index) => (
-                  <button
-                    type="button"
-                    key={branch.name}
-                    ref={(element) => {
-                      optionRefs.current[index] = element;
-                    }}
-                    id={`${pickerId}-option-${index}`}
-                    className={styles.dashboardBaselineOption}
-                    data-dashboard-baseline-option={branch.name}
-                    data-highlighted={activeIndex === index ? true : undefined}
-                    role="option"
-                    aria-selected={branch.name === draft}
-                    onClick={() => selectOption(index)}
-                  >
-                    <IconBranchOutline16 />
-                    <span className={styles.dashboardBaselineOptionLabel}>{branch.name}</span>
-                    {branch.name === draft && <IconCheckOutline16 />}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div
-                className={styles.dashboardBaselineEmpty}
-                data-dashboard-baseline-empty
-                role="status"
-                aria-live="polite"
-              >
-                {t('dashboard.noMatchingBranches')}
-              </div>
-            )}
-          </div>
+          {draft !== undefined && <GitBranchPicker
+            branches={options} value={draft} onChange={setDraft} t={t}
+            disabled={pending || disabled} onClose={closeEditor}
+          />}
           <NotificationToasts
             notices={
               error === undefined
@@ -651,6 +551,7 @@ export function WorktreeDashboard({
         // event. Their DOM may already be gone; defaultPrevented retains ownership.
         if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
+          if ((event.target as Element | undefined)?.closest?.('[data-git-branch-picker]')) return;
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
           event.stopPropagation();

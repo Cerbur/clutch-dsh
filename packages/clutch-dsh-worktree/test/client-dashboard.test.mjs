@@ -175,6 +175,10 @@ const dashboardCssSource = await readFile(
   'utf8',
 );
 
+const branchPickerSource = await readFile(
+  new URL('../src/client/branch/GitBranchSelector.tsx', import.meta.url), 'utf8',
+);
+
 function renderHarness(writeClipboard) {
   const state = [];
   const effects = [];
@@ -207,6 +211,20 @@ function renderHarness(writeClipboard) {
     },
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
+  const branchSource = branchPickerSource;
+  const branchOutput = ts.transpileModule(branchSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const branchExports = {};
+  new Function('require', 'exports', branchOutput)((name) => ({
+    react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@deepseek-ai/dsh-client-ui-primitives': { Input: (props) => jsx('input', props) },
+    '../dsh-icons.js': {
+      IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+      IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+      IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+    }, './git-branch.css': { default: {} },
+  })[name] ?? {}, branchExports);
   const exports = {};
   new Function('require', 'exports', output)(
     (name) =>
@@ -276,6 +294,7 @@ function renderHarness(writeClipboard) {
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
+        '../branch/GitBranchSelector.js': branchExports,
       })[name] ?? {},
     exports,
   );
@@ -492,9 +511,9 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   assert.equal(dialog.props.description, en['dashboard.editBaseDescription']);
   assert.equal(dialog.props.closeLabel, en['dialog.closeBaseline']);
   assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
-  const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  const search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
   assert.ok(search);
-  assert.equal(search.props.autoFocus, undefined);
+  assert.equal(search.props['data-modal-autofocus'], true);
   assert.equal(search.props.role, 'combobox');
   assert.equal(search.props['aria-expanded'], true);
   assert.equal(search.props['aria-controls'], 'dashboard-options');
@@ -513,14 +532,14 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   // focus or click, and only its rows react to the query.
   const optionsSurface = findAll(
     node,
-    (item) => item.props?.['data-dashboard-baseline-options'] !== undefined,
+    (item) => item.props?.['data-git-branch-options'] !== undefined,
   )[0];
   assert.ok(optionsSurface);
   const listbox = byRole(optionsSurface, 'listbox')[0];
   assert.equal(byRole(listbox, 'option').length, 2);
-  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  let options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-dashboard-baseline-option']),
+    options.map((option) => option.props['data-git-branch-option']),
     ['main', 'develop'],
   );
   assert.equal(options[0].props['aria-selected'], true);
@@ -529,42 +548,42 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
 
   search.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
-  assert.equal(options[0].props['aria-selected'], false);
-  assert.equal(options[1].props['aria-selected'], true);
-  const wrappedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['data-highlighted'], true);
+  const wrappedSearch = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
   wrappedSearch.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
   assert.equal(options[0].props['aria-selected'], true);
   assert.equal(options[1].props['aria-selected'], false);
 
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-dashboard-baseline-option']),
+    options.map((option) => option.props['data-git-branch-option']),
     ['develop'],
   );
   search.props.onChange({ currentTarget: { value: 'missing' } });
   node = harness.render();
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-empty'])[0].props.children,
+    findAll(node, (item) => item.props?.['data-git-branch-empty'])[0].props.children,
     en['dashboard.noMatchingBranches'],
   );
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined).length,
+    findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined).length,
     0,
   );
   // An empty result swaps in the status message without removing the frame.
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-options']).length,
+    findAll(node, (item) => item.props?.['data-git-branch-options']).length,
     1,
   );
   assert.equal(byRole(node, 'listbox').length, 0);
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
   options[0].props.onClick();
   node = harness.render();
   findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
@@ -585,6 +604,42 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   harness.dispose();
 });
 
+test('shared baseline picker searches remote branches and saves only confirmed selections', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({
+    branches: [
+      { name: 'main', isCurrent: true, checkedOut: true },
+      { name: 'origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false },
+      { name: record.branch, isCurrent: false, checkedOut: true },
+    ],
+    record: { ...record, baseBranch: 'main' },
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'group').map((group) => group.props.children[0].props.children), [
+    en['branch.local'], en['branch.remote'],
+  ]);
+  let search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  search.props.onChange({ currentTarget: { value: 'ORIGIN' } });
+  node = harness.render();
+  const option = byRole(node, 'option')[0];
+  assert.equal(option.props['data-git-branch-option'], 'origin/main');
+  assert.equal(option.props['aria-selected'], false);
+  search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  search.props.onKeyDown({ key: 'Enter', preventDefault() {} });
+  node = harness.render();
+  assert.equal(byRole(node, 'option')[0].props['aria-selected'], true);
+  assert.deepEqual(calls, []);
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(calls, [{ branch: 'origin/main', expected: 'main' }]);
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-value'])[0].props.children, 'origin/main');
+  harness.dispose();
+});
+
 test('baseline picker keeps a long branch roster in one scrollable list', () => {
   const harness = renderHarness(async (branch) => branch);
   const branches = Array.from({ length: 24 }, (_, index) => ({
@@ -602,51 +657,15 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   const listbox = byRole(node, 'listbox')[0];
   const options = byRole(listbox, 'option');
   assert.equal(options.length, 24);
-  assert.equal(options[0].props['data-dashboard-baseline-option'], 'branch-00');
+  assert.equal(options[0].props['data-git-branch-option'], 'branch-00');
   assert.equal(options[0].props['aria-selected'], true);
-  assert.equal(options.at(-1).props['data-dashboard-baseline-option'], 'branch-23');
+  assert.equal(options.at(-1).props['data-git-branch-option'], 'branch-23');
   harness.dispose();
 });
 
-test('baseline picker renders one fixed, elevated, scrollable branch list', () => {
-  const modalStyles = dashboardCssSource.slice(
-    dashboardCssSource.indexOf('.dashboardBaselineModal {'),
-    dashboardCssSource.indexOf('.dashboardBaselineSearch {'),
-  );
-  assert.match(modalStyles, /width: min\(440px, calc\(100vw - 48px\)\);/);
-  assert.match(modalStyles, /max-height: calc\(100dvh - 48px\);/);
-  assert.match(modalStyles, /min-height: 0;\n\s+overflow-y: auto;/);
-
-  const pickerStyles = dashboardCssSource.slice(
-    dashboardCssSource.indexOf('.dashboardBaselinePicker {'),
-    dashboardCssSource.indexOf('.dashboardBaselineOption {'),
-  );
-  // A fixed (not max-) height viewport: filtering swaps rows and never resizes
-  // the list, so the modal frame stays put.
-  assert.match(
-    pickerStyles,
-    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?height: clamp\(258px, 48dvh, 300px\);[\s\S]*?overflow-y: auto;/,
-  );
-  assert.doesNotMatch(pickerStyles, /max-height:/);
-  assert.match(pickerStyles, /background: var\(--dsw-specific-menu/);
-  assert.match(pickerStyles, /border-radius: 20px;/);
-  // The Input primitive's wrapper is content-box, so the search field opts into
-  // border-box to stay flush with the branch list below it.
-  assert.match(
-    pickerStyles,
-    /\.dashboardBaselineSearch \{[\s\S]*?box-sizing: border-box;[\s\S]*?width: 100%;/,
-  );
-  assert.match(pickerStyles, /\.dashboardBaselineList \{[\s\S]*?flex-direction: column;/);
-  // The error floats over the list instead of growing the frame.
-  assert.match(
-    dashboardCssSource,
-    /\.dashboardBaselineError \{[\s\S]*?position: absolute;/,
-  );
-  assert.match(
-    dashboardCssSource,
-    /\.dashboardBaselineOption \{[\s\S]*?min-height: 40px;[\s\S]*?border-radius: 10px;/,
-  );
-  assert.match(source, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+test('baseline editor delegates list behavior to the shared branch picker', () => {
+  assert.match(source, /<GitBranchPicker/);
+  assert.match(dashboardCssSource, /width: min\(440px, calc\(100vw - 48px\)\);/);
 });
 
 test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {

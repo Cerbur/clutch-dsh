@@ -1,6 +1,7 @@
 import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { gitWorktreeRoot } from '../../../contract/index.js';
 import { ErrorToast, NotificationToasts } from './NotificationToasts.js';
+import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import { worktreeSetupCommands } from '../../view/worktree-view.js';
 import styles from '../../worktree.css';
 import { worktreeLifecycleBlockReason } from '../selectors.js';
@@ -396,26 +397,17 @@ export function WorktreeCreateDialog({
         </div>
       ) : canCreate ? (
         <>
-          <label className={styles.modalField}>
+          <div className={styles.modalField}>
             {t('worktree.baseBranch')}
-            <select
-              className={styles.actionSelect}
-              aria-label={t('worktree.baseBranch')}
+            <GitBranchSelector
+              t={t}
+              branches={view?.branches ?? []}
+              label={t('worktree.baseBranch')}
               value={selectedBranch}
               disabled={actionPending}
-              onChange={(event) => {
-                onSelectedBranchChange(event.currentTarget.value);
-              }}
-            >
-              {view?.branches.map((branch) => (
-                <option key={branch.name} value={branch.name}>
-                  {branch.name}
-                  {branch.isCurrent ? t('branch.current') : ''}
-                  {branch.checkedOut ? t('branch.checkedOut') : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={onSelectedBranchChange}
+            />
+          </div>
           <label className={styles.modalField}>
             {t('worktree.name')}
             <Input

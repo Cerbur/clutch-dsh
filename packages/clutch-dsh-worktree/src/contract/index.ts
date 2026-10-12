@@ -61,7 +61,7 @@ export type WorktreeSource = 'plugin' | 'external';
 export interface WorktreeGitBaseline {
   /** The selected branch tip (or captured/derived baseline identity); tree diffs may use its merge base. */
   readonly commit: string;
-  /** The local branch selected as the baseline, when the projection was branch-selected. */
+  /** The local or fetched remote branch selected as the baseline, when the projection was branch-selected. */
   readonly ref?: string;
   /** Branch selection is the UI source; captured/derived values remain for legacy API compatibility. */
   readonly source: 'captured' | 'derived' | 'branch';
@@ -107,7 +107,7 @@ export type WorktreeGitDiffRequest =
 export interface WorktreeGitRequestContext {
   readonly workspaceId: WorkspaceId;
   readonly worktreeId: WorktreeId;
-  /** Optional local branch selected as the comparison baseline. */
+  /** Optional local or fetched remote branch selected as the comparison baseline. */
   readonly baseBranch?: string;
 }
 
@@ -268,6 +268,9 @@ export function gitWorktreeRoot(record: { readonly absolutePath: string; readonl
  */
 export interface BranchRecord {
   readonly name: string;
+  /** Missing kind denotes a local branch for older injected adapters. */
+  readonly kind?: 'local' | 'remote';
+  readonly remote?: string;
   readonly isCurrent: boolean;
   readonly checkedOut: boolean;
 }
@@ -346,7 +349,7 @@ export interface WorktreeManager {
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
-    /** Optional local branch selected as the comparison baseline. */
+    /** Optional local or fetched remote branch selected as the comparison baseline. */
     readonly baseBranch?: string;
   }): Promise<WorktreeGitHistory>;
 
@@ -505,7 +508,7 @@ export interface WorktreeRemoteManager {
   listWorktreeCommits(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
-    /** Optional local branch selected as the comparison baseline. */
+    /** Optional local or fetched remote branch selected as the comparison baseline. */
     baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitHistory>>;
 

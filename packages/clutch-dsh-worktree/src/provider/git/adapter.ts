@@ -509,20 +509,33 @@ function parseWorktrees(output: string): readonly GitWorktreeInfo[] {
   return worktrees;
 }
 
-/** Parse `for-each-ref` branch/path pairs without relying on whitespace delimiters. */
+/** Parse exact refs, symrefs and optional checkout paths; tags never affect branch names. */
 function parseBranchWorktreePaths(output: string): readonly GitBranchWorktreeInfo[] {
   const fields = output.split('\0');
   const branches: GitBranchWorktreeInfo[] = [];
-  for (let index = 0; index + 1 < fields.length; index += 2) {
-    const name = (fields[index] ?? '').replace(/^\r?\n/u, '');
-    const worktreePath = fields[index + 1] ?? '';
+  for (let index = 0; index + 3 < fields.length; index += 4) {
+    const ref = (fields[index] ?? '').replace(/^\r?\n/u, '');
+    const symref = fields[index + 2] ?? '';
+    const worktreePath = fields[index + 3] ?? '';
+    const kind = ref.startsWith('refs/heads/') ? 'local'
+      : ref.startsWith('refs/remotes/') ? 'remote' : undefined;
+    if (kind === undefined || symref || (kind === 'remote' && ref.endsWith('/HEAD'))) continue;
+    const name = ref.slice(kind === 'local' ? 'refs/heads/'.length : 'refs/remotes/'.length);
     if (!name) continue;
+    const remote = kind === 'remote' ? ref.slice('refs/remotes/'.length).split('/')[0] : undefined;
     branches.push({
       name,
-      ...(worktreePath ? { worktreePath } : {}),
+      ref,
+      kind,
+      ...(remote ? { remote } : {}),
+      ...(kind === 'local' && worktreePath ? { worktreePath } : {}),
     });
   }
-  return branches;
+  // A local branch named origin/main and its remote counterpart need distinct,
+  // stable picker identities. Tags never influence these identities.
+  const locals = new Set(branches.filter((branch) => branch.kind === 'local').map((branch) => branch.name));
+  return branches.map((branch) => branch.kind === 'remote' && locals.has(branch.name)
+    ? { ...branch, name: 'remotes/' + branch.name } : branch);
 }
 
 function isUnsupportedWorktreePathAtom(error: unknown): boolean {
@@ -1474,28 +1487,25 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   }
 
   /**
-   * 仅列出 `refs/heads/` 下的本地分支；NUL 分隔避免依赖面向人的展示格式或空白切分。
-   * Lists local branches under `refs/heads/` only; NUL delimiting avoids
+   * 列出本地分支与已获取的远端分支；NUL 分隔避免依赖面向人的展示格式或空白切分。
+   * Lists local and fetched remote branches; NUL delimiting avoids
    * depending on human-facing formatting or whitespace tokenization.
    */
   async listBranches(workspaceRoot: string, options: GitCommandOptions = {}): Promise<readonly string[]> {
     try {
       const result = await this.run(
-        ['for-each-ref', '--format=%(refname:short)%00', 'refs/heads/'],
+        ['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(symref)%00%00', 'refs/heads/', 'refs/remotes/'],
         workspaceRoot,
         options,
       );
-      return result.stdout
-        .split('\0')
-        .map((branch) => branch.replace(/^\r?\n/, '').replace(/\r?\n$/, ''))
-        .filter((branch) => branch.length > 0);
+      return parseBranchWorktreePaths(result.stdout).map((branch) => branch.name);
     } catch (error) {
       throw operationError('list branches', workspaceRoot, undefined, undefined, error);
     }
   }
 
   /**
-   * Read local branches and their checkout paths in one Git invocation when the
+   * Read local/fetched remote branches and local checkout paths in one invocation when the
    * installed Git supports the `worktreepath` format atom.
    */
   async listBranchesWithWorktreePaths(
@@ -1504,7 +1514,7 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   ): Promise<readonly GitBranchWorktreeInfo[]> {
     try {
       const result = await this.run(
-        ['for-each-ref', '--format=%(refname:short)%00%(worktreepath)%00', 'refs/heads/'],
+        ['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(symref)%00%(worktreepath)%00', 'refs/heads/', 'refs/remotes/'],
         workspaceRoot,
         options,
       );
@@ -1514,7 +1524,12 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         throw operationError('list branches', workspaceRoot, undefined, undefined, error);
       }
       const [branches, worktrees] = await Promise.all([
-        this.listBranches(workspaceRoot, options),
+        this.run(
+          ['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(symref)%00%00', 'refs/heads/', 'refs/remotes/'],
+          workspaceRoot,
+          options,
+        ).then((result) => parseBranchWorktreePaths(result.stdout))
+          .catch((cause: unknown) => { throw operationError('list branches', workspaceRoot, undefined, undefined, cause); }),
         this.listWorktrees(workspaceRoot, options),
       ]);
       const worktreePathByBranch = new Map(
@@ -1522,9 +1537,10 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           ? [[worktree.branch, worktree.absolutePath] as const]
           : []),
       );
-      return branches.map((name) => ({
-        name,
-        ...(worktreePathByBranch.has(name) ? { worktreePath: worktreePathByBranch.get(name) } : {}),
+      return branches.map((branch) => ({
+        ...branch,
+        ...(branch.kind !== 'remote' && worktreePathByBranch.has(branch.ref?.slice('refs/heads/'.length) ?? branch.name)
+          ? { worktreePath: worktreePathByBranch.get(branch.ref?.slice('refs/heads/'.length) ?? branch.name) } : {}),
       }));
     }
   }

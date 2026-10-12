@@ -104,9 +104,18 @@ const importCandidate: WorktreeImportCandidate = {
 };
 const branch: BranchRecord = {
   name: 'feature/example',
+  kind: 'local',
   isCurrent: false,
   checkedOut: false,
 };
+const remoteBranch: BranchRecord = {
+  name: 'origin/main',
+  kind: 'remote',
+  remote: 'origin',
+  isCurrent: false,
+  checkedOut: false,
+};
+void remoteBranch;
 const binding: SessionBinding = {
   workspaceId: 'ws_example',
   worktreeId: 'wt_example',

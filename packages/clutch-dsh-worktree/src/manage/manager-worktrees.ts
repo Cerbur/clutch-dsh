@@ -3,6 +3,8 @@ import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
 import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
 import { readWorktreeStatus } from '../provider/git/worktree-status.js';
+import { isSafeBranchName } from '../provider/git/branch-name.js';
+import { readBranchFacts, assertLocalWorktreeBranch, localBranchExists } from '../provider/git/branches.js';
 import type { GitWorktreeInfo } from '../provider/types.js';
 
 import type {
@@ -213,8 +215,10 @@ export async function listBranches(
     for (const branch of branchFacts) {
       rows.push({
         name: branch.name,
-        isCurrent: branch.worktreePath !== undefined && await samePhysicalPath(branch.worktreePath, gitRoot),
-        checkedOut: branch.worktreePath !== undefined,
+        ...(branch.kind === undefined ? {} : { kind: branch.kind }),
+        ...(branch.remote === undefined ? {} : { remote: branch.remote }),
+        isCurrent: branch.kind !== 'remote' && branch.worktreePath !== undefined && await samePhysicalPath(branch.worktreePath, gitRoot),
+        checkedOut: branch.kind !== 'remote' && branch.worktreePath !== undefined,
       });
     }
     return rows;
@@ -272,7 +276,7 @@ async function createWorktreeAttempt(
     : workspace.rootPath;
 
   if (typeof input.branch !== 'string' || input.branch.length === 0) {
-    throw providerError('GIT_OPERATION_FAILED', 'A local branch is required', {
+    throw providerError('GIT_OPERATION_FAILED', 'A base branch is required', {
       workspaceRoot: workspace.rootPath,
     });
   }
@@ -290,7 +294,7 @@ async function createWorktreeAttempt(
   }
   const newBranch = input.newBranch?.trim();
   if (baseBranch.length === 0) {
-    throw providerError('GIT_OPERATION_FAILED', 'A local base branch is required', {
+    throw providerError('GIT_OPERATION_FAILED', 'A base branch is required', {
       workspaceRoot: workspace.rootPath,
     });
   }
@@ -302,16 +306,23 @@ async function createWorktreeAttempt(
     });
   }
 
+  if ((!detachedBase && !isSafeBranchName(baseBranch)) || (newBranch !== undefined && !isSafeBranchName(newBranch))) {
+    throw providerError('GIT_OPERATION_FAILED', 'A valid branch short name is required', { baseBranch, newBranch: newBranch ?? '' });
+  }
   const targetBranch = newBranch ?? baseBranch;
+  let baseRef = input.baseCommit ?? baseBranch;
   if (!transactional) {
-    const branches = await context.git.listBranches(workspace.rootPath);
-    if (!detachedBase && !branches.includes(baseBranch)) {
-      throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
+    const branches = await readBranchFacts(context.git, workspace.rootPath);
+    const base = branches.find((branch) => branch.name === baseBranch);
+    if (!detachedBase && base === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', `Branch does not exist: ${baseBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: baseBranch,
       });
     }
-    if (newBranch !== undefined && branches.includes(newBranch)) {
+    assertLocalWorktreeBranch(base, newBranch);
+    baseRef = input.baseCommit ?? (newBranch === undefined ? baseBranch : base?.ref ?? baseBranch);
+    if (newBranch !== undefined && localBranchExists(branches, newBranch)) {
       throw providerError('WORKTREE_BRANCH_CONFLICT', `New branch already exists: ${newBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: newBranch,
@@ -362,7 +373,7 @@ async function createWorktreeAttempt(
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {
-    await context.git.createWorktree(workspace.rootPath, targetPath, input.baseCommit ?? baseBranch, newBranch);
+    await context.git.createWorktree(workspace.rootPath, targetPath, baseRef, newBranch);
   } catch (error) {
     throw asGitError('create worktree', workspace.rootPath, targetPath, error);
   }

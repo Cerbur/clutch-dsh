@@ -144,9 +144,13 @@ export interface GitWorktreeInfo {
   readonly detached?: boolean;
 }
 
-/** Local branch facts with the physical checkout path, when Git reports one. */
+/** Locally available branch refs; remote-tracking refs never have a checkout path. */
 export interface GitBranchWorktreeInfo {
   readonly name: string;
+  readonly kind?: 'local' | 'remote';
+  readonly remote?: string;
+  /** Exact enumerated ref, used to avoid tag/branch resolution ambiguity. */
+  readonly ref?: string;
   readonly worktreePath?: string;
 }
 
@@ -204,7 +208,7 @@ export interface GitWorktreeAdapter {
   /** Resolve canonical repository identity for cross-process Git mutation locking. */
   resolveRepositoryIdentity?(workspaceRoot: string, options?: GitCommandOptions): Promise<GitRepositoryInspection>;
   /**
-   * Resolve local branches and their checkout paths in one read when supported.
+   * Resolve local and fetched remote branches and local checkout paths in one read.
    * Optional for adapters that predate the worktreepath ref-format atom.
    */
   listBranchesWithWorktreePaths?(

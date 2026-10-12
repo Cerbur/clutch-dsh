@@ -71,6 +71,138 @@ async function createFixture(options = {}) {
   return { tempRoot, dshHome, workspaceRoot, repositoryRoot, sidecar, manager };
 }
 
+test('enumerates fetched remote branches, excludes symbolic HEAD and creates an attached local branch', async () => {
+  const fixture = await createFixture({ workspaceSubdirectory: 'packages/app' });
+  try {
+    // The selected commit must contain the Workspace subdirectory.
+    await writeFile(path.join(fixture.workspaceRoot, 'app.txt'), 'app\n');
+    await runGit(fixture.repositoryRoot, ['add', '.']);
+    await runGit(fixture.repositoryRoot, ['commit', '-m', 'app']);
+    const base = (await runGit(fixture.repositoryRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(fixture.repositoryRoot, ['update-ref', 'refs/remotes/origin/main', base]);
+    await runGit(fixture.repositoryRoot, ['update-ref', 'refs/remotes/upstream/feature/x', base]);
+    await runGit(fixture.repositoryRoot, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main']);
+    await runGit(fixture.repositoryRoot, ['update-ref', 'refs/remotes/upstream/HEAD', base]);
+    const branches = await fixture.manager.listBranches({ workspaceId: 'ws_dashboard' });
+    assert.deepEqual(branches.filter((branch) => branch.kind === 'remote'), [
+      { name: 'origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false },
+      { name: 'upstream/feature/x', kind: 'remote', remote: 'upstream', isCurrent: false, checkedOut: false },
+    ]);
+    assert.equal(branches.find((branch) => branch.name === 'main').isCurrent, true);
+    for (const branch of ['origin/main', 'refs/remotes/origin/main', '-bad', 'main~1', 'origin/HEAD']) {
+      await assert.rejects(fixture.manager.createWorktree({ workspaceId: 'ws_dashboard', branch }), {
+        code: 'GIT_OPERATION_FAILED',
+      });
+    }
+    assert.equal((await fixture.sidecar.read('ws_dashboard')).pendingOperation, undefined);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'origin/main', newBranch: 'feature/remote-base',
+    });
+    assert.equal(record.baseBranch, 'origin/main');
+    assert.equal(record.baseCommit, base);
+    assert.equal(record.branch, 'feature/remote-base');
+    assert.ok(record.absolutePath.endsWith(path.join('packages', 'app')));
+    assert.equal((await runGit(record.absolutePath, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim(), record.branch);
+    assert.equal((await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim(), base);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('local/remote name collisions remain separately selectable and only local names conflict on create', async () => {
+  const fixture = await createFixture();
+  try {
+    const root = fixture.repositoryRoot;
+    const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['update-ref', 'refs/remotes/origin/main', base]);
+    await runGit(root, ['branch', 'origin/main']);
+    const branches = await fixture.manager.listBranches({ workspaceId: 'ws_dashboard' });
+    assert.equal(branches.find((branch) => branch.name === 'origin/main').kind, 'local');
+    assert.equal(branches.find((branch) => branch.name === 'remotes/origin/main').kind, 'remote');
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'remotes/origin/main', newBranch: 'feature/collision',
+    });
+    assert.equal(record.baseBranch, 'remotes/origin/main');
+    assert.equal(record.baseCommit, base);
+    // A fetched remote named upstream/topic does not occupy the local branch name.
+    await runGit(root, ['update-ref', 'refs/remotes/upstream/topic', base]);
+    const namedLikeRemote = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'upstream/topic',
+    });
+    assert.equal(namedLikeRemote.branch, 'upstream/topic');
+    await assert.rejects(fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'upstream/topic',
+    }), { code: 'WORKTREE_BRANCH_CONFLICT' });
+    const comparison = await fixture.manager.listWorktreeCommits({
+      workspaceId: 'ws_dashboard', worktreeId: record.worktreeId, baseBranch: 'remotes/origin/main',
+    });
+    assert.equal(comparison.baseline.commit, base);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('remote baselines save with CAS, resolve exact refs despite tags, and project divergence and diffs', async () => {
+  const fixture = await createFixture();
+  try {
+    const root = fixture.repositoryRoot;
+    const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['update-ref', 'refs/remotes/origin/main', base]);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/remote-diff',
+    });
+    await writeFile(path.join(record.absolutePath, 'feature.txt'), 'feature\n');
+    await runGit(record.absolutePath, ['add', '.']);
+    await runGit(record.absolutePath, ['commit', '-m', 'feature']);
+    const featureHead = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    await writeFile(path.join(root, 'upstream.txt'), 'upstream\n');
+    await runGit(root, ['add', '.']);
+    await runGit(root, ['commit', '-m', 'upstream']);
+    const remoteHead = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(root, ['update-ref', 'refs/remotes/origin/main', remoteHead]);
+    await runGit(root, ['tag', 'origin/main', featureHead]);
+    const identity = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId };
+    assert.equal(await fixture.manager.updateWorktreeBaseBranch({
+      ...identity, baseBranch: 'origin/main', expectedBaseBranch: 'main',
+    }), 'origin/main');
+    await assert.rejects(fixture.manager.updateWorktreeBaseBranch({
+      ...identity, baseBranch: 'main', expectedBaseBranch: 'main',
+    }), { code: 'WORKTREE_STATE_CONFLICT' });
+    for (const baseBranch of ['refs/remotes/origin/main', 'origin/main~1', '-bad']) {
+      await assert.rejects(fixture.manager.listWorktreeCommits({ ...identity, baseBranch }), {
+        code: 'WORKTREE_STATE_CONFLICT',
+      });
+    }
+    const history = await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: 'origin/main' });
+    assert.equal(history.ahead, 1);
+    assert.equal(history.behind, 1);
+    assert.equal(history.baseline.commit, remoteHead);
+    assert.equal(history.commits[0].sha, featureHead);
+    const selection = { kind: 'summary' };
+    const files = await fixture.manager.listWorktreeCommitFiles({ ...identity, baseBranch: 'origin/main', selection });
+    assert.deepEqual(files.files.map((file) => file.path), ['feature.txt']);
+    const diff = await fixture.manager.getWorktreeCommitFileDiff({
+      ...identity, baseBranch: 'origin/main', selection, path: 'feature.txt',
+    });
+    assert.match(diff.patch, /\+feature/u);
+    const before = await fixture.sidecar.read('ws_dashboard');
+    assert.equal(before.worktrees[0].baseCommit, base);
+    assert.equal(before.worktrees[0].baseBranch, 'origin/main');
+    // A temporary Git baseline never saves to the sidecar.
+    await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: 'main' });
+    assert.deepEqual(await fixture.sidecar.read('ws_dashboard'), before);
+    await runGit(root, ['update-ref', '-d', 'refs/remotes/origin/main']);
+    const unavailable = await fixture.manager.listWorktreeCommits({ ...identity, baseBranch: 'origin/main' });
+    assert.equal(unavailable.unavailableReason, 'baseline-unknown');
+    assert.deepEqual(await fixture.sidecar.read('ws_dashboard'), before);
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('persists a manually selected baseline branch and rejects the current branch', async () => {
   const fixture = await createFixture();
   try {

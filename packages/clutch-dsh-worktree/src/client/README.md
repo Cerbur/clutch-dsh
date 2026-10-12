@@ -261,7 +261,7 @@ When the Workspace root has tracked, staged, unstaged, or untracked changes, the
 **Uncommitted changes** target; Main starts on the first visible target, which may be that live entry. For a managed Worktree with a valid persisted `baseBranch`, or with a captured
 acquisition commit it reads as the implicit baseline, Overview performs one compact status read for ahead/behind,
 committed baseline-to-HEAD line counts, and live working-tree line counts without loading the branch list; genuinely
-unavailable and baseline-unselected managed views remain disconnected. The Git tab's first mount loads local branches and uses the
+unavailable and baseline-unselected managed views remain disconnected. The Git tab's first mount loads local and fetched remote branches and uses the
 persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and different
 from the current Worktree branch; when no usable saved baseline exists but the record has a captured
 acquisition commit, it reads against that immutable commit and shows the resolved commit as the Base fact,
@@ -269,7 +269,7 @@ and only otherwise does it prompt for a baseline. The Overview facts editor is a
 its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
 rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
 replacement through the existing Worktree
-Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
+Manager path, accepts local and fetched remote branches other than the current Worktree branch, and passes the saved
 value back as the next Git selector default. With a valid managed Worktree baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
 Main has no comparison-only summary or branch selector and displays committed history plus the live Workspace-root target.
@@ -302,9 +302,9 @@ per-file caches, retains ready content during refresh, and uses request generati
 after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
 Host projection because the files can change between reads. Main commit files and diffs authorize against the same
 bounded visible history before reading a selected commit or committed aggregate; Main working-tree files and diffs authorize against a fresh
-Workspace-root changed-path projection before reading the live tree. A selected local branch that no longer exists renders an honest unavailable
-state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or remote-tracking
-ref is rejected outright because only a plain local branch name can be selected; a Worktree with neither a
+Workspace-root changed-path projection before reading the live tree. A selected local or remote branch that no longer exists renders an honest unavailable
+state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or revision expression
+is rejected outright because only an enumerated local or fetched remote branch name can be selected; a Worktree with neither a
 usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
@@ -410,7 +410,7 @@ The Dashboard instructions card edits plugin-owned text through
 `expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
 preserved. Main uses the same editor and optimistic witness, with its text stored as Workspace-root guidance. The Dashboard Base fact for a managed Worktree
-can be replaced with a saved local branch other than the current Worktree branch through
+can be replaced with a saved local or fetched remote branch other than the current Worktree branch through
 `updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
 owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
 remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
@@ -654,6 +654,16 @@ Connection, Gateway and unexpected Worktree domain failures remain visible as re
 errors rather than being converted to an empty list. Recognized Git readiness failures are
 Workspace-local setup states, not transport failures. Client disposal must abort pending
 Connection calls and release browser-local membership projections.
+
+## Shared Git branch picker
+
+Creation and the compact Git comparison control use `branch/GitBranchSelector`; the saved-baseline modal
+embeds its `GitBranchPicker` panel. The panel owns case-insensitive search, local/remote grouping,
+checkout markers and keyboard focus (Arrow keys navigate, Enter selects, Escape closes).
+The selector owns popup positioning, outside-pointer dismissal, focus restoration and listener cleanup.
+The callers own selection, async saves and pending state. No Git reads or persistent state live in the picker.
+Missing `BranchRecord.kind` denotes a local branch for older adapters. Creation keeps its existing recommended
+new local name for either branch kind; selected remote refs cannot be checked out directly.
 
 ## Tool preference UI
 

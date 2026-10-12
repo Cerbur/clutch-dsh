@@ -76,7 +76,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | Feature                         | Preview                                                                                                                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
-| **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
+| **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
 | **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
@@ -117,9 +117,15 @@ New Worktree actions use the same branch icon as Worktree rows. The Workspace ro
 on hover, keyboard focus, or while its options menu is open, matching the menu button.
 
 1. Open the options menu for Local/Main or an active Worktree and choose **Create Worktree**.
-2. Choose the local base branch. You can also provide a new branch name.
+2. Choose a local or fetched remote base branch and a new local branch name. The dialog suggests an available name.
 3. Confirm the dialog. The plugin creates the Git Worktree, records its acquisition facts, and
    continues through the normal Session and binding flow when you open a Session from that Worktree.
+
+Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
+and **Remote branches**, with current/checked-out markers. Search ignores case; use Arrow Up/Down to move,
+Enter to choose, and Escape to close. The current local branch is preferred by default. Remote refs are read
+from the local repository; fetch them in Git before selecting them. The plugin never fetches or contacts a remote.
+Remote baselines require a new local branch when creating a Worktree; symbolic remote HEAD entries are excluded.
 
 Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
@@ -175,8 +181,8 @@ The six selectable capabilities correspond to these tools:
 
 | Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
-| `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local base branches. Defaults to the calling Workspace.                                                                                          |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local and fetched remote base branches. Defaults to the calling Workspace.                                                                                          |
 | `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
 | `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
 | `clutch_list_sessions`  | optional `workspaceId`, `worktreeId`                               | Finds existing Sessions, binding state, status and title. Unavailable relations return a diagnostic without reading their history.                                                                                                 |
@@ -189,7 +195,7 @@ within the calling Workspace; prefer stable `worktreeId` for dispatch. Creating 
 Only committed state is inherited; staged, unstaged and untracked files are not copied.
 An unhealthy binding never silently falls back to Main. The default captures the calling checkout's
 committed HEAD, including a detached root HEAD. Detached sources return `baseCommit` without inventing
-a `baseBranch`; an explicit local `baseBranch` remains available as an override.
+a `baseBranch`; an explicit local or fetched remote `baseBranch` remains available as an override.
 
 Newly delegated Sessions automatically receive only
 `clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
@@ -270,7 +276,7 @@ a resumed Session can enable `/cluworktree` and use `clutch_send_message` with a
 
 The first version lists only ready, branch-attached, non-root Git Worktrees that are not already
 managed by the plugin. Detached, bare, prunable, missing, and invalid entries are omitted. Imported
-Worktrees can still use Git & Changes after you choose a local baseline branch.
+Worktrees can still use Git & Changes after you choose a local or fetched remote baseline branch.
 
 Import uses the same Workspace-relative directory rule and offers only candidates where that
 directory is available. Existing records are projected with the corrected path when the original
@@ -345,9 +351,9 @@ committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; th
 projection, not a watcher or a Worktree-record field. Main has no Worktree baseline comparison, so Overview remains
 **Not connected** for ahead/behind facts while its Git tab still exposes Main history. Unavailable or baseline-unselected
 managed views honestly remain **Not connected**. Opening Overview does not load the branch list; the first Git tab
-activation loads local branches and, once a baseline is resolved, managed Worktree commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
+activation loads local and fetched remote branches and, once a baseline is resolved, managed Worktree commit history. To replace that baseline, click the pencil icon beside the Base fact to open the branch
 picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
-scrolls internally, so the dialog keeps one size while you filter. Choose any local branch except the
+scrolls internally, so the dialog keeps one size while you filter. Choose any local or fetched remote branch except the
 current Worktree branch and save.
 The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default for
 the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
@@ -366,8 +372,8 @@ changes** when you need a narrower target. Main skips this comparison-only summa
 Workspace root has changes. Selecting **Uncommitted changes** compares the current Workspace root with `HEAD`; it does not
 create a baseline or write any Git state.
 
-The selected local branch is resolved again for each read. The browser can choose only a plain local branch
-name, not a raw commit SHA or arbitrary Git ref: a full ref path, tag, or remote-tracking ref is rejected
+The selected local or fetched remote branch is resolved again for each read. The browser can choose only an enumerated branch
+name, not a raw commit SHA or arbitrary Git ref: a full ref path, tag, or revision expression is rejected
 outright, while a selected branch that no longer exists shows the honest unavailable state instead of a
 generic Git failure. `baseCommit` is immutable acquisition metadata, is never user-selectable directly, and
 is the implicit baseline whenever no saved branch baseline is usable; creation recovery never overwrites
@@ -480,7 +486,7 @@ text, actions and diagnostic details follow the font size selected in **Settings
   messages, prompts, transcripts, and history. The plugin never copies or rewrites those values.
 - The plugin's external index stores Worktree paths, branches, sources, lifecycle state, bindings,
   ordering, instructions, acquisition facts, and related metadata. For managed Worktrees, the
-  Dashboard Base fact is the persisted `baseBranch`; users can replace it with a local branch other
+  Dashboard Base fact is the persisted `baseBranch`; users can replace it with a local or fetched remote branch other
   than the current Worktree branch, and the saved value becomes the Git-tab selector default. The
   immutable acquisition `baseCommit` remains separate and is not rewritten by that edit. The index is
   kept in the DSH host plugin data directory, not in a project directory or DSH's raw data store. It

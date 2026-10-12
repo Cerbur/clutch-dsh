@@ -1,3 +1,5 @@
+import { readBranchFacts, localBranchExists } from '../../git/branches.js';
+import type { GitBranchWorktreeInfo } from '../../types.js';
 import { isWorktreeGitCommit, type WorktreeRecord } from '../../../contract/index.js';
 import { createRepositoryFingerprint } from '../../git/repository-fingerprint.js';
 import type { GitWorktreeInfo } from '../../types.js';
@@ -98,9 +100,9 @@ export async function recoverWorktreeTransaction(
             await publishCreated(dependencies, locked, pending.id, record, repository.identity);
             return;
           }
-          let branches: readonly string[];
+          let branches: readonly GitBranchWorktreeInfo[];
           try {
-            branches = await dependencies.git.listBranches(gitRoot);
+            branches = await readBranchFacts(dependencies.git, gitRoot);
           } catch (inspectionError) {
             await markRecovery(locked, pending, 'WORKTREE_RECOVERY_REQUIRED');
             throw recoveryError(`Unable to inspect branches during pending create recovery`, {
@@ -111,7 +113,7 @@ export async function recoverWorktreeTransaction(
             });
           }
           const ambiguousNewBranch =
-            pending.baseRef !== undefined && branches.includes(pending.branch);
+            pending.baseRef !== undefined && localBranchExists(branches, pending.branch);
           let pendingTargetExists: boolean;
           try {
             pendingTargetExists = await pathExists(pending.targetPath);

@@ -3,6 +3,7 @@ import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
 import { useRef } from 'react';
+import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
   WorktreeGitCommitFiles,
@@ -218,25 +219,20 @@ export function WorktreeGitPanel({
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
           {!isMain && (
-            <label className={styles.gitBaselineSelector}>
+            <div className={styles.gitBaselineSelector}>
               <span>{t('dashboard.git.baselineSelector')}</span>
-              <select
+              <GitBranchSelector
+                t={t}
+                size="compact"
+                label={t('dashboard.git.baselineSelector')}
+                placeholder={t('dashboard.git.selectBaseline')}
+                emptyLabel={t('dashboard.git.selectBaseline')}
+                branches={branchOptions}
                 value={state.baselineBranch ?? ''}
-                data-dashboard-git-baseline
                 disabled={state.branches.status === 'loading'}
-                onChange={(event) => state.selectBaselineBranch(event.currentTarget.value || undefined)}
-              >
-                <option value="">{t('dashboard.git.selectBaseline')}</option>
-                {state.baselineBranch !== undefined && !branchOptions.some((branch) => branch.name === state.baselineBranch) && (
-                  <option value={state.baselineBranch}>{state.baselineBranch}</option>
-                )}
-                {branchOptions.map((branch) => (
-                  <option key={branch.name} value={branch.name}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => state.selectBaselineBranch(value || undefined)}
+              />
+            </div>
           )}
           {baselineCommit !== undefined && (
             <dl className={styles.gitBaselineFacts}>

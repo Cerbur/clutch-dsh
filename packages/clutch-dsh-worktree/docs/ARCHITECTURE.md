@@ -75,7 +75,7 @@ DSH 是所有核心上下文与会话事实的**唯一真实数据源**。插件
 - Worktree 记录：绝对路径、branch、生命周期状态（`status`）、获取来源（`source`）；
 - 关系状态与 schema 版本（`schemaVersion`）；
 - 可选字段：用户编写的 Worktree 指令（`instructions`）与 Workspace-root Main 指令（`mainInstructions`，均最大 32,000 UTF-16 code units）、创建/导入事实（`createdAt` 或 `importedAt`）、持久化 Dashboard 基线 branch（`baseBranch`）以及不可变的获取 commit（`baseCommit`）。
-  新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地 branch，但 `baseCommit` 始终保留为不可变的获取元数据：创建恢复和创建后检查只会填充最初未能捕获的获取 commit，绝不会用后续的实时 HEAD 覆盖它。
+  新建 Worktree 时的 `baseBranch` 来自获取时选择；用户可在 Dashboard facts 中将其替换为其他本地或已获取的远端 branch，但 `baseCommit` 始终保留为不可变的获取元数据：创建恢复和创建后检查只会填充最初未能捕获的获取 commit，绝不会用后续的实时 HEAD 覆盖它。
 - Git ahead/behind、已提交/未提交 changed-file additions/deletions 以及工作区行数都属于运行时 Git projection，仅通过 contract/Manager 读取，不写入 `WorktreeRecord` 或 Sidecar；不可安全读取时必须返回显式 unavailable，而不是持久化猜测值。
 
 ### 共享指令（Instructions）注入机制
@@ -328,6 +328,21 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 ## 9. Subprocess Git 执行器
 
+### 远端基线与统一分支选择器（2026-10-12）
+
+本次扩展取代历史计划中仅本地分支的基线限制。Provider 在本地枚举 `refs/heads/` 与
+`refs/remotes/`，过滤 symref 与远端 `/HEAD`，不 fetch、不连接远端。BranchRecord 增加可选
+`kind`、`remote`；旧 adapter 的缺省 kind 保持 local 语义。Provider 事实同时携带精确 ref，
+解析基线 SHA 时使用该 ref，避免同名 tag 的 DWIM 歧义；local 与 remote 同名时 remote 显示为
+`remotes/<remote>/<branch>`。创建必须为 remote 基线指定新 local branch，校验在 Git/Sidecar
+副作用前完成。新 branch 冲突与创建恢复仅检查 local refs，remote refs 不占用 local branch 名。
+事务仍固定获取 SHA 并通过 journal 发布，保存基线仍只 CAS 更新 `baseBranch`，保留 `baseCommit`。
+分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段或 RPC。
+
+Client 的共享 `branch/GitBranchPicker` 提供搜索、分组、状态和无障碍键盘导航；
+`GitBranchSelector` 提供创建与临时比较的浮层入口，基线确认弹窗嵌入同一面板。
+默认优先当前 local branch，缺省 kind 视为 local，当前 Worktree branch 仍从比较候选中过滤。
+
 - **依赖抽象**：Provider 仅依赖 `@deepseek-ai/dsh-subprocess` 的轻量 Service Definition，不直接打包或绑定平台具体的实现包。
 - **Capability 注入**：默认由 DSH Host 将 `ctx.subprocess` 注入给 `LocalGitAdapter`。直接构造未注入时，保留 Node `execFile` 兼容回退。
 - **直接命令调用**：所有 Git 调用均使用结构化直接 argv 数组、显式 cwd、受限输出缓冲区（bounded output），**严禁通过 bash、cmd、powershell 或其他 shell 解释器执行**。
@@ -338,11 +353,11 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
 Git Tab 首次挂载时，Main 直接读取 Workspace root `HEAD` 的有界 commit history，并按需读取 root 的 changed-path projection；它不读取 branch 列表、
-不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，客户端读取 Workspace 的本地 branch 列表；
+不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，客户端读取 Workspace 的本地与已获取的远端 branch 列表；
 如果 Worktree 记录存在持久化的 `baseBranch` 且它不同于当前 Worktree branch，客户端以它作为初始选择；否则在记录带有不可变获取
 commit（`baseCommit`）时，以该 commit 作为隐式基线读取并把解析出的 commit 显示为 Base fact。
 只有既无可用已保存基线、也无获取 commit 的 Worktree 才保持未选择并提示用户。受管理 Worktree 的 Overview
-Dashboard facts 提供基线编辑器：候选项仅来自本地 branch，且排除当前 Worktree branch；保存通过
+Dashboard facts 提供基线编辑器：候选项来自本地与已获取的远端 branch，且排除当前 Worktree branch；保存通过
 `updateWorktreeBaseBranch` 沿 Contract → Remote → Host → Manage 传递，使用 expected branch
 执行乐观并发校验，只更新 Sidecar 的 `baseBranch`。`baseCommit` 不会被该操作修改。Git Tab
 在加载有效基线后默认选择 `summary`（基线汇总）而不是第一个 history commit；切换基线 branch 也会回到该
@@ -389,9 +404,9 @@ Git magic pathspec。包含 live working tree 的 summary 不复用 committed-su
 
 既没有可用已保存基线、也没有获取 commit 的旧 managed/imported Worktree 返回明确的
 `baseline-unselected` projection，而不是用移动的 ref 猜测比较点；带有获取 commit 的记录以该不可变
-commit 作为隐式比较点，不再返回 `baseline-unselected`。已选本地 branch 不复存在时降级为 honest
-unavailable projection，而不是泛化 Git 失败；完整 ref 路径、tag 或 remote-tracking ref 仍被直接
-拒绝，只有普通本地 branch 名可以被选择。选择无效、无法解析或 Worktree HEAD 不可用时同样返回 honest
+commit 作为隐式比较点，不再返回 `baseline-unselected`。已选本地或远端 branch 不复存在时降级为 honest
+unavailable projection，而不是泛化 Git 失败；完整 ref 路径、tag 或 revision expression 仍被直接
+拒绝，只有枚举出的本地或已获取的远端 branch 名可以被选择。选择无效、无法解析或 Worktree HEAD 不可用时同样返回 honest
 unavailable projection。运行时 derived/captured 兼容结果不会自动写回 Sidecar；只有用户明确保存 Dashboard
 facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar 损坏或恢复未完成时，Git
 读取沿用既有 recovery/error plumbing，不以空数据覆盖原生 DSH 视图。

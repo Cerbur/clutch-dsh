@@ -574,6 +574,13 @@ test('selects the current local branch as the default Worktree base branch', () 
     'feature/other',
   );
   assert.equal(selectDefaultBaseBranch([]), '');
+  assert.equal(selectDefaultBaseBranch([
+    { name: 'origin/main', kind: 'remote', isCurrent: false, checkedOut: false },
+    { name: 'develop', kind: 'local', isCurrent: false, checkedOut: false },
+  ]), 'develop');
+  assert.equal(selectDefaultBaseBranch([
+    { name: 'origin/main', kind: 'remote', isCurrent: false, checkedOut: false },
+  ]), 'origin/main');
 });
 
 test('maps a non-Git branch-list failure to Workspace-local readiness', async () => {

@@ -1261,6 +1261,28 @@ test('rejects invalid and already checked-out branches without using force', asy
   });
 });
 
+test('legacy sidecar creation enforces a new local branch for remote bases', async () => {
+  await withGitFixture(async ({ workspaceRoot, dshHome, dsh, sidecar }) => {
+    const head = (await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(workspaceRoot, ['update-ref', 'refs/remotes/origin/main', head]);
+    const legacy = createWorktreeManager({
+      dsh, dshHome,
+      sidecar: { read: (...args) => sidecar.read(...args), mutate: (...args) => sidecar.mutate(...args) },
+    });
+    try {
+      await expectCode(legacy.createWorktree({ workspaceId: 'ws_one', branch: 'origin/main' }), 'GIT_OPERATION_FAILED');
+      const record = await legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'origin/main', newBranch: 'legacy/remote',
+      });
+      assert.equal(record.baseBranch, 'origin/main');
+      assert.equal(record.baseCommit, head);
+      assert.equal((await runGit(record.absolutePath, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim(), 'legacy/remote');
+    } finally {
+      await legacy.close();
+    }
+  });
+});
+
 test('creates a new Worktree branch from an already checked-out base branch', async () => {
   await withGitFixture(async ({ provider, workspaceRoot }) => {
     const record = await provider.createWorktree({
@@ -1298,7 +1320,7 @@ test('marks the containing Git Worktree branch current for an imported subdirect
     });
 
     assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
-      { name: 'main', isCurrent: true, checkedOut: true },
+      { name: 'main', kind: 'local', isCurrent: true, checkedOut: true },
     ]);
   });
 });

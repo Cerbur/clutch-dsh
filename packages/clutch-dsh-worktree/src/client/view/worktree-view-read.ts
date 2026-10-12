@@ -136,7 +136,8 @@ export function createWorktreeRefreshGuard() {
 
 /** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
 export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
-  return branches.find((branch) => branch.isCurrent)?.name ?? branches[0]?.name ?? '';
+  return branches.find((branch) => branch.kind !== 'remote' && branch.isCurrent)?.name
+    ?? branches.find((branch) => branch.kind !== 'remote')?.name ?? branches[0]?.name ?? '';
 }
 
 /** Keep a valid user choice across branch-list refreshes, otherwise choose the current branch. */
