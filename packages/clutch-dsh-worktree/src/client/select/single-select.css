@@ -35,14 +35,17 @@
   padding: 4px; box-sizing: border-box; min-height: 0;
 }
 .singleSelectPopup .singleSelectViewport { height: auto; max-height: clamp(120px, calc(100dvh - 160px), 300px); }
+.singleSelectPopup [data-preparing='true'] .singleSelectViewport { height: clamp(120px, calc(100dvh - 160px), 300px); }
 .singleSelectPopup .singleSelectEmpty { min-height: 80px; }
-.singleSelectGroup { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 15px; }
+.singleSelectGroup { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; box-sizing: border-box; padding: 6px 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 15px; }
 .singleSelectOption {
+  box-sizing: border-box;
   display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px;
   padding: 6px 8px; border: 0; border-radius: var(--dsw-radius-md, 8px); background: transparent;
   color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 20px; text-align: start; cursor: pointer;
 }
 .singleSelectOption:hover:not(:disabled), .singleSelectOption[data-highlighted='true']:not(:disabled), .singleSelectOption:focus-visible:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); outline: none; }
+.singleSelectOption[data-description='true'] { min-height: 48px; }
 .singleSelectText { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .singleSelectName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .singleSelectDescription { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }

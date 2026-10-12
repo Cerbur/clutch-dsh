@@ -8,8 +8,11 @@ import { en } from '../lib/client/locales.js';
 const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
 
-function harness() {
+function harness({ deferPreparation = false } = {}) {
   const state = [];
+  const frames = new Map();
+  const effects = [];
+  let frameId = 0;
   let cursor = 0;
   const react = {
     useState(initial) {
@@ -19,7 +22,16 @@ function harness() {
     },
     useId: () => 'select-test',
     useRef: (initial) => react.useState({ current: initial })[0],
-    useEffect() {}, useLayoutEffect() {},
+    useMemo: (create) => create(),
+    useEffect(callback, dependencies) {
+      const index = cursor++;
+      const previous = state[index];
+      if (!previous || dependencies.some((value, i) => value !== previous.dependencies[i])) {
+        state[index] = { dependencies };
+        effects.push(() => { previous?.cleanup?.(); state[index].cleanup = callback(); });
+      }
+    },
+    useLayoutEffect() {},
   };
   const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
   const modules = {};
@@ -28,7 +40,7 @@ function harness() {
     const output = ts.transpileModule(source, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
-    new Function('require', 'exports', output)((id) => ({
+    new Function('require', 'exports', 'requestAnimationFrame', 'cancelAnimationFrame', output)((id) => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': {
         Input: (props) => jsx('input', props), MenuSurface: (props) => jsx('native-menu-surface', props),
@@ -44,10 +56,24 @@ function harness() {
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
       './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
       '../../worktree.css': { default: {} },
-    })[id] ?? {}, exports);
+    })[id] ?? {}, exports,
+    (callback) => { frames.set(++frameId, callback); return frameId; },
+    (id) => frames.delete(id));
     modules[name] = exports;
   }
-  return { render(component, props) { cursor = 0; return modules[component[0]][component[1]](props); } };
+  const advanceFrame = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach((callback) => callback());
+  };
+  return { advanceFrame, render(component, props) {
+    const render = () => { cursor = 0; return modules[component[0]][component[1]](props); };
+    const node = render();
+    effects.splice(0).forEach((callback) => callback());
+    if (deferPreparation) return node;
+    advanceFrame(); advanceFrame();
+    return render();
+  } };
 }
 
 function find(node, predicate) {
@@ -58,6 +84,25 @@ function find(node, predicate) {
 const options = (node) => find(node, (item) => item.props?.role === 'option');
 const search = (node) => find(node, (item) => item.props?.role === 'combobox')[0];
 const key = (name, composing = false) => ({ key: name, nativeEvent: { isComposing: composing }, preventDefault() {}, stopPropagation() {} });
+
+test('opening a large already-loaded list paints its loading shell before constructing option rows', () => {
+  const h = harness({ deferPreparation: true });
+  const props = { label: 'Branch', searchLabel: 'Search', noMatchesLabel: 'Empty', value: 'branch-0',
+    options: Array.from({ length: 1000 }, (_, index) => ({ value: 'branch-' + index, label: 'Branch ' + index })),
+    onChange() {} };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SearchableSingleSelect'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  const node = render();
+  assert.ok(search(node));
+  assert.equal(find(node, (item) => item.props?.['data-single-select-loading'] !== undefined).length, 1);
+  assert.equal(options(node).length, 0);
+  h.advanceFrame();
+  assert.equal(options(render()).length, 0);
+  h.advanceFrame();
+  const ready = render();
+  assert.equal(find(ready, (item) => item.props?.['data-single-select-loading'] !== undefined).length, 0);
+  assert.ok(options(ready).length > 0 && options(ready).length < 30);
+});
 
 test('branch filters intersect text search without changing the selected value', () => {
   const h = harness();
@@ -81,6 +126,53 @@ test('branch filters intersect text search without changing the selected value',
   assert.deepEqual(chosen, []);
   search(render()).props.onKeyDown(key('Enter'));
   assert.deepEqual(chosen, ['origin/main']);
+});
+
+test('large lists keep all candidates searchable and make offscreen keyboard selections available', () => {
+  const h = harness();
+  const chosen = [];
+  const props = { searchLabel: 'Search', noMatchesLabel: 'Empty', value: 'branch-0',
+    options: Array.from({ length: 1000 }, (_, index) => ({ value: 'branch-' + index, label: 'Branch ' + index,
+      description: '/repo/worktree-' + index })), onChange: (value) => chosen.push(value) };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SingleSelectPicker'], props);
+  let node = render();
+  assert.ok(options(node).length < 30);
+  assert.equal(options(node).some((option) => option.props['data-single-select-option'] === 'branch-999'), false);
+  search(node).props.onKeyDown(key('ArrowUp'));
+  node = render();
+  const last = options(node).find((option) => option.props['data-single-select-option'] === 'branch-999');
+  assert.ok(last);
+  assert.equal(last.props['aria-posinset'], 1000);
+  assert.equal(last.props['aria-setsize'], 1000);
+  assert.equal(search(node).props['aria-activedescendant'], last.props.id);
+  search(node).props.onKeyDown(key('Enter'));
+  assert.deepEqual(chosen, ['branch-999']);
+  search(node).props.onChange({ currentTarget: { value: 'worktree-973' } });
+  node = render();
+  assert.deepEqual(options(node).map((option) => option.props['data-single-select-option']), ['branch-973']);
+  options(node)[0].props.onClick();
+  assert.deepEqual(chosen, ['branch-999', 'branch-973']);
+});
+
+test('closing during preparation cancels the pending frame and reopening keeps a fresh shell', () => {
+  const h = harness({ deferPreparation: true });
+  const props = { label: 'Branch', searchLabel: 'Search', noMatchesLabel: 'Empty', value: 'main',
+    options: [{ value: 'main', label: 'Main' }], onChange() {} };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SearchableSingleSelect'], props);
+  const trigger = () => find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0];
+  trigger().props.onClick();
+  render(); h.advanceFrame();
+  trigger().props.onClick();
+  assert.equal(search(render()), undefined);
+  h.advanceFrame(); h.advanceFrame();
+  trigger().props.onClick();
+  let node = render();
+  assert.equal(options(node).length, 0);
+  search(node).props.onChange({ currentTarget: { value: 'MAIN' } });
+  h.advanceFrame(); h.advanceFrame();
+  node = render();
+  assert.equal(search(node).props.value, 'MAIN');
+  assert.equal(options(node)[0].props['data-single-select-option'], 'main');
 });
 
 test('import Worktree searches branch and path and returns the exact candidate path', () => {

@@ -130,6 +130,8 @@ Enter to choose, and Escape to close. Clicking within the dropdown keeps it open
 empty space, search, filters, and fetch controls; selecting an option or clicking outside closes it.
 Branch and import selectors open immediately while candidates load, show a loading indicator inside,
 and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
+Even with cached candidates, the dropdown paints its loading shell before preparing the list. Large lists
+render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
 The current local branch is preferred by default. Remote refs are read
 from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
 remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;

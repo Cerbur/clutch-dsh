@@ -203,6 +203,7 @@ function renderHarness(writeClipboard) {
       return react.useState({ current: initial })[0];
     },
     useId: () => 'dashboard',
+    useMemo: (create) => create(),
     useLayoutEffect() {},
     useEffect(effect, deps) {
       const index = cursor++;
@@ -658,7 +659,7 @@ test('shared baseline picker searches remote branches and saves only confirmed s
 
 test('baseline picker keeps a long branch roster in one scrollable list', () => {
   const harness = renderHarness(async (branch) => branch);
-  const branches = Array.from({ length: 24 }, (_, index) => ({
+  const branches = Array.from({ length: 240 }, (_, index) => ({
     name: 'branch-' + String(index).padStart(2, '0'),
     isCurrent: false,
     checkedOut: false,
@@ -672,10 +673,13 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   node = harness.render();
   const listbox = byRole(node, 'listbox')[0];
   const options = byRole(listbox, 'option');
-  assert.equal(options.length, 24);
+  assert.ok(options.length > 0 && options.length < 30);
   assert.equal(options[0].props['data-single-select-option'], 'branch-00');
   assert.equal(options[0].props['aria-selected'], true);
-  assert.equal(options.at(-1).props['data-single-select-option'], 'branch-23');
+  assert.equal(options[0].props['aria-setsize'], 240);
+  findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.onChange({ currentTarget: { value: 'branch-239' } });
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'option').map((option) => option.props['data-single-select-option']), ['branch-239']);
   harness.dispose();
 });
 

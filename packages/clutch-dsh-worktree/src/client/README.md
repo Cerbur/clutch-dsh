@@ -155,6 +155,13 @@ each field label and control. Registration inputs and selector triggers use 40px
 controls, so padding and borders stay within the shared content column. These adjustments are
 scoped to registration; compact Dashboard selectors retain their native sizing.
 
+Shared dropdown opening first mounts the searchable loading shell, then prepares candidates after
+two animation frames so a paint can occur before list work. Closing, disabling, and unmounting cancel
+the pending frame. Lists over 80 candidates render a window with 120px of overscan, using 34px branch
+rows, 48px path-description rows, and 36px group headers. Filtering and keyboard navigation use the
+complete candidate set; navigation to an unmounted row scrolls it into the rendered window. Stable
+option indexes replace per-row array searches, and positioning updates only when geometry changes.
+
 The Host supplies only branch-attached, non-root, unmanaged Git Worktrees. The browser presents
 them in a standard dropdown: each option shows the branch first and the absolute path as diagnostic
 text. The browser never reads Git, the sidecar, or a generated `./remote` artifact directly. Selecting Import calls
