@@ -292,6 +292,7 @@ export function WorktreeCreateDialog({
       }}
       closeLabel={t('dialog.closeWorktreeCreate')}
       title={t('worktree.createTitle')}
+      className={styles.worktreeRegistrationDialog}
       description={
         importing
           ? t('worktree.importDescription', { name: workspace.title })
@@ -321,112 +322,114 @@ export function WorktreeCreateDialog({
         </>
       }
     >
-      <div className={styles.worktreeModalTabs} role="tablist" aria-label={t('worktree.title')}>
-        <button
-          className={styles.worktreeModalTab}
-          type="button"
-          role="tab"
-          aria-selected={mode === 'create'}
-          disabled={actionPending}
-          onClick={() => {
-            onModeChange('create');
-          }}
-        >
-          {t('worktree.tabCreate')}
-        </button>
-        <button
-          className={styles.worktreeModalTab}
-          type="button"
-          role="tab"
-          aria-selected={mode === 'import'}
-          disabled={actionPending}
-          onClick={() => {
-            onModeChange('import');
-          }}
-        >
-          {t('worktree.tabImport')}
-        </button>
-      </div>
-      {importing ? (
-        <div className={styles.worktreeImportCandidates} role="tabpanel">
-          {importCandidates.status === 'error' && (
-            <div className={styles.recoveryActions}>
-              <ErrorToast
-                error={importCandidates.error}
+      <div className={styles.worktreeRegistrationBody}>
+        <div className={styles.worktreeModalTabs} role="tablist" aria-label={t('worktree.title')}>
+          <button
+            className={styles.worktreeModalTab}
+            type="button"
+            role="tab"
+            aria-selected={mode === 'create'}
+            disabled={actionPending}
+            onClick={() => {
+              onModeChange('create');
+            }}
+          >
+            {t('worktree.tabCreate')}
+          </button>
+          <button
+            className={styles.worktreeModalTab}
+            type="button"
+            role="tab"
+            aria-selected={mode === 'import'}
+            disabled={actionPending}
+            onClick={() => {
+              onModeChange('import');
+            }}
+          >
+            {t('worktree.tabImport')}
+          </button>
+        </div>
+        {importing ? (
+          <div className={styles.worktreeImportCandidates} role="tabpanel">
+            {importCandidates.status === 'error' && (
+              <div className={styles.recoveryActions}>
+                <ErrorToast
+                  error={importCandidates.error}
+                  t={t}
+                  scope={'import:' + workspace.workspaceId}
+                  context={t('settings.import') + ' · ' + workspace.title + ' · ' + workspace.path}
+                  actions={[{ label: t('action.retry'), disabled: actionPending, onClick: onRetryImportCandidates }]}
+                />
+              </div>
+            )}
+            {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
+              <p className={styles.message}>{t('worktree.importEmpty')}</p>
+            )}
+            <div className={styles.modalField}>
+              {t('worktree.tabImport')}
+              <WorktreeSelector
                 t={t}
-                scope={'import:' + workspace.workspaceId}
-                context={t('settings.import') + ' · ' + workspace.title + ' · ' + workspace.path}
-                actions={[{ label: t('action.retry'), disabled: actionPending, onClick: onRetryImportCandidates }]}
+                candidates={importCandidates.candidates}
+                value={selectedImportPath ?? ''}
+                disabled={actionPending}
+                loading={importCandidates.status === 'idle' || importCandidates.status === 'loading'}
+                onChange={onSelectedImportPathChange}
               />
             </div>
-          )}
-          {importCandidates.candidates.length === 0 && importCandidates.status === 'ready' && (
-            <p className={styles.message}>{t('worktree.importEmpty')}</p>
-          )}
-          <div className={styles.modalField}>
-            {t('worktree.tabImport')}
-            <WorktreeSelector
-              t={t}
-              candidates={importCandidates.candidates}
-              value={selectedImportPath ?? ''}
-              disabled={actionPending}
-              loading={importCandidates.status === 'idle' || importCandidates.status === 'loading'}
-              onChange={onSelectedImportPathChange}
-            />
           </div>
-        </div>
-      ) : readError !== undefined ? (
-        <div className={styles.gitReadiness} data-worktree-readiness="error">
-          <ErrorToast error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
-            context={t('settings.create') + ' · ' + workspace.title + ' · ' + workspace.path}
-            actions={readError.retryable && onRetry !== undefined
-              ? [{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }] : []} />
-        </div>
-      ) : canCreate || (branchesLoading && setupStatus === undefined) ? (
-        <>
-          <div className={styles.modalField}>
-            {t('worktree.baseBranch')}
-            <GitBranchSelector
-              t={t}
-              branches={view?.branches ?? []}
-              label={t('worktree.baseBranch')}
-              value={selectedBranch}
-              disabled={actionPending}
-              loading={branchesLoading}
-              onChange={onSelectedBranchChange}
-              onFetch={onFetchBranches}
-            />
+        ) : readError !== undefined ? (
+          <div className={styles.gitReadiness} data-worktree-readiness="error">
+            <ErrorToast error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
+              context={t('settings.create') + ' · ' + workspace.title + ' · ' + workspace.path}
+              actions={readError.retryable && onRetry !== undefined
+                ? [{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }] : []} />
           </div>
-          <label className={styles.modalField}>
-            {t('worktree.name')}
-            <Input
-              className={styles.renameInput}
-              aria-label={t('worktree.name')}
-              value={newBranch}
-              placeholder="dsh/12345678"
-              disabled={actionPending}
-              onChange={(event) => {
-                onNewBranchChange(event.currentTarget.value);
-              }}
-            />
-          </label>
-        </>
-      ) : (
-        <div
-          className={styles.gitReadiness}
-          data-worktree-readiness={setupStatus ?? 'loading'}
-          role="status"
-        >
-          <p className={styles.message}>
-            {setupStatus === undefined ? t('status.loading') : worktreeSetupMessage(setupStatus, t)}
-          </p>
-          {setupCommands.length > 0 && (
-            <pre className={styles.commandBlock} aria-label={t('worktree.setup.commands')}>
-              {setupCommands.join('\n')}
-            </pre>
-          )}
-        </div>
-      )}
+        ) : canCreate || (branchesLoading && setupStatus === undefined) ? (
+          <>
+            <div className={styles.modalField}>
+              {t('worktree.baseBranch')}
+              <GitBranchSelector
+                t={t}
+                branches={view?.branches ?? []}
+                label={t('worktree.baseBranch')}
+                value={selectedBranch}
+                disabled={actionPending}
+                loading={branchesLoading}
+                onChange={onSelectedBranchChange}
+                onFetch={onFetchBranches}
+              />
+            </div>
+            <label className={styles.modalField}>
+              {t('worktree.name')}
+              <Input
+                className={styles.renameInput}
+                aria-label={t('worktree.name')}
+                value={newBranch}
+                placeholder="dsh/12345678"
+                disabled={actionPending}
+                onChange={(event) => {
+                  onNewBranchChange(event.currentTarget.value);
+                }}
+              />
+            </label>
+          </>
+        ) : (
+          <div
+            className={styles.gitReadiness}
+            data-worktree-readiness={setupStatus ?? 'loading'}
+            role="status"
+          >
+            <p className={styles.message}>
+              {setupStatus === undefined ? t('status.loading') : worktreeSetupMessage(setupStatus, t)}
+            </p>
+            {setupCommands.length > 0 && (
+              <pre className={styles.commandBlock} aria-label={t('worktree.setup.commands')}>
+                {setupCommands.join('\n')}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

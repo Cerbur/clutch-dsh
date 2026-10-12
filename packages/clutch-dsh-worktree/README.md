@@ -121,6 +121,8 @@ on hover, keyboard focus, or while its options menu is open, matching the menu b
 3. Confirm the dialog. The plugin creates the Git Worktree, records its acquisition facts, and
    continues through the normal Session and binding flow when you open a Session from that Worktree.
 
+The Create and Import tabs share aligned, full-width controls and consistent spacing between fields.
+
 Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
 and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
 Dropdowns use DSH’s native menu material in light and dark themes. Search ignores case; use Arrow Up/Down to move,

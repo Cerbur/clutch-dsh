@@ -111,20 +111,53 @@
   display: none;
 }
 
+.worktreeRegistrationDialog {
+  width: min(440px, 100%);
+}
+
+.worktreeRegistrationBody {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+}
+
+.worktreeRegistrationBody .modalField {
+  min-width: 0;
+  gap: 8px;
+  line-height: 18px;
+}
+
+.worktreeRegistrationBody .renameInput,
+.worktreeRegistrationBody [data-single-select] > button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.worktreeRegistrationBody .renameInput:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
 .worktreeModalTabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 20px;
 }
 
 .worktreeModalTab {
   border: 0;
   border-bottom: 2px solid transparent;
-  padding: 4px 0;
+  padding: 4px 0 8px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font: inherit;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .worktreeModalTab[aria-selected='true'] {

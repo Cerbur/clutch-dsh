@@ -150,6 +150,11 @@ default; Import is an additive tab below the description. On first entry, the Cl
 `listImportCandidates({ workspaceId })` through the same `/api` Connection. Candidate, selection,
 loading, ready, empty, error, retry, and stale-response state is browser-local to the dialog.
 
+Create and Import share a responsive 440px native Modal, with a 20px body gap and 8px between
+each field label and control. Registration inputs and selector triggers use 40px border-box
+controls, so padding and borders stay within the shared content column. These adjustments are
+scoped to registration; compact Dashboard selectors retain their native sizing.
+
 The Host supplies only branch-attached, non-root, unmanaged Git Worktrees. The browser presents
 them in a standard dropdown: each option shows the branch first and the absolute path as diagnostic
 text. The browser never reads Git, the sidecar, or a generated `./remote` artifact directly. Selecting Import calls
