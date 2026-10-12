@@ -964,13 +964,12 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   assert.match(dialogs, /role="tab"/);
   assert.match(dialogs, /aria-selected=\{mode === 'create'\}/);
   assert.match(dialogs, /aria-selected=\{mode === 'import'\}/);
-  assert.match(dialogs, /candidate\.branch/);
-  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.match(dialogs, /<WorktreeSelector/);
+  assert.match(dialogs, /candidates=\{importCandidates\.candidates\}/);
   assert.match(dialogs, /t\('worktree\.import'\)/);
   assert.match(dialogs, /t\('worktree\.importDescription'/);
   assert.match(dialogs, /t\('worktree\.importEmpty'\)/);
   assert.match(dialogs, /t\('worktree\.importLoading'\)/);
-  assert.match(dialogs, /t\('worktree\.importPlaceholder'\)/);
   assert.match(dialogs, /t\('action\.retry'\)/);
 
   assert.match(
@@ -997,19 +996,14 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   );
 });
 
-test('renders import candidates in a native dropdown instead of a flat candidate list', async () => {
+test('renders import candidates through the shared searchable Worktree selector', async () => {
   const { dialogs } = await readSurfaceSources();
 
-  assert.match(dialogs, /<select[\s\S]*className=\{styles\.worktreeImportSelect\}/);
+  assert.match(dialogs, /<WorktreeSelector/);
   assert.match(dialogs, /value=\{selectedImportPath \?\? ''\}/);
-  assert.match(dialogs, /onSelectedImportPathChange\(event\.currentTarget\.value\)/);
-  assert.match(dialogs, /<option value="" disabled>/);
-  assert.match(
-    dialogs,
-    /<option key=\{candidate\.absolutePath\} value=\{candidate\.absolutePath\}>/,
-  );
-  assert.match(dialogs, /candidate\.branch/);
-  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.match(dialogs, /onChange=\{onSelectedImportPathChange\}/);
+  assert.doesNotMatch(dialogs, /<select|<option/);
+  assert.match(dialogs, /candidates=\{importCandidates\.candidates\}/);
   assert.doesNotMatch(dialogs, /data-worktree-import-candidate/);
 });
 

@@ -122,7 +122,8 @@ on hover, keyboard focus, or while its options menu is open, matching the menu b
    continues through the normal Session and binding flow when you open a Session from that Worktree.
 
 Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
-and **Remote branches**, with current/checked-out markers. Search ignores case; use Arrow Up/Down to move,
+and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
+Dropdowns use DSH’s native menu material in light and dark themes. Search ignores case; use Arrow Up/Down to move,
 Enter to choose, and Escape to close. The current local branch is preferred by default. Remote refs are read
 from the local repository; fetch them in Git before selecting them. The plugin never fetches or contacts a remote.
 Remote baselines require a new local branch when creating a Worktree; symbolic remote HEAD entries are excluded.
@@ -270,7 +271,7 @@ a resumed Session can enable `/cluworktree` and use `clutch_send_message` with a
 ### Import an existing Worktree
 
 1. Select a Workspace, open its branch-icon **New Worktree** action, and switch to **Import**.
-2. Choose a candidate from the branch-and-path list.
+2. Open the searchable Worktree selector and filter by branch name or path. Each candidate shows its branch and directory; choose the Worktree to import.
 3. Select **Import Worktree**. The plugin registers the existing directory without moving,
    copying, or changing its files, then uses the same Session flow as a created Worktree.
 

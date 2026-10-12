@@ -2,6 +2,7 @@ import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { gitWorktreeRoot } from '../../../contract/index.js';
 import { ErrorToast, NotificationToasts } from './NotificationToasts.js';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
+import { WorktreeSelector } from '../../select/WorktreeSelector.js';
 import { worktreeSetupCommands } from '../../view/worktree-view.js';
 import styles from '../../worktree.css';
 import { worktreeLifecycleBlockReason } from '../selectors.js';
@@ -364,28 +365,16 @@ export function WorktreeCreateDialog({
             <p className={styles.message}>{t('worktree.importEmpty')}</p>
           )}
           {importCandidates.candidates.length > 0 && (
-            <label className={styles.modalField}>
+            <div className={styles.modalField}>
               {t('worktree.tabImport')}
-              <select
-                className={styles.worktreeImportSelect}
-                data-worktree-import-select
-                aria-label={t('worktree.tabImport')}
+              <WorktreeSelector
+                t={t}
+                candidates={importCandidates.candidates}
                 value={selectedImportPath ?? ''}
                 disabled={actionPending}
-                onChange={(event) => {
-                  onSelectedImportPathChange(event.currentTarget.value);
-                }}
-              >
-                <option value="" disabled>
-                  {t('worktree.importPlaceholder')}
-                </option>
-                {importCandidates.candidates.map((candidate) => (
-                  <option key={candidate.absolutePath} value={candidate.absolutePath}>
-                    {candidate.branch} — {candidate.absolutePath}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={onSelectedImportPathChange}
+              />
+            </div>
           )}
         </div>
       ) : readError !== undefined ? (

@@ -179,6 +179,10 @@ const branchPickerSource = await readFile(
   new URL('../src/client/branch/GitBranchSelector.tsx', import.meta.url), 'utf8',
 );
 
+const singleSelectSource = await readFile(
+  new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
+);
+
 function renderHarness(writeClipboard) {
   const state = [];
   const effects = [];
@@ -211,6 +215,18 @@ function renderHarness(writeClipboard) {
     },
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
+  const selectOutput = ts.transpileModule(singleSelectSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const selectExports = {};
+  new Function('require', 'exports', selectOutput)((name) => ({
+    react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@deepseek-ai/dsh-client-ui-primitives': { Input: (props) => jsx('input', props) },
+    '../dsh-icons.js': {
+      IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+      IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+    }, './single-select.css': { default: {} },
+  })[name] ?? {}, selectExports);
   const branchSource = branchPickerSource;
   const branchOutput = ts.transpileModule(branchSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -223,7 +239,7 @@ function renderHarness(writeClipboard) {
       IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
       IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
       IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
-    }, './git-branch.css': { default: {} },
+    }, '../select/SearchableSingleSelect.js': selectExports,
   })[name] ?? {}, branchExports);
   const exports = {};
   new Function('require', 'exports', output)(
@@ -511,7 +527,7 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   assert.equal(dialog.props.description, en['dashboard.editBaseDescription']);
   assert.equal(dialog.props.closeLabel, en['dialog.closeBaseline']);
   assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
-  const search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  const search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   assert.ok(search);
   assert.equal(search.props['data-modal-autofocus'], true);
   assert.equal(search.props.role, 'combobox');
@@ -532,14 +548,14 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   // focus or click, and only its rows react to the query.
   const optionsSurface = findAll(
     node,
-    (item) => item.props?.['data-git-branch-options'] !== undefined,
+    (item) => item.props?.['data-single-select-options'] !== undefined,
   )[0];
   assert.ok(optionsSurface);
   const listbox = byRole(optionsSurface, 'listbox')[0];
   assert.equal(byRole(listbox, 'option').length, 2);
-  let options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  let options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-git-branch-option']),
+    options.map((option) => option.props['data-single-select-option']),
     ['main', 'develop'],
   );
   assert.equal(options[0].props['aria-selected'], true);
@@ -548,42 +564,42 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
 
   search.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.equal(options[0].props['aria-selected'], true);
   assert.equal(options[1].props['data-highlighted'], true);
-  const wrappedSearch = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  const wrappedSearch = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   wrappedSearch.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.equal(options[0].props['aria-selected'], true);
   assert.equal(options[1].props['aria-selected'], false);
 
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-git-branch-option']),
+    options.map((option) => option.props['data-single-select-option']),
     ['develop'],
   );
   search.props.onChange({ currentTarget: { value: 'missing' } });
   node = harness.render();
   assert.equal(
-    findAll(node, (item) => item.props?.['data-git-branch-empty'])[0].props.children,
+    findAll(node, (item) => item.props?.['data-single-select-empty'])[0].props.children,
     en['dashboard.noMatchingBranches'],
   );
   assert.equal(
-    findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined).length,
+    findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined).length,
     0,
   );
   // An empty result swaps in the status message without removing the frame.
   assert.equal(
-    findAll(node, (item) => item.props?.['data-git-branch-options']).length,
+    findAll(node, (item) => item.props?.['data-single-select-options']).length,
     1,
   );
   assert.equal(byRole(node, 'listbox').length, 0);
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-git-branch-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   options[0].props.onClick();
   node = harness.render();
   findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
@@ -618,16 +634,16 @@ test('shared baseline picker searches remote branches and saves only confirmed s
   });
   findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
   node = harness.render();
-  assert.deepEqual(byRole(node, 'group').map((group) => group.props.children[0].props.children), [
+  assert.deepEqual(byRole(node, 'group').filter((group) => group.props['aria-labelledby']).map((group) => group.props.children[0].props.children), [
     en['branch.local'], en['branch.remote'],
   ]);
-  let search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  let search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   search.props.onChange({ currentTarget: { value: 'ORIGIN' } });
   node = harness.render();
   const option = byRole(node, 'option')[0];
-  assert.equal(option.props['data-git-branch-option'], 'origin/main');
+  assert.equal(option.props['data-single-select-option'], 'origin/main');
   assert.equal(option.props['aria-selected'], false);
-  search = findAll(node, (item) => item.props?.['data-git-branch-search'])[0];
+  search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   search.props.onKeyDown({ key: 'Enter', preventDefault() {} });
   node = harness.render();
   assert.equal(byRole(node, 'option')[0].props['aria-selected'], true);
@@ -657,9 +673,9 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   const listbox = byRole(node, 'listbox')[0];
   const options = byRole(listbox, 'option');
   assert.equal(options.length, 24);
-  assert.equal(options[0].props['data-git-branch-option'], 'branch-00');
+  assert.equal(options[0].props['data-single-select-option'], 'branch-00');
   assert.equal(options[0].props['aria-selected'], true);
-  assert.equal(options.at(-1).props['data-git-branch-option'], 'branch-23');
+  assert.equal(options.at(-1).props['data-single-select-option'], 'branch-23');
   harness.dispose();
 });
 

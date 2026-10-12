@@ -339,8 +339,12 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 事务仍固定获取 SHA 并通过 journal 发布，保存基线仍只 CAS 更新 `baseBranch`，保留 `baseCommit`。
 分支分类、checkout 状态和 Git 比较结果仅为运行时 projection，不新增 Sidecar 字段或 RPC。
 
-Client 的共享 `branch/GitBranchPicker` 提供搜索、分组、状态和无障碍键盘导航；
-`GitBranchSelector` 提供创建与临时比较的浮层入口，基线确认弹窗嵌入同一面板。
+Client 的 `select/SearchableSingleSelect` / `SingleSelectPicker` 提供领域无关的搜索、分组过滤、
+单选键盘导航、固定滚动区和浮层生命周期，浮层复用 DSH `MenuSurface` 的模糊材质与 macOS 底衬。
+`branch/GitBranchSelector` 将分支事实映射为选项、local/remote 分组与 checkout 标记，
+供创建与临时比较接入；基线确认弹窗通过 `GitBranchPicker` 嵌入同一面板。
+`select/WorktreeSelector` 将导入候选映射为分支名与路径副标题，以 absolutePath 作为选择身份，
+支持按分支名或路径搜索，不再使用原生 HTML select。加载、保存、pending 状态仍由调用方持有。
 默认优先当前 local branch，缺省 kind 视为 local，当前 Worktree branch 仍从比较候选中过滤。
 
 - **依赖抽象**：Provider 仅依赖 `@deepseek-ai/dsh-subprocess` 的轻量 Service Definition，不直接打包或绑定平台具体的实现包。

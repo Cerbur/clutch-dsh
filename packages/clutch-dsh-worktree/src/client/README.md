@@ -655,15 +655,22 @@ errors rather than being converted to an empty list. Recognized Git readiness fa
 Workspace-local setup states, not transport failures. Client disposal must abort pending
 Connection calls and release browser-local membership projections.
 
-## Shared Git branch picker
+## Shared searchable single selection
 
-Creation and the compact Git comparison control use `branch/GitBranchSelector`; the saved-baseline modal
-embeds its `GitBranchPicker` panel. The panel owns case-insensitive search, local/remote grouping,
-checkout markers and keyboard focus (Arrow keys navigate, Enter selects, Escape closes).
-The selector owns popup positioning, outside-pointer dismissal, focus restoration and listener cleanup.
-The callers own selection, async saves and pending state. No Git reads or persistent state live in the picker.
-Missing `BranchRecord.kind` denotes a local branch for older adapters. Creation keeps its existing recommended
-new local name for either branch kind; selected remote refs cannot be checked out directly.
+`select/SearchableSingleSelect` owns the domain-neutral options, text search, optional group filters,
+listbox navigation, bounded scrolling, popup placement, outside-pointer dismissal and focus return.
+It uses native DSH `Input` and `MenuSurface`, including background blur and the macOS backing;
+no raw translucent menu fill is applied to the popup or scroll viewport. Row geometry and elevation
+follow the native menu tokens. `SingleSelectPicker` embeds the same list without a dropdown shell.
+
+`branch/GitBranchSelector` adapts `BranchRecord` into names, local/remote groups and checkout markers.
+Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
+`select/WorktreeSelector` adapts import candidates into branch labels and secondary path descriptions;
+absolute paths are selection identities and both branch and path participate in search.
+The callers own async loading, selection, saves and pending state. No Git reads, transport or persistent
+state live in these components. Arrow keys highlight, Enter/click selects, and Escape closes.
+Missing `BranchRecord.kind` denotes a local branch for older adapters. Creation keeps its existing
+recommended new local name for either branch kind; remote refs cannot be checked out directly.
 
 ## Tool preference UI
 

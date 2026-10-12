@@ -551,7 +551,7 @@ export function WorktreeDashboard({
         // event. Their DOM may already be gone; defaultPrevented retains ownership.
         if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
-          if ((event.target as Element | undefined)?.closest?.('[data-git-branch-picker]')) return;
+          if ((event.target as Element | undefined)?.closest?.('[data-single-select-picker]')) return;
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
           event.stopPropagation();
