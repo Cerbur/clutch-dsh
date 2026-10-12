@@ -665,7 +665,9 @@ follow the native menu tokens. `SingleSelectPicker` embeds the same list without
 
 `branch/GitBranchSelector` adapts `BranchRecord` into names, local/remote groups and checkout markers. Its optional fetch callback is shared by all three branch consumers; the remote heading
 keeps the native download icon visible even without remote candidates. The branch adapter owns busy/error
-feedback and in-flight click suppression; generic groups expose only an action slot. Fetch results preserve
+feedback and in-flight click suppression within the heading action: a loading icon, success text for two
+seconds, then the download icon; errors show an inline retry with details in the button title. Timers are
+cancelled on unmount, and no status row appears below the list. Generic groups expose only an action slot. Fetch results preserve
 search/filter/selection and stale completions after unmount are ignored. Callers refresh only the affected
 Workspace (or the active Git controller); creation preserves its ready form and guards a closed/replaced
 modal before invalidating its cached view.

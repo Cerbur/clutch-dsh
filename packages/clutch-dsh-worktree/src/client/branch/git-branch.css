@@ -5,5 +5,6 @@
 .branchFetch[aria-busy='true'] svg { animation: branchFetchSpin 1s linear infinite; }
 @keyframes branchFetchSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .branchFetch[aria-busy='true'] svg { animation: none; } }
-.branchFetchStatus { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
-.branchFetchStatus[role='alert'] { color: var(--dsw-alias-state-error-primary); }
+.branchFetch[data-fetch-status='success'], .branchFetch[data-fetch-status='error'] { width: auto; padding-inline: 6px; white-space: nowrap; font-size: 12px; line-height: 18px; }
+.branchFetch[data-fetch-status='success']:disabled { opacity: 1; }
+.branchFetch[data-fetch-status='error'] { color: var(--dsw-alias-state-error-primary); }

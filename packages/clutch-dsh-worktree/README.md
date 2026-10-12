@@ -128,7 +128,9 @@ Enter to choose, and Escape to close. The current local branch is preferred by d
 from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
 remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;
 it preserves your current selection, local branches, tags and working files, and does not prune deleted refs.
-A busy state prevents repeated clicks; failures retain the list and offer a retry through the same button.
+The button shows a loading icon during fetch, then displays **Remote branches updated** in place for two
+seconds before restoring the download icon. Failures retain the list and show a retry on the same button;
+no extra status row is added beneath the list.
 Listing branches never contacts a remote automatically.
 Remote baselines require a new local branch when creating a Worktree; symbolic remote HEAD entries are excluded.
 

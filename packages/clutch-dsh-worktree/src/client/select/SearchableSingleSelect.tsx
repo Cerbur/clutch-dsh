@@ -31,12 +31,11 @@ export interface SingleSelectPickerProps {
   readonly noMatchesLabel: string;
   readonly disabled?: boolean;
   readonly onClose?: () => void;
-  readonly feedback?: ReactNode;
 }
 
 /** Domain-neutral single selection. Arrow navigation never commits a value. */
 export function SingleSelectPicker({ options, groups = [], allLabel, value, onChange,
-  searchLabel, noMatchesLabel, disabled, onClose, feedback }: SingleSelectPickerProps) {
+  searchLabel, noMatchesLabel, disabled, onClose }: SingleSelectPickerProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [highlight, setHighlight] = useState(value);
@@ -113,7 +112,6 @@ export function SingleSelectPicker({ options, groups = [], allLabel, value, onCh
       </div> : null}
       {visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
     </div>
-    {feedback}
   </div>;
 }
 

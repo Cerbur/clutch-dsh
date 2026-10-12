@@ -101,7 +101,8 @@ test('import Worktree searches branch and path and returns the exact candidate p
   assert.equal(search(render()), undefined);
 });
 
-test('fetch is available with no remote rows, deduplicates clicks, and preserves search and selection', async () => {
+test('fetch is available with no remote rows, preserves selection, and restores its icon after two seconds', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();
   let resolve;
   let calls = 0;
@@ -125,16 +126,27 @@ test('fetch is available with no remote rows, deduplicates clicks, and preserves
   assert.equal(calls, 1);
   assert.equal(fetchButton(node).props.disabled, true);
   assert.equal(fetchButton(node).props['aria-busy'], true);
+  assert.equal(fetchButton(node).props.children.props.icon, 'IconLoadingOutline16');
   resolve([{ name: 'main' }, { name: 'origin/new', kind: 'remote', remote: 'origin' }]);
   await Promise.resolve();
   node = render();
   assert.equal(search(node).props.value, 'new');
   assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['origin/new']);
   assert.deepEqual(chosen, []);
+  assert.equal(fetchButton(node).props.children, en['branch.fetched']);
+  assert.equal(fetchButton(node).props.disabled, true);
+  assert.equal(find(node, (item) => item.props?.role === 'status').length, 0);
+  t.mock.timers.tick(1999);
+  assert.equal(fetchButton(render()).props.children, en['branch.fetched']);
+  t.mock.timers.tick(1);
+  node = render();
+  assert.equal(fetchButton(node).props.children.props.icon, 'IconDownloadOutline16');
   assert.equal(fetchButton(node).props.disabled, false);
+  assert.equal(search(node).props.value, 'new');
 });
 
-test('fetch failure keeps old branch rows and exposes a retryable localized error', async () => {
+test('fetch failure keeps old branch rows and exposes an inline retryable localized error', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();
   let calls = 0;
   const props = { t: (name) => en[name], value: 'origin/main', branches: [{ name: 'origin/main', kind: 'remote' }],
@@ -144,7 +156,8 @@ test('fetch failure keeps old branch rows and exposes a retryable localized erro
   fetchButton(render()).props.onClick();
   await Promise.resolve();
   let node = render();
-  assert.equal(find(node, (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchFailed']);
+  assert.equal(find(fetchButton(node), (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchRetry']);
+  assert.equal(fetchButton(node).props.title, en['branch.fetchFailed']);
   assert.equal(options(node)[0].props['aria-selected'], true);
   fetchButton(node).props.onClick();
   await Promise.resolve();

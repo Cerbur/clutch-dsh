@@ -22,28 +22,45 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, ...pro
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const pending = useRef(false);
   const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const resetTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      clearTimeout(resetTimer.current);
+    };
+  }, []);
   const branches = fetched?.source === source ? fetched.branches : source;
   const fetchBranches = async () => {
     if (!onFetch || pending.current || props.disabled) return;
+    clearTimeout(resetTimer.current);
     pending.current = true;
     setStatus('pending');
     try {
       const next = await onFetch();
-      if (alive.current) { setFetched({ source, branches: next }); setStatus('success'); }
+      if (alive.current) {
+        setFetched({ source, branches: next });
+        setStatus('success');
+        resetTimer.current = setTimeout(() => {
+          if (alive.current) setStatus('idle');
+        }, 2000);
+      }
     } catch {
       if (alive.current) setStatus('error');
     } finally { pending.current = false; }
   };
+  const actionLabel = t(status === 'pending' ? 'branch.fetching' : status === 'success' ? 'branch.fetched'
+    : status === 'error' ? 'branch.fetchFailed' : 'branch.fetch');
   const action = onFetch === undefined ? undefined : <button type="button" className={styles.branchFetch}
-    data-branch-fetch title={t(status === 'pending' ? 'branch.fetching' : 'branch.fetch')}
-    aria-label={t(status === 'pending' ? 'branch.fetching' : 'branch.fetch')} aria-busy={status === 'pending'}
-    disabled={props.disabled || status === 'pending'} onClick={() => void fetchBranches()}>
-    {status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
+    data-branch-fetch data-fetch-status={status} title={actionLabel}
+    aria-label={actionLabel} aria-live="polite" aria-busy={status === 'pending'}
+    disabled={props.disabled || status === 'pending' || status === 'success'} onClick={() => void fetchBranches()}>
+    {status === 'success' ? t('branch.fetched') : status === 'error'
+      ? <span role="alert">{t('branch.fetchRetry')}</span>
+      : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
   return { status, picker: {
     ...props,
-    feedback: <FetchStatus status={status} t={t} />,
     searchLabel: t('dashboard.searchBranches'),
     noMatchesLabel: t('dashboard.noMatchingBranches'),
     allLabel: t('branch.all'),
@@ -63,12 +80,6 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, ...pro
 export function GitBranchPicker(props: BranchPickerProps) {
   const { picker } = useBranchPickerProps(props);
   return <SingleSelectPicker {...picker} />;
-}
-
-function FetchStatus({ status, t }: { status: 'idle' | 'pending' | 'success' | 'error'; t: WorktreeTranslate }) {
-  return status === 'idle' ? null : <div className={styles.branchFetchStatus} role={status === 'error' ? 'alert' : 'status'}>
-    {t(status === 'error' ? 'branch.fetchFailed' : status === 'pending' ? 'branch.fetching' : 'branch.fetched')}
-  </div>;
 }
 
 interface GitBranchSelectorProps extends BranchPickerProps {
