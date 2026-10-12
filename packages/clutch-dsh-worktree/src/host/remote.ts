@@ -63,6 +63,7 @@ export function createWorktreeRemoteProjection(
     updateWorktreeInstructions: (input) => project(() => manager.updateWorktreeInstructions(input)),
     updateWorktreeBaseBranch: (input) => project(() => manager.updateWorktreeBaseBranch(input)),
     listWorktrees: (input) => project(() => manager.listWorktrees(input)),
+    getWorkspaceGitState: (input) => project(() => manager.getWorkspaceGitState(input)),
     listWorktreeCommits: (input) => project(() => manager.listWorktreeCommits(input)),
     listWorktreeCommitFiles: (input) => project(() => manager.listWorktreeCommitFiles(input)),
     getWorktreeCommitFileDiff: (input) => project(() => manager.getWorktreeCommitFileDiff(input)),

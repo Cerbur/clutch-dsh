@@ -2021,7 +2021,7 @@ test('renders a localized Main label with the current branch and a fallback', as
 
   assert.match(
     source,
-    /const currentBranch = view\?\.branches\.find\(\s*\(branch\) => branch\.isCurrent,?\s*\)\?\.name;/,
+    /const currentBranch = view\?\.currentBranch === null \? undefined\s*: view\?\.currentBranch \?\? view\?\.branches\.find\(\s*\(branch\) => branch\.isCurrent,?\s*\)\?\.name;/,
   );
   assert.match(
     source,

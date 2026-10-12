@@ -1,6 +1,7 @@
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client';
 
 import type {
+  BranchRecord,
   WorktreeError,
   WorktreeManager,
   WorktreePermissionManager,
@@ -19,6 +20,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   getToolSettings: 'worktreeManager/getToolSettings',
   updateToolSettings: 'worktreeManager/updateToolSettings',
   watchToolChanges: 'worktreeManager/watchToolChanges',
@@ -171,6 +173,7 @@ export function createWorktreeConnectionAdapter(
   rpc: WorktreeConnectionRpc,
 ): WorktreeConnectionAdapter {
   const inFlight = new Set<AbortController>();
+  const branchReads = new Map<string, Promise<readonly BranchRecord[]>>();
   let disposed = false;
 
   async function call(
@@ -221,11 +224,20 @@ export function createWorktreeConnectionAdapter(
     // An outer success (including inner WORKSPACE_NOT_FOUND) proves the Host is composed.
     probeHost: (signal) => call('listBindings', { workspaceId: '' }, signal),
     listWorktrees: (input) => invoke('listWorktrees', input),
+    getWorkspaceGitState: (input) => invoke('getWorkspaceGitState', input),
     listWorktreeCommits: (input) => invoke('listWorktreeCommits', input),
     listWorktreeCommitFiles: (input) => invoke('listWorktreeCommitFiles', input),
     getWorktreeCommitFileDiff: (input) => invoke('getWorktreeCommitFileDiff', input),
     listImportCandidates: (input) => invoke('listImportCandidates', input),
-    listBranches: (input) => invoke('listBranches', input),
+    listBranches: (input) => {
+      const current = branchReads.get(input.workspaceId);
+      if (current) return current;
+      const request = invoke<readonly BranchRecord[]>('listBranches', input).finally(() => {
+        if (branchReads.get(input.workspaceId) === request) branchReads.delete(input.workspaceId);
+      });
+      branchReads.set(input.workspaceId, request);
+      return request;
+    },
     fetchRemoteBranches: (input) => invoke('fetchRemoteBranches', input),
     createWorktree: (input) => invoke('createWorktree', input),
     importWorktree: (input) => invoke('importWorktree', input),

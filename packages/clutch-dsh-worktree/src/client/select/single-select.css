@@ -34,8 +34,8 @@
   height: clamp(120px, calc(100dvh - 160px), 300px); overflow-y: auto; overscroll-behavior: contain;
   padding: 4px; box-sizing: border-box; min-height: 0;
 }
-.singleSelectPopup .singleSelectViewport { height: auto; max-height: clamp(120px, calc(100dvh - 160px), 300px); }
-.singleSelectPopup [data-preparing='true'] .singleSelectViewport { height: clamp(120px, calc(100dvh - 160px), 300px); }
+.singleSelectPopup .singleSelectViewport { height: auto; max-height: var(--single-select-viewport-height, 220px); }
+.singleSelectPopup [data-preparing='true'] .singleSelectViewport { height: var(--single-select-viewport-height, 220px); }
 .singleSelectPopup .singleSelectEmpty { min-height: 80px; }
 .singleSelectGroup { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; box-sizing: border-box; padding: 6px 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 15px; }
 .singleSelectOption {

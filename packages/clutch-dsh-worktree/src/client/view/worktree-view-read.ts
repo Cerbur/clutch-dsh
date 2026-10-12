@@ -17,6 +17,7 @@ export type WorktreeGitReadiness =
 export interface WorktreeViewData {
   readonly worktrees: readonly WorktreeRecord[];
   readonly branches: readonly BranchRecord[];
+  readonly currentBranch?: string | null;
   readonly bindings: readonly SessionBinding[];
   /** Shared instructions for the browser-local Main projection. */
   readonly mainInstructions: string;
@@ -258,7 +259,7 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 }
 
-/** Read the Worktree, branch, binding, and Workspace-root Main projections in one refresh. */
+/** Read Worktree, Git readiness/HEAD, binding, and Workspace-root Main projections. */
 export async function loadWorktreeView(
   manager: WorktreeManager,
   workspaceId: string,
@@ -266,7 +267,9 @@ export async function loadWorktreeView(
   const [worktreesResult, branchesResult, bindingsResult, mainInstructionsResult] =
     await Promise.allSettled([
       manager.listWorktrees({ workspaceId }),
-      manager.listBranches({ workspaceId }),
+      typeof manager.getWorkspaceGitState === 'function'
+        ? manager.getWorkspaceGitState({ workspaceId })
+        : manager.listBranches({ workspaceId }),
       manager.listBindings({ workspaceId }),
       typeof manager.getWorktreeInstructions === 'function'
         ? manager.getWorktreeInstructions({ workspaceId, worktreeId: `main:${workspaceId}` })
@@ -290,12 +293,18 @@ export async function loadWorktreeView(
     throw branchesResult.reason;
   }
 
+  const state = branchesResult.value;
+  const branches = Array.isArray(state) ? state as readonly BranchRecord[] : [];
+  const currentBranch = Array.isArray(state)
+    ? branches.find((branch) => branch.isCurrent)?.name
+    : (state as { currentBranch: string | null }).currentBranch;
   return {
     worktrees: worktreesResult.value,
-    branches: branchesResult.value,
+    branches,
+    ...(currentBranch === undefined ? {} : { currentBranch }),
     bindings: bindingsResult.value,
     mainInstructions: mainInstructionsResult.value,
-    readiness: branchesResult.value.length > 0
+    readiness: !Array.isArray(state) || branches.length > 0
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },
   };
@@ -304,13 +313,28 @@ export async function loadWorktreeView(
 /** Isolate modal-target callbacks while sharing the Client Workspace reader. */
 export function createWorktreeModalViewLoader(
   reader: WorktreeViewReader,
+  manager?: WorktreeManager,
 ): WorktreeModalViewLoader {
   const guard = createWorktreeRefreshGuard();
   return {
     invalidate: guard.invalidate,
     load(workspaceId, onSuccess, onError) {
       return guard.run(
-        () => reader.read(workspaceId),
+        async () => {
+          const [viewResult, branchesResult] = await Promise.allSettled([
+            reader.read(workspaceId), manager?.listBranches({ workspaceId }),
+          ]);
+          if (viewResult.status === 'rejected') throw viewResult.reason;
+          const view = viewResult.value;
+          if (branchesResult.status === 'rejected') {
+            const readiness = readinessFromBranchError(branchesResult.reason);
+            if (readiness) return { ...view, branches: [], readiness };
+            throw branchesResult.reason;
+          }
+          const branches = branchesResult.value;
+          return branches === undefined ? view : { ...view, branches,
+            readiness: branches.length > 0 ? { status: 'ready' as const } : { status: 'noLocalBranch' as const } };
+        },
         onSuccess,
         (error) => onError(toWorktreeViewError(error)),
       );

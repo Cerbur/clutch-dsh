@@ -104,7 +104,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         );
   const targetView =
     dashboard === undefined ? undefined : read.viewByWorkspace.get(dashboard.workspaceId);
-  const dashboardMainBranch = targetView?.branches.find((branch) => branch.isCurrent)?.name;
+  const dashboardMainBranch = targetView?.currentBranch === null ? undefined
+    : targetView?.currentBranch ?? targetView?.branches.find((branch) => branch.isCurrent)?.name;
   const dashboardMainRecord =
     targetWorkspace === undefined
       ? undefined
@@ -444,6 +445,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           }
           branches={dashboardView?.branches ?? []}
           branchesLoading={dashboardView === undefined && read.readState.status === 'loading'}
+          onLoadBranches={props.manager === undefined ? undefined
+            : () => props.manager!.listBranches({ workspaceId: dashboardRecord.workspaceId })}
           onFetchBranches={props.manager?.fetchRemoteBranches === undefined ? undefined : async () => {
             try {
               return await props.manager!.fetchRemoteBranches({ workspaceId: dashboardRecord.workspaceId });

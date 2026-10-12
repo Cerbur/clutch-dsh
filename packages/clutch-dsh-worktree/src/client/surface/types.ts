@@ -434,6 +434,7 @@ export interface WorktreeCreateDialogProps {
   readonly onSelectedImportPathChange: (absolutePath: string) => void;
   readonly onSelectedBranchChange: (branch: string) => void;
   readonly onFetchBranches?: () => Promise<readonly BranchRecord[]>;
+  readonly onLoadBranches?: () => Promise<readonly BranchRecord[]>;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Input, MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives';
 import { IconCheckOutline16, IconChevronDownOutline14, IconLoadingOutline16, IconSearchOutline16 } from '../dsh-icons.js';
 import styles from './single-select.css';
@@ -37,12 +37,14 @@ export interface SingleSelectPickerProps {
   readonly onClose?: () => void;
   /** Opening shells defer candidate work until the browser has painted. */
   readonly preparing?: boolean;
+  /** Revalidate domain data after opening and when returning to an open picker. */
+  readonly onRefresh?: () => void;
 }
 
 /** Domain-neutral single selection. Arrow navigation never commits a value. */
 export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, value, onChange,
   searchLabel, noMatchesLabel, disabled, loading = false, loadingLabel = 'Loading…', onClose,
-  preparing = false }: SingleSelectPickerProps) {
+  preparing = false, onRefresh }: SingleSelectPickerProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [highlight, setHighlight] = useState(value);
@@ -50,6 +52,23 @@ export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, valu
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const viewport = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const refresh = useRef(onRefresh);
+  refresh.current = onRefresh;
+  const canRefresh = onRefresh !== undefined;
+  useEffect(() => {
+    if (preparing || !canRefresh) return;
+    const revalidate = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') refresh.current?.();
+    };
+    revalidate();
+    if (typeof window === 'undefined') return;
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
+    return () => {
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
+    };
+  }, [preparing, canRefresh]);
   const search = query.trim().toLocaleLowerCase();
   const busy = loading || preparing;
   const { sections, visible, height } = useMemo(() => {
@@ -170,7 +189,7 @@ export interface SearchableSingleSelectProps extends SingleSelectPickerProps {
 export function SearchableSingleSelect({ label, placeholder, icon, size = 'standard', ...props }: SearchableSingleSelectProps) {
   const [open, setOpen] = useState(false);
   const [prepared, setPrepared] = useState(false);
-  const [position, setPosition] = useState({ left: 0, top: 0, width: 320 });
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 320, viewportHeight: 220 });
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
@@ -195,12 +214,21 @@ export function SearchableSingleSelect({ label, placeholder, icon, size = 'stand
       const rect = trigger.current?.getBoundingClientRect();
       if (!rect) return;
       const width = Math.min(Math.max(rect.width, 320), Math.max(0, window.innerWidth - 24));
-      const height = popup.current?.offsetHeight ?? 390;
+      const viewport = popup.current?.querySelector<HTMLElement>('[data-single-select-options]');
+      const chromeHeight = popup.current && viewport
+        ? popup.current.offsetHeight - viewport.offsetHeight : 90;
+      const below = Math.max(0, window.innerHeight - 12 - rect.bottom - 4);
+      const above = Math.max(0, rect.top - 4 - 12);
+      // Prefer a shorter list below, keeping room for a heading and at least one row.
+      const downward = below >= chromeHeight + 96 || below >= above;
+      const viewportHeight = Math.min(220, Math.max(0, (downward ? below : above) - chromeHeight));
+      const height = chromeHeight + Math.min(viewport?.scrollHeight ?? viewportHeight, viewportHeight);
       const next = { width,
+        viewportHeight,
         left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)),
-        top: Math.max(12, rect.bottom + height + 12 <= window.innerHeight ? rect.bottom + 4 : rect.top - height - 4),
+        top: Math.max(12, downward ? rect.bottom + 4 : rect.top - height - 4),
       };
-      setPosition((current) => current.width === next.width && current.left === next.left && current.top === next.top
+      setPosition((current) => current.width === next.width && current.left === next.left && current.top === next.top && current.viewportHeight === next.viewportHeight
         ? current : next);
     };
     place();
@@ -238,7 +266,9 @@ export function SearchableSingleSelect({ label, placeholder, icon, size = 'stand
         {selected?.label ?? (props.value || placeholder || label)}
       </span><IconChevronDownOutline14 />
     </button>
-    {open && <MenuSurface ref={popup} id={id} className={styles.singleSelectPopup} style={position} role="dialog" aria-label={label}>
+    {open && <MenuSurface ref={popup} id={id} className={styles.singleSelectPopup}
+      style={{ left: position.left, top: position.top, width: position.width,
+        '--single-select-viewport-height': position.viewportHeight + 'px' } as CSSProperties} role="dialog" aria-label={label}>
       <SingleSelectPicker {...props} preparing={!prepared} onClose={close} onChange={(value) => { props.onChange(value); close(); }} />
     </MenuSurface>}
   </div>;

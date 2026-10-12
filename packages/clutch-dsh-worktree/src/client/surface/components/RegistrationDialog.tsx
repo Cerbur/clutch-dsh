@@ -106,12 +106,14 @@ export function RegistrationDialog({
         }}
         onSelectedImportPathChange={setSelectedImportPath}
         onSelectedBranchChange={setSelectedBranch}
+        onLoadBranches={props.manager === undefined || worktreeModalWorkspaceId === undefined ? undefined
+          : () => props.manager!.listBranches({ workspaceId: worktreeModalWorkspaceId })}
         onFetchBranches={props.manager?.fetchRemoteBranches === undefined || worktreeModalWorkspaceId === undefined ? undefined : async () => {
           const workspaceId = worktreeModalWorkspaceId;
           try {
             return await props.manager!.fetchRemoteBranches({ workspaceId });
           } finally {
-            if (modalWorkspaceIdRef.current === workspaceId) modalReadViewRef.current = undefined;
+            if (modalWorkspaceIdRef.current === workspaceId) loadModalWorktreeView(workspaceId);
             await read.refresh({ preserveCurrent: true, invalidateContext: false,
               scope: { kind: 'workspace', workspaceId } });
           }

@@ -2,7 +2,7 @@ import { NotificationToasts } from '../../surface/components/NotificationToasts.
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
@@ -149,8 +149,9 @@ export function WorktreeGitPanel({
   const diff = state.diff.status === 'ready' ? state.diff.value : undefined;
   const refreshing = state.history.status === 'ready' && state.history.refreshing === true;
   const unavailable = historyValue?.unavailableReason;
-  const branchOptions = (state.branches.status === 'ready' ? state.branches.value : [])
-    .filter((branch) => branch.name !== currentBranch);
+  const branchRoster = state.branches.status === 'ready' ? state.branches.value : undefined;
+  const branchOptions = useMemo(() => (branchRoster ?? [])
+    .filter((branch) => branch.name !== currentBranch), [branchRoster, currentBranch]);
   const branchError = state.branches.status === 'error'
     ? state.branches.error
     : state.branches.status === 'ready'
@@ -229,7 +230,7 @@ export function WorktreeGitPanel({
                 emptyLabel={t('dashboard.git.selectBaseline')}
                 branches={branchOptions}
                 value={state.baselineBranch ?? ''}
-                loading={state.branches.status === 'idle' || state.branches.status === 'loading'
+                loading={state.branches.status === 'loading'
                   || (state.branches.status === 'ready' && state.branches.refreshing === true)}
                 onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
                   try {
@@ -240,6 +241,9 @@ export function WorktreeGitPanel({
                   }
                 }}
                 onChange={(value) => state.selectBaselineBranch(value || undefined)}
+                onLoad={manager?.listBranches === undefined ? undefined
+                  : async () => (await state.readFreshBranches())
+                    .filter((branch) => branch.name !== currentBranch)}
               />
             </div>
           )}

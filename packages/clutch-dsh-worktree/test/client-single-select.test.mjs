@@ -8,11 +8,16 @@ import { en } from '../lib/client/locales.js';
 const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
 
-function harness({ deferPreparation = false } = {}) {
+function harness({ deferPreparation = false, geometry } = {}) {
   const state = [];
   const frames = new Map();
   const effects = [];
   let frameId = 0;
+  const listeners = new Map();
+  const browserWindow = { innerWidth: 1000, innerHeight: 800,
+    addEventListener: (name, listener) => listeners.set(name, listener),
+    removeEventListener: (name, listener) => { if (listeners.get(name) === listener) listeners.delete(name); } };
+  const browserDocument = { ...browserWindow, visibilityState: 'visible' };
   let cursor = 0;
   const react = {
     useState(initial) {
@@ -31,16 +36,30 @@ function harness({ deferPreparation = false } = {}) {
         effects.push(() => { previous?.cleanup?.(); state[index].cleanup = callback(); });
       }
     },
-    useLayoutEffect() {},
+    useLayoutEffect(callback, dependencies) { if (geometry) react.useEffect(callback, dependencies); },
   };
-  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const jsx = (type, props) => {
+    if (typeof type === 'function') return type(props);
+    if (geometry && props.ref) {
+      const listHeight = Math.min(geometry.listHeight ?? 300,
+        Number.parseFloat(props.style?.['--single-select-viewport-height'] ?? '300'));
+      const element = { contains: () => false, focus() {},
+        getBoundingClientRect: () => geometry.trigger,
+        offsetHeight: type === 'native-menu-surface' ? 90 + listHeight : listHeight,
+        querySelector: (selector) => selector === 'input' ? { focus() {} } : { offsetHeight: listHeight, scrollHeight: geometry.listHeight ?? 300 },
+      };
+      if (typeof props.ref === 'function') props.ref(element);
+      else props.ref.current = element;
+    }
+    return { type, props };
+  };
   const modules = {};
   for (const [name, source] of sources) {
     const exports = {};
     const output = ts.transpileModule(source, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
-    new Function('require', 'exports', 'requestAnimationFrame', 'cancelAnimationFrame', output)((id) => ({
+    new Function('require', 'exports', 'requestAnimationFrame', 'cancelAnimationFrame', 'window', 'document', 'ResizeObserver', output)((id) => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': {
         Input: (props) => jsx('input', props), MenuSurface: (props) => jsx('native-menu-surface', props),
@@ -55,10 +74,13 @@ function harness({ deferPreparation = false } = {}) {
       '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
       './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
+      '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
+      '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ code: error.code ?? 'FAILED', message: error.message, retryable: true }) },
       '../../worktree.css': { default: {} },
     })[id] ?? {}, exports,
     (callback) => { frames.set(++frameId, callback); return frameId; },
-    (id) => frames.delete(id));
+    (id) => frames.delete(id), browserWindow, browserDocument,
+    class { observe() {} disconnect() {} });
     modules[name] = exports;
   }
   const advanceFrame = () => {
@@ -66,12 +88,21 @@ function harness({ deferPreparation = false } = {}) {
     frames.clear();
     pending.forEach((callback) => callback());
   };
-  return { advanceFrame, render(component, props) {
-    const render = () => { cursor = 0; return modules[component[0]][component[1]](props); };
+  return { advanceFrame, focus: () => listeners.get('focus')?.(),
+    resize: (height) => { browserWindow.innerHeight = height; listeners.get('resize')?.(); },
+    render(component, props) {
+    const render = () => {
+      cursor = 0;
+      const node = modules[component[0]][component[1]](props);
+      state.splice(cursor).forEach((removed) => removed?.cleanup?.());
+      return node;
+    };
     const node = render();
     effects.splice(0).forEach((callback) => callback());
     if (deferPreparation) return node;
     advanceFrame(); advanceFrame();
+    render();
+    effects.splice(0).forEach((callback) => callback());
     return render();
   } };
 }
@@ -84,6 +115,31 @@ function find(node, predicate) {
 const options = (node) => find(node, (item) => item.props?.role === 'option');
 const search = (node) => find(node, (item) => item.props?.role === 'combobox')[0];
 const key = (name, composing = false) => ({ key: name, nativeEvent: { isComposing: composing }, preventDefault() {}, stopPropagation() {} });
+
+test('dropdown stays below a middle trigger by limiting its scrolling viewport through loading and ready states', () => {
+  const h = harness({ geometry: { trigger: { left: 340, top: 424, bottom: 460, width: 400 } } });
+  const props = { label: 'Branch', searchLabel: 'Search', noMatchesLabel: 'Empty', value: '',
+    options: Array.from({ length: 200 }, (_, i) => ({ value: String(i), label: String(i) })), onChange() {} };
+  const render = () => h.render(['select/SearchableSingleSelect', 'SearchableSingleSelect'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  let popup = find(render(), (item) => item.type === 'native-menu-surface')[0];
+  assert.equal(popup.props.style.top, 464);
+  assert.equal(Number.parseFloat(popup.props.style['--single-select-viewport-height']), 220);
+  // Less space should shrink the roster in place rather than flip above the trigger.
+  h.resize(720);
+  popup = find(render(), (item) => item.type === 'native-menu-surface')[0];
+  assert.equal(popup.props.style.top, 464);
+  assert.equal(Number.parseFloat(popup.props.style['--single-select-viewport-height']), 154);
+  props.loading = true;
+  assert.equal(find(render(), (item) => item.type === 'native-menu-surface')[0].props.style.top, 464);
+  props.loading = false;
+  assert.equal(find(render(), (item) => item.type === 'native-menu-surface')[0].props.style.top, 464);
+  // Near the bottom edge, there is no useful roster space below: use bounded space above.
+  h.resize(580);
+  popup = find(render(), (item) => item.type === 'native-menu-surface')[0];
+  assert.ok(popup.props.style.top >= 12 && popup.props.style.top < 424);
+  assert.ok(popup.props.style.top + 90 + 220 <= 420);
+});
 
 test('opening a large already-loaded list paints its loading shell before constructing option rows', () => {
   const h = harness({ deferPreparation: true });
@@ -128,6 +184,46 @@ test('branch filters intersect text search without changing the selected value',
   assert.deepEqual(chosen, ['origin/main']);
 });
 
+test('reopening a branch dropdown rereads local refs after terminal changes without fetching remotes', async () => {
+  const h = harness();
+  let reads = 0;
+  let fetches = 0;
+  let resolve;
+  const props = { t: (name) => en[name], label: 'Branch', value: 'main',
+    branches: [{ name: 'main', isCurrent: true }], onChange() {},
+    onLoad: () => { reads++; return new Promise((done) => { resolve = done; }); },
+    onFetch: async () => { fetches++; return []; } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchSelector'], props);
+  const trigger = () => find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0];
+  render();
+  assert.equal(reads, 0);
+  trigger().props.onClick();
+  let node = render();
+  assert.equal(reads, 1);
+  assert.equal(find(node, (item) => item.props?.['data-single-select-loading'] !== undefined).length, 1);
+  resolve([{ name: 'main' }, { name: 'terminal/new', isCurrent: true }]);
+  await Promise.resolve(); await Promise.resolve();
+  node = render();
+  assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['main', 'terminal/new']);
+  assert.ok(find(options(node)[1], (item) => item.props?.children === en['branch.current']).length > 0);
+  search(node).props.onKeyDown(key('Escape'));
+  trigger().props.onClick();
+  render();
+  assert.equal(reads, 2);
+  resolve([{ name: 'main', isCurrent: true }]);
+  await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['main']);
+  assert.equal(fetches, 0);
+  h.focus(); h.focus();
+  assert.equal(reads, 3);
+  resolve([{ name: 'focus/new' }]);
+  await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['focus/new']);
+  search(render()).props.onKeyDown(key('Escape'));
+  render(); h.focus();
+  assert.equal(reads, 3);
+});
+
 test('large lists keep all candidates searchable and make offscreen keyboard selections available', () => {
   const h = harness();
   const chosen = [];
@@ -152,6 +248,30 @@ test('large lists keep all candidates searchable and make offscreen keyboard sel
   assert.deepEqual(options(node).map((option) => option.props['data-single-select-option']), ['branch-973']);
   options(node)[0].props.onClick();
   assert.deepEqual(chosen, ['branch-999', 'branch-973']);
+});
+
+test('branch reread failures retain candidates and expose a retry without resetting search', async () => {
+  const h = harness();
+  let attempts = 0;
+  const props = { t: (name) => en[name], label: 'Branch', value: 'main', branches: [{ name: 'main' }],
+    onChange() {}, onLoad: async () => {
+      if (++attempts === 1) throw new Error('offline');
+      return [{ name: 'main' }, { name: 'main/new' }];
+    } };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchSelector'], props);
+  find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+  render(); await Promise.resolve(); await Promise.resolve();
+  let node = render();
+  search(node).props.onChange({ currentTarget: { value: 'main' } });
+  node = render();
+  assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['main']);
+  const notice = find(node, (item) => item.type === 'error-toast' && item.props.error)[0];
+  assert.equal(notice.props.error.message, 'offline');
+  notice.props.actions[0].onClick();
+  await Promise.resolve(); await Promise.resolve();
+  node = render();
+  assert.equal(search(node).props.value, 'main');
+  assert.deepEqual(options(node).map((item) => item.props['data-single-select-option']), ['main', 'main/new']);
 });
 
 test('closing during preparation cancels the pending frame and reopening keeps a fresh shell', () => {

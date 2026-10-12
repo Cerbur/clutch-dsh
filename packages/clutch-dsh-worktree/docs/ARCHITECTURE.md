@@ -274,6 +274,13 @@ Provider 的 `readWorktreeStatus` 统一投影运行时状态：`ready`、`missi
 - 该状态属于运行时动态观察，不进行持久化；
 - 普通的外部 `git checkout` 导致分支不一致时，投影为 `branch-drift` 警告，不产生 recovery issue，Session 绑定与 cwd 保持不变。
 
+checkout 识别发生在读取投影时，不监听 terminal 命令或 Git 文件变更。`listWorktrees` 比较
+受管理目录的实际分支与登记分支；Local/Main 通过 `getWorkspaceGitState` 单独读取根 checkout
+当前分支和 Git 就绪状态（detached 为 null），无需枚举完整 refs。这些事实只保留在运行时。
+Workspace 导航与刷新不读取完整 branch list；仅创建默认值和打开分支选择器时调用 `listBranches`。
+Git 页签初次只读历史，选择器使用过后显式刷新才同时更新分支候选。Client 的旧注入 adapter
+缺少轻量接口时保留兼容回退，随包 Host/Remote/Connection 使用轻量接口。
+
 ### 分支同步（adoptWorktreeBranch）
 
 - 用户在弹窗中确认分支切换后，调用 `adoptWorktreeBranch`；

@@ -20,6 +20,7 @@ import type {
   WorktreePermissionNormalizationRequest,
   WorktreePermissionResult,
   WorkspaceId,
+  WorkspaceGitState,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -224,6 +225,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
     expectedBaseBranch?: string;
   }): Promise<WorktreeRemoteResult<string>> {
     return this.remote.updateWorktreeBaseBranch(input);
+  }
+
+  @Remote
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>> {
+    return this.remote.getWorkspaceGitState(input);
   }
 
   @Remote

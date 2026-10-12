@@ -125,13 +125,19 @@ The Create and Import tabs share aligned, full-width controls and consistent spa
 
 Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
 and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
-Dropdowns use DSH’s native menu material in light and dark themes. Search ignores case; use Arrow Up/Down to move,
-Enter to choose, and Escape to close. Clicking within the dropdown keeps it open, including headings,
+Dropdowns use DSH’s native menu material in light and dark themes.
+Dropdown lists are compact and prefer opening below the field, shrinking to available space with internal scrolling;
+they open above only when there is too little useful space below.
+Search ignores case; use Arrow Up/Down to move, Enter to choose, and Escape to close. Clicking within the dropdown keeps it open, including headings,
 empty space, search, filters, and fetch controls; selecting an option or clicking outside closes it.
 Branch and import selectors open immediately while candidates load, show a loading indicator inside,
 and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
 Even with cached candidates, the dropdown paints its loading shell before preparing the list. Large lists
 render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
+Opening any branch selector rereads local Git refs, including changes made in a terminal. An open selector
+also revalidates when you return to the browser. This refresh does not contact remotes; use Fetch to update remote refs.
+The full branch list is loaded only for creation defaults or an open branch picker. Workspace navigation
+reads Git readiness and the current root-checkout branch separately; entering Git & Changes loads history without preloading branches.
 The current local branch is preferred by default. Remote refs are read
 from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
 remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;

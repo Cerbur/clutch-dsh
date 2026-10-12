@@ -13,6 +13,7 @@ import type {
   WorktreeId,
   WorktreeImportCandidate,
   WorktreeRecord,
+  WorkspaceGitState,
   WorkspaceId,
 } from '../contract/index.js';
 import { createWorktreeMutationToken } from '../provider/mutation-token.js';
@@ -196,6 +197,24 @@ export async function listImportCandidates(
     }
   }
   return candidates;
+}
+
+/** Inspect Git readiness and the root checkout without enumerating branch refs. */
+export async function getWorkspaceGitState(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<WorkspaceGitState> {
+  const workspace = await requireWorkspaceForRead(context, input.workspaceId);
+  await requireWorkspaceRoot(workspace);
+  await context.git.validateRepository(workspace.rootPath);
+  const root = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath) : workspace.rootPath;
+  for (const worktree of await context.git.listWorktrees(root)) {
+    if (await samePhysicalPath(worktree.absolutePath, root)) {
+      return { currentBranch: worktree.detached ? null : worktree.branch ?? null };
+    }
+  }
+  throw providerError('GIT_OPERATION_FAILED', 'Workspace checkout is absent from Git worktree metadata', { workspaceId: input.workspaceId });
 }
 
 /** Project local branches against all Git worktrees and mark checkout/current state. */

@@ -671,6 +671,10 @@ Connection calls and release browser-local membership projections.
 
 `select/SearchableSingleSelect` owns the domain-neutral options, text search, optional group filters,
 listbox navigation, bounded scrolling, popup placement, outside-pointer dismissal and focus return.
+Dropdown rosters cap at 220px and shrink to the available space below the trigger. Placement flips
+above only when the space below cannot accommodate the search/filter chrome plus a 96px roster
+and there is more space above. Loading and ready states share the same viewport budget; resize,
+scroll and content-size changes recalculate it. Embedded pickers retain their 300px roster.
 Blur alone never dismisses the dropdown: internal headings, empty space, search, filters and fetch
 actions keep it open. Option selection, an outside pointer, Escape or the trigger dismisses it.
 Loading is separate from disabled: the trigger opens synchronously, and the picker shows a localized
@@ -691,6 +695,17 @@ search/filter/selection and stale completions after unmount are ignored. Callers
 Workspace (or the active Git controller); creation preserves its ready form and guards a closed/replaced
 modal before invalidating its cached view.
 Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
+All three supply a local-ref read callback. Opening the picker or returning to a visible browser with
+it open revalidates candidates through `listBranches`, independently of remote Fetch. Dropdown reads
+start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
+keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
+branch reads by Workspace but never caches settled results. Git comparison uses its controller's
+forced branch read, retaining ready state and avoiding history/file/diff refreshes.
+Workspace view reads use `getWorkspaceGitState` for readiness and the root checkout's current branch,
+without listing refs. Creation's modal loader requests `listBranches` separately for defaults and
+new-name collision checks. Git tab mount loads history only; explicit refresh reloads branches only
+after its selector has requested them. Legacy injected managers without the lightweight method retain
+the branch-read fallback, while the bundled Host and Connection always expose the lightweight endpoint.
 `select/WorktreeSelector` adapts import candidates into branch labels and secondary path descriptions;
 absolute paths are selection identities and both branch and path participate in search.
 The callers own async loading, selection, saves and pending state. Git execution remains in Host/Provider; these components have no persistent state or direct transport. Arrow keys highlight, Enter/click selects, and Escape closes.

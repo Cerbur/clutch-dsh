@@ -275,6 +275,11 @@ export interface BranchRecord {
   readonly checkedOut: boolean;
 }
 
+/** Lightweight runtime HEAD fact, independent of the branch catalog and sidecar. */
+export interface WorkspaceGitState {
+  readonly currentBranch: string | null;
+}
+
 /**
  * 保存在 DSH 之外的关系记录；同一 Session 最多一个 active binding，该不变量由 Manage/Provider 写入路径强制执行。
  * Relation record stored outside DSH; the Manage/Provider write path enforces at most one active binding per Session.
@@ -345,6 +350,7 @@ export interface WorktreeManager {
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
@@ -445,6 +451,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'getWorkspaceGitState',
   'getToolSettings',
   'updateToolSettings',
   'watchToolChanges',
@@ -507,6 +514,7 @@ export interface WorktreeRemoteManager {
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>>;
 
   listWorktreeCommits(input: {
     workspaceId: WorkspaceId;

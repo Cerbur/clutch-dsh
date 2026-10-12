@@ -11,7 +11,7 @@ import type {
   WorktreeSurfaceProps,
 } from '../types.js';
 
-type Input = { props: Pick<WorktreeSurfaceProps, 'viewReader'> };
+type Input = { props: Pick<WorktreeSurfaceProps, 'viewReader' | 'manager'> };
 
 export function useRegistrationState({ props }: Input) {
   const { viewReader } = props;
@@ -26,7 +26,7 @@ export function useRegistrationState({ props }: Input) {
   const [selectedImportPath, setSelectedImportPath] = useState<string | undefined>();
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranch, setNewBranch] = useState('');
-  const modalReadLoader = useRef(createWorktreeModalViewLoader(viewReader));
+  const modalReadLoader = useRef(createWorktreeModalViewLoader(viewReader, props.manager));
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
   const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);

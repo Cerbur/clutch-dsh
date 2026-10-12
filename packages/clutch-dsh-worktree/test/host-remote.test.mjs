@@ -5,6 +5,7 @@ import { createWorktreeRemoteProjection } from '../lib/host/remote.js';
 
 function createManager(overrides = {}) {
   return {
+    async getWorkspaceGitState() { return { currentBranch: 'main' }; },
     async getWorktreeInstructions() {
       return 'Workspace guidance';
     },
@@ -61,6 +62,7 @@ function createManager(overrides = {}) {
 
 test('projects every approved Manager operation as a serializable result', async () => {
   const remote = createWorktreeRemoteProjection(createManager());
+  assert.deepEqual(await remote.getWorkspaceGitState({ workspaceId: 'ws_example' }), { ok: true, value: { currentBranch: 'main' } });
 
   assert.deepEqual(
     await remote.getWorktreeInstructions({ workspaceId: 'ws_example', worktreeId: 'main:ws_example' }),

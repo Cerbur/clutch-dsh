@@ -83,6 +83,18 @@ async function fixture(run, source = 'external') {
   }
 }
 
+test('Local HEAD state observes checkout without enumerating branch refs or modifying the index', async () => {
+  await fixture(async ({ repo, manager, input, shard }) => {
+    const before = await readFile(shard, 'utf8');
+    assert.deepEqual(await manager.getWorkspaceGitState({ workspaceId: input.workspaceId }), { currentBranch: 'main' });
+    git(repo, 'checkout', '-b', 'terminal/local');
+    assert.deepEqual(await manager.getWorkspaceGitState({ workspaceId: input.workspaceId }), { currentBranch: 'terminal/local' });
+    git(repo, 'checkout', '--detach');
+    assert.deepEqual(await manager.getWorkspaceGitState({ workspaceId: input.workspaceId }), { currentBranch: null });
+    assert.equal(await readFile(shard, 'utf8'), before);
+  });
+});
+
 for (const source of ['external', 'plugin'])
   test(`${source}: checkout projects drift; adoption preserves bindings and permits cleanup`, async () => {
     await fixture(

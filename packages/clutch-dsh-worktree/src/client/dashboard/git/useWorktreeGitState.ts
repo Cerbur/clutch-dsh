@@ -50,7 +50,8 @@ export interface WorktreeGitState {
 export interface WorktreeGitStateController {
   readonly getSnapshot: () => WorktreeGitState;
   readonly subscribe: (listener: () => void) => () => void;
-  readonly loadBranches: () => Promise<void>;
+  readonly loadBranches: (refresh?: boolean) => Promise<void>;
+  readonly readFreshBranches: () => Promise<readonly BranchRecord[]>;
   readonly loadHistory: () => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly selectBaselineBranch: (branch: string | undefined) => void;
@@ -645,10 +646,16 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    loadBranches: () => loadBranches(false),
+    loadBranches,
+    readFreshBranches: async () => {
+      await loadBranches(true);
+      const branches = state.branches;
+      if (branches.status === 'error' || (branches.status === 'ready' && branches.error)) throw branches.error;
+      return branches.status === 'ready' ? branches.value : [];
+    },
     loadHistory: () => loadHistory(false),
     refresh: () => {
-      const branchesTask = loadBranches(true);
+      const branchesTask = branchesLoaded ? loadBranches(true) : Promise.resolve();
       const historyTask = loadHistory(true);
       return Promise.all([branchesTask, historyTask]).then(() => undefined);
     },
@@ -690,13 +697,13 @@ export function useWorktreeGitState(input: UseWorktreeGitStateInput): WorktreeGi
   );
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   useEffect(() => {
-    void controller.loadBranches();
     void controller.loadHistory();
     return controller.dispose;
   }, [controller]);
   return {
     ...snapshot,
     loadBranches: controller.loadBranches,
+    readFreshBranches: controller.readFreshBranches,
     loadHistory: controller.loadHistory,
     refresh: controller.refresh,
     selectBaselineBranch: controller.selectBaselineBranch,

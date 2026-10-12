@@ -241,6 +241,8 @@ function renderHarness(writeClipboard) {
       IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
       IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
     }, './git-branch.css': { default: {} }, '../select/SearchableSingleSelect.js': selectExports,
+    '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('branch-error-toast', props) },
+    '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ message: error.message, retryable: true }) },
   })[name] ?? {}, branchExports);
   const exports = {};
   new Function('require', 'exports', output)(
