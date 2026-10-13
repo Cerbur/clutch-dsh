@@ -38,6 +38,7 @@ await build({
   clean: false,
   dts: false,
   sourcemap: true,
+  failOnWarn: true,
   deps: {
     neverBundle: clientExternals,
     alwaysBundle: (id) => !clientExternals.includes(id),

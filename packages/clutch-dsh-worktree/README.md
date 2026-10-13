@@ -60,6 +60,17 @@ pnpm dsh web
 The DSH Web profile must be able to start before this plugin is added. Re-run the absolute-path
 install command after changing `package.json` or `cordis.patch.yml`.
 
+For Desktop, fully quit DeepSeek Harness after active tasks finish, then use the installed DSH CLI:
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+Reopen Desktop after installation. Keep the local checkout and its installed `node_modules`
+available while it is linked; copying only `lib/` or removing the checkout's dependencies can
+cause the Host and permission-preset entries to fail to import. Client implementation dependencies
+are bundled during the build, so Desktop does not need separate Zustand or Immer modules.
+
 ### Install from GitHub source (optional)
 
 The package also supports the source dependency form used by the DSH plugin market:

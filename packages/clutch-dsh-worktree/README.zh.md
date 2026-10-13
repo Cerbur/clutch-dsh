@@ -56,6 +56,16 @@ pnpm dsh web
 DSH Web profile 必须已经能够正常启动。修改 `package.json` 或 `cordis.patch.yml` 后，需要重新
 执行绝对路径安装命令。
 
+安装到 Desktop 时，先结束活跃任务并完全退出 DeepSeek Harness，再使用已安装的 DSH CLI：
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+安装完成后重新打开 Desktop。本地链接生效期间，需要保留 checkout 及其已安装的 `node_modules`；
+只复制 `lib/` 或移除 checkout 的依赖可能导致 Host 和权限 preset 入口导入失败。
+Client 的实现依赖在构建时打包，Desktop 无需另外提供 Zustand 或 Immer 模块。
+
 ### 从 GitHub 源码安装（可选）
 
 DSH plugin market 使用的源码依赖形式也可以直接安装：
