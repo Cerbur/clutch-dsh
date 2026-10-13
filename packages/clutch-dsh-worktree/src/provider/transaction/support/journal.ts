@@ -76,6 +76,7 @@ export function pendingCreate(
     targetPath: input.targetPath,
     ...(input.workspacePath === undefined ? {} : { workspacePath: input.workspacePath }),
     branch: input.targetBranch,
+    ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
     ...(input.newBranch !== undefined ? { baseRef: input.baseBranch ?? `${input.baseCommit}^{commit}` } : {}),
     ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
     repositoryFingerprint: createRepositoryFingerprint(repository),

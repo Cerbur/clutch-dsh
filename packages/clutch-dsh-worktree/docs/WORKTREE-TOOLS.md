@@ -45,7 +45,7 @@ history replay, binding generations and plugin disposal use the same native life
    Repeated invocation adds only missing registrations, including those already automatically injected. The command accepts no arguments and is registered only while General is enabled.
 3. `clutch_new_worktree({ name, baseBranch?, instructions? })` creates a new branch from
    the calling Session's healthy active Worktree branch, or the root checkout's current branch
-   when its physical cwd matches Local/Main. An explicit local base overrides this. Broken
+   when its physical cwd matches Local/Main. An explicit local or fetched remote base overrides this. Broken
    bindings never silently select Main. The Host captures the calling checkout's HEAD before
    creation, including detached root HEAD; detached sources omit `baseBranch`. The transaction pins the captured
    commit when creating a new branch; uncommitted files are not copied. It then saves optional shared
@@ -71,8 +71,10 @@ Dispatched Sessions are enabled automatically before prompt admission. Nested Ag
 cannot execute these registrations because the body checks the exact caller.
 There are no merge/publish/remove/cleanup tools and no native parent/subagent lineage.
 
-`clutch_list_worktrees({ workspaceId? })` returns managed facts and local branch candidates;
+`clutch_list_worktrees({ workspaceId? })` returns managed facts and local and fetched remote branch candidates;
 Git failure is reported as `branchesUnavailable` while preserving a sidecar-supported list.
+Its branch output schema declares optional `ref`, `kind` (`local` or `remote`) and `remote`.
+Native DSH output validation accepts both exact-ref facts and older adapters omitting these fields.
 `clutch_list_sessions({ workspaceId?, worktreeId? })` discovers existing native Sessions and
 relations, including unavailable diagnostics without loading unauthorized history. Explicit
 Workspace ids must equal the calling Workspace. Every send/report target is reauthorized

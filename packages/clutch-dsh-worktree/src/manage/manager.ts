@@ -33,6 +33,8 @@ import {
   importWorktree,
   insertWorktreeBefore,
   listBranches,
+  getWorkspaceGitState,
+  fetchRemoteBranches,
   listImportCandidates,
   listWorktrees,
   removeWorktree,
@@ -226,6 +228,10 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => listWorktrees(this.context, input));
   }
 
+  getWorkspaceGitState(input: { readonly workspaceId: WorkspaceId }) {
+    return this.afterRecovery(() => getWorkspaceGitState(this.context, input));
+  }
+
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: string;
@@ -250,6 +256,10 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
     return this.afterRecovery(() => listBranches(this.context, input));
+  }
+
+  fetchRemoteBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
+    return this.afterRecovery(() => fetchRemoteBranches(this.context, input));
   }
 
   createWorktree(input: {

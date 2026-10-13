@@ -904,6 +904,22 @@ test('default base follows the calling Worktree and an explicit base overrides i
   assert.equal(f.calls.filter(([kind]) => kind === 'create-worktree').length, 2);
 });
 
+test('branch discovery output passes native DSH validation for local, remote and legacy adapters', async (t) => {
+  for (const branches of [
+    [{ name: 'main', ref: 'refs/heads/main', kind: 'local', isCurrent: true, checkedOut: true }],
+    [{ name: 'origin/main', ref: 'refs/remotes/origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false }],
+    [{ name: 'main', isCurrent: true, checkedOut: true }],
+  ]) {
+    const f = await fixture(t, { manager: { listBranches: async () => branches } });
+    await f.enable();
+    const schema = f.ctx.tools.get('clutch_list_worktrees', f.agent);
+    assertSupportedJsonSchema(schema.output.schema);
+    const listed = await f.run('clutch_list_worktrees', {});
+    assert.deepEqual(listed.branches, branches);
+    assert.deepEqual(validateJsonSchemaValue(schema.output.schema, listed), []);
+  }
+});
+
 test('discovery, stable-id dispatch, model override and follow-ups form a delegation round trip', async (t) => {
   const f = await fixture(t);
   await f.enable();

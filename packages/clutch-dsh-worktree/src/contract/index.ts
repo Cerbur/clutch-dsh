@@ -61,7 +61,7 @@ export type WorktreeSource = 'plugin' | 'external';
 export interface WorktreeGitBaseline {
   /** The selected branch tip (or captured/derived baseline identity); tree diffs may use its merge base. */
   readonly commit: string;
-  /** The local branch selected as the baseline, when the projection was branch-selected. */
+  /** The local or fetched remote branch selected as the baseline, when the projection was branch-selected. */
   readonly ref?: string;
   /** Branch selection is the UI source; captured/derived values remain for legacy API compatibility. */
   readonly source: 'captured' | 'derived' | 'branch';
@@ -107,7 +107,7 @@ export type WorktreeGitDiffRequest =
 export interface WorktreeGitRequestContext {
   readonly workspaceId: WorkspaceId;
   readonly worktreeId: WorktreeId;
-  /** Optional local branch selected as the comparison baseline. */
+  /** Optional local or fetched remote branch selected as the comparison baseline. */
   readonly baseBranch?: string;
 }
 
@@ -267,9 +267,19 @@ export function gitWorktreeRoot(record: { readonly absolutePath: string; readonl
  * Git projection for branch selection; `isCurrent` identifies the main Workspace and `checkedOut` covers any registered worktree.
  */
 export interface BranchRecord {
+  /** Display name only. Use ref as the stable selection identity when available. */
   readonly name: string;
+  readonly ref?: string;
+  /** Missing kind denotes a local branch for older injected adapters. */
+  readonly kind?: 'local' | 'remote';
+  readonly remote?: string;
   readonly isCurrent: boolean;
   readonly checkedOut: boolean;
+}
+
+/** Lightweight runtime HEAD fact, independent of the branch catalog and sidecar. */
+export interface WorkspaceGitState {
+  readonly currentBranch: string | null;
 }
 
 /**
@@ -342,11 +352,12 @@ export interface WorktreeManager {
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
   listWorktreeCommits(input: {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: WorktreeId;
-    /** Optional local branch selected as the comparison baseline. */
+    /** Optional local or fetched remote branch selected as the comparison baseline. */
     readonly baseBranch?: string;
   }): Promise<WorktreeGitHistory>;
 
@@ -363,6 +374,8 @@ export interface WorktreeManager {
    * Lists local branches together with their main-Workspace and any-worktree checkout state.
    */
   listBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
+  /** Explicitly fetch all configured remotes' branch heads and return refreshed branch facts. */
+  fetchRemoteBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
 
   /**
    * 从已有本地分支创建路径受管的 Worktree；当 base branch 已 checkout 时，`newBranch`
@@ -440,6 +453,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'getWorkspaceGitState',
   'getToolSettings',
   'updateToolSettings',
   'watchToolChanges',
@@ -452,6 +466,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'getWorktreeCommitFileDiff',
   'listImportCandidates',
   'listBranches',
+  'fetchRemoteBranches',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -501,11 +516,12 @@ export interface WorktreeRemoteManager {
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>>;
 
   listWorktreeCommits(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
-    /** Optional local branch selected as the comparison baseline. */
+    /** Optional local or fetched remote branch selected as the comparison baseline. */
     baseBranch?: string;
   }): Promise<WorktreeRemoteResult<WorktreeGitHistory>>;
 
@@ -518,6 +534,10 @@ export interface WorktreeRemoteManager {
   }): Promise<WorktreeRemoteResult<readonly WorktreeImportCandidate[]>>;
 
   listBranches(input: {
+    workspaceId: WorkspaceId;
+  }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
+
+  fetchRemoteBranches(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>>;
 

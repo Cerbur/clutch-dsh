@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import {
   createDefaultWorktreeName,
@@ -29,11 +29,14 @@ type Input = {
     ReturnType<typeof useRegistrationState>,
     | 'worktreeModalWorkspaceId'
     | 'modalReadLoading'
+    | 'modalBranches'
+    | 'setModalBranches'
     | 'setSelectedBranch'
     | 'setNewBranch'
     | 'setImportCandidates'
     | 'importCandidatesGuard'
     | 'modalWorkspaceIdRef'
+    | 'modalGenerationRef'
     | 'modalReadLoader'
     | 'modalReadViewRef'
     | 'setWorktreeModalWorkspaceId'
@@ -71,11 +74,14 @@ export function useWorktreeRegistration({
   const {
     worktreeModalWorkspaceId,
     modalReadLoading,
+    modalBranches,
+    setModalBranches,
     setSelectedBranch,
     setNewBranch,
     setImportCandidates,
     importCandidatesGuard,
     modalWorkspaceIdRef,
+    modalGenerationRef,
     modalReadLoader,
     modalReadViewRef,
     setWorktreeModalWorkspaceId,
@@ -96,29 +102,33 @@ export function useWorktreeRegistration({
   const modalWorkspace = workspaces.items.find(
     (workspace) => workspace.workspaceId === worktreeModalWorkspaceId,
   );
-  const modalView =
+  const modalProjection =
     worktreeModalWorkspaceId === undefined
       ? undefined
-      : viewByWorkspace.get(worktreeModalWorkspaceId);
+      : modalReadViewRef.current?.workspaceId === worktreeModalWorkspaceId
+        ? modalReadViewRef.current : viewByWorkspace.get(worktreeModalWorkspaceId);
+  const modalView = useMemo(() => modalProjection === undefined || modalBranches === undefined
+    ? modalProjection : { ...modalProjection, branches: modalBranches }, [modalProjection, modalBranches]);
   const modalReadiness = modalView?.readiness;
   const modalSetupStatus: WorktreeSetupStatus | undefined =
     modalView === undefined
       ? undefined
       : modalReadiness?.status === 'ready'
-        ? modalView.branches.length === 0
-          ? 'noLocalBranch'
-          : undefined
+        ? undefined
         : modalReadiness?.status;
   const modalCanCreate =
     !modalReadLoading && modalSetupStatus === undefined && modalReadiness?.status === 'ready';
   useEffect(() => {
     if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
+    if (modalReadLoading) return;
     if (modalView.readiness.status !== 'ready') {
       setSelectedBranch('');
       setNewBranch('');
       return;
     }
-    setSelectedBranch((current) => reconcileBaseBranchSelection(current, modalView.branches));
+    setSelectedBranch((current) => modalView.branches.length > 0
+      ? reconcileBaseBranchSelection(current, modalView.branches)
+      : current || modalView.currentBranch || 'HEAD');
     setNewBranch((current) => {
       if (current.length > 0) return current;
       const existingNames = [
@@ -127,7 +137,7 @@ export function useWorktreeRegistration({
       ];
       return createDefaultWorktreeName(existingNames);
     });
-  }, [modalView, worktreeModalWorkspaceId]);
+  }, [modalView, worktreeModalWorkspaceId, modalReadLoading]);
   const loadImportCandidates = useCallback(
     async (workspaceId: string): Promise<void> => {
       if (manager === undefined) return;
@@ -152,29 +162,33 @@ export function useWorktreeRegistration({
   );
   const closeWorktreeCreator = (force = false): void => {
     if (actionPending && !force) return;
+    modalGenerationRef.current++;
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
     setWorktreeModalWorkspaceId(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
+    setModalBranches(undefined);
   };
   const openWorktreeCreator = (
     workspace: WorkspaceLike,
     defaults: WorktreeCreateDefaults = {},
   ): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
+    modalGenerationRef.current++;
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
     setWorktreeModalWorkspaceId(workspace.workspaceId);
+    setModalBranches(undefined);
     setWorktreeModalMode('create');
     setImportCandidates({ status: 'idle', candidates: [] });
     setSelectedImportPath(undefined);
     setActionError(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
-    if (view === undefined) {
+    if (view === undefined || view.branches.length === 0) {
       setSelectedBranch(defaults.baseBranch ?? '');
       setNewBranch(defaults.newBranch ?? '');
       loadModalWorktreeView(workspace.workspaceId);
@@ -188,8 +202,10 @@ export function useWorktreeRegistration({
           ...view.worktrees.map((worktree) => worktree.branch),
         ]),
     );
+    loadModalWorktreeView(workspace.workspaceId);
   };
   const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
+    if (mode !== worktreeModalMode) modalGenerationRef.current++;
     setWorktreeModalMode(mode);
     if (
       mode === 'import' &&

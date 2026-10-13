@@ -2,6 +2,8 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives';
 import { createDshIconAlias } from './dsh-icon-compat.js';
 
 const exports = primitives as unknown as Readonly<Record<string, unknown>>;
+export const IconDownloadOutline16 = createDshIconAlias(exports, 'IconDownloadOutline16', 'IconDownloadOutlineRegular');
+export const IconLoadingOutline16 = createDshIconAlias(exports, 'IconLoadingOutline16', 'IconLoadingOutlineRegular');
 
 export const IconArchiveOutline20 = createDshIconAlias(exports, 'IconArchiveOutline20', 'IconArchiveOutlineRegular');
 export const IconBranchOutline16 = createDshIconAlias(exports, 'IconBranchOutline16', 'IconBranchOutlineRegular');

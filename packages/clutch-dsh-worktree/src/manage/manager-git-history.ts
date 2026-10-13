@@ -1,3 +1,5 @@
+import { isSafeBranchIdentity } from '../provider/git/branch-name.js';
+import { readBranchFacts, findBranchIdentity, canonicalBranchIdentity } from '../provider/git/branches.js';
 import { gitWorktreeRoot } from '../contract/index.js';
 import {
   WORKTREE_GIT_COMMIT_PATTERN,
@@ -14,7 +16,7 @@ import {
   type WorktreeGitHistory,
   type WorktreeRecord,
 } from '../contract/index.js';
-import type { GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
+import type { GitBranchWorktreeInfo, GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
@@ -202,30 +204,15 @@ async function resolveWorktree(
   };
 }
 
-/** True when a branch name can be safely handed to Git as a ref argument. */
-function isSafeBranchName(branch: string): boolean {
-  if (branch.length === 0 || branch.startsWith('-')) return false;
-  // Only a local branch short name may be selected. A full ref path is an
-  // arbitrary-ref attempt and is rejected instead of degrading to unavailable.
-  if (branch.startsWith('refs/')) return false;
-  for (const character of branch) {
-    const code = character.codePointAt(0) ?? 0;
-    if (code < 0x20 || code === 0x7f) return false;
-  }
-  return true;
-}
-
 /**
- * Resolve one local branch tip for the Dashboard baseline. The branch must exist
- * under `refs/heads/`, so tags, remote-tracking branches, and arbitrary refs are
- * rejected even though the browser may send any string.
+ * Resolve only enumerated branch identities. Tags and arbitrary revision expressions are rejected.
  */
-async function resolveLocalBranchCommit(
+async function resolveBranchCommit(
   context: WorktreeManagerContext,
   resolved: ResolvedWorktree,
   baseBranch: string,
   options: { readonly allowUnavailable?: boolean } = {},
-): Promise<string | undefined> {
+): Promise<{ commit: string; branch: GitBranchWorktreeInfo } | undefined> {
   const unavailable = (): never => {
     throw providerError('WORKTREE_STATE_CONFLICT', 'Selected baseline branch is unavailable: ' + baseBranch, {
       worktreeId: resolved.record.worktreeId,
@@ -234,18 +221,18 @@ async function resolveLocalBranchCommit(
   };
   // An unsafe ref is always a hard failure: arbitrary refs must never resolve,
   // even for a read that is allowed to degrade to an unavailable projection.
-  if (!isSafeBranchName(baseBranch)) unavailable();
-  const listBranches = gitRead(context, 'listBranches', resolved.record.worktreeId);
+  if (!isSafeBranchIdentity(baseBranch)) unavailable();
   const resolveCommit = gitRead(context, 'resolveCommit', resolved.record.worktreeId);
-  const branches = await listBranches(resolved.repositoryRoot, { signal: context.signal });
+  const branches = await readBranchFacts(context.git, resolved.repositoryRoot, { signal: context.signal });
+  const branch = findBranchIdentity(branches, baseBranch);
   // A baseline branch that no longer exists is an expected unavailable state for
   // reads, so the Dashboard can show an honest empty projection instead of a
   // generic Git failure. Writes keep the strict behaviour.
-  if (!branches.includes(baseBranch)) {
+  if (branch === undefined) {
     if (options.allowUnavailable === true) return undefined;
     unavailable();
   }
-  const commit = await resolveCommit(gitWorktreeRoot(resolved.record), baseBranch, {
+  const commit = await resolveCommit(gitWorktreeRoot(resolved.record), branch?.ref ?? baseBranch, {
     signal: context.signal,
   });
   if (!COMMIT_PATTERN.test(commit)) {
@@ -254,7 +241,7 @@ async function resolveLocalBranchCommit(
       baseBranch,
     });
   }
-  return commit;
+  return { commit, branch: branch! };
 }
 
 async function resolveSelectedBaseline(
@@ -265,10 +252,11 @@ async function resolveSelectedBaseline(
   const baseBranch = rawBranch.trim();
   if (baseBranch.length === 0) return undefined;
   // A vanished baseline branch degrades to an unavailable projection for reads.
-  const commit = await resolveLocalBranchCommit(context, resolved, baseBranch, {
+  const selected = await resolveBranchCommit(context, resolved, baseBranch, {
     allowUnavailable: true,
   });
-  if (commit === undefined) return undefined;
+  if (selected === undefined) return undefined;
+  const { commit } = selected;
 
   // A selected branch can move after the Worktree was created. Match GitHub's
   // pull-request range by diffing from the two heads' merge base to Worktree
@@ -300,7 +288,7 @@ async function resolveSelectedBaseline(
   };
 }
 
-/** Persist a user-selected local branch as the Worktree's Dashboard baseline. */
+/** Persist a user-selected local or fetched remote branch as the Dashboard baseline. */
 export async function updateWorktreeBaseBranch(
   context: WorktreeManagerContext,
   input: {
@@ -315,7 +303,7 @@ export async function updateWorktreeBaseBranch(
       worktreeId: input.worktreeId,
     });
   }
-  const baseBranch = input.baseBranch.trim();
+  let baseBranch = input.baseBranch.trim();
   if (baseBranch.length === 0) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The baseline branch cannot be empty', {
       worktreeId: input.worktreeId,
@@ -342,7 +330,13 @@ export async function updateWorktreeBaseBranch(
   }
   // Resolve the replacement branch against the pinned repository root before the
   // sidecar mutation, so an unavailable branch fails closed without a write.
-  await resolveLocalBranchCommit(context, resolved.value, baseBranch);
+  const selected = await resolveBranchCommit(context, resolved.value, baseBranch);
+  if (selected!.branch.kind !== 'remote' && selected!.branch.name === currentBranch) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The baseline branch cannot be the current Worktree branch', {
+      worktreeId: input.worktreeId, baseBranch,
+    });
+  }
+  baseBranch = canonicalBranchIdentity(selected!.branch, baseBranch);
 
   return context.sidecar.mutate(input.workspaceId, (snapshot) => {
     if (snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0) {
@@ -462,7 +456,7 @@ async function requireBaseline(
   if (baseline === undefined) {
     throw providerError(
       'WORKTREE_STATE_CONFLICT',
-      'Select a local baseline branch before reading Git changes',
+      'Select a baseline branch before reading Git changes',
       { worktreeId: resolved.record.worktreeId },
     );
   }

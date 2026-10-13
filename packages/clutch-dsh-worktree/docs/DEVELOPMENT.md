@@ -14,6 +14,11 @@
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
 
+分支按需加载增加 `getWorkspaceGitState` Host/Remote 接缝，返回根 checkout 的当前分支与 Git
+就绪错误，不枚举 branch refs。更新此版本联调时需要重新构建并重载或重启 Host；单独刷新浏览器
+无法为旧 Host 添加该 RPC。Workspace 导航和创建弹窗打开不读完整分支列表；选择器打开才请求候选，
+Fetch 完成后由 Host 读取一次并直接返回列表，窗口焦点与 Git 页刷新不额外读取。
+
 ---
 
 ## 2. 准备 Upstream DSH 源码 Checkout

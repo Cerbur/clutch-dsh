@@ -30,22 +30,6 @@
   font-size: 12px;
 }
 
-.gitBaselineSelector select {
-  min-width: 180px;
-  max-width: min(360px, 60vw);
-  padding: 5px 8px;
-  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-base, #fff);
-  color: var(--dsw-alias-label-primary, #273142);
-  font: inherit;
-}
-
-.gitBaselineSelector select:disabled {
-  cursor: wait;
-  opacity: 0.7;
-}
-
 .gitBaselinePrompt {
   padding: 22px;
   border: 1px dashed var(--dsw-alias-border-l3, #dfe3ea);

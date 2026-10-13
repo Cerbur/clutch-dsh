@@ -21,6 +21,8 @@ import { publishCreated, markRecovery } from '../support/publication.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
 import { workspacePathInWorktree } from '../../worktree-path.js';
+import { isSafeBranchName, isSafeBranchIdentity } from '../../git/branch-name.js';
+import { assertLocalWorktreeBranch, localBranchExists, findBranchIdentity, canonicalBranchIdentity } from '../../git/branches.js';
 
 export async function createWorktreeTransaction(
   dependencies: Pick<TransactionDependencies, 'dshHome' | 'git' | 'repositoryLock' | 'sidecar'>,
@@ -29,7 +31,12 @@ export async function createWorktreeTransaction(
   if (input.baseBranch === undefined && (!isWorktreeGitCommit(input.baseCommit) || input.newBranch === undefined)) {
     throw providerError('GIT_OPERATION_FAILED', 'Commit-based creation requires a full Git hash and a new branch', {});
   }
-  const baseRef = input.baseCommit ?? input.baseBranch!;
+  if ((input.baseBranch !== undefined && !isSafeBranchIdentity(input.baseBranch)) ||
+    (input.newBranch !== undefined && !isSafeBranchName(input.newBranch))) {
+    throw providerError('GIT_OPERATION_FAILED', 'A valid branch short name is required', {});
+  }
+  let baseRef = input.baseCommit ?? input.baseBranch!;
+  let savedBaseBranch = input.baseBranch;
   return withShardLock(dependencies, input.workspaceId, async (locked) => {
     await dependencies.git.validateRepository(input.workspaceRoot);
     const repository = await resolveRepository(dependencies, input.workspaceRoot);
@@ -47,20 +54,23 @@ export async function createWorktreeTransaction(
         let existingGitWorktrees: readonly GitWorktreeInfo[] | undefined;
         if (dependencies.git.listBranchesWithWorktreePaths) {
           const branches = await dependencies.git.listBranchesWithWorktreePaths(gitRoot);
-          const baseBranch = branches.find((branch) => branch.name === input.baseBranch);
+          const baseBranch = input.baseBranch === undefined ? undefined : findBranchIdentity(branches, input.baseBranch);
           if (input.baseBranch !== undefined && !baseBranch) {
             throw providerError(
               'GIT_OPERATION_FAILED',
-              `Local branch does not exist: ${input.baseBranch}`,
+              `Branch does not exist: ${input.baseBranch}`,
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.baseBranch,
               },
             );
           }
+          assertLocalWorktreeBranch(baseBranch, input.newBranch);
+          if (baseBranch !== undefined) savedBaseBranch = canonicalBranchIdentity(baseBranch, input.baseBranch!);
+          baseRef = input.baseCommit ?? baseBranch?.ref ?? baseRef;
           if (
             input.newBranch !== undefined &&
-            branches.some((branch) => branch.name === input.newBranch)
+            localBranchExists(branches, input.newBranch)
           ) {
             throw providerError(
               'WORKTREE_BRANCH_CONFLICT',
@@ -92,7 +102,7 @@ export async function createWorktreeTransaction(
           if (input.baseBranch !== undefined && !branches.includes(input.baseBranch)) {
             throw providerError(
               'GIT_OPERATION_FAILED',
-              `Local branch does not exist: ${input.baseBranch}`,
+              `Branch does not exist: ${input.baseBranch}`,
               {
                 workspaceRoot: input.workspaceRoot,
                 branch: input.baseBranch,
@@ -156,6 +166,7 @@ export async function createWorktreeTransaction(
           : input.baseCommit;
         const transactionInput = {
           ...input,
+          ...(savedBaseBranch === undefined ? {} : { baseBranch: savedBaseBranch }),
           workspacePath: await workspacePathInWorktree(
             input.workspaceRoot,
             gitRoot,
@@ -183,7 +194,7 @@ export async function createWorktreeTransaction(
             input.workspaceRoot,
             input.targetPath,
             input.newBranch === undefined
-              ? input.baseBranch!
+              ? input.targetBranch
               : (capturedBaseCommit ?? baseRef),
             input.newBranch,
           );

@@ -2,7 +2,8 @@ import { NotificationToasts } from '../../surface/components/NotificationToasts.
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
+import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
   WorktreeGitCommitFiles,
@@ -31,7 +32,7 @@ export interface WorktreeGitPanelProps {
   readonly manager?: Pick<
     WorktreeManager,
     'listBranches' | 'listWorktreeCommits' | 'listWorktreeCommitFiles' | 'getWorktreeCommitFileDiff'
-  >;
+  > & Partial<Pick<WorktreeManager, 'fetchRemoteBranches'>>;
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly defaultBaselineBranch?: string;
@@ -148,8 +149,9 @@ export function WorktreeGitPanel({
   const diff = state.diff.status === 'ready' ? state.diff.value : undefined;
   const refreshing = state.history.status === 'ready' && state.history.refreshing === true;
   const unavailable = historyValue?.unavailableReason;
-  const branchOptions = (state.branches.status === 'ready' ? state.branches.value : [])
-    .filter((branch) => branch.name !== currentBranch);
+  const branchRoster = state.branches.status === 'ready' ? state.branches.value : undefined;
+  const branchOptions = useMemo(() => (branchRoster ?? [])
+    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch), [branchRoster, currentBranch]);
   const branchError = state.branches.status === 'error'
     ? state.branches.error
     : state.branches.status === 'ready'
@@ -218,25 +220,33 @@ export function WorktreeGitPanel({
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
           {!isMain && (
-            <label className={styles.gitBaselineSelector}>
+            <div className={styles.gitBaselineSelector}>
               <span>{t('dashboard.git.baselineSelector')}</span>
-              <select
+              <GitBranchSelector
+                t={t}
+                size="compact"
+                label={t('dashboard.git.baselineSelector')}
+                placeholder={t('dashboard.git.selectBaseline')}
+                emptyLabel={t('dashboard.git.selectBaseline')}
+                branches={branchOptions}
                 value={state.baselineBranch ?? ''}
-                data-dashboard-git-baseline
-                disabled={state.branches.status === 'loading'}
-                onChange={(event) => state.selectBaselineBranch(event.currentTarget.value || undefined)}
-              >
-                <option value="">{t('dashboard.git.selectBaseline')}</option>
-                {state.baselineBranch !== undefined && !branchOptions.some((branch) => branch.name === state.baselineBranch) && (
-                  <option value={state.baselineBranch}>{state.baselineBranch}</option>
-                )}
-                {branchOptions.map((branch) => (
-                  <option key={branch.name} value={branch.name}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                loading={state.branches.status === 'loading'
+                  || (state.branches.status === 'ready' && state.branches.refreshing === true)}
+                onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
+                  try {
+                    const branches = await manager.fetchRemoteBranches!({ workspaceId });
+                    state.acceptBranches(branches);
+                    return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
+                  } finally {
+                    await state.refresh();
+                  }
+                }}
+                onChange={(value) => state.selectBaselineBranch(value || undefined)}
+                onLoad={manager?.listBranches === undefined ? undefined
+                  : async () => (await state.readFreshBranches())
+                    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
+              />
+            </div>
           )}
           {baselineCommit !== undefined && (
             <dl className={styles.gitBaselineFacts}>
@@ -245,7 +255,7 @@ export function WorktreeGitPanel({
                 <dd>
                   {baselineRef !== undefined ? (
                     <>
-                      {baselineRef}
+                      {baselineRef.replace(/^refs\/(heads|remotes)\//u, '')}
                       <code>@ {shortCommit(baselineCommit)}</code>
                     </>
                   ) : (

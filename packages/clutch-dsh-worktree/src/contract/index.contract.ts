@@ -10,6 +10,7 @@ import type {
 // 两份列表刻意独立于 interface 编写：任何方法遗漏或意外扩张都会在类型检查阶段失败。
 // These lists are deliberately independent of the interfaces so omissions or accidental expansion fail at type-check time.
 const expectedManagerKeys = [
+  'getWorkspaceGitState',
   'getWorktreeInstructions',
   'updateWorktreeInstructions',
   'updateWorktreeBaseBranch',
@@ -19,6 +20,7 @@ const expectedManagerKeys = [
   'getWorktreeCommitFileDiff',
   'listImportCandidates',
   'listBranches',
+  'fetchRemoteBranches',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -32,6 +34,7 @@ const expectedManagerKeys = [
   'bindSession',
 ] as const;
 const expectedRemoteKeys = [
+  'getWorkspaceGitState',
   'getWorktreeInstructions',
   'adoptWorktreeBranch',
   'recoverWorktrees',
@@ -41,6 +44,7 @@ const expectedRemoteKeys = [
   'getWorktreeCommitFileDiff',
   'listImportCandidates',
   'listBranches',
+  'fetchRemoteBranches',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -104,9 +108,18 @@ const importCandidate: WorktreeImportCandidate = {
 };
 const branch: BranchRecord = {
   name: 'feature/example',
+  kind: 'local',
   isCurrent: false,
   checkedOut: false,
 };
+const remoteBranch: BranchRecord = {
+  name: 'origin/main',
+  kind: 'remote',
+  remote: 'origin',
+  isCurrent: false,
+  checkedOut: false,
+};
+void remoteBranch;
 const binding: SessionBinding = {
   workspaceId: 'ws_example',
   worktreeId: 'wt_example',

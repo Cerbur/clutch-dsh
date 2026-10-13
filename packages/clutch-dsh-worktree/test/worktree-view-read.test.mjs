@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   createWorktreeViewReader,
+  createWorktreeModalViewLoader,
   mergeWorktreeViews,
 } from '../lib/client/view/worktree-view-read.js';
 
@@ -40,6 +41,35 @@ function createManager(calls, version = () => 1) {
     },
   };
 }
+
+test('Workspace reads inspect current HEAD without loading the branch catalog', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const manager = createManager(calls);
+  manager.getWorkspaceGitState = async () => ({ currentBranch: 'terminal/checkout' });
+  const reader = createWorktreeViewReader(manager);
+  const result = await reader.read('ws1');
+  assert.equal(calls.listBranches.length, 0);
+  assert.equal(result.currentBranch, 'terminal/checkout');
+  assert.deepEqual(result.branches, []);
+  assert.equal(result.readiness.status, 'ready');
+  reader.dispose();
+});
+
+test('opening creation reads lightweight Workspace state without preloading branch candidates', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const manager = createManager(calls);
+  manager.getWorkspaceGitState = async () => ({ currentBranch: 'main' });
+  const reader = createWorktreeViewReader(manager);
+  await reader.read('ws1');
+  const modal = createWorktreeModalViewLoader(reader);
+  let result;
+  await modal.load('ws1', (view) => { result = view; }, (error) => { throw error; });
+  assert.deepEqual(calls.listBranches, []);
+  assert.deepEqual(result.branches, []);
+  assert.equal(result.currentBranch, 'main');
+  assert.equal((await reader.read('ws1')).branches.length, 0);
+  modal.invalidate(); reader.dispose();
+});
 
 function view(workspaceId, branches = []) {
   return {

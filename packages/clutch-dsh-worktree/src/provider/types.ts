@@ -41,6 +41,8 @@ export interface CreateWorktreePendingOperation {
   readonly worktreeId: WorktreeId;
   readonly targetPath: string;
   readonly branch: string;
+  /** Acquisition identity, independent of baseRef's legacy new-branch marker. */
+  readonly baseBranch?: string;
   readonly baseRef?: string;
   readonly baseCommit?: string;
   readonly repositoryFingerprint: string;
@@ -144,9 +146,13 @@ export interface GitWorktreeInfo {
   readonly detached?: boolean;
 }
 
-/** Local branch facts with the physical checkout path, when Git reports one. */
+/** Locally available branch refs; remote-tracking refs never have a checkout path. */
 export interface GitBranchWorktreeInfo {
   readonly name: string;
+  readonly kind?: 'local' | 'remote';
+  readonly remote?: string;
+  /** Exact enumerated ref, used to avoid tag/branch resolution ambiguity. */
+  readonly ref?: string;
   readonly worktreePath?: string;
 }
 
@@ -204,7 +210,7 @@ export interface GitWorktreeAdapter {
   /** Resolve canonical repository identity for cross-process Git mutation locking. */
   resolveRepositoryIdentity?(workspaceRoot: string, options?: GitCommandOptions): Promise<GitRepositoryInspection>;
   /**
-   * Resolve local branches and their checkout paths in one read when supported.
+   * Resolve local and fetched remote branches and local checkout paths in one read.
    * Optional for adapters that predate the worktreepath ref-format atom.
    */
   listBranchesWithWorktreePaths?(
@@ -212,6 +218,8 @@ export interface GitWorktreeAdapter {
     options?: GitCommandOptions,
   ): Promise<readonly GitBranchWorktreeInfo[]>;
   listBranches(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly string[]>;
+  /** Explicit user-triggered network read; writes only fetched Git metadata. */
+  fetchRemoteBranches?(workspaceRoot: string, options?: GitCommandOptions): Promise<void>;
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
   /** Resolve one commit object without exposing a generic object reader. */
   resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;

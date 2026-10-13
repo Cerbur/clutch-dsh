@@ -1113,7 +1113,7 @@ test('shares one Worktree view reader between Context and Surface for one Client
   assert.deepEqual(calls, [
     'worktreeManager/listBindings', // Host readiness probe; no Workspace projection is read.
     'worktreeManager/listWorktrees',
-    'worktreeManager/listBranches',
+    'worktreeManager/getWorkspaceGitState',
     'worktreeManager/listBindings',
     'worktreeManager/getWorktreeInstructions',
   ]);

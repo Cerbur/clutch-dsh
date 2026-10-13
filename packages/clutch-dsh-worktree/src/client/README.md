@@ -150,6 +150,18 @@ default; Import is an additive tab below the description. On first entry, the Cl
 `listImportCandidates({ workspaceId })` through the same `/api` Connection. Candidate, selection,
 loading, ready, empty, error, retry, and stale-response state is browser-local to the dialog.
 
+Create and Import share a responsive 440px native Modal, with a 20px body gap and 8px between
+each field label and control. Registration inputs and selector triggers use 40px border-box
+controls, so padding and borders stay within the shared content column. These adjustments are
+scoped to registration; compact Dashboard selectors retain their native sizing.
+
+Shared dropdown opening first mounts the searchable loading shell, then prepares candidates after
+two animation frames so a paint can occur before list work. Closing, disabling, and unmounting cancel
+the pending frame. Lists over 80 candidates render a window with 120px of overscan, using 34px branch
+rows, 48px path-description rows, and 36px group headers. Filtering and keyboard navigation use the
+complete candidate set; navigation to an unmounted row scrolls it into the rendered window. Stable
+option indexes replace per-row array searches, and positioning updates only when geometry changes.
+
 The Host supplies only branch-attached, non-root, unmanaged Git Worktrees. The browser presents
 them in a standard dropdown: each option shows the branch first and the absolute path as diagnostic
 text. The browser never reads Git, the sidecar, or a generated `./remote` artifact directly. Selecting Import calls
@@ -261,7 +273,7 @@ When the Workspace root has tracked, staged, unstaged, or untracked changes, the
 **Uncommitted changes** target; Main starts on the first visible target, which may be that live entry. For a managed Worktree with a valid persisted `baseBranch`, or with a captured
 acquisition commit it reads as the implicit baseline, Overview performs one compact status read for ahead/behind,
 committed baseline-to-HEAD line counts, and live working-tree line counts without loading the branch list; genuinely
-unavailable and baseline-unselected managed views remain disconnected. The Git tab's first mount loads local branches and uses the
+unavailable and baseline-unselected managed views remain disconnected. The Git tab's first mount reads history without enumerating branches and uses the
 persisted `baseBranch` shown in Dashboard facts as the initial selection when it is present and different
 from the current Worktree branch; when no usable saved baseline exists but the record has a captured
 acquisition commit, it reads against that immutable commit and shows the resolved commit as the Base fact,
@@ -269,7 +281,7 @@ and only otherwise does it prompt for a baseline. The Overview facts editor is a
 its search field permanently above an elevated branch list with a fixed, roughly seven-row viewport; long
 rosters and filtered results scroll inside that list, so the dialog never resizes while searching. It saves a
 replacement through the existing Worktree
-Manager path, accepts only local branches other than the current Worktree branch, and passes the saved
+Manager path, accepts local and fetched remote branches other than the current Worktree branch, and passes the saved
 value back as the next Git selector default. With a valid managed Worktree baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
 Main has no comparison-only summary or branch selector and displays committed history plus the live Workspace-root target.
@@ -302,9 +314,9 @@ per-file caches, retains ready content during refresh, and uses request generati
 after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
 Host projection because the files can change between reads. Main commit files and diffs authorize against the same
 bounded visible history before reading a selected commit or committed aggregate; Main working-tree files and diffs authorize against a fresh
-Workspace-root changed-path projection before reading the live tree. A selected local branch that no longer exists renders an honest unavailable
-state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or remote-tracking
-ref is rejected outright because only a plain local branch name can be selected; a Worktree with neither a
+Workspace-root changed-path projection before reading the live tree. A selected local or remote branch that no longer exists renders an honest unavailable
+state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or revision expression
+is rejected outright because only an enumerated local or fetched remote branch name can be selected; a Worktree with neither a
 usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
@@ -410,7 +422,7 @@ The Dashboard instructions card edits plugin-owned text through
 `expectedInstructions` witness, retains a failed draft, coalesces duplicate clicks, and
 ignores completion after unmount. Save refreshes only the owning Workspace with ready content
 preserved. Main uses the same editor and optimistic witness, with its text stored as Workspace-root guidance. The Dashboard Base fact for a managed Worktree
-can be replaced with a saved local branch other than the current Worktree branch through
+can be replaced with a saved local or fetched remote branch other than the current Worktree branch through
 `updateWorktreeBaseBranch`; the optimistic expected-baseline witness rejects stale saves, the
 owning Workspace refreshes with ready content preserved, and the immutable acquisition `baseCommit`
 remains untouched, serves as the implicit baseline whenever no saved branch baseline is usable, and is
@@ -654,6 +666,72 @@ Connection, Gateway and unexpected Worktree domain failures remain visible as re
 errors rather than being converted to an empty list. Recognized Git readiness failures are
 Workspace-local setup states, not transport failures. Client disposal must abort pending
 Connection calls and release browser-local membership projections.
+
+## Shared searchable single selection
+
+`select/SearchableSingleSelect` owns the domain-neutral options, text search, optional group filters,
+listbox navigation, bounded scrolling, popup placement, outside-pointer dismissal and focus return.
+Dropdown rosters cap at 220px and shrink to the available space below the trigger. Placement flips
+above only when the space below cannot accommodate the search/filter chrome plus a 96px roster
+and there is more space above. Loading and ready states share the same viewport budget; resize,
+scroll and content-size changes recalculate it. Embedded pickers retain their 300px roster.
+Blur alone never dismisses the dropdown: internal headings, empty space, search, filters and fetch
+actions keep it open. Option selection, an outside pointer, Escape or the trigger dismisses it.
+Loading is separate from disabled: the trigger opens synchronously, and the picker shows a localized
+spinner until the caller supplies fresh candidates. Search/filter state survives data replacement;
+retained rows stay visible during refresh but cannot be committed until loading finishes. Creation
+renders its branch field while the first Workspace read is pending, import renders its field even
+before candidates arrive, and Git comparison passes its branch load state without disabling the trigger.
+It uses native DSH `Input` and `MenuSurface`, including background blur and the macOS backing;
+no raw translucent menu fill is applied to the popup or scroll viewport. Row geometry and elevation
+follow the native menu tokens. `SingleSelectPicker` embeds the same list without a dropdown shell.
+
+`branch/GitBranchSelector` uses `BranchRecord.ref ?? name` for selection identity and `name` for display,
+with local/remote groups and checkout markers. Full refs remain stable across same-named local branch additions/deletions;
+only the current local branch is filtered, never a same-named remote. Ambiguous legacy saved names fail explicitly in Host.
+Its optional fetch callback is shared by all three branch consumers; the remote heading
+keeps the native download icon visible even without remote candidates. The branch adapter owns busy/error
+feedback and in-flight click suppression within the heading action: a loading icon, success text for two
+seconds, then the download icon; errors show an inline retry with details in the button title. Timers are
+cancelled on unmount, and no status row appears below the list. Generic groups expose only an action slot. Fetch results preserve
+search/filter/selection and stale completions after unmount are ignored. Callers refresh only the affected
+Workspace (or the active Git controller); creation preserves its ready form and guards a closed/replaced
+modal before invalidating its cached view. A modal lifecycle generation invalidates list and Fetch callbacks on close,
+reopen (including the same Workspace), replacement, or mode change. Stale callbacks cannot change candidates,
+selection, loading/error status, or trigger a refresh for a newer modal.
+The registration state owner advances the generation synchronously on open/close, including batched close/reopen
+without an intermediate render; the dialog also isolates manager replacements and remounts its picker by generation.
+Fetch failures retain code, message and details in the button title and the existing Errors & Repair lifecycle;
+retry retains the diagnostic record while pending and success resolves it, without adding a status row below the list.
+The saved-baseline editor owns its fetched roster for the mounted Worktree identity, independently
+of parent Workspace branch-array references. A lightweight Workspace refresh returns no catalog;
+it must not invalidate or erase the editor's ready candidates. Fetch results also update the editor's
+save validation, so newly fetched branches can be saved without a follow-up branch read.
+The editor advances its modal lifetime on open/close and its request generation on every list/Fetch.
+The modal lifetime keys its picker, so batched close/reopen also retires the picker's own callbacks.
+Only callbacks matching both may publish candidates or release reading; old success, failure and
+finally callbacks cannot affect a reopened modal or a newer request. Picker read deduplication also
+checks its effect generation. StrictMode cleanup retires the old request; replay starts a replacement
+from the picker or parent setup, regardless of their effect order. Success and failure release loading.
+Creation and compact Git comparison use its dropdown; the saved-baseline modal uses `GitBranchPicker`.
+All three supply a local-ref read callback. Opening the picker reads candidates through `listBranches`;
+window focus and visibility changes never reload them. Fetch already reads the catalog once in Host
+and returns it; clients consume that result directly without a second `listBranches` RPC.
+Dropdown reads start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
+keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
+branch reads by Workspace but never caches settled results. Git comparison uses its controller's
+forced branch read, retaining ready state and avoiding history/file/diff refreshes.
+Workspace view reads use `getWorkspaceGitState` for readiness and the root checkout's current branch,
+without listing refs. Creation's modal loader reads only this projection; an empty branch array means
+the catalog has not been requested, not that Git has no branches. Defaults use the known current branch
+or HEAD and known names; final collision checks remain in Host. Git tab mount and explicit refresh
+load history only. Its controller accepts the Fetch roster directly. Legacy injected managers without the lightweight method retain
+the branch-read fallback, while the bundled Host and Connection always expose the lightweight endpoint.
+`select/WorktreeSelector` adapts import candidates into branch labels and secondary path descriptions;
+absolute paths are selection identities and both branch and path participate in search.
+The callers own async loading, selection, saves and pending state. Git execution remains in Host/Provider; these components have no persistent state or direct transport. Arrow keys highlight, Enter/click selects, and Escape closes.
+Missing `BranchRecord.kind` denotes a local branch for older adapters. Creation keeps its existing
+recommended new local name for either branch kind; remote refs cannot be checked out directly.
 
 ## Tool preference UI
 

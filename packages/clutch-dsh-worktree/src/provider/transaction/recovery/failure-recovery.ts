@@ -1,3 +1,5 @@
+import { readBranchFacts, localBranchExists } from '../../git/branches.js';
+import type { GitBranchWorktreeInfo } from '../../types.js';
 import { gitWorktreeRoot } from '../../../contract/index.js';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import type {
@@ -64,9 +66,9 @@ export async function reconcileCreateFailure(
     );
     return record;
   }
-  let branches: readonly string[];
+  let branches: readonly GitBranchWorktreeInfo[];
   try {
-    branches = await dependencies.git.listBranches(options.gitRoot);
+    branches = await readBranchFacts(dependencies.git, options.gitRoot);
   } catch (inspectionError) {
     await markRecovery(options.locked, options.pending, 'WORKTREE_RECOVERY_REQUIRED');
     throw recoveryError(
@@ -82,7 +84,7 @@ export async function reconcileCreateFailure(
   const branchAmbiguous =
     options.pending.type === 'create-worktree' &&
     options.pending.baseRef !== undefined &&
-    branches.includes(options.pending.branch);
+    localBranchExists(branches, options.pending.branch);
   let targetExists: boolean;
   try {
     targetExists = await pathExists(options.input.targetPath);

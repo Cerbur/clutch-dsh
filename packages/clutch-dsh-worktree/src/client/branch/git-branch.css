@@ -1,0 +1,10 @@
+.branchFetch { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 4px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.branchFetch:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.branchFetch:disabled { opacity: .4; cursor: default; }
+.branchFetch svg { width: 16px; height: 16px; }
+.branchFetch[aria-busy='true'] svg { animation: branchFetchSpin 1s linear infinite; }
+@keyframes branchFetchSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .branchFetch[aria-busy='true'] svg { animation: none; } }
+.branchFetch[data-fetch-status='success'], .branchFetch[data-fetch-status='error'] { width: auto; padding-inline: 6px; white-space: nowrap; font-size: 12px; line-height: 18px; }
+.branchFetch[data-fetch-status='success']:disabled { opacity: 1; }
+.branchFetch[data-fetch-status='error'] { color: var(--dsw-alias-state-error-primary); }

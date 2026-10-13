@@ -12,6 +12,33 @@ const BASELINES = {
   'base-b': '2'.repeat(40),
 };
 
+test('fresh branch reads bypass the loaded cache, share requests, and preserve rows on failure', async () => {
+  let calls = 0;
+  let finish;
+  let reject;
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt', manager: {
+    listBranches: () => { calls++; return new Promise((resolve, fail) => { finish = resolve; reject = fail; }); },
+  } });
+  const initial = controller.loadBranches();
+  finish([{ name: 'main' }]);
+  await initial;
+  await controller.loadBranches();
+  assert.equal(calls, 1);
+  const first = controller.readFreshBranches();
+  const shared = controller.readFreshBranches();
+  assert.equal(calls, 2);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'main' }]);
+  assert.equal(controller.getSnapshot().branches.refreshing, true);
+  finish([{ name: 'terminal/new', isCurrent: true }]);
+  assert.deepEqual(await first, [{ name: 'terminal/new', isCurrent: true }]);
+  assert.deepEqual(await shared, [{ name: 'terminal/new', isCurrent: true }]);
+  const failure = controller.readFreshBranches();
+  reject(new Error('unavailable'));
+  await assert.rejects(failure, /unavailable/);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'terminal/new', isCurrent: true }]);
+  controller.dispose();
+});
+
 function deferred() {
   let resolve;
   const promise = new Promise((fulfill) => {
@@ -19,6 +46,28 @@ function deferred() {
   });
   return { promise, resolve };
 }
+
+test('Git history refresh never reads branches, including after selector use and Fetch', async () => {
+  let branchReads = 0;
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt',
+    defaultBaselineBranch: 'base-a', manager: {
+      listBranches: async () => { branchReads++; return [{ name: 'main' }]; },
+      listWorktreeCommits: async () => historyFor('base-a'),
+      listWorktreeCommitFiles: async () => ({ commit: 'summary', files: [] }),
+    } });
+  await controller.loadHistory();
+  await controller.refresh();
+  assert.equal(branchReads, 0);
+  await controller.readFreshBranches();
+  assert.equal(branchReads, 1);
+  await controller.refresh();
+  assert.equal(branchReads, 1);
+  controller.acceptBranches([{ name: 'origin/fetched', kind: 'remote' }]);
+  await controller.refresh();
+  assert.equal(branchReads, 1);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'origin/fetched', kind: 'remote' }]);
+  controller.dispose();
+});
 
 async function settle() {
   await setImmediate();

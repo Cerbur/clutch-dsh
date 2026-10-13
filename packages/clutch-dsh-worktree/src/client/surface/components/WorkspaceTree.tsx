@@ -177,7 +177,8 @@ export function WorkspaceTree({
         ) : (
           visibleWorkspaces.map((workspace) => {
             const view = viewByWorkspace.get(workspace.workspaceId);
-            const currentBranch = view?.branches.find((branch) => branch.isCurrent)?.name;
+            const currentBranch = view?.currentBranch === null ? undefined
+              : view?.currentBranch ?? view?.branches.find((branch) => branch.isCurrent)?.name;
             const mainLabel =
               currentBranch === undefined
                 ? t('worktree.main')

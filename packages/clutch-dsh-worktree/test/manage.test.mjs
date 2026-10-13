@@ -197,8 +197,53 @@ test('wraps non-ENOENT Workspace root stat failures with Workspace error details
 });
 
 async function runGit(cwd, args) {
-  return execFile('git', args, { cwd, encoding: 'utf8' });
+  return execFile('git', args, { cwd, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
 }
+
+test('explicit fetch updates all remotes without configured local/tag mappings, pruning or sidecar writes', async () => {
+  const source = await createGitWorkspace();
+  try {
+    await runGit(source.workspaceRoot, ['branch', 'incoming']);
+    await runGit(source.workspaceRoot, ['tag', 'remote-tag']);
+    await withGitFixture(async ({ workspaceRoot, provider, sidecar }) => {
+      for (const remote of ['origin', 'upstream']) {
+        await runGit(workspaceRoot, ['remote', 'add', remote, source.workspaceRoot]);
+        await runGit(workspaceRoot, ['config', '--replace-all', 'remote.' + remote + '.fetch', '+refs/heads/*:refs/heads/injected/*']);
+        await runGit(workspaceRoot, ['config', '--add', 'remote.' + remote + '.fetch', '+refs/tags/*:refs/tags/*']);
+      }
+      await runGit(workspaceRoot, ['config', 'fetch.prune', 'true']);
+      await runGit(workspaceRoot, ['config', 'fetch.pruneTags', 'true']);
+      await runGit(workspaceRoot, ['tag', 'keep-local-tag']);
+      await runGit(workspaceRoot, ['update-ref', 'refs/remotes/origin/stale', 'HEAD']);
+      await writeFile(path.join(workspaceRoot, 'README.md'), 'uncommitted edit\n');
+      const before = await sidecar.read('ws_one');
+      const head = (await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout;
+      const rows = await provider.fetchRemoteBranches({ workspaceId: 'ws_one' });
+      for (const remote of ['origin', 'upstream']) {
+        assert.ok(rows.some((row) => row.name === remote + '/incoming' && row.kind === 'remote'));
+      }
+      assert.ok(rows.some((row) => row.name === 'origin/stale'));
+      assert.equal((await runGit(workspaceRoot, ['for-each-ref', '--format=%(refname)', 'refs/heads/'])).stdout, 'refs/heads/main\n');
+      assert.equal((await runGit(workspaceRoot, ['tag', '--list'])).stdout, 'keep-local-tag\n');
+      assert.equal((await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout, head);
+      assert.equal(await readFile(path.join(workspaceRoot, 'README.md'), 'utf8'), 'uncommitted edit\n');
+      assert.deepEqual(await sidecar.read('ws_one'), before);
+      await expectCode(provider.fetchRemoteBranches({ workspaceId: 'unknown' }), 'WORKSPACE_NOT_FOUND');
+      await provider.close();
+    });
+  } finally { await rm(source.tempRoot, { recursive: true, force: true }); }
+});
+
+test('failed fetch reports a Git error and can be retried after fixing the remote', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, provider }) => {
+    await runGit(workspaceRoot, ['remote', 'add', 'origin', path.join(tempRoot, 'missing-remote')]);
+    await expectCode(provider.fetchRemoteBranches({ workspaceId: 'ws_one' }), 'GIT_OPERATION_FAILED');
+    assert.ok((await provider.listBranches({ workspaceId: 'ws_one' })).some((row) => row.name === 'main'));
+    await runGit(workspaceRoot, ['remote', 'set-url', 'origin', workspaceRoot]);
+    assert.ok((await provider.fetchRemoteBranches({ workspaceId: 'ws_one' })).some((row) => row.name === 'origin/main'));
+    await provider.close();
+  });
+});
 
 test('instructions persist with acquisition facts, reject stale edits, and follow active bindings', async () => {
   await withGitFixture(async ({ provider, sidecar, dsh, dshHome, workspaceRoot }) => {
@@ -1261,6 +1306,39 @@ test('rejects invalid and already checked-out branches without using force', asy
   });
 });
 
+test('legacy sidecar creation enforces a new local branch for remote bases', async () => {
+  await withGitFixture(async ({ workspaceRoot, dshHome, dsh, sidecar }) => {
+    const head = (await runGit(workspaceRoot, ['rev-parse', 'HEAD'])).stdout.trim();
+    await runGit(workspaceRoot, ['update-ref', 'refs/remotes/origin/main', head]);
+    const legacy = createWorktreeManager({
+      dsh, dshHome,
+      sidecar: { read: (...args) => sidecar.read(...args), mutate: (...args) => sidecar.mutate(...args) },
+    });
+    try {
+      await expectCode(legacy.createWorktree({ workspaceId: 'ws_one', branch: 'origin/main' }), 'GIT_OPERATION_FAILED');
+      const record = await legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'origin/main', newBranch: 'legacy/remote',
+      });
+      assert.equal(record.baseBranch, 'refs/remotes/origin/main');
+      assert.equal(record.baseCommit, head);
+      assert.equal((await runGit(record.absolutePath, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim(), 'legacy/remote');
+      const sameName = await legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'origin/main', newBranch: 'origin/main',
+      });
+      assert.equal(sameName.branch, 'origin/main');
+      assert.equal(sameName.baseBranch, 'refs/remotes/origin/main');
+      assert.equal(sameName.baseCommit, head);
+      const before = await sidecar.read('ws_one');
+      await expectCode(legacy.createWorktree({
+        workspaceId: 'ws_one', branch: 'refs/remotes/origin/main', newBranch: 'origin/main',
+      }), 'WORKTREE_BRANCH_CONFLICT');
+      assert.deepEqual(await sidecar.read('ws_one'), before);
+    } finally {
+      await legacy.close();
+    }
+  });
+});
+
 test('creates a new Worktree branch from an already checked-out base branch', async () => {
   await withGitFixture(async ({ provider, workspaceRoot }) => {
     const record = await provider.createWorktree({
@@ -1298,7 +1376,7 @@ test('marks the containing Git Worktree branch current for an imported subdirect
     });
 
     assert.deepEqual(await provider.listBranches({ workspaceId: 'ws_one' }), [
-      { name: 'main', isCurrent: true, checkedOut: true },
+      { name: 'main', ref: 'refs/heads/main', kind: 'local', isCurrent: true, checkedOut: true },
     ]);
   });
 });

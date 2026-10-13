@@ -3,6 +3,8 @@ import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
 import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
 import { readWorktreeStatus } from '../provider/git/worktree-status.js';
+import { isSafeBranchName, isSafeBranchIdentity } from '../provider/git/branch-name.js';
+import { readBranchFacts, assertLocalWorktreeBranch, localBranchExists, findBranchIdentity, canonicalBranchIdentity } from '../provider/git/branches.js';
 import type { GitWorktreeInfo } from '../provider/types.js';
 
 import type {
@@ -11,6 +13,7 @@ import type {
   WorktreeId,
   WorktreeImportCandidate,
   WorktreeRecord,
+  WorkspaceGitState,
   WorkspaceId,
 } from '../contract/index.js';
 import { createWorktreeMutationToken } from '../provider/mutation-token.js';
@@ -196,6 +199,24 @@ export async function listImportCandidates(
   return candidates;
 }
 
+/** Inspect Git readiness and the root checkout without enumerating branch refs. */
+export async function getWorkspaceGitState(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<WorkspaceGitState> {
+  const workspace = await requireWorkspaceForRead(context, input.workspaceId);
+  await requireWorkspaceRoot(workspace);
+  await context.git.validateRepository(workspace.rootPath);
+  const root = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath) : workspace.rootPath;
+  for (const worktree of await context.git.listWorktrees(root)) {
+    if (await samePhysicalPath(worktree.absolutePath, root)) {
+      return { currentBranch: worktree.detached ? null : worktree.branch ?? null };
+    }
+  }
+  throw providerError('GIT_OPERATION_FAILED', 'Workspace checkout is absent from Git worktree metadata', { workspaceId: input.workspaceId });
+}
+
 /** Project local branches against all Git worktrees and mark checkout/current state. */
 export async function listBranches(
   context: WorktreeManagerContext,
@@ -213,8 +234,11 @@ export async function listBranches(
     for (const branch of branchFacts) {
       rows.push({
         name: branch.name,
-        isCurrent: branch.worktreePath !== undefined && await samePhysicalPath(branch.worktreePath, gitRoot),
-        checkedOut: branch.worktreePath !== undefined,
+        ...(branch.ref === undefined ? {} : { ref: branch.ref }),
+        ...(branch.kind === undefined ? {} : { kind: branch.kind }),
+        ...(branch.remote === undefined ? {} : { remote: branch.remote }),
+        isCurrent: branch.kind !== 'remote' && branch.worktreePath !== undefined && await samePhysicalPath(branch.worktreePath, gitRoot),
+        checkedOut: branch.kind !== 'remote' && branch.worktreePath !== undefined,
       });
     }
     return rows;
@@ -238,6 +262,21 @@ export async function listBranches(
     isCurrent: currentBranch === name,
     checkedOut: checkedOut.has(name),
   }));
+}
+
+/** Explicit fetch has no sidecar writes and returns the current branch projection. */
+export async function fetchRemoteBranches(
+  context: WorktreeManagerContext,
+  input: { readonly workspaceId: WorkspaceId },
+): Promise<readonly BranchRecord[]> {
+  const workspace = await requireWorkspace(context, input.workspaceId);
+  await context.sidecar.read(input.workspaceId);
+  await context.git.validateRepository(workspace.rootPath);
+  const gitRoot = context.git.resolveRepositoryRoot
+    ? await context.git.resolveRepositoryRoot(workspace.rootPath) : workspace.rootPath;
+  if (!context.git.fetchRemoteBranches) throw providerError('GIT_OPERATION_FAILED', 'Git adapter does not support fetching remote branches', { operation: 'fetch remote branches' });
+  await context.git.fetchRemoteBranches(gitRoot, { signal: context.signal });
+  return listBranches(context, input);
 }
 
 /** Create a Git Worktree first, then commit its external relation to the sidecar. */
@@ -272,12 +311,12 @@ async function createWorktreeAttempt(
     : workspace.rootPath;
 
   if (typeof input.branch !== 'string' || input.branch.length === 0) {
-    throw providerError('GIT_OPERATION_FAILED', 'A local branch is required', {
+    throw providerError('GIT_OPERATION_FAILED', 'A base branch is required', {
       workspaceRoot: workspace.rootPath,
     });
   }
 
-  const baseBranch = input.branch.trim();
+  let baseBranch = input.branch.trim();
   if (input.baseCommit !== undefined && (!isWorktreeGitCommit(input.baseCommit) || input.newBranch === undefined)) {
     throw providerError('GIT_OPERATION_FAILED', 'A captured commit requires a full Git hash and a new branch', {});
   }
@@ -290,28 +329,36 @@ async function createWorktreeAttempt(
   }
   const newBranch = input.newBranch?.trim();
   if (baseBranch.length === 0) {
-    throw providerError('GIT_OPERATION_FAILED', 'A local base branch is required', {
+    throw providerError('GIT_OPERATION_FAILED', 'A base branch is required', {
       workspaceRoot: workspace.rootPath,
     });
   }
-  if (input.newBranch !== undefined && (!newBranch || newBranch === baseBranch)) {
-    throw providerError('GIT_OPERATION_FAILED', 'A distinct new branch name is required', {
+  if (input.newBranch !== undefined && !newBranch) {
+    throw providerError('GIT_OPERATION_FAILED', 'A new branch name is required', {
       workspaceRoot: workspace.rootPath,
       baseBranch,
       newBranch: input.newBranch,
     });
   }
 
-  const targetBranch = newBranch ?? baseBranch;
+  if ((!detachedBase && !isSafeBranchIdentity(baseBranch)) || (newBranch !== undefined && !isSafeBranchName(newBranch))) {
+    throw providerError('GIT_OPERATION_FAILED', 'A valid branch short name is required', { baseBranch, newBranch: newBranch ?? '' });
+  }
+  const targetBranch = newBranch ?? baseBranch.replace(/^refs\/heads\//u, '');
+  let baseRef = input.baseCommit ?? baseBranch;
   if (!transactional) {
-    const branches = await context.git.listBranches(workspace.rootPath);
-    if (!detachedBase && !branches.includes(baseBranch)) {
-      throw providerError('GIT_OPERATION_FAILED', `Local branch does not exist: ${baseBranch}`, {
+    const branches = await readBranchFacts(context.git, workspace.rootPath);
+    const base = detachedBase ? undefined : findBranchIdentity(branches, baseBranch);
+    if (!detachedBase && base === undefined) {
+      throw providerError('GIT_OPERATION_FAILED', `Branch does not exist: ${baseBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: baseBranch,
       });
     }
-    if (newBranch !== undefined && branches.includes(newBranch)) {
+    assertLocalWorktreeBranch(base, newBranch);
+    baseRef = input.baseCommit ?? base?.ref ?? baseBranch;
+    if (base !== undefined) baseBranch = canonicalBranchIdentity(base, baseBranch);
+    if (newBranch !== undefined && localBranchExists(branches, newBranch)) {
       throw providerError('WORKTREE_BRANCH_CONFLICT', `New branch already exists: ${newBranch}`, {
         workspaceRoot: workspace.rootPath,
         branch: newBranch,
@@ -362,7 +409,7 @@ async function createWorktreeAttempt(
 
   // Git is the first external side effect; the sidecar mutation below is the relation commit point.
   try {
-    await context.git.createWorktree(workspace.rootPath, targetPath, input.baseCommit ?? baseBranch, newBranch);
+    await context.git.createWorktree(workspace.rootPath, targetPath, newBranch === undefined ? targetBranch : baseRef, newBranch);
   } catch (error) {
     throw asGitError('create worktree', workspace.rootPath, targetPath, error);
   }

@@ -175,7 +175,15 @@ const dashboardCssSource = await readFile(
   'utf8',
 );
 
-function renderHarness(writeClipboard) {
+const branchPickerSource = await readFile(
+  new URL('../src/client/branch/GitBranchSelector.tsx', import.meta.url), 'utf8',
+);
+
+const singleSelectSource = await readFile(
+  new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
+);
+
+function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
   const state = [];
   const effects = [];
   let cursor = 0;
@@ -195,6 +203,7 @@ function renderHarness(writeClipboard) {
       return react.useState({ current: initial })[0];
     },
     useId: () => 'dashboard',
+    useMemo: (create) => create(),
     useLayoutEffect() {},
     useEffect(effect, deps) {
       const index = cursor++;
@@ -207,6 +216,34 @@ function renderHarness(writeClipboard) {
     },
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
+  const selectOutput = ts.transpileModule(singleSelectSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const selectExports = {};
+  new Function('require', 'exports', selectOutput)((name) => ({
+    react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@deepseek-ai/dsh-client-ui-primitives': { Input: (props) => jsx('input', props) },
+    '../dsh-icons.js': {
+      IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+      IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+    }, './single-select.css': { default: {} },
+  })[name] ?? {}, selectExports);
+  const branchSource = branchPickerSource;
+  const branchOutput = ts.transpileModule(branchSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const branchExports = {};
+  new Function('require', 'exports', branchOutput)((name) => ({
+    react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@deepseek-ai/dsh-client-ui-primitives': { Input: (props) => jsx('input', props) },
+    '../dsh-icons.js': {
+      IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+      IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
+      IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
+    }, './git-branch.css': { default: {} }, '../select/SearchableSingleSelect.js': selectExports,
+    '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('branch-error-toast', props) },
+    '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ message: error.message, retryable: true }) },
+  })[name] ?? {}, branchExports);
   const exports = {};
   new Function('require', 'exports', output)(
     (name) =>
@@ -276,6 +313,8 @@ function renderHarness(writeClipboard) {
         '../session/session-view.js': { isBlankSession, relativeTime, sessionDisplayLabel },
         '../session/session-labels.js': { sessionStatusLabel, sessionTimeLabel },
         './dashboard.css': { default: {} },
+        '../branch/GitBranchSelector.js': stubBranchPicker
+          ? { GitBranchPicker: (props) => jsx('baseline-picker', props) } : branchExports,
       })[name] ?? {},
     exports,
   );
@@ -492,9 +531,9 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   assert.equal(dialog.props.description, en['dashboard.editBaseDescription']);
   assert.equal(dialog.props.closeLabel, en['dialog.closeBaseline']);
   assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-modal']).length, 1);
-  const search = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  const search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   assert.ok(search);
-  assert.equal(search.props.autoFocus, undefined);
+  assert.equal(search.props['data-modal-autofocus'], true);
   assert.equal(search.props.role, 'combobox');
   assert.equal(search.props['aria-expanded'], true);
   assert.equal(search.props['aria-controls'], 'dashboard-options');
@@ -513,14 +552,14 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   // focus or click, and only its rows react to the query.
   const optionsSurface = findAll(
     node,
-    (item) => item.props?.['data-dashboard-baseline-options'] !== undefined,
+    (item) => item.props?.['data-single-select-options'] !== undefined,
   )[0];
   assert.ok(optionsSurface);
   const listbox = byRole(optionsSurface, 'listbox')[0];
   assert.equal(byRole(listbox, 'option').length, 2);
-  let options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  let options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-dashboard-baseline-option']),
+    options.map((option) => option.props['data-single-select-option']),
     ['main', 'develop'],
   );
   assert.equal(options[0].props['aria-selected'], true);
@@ -529,42 +568,42 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
 
   search.props.onKeyDown({ key: 'ArrowUp', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
-  assert.equal(options[0].props['aria-selected'], false);
-  assert.equal(options[1].props['aria-selected'], true);
-  const wrappedSearch = findAll(node, (item) => item.props?.['data-dashboard-baseline-search'])[0];
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
+  assert.equal(options[0].props['aria-selected'], true);
+  assert.equal(options[1].props['data-highlighted'], true);
+  const wrappedSearch = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
   wrappedSearch.props.onKeyDown({ key: 'ArrowDown', preventDefault() {} });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.equal(options[0].props['aria-selected'], true);
   assert.equal(options[1].props['aria-selected'], false);
 
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   assert.deepEqual(
-    options.map((option) => option.props['data-dashboard-baseline-option']),
+    options.map((option) => option.props['data-single-select-option']),
     ['develop'],
   );
   search.props.onChange({ currentTarget: { value: 'missing' } });
   node = harness.render();
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-empty'])[0].props.children,
+    findAll(node, (item) => item.props?.['data-single-select-empty'])[0].props.children,
     en['dashboard.noMatchingBranches'],
   );
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined).length,
+    findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined).length,
     0,
   );
   // An empty result swaps in the status message without removing the frame.
   assert.equal(
-    findAll(node, (item) => item.props?.['data-dashboard-baseline-options']).length,
+    findAll(node, (item) => item.props?.['data-single-select-options']).length,
     1,
   );
   assert.equal(byRole(node, 'listbox').length, 0);
   search.props.onChange({ currentTarget: { value: 'dev' } });
   node = harness.render();
-  options = findAll(node, (item) => item.props?.['data-dashboard-baseline-option'] !== undefined);
+  options = findAll(node, (item) => item.props?.['data-single-select-option'] !== undefined);
   options[0].props.onClick();
   node = harness.render();
   findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
@@ -585,9 +624,69 @@ test('dashboardFacts uses a fixed-frame searchable baseline modal and feeds it t
   harness.dispose();
 });
 
+test('shared baseline picker searches remote branches and saves only confirmed selections', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({
+    branches: [
+      { name: 'main', isCurrent: true, checkedOut: true },
+      { name: 'origin/main', kind: 'remote', remote: 'origin', isCurrent: false, checkedOut: false },
+      { name: record.branch, isCurrent: false, checkedOut: true },
+    ],
+    record: { ...record, baseBranch: 'main' },
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'group').filter((group) => group.props['aria-labelledby']).map((group) => group.props.children[0].props.children[0].props.children), [
+    en['branch.local'], en['branch.remote'],
+  ]);
+  let search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
+  search.props.onChange({ currentTarget: { value: 'ORIGIN' } });
+  node = harness.render();
+  const option = byRole(node, 'option')[0];
+  assert.equal(option.props['data-single-select-option'], 'origin/main');
+  assert.equal(option.props['aria-selected'], false);
+  search = findAll(node, (item) => item.props?.['data-single-select-search'])[0];
+  search.props.onKeyDown({ key: 'Enter', preventDefault() {} });
+  node = harness.render();
+  assert.equal(byRole(node, 'option')[0].props['aria-selected'], true);
+  assert.deepEqual(calls, []);
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(calls, [{ branch: 'origin/main', expected: 'main' }]);
+  assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-value'])[0].props.children, 'origin/main');
+  harness.dispose();
+});
+
+test('baseline editor saves an exact remote ref even when its display name matches the current local branch', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({ record: { ...record, branch: 'origin/main', currentBranch: 'origin/main', baseBranch: 'main' },
+    branches: [{ name: 'origin/main', ref: 'refs/heads/origin/main', kind: 'local' },
+      { name: 'origin/main', ref: 'refs/remotes/origin/main', kind: 'remote', remote: 'origin' }],
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  const options = byRole(node, 'option');
+  assert.equal(options.length, 1);
+  assert.equal(options[0].props['data-single-select-option'], 'refs/remotes/origin/main');
+  options[0].props.onClick();
+  node = harness.render();
+  const save = findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0];
+  assert.equal(save.props.disabled, false);
+  save.props.onClick();
+  await tick();
+  assert.deepEqual(calls, [{ branch: 'refs/remotes/origin/main', expected: 'main' }]);
+  assert.equal(findAll(harness.render(), (item) => item.props?.['data-dashboard-baseline-value'])[0].props.children, 'origin/main');
+  harness.dispose();
+});
+
 test('baseline picker keeps a long branch roster in one scrollable list', () => {
   const harness = renderHarness(async (branch) => branch);
-  const branches = Array.from({ length: 24 }, (_, index) => ({
+  const branches = Array.from({ length: 240 }, (_, index) => ({
     name: 'branch-' + String(index).padStart(2, '0'),
     isCurrent: false,
     checkedOut: false,
@@ -601,52 +700,131 @@ test('baseline picker keeps a long branch roster in one scrollable list', () => 
   node = harness.render();
   const listbox = byRole(node, 'listbox')[0];
   const options = byRole(listbox, 'option');
-  assert.equal(options.length, 24);
-  assert.equal(options[0].props['data-dashboard-baseline-option'], 'branch-00');
+  assert.ok(options.length > 0 && options.length < 30);
+  assert.equal(options[0].props['data-single-select-option'], 'branch-00');
   assert.equal(options[0].props['aria-selected'], true);
-  assert.equal(options.at(-1).props['data-dashboard-baseline-option'], 'branch-23');
+  assert.equal(options[0].props['aria-setsize'], 240);
+  findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.onChange({ currentTarget: { value: 'branch-239' } });
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'option').map((option) => option.props['data-single-select-option']), ['branch-239']);
   harness.dispose();
 });
 
-test('baseline picker renders one fixed, elevated, scrollable branch list', () => {
-  const modalStyles = dashboardCssSource.slice(
-    dashboardCssSource.indexOf('.dashboardBaselineModal {'),
-    dashboardCssSource.indexOf('.dashboardBaselineSearch {'),
-  );
-  assert.match(modalStyles, /width: min\(440px, calc\(100vw - 48px\)\);/);
-  assert.match(modalStyles, /max-height: calc\(100dvh - 48px\);/);
-  assert.match(modalStyles, /min-height: 0;\n\s+overflow-y: auto;/);
+test('saved baseline can immediately select a newly fetched branch while excluding its own branch', async () => {
+  const harness = renderHarness(async () => true);
+  const calls = [];
+  let node = harness.render({ branches: [{ name: 'main' }], record: { ...record, baseBranch: 'main' },
+    onFetchBranches: async () => [{ name: 'main' }, { name: record.branch }, { name: 'origin/new', kind: 'remote' }],
+    onSaveBaseline: async (branch, expected) => { calls.push({ branch, expected }); return branch; },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['main', 'origin/new']);
+  byRole(node, 'option')[1].props.onClick();
+  node = harness.render();
+  const save = findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0];
+  assert.equal(save.props.disabled, false);
+  save.props.onClick();
+  await tick();
+  assert.deepEqual(calls, [{ branch: 'origin/new', expected: 'main' }]);
+  harness.dispose();
+});
 
-  const pickerStyles = dashboardCssSource.slice(
-    dashboardCssSource.indexOf('.dashboardBaselinePicker {'),
-    dashboardCssSource.indexOf('.dashboardBaselineOption {'),
-  );
-  // A fixed (not max-) height viewport: filtering swaps rows and never resizes
-  // the list, so the modal frame stays put.
-  assert.match(
-    pickerStyles,
-    /\.dashboardBaselineOptions \{[\s\S]*?max-width: min\(420px, calc\(100vw - 32px\)\);[\s\S]*?height: clamp\(258px, 48dvh, 300px\);[\s\S]*?overflow-y: auto;/,
-  );
-  assert.doesNotMatch(pickerStyles, /max-height:/);
-  assert.match(pickerStyles, /background: var\(--dsw-specific-menu/);
-  assert.match(pickerStyles, /border-radius: 20px;/);
-  // The Input primitive's wrapper is content-box, so the search field opts into
-  // border-box to stay flush with the branch list below it.
-  assert.match(
-    pickerStyles,
-    /\.dashboardBaselineSearch \{[\s\S]*?box-sizing: border-box;[\s\S]*?width: 100%;/,
-  );
-  assert.match(pickerStyles, /\.dashboardBaselineList \{[\s\S]*?flex-direction: column;/);
-  // The error floats over the list instead of growing the frame.
-  assert.match(
-    dashboardCssSource,
-    /\.dashboardBaselineError \{[\s\S]*?position: absolute;/,
-  );
-  assert.match(
-    dashboardCssSource,
-    /\.dashboardBaselineOption \{[\s\S]*?min-height: 40px;[\s\S]*?border-radius: 10px;/,
-  );
-  assert.match(source, /scrollIntoView\(\{ block: 'nearest' \}\)/);
+test('baseline Fetch retains its roster across lightweight Workspace refreshes without another branch read', async () => {
+  const harness = renderHarness(async () => true);
+  const before = [{ name: 'origin/main', kind: 'remote', remote: 'origin' }];
+  const after = [...before, { name: 'origin/new', kind: 'remote', remote: 'origin' }];
+  let finishFetch;
+  let reads = 0;
+  const props = { branches: [], record: { ...record, baseBranch: 'origin/main' },
+    onLoadBranches: async () => { reads++; return before; },
+    onFetchBranches: () => new Promise((resolve) => { finishFetch = resolve; }),
+    onSaveBaseline: async (branch) => branch };
+  let node = harness.render(props);
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  harness.render();
+  await tick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['branch.remote'])[0].props.onClick();
+  findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.onChange({ currentTarget: { value: 'origin' } });
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  node = harness.render({ branches: [] });
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['origin/main']);
+  finishFetch(after);
+  await tick();
+  // Workspace reads contain no branch catalog and replace the empty array after Fetch.
+  node = harness.render({ branches: [] });
+  assert.deepEqual(byRole(node, 'option').map((item) => item.props['data-single-select-option']), ['origin/main', 'origin/new']);
+  assert.equal(findAll(node, (item) => item.props?.['data-single-select-search'])[0].props.value, 'origin');
+  assert.equal(findAll(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0].props['data-fetch-status'], 'success');
+  assert.equal(byRole(node, 'option')[0].props['aria-selected'], true);
+  assert.equal(reads, 1);
+  byRole(node, 'option')[1].props.onClick();
+  assert.equal(findAll(harness.render(), (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+  harness.dispose();
+});
+
+for (const operation of ['onLoad', 'onFetch']) {
+  for (const settlement of ['resolve', 'reject']) {
+    for (const batched of [false, true]) {
+      test(`baseline ${operation} ignores ${settlement} from a closed modal after a newer request (batched: ${batched})`, async () => {
+        const harness = renderHarness(async () => true, { stubBranchPicker: true });
+        const requests = [];
+        const read = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
+        let node = harness.render({ branches: [{ name: 'main' }], record: { ...record, baseBranch: 'main' },
+          onLoadBranches: read, onFetchBranches: read, onSaveBaseline: async (branch) => branch });
+        const open = () => {
+          findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+          node = harness.render();
+          return findAll(node, (item) => item.type === 'baseline-picker')[0].props;
+        };
+        const oldPicker = open();
+        const old = oldPicker[operation]().catch(() => {});
+        node = harness.render();
+        byRole(node, 'dialog')[0].props.onClose();
+        if (!batched) node = harness.render();
+        const picker = open();
+        await oldPicker[operation]();
+        assert.equal(requests.length, 1, 'callbacks from the closed modal cannot start reads');
+        const latest = picker.onLoad();
+        node = harness.render();
+        // An obsolete completion must not release the new read's Save gate.
+        if (settlement === 'reject') requests[0].reject(new Error('obsolete'));
+        else requests[0].resolve([{ name: 'obsolete' }]);
+        await old;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, true);
+        requests[1].resolve([{ name: 'main' }, { name: 'latest' }]);
+        await latest;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main', 'latest']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+        // Same modal, new request first; the previous callback settles last.
+        const current = findAll(node, (item) => item.type === 'baseline-picker')[0].props;
+        const earlier = current[operation]().catch(() => {});
+        const newer = current.onLoad();
+        requests[3].resolve([{ name: 'main' }, { name: 'newest' }]);
+        await newer;
+        if (settlement === 'reject') requests[2].reject(new Error('earlier'));
+        else requests[2].resolve([{ name: 'obsolete' }]);
+        await earlier;
+        node = harness.render();
+        assert.deepEqual(findAll(node, (item) => item.type === 'baseline-picker')[0].props.branches.map((branch) => branch.name), ['main', 'newest']);
+        assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.disabled, false);
+        harness.dispose();
+      });
+    }
+  }
+}
+
+test('baseline editor delegates list behavior to the shared branch picker', () => {
+  assert.match(source, /<GitBranchPicker/);
+  assert.match(dashboardCssSource, /width: min\(440px, calc\(100vw - 48px\)\);/);
 });
 
 test('dashboard membership follows live bindings, archive/blank visibility, and retained order', () => {
