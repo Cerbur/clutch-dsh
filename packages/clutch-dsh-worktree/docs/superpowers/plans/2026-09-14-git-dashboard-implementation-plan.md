@@ -1780,6 +1780,18 @@ current source of truth; this section keeps the plan honest instead of rewriting
     collapsing the native rightbar for a sessionless target, and reusing the native `openResource`
     path. Recorded here as an accepted scope decision rather than a Git-tab-only change.
 
+### October 2026 amendment: Local comparisons and paged history
+
+Local/Main defaults to a **None** comparison branch and hides the total commit count. Selecting
+an enumerated local or fetched remote branch enables the same transient baseline comparison,
+summary and ahead/behind facts used by managed Worktrees. This requires no sidecar write.
+Both direct and comparison histories load 50 committed entries per request and append pages
+when scrolling to the bottom; comparison totals use the complete ahead count. Continuations
+carry the expected HEAD and baseline commits and reject changed projections. Commit membership
+is verified independently of pagination by HEAD reachability and baseline exclusion. This
+supersedes the 200-entry history cap and bounded visible-projection authorization in amendments
+5, 8, 14 and 15; aggregate selections remain limited to 200 selected commits.
+
 ## Known limitation
 
 A truncated changed-file projection reports an empty list with `truncated: true` rather than a

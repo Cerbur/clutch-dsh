@@ -14,6 +14,7 @@ import {
   type WorktreeGitFileDiff,
   type WorktreeGitFileDiffRequest,
   type WorktreeGitHistory,
+  type WorktreeGitHistoryRequest,
   type WorktreeRecord,
 } from '../contract/index.js';
 import type { GitBranchWorktreeInfo, GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
@@ -138,7 +139,8 @@ async function findLiveWorktree(
 
 async function resolveWorktree(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: string; readonly worktreeId: string },
+  input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
+  compareMain = true,
 ): Promise<{ readonly main: true; readonly workspaceRoot: string; readonly repositoryRoot: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   if (isMainWorktreeId(input.worktreeId, input.workspaceId)) {
@@ -146,6 +148,23 @@ async function resolveWorktree(
     const repositoryRoot = context.git.resolveRepositoryRoot
       ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
       : workspace.rootPath;
+    if (compareMain && input.baseBranch !== undefined) {
+      // A request-local checkout context reuses comparison and path authorization.
+      // It is never read from or written to the sidecar.
+      const headCommit = await gitRead(context, 'resolveCommit', input.worktreeId)(
+        repositoryRoot, 'HEAD', { signal: context.signal },
+      );
+      return { main: false, value: {
+        workspaceRoot: workspace.rootPath,
+        repositoryRoot,
+        record: {
+          workspaceId: input.workspaceId, worktreeId: input.worktreeId,
+          absolutePath: workspace.rootPath, gitRootPath: repositoryRoot,
+          branch: 'HEAD', source: 'external', status: 'active',
+        },
+        live: { absolutePath: repositoryRoot, headCommit },
+      } };
+    }
     return { main: true, workspaceRoot: workspace.rootPath, repositoryRoot };
   }
 
@@ -317,7 +336,7 @@ export async function updateWorktreeBaseBranch(
     });
   }
   const expectedBaseBranch = input.expectedBaseBranch?.trim() || undefined;
-  const resolved = await resolveWorktree(context, input);
+  const resolved = await resolveWorktree(context, input, false);
   if (resolved.main) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The local Workspace has no editable baseline', {
       workspaceId: input.workspaceId,
@@ -499,13 +518,9 @@ async function readCommitDivergence(
 /**
  * Authorize commit SHAs against one pinned comparison projection.
  *
- * One bounded `listCommits` read yields exactly the authorized set: commits
- * reachable from the Worktree HEAD and not reachable from the resolved baseline
- * head. That is the same membership the previous per-SHA ancestry walks proved,
- * but a wide multi-commit selection now costs one projection read instead of
- * several Git processes per candidate SHA. The visible projection is therefore
- * the authorization boundary, matching the truncated 200-commit history the
- * browser can actually select from.
+ * Candidates must be reachable from HEAD and excluded from baseline ancestry,
+ * independently of which 50-commit page the browser has loaded. Legacy adapters
+ * without the membership capability retain bounded projection authorization.
  */
 async function authorizeCommits(
   context: WorktreeManagerContext,
@@ -522,6 +537,17 @@ async function authorizeCommits(
     }
     return candidate;
   });
+  if (context.git.containsCommit !== undefined) {
+    for (const commit of requested) {
+      if (!await context.git.containsCommit(gitWorktreeRoot(resolved.record), commit,
+        comparison.baseHeadCommit, { signal: context.signal })) {
+        throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
+          worktreeId, commit,
+        });
+      }
+    }
+    return requested;
+  }
   const listCommits = gitRead(context, 'listCommits', worktreeId);
   const history = await listCommits(gitWorktreeRoot(resolved.record), comparison.baseHeadCommit, {
     signal: context.signal,
@@ -565,13 +591,14 @@ async function listMainCommits(
   context: WorktreeManagerContext,
   workspaceRoot: string,
   worktreeId: string,
+  offset = 0,
 ): Promise<GitCommitHistoryRead> {
   const listCommits = gitRead(context, 'listCommits', worktreeId);
   const readWorkingTreePaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
     ?? gitReadOptional(context, 'listWorkingTreeFiles');
   const [history, workingTreeFiles] = await Promise.all([
-    listCommits(workspaceRoot, undefined, { signal: context.signal }),
-    readWorkingTreePaths === undefined
+    listCommits(workspaceRoot, undefined, { signal: context.signal, offset }),
+    offset > 0 || readWorkingTreePaths === undefined
       ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
       : readWorkingTreePaths(workspaceRoot, { signal: context.signal }),
   ]);
@@ -593,6 +620,12 @@ async function authorizeMainCommit(
   if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
       worktreeId,
+    });
+  }
+  if (context.git.containsCommit !== undefined) {
+    if (await context.git.containsCommit(workspaceRoot, commitInput, undefined, { signal: context.signal })) return commitInput;
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside the Main history', {
+      worktreeId, commit: commitInput,
     });
   }
   const history = await listMainCommits(context, workspaceRoot, worktreeId);
@@ -641,6 +674,10 @@ async function authorizeMainAggregate(
       worktreeId,
     });
   }
+  if (context.git.containsCommit !== undefined) {
+    for (const commit of requested) await authorizeMainCommit(context, workspaceRoot, worktreeId, commit);
+    return { selection: { kind: 'commits', commits: requested }, commits: requested };
+  }
   const history = await listMainCommits(context, workspaceRoot, worktreeId);
   const members = new Set(
     history.commits
@@ -663,12 +700,28 @@ async function authorizeMainAggregate(
 
 export async function listWorktreeCommits(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
+  input: WorktreeGitHistoryRequest,
 ): Promise<WorktreeGitHistory> {
+  const offset = input.offset ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 ||
+    (offset > 0 && (input.expectedHeadCommit === undefined ||
+      (input.baseBranch !== undefined && input.expectedBaselineCommit === undefined)))) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Invalid history page', { worktreeId: input.worktreeId });
+  }
+  const checkProjection = (head: string, baseline?: string): void => {
+    if ((input.expectedHeadCommit !== undefined && input.expectedHeadCommit !== head) ||
+      (input.expectedBaselineCommit !== undefined && input.expectedBaselineCommit !== baseline)) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'Git history changed; refresh before loading more', {
+        worktreeId: input.worktreeId,
+      });
+    }
+  };
   const resolved = await resolveWorktree(context, input);
   if (resolved.main) {
-    const history = await listMainCommits(context, resolved.repositoryRoot, input.worktreeId);
+    const history = await listMainCommits(context, resolved.repositoryRoot, input.worktreeId, offset);
+    checkProjection(history.headCommit);
     return {
+      ...(history.nextOffset === undefined ? {} : { nextOffset: history.nextOffset }),
       headCommit: history.headCommit,
       commits: history.commits,
       truncated: history.truncated,
@@ -683,6 +736,11 @@ export async function listWorktreeCommits(
         : 'baseline-unknown',
     );
   }
+  if (offset > 0 && input.expectedBaselineCommit === undefined) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'A comparison page requires its baseline commit', {
+      worktreeId: input.worktreeId,
+    });
+  }
   const listCommits = gitRead(context, 'listCommits', input.worktreeId);
   // The working-tree entry only needs the changed-path projection here; its file
   // list and line counts are read on demand when the entry is selected.
@@ -692,15 +750,16 @@ export async function listWorktreeCommits(
     listCommits(
       gitWorktreeRoot(resolved.value.record),
       baseline.baseHeadCommit,
-      { signal: context.signal },
+      { signal: context.signal, offset },
     ),
-    readWorkingTreePaths === undefined
+    offset > 0 || readWorkingTreePaths === undefined
       ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
       : readWorkingTreePaths(
           gitWorktreeRoot(resolved.value.record),
           { signal: context.signal },
         ),
   ]);
+  checkProjection(history.headCommit, baseline.baseline.commit);
   const divergence = await readCommitDivergence(context, resolved.value, baseline, history.headCommit);
   return {
     ...history,

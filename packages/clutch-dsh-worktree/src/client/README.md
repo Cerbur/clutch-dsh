@@ -272,7 +272,11 @@ cwd also preserves previews for already-bound legacy Sessions whose cwd is the G
 The active-binding action accepts that legacy root when Host physical validation is
 unavailable; blank unbound Session candidates still match only `absolutePath`.
 Tabs implement roving keyboard focus. The Git tab is mounted only while selected. Main loads the Workspace-root
-HEAD history directly, skips branch-baseline and comparison-summary controls, and caps committed history at 200 commits.
+HEAD history directly by default with baseline **None** and no total count. Its branch selector can switch to
+a transient local or fetched remote comparison, including Baseline summary and complete ahead/behind counts.
+Every history read returns 50 committed entries; scrolling to the bottom appends another page. Equivalent
+page requests coalesce, append preserves selected files/diff, and baseline changes or refresh retire pending pages.
+Continuation requests carry the expected HEAD and baseline SHA; moved refs require refresh rather than mixing pages.
 When the Workspace root has tracked, staged, unstaged, or untracked changes, the history prepends a live
 **Uncommitted changes** target; Main starts on the first visible target, which may be that live entry. For a managed Worktree with a valid persisted `baseBranch`, or with a captured
 acquisition commit it reads as the implicit baseline, Overview performs one compact status read for ahead/behind,
@@ -288,11 +292,11 @@ replacement through the existing Worktree
 Manager path, accepts local and fetched remote branches other than the current Worktree branch, and passes the saved
 value back as the next Git selector default. With a valid managed Worktree baseline, the Git tab initially selects the
 Baseline summary instead of the first history commit; changing the baseline branch also returns to that summary.
-Main has no comparison-only summary or branch selector and displays committed history plus the live Workspace-root target.
+Main with **None** displays committed history plus the live Workspace-root target, skipping the comparison summary.
 The Git tab reloads committed history and the current working-tree snapshot transiently; it never writes Git state. A commit or
 **Uncommitted changes** selection loads changed files and a file selection loads one diff. The commits header for managed Worktrees and Main owns an
 off-by-default **Multi-select commits** switch: while it is off a commit click replaces the selection, and while it
-is on clicks toggle rows into the aggregate target. Main keeps the same committed aggregate behavior while omitting comparison-summary controls. Changed-file names use
+is on clicks toggle rows into the aggregate target. Main keeps the same committed aggregate behavior and exposes comparison controls when a branch is selected. Changed-file names use
 green, red, and blue to distinguish additions, deletions, and other changes, with the localized status kept in the
 row title and accessible label; folder icons show expansion state. An over-bound changed-file projection
 renders its explicit truncated notice instead of a generic error. Opening a file is a diff-toolbar action only.
@@ -316,11 +320,12 @@ commit. Working-tree selection stays single-select and
 cannot be combined with committed rows. The Git state machine keeps bounded baseline-scoped per-entry/
 per-file caches, retains ready content during refresh, and uses request generations to ignore late results
 after a newer selection or disposal. Live summary and working-tree paths are authorized against a fresh
-Host projection because the files can change between reads. Main commit files and diffs authorize against the same
-bounded visible history before reading a selected commit or committed aggregate; Main working-tree files and diffs authorize against a fresh
+Host projection because the files can change between reads. Main commit files and diffs authorize against
+HEAD reachability, excluding baseline ancestors in comparison mode, independently of loaded pages;
+Main working-tree files and diffs authorize against a fresh
 Workspace-root changed-path projection before reading the live tree. A selected local or remote branch that no longer exists renders an honest unavailable
-state without hiding the Dashboard’s Workspace information, while a full ref path, tag, or revision expression
-is rejected outright because only an enumerated local or fetched remote branch name can be selected; a Worktree with neither a
+state without hiding the Dashboard’s Workspace information. Only enumerated local or fetched remote
+branch identities are accepted; tags and arbitrary revision expressions are rejected. A Worktree with neither a
 usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 

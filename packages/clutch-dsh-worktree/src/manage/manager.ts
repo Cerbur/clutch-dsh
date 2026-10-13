@@ -13,6 +13,7 @@ import type {
   WorktreeGitFileDiff,
   WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
+  WorktreeGitHistoryRequest,
   WorktreeRecord,
   WorkspaceId,
   WorkspaceCheckout,
@@ -234,11 +235,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => getWorkspaceGitState(this.context, input));
   }
 
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitHistory> {
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory> {
     return this.afterRecovery(() => listWorktreeCommits(this.context, input));
   }
 

@@ -12,6 +12,7 @@ import type {
   GitCommitHistoryRead,
   GitChangedFileRead,
   GitCommandOptions,
+  GitHistoryOptions,
   GitBranchWorktreeInfo,
   GitSubprocessRuntime,
   GitWorktreeAdapter,
@@ -23,8 +24,7 @@ import type { WorktreeGitChangedFile, WorktreeGitFileDiff } from '../../contract
 
 /** Shared with Contract/Manage/Client so commit-SHA validation cannot drift. */
 const COMMIT_PATTERN = WORKTREE_GIT_COMMIT_PATTERN;
-const HISTORY_REQUEST_LIMIT = 201;
-const HISTORY_VISIBLE_LIMIT = 200;
+const HISTORY_VISIBLE_LIMIT = 50;
 /**
  * Line statistics for untracked files cost one `git diff --no-index` process per
  * file. A large untracked tree therefore reports unknown counts beyond this
@@ -790,13 +790,17 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
     }
   }
 
-  /** Read at most 201 commits after a boundary, or the complete reachable HEAD history when omitted. */
+  /** Read one bounded page using a pinned HEAD for the entire log invocation. */
   async listCommits(
     worktreeRoot: string,
     baseCommit?: string,
-    options: GitCommandOptions = {},
+    options: GitHistoryOptions = {},
   ): Promise<GitCommitHistoryRead> {
     if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'list commits', worktreeRoot);
+    const offset = options.offset ?? 0;
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'Invalid history offset', { offset });
+    }
     const headCommit = await this.resolveCommit(worktreeRoot, 'HEAD', options);
     try {
       const result = await this.run(
@@ -804,9 +808,10 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
           'log',
           '--no-color',
           '--topo-order',
-          `--max-count=${HISTORY_REQUEST_LIMIT}`,
+          `--max-count=${HISTORY_VISIBLE_LIMIT + 1}`,
+          `--skip=${offset}`,
           '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
-          ...(baseCommit === undefined ? [] : [`${baseCommit}..HEAD`]),
+          baseCommit === undefined ? headCommit : `${baseCommit}..${headCommit}`,
         ],
         worktreeRoot,
         options,
@@ -820,11 +825,41 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         headCommit,
         commits: commits.slice(0, HISTORY_VISIBLE_LIMIT),
         truncated: commits.length > HISTORY_VISIBLE_LIMIT,
+        ...(commits.length > HISTORY_VISIBLE_LIMIT ? { nextOffset: offset + HISTORY_VISIBLE_LIMIT } : {}),
       };
     } catch (error) {
       if (error instanceof WorktreeProviderError) throw error;
       throw operationError('list commits', worktreeRoot, undefined, baseCommit, error);
     }
+  }
+
+  async containsCommit(
+    worktreeRoot: string,
+    commit: string,
+    baseCommit?: string,
+    options: GitCommandOptions = {},
+  ): Promise<boolean> {
+    assertCommitArgument(commit, 'authorize commit', worktreeRoot);
+    if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'authorize commit', worktreeRoot);
+    try {
+      await this.run(['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], worktreeRoot, options);
+    } catch (error) {
+      if (error instanceof GitCommandError && error.exitCode === 1 &&
+        !error.timedOut && !error.aborted && !error.outputTruncated) return false;
+      throw operationError('authorize commit', worktreeRoot, undefined, commit, error);
+    }
+    const isAncestor = async (head: string): Promise<boolean> => {
+      try {
+        await this.run(['merge-base', '--is-ancestor', commit, head], worktreeRoot, options);
+        return true;
+      } catch (error) {
+        if (error instanceof GitCommandError && error.exitCode === 1 &&
+          !error.timedOut && !error.aborted && !error.outputTruncated) return false;
+        throw operationError('authorize commit', worktreeRoot, undefined, commit, error);
+      }
+    };
+    const head = await this.resolveCommit(worktreeRoot, 'HEAD', options);
+    return await isAncestor(head) && (baseCommit === undefined || !await isAncestor(baseCommit));
   }
 
   private async isTrackedWorkingTreeFile(

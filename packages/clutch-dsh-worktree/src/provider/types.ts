@@ -167,8 +167,13 @@ export interface GitCommandOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface GitHistoryOptions extends GitCommandOptions {
+  readonly offset?: number;
+}
+
 /** Provider-only history result before Manage attaches the selected baseline. */
 export interface GitCommitHistoryRead {
+  readonly nextOffset?: number;
   readonly headCommit: string;
   readonly commits: readonly WorktreeGitCommit[];
   readonly truncated: boolean;
@@ -239,12 +244,19 @@ export interface GitWorktreeAdapter {
     headCommit: string,
     options?: GitCommandOptions,
   ): Promise<{ readonly ahead: number; readonly behind: number }>;
-  /** Read up to 200 commits after a boundary, or the repository HEAD history when no boundary is supplied. */
+  /** Read one 50-commit page from the comparison or HEAD history. */
   listCommits?(
     worktreeRoot: string,
     baseCommit?: string,
-    options?: GitCommandOptions,
+    options?: GitHistoryOptions,
   ): Promise<GitCommitHistoryRead>;
+  /** Prove candidate membership in HEAD history, excluding the baseline's ancestors. */
+  containsCommit?(
+    worktreeRoot: string,
+    commit: string,
+    baseCommit?: string,
+    options?: GitCommandOptions,
+  ): Promise<boolean>;
   /** Read tracked and untracked changes in the live working tree against HEAD. */
   listWorkingTreeFiles?(
     worktreeRoot: string,

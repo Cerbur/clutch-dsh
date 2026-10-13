@@ -14,6 +14,7 @@ import type {
   WorktreeGitFileDiff,
   WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
+  WorktreeGitHistoryRequest,
   WorktreeId,
   WorktreeRecord,
   WorktreeImportCandidate,
@@ -241,11 +242,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
     return this.remote.listWorktreeCommits(input);
   }
 

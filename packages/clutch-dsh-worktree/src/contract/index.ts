@@ -111,6 +111,13 @@ export interface WorktreeGitRequestContext {
   readonly baseBranch?: string;
 }
 
+export interface WorktreeGitHistoryRequest extends WorktreeGitRequestContext {
+  readonly offset?: number;
+  /** Subsequent pages must still belong to this comparison projection. */
+  readonly expectedHeadCommit?: string;
+  readonly expectedBaselineCommit?: string;
+}
+
 export type WorktreeGitCommitFilesRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest;
 export type WorktreeGitFileDiffRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest & {
   /** Canonical Workspace-relative path returned by listWorktreeCommitFiles; ../ may name other checkout files. */
@@ -129,6 +136,8 @@ export interface WorktreeGitCommit {
 }
 
 export interface WorktreeGitHistory {
+  /** Offset of the next 50-commit page; absent at the end of history. */
+  readonly nextOffset?: number;
   readonly headCommit?: string;
   readonly baseline?: WorktreeGitBaseline;
   /** Number of commits reachable only from the Worktree HEAD. */
@@ -375,12 +384,7 @@ export interface WorktreeManager {
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    /** Optional local or fetched remote branch selected as the comparison baseline. */
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitHistory>;
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory>;
 
   listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeGitCommitFiles>;
 

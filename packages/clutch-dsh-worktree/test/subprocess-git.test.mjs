@@ -639,20 +639,21 @@ test('reads machine-delimited commit history with the immutable range and visibl
       'log',
       '--no-color',
       '--topo-order',
-      '--max-count=201',
+      '--max-count=51',
+      '--skip=0',
       '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
-      `${baseline}..HEAD`,
+      `${baseline}..${head}`,
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
 
-test('reads direct HEAD history without a baseline and caps a 201st record', async () => {
+test('reads direct HEAD history without a baseline and exposes another 50-commit page', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   const head = 'a'.repeat(40);
   try {
-    const records = Array.from({ length: 201 }, (_, index) => {
+    const records = Array.from({ length: 51 }, (_, index) => {
       const sha = index.toString(16).padStart(40, '0');
       return `${sha}\0\0subject ${index}\0Alice\0alice@example.invalid\x002026-09-14T00:00:00+00:00\x1e`;
     }).join('');
@@ -661,14 +662,17 @@ test('reads direct HEAD history without a baseline and caps a 201st record', asy
 
     const history = await git.listCommits(workspaceRoot);
 
-    assert.equal(history.commits.length, 200);
+    assert.equal(history.commits.length, 50);
     assert.equal(history.truncated, true);
+    assert.equal(history.nextOffset, 50);
     assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
       'log',
       '--no-color',
       '--topo-order',
-      '--max-count=201',
+      '--max-count=51',
+      '--skip=0',
       '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+      head,
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

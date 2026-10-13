@@ -18,6 +18,82 @@ import {
 
 const execFile = promisify(execFileCallback);
 
+test('Local and Worktree comparisons page past 200 commits with full totals and authorized diffs', async () => {
+  const fixture = await createFixture();
+  try {
+    const root = fixture.repositoryRoot;
+    const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/pages',
+    });
+    const ids = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId, baseBranch: 'main' };
+    await writeFile(path.join(record.absolutePath, 'paged.txt'), 'oldest change\n');
+    await runGit(record.absolutePath, ['add', 'paged.txt']);
+    for (let i = 0; i < 211; i++) {
+      await runGit(record.absolutePath, ['commit', '--allow-empty', '-m', 'page ' + i]);
+    }
+    const head = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    const first = await fixture.manager.listWorktreeCommits(ids);
+    assert.equal(first.commits.length, 50);
+    assert.equal(first.nextOffset, 50);
+    assert.equal(first.ahead, 211);
+    const commits = [...first.commits];
+    let page = first;
+    while (page.nextOffset !== undefined) {
+      page = await fixture.manager.listWorktreeCommits({
+        ...ids, offset: page.nextOffset, expectedHeadCommit: head, expectedBaselineCommit: base,
+      });
+      commits.push(...page.commits);
+    }
+    assert.equal(commits.length, 211);
+    assert.equal(new Set(commits.map((commit) => commit.sha)).size, 211);
+    assert.equal(page.truncated, false);
+    const oldest = commits.at(-1).sha;
+    assert.equal((await fixture.manager.listWorktreeCommitFiles({ ...ids, commit: oldest })).files[0].path, 'paged.txt');
+    assert.match((await fixture.manager.getWorktreeCommitFileDiff({
+      ...ids, commit: oldest, path: 'paged.txt',
+    })).patch, /[+]oldest change/u);
+    await assert.rejects(fixture.manager.listWorktreeCommitFiles({ ...ids, commit: base }), {
+      code: 'WORKTREE_STATE_CONFLICT',
+    });
+    await runGit(root, ['branch', 'comparison/base', base]);
+    await runGit(root, ['merge', '--ff-only', 'feature/pages']);
+    const local = { workspaceId: 'ws_dashboard', worktreeId: 'main:ws_dashboard' };
+    const history = await fixture.manager.listWorktreeCommits(local);
+    assert.equal(history.commits.length, 50);
+    assert.equal(history.baseline, undefined);
+    assert.equal(history.ahead, undefined);
+    const comparison = { ...local, baseBranch: 'comparison/base' };
+    const localDiff = await fixture.manager.listWorktreeCommits(comparison);
+    assert.equal(localDiff.ahead, 211);
+    assert.equal(localDiff.baseline.commit, base);
+    const tail = await fixture.manager.listWorktreeCommits({
+      ...comparison, offset: 200, expectedHeadCommit: head, expectedBaselineCommit: base,
+    });
+    assert.equal(tail.commits.length, 11);
+    assert.equal((await fixture.manager.listWorktreeCommitFiles({
+      ...comparison, selection: { kind: 'summary' },
+    })).files[0].path, 'paged.txt');
+    assert.match((await fixture.manager.getWorktreeCommitFileDiff({
+      ...comparison, selection: { kind: 'summary' }, path: 'paged.txt',
+    })).patch, /[+]oldest change/u);
+    assert.equal((await fixture.manager.listWorktreeCommitFiles({
+      ...local, commit: oldest,
+    })).files[0].path, 'paged.txt');
+    await assert.rejects(fixture.manager.listWorktreeCommits({
+      ...comparison, offset: 50, expectedHeadCommit: base, expectedBaselineCommit: base,
+    }), { code: 'WORKTREE_STATE_CONFLICT' });
+    await assert.rejects(fixture.manager.listWorktreeCommits({
+      ...comparison, offset: -1,
+    }), { code: 'WORKTREE_STATE_CONFLICT' });
+    await assert.rejects(fixture.manager.listWorktreeCommits({
+      ...comparison, baseBranch: 'HEAD~1',
+    }), { code: 'WORKTREE_STATE_CONFLICT' });
+  } finally {
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 async function runGit(cwd, args) {
   return execFile('git', args, { cwd, encoding: 'utf8' });
 }
@@ -1384,7 +1460,7 @@ test('defaults to the Baseline summary and stays unselected without a creation b
 
   controller.selectBaselineBranch(undefined);
   assert.equal(controller.getSnapshot().baselineBranch, undefined);
-  assert.equal(controller.getSnapshot().history.status, 'idle');
+  assert.equal(controller.getSnapshot().history.value.unavailableReason, 'baseline-unselected');
   controller.dispose();
 });
 
@@ -2184,7 +2260,7 @@ test('serves Main multi-commit selections with exact file unions and diff segmen
   }
 });
 
-test('loads Main history without branch or baseline reads', async () => {
+test('loads Main history lazily without branch or baseline reads', async () => {
   const calls = [];
   const manager = {
     listBranches() {
@@ -2218,11 +2294,9 @@ test('loads Main history without branch or baseline reads', async () => {
     worktreeId: 'main:ws_dashboard',
     defaultBaselineBranch: 'main',
   });
-  await controller.loadBranches();
   await controller.loadHistory();
   controller.selectSummary();
   controller.setIncludeWorkingTree(true);
-  controller.selectBaselineBranch('develop');
   controller.setCommitMultiSelect(true);
   controller.toggleCommit('a'.repeat(40));
   controller.toggleCommit('b'.repeat(40));

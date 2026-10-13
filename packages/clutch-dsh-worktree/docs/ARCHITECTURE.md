@@ -437,22 +437,28 @@ projection 超过 adapter 既有输出上限时返回显式的 truncated 结果�
 commit history 使用所选 branch 当前 tip 到 Worktree `HEAD` 的范围，只展示 Worktree 独有的 commit；
 基线汇总与文件 tree diff 使用两者共同先祖到 Worktree `HEAD` 的范围。若没有共同先祖，tree diff
 安全降级为两个 branch head 之间的完整范围，且 history 使用 Worktree head 相对 base tip 的完整可达 commit。
-受管理 Worktree 与 Main history 都最多返回 200 个 committed history entries。Main 展示从 Workspace root `HEAD` 可达的 committed history，
+受管理 Worktree 与 Local/Main history 每次最多返回 50 个 committed entries，Provider 额外读取一个 entry 判断是否存在下一页，
+返回 `nextOffset`，不再按 200 个截断。Client 滚动到底部追加下一页，分享等价的待完成请求并保留选择与 ready diff。
+后续页必须携带 `expectedHeadCommit`，对比页还需 `expectedBaselineCommit`；ref 移动时拒绝混合 projection，要求刷新。
+Local/Main 基线默认无，展示从 Workspace root `HEAD` 可达的 committed history 且不显示提交总数；
+选择枚举出的本地或已获取远端 branch 后，复用 managed comparison 的只读解析、汇总和路径授权。
+该 checkout context 仅存在于请求内存，绝不写入 Sidecar、DSH Workspace 或 Session。所有对比视图使用 `ahead` 展示完整已提交总数。
 并在 tracked、staged、unstaged 或 untracked 文件存在时，在顶部额外投影一个临时的 `working-tree` entry；受管理 Worktree 也沿用同一规则。
 默认选中第一个可见目标；working-tree entry 的文件和 unified diff 都相对于当前 `HEAD`。
-该 entry 不写入 Sidecar 或 DSH，也不计入 committed history 的 200 个 commit 上限。Main 的 working-tree 文件与 Diff 读取使用 Workspace root；Sidecar 中的
+该 entry 不写入 Sidecar 或 DSH，只在第一页出现且不计入 50 个 commit 的分页数量。Main 的 working-tree 文件与 Diff 读取使用 Workspace root；Sidecar 中的
 `baseCommit` 仍保留给历史 API 兼容和恢复逻辑，但不是新的用户选择类型。
 
-Manage 在每次 Main committed 文件/差异读取前，使用同一次有界的 Workspace-root history projection 授权可见 commit；Main 的 working-tree 文件/差异读取则重新授权 Workspace-root changed paths。对受管理 Worktree
-则校验 Worktree 仍是当前 Git registration，并验证 commit 可从 Worktree `HEAD` 到达；存在共同先祖时，commit 还必须位于共同先祖之后的 Worktree 增量范围内，
-没有共同先祖时则允许当前 branch 的完整 commit history。working-tree entry 则重新读取当前状态。
+Manage 在每次 committed 文件/差异读取前验证 commit 从当前 checkout `HEAD` 可达；
+对比时还排除从基线 head 可达的 commit，授权不依赖已加载页数。Provider 使用结构化的 `merge-base --is-ancestor`，
+对象不存在时拒绝；权限、超时和输出截断仍 fail closed。旧 adapter 缺少 membership capability 时保留 bounded history 授权。
+Main 的 working-tree 文件/差异读取重新授权 Workspace-root changed paths；managed Worktree 还校验当前 Git registration。
 随后只允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git
 object、ref、文件或命令读取能力。正常 commit 使用 first-parent，root commit 使用 empty tree；
 diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
 输出上限、超时、cleanup deadline 和 AbortSignal。
 
 受管理 Worktree 的 Git projection 提供 committed selection aggregate 与两个 comparison aggregate target，而不增加新的 RPC transport；Main 提供 committed selection aggregate，
-但不提供比较型 `summary` 或 working-tree inclusion target。`summary` 默认使用同一次
+未选基线时不提供比较型 `summary` 或 working-tree inclusion target，选定基线后复用相同实现。`summary` 默认使用同一次
 授权中解析并固定的 tree comparison boundary（共同先祖，或无共同先祖时的 base head）与 `HEAD` SHA，
 读取真正的 boundary-to-HEAD 净 committed tree diff；它不把 working tree 变化混入默认 summary。打开
 `includeWorkingTree` 后，`summary` 改为读取从同一 boundary 到当前 live working tree 的一次净 projection，包含 committed、staged、unstaged、
@@ -460,7 +466,7 @@ untracked、删除和重命名改动，而不是拼接两个 Diff。`commits` se
 请求顺序读取每个 commit 的 first-parent changed-file/diff projection。Manage 返回文件并集以及
 每个 commit 的独立 diff segment，绝不把任意多选静默解释为连续 range，因此未选择的中间 commit
 不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。受管理 Worktree 的 comparison aggregate 继续经过 baseline、HEAD、commit、path
-授权；Main committed aggregate 则以同一次有界的可见 Main history 作为 commit 授权边界。所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
+授权；Main committed aggregate 也基于当前 HEAD 可达性授权。aggregate 最多选择 200 个 commit，所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
 Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
 当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 
