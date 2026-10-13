@@ -154,7 +154,11 @@ Fetch 完成后读取一次更新后的分支列表，并直接提供给选择�
 
 Git repository 和 initial commit 必须可用。可选择本地 branch，或选择 **HEAD**，从 Main 当前
 checkout（包括精确 Tag 或游离 Commit）创建新分支。Main 会显示当前 branch、精确 Tag 或短 Commit，
-游离时仍保留创建入口。如果仓库尚未准备好，DSH 会显示对应
+游离时仍保留创建入口。
+本地化的 HEAD 选项会包含当前引用名称，例如**当前 HEAD (v1.0.0)**。
+创建使用选择时显示的 commit；提交前 HEAD 已变化时，以 `WORKTREE_STATE_CONFLICT` 拒绝创建，
+请刷新弹窗并重新选择来源。
+如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
 
 如果 Workspace 位于仓库子目录，其 Worktree 会保留相同的相对目录。例如，位于
@@ -398,6 +402,7 @@ Ahead/Behind 使用中性的提交计数（`↑ N` / `↓ N`），代码增删�
 managed Worktree 和 Local/Main history 首次加载最近 50 个 commit，滚动到底部继续追加后续 50 个，
 保留当前选择和 Diff；也可以用键盘操作加载更多按钮。对比视图使用 ahead 数量展示完整已提交总数，
 与已加载页数无关。HEAD 或基线在分页间移动时，需要刷新后继续，已有行保持可见。
+发生该冲突后，加载后续提交按钮改为**刷新**。提交文件和 Diff 读取也要求 HEAD 在授权及读取期间保持一致。
 多选最多支持 200 个所选 commit。超过 Git adapter 输出上限的变更文件列表
 也会显式标记为 truncated，而不是报泛化错误。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更

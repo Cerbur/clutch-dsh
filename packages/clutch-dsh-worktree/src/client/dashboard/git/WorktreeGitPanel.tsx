@@ -170,6 +170,8 @@ export function WorktreeGitPanel({
         : commitLabel(commit, t);
   const hasTarget = state.view === 'summary' || commit !== undefined;
   const lineTotals = state.files.status === 'ready' && hasTarget ? sumLineTotals(files) : undefined;
+  const refreshRequired = state.loadMoreError !== undefined &&
+    toWorktreeViewError(state.loadMoreError).code === 'WORKTREE_STATE_CONFLICT';
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
@@ -224,31 +226,31 @@ export function WorktreeGitPanel({
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
           <div className={styles.gitBaselineSelector}>
-              <span>{t('dashboard.git.baselineSelector')}</span>
-              <GitBranchSelector
-                t={t}
-                size="compact"
-                label={t('dashboard.git.baselineSelector')}
-                placeholder={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
-                emptyLabel={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
-                branches={branchOptions}
-                value={state.baselineBranch ?? ''}
-                loading={state.branches.status === 'loading'
-                  || (state.branches.status === 'ready' && state.branches.refreshing === true)}
-                onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
-                  try {
-                    const branches = await manager.fetchRemoteBranches!({ workspaceId });
-                    state.acceptBranches(branches);
-                    return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
-                  } finally {
-                    await state.refresh();
-                  }
-                }}
-                onChange={(value) => state.selectBaselineBranch(value || undefined)}
-                onLoad={manager?.listBranches === undefined ? undefined
-                  : async () => (await state.readFreshBranches())
-                    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
-              />
+            <span>{t('dashboard.git.baselineSelector')}</span>
+            <GitBranchSelector
+              t={t}
+              size="compact"
+              label={t('dashboard.git.baselineSelector')}
+              placeholder={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
+              emptyLabel={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
+              branches={branchOptions}
+              value={state.baselineBranch ?? ''}
+              loading={state.branches.status === 'loading'
+                || (state.branches.status === 'ready' && state.branches.refreshing === true)}
+              onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
+                try {
+                  const branches = await manager.fetchRemoteBranches!({ workspaceId });
+                  state.acceptBranches(branches);
+                  return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
+                } finally {
+                  await state.refresh();
+                }
+              }}
+              onChange={(value) => state.selectBaselineBranch(value || undefined)}
+              onLoad={manager?.listBranches === undefined ? undefined
+                : async () => (await state.readFreshBranches())
+                  .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
+            />
           </div>
           {baselineCommit !== undefined && (
             <dl className={styles.gitBaselineFacts}>
@@ -398,7 +400,9 @@ export function WorktreeGitPanel({
               hasMore={historyValue.nextOffset !== undefined}
               loadingMore={state.loadingMore}
               loadMoreError={state.loadMoreError !== undefined}
-              onLoadMore={() => void state.loadMore()}
+              onLoadMore={() => void (refreshRequired
+                ? state.refresh() : state.loadMore())}
+              refreshRequired={refreshRequired}
               t={t}
             />
           </section>

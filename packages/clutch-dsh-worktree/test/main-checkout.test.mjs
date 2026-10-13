@@ -33,7 +33,8 @@ test('real nested checkout projects branch, exact tags and detached commits with
   await mkdir(working, { recursive: true });
   await mkdir(dshHome);
   const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
-  const manager = createWorktreeManager({ dshHome, sidecar, dsh: {
+  const adapter = new LocalGitAdapter();
+  const manager = createWorktreeManager({ dshHome, sidecar, git: adapter, dsh: {
     async getWorkspace(id) { return id === 'ws' ? { workspaceId: id, projectId: 'p', rootPath: working } : undefined; },
     async getSession() { return undefined; }, async listSessions() { return []; },
   } });
@@ -73,6 +74,25 @@ test('real nested checkout projects branch, exact tags and detached commits with
     assert.equal(observed.currentHead.kind, 'tag');
     assert.equal(observed.currentBranch, null);
     assert.equal(observed.health, 'branch-drift');
+    const unrelated = path.join(temp, 'unmanaged-detached');
+    await git(repo, ['worktree', 'add', '--detach', unrelated, commit]);
+    const resolveHead = adapter.resolveCheckoutHead.bind(adapter);
+    const probes = [];
+    adapter.resolveCheckoutHead = async (_root, row) => {
+      probes.push(row.absolutePath);
+      throw new Error('display resolution unavailable');
+    };
+    const degradedCheckout = await manager.getWorkspaceCheckout({ workspaceId: 'ws' });
+    assert.equal(Object.hasOwn(degradedCheckout, 'currentHead'), false);
+    assert.deepEqual(probes, [await realpath(repo)]);
+    probes.length = 0;
+    const degradedRows = await manager.listWorktrees({ workspaceId: 'ws' });
+    assert.deepEqual(probes, [await realpath(created.gitRootPath)]);
+    assert.equal(degradedRows.length, 1);
+    assert.equal(degradedRows[0].health, 'branch-drift');
+    assert.equal(degradedRows[0].currentBranch, null);
+    assert.equal(Object.hasOwn(degradedRows[0], 'currentHead'), false);
+    adapter.resolveCheckoutHead = resolveHead;
     await sidecar.upsertWorktree(observed);
     const raw = JSON.parse(await readFile(path.join(dshHome, 'clutch-dsh-worktree/workspaces/ws.json'), 'utf8'));
     assert.equal(raw.schemaVersion, 7);
@@ -83,6 +103,12 @@ test('real nested checkout projects branch, exact tags and detached commits with
     await git(repo, ['add', '.']);
     await git(repo, ['commit', '-m', 'second']);
     const detached = (await git(repo, ['rev-parse', 'HEAD'])).stdout.trim();
+    const beforeConflict = await sidecar.read('ws');
+    await assert.rejects(manager.createWorktree({
+      workspaceId: 'ws', branch: 'HEAD', fromHead: true, expectedHeadCommit: commit, newBranch: 'stale-head',
+    }), { code: 'WORKTREE_STATE_CONFLICT' });
+    assert.deepEqual(await sidecar.read('ws'), beforeConflict);
+    await assert.rejects(git(repo, ['show-ref', '--verify', 'refs/heads/stale-head']));
     await git(repo, ['checkout', '--detach', detached]);
     checkout = await manager.getWorkspaceCheckout({ workspaceId: 'ws' });
     assert.equal(checkout.currentHead.kind, 'commit');
@@ -91,13 +117,16 @@ test('real nested checkout projects branch, exact tags and detached commits with
     await git(repo, ['branch', '-d', 'main']);
     await git(repo, ['branch', '-d', 'from-tag']);
     assert.equal((await loadWorktreeView(manager, 'ws')).readiness.status, 'ready');
-    const fromCommit = await manager.createWorktree({ workspaceId: 'ws', branch: 'HEAD', fromHead: true, newBranch: 'from-commit' });
+    const fromCommit = await manager.createWorktree({ workspaceId: 'ws', branch: 'HEAD', fromHead: true,
+      expectedHeadCommit: detached, newBranch: 'from-commit' });
     assert.equal(fromCommit.baseCommit, detached);
     await assert.rejects(manager.createWorktree({ workspaceId: 'ws', branch: 'v1.0.0', newBranch: 'invalid-tag-selector' }),
       (error) => error.code === 'GIT_OPERATION_FAILED');
     await assert.rejects(manager.getWorkspaceCheckout({ workspaceId: 'unknown' }), (error) => error.code === 'WORKSPACE_NOT_FOUND');
-    const adapter = new LocalGitAdapter();
-    assert.equal((await adapter.listWorktrees(repo)).find((row) => row.absolutePath === checkout.gitRootPath).currentHead.kind, 'commit');
+    const rows = await adapter.listWorktrees(repo);
+    const row = rows.find((row) => row.absolutePath === checkout.gitRootPath);
+    assert.equal(row.currentHead, undefined);
+    assert.equal((await adapter.resolveCheckoutHead(repo, row)).kind, 'commit');
   } finally {
     await manager.close();
     await rm(temp, { recursive: true, force: true });
@@ -162,15 +191,31 @@ test('Main resolves the owning linked checkout through a nested Workspace path a
   }
 });
 
-test('checkout failures cannot be hidden by a successful branch read', async () => {
+test('checkout failures omit optional data and preserve successful branches', async () => {
   const manager = {
     async listWorktrees() { return []; },
     async listBranches() { return [{ name: 'main', isCurrent: true, checkedOut: true }]; },
     async listBindings() { return []; },
     async getWorkspaceCheckout() { throw { code: 'WORKSPACE_ROOT_MISSING', message: 'missing root' }; },
   };
-  assert.equal((await loadWorktreeView(manager, 'ws')).readiness.status, 'workspaceMissing');
-  const failure = { code: 'WORKSPACE_NOT_FOUND', message: 'unknown workspace' };
-  manager.getWorkspaceCheckout = async () => { throw failure; };
-  await assert.rejects(loadWorktreeView(manager, 'ws'), (error) => error === failure);
+  for (const failure of [
+    { code: 'WORKSPACE_ROOT_MISSING', message: 'missing root' },
+    { code: 'WORKSPACE_NOT_GIT_REPOSITORY', message: 'no repository' },
+    new Error('checkout unavailable'),
+  ]) {
+    for (const synchronous of [false, true]) {
+      manager.getWorkspaceCheckout = synchronous
+        ? () => { throw failure; } : async () => { throw failure; };
+      const view = await loadWorktreeView(manager, 'ws');
+      assert.equal(view.readiness.status, 'ready');
+      assert.deepEqual(view.branches, [{ name: 'main', isCurrent: true, checkedOut: true }]);
+      assert.equal(Object.hasOwn(view, 'checkout'), false);
+    }
+  }
+  manager.listBranches = async () => [];
+  assert.equal((await loadWorktreeView(manager, 'ws')).readiness.status, 'noLocalBranch');
+  manager.getWorkspaceCheckout = async () => ({ currentHead: { kind: 'commit', name: 'abcdef0', commit: 'a'.repeat(40) } });
+  assert.equal((await loadWorktreeView(manager, 'ws')).readiness.status, 'ready');
+  manager.listBranches = async () => { throw { code: 'WORKTREE_REQUIRES_INITIAL_COMMIT' }; };
+  assert.equal((await loadWorktreeView(manager, 'ws')).readiness.status, 'noInitialCommit');
 });

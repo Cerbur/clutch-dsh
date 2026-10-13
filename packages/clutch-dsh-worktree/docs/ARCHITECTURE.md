@@ -169,17 +169,24 @@ Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 
 Main 与 managed Worktree 共用 checkout projection：工作目录与 Git checkout 根目录独立，
 `currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
 不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
-detached 时对捕获的 commit 做 exact-tag 探测，无 tag 再读取短 hash。读取采用有界并发、
+通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+`getWorkspaceCheckout` 只解析 Main checkout，Manage 的列表只解析匹配到的受管 Worktree：
+detached 时对捕获的 commit 做 exact-tag 探测，无 tag 直接取 `commit.slice(0, 7)`；解析失败仅省略
+`currentHead`，不阻断列表或将其他目录标为 repair。读取采用
 结构化 argv 和既有 subprocess 超时/取消规则，缺失或可 prune 的 checkout 不获得虚构引用。
 `getWorkspaceCheckout` 在既有 `/api` transport 上提供物理 `gitRootPath`、物理 `workspacePath`
 与 `currentHead`，Client 的 Main 使用同一物理路径对，避免子目录和 `/var`/`/private/var`
 等别名重复拼接；DSH 原始 Workspace/Session cwd 从不改写。该 projection 复用 Workspace
 reader 的 generation、共享请求及最小刷新作用域，不建立第二数据源。
+Client 将 checkout 视为可降级的可选数据：任何读取失败只省略该字段，保留已成功读取的 branches；
+readiness 错误仅由 branch/Git state 读取决定。成功的空分支列表仅在 checkout 提供 currentHead 时 ready。
 
 Sidecar schema 仍为 v7，v1–v6 的迁移链保持不变。`currentHead` 和 `currentBranch` 均只在
 运行时返回，upsert 必须剥离它们，mutation token 继续只依据持久事实。managed Worktree
 detached 时仍显示 branch drift 并保留既有清理/分支接纳门禁，但展示具体 Tag 或 Commit。
-Main 新建支持显式 `fromHead`：Host 在已验证 Workspace 中捕获 HEAD full commit，再复用已有
+Main 新建支持显式 `fromHead`：Client 的本地化 HEAD 选项显示当前 branch/Tag/Commit 名称，
+并传入观察到的 `expectedHeadCommit`。Host 在已验证 Workspace 中解析 HEAD full commit，
+与该预期值比对；不一致以 `WORKTREE_STATE_CONFLICT` 拒绝创建，要求刷新。校验成功后复用已有
 固定 commit 的创建事务、获取事实和恢复 journal；不把 Tag 当成本地 branch，不放宽基线选择器。
 
 `WorktreeRecord.absolutePath` 是面向 Workspace 的工作目录，供 Session 创建、运行时 cwd、
@@ -445,13 +452,15 @@ Local/Main 基线默认无，展示从 Workspace root `HEAD` 可达的 committed
 该 checkout context 仅存在于请求内存，绝不写入 Sidecar、DSH Workspace 或 Session。所有对比视图使用 `ahead` 展示完整已提交总数。
 并在 tracked、staged、unstaged 或 untracked 文件存在时，在顶部额外投影一个临时的 `working-tree` entry；受管理 Worktree 也沿用同一规则。
 默认选中第一个可见目标；working-tree entry 的文件和 unified diff 都相对于当前 `HEAD`。
-该 entry 不写入 Sidecar 或 DSH，只在第一页出现且不计入 50 个 commit 的分页数量。Main 的 working-tree 文件与 Diff 读取使用 Workspace root；Sidecar 中的
+该 entry 不写入 Sidecar 或 DSH，只在第一页出现且不计入 50 个 commit 的分页数量。Main 的 working-tree 文件与 Diff 在解析出的 Git checkout 根目录读取，
+公开文件路径以 Workspace 工作目录为坐标（checkout 内其他文件使用 `../`）；与 managed Worktree 共用路径转换。realpath 失败返回
+`WORKTREE_NOT_FOUND` 的缺失/repair 语义，不能泄漏为未知 Remote 异常。Sidecar 中的
 `baseCommit` 仍保留给历史 API 兼容和恢复逻辑，但不是新的用户选择类型。
 
 Manage 在每次 committed 文件/差异读取前验证 commit 从当前 checkout `HEAD` 可达；
 对比时还排除从基线 head 可达的 commit，授权不依赖已加载页数。Provider 使用结构化的 `merge-base --is-ancestor`，
 对象不存在时拒绝；权限、超时和输出截断仍 fail closed。旧 adapter 缺少 membership capability 时保留 bounded history 授权。
-Main 的 working-tree 文件/差异读取重新授权 Workspace-root changed paths；managed Worktree 还校验当前 Git registration。
+Main 的 working-tree 文件/差异读取重新授权 Git-root changed paths，再转换为 Workspace-relative 路径；managed Worktree 还校验当前 Git registration。
 随后只允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git
 object、ref、文件或命令读取能力。正常 commit 使用 first-parent，root commit 使用 empty tree；
 diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
@@ -466,7 +475,10 @@ untracked、删除和重命名改动，而不是拼接两个 Diff。`commits` se
 请求顺序读取每个 commit 的 first-parent changed-file/diff projection。Manage 返回文件并集以及
 每个 commit 的独立 diff segment，绝不把任意多选静默解释为连续 range，因此未选择的中间 commit
 不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。受管理 Worktree 的 comparison aggregate 继续经过 baseline、HEAD、commit、path
-授权；Main committed aggregate 也基于当前 HEAD 可达性授权。aggregate 最多选择 200 个 commit，所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
+授权；Main committed aggregate 也基于当前 HEAD 可达性授权。每次授权复用 comparison/live 或 Main 请求中固定的 HEAD，
+不逐 commit 重新解析 HEAD。大 selection 使用一次有界 `rev-list <head> ^<base>` 构造成员集合，
+输出超限或失败时 fail closed。文件/Diff 返回前再次校验 HEAD，读取期间移动时返回 `WORKTREE_STATE_CONFLICT`。
+aggregate 最多选择 200 个 commit，所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
 Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
 当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 

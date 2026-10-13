@@ -209,14 +209,6 @@ html[data-platform='darwin']
   white-space: nowrap;
   cursor: pointer;
 }
-.dashboardTitleRow[role='button'] {
-  cursor: pointer;
-}
-.dashboardTitleRow[role='button']:focus-visible {
-  outline: 2px solid #497cd4;
-  outline-offset: 3px;
-  border-radius: 4px;
-}
 .dashboardHealth,
 .dashboardSoon {
   display: inline-flex;

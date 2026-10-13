@@ -289,7 +289,10 @@ export function useWorktreeRegistration({
               input: {
                 workspaceId: modalWorkspace.workspaceId,
                 branch: selectedBranch,
-                ...(selectedBranch === 'HEAD' ? { fromHead: true } : {}),
+                ...(selectedBranch === 'HEAD' ? {
+                  fromHead: true,
+                  expectedHeadCommit: modalView?.checkout?.currentHead?.commit,
+                } : {}),
                 newBranch: worktreeName,
               },
             })

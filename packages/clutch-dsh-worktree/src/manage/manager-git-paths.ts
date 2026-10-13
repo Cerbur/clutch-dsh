@@ -5,7 +5,17 @@ import { providerError } from '../provider/types.js';
 
 /** One coordinate boundary: Provider paths are checkout-relative, public paths are Workspace-relative. */
 export async function workspaceGitPaths(checkoutRoot: string, workspaceDirectory: string) {
-  const [checkout, workspace] = await Promise.all([realpath(checkoutRoot), realpath(workspaceDirectory)]);
+  const resolveDirectory = async (absolutePath: string): Promise<string> => {
+    try {
+      return await realpath(absolutePath);
+    } catch (error) {
+      throw providerError('WORKTREE_NOT_FOUND', 'Worktree directory is unavailable or needs repair', {
+        absolutePath, checkoutRoot, workspaceDirectory,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  const [checkout, workspace] = await Promise.all([resolveDirectory(checkoutRoot), resolveDirectory(workspaceDirectory)]);
   const insideCheckout = (absolute: string): boolean => {
     const relative = path.relative(checkout, absolute);
     return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);

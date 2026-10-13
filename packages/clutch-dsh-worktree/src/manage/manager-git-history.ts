@@ -141,7 +141,7 @@ async function resolveWorktree(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
   compareMain = true,
-): Promise<{ readonly main: true; readonly workspaceRoot: string; readonly repositoryRoot: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
+): Promise<{ readonly main: true; readonly workspaceRoot: string; readonly repositoryRoot: string; readonly headCommit?: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   if (isMainWorktreeId(input.worktreeId, input.workspaceId)) {
     // The imported Workspace can be nested, while committed Git paths are root-relative.
@@ -165,7 +165,10 @@ async function resolveWorktree(
         live: { absolutePath: repositoryRoot, headCommit },
       } };
     }
-    return { main: true, workspaceRoot: workspace.rootPath, repositoryRoot };
+    const headCommit = compareMain && context.git.resolveCommit
+      ? await context.git.resolveCommit(repositoryRoot, 'HEAD', { signal: context.signal })
+      : undefined;
+    return { main: true, workspaceRoot: workspace.rootPath, repositoryRoot, headCommit };
   }
 
   const snapshot = await context.sidecar.read(input.workspaceId);
@@ -220,7 +223,9 @@ async function resolveWorktree(
       workspaceRoot: workspace.rootPath,
       repositoryRoot,
       record,
-      live,
+      live: live.headCommit === undefined && context.git.resolveCommit
+        ? { ...live, headCommit: await context.git.resolveCommit(gitWorktreeRoot(record), 'HEAD', { signal: context.signal }) }
+        : live,
     },
   };
 }
@@ -537,15 +542,10 @@ async function authorizeCommits(
     }
     return candidate;
   });
-  if (context.git.containsCommit !== undefined) {
-    for (const commit of requested) {
-      if (!await context.git.containsCommit(gitWorktreeRoot(resolved.record), commit,
-        comparison.baseHeadCommit, { signal: context.signal })) {
-        throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside this Worktree history', {
-          worktreeId, commit,
-        });
-      }
-    }
+  const headCommit = resolved.live.headCommit;
+  if (headCommit !== undefined && (context.git.containsCommits || context.git.containsCommit)) {
+    await authorizeMembership(context, gitWorktreeRoot(resolved.record), worktreeId, requested,
+      headCommit, comparison.baseHeadCommit);
     return requested;
   }
   const listCommits = gitRead(context, 'listCommits', worktreeId);
@@ -562,6 +562,29 @@ async function authorizeCommits(
     }
   }
   return requested;
+}
+
+/** Share a fixed checkout identity across all membership checks in a request. */
+async function authorizeMembership(
+  context: WorktreeManagerContext,
+  root: string,
+  worktreeId: string,
+  commits: readonly string[],
+  headCommit: string,
+  baseCommit?: string,
+): Promise<void> {
+  const options = { signal: context.signal };
+  const allowed = context.git.containsCommits
+    ? await context.git.containsCommits(root, commits, headCommit, baseCommit, options)
+    : await (async () => {
+      for (const commit of commits) {
+        if (!await context.git.containsCommit!(root, commit, headCommit, baseCommit, options)) return false;
+      }
+      return true;
+    })();
+  if (!allowed) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commits are outside this checkout history', { worktreeId });
+  }
 }
 
 async function authorizeCommit(
@@ -616,17 +639,16 @@ async function authorizeMainCommit(
   workspaceRoot: string,
   worktreeId: string,
   commitInput: string,
+  headCommit?: string,
 ): Promise<string> {
   if (typeof commitInput !== 'string' || !COMMIT_PATTERN.test(commitInput)) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is not a valid commit SHA', {
       worktreeId,
     });
   }
-  if (context.git.containsCommit !== undefined) {
-    if (await context.git.containsCommit(workspaceRoot, commitInput, undefined, { signal: context.signal })) return commitInput;
-    throw providerError('WORKTREE_STATE_CONFLICT', 'The requested commit is outside the Main history', {
-      worktreeId, commit: commitInput,
-    });
+  if (headCommit !== undefined && (context.git.containsCommits || context.git.containsCommit)) {
+    await authorizeMembership(context, workspaceRoot, worktreeId, [commitInput], headCommit);
+    return commitInput;
   }
   const history = await listMainCommits(context, workspaceRoot, worktreeId);
   if (!history.commits.some((commit) => commit.sha === commitInput)) {
@@ -650,6 +672,7 @@ async function authorizeMainAggregate(
   workspaceRoot: string,
   worktreeId: string,
   selection: WorktreeGitDiffSelection,
+  headCommit?: string,
 ): Promise<AuthorizedMainAggregate> {
   if (selection.kind !== 'commits') {
     throw providerError('WORKTREE_STATE_CONFLICT', 'Main Git supports committed selections only', {
@@ -674,8 +697,8 @@ async function authorizeMainAggregate(
       worktreeId,
     });
   }
-  if (context.git.containsCommit !== undefined) {
-    for (const commit of requested) await authorizeMainCommit(context, workspaceRoot, worktreeId, commit);
+  if (headCommit !== undefined && (context.git.containsCommits || context.git.containsCommit)) {
+    await authorizeMembership(context, workspaceRoot, worktreeId, requested, headCommit);
     return { selection: { kind: 'commits', commits: requested }, commits: requested };
   }
   const history = await listMainCommits(context, workspaceRoot, worktreeId);
@@ -1036,13 +1059,14 @@ async function aggregateMainFileDiff(
   worktreeId: string,
   selection: Extract<WorktreeGitDiffSelection, { readonly kind: 'commits' }>,
   requestedPath: string,
+  headCommit?: string,
 ): Promise<WorktreeGitFileDiff> {
   if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
     throw providerError('WORKTREE_STATE_CONFLICT', 'A changed file path is required', {
       worktreeId,
     });
   }
-  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
+  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection, headCommit);
   return selectedAggregateFileDiff(
     context,
     repositoryRoot,
@@ -1059,8 +1083,9 @@ async function listMainAggregateFiles(
   repositoryRoot: string,
   worktreeId: string,
   selection: WorktreeGitDiffSelection,
+  headCommit?: string,
 ): Promise<WorktreeGitCommitFiles> {
-  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection);
+  const authorized = await authorizeMainAggregate(context, workspaceRoot, worktreeId, selection, headCommit);
   const groups = await selectedCommitFiles(context, repositoryRoot, worktreeId, authorized.commits);
   return {
     commit: authorized.commits[0]!,
@@ -1174,6 +1199,7 @@ async function listCheckoutCommitFiles(
         resolved.repositoryRoot,
         input.worktreeId,
         requested.selection,
+        resolved.headCommit,
       );
     }
     if (requested.commit === WORKTREE_GIT_WORKING_TREE) {
@@ -1190,6 +1216,7 @@ async function listCheckoutCommitFiles(
       resolved.repositoryRoot,
       input.worktreeId,
       requested.commit,
+      resolved.headCommit,
     );
     const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
     const read = await listCommitFiles(resolved.repositoryRoot, commit, { signal: context.signal });
@@ -1250,6 +1277,7 @@ async function getCheckoutCommitFileDiff(
         input.worktreeId,
         requested.selection,
         input.path,
+        resolved.headCommit,
       );
     }
     if (typeof input.path !== 'string' || input.path.length === 0) {
@@ -1282,6 +1310,7 @@ async function getCheckoutCommitFileDiff(
       resolved.repositoryRoot,
       input.worktreeId,
       requested.commit,
+      resolved.headCommit,
     );
     const listCommitFiles = gitRead(context, 'listCommitFiles', input.worktreeId);
     const filesRead = await listCommitFiles(resolved.repositoryRoot, commit, { signal: context.signal });
@@ -1380,6 +1409,21 @@ async function pathsFor(resolved: Awaited<ReturnType<typeof resolveWorktree>>) {
   return workspaceGitPaths(gitWorktreeRoot(projected), projected.absolutePath);
 }
 
+/** Reject a projection if checkout HEAD moved during authorization or file reads. */
+async function assertCheckoutHead(
+  context: WorktreeManagerContext,
+  resolved: Awaited<ReturnType<typeof resolveWorktree>>,
+  worktreeId: string,
+): Promise<void> {
+  const headCommit = resolved.main ? resolved.headCommit : resolved.value.live.headCommit;
+  if (headCommit === undefined || context.git.resolveCommit === undefined) return;
+  const root = resolved.main ? resolved.repositoryRoot : gitWorktreeRoot(resolved.value.record);
+  const current = await context.git.resolveCommit(root, 'HEAD', { signal: context.signal });
+  if (current !== headCommit) {
+    throw providerError('WORKTREE_STATE_CONFLICT', 'Checkout HEAD changed; refresh Git data', { worktreeId });
+  }
+}
+
 /** Public changed-file identities always start at the Workspace directory, including ../ siblings. */
 export async function listWorktreeCommitFiles(
   context: WorktreeManagerContext,
@@ -1387,7 +1431,9 @@ export async function listWorktreeCommitFiles(
 ): Promise<WorktreeGitCommitFiles> {
   const resolved = await resolveWorktree(context, input);
   const paths = await pathsFor(resolved);
-  return paths.projectFiles(await listCheckoutCommitFiles(context, input, resolved));
+  const read = await listCheckoutCommitFiles(context, input, resolved);
+  await assertCheckoutHead(context, resolved, input.worktreeId);
+  return paths.projectFiles(read);
 }
 
 /** Translate exactly once, then keep the existing changed-file authorization in checkout coordinates. */
@@ -1398,5 +1444,6 @@ export async function getWorktreeCommitFileDiff(
   const resolved = await resolveWorktree(context, input);
   const paths = await pathsFor(resolved);
   const diff = await getCheckoutCommitFileDiff(context, { ...input, path: paths.toCheckout(input.path) }, resolved);
+  await assertCheckoutHead(context, resolved, input.worktreeId);
   return { ...diff, path: input.path };
 }

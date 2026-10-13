@@ -168,6 +168,9 @@ when that local branch does not exist. Symbolic remote HEAD entries are excluded
 
 Git must have a usable repository and initial commit. Choose a local branch, or choose **HEAD** to
 create a new branch from Main's current checkout, including an exact Tag or detached Commit.
+The localized HEAD option includes the current reference name, for example **HEAD (v1.0.0)**.
+Creation uses the commit shown when selected. If HEAD changes before submission, creation is rejected
+with `WORKTREE_STATE_CONFLICT`; refresh the dialog and select the source again.
 Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
 If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
@@ -460,6 +463,8 @@ Managed Worktree and Local/Main history load the newest 50 commits first. Scroll
 the next 50 without replacing the current selection or diff; the load-more button also supports keyboard use.
 Comparison views show the full committed total from ahead counts, independent of loaded pages.
 If HEAD or the baseline moves between pages, refresh before continuing; existing rows remain visible.
+The load-more button becomes **Refresh** after this conflict. Commit file and Diff reads also require
+a stable HEAD throughout authorization and reading.
 Multi-selection supports up to 200 selected commits. A changed-file list larger
 than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
 Commit details use

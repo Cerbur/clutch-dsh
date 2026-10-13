@@ -417,6 +417,8 @@ export interface WorktreeManager {
     newBranch?: string;
     /** Create a new branch from the Workspace checkout's captured HEAD. */
     fromHead?: boolean;
+    /** Observed HEAD for optimistic concurrency when creating from HEAD. */
+    expectedHeadCommit?: string;
   }): Promise<WorktreeRecord>;
 
   importWorktree(input: {
@@ -577,6 +579,7 @@ export interface WorktreeRemoteManager {
     branch: string;
     newBranch?: string;
     fromHead?: boolean;
+    expectedHeadCommit?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
 
   importWorktree(input: {

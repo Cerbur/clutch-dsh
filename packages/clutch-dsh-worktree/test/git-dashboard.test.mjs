@@ -18,8 +18,75 @@ import {
 
 const execFile = promisify(execFileCallback);
 
+test('commit and aggregate file reads fail closed when HEAD moves after authorization or during reads', async () => {
+  const adapter = new LocalGitAdapter();
+  const fixture = await createFixture({ git: adapter });
+  try {
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/head-race',
+    });
+    const base = record.baseCommit;
+    const commits = [];
+    for (const name of ['first', 'second']) {
+      await writeFile(path.join(record.absolutePath, 'race.txt'), name + '\n');
+      await runGit(record.absolutePath, ['add', 'race.txt']);
+      await runGit(record.absolutePath, ['commit', '-m', name]);
+      commits.push((await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim());
+    }
+    const head = commits[1];
+    await runGit(fixture.repositoryRoot, ['merge', '--ff-only', record.branch]);
+    const originalContains = adapter.containsCommits.bind(adapter);
+    const originalFiles = adapter.listCommitFiles.bind(adapter);
+    for (const worktreeId of ['main:ws_dashboard', record.worktreeId]) {
+      const root = worktreeId === record.worktreeId ? record.absolutePath : fixture.repositoryRoot;
+      for (const baseBranch of [undefined, 'main']) {
+        if (worktreeId === record.worktreeId && baseBranch === 'main') continue;
+        // Keep a stable comparison branch after both checkouts have advanced.
+        await runGit(root, ['update-ref', 'refs/heads/comparison-base', base]);
+        const identity = { workspaceId: 'ws_dashboard', worktreeId,
+          ...(baseBranch === undefined ? {} : { baseBranch: 'comparison-base' }) };
+        for (const aggregate of [false, true]) {
+          for (const diff of [false, true]) {
+            for (const phase of ['authorization', 'files']) {
+              await runGit(root, ['update-ref', 'HEAD', head]);
+              let moved = false;
+              const move = async () => {
+                if (moved) return;
+                moved = true;
+                await runGit(root, ['update-ref', 'HEAD', base]);
+              };
+              adapter.containsCommits = async (cwd, candidates, fixedHead, ...rest) => {
+                assert.equal(fixedHead, head);
+                const allowed = await originalContains(cwd, candidates, fixedHead, ...rest);
+                if (phase === 'authorization') await move();
+                return allowed;
+              };
+              adapter.listCommitFiles = async (...args) => {
+                const read = await originalFiles(...args);
+                if (phase === 'files') await move();
+                return read;
+              };
+              const request = { ...identity, ...(aggregate
+                ? { selection: { kind: 'commits', commits } } : { commit: head }) };
+              await assert.rejects(diff
+                ? fixture.manager.getWorktreeCommitFileDiff({ ...request, path: 'race.txt' })
+                : fixture.manager.listWorktreeCommitFiles(request), { code: 'WORKTREE_STATE_CONFLICT' });
+              assert.equal(moved, true);
+            }
+          }
+        }
+        await runGit(root, ['update-ref', 'HEAD', head]);
+      }
+    }
+  } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('Local and Worktree comparisons page past 200 commits with full totals and authorized diffs', async () => {
-  const fixture = await createFixture();
+  const adapter = new LocalGitAdapter();
+  const fixture = await createFixture({ git: adapter });
   try {
     const root = fixture.repositoryRoot;
     const base = (await runGit(root, ['rev-parse', 'HEAD'])).stdout.trim();
@@ -80,6 +147,29 @@ test('Local and Worktree comparisons page past 200 commits with full totals and 
     assert.equal((await fixture.manager.listWorktreeCommitFiles({
       ...local, commit: oldest,
     })).files[0].path, 'paged.txt');
+    const originalRun = adapter.run.bind(adapter);
+    const originalFiles = adapter.listCommitFiles.bind(adapter);
+    const commands = [];
+    adapter.run = async (args, ...rest) => {
+      commands.push(args);
+      return originalRun(args, ...rest);
+    };
+    // Isolate authorization cost from the separate file projections for each commit.
+    adapter.listCommitFiles = async () => ({ files: [], truncated: false });
+    for (const identity of [ids, local, comparison]) {
+      // Main now contains the feature commits, so use the stable acquisition base for comparison.
+      commands.length = 0;
+      await fixture.manager.listWorktreeCommitFiles({
+        ...identity, ...(identity === ids ? { baseBranch: 'comparison/base' } : {}),
+        selection: { kind: 'commits', commits: commits.slice(0, 200).map((commit) => commit.sha) },
+      });
+      assert.equal(commands.filter((args) => args[0] === 'rev-list').length, 1);
+      assert.equal(commands.filter((args) => args[0] === 'merge-base' && args.includes('--is-ancestor')).length, 0);
+      assert.equal(commands.filter((args) => args[0] === 'rev-parse' && args.includes('HEAD^{commit}')).length,
+        identity === ids ? 1 : 2);
+    }
+    adapter.run = originalRun;
+    adapter.listCommitFiles = originalFiles;
     await assert.rejects(fixture.manager.listWorktreeCommits({
       ...comparison, offset: 50, expectedHeadCommit: base, expectedBaselineCommit: base,
     }), { code: 'WORKTREE_STATE_CONFLICT' });

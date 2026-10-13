@@ -681,7 +681,7 @@ export function WorktreeDashboard({
                   {displayBranch}
                 </button>
               </h1>
-              {record.currentHead?.kind !== undefined && record.currentHead.kind !== 'branch' && <span className={styles.dashboardSoon}>{record.currentHead.kind === 'tag' ? 'Tag' : 'Commit'}</span>}
+              {record.currentHead?.kind !== undefined && record.currentHead.kind !== 'branch' && <span className={styles.dashboardSoon}>{t(record.currentHead.kind === 'tag' ? 'dashboard.refKind.tag' : 'dashboard.refKind.commit')}</span>}
               <span className={styles.dashboardHealth} data-health={isMain ? 'local' : record.health ?? 'unknown'}>
                 <span aria-hidden="true">●</span>
                 {t(healthKey)}

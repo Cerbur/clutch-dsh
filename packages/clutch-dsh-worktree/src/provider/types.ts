@@ -228,6 +228,12 @@ export interface GitWorktreeAdapter {
   /** Explicit user-triggered network read; writes only fetched Git metadata. */
   fetchRemoteBranches?(workspaceRoot: string, options?: GitCommandOptions): Promise<void>;
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
+  /** Optional display projection for one captured checkout; failure omits its HEAD label. */
+  resolveCheckoutHead?(
+    workspaceRoot: string,
+    worktree: GitWorktreeInfo,
+    options?: GitCommandOptions,
+  ): Promise<import('../contract/index.js').GitCheckoutHead | undefined>;
   /** Resolve one commit object without exposing a generic object reader. */
   resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;
   /** Resolve a common ancestor for the selected branch comparison boundary. */
@@ -254,6 +260,15 @@ export interface GitWorktreeAdapter {
   containsCommit?(
     worktreeRoot: string,
     commit: string,
+    headCommit: string,
+    baseCommit?: string,
+    options?: GitCommandOptions,
+  ): Promise<boolean>;
+  /** Authorize a selection against one fixed HEAD with bounded Git output. */
+  containsCommits?(
+    worktreeRoot: string,
+    commits: readonly string[],
+    headCommit: string,
     baseCommit?: string,
     options?: GitCommandOptions,
   ): Promise<boolean>;

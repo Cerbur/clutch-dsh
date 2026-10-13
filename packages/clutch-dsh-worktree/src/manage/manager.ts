@@ -274,13 +274,20 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       const workspacePath = await realpath(workspace.rootPath);
       for (const worktree of worktrees) {
         if (await samePhysicalPath(worktree.absolutePath, gitRootPath)) {
+          let currentHead = worktree.currentHead;
+          try {
+            currentHead = this.context.git.resolveCheckoutHead
+              ? await this.context.git.resolveCheckoutHead(gitRootPath, worktree, options)
+              : currentHead ?? (worktree.headCommit && worktree.branch && !worktree.detached
+                ? { kind: 'branch', name: worktree.branch, commit: worktree.headCommit }
+                : undefined);
+          } catch {
+            currentHead = undefined;
+          }
           return {
             gitRootPath,
             workspacePath,
-            currentHead: worktree.currentHead ??
-              (worktree.headCommit && worktree.branch && !worktree.detached
-                ? { kind: 'branch', name: worktree.branch, commit: worktree.headCommit }
-                : undefined),
+            ...(currentHead === undefined ? {} : { currentHead }),
           };
         }
       }
@@ -293,6 +300,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly branch: string;
     readonly newBranch?: string;
     readonly fromHead?: boolean;
+    readonly expectedHeadCommit?: string;
   }): Promise<WorktreeRecord> {
     return this.afterRecovery(async () => {
       if (!input.fromHead) return createWorktree(this.context, input);
@@ -302,6 +310,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       const workspace = await requireWorkspace(this.context, input.workspaceId);
       await this.context.git.validateRepository(workspace.rootPath, { signal: this.context.signal });
       const commit = await this.context.git.resolveCommit(workspace.rootPath, 'HEAD', { signal: this.context.signal });
+      if (input.expectedHeadCommit !== undefined && input.expectedHeadCommit !== commit) {
+        throw providerError('WORKTREE_STATE_CONFLICT', 'Workspace HEAD changed; refresh before creating a Worktree', {
+          workspaceId: input.workspaceId, expectedHeadCommit: input.expectedHeadCommit, headCommit: commit,
+        });
+      }
       return createWorktree(this.context, {
         workspaceId: input.workspaceId,
         branch: `${commit}^{commit}`,

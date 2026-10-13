@@ -292,6 +292,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly branch: string;
     readonly newBranch?: string;
     readonly fromHead?: boolean;
+    readonly expectedHeadCommit?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>> {
     return this.remote.createWorktree(input);
   }

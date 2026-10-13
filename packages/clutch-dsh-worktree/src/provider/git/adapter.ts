@@ -836,10 +836,12 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
   async containsCommit(
     worktreeRoot: string,
     commit: string,
+    headCommit: string,
     baseCommit?: string,
     options: GitCommandOptions = {},
   ): Promise<boolean> {
     assertCommitArgument(commit, 'authorize commit', worktreeRoot);
+    assertCommitArgument(headCommit, 'authorize commit', worktreeRoot);
     if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'authorize commit', worktreeRoot);
     try {
       await this.run(['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], worktreeRoot, options);
@@ -858,8 +860,39 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         throw operationError('authorize commit', worktreeRoot, undefined, commit, error);
       }
     };
-    const head = await this.resolveCommit(worktreeRoot, 'HEAD', options);
-    return await isAncestor(head) && (baseCommit === undefined || !await isAncestor(baseCommit));
+    return await isAncestor(headCommit) && (baseCommit === undefined || !await isAncestor(baseCommit));
+  }
+
+  async containsCommits(
+    worktreeRoot: string,
+    commits: readonly string[],
+    headCommit: string,
+    baseCommit?: string,
+    options: GitCommandOptions = {},
+  ): Promise<boolean> {
+    for (const commit of commits) assertCommitArgument(commit, 'authorize commits', worktreeRoot);
+    assertCommitArgument(headCommit, 'authorize commits', worktreeRoot);
+    if (baseCommit !== undefined) assertCommitArgument(baseCommit, 'authorize commits', worktreeRoot);
+    if (commits.length < 8) {
+      for (const commit of commits) {
+        if (!await this.containsCommit(worktreeRoot, commit, headCommit, baseCommit, options)) return false;
+      }
+      return true;
+    }
+    try {
+      // Large selections share one traversal. The runner's output bound fails
+      // closed on oversized histories; a partial membership set is never trusted.
+      const result = await this.run(
+        ['rev-list', headCommit, ...(baseCommit === undefined ? [] : [`^${baseCommit}`]), '--'],
+        worktreeRoot, options,
+      );
+      const members = new Set(result.stdout.trim().split(/\s+/u).filter(Boolean));
+      for (const member of members) assertCommitArgument(member, 'authorize commits', worktreeRoot);
+      return commits.every((commit) => members.has(commit));
+    } catch (error) {
+      if (error instanceof WorktreeProviderError) throw error;
+      throw operationError('authorize commits', worktreeRoot, undefined, headCommit, error);
+    }
   }
 
   private async isTrackedWorkingTreeFile(
@@ -1611,26 +1644,33 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         workspaceRoot,
         options,
       );
-      const worktrees = parseWorktrees(result.stdout);
-      return await mapInChunks(worktrees, STAT_READ_CONCURRENCY, async (worktree) => {
-        const commit = worktree.headCommit;
-        if (worktree.prunable || worktree.bare || !commit || !COMMIT_PATTERN.test(commit) || /^0+$/u.test(commit)) return worktree;
-        if (worktree.branch && !worktree.detached) {
-          return { ...worktree, currentHead: { kind: 'branch' as const, name: worktree.branch, commit } };
-        }
-        // Probe the captured object through the known repository, rather than
-        // running processes in missing or untrusted linked checkout paths.
-        let tag: string | undefined;
-        try {
-          tag = (await this.run(['describe', '--tags', '--exact-match', commit], workspaceRoot, options)).stdout.trim() || undefined;
-        } catch (error) {
-          if (!(error instanceof GitCommandError) || error.exitCode !== 128 || error.aborted || error.timedOut || error.outputTruncated || error.processTreeDidNotExit) throw error;
-        }
-        const name = tag ?? (await this.run(['rev-parse', '--short', commit], workspaceRoot, options)).stdout.trim();
-        return { ...worktree, currentHead: { kind: tag ? 'tag' as const : 'commit' as const, name, commit } };
-      });
+      return parseWorktrees(result.stdout);
     } catch (error) {
       throw operationError('list worktrees', workspaceRoot, undefined, undefined, error);
+    }
+  }
+
+  async resolveCheckoutHead(
+    workspaceRoot: string,
+    worktree: GitWorktreeInfo,
+    options: GitCommandOptions = {},
+  ): Promise<import('../../contract/index.js').GitCheckoutHead | undefined> {
+    const commit = worktree.headCommit;
+    if (worktree.prunable || worktree.bare || !commit || !COMMIT_PATTERN.test(commit) || /^0+$/u.test(commit)) return undefined;
+    if (worktree.branch && !worktree.detached) return { kind: 'branch', name: worktree.branch, commit };
+    try {
+      // Only the captured object in the known repository is inspected.
+      const tag = (await this.run(['describe', '--tags', '--exact-match', commit], workspaceRoot, options)).stdout.trim();
+      return tag ? { kind: 'tag', name: tag, commit } : { kind: 'commit', name: commit.slice(0, 7), commit };
+    } catch (error) {
+      // No exact tag is an ordinary detached commit. All other display failures
+      // omit the label without breaking registration or readiness reads.
+      if (error instanceof GitCommandError && error.exitCode === 128 &&
+        !error.aborted && !error.timedOut && !error.outputTruncated && !error.processTreeDidNotExit &&
+        /no tag|cannot describe|no names found/iu.test(error.stderr)) {
+        return { kind: 'commit', name: commit.slice(0, 7), commit };
+      }
+      return undefined;
     }
   }
 

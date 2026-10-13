@@ -281,20 +281,15 @@ export async function loadWorktreeView(
       typeof manager.getWorktreeInstructions === 'function'
         ? manager.getWorktreeInstructions({ workspaceId, worktreeId: `main:${workspaceId}` })
         : Promise.resolve(''),
-      manager.getWorkspaceCheckout?.({ workspaceId }) ?? Promise.resolve(undefined),
+      Promise.resolve().then(() => manager.getWorkspaceCheckout?.({ workspaceId })),
     ]);
 
   if (worktreesResult.status === 'rejected') throw worktreesResult.reason;
   if (bindingsResult.status === 'rejected') throw bindingsResult.reason;
   if (mainInstructionsResult.status === 'rejected') throw mainInstructionsResult.reason;
-  let readiness: WorktreeGitReadiness | undefined;
-  for (const result of [branchesResult, checkoutResult]) {
-    if (result.status !== 'rejected') continue;
-    const failureReadiness = readinessFromBranchError(result.reason);
-    if (failureReadiness === undefined) throw result.reason;
-    readiness = failureReadiness;
-  }
-  if (readiness !== undefined) {
+  if (branchesResult.status === 'rejected') {
+    const readiness = readinessFromBranchError(branchesResult.reason);
+    if (readiness === undefined) throw branchesResult.reason;
     return {
       worktrees: worktreesResult.value,
       branches: [],
@@ -317,7 +312,7 @@ export async function loadWorktreeView(
     ...(currentBranch === undefined ? {} : { currentBranch }),
     bindings: bindingsResult.value,
     mainInstructions: mainInstructionsResult.value,
-    readiness: (!Array.isArray(state) || branches.length > 0) || checkout?.currentHead !== undefined
+    readiness: branches.length > 0 || checkout?.currentHead !== undefined
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },
   };

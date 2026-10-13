@@ -1584,6 +1584,14 @@ test('Main Tag projection renders a local status and omits derived acquisition a
   assert.equal(findAll(node, (item) => item.props?.['data-health'] === 'unknown').length, 0);
   assert.equal(findAll(node, (item) => item.props?.['data-health'] === 'local').length, 1);
   assert.equal(findAll(node, (item) => item.type === 'dt' && [en['dashboard.created'], en['dashboard.base']].includes(item.props.children)).length, 0);
+  for (const locale of [en, zh]) {
+    for (const kind of ['tag', 'commit']) {
+      const localized = harness.render({ t: (key) => locale[key],
+        record: { ...main, currentHead: { ...main.currentHead, kind } } });
+      assert.ok(findAll(localized, (item) => item.type === 'span' &&
+        item.props.children === locale['dashboard.refKind.' + kind]).length > 0);
+    }
+  }
   harness.dispose();
 });
 

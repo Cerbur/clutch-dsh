@@ -74,7 +74,8 @@ export function createWorktreeRemoteProjection(
     listImportCandidates: (input) => project(() => manager.listImportCandidates(input)),
     listBranches: (input) => project(() => manager.listBranches(input)),
     fetchRemoteBranches: (input) => project(() => manager.fetchRemoteBranches(input)),
-    createWorktree: (input) => project(() => manager.createWorktree(input)),
+    createWorktree: (input: Parameters<WorktreeManager['createWorktree']>[0]) =>
+      project(() => manager.createWorktree(input)),
     importWorktree: (input) => project(() => manager.importWorktree(input)),
     removeWorktree: (input) =>
       project(async () => {

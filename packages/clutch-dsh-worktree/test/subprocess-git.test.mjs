@@ -11,6 +11,69 @@ import { LocalGitAdapter, WORKTREE_GIT_WORKING_TREE } from '../lib/index.js';
 
 const gitNullDevice = process.platform === 'win32' ? 'NUL' : os.devNull;
 
+test('worktree enumeration never probes detached labels and optional resolution degrades', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'worktree-label-'));
+  const commit = 'a'.repeat(40);
+  try {
+    for (const failure of [
+      { stderr: 'unexpected describe failure', outcome: { exitCode: 1, signal: null } },
+      { stderr: 'invalid object', outcome: { exitCode: 128, signal: null } },
+      { stdout: 'incomplete', lossy: true },
+    ]) {
+      const runtime = createFakeRuntime({ responses: [
+        { stdout: `worktree ${root}\nHEAD ${commit}\ndetached\n\nworktree /other\nHEAD ${commit}\ndetached\n\n` },
+        failure,
+      ] });
+      const adapter = new LocalGitAdapter({ subprocess: runtime });
+      const rows = await adapter.listWorktrees(root);
+      assert.equal(rows.length, 2);
+      assert.equal(runtime.spawnCalls.length, 1);
+      assert.equal(rows[0].currentHead, undefined);
+      assert.equal(await adapter.resolveCheckoutHead(root, rows[0]), undefined);
+      assert.equal(runtime.spawnCalls.length, 2);
+      assert.ok(runtime.spawnCalls.every((call) => !call.argv.includes('rev-parse')));
+    }
+    const runtime = createFakeRuntime({ stderr: 'fatal: no tag exactly matches commit',
+      outcome: { exitCode: 128, signal: null } });
+    const adapter = new LocalGitAdapter({ subprocess: runtime });
+    assert.deepEqual(await adapter.resolveCheckoutHead(root, { absolutePath: root, detached: true, headCommit: commit }),
+      { kind: 'commit', name: commit.slice(0, 7), commit });
+    // A rev-parse failure cannot affect the label: short hashes are derived locally.
+    assert.equal(runtime.spawnCalls.length, 1);
+    assert.equal(runtime.spawnCalls[0].argv[1], 'describe');
+    assert.equal(await adapter.resolveCheckoutHead(root, { absolutePath: root, detached: true, headCommit: 'bad' }), undefined);
+    assert.equal(runtime.spawnCalls.length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('200 commit membership checks share one bounded traversal of a fixed HEAD', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'commit-membership-'));
+  const commits = Array.from({ length: 200 }, (_, i) => (i + 1).toString(16).padStart(40, '0'));
+  const head = 'a'.repeat(40);
+  const base = 'b'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({ stdout: commits.join('\n') + '\n' });
+    const adapter = new LocalGitAdapter({ subprocess: runtime });
+    assert.equal(await adapter.containsCommits(root, commits, head, base), true);
+    assert.equal(runtime.spawnCalls.length, 1);
+    assert.deepEqual(runtime.spawnCalls[0].argv.slice(1), ['rev-list', head, `^${base}`, '--']);
+    assert.equal(await adapter.containsCommits(root, [...commits.slice(1), 'c'.repeat(40)], head, base), false);
+    const truncated = new LocalGitAdapter({ subprocess: createFakeRuntime({ stdout: commits.join('\n'), lossy: true }) });
+    await assert.rejects(truncated.containsCommits(root, commits, head, base), { code: 'GIT_OPERATION_FAILED' });
+    const singleRuntime = createFakeRuntime({ responses: [{}, {}, { outcome: { exitCode: 1, signal: null } }] });
+    assert.equal(await new LocalGitAdapter({ subprocess: singleRuntime }).containsCommit(root, commits[0], head, base), true);
+    assert.deepEqual(singleRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['rev-parse', '--verify', '--quiet', `${commits[0]}^{commit}`],
+      ['merge-base', '--is-ancestor', commits[0], head],
+      ['merge-base', '--is-ancestor', commits[0], base],
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('preserves porcelain status flags with and without reasons', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
   try {

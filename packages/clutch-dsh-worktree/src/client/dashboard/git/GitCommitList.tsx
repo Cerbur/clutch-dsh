@@ -16,6 +16,7 @@ export interface GitCommitListProps {
   readonly loadingMore?: boolean;
   readonly loadMoreError?: boolean;
   readonly onLoadMore?: () => void;
+  readonly refreshRequired?: boolean;
 }
 
 function commitDate(value: string): string {
@@ -25,7 +26,7 @@ function commitDate(value: string): string {
 
 /** Keyboard-navigable, optionally multi-selectable, graph-free commit list for the Dashboard. */
 export function GitCommitList({ commits, selectedCommit, selectedCommits = [], multiSelect = false, onSelect, onToggle,
-  hasMore, loadingMore, loadMoreError, onLoadMore, t }: GitCommitListProps) {
+  hasMore, loadingMore, loadMoreError, refreshRequired, onLoadMore, t }: GitCommitListProps) {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const move = (index: number, direction: -1 | 1 | 'first' | 'last'): void => {
     const nextIndex = direction === 'first'
@@ -119,7 +120,7 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], m
       {hasMore && (
         <li>
           <button type="button" data-dashboard-git-load-more disabled={loadingMore} onClick={onLoadMore}>
-            {t(loadingMore ? 'dashboard.git.loadingMore' : 'dashboard.git.loadMore')}
+            {t(loadingMore ? 'dashboard.git.loadingMore' : refreshRequired ? 'dashboard.git.refresh' : 'dashboard.git.loadMore')}
           </button>
         </li>
       )}

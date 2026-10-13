@@ -285,7 +285,8 @@ export function WorktreeCreateDialog({
   const branchOptions = [
     ...(view?.checkout?.currentHead !== undefined
       ? [{
-          name: 'HEAD',
+          ref: 'HEAD',
+          name: t('worktree.headOption', { name: view.checkout.currentHead.name }),
           isCurrent: false,
           checkedOut: false,
         }]

@@ -147,6 +147,15 @@ export async function listWorktrees(
         ready = workspaceAvailable && (status === 'ready' || status === 'detached');
         currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
         currentHead = gitWorktree.currentHead;
+        try {
+          if (context.git.resolveCheckoutHead) {
+            currentHead = await context.git.resolveCheckoutHead(gitRoot!, gitWorktree, { signal: context.signal });
+          } else if (currentHead === undefined && gitWorktree.headCommit && gitWorktree.branch && !gitWorktree.detached) {
+            currentHead = { kind: 'branch', name: gitWorktree.branch, commit: gitWorktree.headCommit };
+          }
+        } catch {
+          currentHead = undefined;
+        }
         break;
       }
     }
