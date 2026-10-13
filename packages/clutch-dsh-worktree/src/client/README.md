@@ -674,7 +674,9 @@ listbox navigation, bounded scrolling, popup placement, outside-pointer dismissa
 Dropdown rosters cap at 220px and shrink to the available space below the trigger. Placement flips
 above only when the space below cannot accommodate the search/filter chrome plus a 96px roster
 and there is more space above. Loading and ready states share the same viewport budget; resize,
-scroll and content-size changes recalculate it. Embedded pickers retain their 300px roster.
+scroll and content-size changes recalculate it. Preparation uses the natural compact loading height,
+not the maximum roster budget, so the first paint does not expand and then shrink before a read.
+Ready rosters grow only to their content height within that budget. Embedded pickers retain their 300px roster.
 Blur alone never dismisses the dropdown: internal headings, empty space, search, filters and fetch
 actions keep it open. Option selection, an outside pointer, Escape or the trigger dismisses it.
 Loading is separate from disabled: the trigger opens synchronously, and the picker shows a localized
@@ -701,6 +703,11 @@ reopen (including the same Workspace), replacement, or mode change. Stale callba
 selection, loading/error status, or trigger a refresh for a newer modal.
 The registration state owner advances the generation synchronously on open/close, including batched close/reopen
 without an intermediate render; the dialog also isolates manager replacements and remounts its picker by generation.
+The native registration Modal has a separate owner lifetime advanced only on open/close;
+Workspace or manager replacement also renews its shell identity. Tab changes and read retries
+retire picker callbacks without replacing the Modal/overlay DOM or replaying its entry animation.
+Creation/import values remain in the registration owner while the body swaps. Closing and reopening,
+including a batched reopen of the same Workspace, still creates a fresh shell and picker.
 Fetch failures retain code, message and details in the button title and the existing Errors & Repair lifecycle;
 retry retains the diagnostic record while pending and success resolves it, without adding a status row below the list.
 The saved-baseline editor owns its fetched roster for the mounted Worktree identity, independently

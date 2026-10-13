@@ -37,7 +37,7 @@ async function harness() {
       }
     },
   };
-  const jsx = (type, props) => ({ type, props });
+  const jsx = (type, props, key) => ({ type, props, key });
   const modules = {};
   for (const file of ['state/useRegistrationState', 'actions/useWorktreeRegistration', 'components/RegistrationDialog']) {
     const source = await readFile(new URL('../src/client/surface/' + file + '.tsx', import.meta.url), 'utf8');
@@ -64,6 +64,7 @@ async function harness() {
     manager: {
       listBranches: async () => { reads++; return branches; },
       fetchRemoteBranches: async () => { fetches++; return [...branches, { name: 'origin/new', kind: 'remote' }]; },
+      listImportCandidates: async () => [],
     } };
   const render = () => {
     cursor = 0;
@@ -75,7 +76,8 @@ async function harness() {
       registrationState, read, props, mutation, session: { setPendingSessionBinding() {} } });
     const dialog = modules.RegistrationDialog({ props, registration, registrationState, read, mutation });
     effects.splice(0).forEach((fn) => fn());
-    return { registration, registrationState, dialog: dialog.props.children.props };
+    return { registration, registrationState, dialog: dialog.props.children.props,
+      dialogKey: dialog.props.children.key ?? dialog.props.children.props.key };
   };
   return { render, workspace, props, counts: () => ({ reads, fetches, refreshes }),
     replayEffects() { state.filter((entry) => entry?.setup).forEach((entry) => {
@@ -122,9 +124,36 @@ test('Registration callbacks remain usable after development effect replay', asy
   assert.deepEqual(render().dialog.view.branches.map((branch) => branch.name), ['main', 'origin/main']);
 });
 
+test('switching registration tabs retains the dialog shell and retires prior branch callbacks', async () => {
+  const { render, workspace, props, counts } = await harness();
+  props.manager.listImportCandidates = async () => [];
+  let settle;
+  props.manager.listBranches = () => new Promise((resolve) => { settle = resolve; });
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  const initial = render();
+  const delayed = initial.dialog.onLoadBranches();
+  initial.dialog.onModeChange('import');
+  let current = render();
+  assert.equal(current.dialog.mode, 'import');
+  assert.equal(current.dialogKey, initial.dialogKey, 'tab changes must not remount the Modal');
+  await Promise.resolve();
+  current.dialog.onModeChange('create');
+  current = render();
+  assert.equal(current.dialogKey, initial.dialogKey);
+  settle([{ name: 'old-result' }]);
+  await delayed;
+  assert.equal(render().dialog.view.branches.length, 0);
+  await initial.dialog.onFetchBranches();
+  assert.equal(counts().fetches, 0, 'stale tab callbacks must remain inactive');
+  current.dialog.onClose();
+  current.registration.openWorktreeCreator(workspace);
+  assert.notEqual(render().dialogKey, initial.dialogKey, 'batched close/reopen starts a new dialog lifetime');
+});
+
 for (const operation of ['onLoadBranches', 'onFetchBranches']) {
   for (const outcome of ['success', 'failure']) {
-    for (const replacement of ['reopen', 'owner-reopen', 'manager']) {
+    for (const replacement of ['reopen', 'owner-reopen', 'manager', 'tab']) {
       test(`${operation} late ${outcome} cannot update a ${replacement} dialog for the same Workspace`, async () => {
         const { render, workspace, props, counts } = await harness();
         let settle;
@@ -139,6 +168,9 @@ for (const operation of ['onLoadBranches', 'onFetchBranches']) {
           if (replacement === 'owner-reopen') old.registration.closeWorktreeCreator();
           else old.dialog.onClose();
           old.registration.openWorktreeCreator(workspace);
+        } else if (replacement === 'tab') {
+          old.dialog.onModeChange('import');
+          render().dialog.onModeChange('create');
         } else {
           props.manager = { ...props.manager };
         }
