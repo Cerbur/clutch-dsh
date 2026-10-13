@@ -421,6 +421,7 @@ export interface WorktreeCreateDialogProps {
   readonly setupStatus: WorktreeSetupStatus | undefined;
   readonly canCreate: boolean;
   readonly branchesLoading?: boolean;
+  readonly pickerKey?: number;
   readonly mode: WorktreeRegistrationMode;
   readonly importCandidates: ImportCandidatesState;
   readonly selectedImportPath: string | undefined;

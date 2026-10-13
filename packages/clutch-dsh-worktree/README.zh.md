@@ -56,6 +56,16 @@ pnpm dsh web
 DSH Web profile 必须已经能够正常启动。修改 `package.json` 或 `cordis.patch.yml` 后，需要重新
 执行绝对路径安装命令。
 
+安装到 Desktop 时，先结束活跃任务并完全退出 DeepSeek Harness，再使用已安装的 DSH CLI：
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+安装完成后重新打开 Desktop。本地链接生效期间，需要保留 checkout 及其已安装的 `node_modules`；
+只复制 `lib/` 或移除 checkout 的依赖可能导致 Host 和权限 preset 入口导入失败。
+Client 的实现依赖在构建时打包，Desktop 无需另外提供 Zustand 或 Immer 模块。
+
 ### 从 GitHub 源码安装（可选）
 
 DSH plugin market 使用的源码依赖形式也可以直接安装：
@@ -124,8 +134,10 @@ Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入
 关闭并重新打开基线编辑器后，旧弹窗的待完成结果会被忽略。
 只有最新的分支读取或 Fetch 可以更新候选与加载状态。
 下拉列表采用紧凑高度，优先在字段下方展开，空间不足时缩短列表并在内部滚动；仅下方可用空间过小时向上展开。
-即使候选数据已经缓存，也先绘制浮窗与加载状态，再准备列表。大量候选只渲染可视区域附近的选项；
+即使候选数据已经缓存，也先绘制紧凑的加载浮窗，再准备列表。
+首次浮窗与加载阶段保持同一高度，数据就绪后按内容调整高度，并受滚动上限约束。大量候选只渲染可视区域附近的选项；
 搜索、筛选和键盘选择仍覆盖全部候选。
+切换**创建**和**导入**时，在同一弹窗内替换表单内容，不重新播放弹窗的打开动画。
 每次打开分支选择器都会重新读取本地 Git 引用，包含 terminal 中的变更；切回浏览器不重新加载候选。
 Fetch 完成后读取一次更新后的分支列表，并直接提供给选择器。
 打开新建 Worktree 弹窗不预加载分支，默认基线来自当前分支或 HEAD。

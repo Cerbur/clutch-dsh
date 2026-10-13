@@ -32,6 +32,7 @@ type Input = {
     | 'modalReadViewRef'
     | 'modalWorkspaceIdRef'
     | 'modalGenerationRef'
+    | 'modalLifetimeRef'
     | 'setModalBranches'
     | 'setSelectedBranch'
     | 'setNewBranch'
@@ -71,6 +72,7 @@ export function RegistrationDialog({
     modalReadViewRef,
     modalWorkspaceIdRef,
     modalGenerationRef,
+    modalLifetimeRef,
     setModalBranches,
     setSelectedBranch,
     setNewBranch,
@@ -78,6 +80,14 @@ export function RegistrationDialog({
   } = registrationState;
   const { actionPending } = mutation;
   const { loadModalWorktreeView } = read;
+  // Tab/request invalidation must not restart the native Modal entry animation.
+  const shell = useRef({ workspaceId: worktreeModalWorkspaceId, manager: props.manager,
+    lifetime: modalLifetimeRef.current, generation: 0 });
+  if (shell.current.workspaceId !== worktreeModalWorkspaceId ||
+      shell.current.manager !== props.manager || shell.current.lifetime !== modalLifetimeRef.current) {
+    shell.current = { workspaceId: worktreeModalWorkspaceId, manager: props.manager,
+      lifetime: modalLifetimeRef.current, generation: shell.current.generation + 1 };
+  }
   // Workspace equality cannot distinguish closing and reopening the same dialog.
   const lifecycle = useRef({ workspaceId: worktreeModalWorkspaceId, manager: props.manager,
     mode: worktreeModalMode, ownerGeneration: modalGenerationRef.current, generation: 0 });
@@ -102,7 +112,8 @@ export function RegistrationDialog({
   return (
     <>
       <WorktreeCreateDialog
-        key={generation}
+        key={shell.current.generation}
+        pickerKey={generation}
         t={t}
         workspace={modalWorkspace}
         view={modalView}

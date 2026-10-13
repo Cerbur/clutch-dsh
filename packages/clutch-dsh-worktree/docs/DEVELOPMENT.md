@@ -61,6 +61,17 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-path` 的官方
 `fileAddressFor`。该 browser-safe helper 随 Client bundle 打包，不新增 Host 注入服务。
 
+`@deepseek-ai/dsh-client-store` 发布包会导入 `zustand/vanilla`、`zustand/middleware`、
+`zustand/shallow` 和 `immer`，但未将它们声明为运行依赖。本包直接声明 Zustand/Immer
+开发依赖并将其打入 Client；不能依靠其他 workspace 包或 upstream checkout 偶然提供这些模块。
+`build-client.mjs` 启用 `failOnWarn`，无法解析的私有依赖必须使构建失败，不能静默变成
+Desktop module table 不支持的 `require()`。隔离回归复制真实发布版 snapshot store、仅链接
+本包声明的构建依赖，再执行生成的 handoff factory 与 store 更新；缺失依赖的 fixture 必须构建失败：
+
+```bash
+node --test test/client-build.test.mjs
+```
+
 ### 3.2 将本地插件添加到 DSH Profile
 
 bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
@@ -88,6 +99,31 @@ pnpm dsh plugin --profile web remove clutch-dsh-worktree
 ```bash
 pnpm dsh web
 ```
+
+Desktop 本地安装使用已安装的 CLI，在结束任务并完全退出 Desktop 后执行：
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+重新打开 Desktop 加载插件。本地链接会从 checkout 解析 Host 的运行依赖，因此
+`pnpm install` 后的包级 `node_modules` 必须保留；只有根目录工具链或只有 `lib/` 不能保证
+Host/preset 入口可导入。不要通过手工链接或复制替代 profile 安装与依赖解析。
+遇到两个入口同时 `failed to import` 时，先检查链接目标的依赖；遇到
+`client-modules: require("zustand/vanilla") missed the module table` 时，重新安装构建依赖并构建
+Client，不要向 Desktop 全局 module table 添加私有实现依赖。
+
+可选 Desktop 导入 smoke 使用现有 Electron/DSH 图创建隔离 profile，验证实际
+`createRuntimeResolution`、`PluginPackages` 与 Cordis Loader 的 preset/Host/Typert 导入，
+不启动 GUI、不修改现有 profile。先构建本包，再在本包目录执行：
+
+```bash
+ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness' --expose-internals test/manual/desktop-plugin-import.mjs '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/package.json'
+```
+
+可在安装 anchor 后追加其他构建好的 package 绝对路径，用于比较本地 release 与 feature。
+导入 smoke 不代表完整 Desktop GUI 已部署或验证。诊断结果见
+[Desktop 本地构建诊断](plans/2026-10-13-desktop-local-build.md)。
 
 针对 `dsh-v0.2.0-rc.1` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
 

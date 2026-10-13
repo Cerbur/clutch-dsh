@@ -60,6 +60,17 @@ pnpm dsh web
 The DSH Web profile must be able to start before this plugin is added. Re-run the absolute-path
 install command after changing `package.json` or `cordis.patch.yml`.
 
+For Desktop, fully quit DeepSeek Harness after active tasks finish, then use the installed DSH CLI:
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+Reopen Desktop after installation. Keep the local checkout and its installed `node_modules`
+available while it is linked; copying only `lib/` or removing the checkout's dependencies can
+cause the Host and permission-preset entries to fail to import. Client implementation dependencies
+are bundled during the build, so Desktop does not need separate Zustand or Immer modules.
+
 ### Install from GitHub source (optional)
 
 The package also supports the source dependency form used by the DSH plugin market:
@@ -134,8 +145,10 @@ Branch and import selectors open immediately while candidates load, show a loadi
 and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
 Closing and reopening the baseline editor discards pending results from the previous dialog.
 Only the latest branch read or Fetch can update its candidates and loading state.
-Even with cached candidates, the dropdown paints its loading shell before preparing the list. Large lists
-render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
+Even with cached candidates, the dropdown paints its compact loading shell before preparing the list.
+The initial shell and loading state keep the same height; ready results size to their content within the scrolling limit.
+Large lists render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
+Switching between **Create** and **Import** replaces the form content in the same dialog without replaying its opening animation.
 Opening any branch selector rereads local Git refs, including changes made in a terminal. Returning to
 the browser does not reload candidates. Fetch reads the updated list once and supplies it directly to the selector.
 Opening the New Worktree dialog does not preload branches; its default comes from the current branch or HEAD.

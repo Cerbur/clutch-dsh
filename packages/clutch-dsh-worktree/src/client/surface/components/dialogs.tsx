@@ -261,6 +261,7 @@ export function WorktreeCreateDialog({
   setupStatus,
   canCreate,
   branchesLoading = view === undefined && setupStatus === undefined && readError === undefined,
+  pickerKey,
   mode,
   importCandidates,
   selectedImportPath,
@@ -369,6 +370,7 @@ export function WorktreeCreateDialog({
             <div className={styles.modalField}>
               {t('worktree.tabImport')}
               <WorktreeSelector
+                key={pickerKey}
                 t={t}
                 candidates={importCandidates.candidates}
                 value={selectedImportPath ?? ''}
@@ -390,6 +392,7 @@ export function WorktreeCreateDialog({
             <div className={styles.modalField}>
               {t('worktree.baseBranch')}
               <GitBranchSelector
+                key={pickerKey}
                 t={t}
                 branches={view?.branches ?? []}
                 label={t('worktree.baseBranch')}

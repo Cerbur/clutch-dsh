@@ -37,6 +37,7 @@ type Input = {
     | 'importCandidatesGuard'
     | 'modalWorkspaceIdRef'
     | 'modalGenerationRef'
+    | 'modalLifetimeRef'
     | 'modalReadLoader'
     | 'modalReadViewRef'
     | 'setWorktreeModalWorkspaceId'
@@ -82,6 +83,7 @@ export function useWorktreeRegistration({
     importCandidatesGuard,
     modalWorkspaceIdRef,
     modalGenerationRef,
+    modalLifetimeRef,
     modalReadLoader,
     modalReadViewRef,
     setWorktreeModalWorkspaceId,
@@ -163,6 +165,7 @@ export function useWorktreeRegistration({
   const closeWorktreeCreator = (force = false): void => {
     if (actionPending && !force) return;
     modalGenerationRef.current++;
+    modalLifetimeRef.current++;
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
@@ -177,6 +180,7 @@ export function useWorktreeRegistration({
   ): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
     modalGenerationRef.current++;
+    modalLifetimeRef.current++;
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
