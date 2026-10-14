@@ -8,6 +8,7 @@ import type {
 import type { WorktreeTranslate } from '../../surface/types.js';
 import { isMainWorktreeId, normalizeBaselineBranch, sumLineTotals } from './git-facts.js';
 import { GitLineStats } from './GitLineStats.js';
+import { GitCommitStats } from './GitCommitStats.js';
 import styles from '../dashboard.css';
 
 export interface WorktreeGitOverviewInput {
@@ -109,11 +110,7 @@ export function WorktreeGitOverviewValue({
       return <span className={styles.dashboardHistorical}>{t('dashboard.notConnected')}</span>;
     }
     return (
-      <GitLineStats
-        additions={ahead}
-        deletions={behind}
-        ariaLabel={t('dashboard.git.aheadBehindStats', { ahead, behind })}
-      />
+      <GitCommitStats ahead={ahead} behind={behind} t={t} />
     );
   }
   if (state.history.unavailableReason !== undefined) {

@@ -14,6 +14,11 @@
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
 
+分支按需加载增加 `getWorkspaceGitState` Host/Remote 接缝，返回根 checkout 的当前分支与 Git
+就绪错误，不枚举 branch refs。更新此版本联调时需要重新构建并重载或重启 Host；单独刷新浏览器
+无法为旧 Host 添加该 RPC。Workspace 导航和创建弹窗打开不读完整分支列表；选择器打开才请求候选，
+Fetch 完成后由 Host 读取一次并直接返回列表，窗口焦点与 Git 页刷新不额外读取。
+
 ---
 
 ## 2. 准备 Upstream DSH 源码 Checkout
@@ -56,6 +61,17 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-path` 的官方
 `fileAddressFor`。该 browser-safe helper 随 Client bundle 打包，不新增 Host 注入服务。
 
+`@deepseek-ai/dsh-client-store` 发布包会导入 `zustand/vanilla`、`zustand/middleware`、
+`zustand/shallow` 和 `immer`，但未将它们声明为运行依赖。本包直接声明 Zustand/Immer
+开发依赖并将其打入 Client；不能依靠其他 workspace 包或 upstream checkout 偶然提供这些模块。
+`build-client.mjs` 启用 `failOnWarn`，无法解析的私有依赖必须使构建失败，不能静默变成
+Desktop module table 不支持的 `require()`。隔离回归复制真实发布版 snapshot store、仅链接
+本包声明的构建依赖，再执行生成的 handoff factory 与 store 更新；缺失依赖的 fixture 必须构建失败：
+
+```bash
+node --test test/client-build.test.mjs
+```
+
 ### 3.2 将本地插件添加到 DSH Profile
 
 bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
@@ -84,6 +100,31 @@ pnpm dsh plugin --profile web remove clutch-dsh-worktree
 pnpm dsh web
 ```
 
+Desktop 本地安装使用已安装的 CLI，在结束任务并完全退出 Desktop 后执行：
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+重新打开 Desktop 加载插件。本地链接会从 checkout 解析 Host 的运行依赖，因此
+`pnpm install` 后的包级 `node_modules` 必须保留；只有根目录工具链或只有 `lib/` 不能保证
+Host/preset 入口可导入。不要通过手工链接或复制替代 profile 安装与依赖解析。
+遇到两个入口同时 `failed to import` 时，先检查链接目标的依赖；遇到
+`client-modules: require("zustand/vanilla") missed the module table` 时，重新安装构建依赖并构建
+Client，不要向 Desktop 全局 module table 添加私有实现依赖。
+
+可选 Desktop 导入 smoke 使用现有 Electron/DSH 图创建隔离 profile，验证实际
+`createRuntimeResolution`、`PluginPackages` 与 Cordis Loader 的 preset/Host/Typert 导入，
+不启动 GUI、不修改现有 profile。先构建本包，再在本包目录执行：
+
+```bash
+ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness' --expose-internals test/manual/desktop-plugin-import.mjs '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/package.json'
+```
+
+可在安装 anchor 后追加其他构建好的 package 绝对路径，用于比较本地 release 与 feature。
+导入 smoke 不代表完整 Desktop GUI 已部署或验证。诊断结果见
+[Desktop 本地构建诊断](plans/2026-10-13-desktop-local-build.md)。
+
 针对 `dsh-v0.2.0-rc.1` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
 
 ```bash
@@ -97,6 +138,22 @@ pnpm dsh web --port 3088 --no-open
 ```
 
 ### 3.3 开发迭代与重载
+
+Main/子目录 checkout 回归（先构建本包）：
+
+```bash
+node --test test/main-checkout.test.mjs test/file-address.test.mjs test/client-git-open-file.test.mjs test/client-dashboard.test.mjs test/client-branch-drift.test.mjs
+node --test test/sidecar-data-migration.test.mjs
+```
+
+第一组通过真实临时 Git 仓库验证嵌套 Workspace、linked checkout 路径别名、branch/精确 Tag/
+detached Commit、从捕获 HEAD 创建、文件地址和 Sidebar 回调，以及 Main 的菜单与状态展示。
+Git 路径语义回归见 `test/git-dashboard.test.mjs`：公开列表与 Diff 请求从 Workspace 工作目录起算，
+Provider 保留 Git 根坐标；测试包含 Main/托管/旧记录、commit/summary/working-tree、rename 和边界拒绝。
+Windows drive、extended prefix 与 UNC 在浏览器路径单测中验证；这些测试不等于 Windows
+宿主或运行中 DSH 的端到端联调。第二组覆盖 v1–v7 历史 Sidecar 迁移；本次 checkout 投影
+不升级 v7 schema，HEAD 观察值不可写入 Sidecar。布局还应在 Chromium 窄屏和宽屏检查长引用、
+多位数统计与空 Git 面板，使用隔离组件 fixture 时需与实机联调结果区分。
 
 `/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
 `sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools

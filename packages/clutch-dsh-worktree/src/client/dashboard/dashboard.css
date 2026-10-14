@@ -18,7 +18,7 @@
 .dashboardSurface *::after {
   box-sizing: border-box;
 }
-.dashboardSurface button {
+.dashboardSurface button:not(.dashboardRefButton) {
   font: inherit;
 }
 .dashboardSurface svg {
@@ -104,7 +104,7 @@
   top: 0;
   z-index: 3;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 20px;
@@ -128,7 +128,8 @@
 }
 .dashboardToplineActions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   margin-inline-start: auto;
@@ -167,7 +168,7 @@ html[data-platform='darwin']
 }
 .dashboardHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 225px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.45fr);
   gap: 32px;
   margin-bottom: 15px;
 }
@@ -191,16 +192,22 @@ html[data-platform='darwin']
   line-height: 1.3;
   font-weight: 650;
   margin: 0;
-  overflow-wrap: anywhere;
+  flex: 0 1 auto;
+  overflow: hidden;
   min-width: 0;
 }
-.dashboardTitleRow[role='button'] {
+.dashboardRefButton {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
-}
-.dashboardTitleRow[role='button']:focus-visible {
-  outline: 2px solid #497cd4;
-  outline-offset: 3px;
-  border-radius: 4px;
 }
 .dashboardHealth,
 .dashboardSoon {
@@ -456,6 +463,8 @@ html[data-platform='darwin']
 }
 .dashboardEmpty {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
   align-items: center;
   justify-content: center;
   min-height: 78px;
@@ -473,7 +482,7 @@ html[data-platform='darwin']
 }
 .dashboardFacts > div {
   display: grid;
-  grid-template-columns: minmax(90px, 0.85fr) minmax(0, 1fr) 29px;
+  grid-template-columns: minmax(70px, 0.65fr) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 11px 0;
@@ -499,6 +508,14 @@ html[data-platform='darwin']
   overflow-wrap: break-word;
   word-break: normal;
 }
+.dashboardFacts > div:has(.dashboardFactAction > *) {
+  grid-template-columns: minmax(70px, 0.65fr) minmax(0, 1fr) 29px;
+}
+.dashboardFacts dd > span {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .dashboardFactAction {
   display: flex;
   grid-column: 3;
@@ -507,6 +524,7 @@ html[data-platform='darwin']
   min-width: 29px;
   min-height: 29px;
 }
+.dashboardFactAction:empty { display: none; }
 .dashboardHeaderAside .dashboardFacts > div {
   padding: 4px 0;
   border: 0;
@@ -536,119 +554,6 @@ html[data-platform='darwin']
   gap: 8px;
   width: 100%;
   min-width: 0;
-}
-.dashboardBaselineSearch {
-  box-sizing: border-box;
-  flex: none;
-  display: flex;
-  width: 100%;
-}
-.dashboardBaselineOptions {
-  box-sizing: border-box;
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  width: 100%;
-  min-width: min(220px, 100%);
-  max-width: min(420px, calc(100vw - 32px));
-  /* Constant frame: six rows on compact windows, seven on normal ones. Search
-     swaps the rows inside this fixed box, so the modal never resizes. */
-  height: clamp(258px, 48vh, 300px);
-  height: clamp(258px, 48dvh, 300px);
-  padding: 4px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 0;
-  border-radius: 20px;
-  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3, #fff));
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  box-shadow: var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
-}
-.dashboardBaselineList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-}
-.dashboardBaselineOption {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 10px;
-  outline: none;
-  background: transparent;
-  color: var(--dsw-alias-label-primary, #19212f);
-  text-align: left;
-  cursor: pointer;
-}
-.dashboardBaselineOption:hover,
-.dashboardBaselineOption[data-highlighted='true'],
-.dashboardBaselineOption[aria-selected='true'] {
-  background: var(--dsw-alias-interactive-bg-hover, #f0f3f8);
-}
-.dashboardBaselineOption:focus-visible {
-  outline: 2px solid #497cd4;
-  outline-offset: -2px;
-}
-.dashboardBaselineOption > svg {
-  width: 16px;
-  height: 16px;
-  color: var(--dsw-alias-label-secondary, #788191);
-}
-.dashboardBaselineOption[aria-selected='true'] > svg:last-child {
-  color: var(--dsw-alias-label-primary, #19212f);
-}
-.dashboardBaselineOptionLabel {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dashboardBaselineEmpty {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 10px;
-  color: var(--dsw-alias-label-secondary, #788191);
-  text-align: center;
-}
-/* Zero-height anchor: the save error floats over the list instead of growing
-   the modal, so the frame keeps its size in every state. */
-.dashboardBaselineStatus {
-  position: relative;
-  box-sizing: border-box;
-  min-height: 0;
-}
-.dashboardBaselineError {
-  position: absolute;
-  right: 4px;
-  bottom: 12px;
-  left: 4px;
-  z-index: 1;
-  box-sizing: border-box;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-2, #fff);
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-state-error-label, #bd5d43) 10%,
-    var(--dsw-alias-bg-layer-2, #fff)
-  );
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-error-label, #bd5d43) 32%, transparent),
-    var(--dsw-elevation-prominent, 0 8px 24px rgb(25 33 47 / 12%));
-  color: var(--dsw-alias-state-error-label, #bd5d43);
-  font-size: 12px;
-  line-height: 16px;
 }
 .dashboardLink {
   display: flex;

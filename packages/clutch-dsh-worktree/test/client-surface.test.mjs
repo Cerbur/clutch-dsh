@@ -574,6 +574,13 @@ test('selects the current local branch as the default Worktree base branch', () 
     'feature/other',
   );
   assert.equal(selectDefaultBaseBranch([]), '');
+  assert.equal(selectDefaultBaseBranch([
+    { name: 'origin/main', kind: 'remote', isCurrent: false, checkedOut: false },
+    { name: 'develop', kind: 'local', isCurrent: false, checkedOut: false },
+  ]), 'develop');
+  assert.equal(selectDefaultBaseBranch([
+    { name: 'origin/main', kind: 'remote', isCurrent: false, checkedOut: false },
+  ]), 'origin/main');
 });
 
 test('maps a non-Git branch-list failure to Workspace-local readiness', async () => {
@@ -957,13 +964,12 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   assert.match(dialogs, /role="tab"/);
   assert.match(dialogs, /aria-selected=\{mode === 'create'\}/);
   assert.match(dialogs, /aria-selected=\{mode === 'import'\}/);
-  assert.match(dialogs, /candidate\.branch/);
-  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.match(dialogs, /<WorktreeSelector/);
+  assert.match(dialogs, /candidates=\{importCandidates\.candidates\}/);
   assert.match(dialogs, /t\('worktree\.import'\)/);
   assert.match(dialogs, /t\('worktree\.importDescription'/);
   assert.match(dialogs, /t\('worktree\.importEmpty'\)/);
-  assert.match(dialogs, /t\('worktree\.importLoading'\)/);
-  assert.match(dialogs, /t\('worktree\.importPlaceholder'\)/);
+  assert.match(dialogs, /loading=\{importCandidates\.status === 'idle' \|\| importCandidates\.status === 'loading'\}/);
   assert.match(dialogs, /t\('action\.retry'\)/);
 
   assert.match(
@@ -990,19 +996,14 @@ test('adds a Create/Import dialog that retains the existing shared Session regis
   );
 });
 
-test('renders import candidates in a native dropdown instead of a flat candidate list', async () => {
+test('renders import candidates through the shared searchable Worktree selector', async () => {
   const { dialogs } = await readSurfaceSources();
 
-  assert.match(dialogs, /<select[\s\S]*className=\{styles\.worktreeImportSelect\}/);
+  assert.match(dialogs, /<WorktreeSelector/);
   assert.match(dialogs, /value=\{selectedImportPath \?\? ''\}/);
-  assert.match(dialogs, /onSelectedImportPathChange\(event\.currentTarget\.value\)/);
-  assert.match(dialogs, /<option value="" disabled>/);
-  assert.match(
-    dialogs,
-    /<option key=\{candidate\.absolutePath\} value=\{candidate\.absolutePath\}>/,
-  );
-  assert.match(dialogs, /candidate\.branch/);
-  assert.match(dialogs, /candidate\.absolutePath/);
+  assert.match(dialogs, /onChange=\{onSelectedImportPathChange\}/);
+  assert.doesNotMatch(dialogs, /<select|<option/);
+  assert.match(dialogs, /candidates=\{importCandidates\.candidates\}/);
   assert.doesNotMatch(dialogs, /data-worktree-import-candidate/);
 });
 
@@ -1927,10 +1928,10 @@ test('offers Local and Worktree creation through shared menu parameters', async 
   // menu handlers in client-branch-drift.test.mjs.
 
   const mainCallSource = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
-  assert.match(mainCallSource, /showCreate: currentBranch !== undefined/);
+  assert.match(mainCallSource, /showCreate: mainRef !== undefined/);
   assert.match(mainCallSource, /onCreateWorktree:/);
-  assert.match(mainCallSource, /baseBranch: currentBranch/);
-  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*currentBranch/);
+  assert.match(mainCallSource, /baseBranch: currentHead\?\.kind/);
+  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*mainRef/);
 
   const worktreeCallSource = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
   assert.match(worktreeCallSource, /showCreate:\s*record\.status === 'active'/);
@@ -2020,11 +2021,11 @@ test('renders a localized Main label with the current branch and a fallback', as
 
   assert.match(
     source,
-    /const currentBranch = view\?\.branches\.find\(\s*\(branch\) => branch\.isCurrent,?\s*\)\?\.name;/,
+    /const currentBranch = view\?\.currentBranch === null \? undefined\s*: view\?\.currentBranch \?\? view\?\.branches\.find\(\s*\(branch\) => branch\.isCurrent,?\s*\)\?\.name;/,
   );
   assert.match(
     source,
-    /const\s+mainLabel\s*=\s*currentBranch\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*currentBranch\s*\}\);/,
+    /const\s+mainLabel\s*=\s*mainRef\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*mainRef\s*\}\);/,
   );
   assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);

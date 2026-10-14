@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+import { realpath } from 'node:fs/promises';
 
 import type {
   AdoptWorktreeBranchInput,
@@ -12,8 +13,10 @@ import type {
   WorktreeGitFileDiff,
   WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
+  WorktreeGitHistoryRequest,
   WorktreeRecord,
   WorkspaceId,
+  WorkspaceCheckout,
 } from '../contract/index.js';
 import { LocalGitAdapter } from '../provider/git/adapter.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
@@ -33,6 +36,8 @@ import {
   importWorktree,
   insertWorktreeBefore,
   listBranches,
+  getWorkspaceGitState,
+  fetchRemoteBranches,
   listImportCandidates,
   listWorktrees,
   removeWorktree,
@@ -46,7 +51,7 @@ import {
   updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
-import { requireWorkspace, requireWorkspaceForRead } from './manager-support.js';
+import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
 
 function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
   // `main` is retained for legacy browser callers; the canonical synthetic ID is
@@ -226,11 +231,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => listWorktrees(this.context, input));
   }
 
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: string;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitHistory> {
+  getWorkspaceGitState(input: { readonly workspaceId: WorkspaceId }) {
+    return this.afterRecovery(() => getWorkspaceGitState(this.context, input));
+  }
+
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory> {
     return this.afterRecovery(() => listWorktreeCommits(this.context, input));
   }
 
@@ -252,12 +257,71 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => listBranches(this.context, input));
   }
 
+  fetchRemoteBranches(input: { readonly workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]> {
+    return this.afterRecovery(() => fetchRemoteBranches(this.context, input));
+  }
+
+  getWorkspaceCheckout(input: { workspaceId: WorkspaceId }): Promise<WorkspaceCheckout> {
+    return this.afterRecovery(async () => {
+      const workspace = await requireWorkspaceForRead(this.context, input.workspaceId);
+      await requireWorkspaceRoot(workspace);
+      const options = { signal: this.context.signal };
+      await this.context.git.validateRepository(workspace.rootPath, options);
+      const gitRootPath = this.context.git.resolveRepositoryRoot
+        ? await this.context.git.resolveRepositoryRoot(workspace.rootPath, options)
+        : workspace.rootPath;
+      const worktrees = await this.context.git.listWorktrees(gitRootPath, options);
+      const workspacePath = await realpath(workspace.rootPath);
+      for (const worktree of worktrees) {
+        if (await samePhysicalPath(worktree.absolutePath, gitRootPath)) {
+          let currentHead = worktree.currentHead;
+          try {
+            currentHead = this.context.git.resolveCheckoutHead
+              ? await this.context.git.resolveCheckoutHead(gitRootPath, worktree, options)
+              : currentHead ?? (worktree.headCommit && worktree.branch && !worktree.detached
+                ? { kind: 'branch', name: worktree.branch, commit: worktree.headCommit }
+                : undefined);
+          } catch {
+            currentHead = undefined;
+          }
+          return {
+            gitRootPath,
+            workspacePath,
+            ...(currentHead === undefined ? {} : { currentHead }),
+          };
+        }
+      }
+      return { gitRootPath, workspacePath };
+    });
+  }
+
   createWorktree(input: {
     readonly workspaceId: WorkspaceId;
     readonly branch: string;
     readonly newBranch?: string;
+    readonly fromHead?: boolean;
+    readonly expectedHeadCommit?: string;
   }): Promise<WorktreeRecord> {
-    return this.afterRecovery(() => createWorktree(this.context, input));
+    return this.afterRecovery(async () => {
+      if (!input.fromHead) return createWorktree(this.context, input);
+      if (!input.newBranch || !this.context.git.resolveCommit) {
+        throw providerError('GIT_OPERATION_FAILED', 'Creating from HEAD requires a new branch and commit resolution', {});
+      }
+      const workspace = await requireWorkspace(this.context, input.workspaceId);
+      await this.context.git.validateRepository(workspace.rootPath, { signal: this.context.signal });
+      const commit = await this.context.git.resolveCommit(workspace.rootPath, 'HEAD', { signal: this.context.signal });
+      if (input.expectedHeadCommit !== undefined && input.expectedHeadCommit !== commit) {
+        throw providerError('WORKTREE_STATE_CONFLICT', 'Workspace HEAD changed; refresh before creating a Worktree', {
+          workspaceId: input.workspaceId, expectedHeadCommit: input.expectedHeadCommit, headCommit: commit,
+        });
+      }
+      return createWorktree(this.context, {
+        workspaceId: input.workspaceId,
+        branch: `${commit}^{commit}`,
+        baseCommit: commit,
+        newBranch: input.newBranch,
+      });
+    });
   }
 
   createWorktreeAtCommit(input: {

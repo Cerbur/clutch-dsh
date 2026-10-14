@@ -12,6 +12,100 @@ const BASELINES = {
   'base-b': '2'.repeat(40),
 };
 
+test('Local defaults to no baseline, shares append reads, and discards pages after baseline switches', async () => {
+  const page = deferred();
+  const requests = [];
+  const first = { headCommit: HEAD, commits: [{ sha: COMMIT_A, parents: [], subject: 'first' }],
+    truncated: true, nextOffset: 50 };
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'main:ws', manager: {
+    listBranches: async () => [{ name: 'base-a' }],
+    listWorktreeCommits: async (input) => {
+      requests.push(input);
+      if (input.offset !== undefined) return page.promise;
+      return input.baseBranch === undefined ? first : historyFor(input.baseBranch);
+    },
+    listWorktreeCommitFiles: async () => ({ commit: 'summary', files: [] }),
+  } });
+  await controller.loadHistory();
+  assert.equal(controller.getSnapshot().baselineBranch, undefined);
+  assert.equal(controller.getSnapshot().view, 'commits');
+  const more = controller.loadMore();
+  assert.equal(controller.loadMore(), more);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].offset, 50);
+  assert.equal(requests[1].expectedHeadCommit, HEAD);
+  assert.equal(controller.getSnapshot().history.value.commits.length, 1);
+  controller.selectBaselineBranch('base-a');
+  await setImmediate();
+  assert.equal(controller.getSnapshot().view, 'summary');
+  page.resolve({ ...first, commits: [{ sha: COMMIT_D }], nextOffset: undefined, truncated: false });
+  await more;
+  assert.equal(controller.getSnapshot().history.value.baseline.commit, BASELINES['base-a']);
+  assert.equal(controller.getSnapshot().loadingMore, false);
+  controller.selectBaselineBranch(undefined);
+  await setImmediate();
+  assert.equal(controller.getSnapshot().view, 'commits');
+  assert.equal(controller.getSnapshot().history.value.baseline, undefined);
+  controller.dispose();
+});
+
+test('appending preserves selected target and files, errors keep history retryable', async () => {
+  let fail = true;
+  const initial = { headCommit: HEAD, baseline: { commit: BASELINES['base-a'] },
+    ahead: 101, commits: [{ sha: COMMIT_A, parents: [], subject: 'first' }], nextOffset: 50, truncated: true };
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt',
+    defaultBaselineBranch: 'base-a', manager: {
+      listWorktreeCommits: async (input) => {
+        if (!input.offset) return initial;
+        if (fail) throw new Error('page failed');
+        return { ...initial, commits: [{ sha: COMMIT_D }], nextOffset: undefined, truncated: false };
+      },
+      listWorktreeCommitFiles: async () => ({ commit: 'summary', files: [] }),
+    } });
+  await controller.loadHistory();
+  await setImmediate();
+  const files = controller.getSnapshot().files;
+  await controller.loadMore();
+  assert.match(controller.getSnapshot().loadMoreError.message, /page failed/);
+  assert.equal(controller.getSnapshot().history.value.commits.length, 1);
+  fail = false;
+  await controller.loadMore();
+  assert.deepEqual(controller.getSnapshot().history.value.commits.map((commit) => commit.sha), [COMMIT_A, COMMIT_D]);
+  assert.equal(controller.getSnapshot().history.value.ahead, 101);
+  assert.equal(controller.getSnapshot().view, 'summary');
+  assert.equal(controller.getSnapshot().files, files);
+  assert.equal(controller.getSnapshot().history.value.nextOffset, undefined);
+  assert.equal(controller.getSnapshot().loadMoreError, undefined);
+  controller.dispose();
+});
+
+test('fresh branch reads bypass the loaded cache, share requests, and preserve rows on failure', async () => {
+  let calls = 0;
+  let finish;
+  let reject;
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt', manager: {
+    listBranches: () => { calls++; return new Promise((resolve, fail) => { finish = resolve; reject = fail; }); },
+  } });
+  const initial = controller.loadBranches();
+  finish([{ name: 'main' }]);
+  await initial;
+  await controller.loadBranches();
+  assert.equal(calls, 1);
+  const first = controller.readFreshBranches();
+  const shared = controller.readFreshBranches();
+  assert.equal(calls, 2);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'main' }]);
+  assert.equal(controller.getSnapshot().branches.refreshing, true);
+  finish([{ name: 'terminal/new', isCurrent: true }]);
+  assert.deepEqual(await first, [{ name: 'terminal/new', isCurrent: true }]);
+  assert.deepEqual(await shared, [{ name: 'terminal/new', isCurrent: true }]);
+  const failure = controller.readFreshBranches();
+  reject(new Error('unavailable'));
+  await assert.rejects(failure, /unavailable/);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'terminal/new', isCurrent: true }]);
+  controller.dispose();
+});
+
 function deferred() {
   let resolve;
   const promise = new Promise((fulfill) => {
@@ -19,6 +113,28 @@ function deferred() {
   });
   return { promise, resolve };
 }
+
+test('Git history refresh never reads branches, including after selector use and Fetch', async () => {
+  let branchReads = 0;
+  const controller = createWorktreeGitStateController({ workspaceId: 'ws', worktreeId: 'wt',
+    defaultBaselineBranch: 'base-a', manager: {
+      listBranches: async () => { branchReads++; return [{ name: 'main' }]; },
+      listWorktreeCommits: async () => historyFor('base-a'),
+      listWorktreeCommitFiles: async () => ({ commit: 'summary', files: [] }),
+    } });
+  await controller.loadHistory();
+  await controller.refresh();
+  assert.equal(branchReads, 0);
+  await controller.readFreshBranches();
+  assert.equal(branchReads, 1);
+  await controller.refresh();
+  assert.equal(branchReads, 1);
+  controller.acceptBranches([{ name: 'origin/fetched', kind: 'remote' }]);
+  await controller.refresh();
+  assert.equal(branchReads, 1);
+  assert.deepEqual(controller.getSnapshot().branches.value, [{ name: 'origin/fetched', kind: 'remote' }]);
+  controller.dispose();
+});
 
 async function settle() {
   await setImmediate();

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { BranchRecord } from '../../../contract/index.js';
 import {
   createWorktreeModalViewLoader,
   createWorktreeRefreshGuard,
@@ -11,13 +12,14 @@ import type {
   WorktreeSurfaceProps,
 } from '../types.js';
 
-type Input = { props: Pick<WorktreeSurfaceProps, 'viewReader'> };
+type Input = { props: Pick<WorktreeSurfaceProps, 'viewReader' | 'manager'> };
 
 export function useRegistrationState({ props }: Input) {
   const { viewReader } = props;
   const [worktreeModalWorkspaceId, setWorktreeModalWorkspaceId] = useState<string>();
   const [modalReadError, setModalReadError] = useState<WorktreeViewError>();
   const [modalReadLoading, setModalReadLoading] = useState(false);
+  const [modalBranches, setModalBranches] = useState<readonly BranchRecord[]>();
   const [worktreeModalMode, setWorktreeModalMode] = useState<WorktreeRegistrationMode>('create');
   const [importCandidates, setImportCandidates] = useState<ImportCandidatesState>({
     status: 'idle',
@@ -30,6 +32,8 @@ export function useRegistrationState({ props }: Input) {
   const modalReadViewRef = useRef<WorktreeWorkspaceView>();
   const importCandidatesGuard = useRef(createWorktreeRefreshGuard());
   const modalWorkspaceIdRef = useRef(worktreeModalWorkspaceId);
+  const modalGenerationRef = useRef(0);
+  const modalLifetimeRef = useRef(0);
   modalWorkspaceIdRef.current = worktreeModalWorkspaceId;
   return {
     worktreeModalWorkspaceId,
@@ -38,6 +42,8 @@ export function useRegistrationState({ props }: Input) {
     setModalReadError,
     modalReadLoading,
     setModalReadLoading,
+    modalBranches,
+    setModalBranches,
     worktreeModalMode,
     setWorktreeModalMode,
     importCandidates,
@@ -52,5 +58,7 @@ export function useRegistrationState({ props }: Input) {
     modalReadViewRef,
     importCandidatesGuard,
     modalWorkspaceIdRef,
+    modalGenerationRef,
+    modalLifetimeRef,
   };
 }

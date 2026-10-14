@@ -322,6 +322,31 @@ test('baseCommit is strict on create pending operations across schema versions',
   assert.equal(snapshot.pendingOperation?.baseCommit, 'a'.repeat(40));
 });
 
+test('create journals retain acquisition identity without changing legacy new-branch markers', () => {
+  const pendingOperation = {
+    id: 'op1', type: 'create-worktree', phase: 'executing',
+    workspaceId: 'ws1', worktreeId: 'wt1', targetPath: '/tmp/wt1',
+    branch: 'origin/main', repositoryFingerprint: 'v1-' + 'b'.repeat(64),
+    startedAt: '2026-10-13T00:00:00.000Z',
+  };
+  const parse = (schemaVersion, operation) => validateSidecarSnapshot({
+    schemaVersion, workspaceId: 'ws1', revision: '5', worktrees: [], bindings: [],
+    pendingOperation: operation,
+  }, '/tmp/ws1.json').pendingOperation;
+  for (const version of [3, 4, 5, 6, 7]) {
+    for (const marker of [{}, { baseRef: 'main' }]) {
+      const old = { ...pendingOperation, ...marker };
+      assert.deepEqual(parse(version, old), old);
+    }
+  }
+  const exact = { ...pendingOperation, baseBranch: 'refs/heads/origin/main', baseCommit: 'a'.repeat(40) };
+  assert.deepEqual(parse(7, exact), exact);
+  assert.equal(parse(7, exact).baseRef, undefined);
+  for (const baseBranch of [false, 42, {}, []]) {
+    assert.throws(() => parse(7, { ...exact, baseBranch }), { code: 'SIDECAR_CORRUPT' });
+  }
+});
+
 test('mutation token changes when diskCleanup or baseCommit changes', () => {
   const snap = { schemaVersion: 5, workspaceId: 'ws1', revision: '1' };
   const tok1 = createWorktreeMutationToken(snap, record);

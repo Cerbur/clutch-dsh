@@ -8,6 +8,7 @@ import {
 } from '../lib/client/worktree-connection.js';
 
 const METHODS = [
+  ['getWorkspaceGitState', { workspaceId: 'ws1' }, { currentBranch: 'main' }],
   ['getToolSettings', { scope: { kind: 'general' } }, { enabled: false, tools: [] }],
   ['updateToolSettings', { scope: { kind: 'general' }, selection: { enabled: true, tools: [] }, expected: { enabled: false, tools: [] } }, { enabled: false, tools: [] }],
   ['getWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1' }, 'Use tests'],
@@ -21,6 +22,8 @@ const METHODS = [
   ['getWorktreeCommitFileDiff', { workspaceId: 'ws1', worktreeId: 'wt1', commit: 'a'.repeat(40), path: 'src/index.ts', baseBranch: 'main' }, { commit: 'a'.repeat(40), path: 'src/index.ts', patch: '', binary: false }],
   ['listImportCandidates', { workspaceId: 'ws1' }, []],
   ['listBranches', { workspaceId: 'ws1' }, []],
+  ['fetchRemoteBranches', { workspaceId: 'ws1' }, []],
+  ['getWorkspaceCheckout', { workspaceId: 'ws1' }, { gitRootPath: '/repo', workspacePath: '/repo/app', currentHead: { kind: 'tag', name: 'v1', commit: 'a'.repeat(40) } }],
   ['createWorktree', { workspaceId: 'ws1', branch: 'feature/login' }, { worktreeId: 'wt1' }],
   ['importWorktree', { workspaceId: 'ws1', absolutePath: '/tmp/external' }, { worktreeId: 'wt_external' }],
   ['removeWorktree', { workspaceId: 'ws1', worktreeId: 'wt1', mutationToken: 'token-example' }, null],
@@ -51,6 +54,28 @@ function successfulRpc(calls) {
   };
 }
 
+test('shares concurrent branch reads per Workspace but rereads after terminal changes', async () => {
+  const calls = [];
+  const resolves = [];
+  const adapter = createWorktreeConnectionAdapter({ call(channel, endpoint, payload) {
+    calls.push({ channel, endpoint, payload });
+    return new Promise((resolve) => resolves.push(resolve));
+  } });
+  const first = adapter.listBranches({ workspaceId: 'ws1' });
+  const duplicate = adapter.listBranches({ workspaceId: 'ws1' });
+  assert.equal(first, duplicate);
+  const other = adapter.listBranches({ workspaceId: 'ws2' });
+  assert.equal(calls.length, 2);
+  resolves[0]({ ok: true, value: { ok: true, value: [{ name: 'main' }] } });
+  resolves[1]({ ok: true, value: { ok: true, value: [] } });
+  await Promise.all([first, duplicate, other]);
+  const fresh = adapter.listBranches({ workspaceId: 'ws1' });
+  assert.equal(calls.length, 3);
+  resolves[2]({ ok: true, value: { ok: true, value: [{ name: 'terminal/new' }] } });
+  assert.deepEqual(await fresh, [{ name: 'terminal/new' }]);
+  adapter.dispose();
+});
+
 test('routes all Worktree methods through /api with the canonical endpoint and payload', async () => {
   const calls = [];
   const adapter = createWorktreeConnectionAdapter(successfulRpc(calls));
@@ -77,6 +102,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     })),
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/getWorkspaceGitState',
     'worktreeManager/getToolSettings',
     'worktreeManager/updateToolSettings',
     'worktreeManager/watchToolChanges',
@@ -86,6 +112,8 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/getWorktreeCommitFileDiff',
     'worktreeManager/listImportCandidates',
     'worktreeManager/listBranches',
+    'worktreeManager/fetchRemoteBranches',
+    'worktreeManager/getWorkspaceCheckout',
     'worktreeManager/createWorktree',
     'worktreeManager/importWorktree',
     'worktreeManager/removeWorktree',

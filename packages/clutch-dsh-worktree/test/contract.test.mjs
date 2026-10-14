@@ -96,6 +96,7 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
 
 test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'getWorkspaceGitState',
     'getToolSettings',
     'updateToolSettings',
     'watchToolChanges',
@@ -108,6 +109,8 @@ test('exposes the approved Manager and Remote methods', () => {
     'getWorktreeCommitFileDiff',
     'listImportCandidates',
     'listBranches',
+    'fetchRemoteBranches',
+    'getWorkspaceCheckout',
     'createWorktree',
     'importWorktree',
     'removeWorktree',

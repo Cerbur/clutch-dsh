@@ -134,6 +134,10 @@ export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTra
       return t('error.worktreeIdentityChanged');
     case 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE':
       return t('error.worktreeRegistrationSessionUnavailable');
+    case 'GIT_FILE_SESSION_REQUIRED':
+      return t('dashboard.git.sessionRequired');
+    case 'GIT_FILE_OUTSIDE_SESSION':
+      return t('dashboard.git.outsideSession');
     case 'WORKSPACE_RENAME_UNAVAILABLE':
       return t('error.workspaceRenameUnavailable');
     case 'WORKSPACE_DELETE_UNAVAILABLE':

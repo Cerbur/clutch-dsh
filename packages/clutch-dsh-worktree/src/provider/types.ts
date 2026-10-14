@@ -41,6 +41,8 @@ export interface CreateWorktreePendingOperation {
   readonly worktreeId: WorktreeId;
   readonly targetPath: string;
   readonly branch: string;
+  /** Acquisition identity, independent of baseRef's legacy new-branch marker. */
+  readonly baseBranch?: string;
   readonly baseRef?: string;
   readonly baseCommit?: string;
   readonly repositoryFingerprint: string;
@@ -135,6 +137,7 @@ export interface DshReadAdapter {
  * detached HEAD may have no local branch.
  */
 export interface GitWorktreeInfo {
+  readonly currentHead?: import('../contract/index.js').GitCheckoutHead;
   readonly prunable?: boolean;
   readonly locked?: boolean;
   readonly bare?: boolean;
@@ -144,9 +147,13 @@ export interface GitWorktreeInfo {
   readonly detached?: boolean;
 }
 
-/** Local branch facts with the physical checkout path, when Git reports one. */
+/** Locally available branch refs; remote-tracking refs never have a checkout path. */
 export interface GitBranchWorktreeInfo {
   readonly name: string;
+  readonly kind?: 'local' | 'remote';
+  readonly remote?: string;
+  /** Exact enumerated ref, used to avoid tag/branch resolution ambiguity. */
+  readonly ref?: string;
   readonly worktreePath?: string;
 }
 
@@ -160,8 +167,13 @@ export interface GitCommandOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface GitHistoryOptions extends GitCommandOptions {
+  readonly offset?: number;
+}
+
 /** Provider-only history result before Manage attaches the selected baseline. */
 export interface GitCommitHistoryRead {
+  readonly nextOffset?: number;
   readonly headCommit: string;
   readonly commits: readonly WorktreeGitCommit[];
   readonly truncated: boolean;
@@ -173,6 +185,7 @@ export interface GitCommitHistoryRead {
  * of letting an unbounded payload or a generic failure reach the browser.
  */
 export interface GitChangedFileRead {
+  /** Internal Provider coordinate system: path and oldPath are Git checkout-relative. */
   readonly files: readonly WorktreeGitChangedFile[];
   readonly truncated: boolean;
 }
@@ -204,7 +217,7 @@ export interface GitWorktreeAdapter {
   /** Resolve canonical repository identity for cross-process Git mutation locking. */
   resolveRepositoryIdentity?(workspaceRoot: string, options?: GitCommandOptions): Promise<GitRepositoryInspection>;
   /**
-   * Resolve local branches and their checkout paths in one read when supported.
+   * Resolve local and fetched remote branches and local checkout paths in one read.
    * Optional for adapters that predate the worktreepath ref-format atom.
    */
   listBranchesWithWorktreePaths?(
@@ -212,7 +225,15 @@ export interface GitWorktreeAdapter {
     options?: GitCommandOptions,
   ): Promise<readonly GitBranchWorktreeInfo[]>;
   listBranches(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly string[]>;
+  /** Explicit user-triggered network read; writes only fetched Git metadata. */
+  fetchRemoteBranches?(workspaceRoot: string, options?: GitCommandOptions): Promise<void>;
   listWorktrees(workspaceRoot: string, options?: GitCommandOptions): Promise<readonly GitWorktreeInfo[]>;
+  /** Optional display projection for one captured checkout; failure omits its HEAD label. */
+  resolveCheckoutHead?(
+    workspaceRoot: string,
+    worktree: GitWorktreeInfo,
+    options?: GitCommandOptions,
+  ): Promise<import('../contract/index.js').GitCheckoutHead | undefined>;
   /** Resolve one commit object without exposing a generic object reader. */
   resolveCommit?(workspaceRoot: string, ref: string, options?: GitCommandOptions): Promise<string>;
   /** Resolve a common ancestor for the selected branch comparison boundary. */
@@ -229,12 +250,28 @@ export interface GitWorktreeAdapter {
     headCommit: string,
     options?: GitCommandOptions,
   ): Promise<{ readonly ahead: number; readonly behind: number }>;
-  /** Read up to 200 commits after a boundary, or the repository HEAD history when no boundary is supplied. */
+  /** Read one 50-commit page from the comparison or HEAD history. */
   listCommits?(
     worktreeRoot: string,
     baseCommit?: string,
-    options?: GitCommandOptions,
+    options?: GitHistoryOptions,
   ): Promise<GitCommitHistoryRead>;
+  /** Prove candidate membership in HEAD history, excluding the baseline's ancestors. */
+  containsCommit?(
+    worktreeRoot: string,
+    commit: string,
+    headCommit: string,
+    baseCommit?: string,
+    options?: GitCommandOptions,
+  ): Promise<boolean>;
+  /** Authorize a selection against one fixed HEAD with bounded Git output. */
+  containsCommits?(
+    worktreeRoot: string,
+    commits: readonly string[],
+    headCommit: string,
+    baseCommit?: string,
+    options?: GitCommandOptions,
+  ): Promise<boolean>;
   /** Read tracked and untracked changes in the live working tree against HEAD. */
   listWorkingTreeFiles?(
     worktreeRoot: string,

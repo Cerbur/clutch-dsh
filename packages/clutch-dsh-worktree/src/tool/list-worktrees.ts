@@ -7,7 +7,7 @@ export function registerListWorktrees(context: ToolContext): void {
   const { add, options, check, scope } = context;
   add(
     'clutch_list_worktrees',
-    'List managed Worktrees and local base branches in workspaceId, defaulting to the calling Workspace. Returns stable ids, branch, path, lifecycle and health. Another Workspace is rejected.',
+    'List managed Worktrees and local/fetched remote base branches in workspaceId, defaulting to the calling Workspace. Returns stable ids, branch, path, lifecycle and health. Another Workspace is rejected.',
     workspace,
     output.object(
       {
@@ -15,7 +15,14 @@ export function registerListWorktrees(context: ToolContext): void {
         worktrees: output.array(output.worktree),
         branches: output.array(
           output.object(
-            { name: output.string, isCurrent: output.boolean, checkedOut: output.boolean },
+            {
+              name: output.string,
+              ref: output.string,
+              kind: { type: 'string', enum: ['local', 'remote'] },
+              remote: output.string,
+              isCurrent: output.boolean,
+              checkedOut: output.boolean,
+            },
             ['name', 'isCurrent', 'checkedOut'],
           ),
         ),

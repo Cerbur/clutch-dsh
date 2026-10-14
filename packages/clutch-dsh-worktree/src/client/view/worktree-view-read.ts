@@ -3,6 +3,7 @@ import type {
   SessionBinding,
   WorktreeManager,
   WorktreeRecord,
+  WorkspaceCheckout,
 } from '../../contract/index.js';
 import { toWorktreeViewError, type WorktreeViewError } from './worktree-view-errors.js';
 
@@ -15,8 +16,10 @@ export type WorktreeGitReadiness =
   | { readonly status: 'noLocalBranch' };
 
 export interface WorktreeViewData {
+  readonly checkout?: WorkspaceCheckout;
   readonly worktrees: readonly WorktreeRecord[];
   readonly branches: readonly BranchRecord[];
+  readonly currentBranch?: string | null;
   readonly bindings: readonly SessionBinding[];
   /** Shared instructions for the browser-local Main projection. */
   readonly mainInstructions: string;
@@ -136,7 +139,9 @@ export function createWorktreeRefreshGuard() {
 
 /** Prefer the branch checked out by the DSH Workspace, then fall back to any local branch. */
 export function selectDefaultBaseBranch(branches: readonly BranchRecord[]): string {
-  return branches.find((branch) => branch.isCurrent)?.name ?? branches[0]?.name ?? '';
+  const branch = branches.find((branch) => branch.kind !== 'remote' && branch.isCurrent)
+    ?? branches.find((branch) => branch.kind !== 'remote') ?? branches[0];
+  return branch?.ref ?? branch?.name ?? '';
 }
 
 /** Keep a valid user choice across branch-list refreshes, otherwise choose the current branch. */
@@ -144,7 +149,11 @@ export function reconcileBaseBranchSelection(
   selectedBranch: string,
   branches: readonly BranchRecord[],
 ): string {
-  if (branches.some((branch) => branch.name === selectedBranch)) return selectedBranch;
+  if (branches.some((branch) => (branch.ref ?? branch.name) === selectedBranch)) return selectedBranch;
+  // The picker resolves unique legacy aliases for presentation. An ambiguous name
+  // remains unselected until the user explicitly chooses a complete ref.
+  if (branches.some((branch) => branch.name === selectedBranch ||
+      (branch.kind === 'remote' && 'remotes/' + branch.name === selectedBranch))) return selectedBranch;
   return selectDefaultBaseBranch(branches);
 }
 
@@ -257,19 +266,22 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 }
 
-/** Read the Worktree, branch, binding, and Workspace-root Main projections in one refresh. */
+/** Read Worktree, Git readiness/HEAD, binding, and Workspace-root Main projections. */
 export async function loadWorktreeView(
   manager: WorktreeManager,
   workspaceId: string,
 ): Promise<WorktreeViewData> {
-  const [worktreesResult, branchesResult, bindingsResult, mainInstructionsResult] =
+  const [worktreesResult, branchesResult, bindingsResult, mainInstructionsResult, checkoutResult] =
     await Promise.allSettled([
       manager.listWorktrees({ workspaceId }),
-      manager.listBranches({ workspaceId }),
+      typeof manager.getWorkspaceGitState === 'function'
+        ? manager.getWorkspaceGitState({ workspaceId })
+        : manager.listBranches({ workspaceId }),
       manager.listBindings({ workspaceId }),
       typeof manager.getWorktreeInstructions === 'function'
         ? manager.getWorktreeInstructions({ workspaceId, worktreeId: `main:${workspaceId}` })
         : Promise.resolve(''),
+      Promise.resolve().then(() => manager.getWorkspaceCheckout?.({ workspaceId })),
     ]);
 
   if (worktreesResult.status === 'rejected') throw worktreesResult.reason;
@@ -277,24 +289,30 @@ export async function loadWorktreeView(
   if (mainInstructionsResult.status === 'rejected') throw mainInstructionsResult.reason;
   if (branchesResult.status === 'rejected') {
     const readiness = readinessFromBranchError(branchesResult.reason);
-    if (readiness !== undefined) {
-      return {
-        worktrees: worktreesResult.value,
-        branches: [],
-        bindings: bindingsResult.value,
-        mainInstructions: mainInstructionsResult.value,
-        readiness,
-      };
-    }
-    throw branchesResult.reason;
+    if (readiness === undefined) throw branchesResult.reason;
+    return {
+      worktrees: worktreesResult.value,
+      branches: [],
+      bindings: bindingsResult.value,
+      mainInstructions: mainInstructionsResult.value,
+      readiness,
+    };
   }
 
+  const checkout = checkoutResult.status === 'fulfilled' ? checkoutResult.value : undefined;
+  const state = branchesResult.status === 'fulfilled' ? branchesResult.value : [];
+  const branches = Array.isArray(state) ? state as readonly BranchRecord[] : [];
+  const currentBranch = Array.isArray(state)
+    ? branches.find((branch) => branch.isCurrent)?.name
+    : (state as { currentBranch: string | null }).currentBranch;
   return {
+    ...(checkout !== undefined ? { checkout } : {}),
     worktrees: worktreesResult.value,
-    branches: branchesResult.value,
+    branches,
+    ...(currentBranch === undefined ? {} : { currentBranch }),
     bindings: bindingsResult.value,
     mainInstructions: mainInstructionsResult.value,
-    readiness: branchesResult.value.length > 0
+    readiness: branches.length > 0 || checkout?.currentHead !== undefined
       ? { status: 'ready' }
       : { status: 'noLocalBranch' },
   };

@@ -11,6 +11,69 @@ import { LocalGitAdapter, WORKTREE_GIT_WORKING_TREE } from '../lib/index.js';
 
 const gitNullDevice = process.platform === 'win32' ? 'NUL' : os.devNull;
 
+test('worktree enumeration never probes detached labels and optional resolution degrades', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'worktree-label-'));
+  const commit = 'a'.repeat(40);
+  try {
+    for (const failure of [
+      { stderr: 'unexpected describe failure', outcome: { exitCode: 1, signal: null } },
+      { stderr: 'invalid object', outcome: { exitCode: 128, signal: null } },
+      { stdout: 'incomplete', lossy: true },
+    ]) {
+      const runtime = createFakeRuntime({ responses: [
+        { stdout: `worktree ${root}\nHEAD ${commit}\ndetached\n\nworktree /other\nHEAD ${commit}\ndetached\n\n` },
+        failure,
+      ] });
+      const adapter = new LocalGitAdapter({ subprocess: runtime });
+      const rows = await adapter.listWorktrees(root);
+      assert.equal(rows.length, 2);
+      assert.equal(runtime.spawnCalls.length, 1);
+      assert.equal(rows[0].currentHead, undefined);
+      assert.equal(await adapter.resolveCheckoutHead(root, rows[0]), undefined);
+      assert.equal(runtime.spawnCalls.length, 2);
+      assert.ok(runtime.spawnCalls.every((call) => !call.argv.includes('rev-parse')));
+    }
+    const runtime = createFakeRuntime({ stderr: 'fatal: no tag exactly matches commit',
+      outcome: { exitCode: 128, signal: null } });
+    const adapter = new LocalGitAdapter({ subprocess: runtime });
+    assert.deepEqual(await adapter.resolveCheckoutHead(root, { absolutePath: root, detached: true, headCommit: commit }),
+      { kind: 'commit', name: commit.slice(0, 7), commit });
+    // A rev-parse failure cannot affect the label: short hashes are derived locally.
+    assert.equal(runtime.spawnCalls.length, 1);
+    assert.equal(runtime.spawnCalls[0].argv[1], 'describe');
+    assert.equal(await adapter.resolveCheckoutHead(root, { absolutePath: root, detached: true, headCommit: 'bad' }), undefined);
+    assert.equal(runtime.spawnCalls.length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('200 commit membership checks share one bounded traversal of a fixed HEAD', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'commit-membership-'));
+  const commits = Array.from({ length: 200 }, (_, i) => (i + 1).toString(16).padStart(40, '0'));
+  const head = 'a'.repeat(40);
+  const base = 'b'.repeat(40);
+  try {
+    const runtime = createFakeRuntime({ stdout: commits.join('\n') + '\n' });
+    const adapter = new LocalGitAdapter({ subprocess: runtime });
+    assert.equal(await adapter.containsCommits(root, commits, head, base), true);
+    assert.equal(runtime.spawnCalls.length, 1);
+    assert.deepEqual(runtime.spawnCalls[0].argv.slice(1), ['rev-list', head, `^${base}`, '--']);
+    assert.equal(await adapter.containsCommits(root, [...commits.slice(1), 'c'.repeat(40)], head, base), false);
+    const truncated = new LocalGitAdapter({ subprocess: createFakeRuntime({ stdout: commits.join('\n'), lossy: true }) });
+    await assert.rejects(truncated.containsCommits(root, commits, head, base), { code: 'GIT_OPERATION_FAILED' });
+    const singleRuntime = createFakeRuntime({ responses: [{}, {}, { outcome: { exitCode: 1, signal: null } }] });
+    assert.equal(await new LocalGitAdapter({ subprocess: singleRuntime }).containsCommit(root, commits[0], head, base), true);
+    assert.deepEqual(singleRuntime.spawnCalls.map((call) => call.argv.slice(1)), [
+      ['rev-parse', '--verify', '--quiet', `${commits[0]}^{commit}`],
+      ['merge-base', '--is-ancestor', commits[0], head],
+      ['merge-base', '--is-ancestor', commits[0], base],
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('preserves porcelain status flags with and without reasons', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-status-parser-'));
   try {
@@ -127,7 +190,7 @@ function createFakeRuntime({
 test('runs Git through the injected DSH subprocess runtime with explicit direct argv', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   try {
-    const runtime = createFakeRuntime({ stdout: 'main\0feature/x\0' });
+    const runtime = createFakeRuntime({ stdout: 'refs/heads/main\0main\0\0\0\nrefs/heads/feature/x\0feature/x\0\0\0\n' });
     const git = new LocalGitAdapter({
       subprocess: runtime,
       timeoutMs: 500,
@@ -140,8 +203,9 @@ test('runs Git through the injected DSH subprocess runtime with explicit direct 
     assert.deepEqual(runtime.spawnCalls[0].argv, [
       '/execution-world/bin/git',
       'for-each-ref',
-      '--format=%(refname:short)%00',
+      '--format=%(refname)%00%(refname:short)%00%(symref)%00%00',
       'refs/heads/',
+      'refs/remotes/',
     ]);
     assert.equal(runtime.spawnCalls[0].cwd, workspaceRoot);
     assert.equal(runtime.spawnCalls[0].stdio.stdin, 'ignore');
@@ -156,21 +220,45 @@ test('runs Git through the injected DSH subprocess runtime with explicit direct 
   }
 });
 
+test('concurrent fetch shares subprocess work and retry clears failed in-flight state', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'worktree-fetch-'));
+  try {
+    const runtime = createFakeRuntime({ responses: [{ stdout: 'origin\r\nupstream\r\n' }] });
+    const git = new LocalGitAdapter({ subprocess: runtime });
+    await Promise.all([git.fetchRemoteBranches(workspaceRoot), git.fetchRemoteBranches(workspaceRoot)]);
+    assert.equal(runtime.spawnCalls.length, 3);
+    for (const spec of runtime.spawnCalls.slice(1)) {
+      assert.equal(spec.cwd, workspaceRoot);
+      assert.equal(spec.env.GIT_TERMINAL_PROMPT, '0');
+      assert.ok(spec.argv.includes('--refmap='));
+      assert.ok(spec.argv.includes('--no-tags'));
+      assert.ok(spec.argv.includes('--no-prune'));
+      assert.ok(spec.argv.includes('core.hooksPath=' + gitNullDevice));
+    }
+    const failed = new LocalGitAdapter({ subprocess: createFakeRuntime({ responses: [
+      { stdout: 'origin\n' }, { outcome: { exitCode: 1, signal: null } }, { stdout: '' },
+    ] }) });
+    await assert.rejects(failed.fetchRemoteBranches(workspaceRoot), { code: 'GIT_OPERATION_FAILED' });
+    await failed.fetchRemoteBranches(workspaceRoot);
+  } finally { await rm(workspaceRoot, { recursive: true, force: true }); }
+});
+
 test('reads branch checkout paths with one NUL-delimited for-each-ref invocation', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   try {
-    const runtime = createFakeRuntime({ stdout: `main\0${workspaceRoot}\0\nfeature/x\0\0\n` });
+    const runtime = createFakeRuntime({ stdout: `refs/heads/main\0main\0\0${workspaceRoot}\0\nrefs/heads/feature/x\0feature/x\0\0\0\n` });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
     assert.deepEqual(await git.listBranchesWithWorktreePaths(workspaceRoot), [
-      { name: 'main', worktreePath: workspaceRoot },
-      { name: 'feature/x' },
+      { name: 'main', ref: 'refs/heads/main', kind: 'local', worktreePath: workspaceRoot },
+      { name: 'feature/x', ref: 'refs/heads/feature/x', kind: 'local' },
     ]);
     assert.equal(runtime.spawnCalls.length, 1);
     assert.deepEqual(runtime.spawnCalls[0].argv.slice(1), [
       'for-each-ref',
-      '--format=%(refname:short)%00%(worktreepath)%00',
+      '--format=%(refname)%00%(refname:short)%00%(symref)%00%(worktreepath)%00',
       'refs/heads/',
+      'refs/remotes/',
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -186,20 +274,42 @@ test('falls back to separate branch and worktree reads when worktreepath is unsu
           stderr: 'fatal: unknown field name: worktreepath\n',
           outcome: { exitCode: 128, signal: null },
         },
-        { stdout: 'main\0feature/x\0' },
+        { stdout: 'refs/heads/main\0main\0\0\0\nrefs/heads/feature/x\0feature/x\0\0\0\n' },
         { stdout: `worktree ${workspaceRoot}\nHEAD 0123456789abcdef0123456789abcdef01234567\nbranch refs/heads/main\n\n` },
       ],
     });
     const git = new LocalGitAdapter({ subprocess: runtime });
 
     assert.deepEqual(await git.listBranchesWithWorktreePaths(workspaceRoot), [
-      { name: 'main', worktreePath: workspaceRoot },
-      { name: 'feature/x' },
+      { name: 'main', ref: 'refs/heads/main', kind: 'local', worktreePath: workspaceRoot },
+      { name: 'feature/x', ref: 'refs/heads/feature/x', kind: 'local' },
     ]);
     assert.equal(runtime.spawnCalls.length, 3);
     assert.deepEqual(runtime.spawnCalls.slice(1).map(({ argv }) => argv.slice(1)), [
-      ['for-each-ref', '--format=%(refname:short)%00', 'refs/heads/'],
+      ['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(symref)%00%00', 'refs/heads/', 'refs/remotes/'],
       ['worktree', 'list', '--porcelain'],
+    ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('keeps fetched remote facts and filters symbolic refs in the old-Git fallback', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
+  try {
+    const runtime = createFakeRuntime({
+      responses: [
+        { stderr: 'fatal: unknown field name: worktreepath\n', outcome: { exitCode: 128, signal: null } },
+        { stdout: 'refs/heads/main\0main\0\0\0\nrefs/remotes/origin/main\0origin/main\0\0\0\n' +
+          'refs/remotes/origin/HEAD\0origin/HEAD\0refs/remotes/origin/main\0\0\n' +
+          'refs/remotes/upstream/HEAD\0upstream/HEAD\0\0\0\n' },
+        { stdout: `worktree ${workspaceRoot}\nbranch refs/heads/main\n\n` },
+      ],
+    });
+    const branches = await new LocalGitAdapter({ subprocess: runtime }).listBranchesWithWorktreePaths(workspaceRoot);
+    assert.deepEqual(branches, [
+      { name: 'main', kind: 'local', ref: 'refs/heads/main', worktreePath: workspaceRoot },
+      { name: 'origin/main', kind: 'remote', remote: 'origin', ref: 'refs/remotes/origin/main' },
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -251,8 +361,9 @@ test('maps a runtime executable-resolution failure to the stable missing-Git err
       assert.equal(error?.details?.gitExitCode, 'ENOENT');
       assert.deepEqual(error?.details?.gitArgs, [
         'for-each-ref',
-        '--format=%(refname:short)%00',
+        '--format=%(refname)%00%(refname:short)%00%(symref)%00%00',
         'refs/heads/',
+      'refs/remotes/',
       ]);
       return true;
     });
@@ -496,7 +607,7 @@ test('removes an ambient optional-lock override before running a Git mutation', 
 test('places embedded executable arguments after the resolved executable', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   try {
-    const runtime = createFakeRuntime({ stdout: 'main\0' });
+    const runtime = createFakeRuntime({ stdout: 'refs/heads/main\0main\0\0\0\n' });
     const git = new LocalGitAdapter({
       subprocess: runtime,
       executable: '/execution-world/bin/node',
@@ -508,8 +619,9 @@ test('places embedded executable arguments after the resolved executable', async
       '/execution-world/bin/git',
       '--embedded-git-shim',
       'for-each-ref',
-      '--format=%(refname:short)%00',
+      '--format=%(refname)%00%(refname:short)%00%(symref)%00%00',
       'refs/heads/',
+      'refs/remotes/',
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -590,20 +702,21 @@ test('reads machine-delimited commit history with the immutable range and visibl
       'log',
       '--no-color',
       '--topo-order',
-      '--max-count=201',
+      '--max-count=51',
+      '--skip=0',
       '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
-      `${baseline}..HEAD`,
+      `${baseline}..${head}`,
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
 
-test('reads direct HEAD history without a baseline and caps a 201st record', async () => {
+test('reads direct HEAD history without a baseline and exposes another 50-commit page', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'clutch-dsh-subprocess-git-'));
   const head = 'a'.repeat(40);
   try {
-    const records = Array.from({ length: 201 }, (_, index) => {
+    const records = Array.from({ length: 51 }, (_, index) => {
       const sha = index.toString(16).padStart(40, '0');
       return `${sha}\0\0subject ${index}\0Alice\0alice@example.invalid\x002026-09-14T00:00:00+00:00\x1e`;
     }).join('');
@@ -612,14 +725,17 @@ test('reads direct HEAD history without a baseline and caps a 201st record', asy
 
     const history = await git.listCommits(workspaceRoot);
 
-    assert.equal(history.commits.length, 200);
+    assert.equal(history.commits.length, 50);
     assert.equal(history.truncated, true);
+    assert.equal(history.nextOffset, 50);
     assert.deepEqual(runtime.spawnCalls[1].argv.slice(1), [
       'log',
       '--no-color',
       '--topo-order',
-      '--max-count=201',
+      '--max-count=51',
+      '--skip=0',
       '--format=%H%x00%P%x00%s%x00%an%x00%ae%x00%aI%x1e',
+      head,
     ]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

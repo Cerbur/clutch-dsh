@@ -7,12 +7,14 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 
 import type {
   BranchRecord,
+  WorkspaceCheckout,
   SessionBinding,
   WorktreeGitCommitFiles,
   WorktreeGitCommitFilesRequest,
   WorktreeGitFileDiff,
   WorktreeGitFileDiffRequest,
   WorktreeGitHistory,
+  WorktreeGitHistoryRequest,
   WorktreeId,
   WorktreeRecord,
   WorktreeImportCandidate,
@@ -20,6 +22,7 @@ import type {
   WorktreePermissionNormalizationRequest,
   WorktreePermissionResult,
   WorkspaceId,
+  WorkspaceGitState,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -227,6 +230,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>> {
+    return this.remote.getWorkspaceGitState(input);
+  }
+
+  @Remote
   listWorktrees(input: {
     readonly workspaceId: string;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>> {
@@ -234,11 +242,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    readonly baseBranch?: string;
-  }): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeRemoteResult<WorktreeGitHistory>> {
     return this.remote.listWorktreeCommits(input);
   }
 
@@ -271,10 +275,24 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
+  fetchRemoteBranches(input: {
+    readonly workspaceId: string;
+  }): Promise<WorktreeRemoteResult<readonly BranchRecord[]>> {
+    return this.remote.fetchRemoteBranches(input);
+  }
+
+  @Remote
+  getWorkspaceCheckout(input: { readonly workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceCheckout>> {
+    return this.remote.getWorkspaceCheckout(input);
+  }
+
+  @Remote
   createWorktree(input: {
     readonly workspaceId: string;
     readonly branch: string;
     readonly newBranch?: string;
+    readonly fromHead?: boolean;
+    readonly expectedHeadCommit?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>> {
     return this.remote.createWorktree(input);
   }

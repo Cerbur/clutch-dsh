@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { ReactNode } from 'react';
 import type {
   WorktreeImportCandidate,
+  BranchRecord,
   WorktreeManager,
   WorktreePermissionManager,
   WorktreePermissionResult,
@@ -419,6 +420,8 @@ export interface WorktreeCreateDialogProps {
   readonly readError?: WorktreeViewError;
   readonly setupStatus: WorktreeSetupStatus | undefined;
   readonly canCreate: boolean;
+  readonly branchesLoading?: boolean;
+  readonly pickerKey?: number;
   readonly mode: WorktreeRegistrationMode;
   readonly importCandidates: ImportCandidatesState;
   readonly selectedImportPath: string | undefined;
@@ -431,6 +434,8 @@ export interface WorktreeCreateDialogProps {
   readonly onRetryImportCandidates: () => void;
   readonly onSelectedImportPathChange: (absolutePath: string) => void;
   readonly onSelectedBranchChange: (branch: string) => void;
+  readonly onFetchBranches?: () => Promise<readonly BranchRecord[]>;
+  readonly onLoadBranches?: () => Promise<readonly BranchRecord[]>;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;
 }

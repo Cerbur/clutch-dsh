@@ -8,7 +8,7 @@
 
 工具偏好存储在 Host 自有的独立配置文件中，与关系索引和原生 Session 元数据隔离。
 插件只在自己的 sidecar 中保存 Worktree 关系、获取事实、共享 Worktree 指令以及 Workspace 根目录的
-Main 指令。受管理的 Worktree 提供可选择本地 branch 基线的只读 Git 与变更 Dashboard，Main 提供 Workspace 根目录 HEAD history；
+Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 branch 基线的只读 Git 与变更 Dashboard，Local/Main 提供 Workspace 根目录 HEAD history 和可选对比分支；
 不会复制 transcript 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期操作、
@@ -56,6 +56,16 @@ pnpm dsh web
 DSH Web profile 必须已经能够正常启动。修改 `package.json` 或 `cordis.patch.yml` 后，需要重新
 执行绝对路径安装命令。
 
+安装到 Desktop 时，先结束活跃任务并完全退出 DeepSeek Harness，再使用已安装的 DSH CLI：
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-dsh-worktree
+```
+
+安装完成后重新打开 Desktop。本地链接生效期间，需要保留 checkout 及其已安装的 `node_modules`；
+只复制 `lib/` 或移除 checkout 的依赖可能导致 Host 和权限 preset 入口导入失败。
+Client 的实现依赖在构建时打包，Desktop 无需另外提供 Zustand 或 Immer 模块。
+
 ### 从 GitHub 源码安装（可选）
 
 DSH plugin market 使用的源码依赖形式也可以直接安装：
@@ -72,7 +82,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | 功能                    | 预览                                                                                                                                 | 作用                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
-| **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
+| **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
 | **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 和其他未完成卡片仍标记为**即将推出**。                                                                                         |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
@@ -109,11 +119,46 @@ Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入
 或选项菜单打开时显示，与菜单按钮保持一致。
 
 1. 打开 Local/Main 或 active Worktree 的选项菜单，选择 **Create Worktree**。
-2. 选择本地 base branch，也可以填写新的 branch 名称。
+2. 选择本地或已获取的远端 base branch，并填写新的本地 branch 名称。弹窗会推荐一个可用名称。
 3. 确认弹窗。插件会创建 Git Worktree，记录获取事实；从该 Worktree 打开 Session 时继续执行
    正常的 Session 和 binding 流程。
 
-Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚未准备好，DSH 会显示对应
+创建和导入页签使用左右对齐、占满内容宽度的控件，并保持一致的字段间距。
+
+创建、保存基线和 Git 对比共用同一个可搜索选择器，按**本地分支**和**远端分支**分组，
+并标注当前与已检出状态，支持全部、本地、远端分支过滤。
+下拉框在亮色与暗色主题下均使用 DSH 原生菜单材质。搜索不区分大小写；方向键移动、Enter 选择、Escape 关闭。
+点击浮窗内的标题、空白、搜索、筛选或获取区域会保持打开；选中选项或点击外部区域才收起浮窗。
+分支与导入选择器在候选数据加载期间也能立即打开，浮窗内显示加载状态，数据返回后原位更新。
+搜索和筛选条件保持不变，刷新时保留已有候选列表。
+关闭并重新打开基线编辑器后，旧弹窗的待完成结果会被忽略。
+只有最新的分支读取或 Fetch 可以更新候选与加载状态。
+下拉列表采用紧凑高度，优先在字段下方展开，空间不足时缩短列表并在内部滚动；仅下方可用空间过小时向上展开。
+即使候选数据已经缓存，也先绘制紧凑的加载浮窗，再准备列表。
+首次浮窗与加载阶段保持同一高度，数据就绪后按内容调整高度，并受滚动上限约束。大量候选只渲染可视区域附近的选项；
+搜索、筛选和键盘选择仍覆盖全部候选。
+切换**创建**和**导入**时，在同一弹窗内替换表单内容，不重新播放弹窗的打开动画。
+每次打开分支选择器都会重新读取本地 Git 引用，包含 terminal 中的变更；切回浏览器不重新加载候选。
+Fetch 完成后读取一次更新后的分支列表，并直接提供给选择器。
+打开新建 Worktree 弹窗不预加载分支，默认基线来自当前分支或 HEAD。
+完整分支列表仅在打开选择器或 Fetch 完成后读取。工作区导航单独读取 Git 就绪状态和根 checkout 当前分支；
+进入 Git 与变更只加载历史，不预加载分支列表。
+默认优先选择当前本地分支。远端列表来自本地仓库已有的引用；点击**远端分支**标题旁的
+下载箭头可获取全部已配置远端的分支，即使远端列表为空也能使用。Fetch 更新远端分支引用并刷新
+当前 Workspace，保留已选值、本地分支、tag 和工作区文件，不清理已删除的引用。
+获取期间按钮显示加载图标并禁止重复点击；成功后原位显示**远端分支已更新**，2 秒后恢复下载图标。
+失败保留列表，在同一按钮上显示重试入口；按钮详情保留错误码、message 与诊断信息，
+并可在**报错与修复**中查看，列表底部不额外添加提示行。
+分支列表读取不会自动连接远端。基于远端创建 Worktree 必须使用新的本地分支；
+若该本地分支不存在，其短名可以与远端基线同名。远端 HEAD 条目不会列出。
+
+Git repository 和 initial commit 必须可用。可选择本地 branch，或选择 **HEAD**，从 Main 当前
+checkout（包括精确 Tag 或游离 Commit）创建新分支。Main 会显示当前 branch、精确 Tag 或短 Commit，
+游离时仍保留创建入口。
+本地化的 HEAD 选项会包含当前引用名称，例如**当前 HEAD (v1.0.0)**。
+创建使用选择时显示的 commit；提交前 HEAD 已变化时，以 `WORKTREE_STATE_CONFLICT` 拒绝创建，
+请刷新弹窗并重新选择来源。
+如果仓库尚未准备好，DSH 会显示对应
 的 readiness 提示和可复制的 setup 指引。
 
 如果 Workspace 位于仓库子目录，其 Worktree 会保留相同的相对目录。例如，位于
@@ -125,7 +170,8 @@ Git repository、本地 branch 和 initial commit 必须可用。如果仓库尚
 子目录机制升级后，已绑定且仍使用旧 Git 根目录 cwd 的 Session 可以继续使用，包括自动工具注入、
 会话发现、继续投递、结果回报，以及默认从自身 checkout 的 HEAD 创建 Worktree。原始 cwd 和历史保持不变；
 新的 Session 绑定仍必须匹配 checkout 内的 Workspace 工作目录。Git 文件预览对当前 Session
-cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址，并遵循 DSH 原生文件访问校验。
+cwd 内的文件使用相对地址。cwd 外的文件会提示使用 IDE 或仓库根目录的 Session；已绑定的旧
+Git-root Session 保留原有预览范围。
 
 ### 启用 Agent Worktree 工具
 
@@ -156,8 +202,8 @@ cwd 内的文件使用相对地址，对其余 checkout 文件使用绝对地址
 
 | 工具                    | 参数                                                          | 行为                                                                                                                                                                      |
 | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 所在的健康 Worktree 分支创建新分支；Local/Main 使用根 checkout 当前分支。显式本地 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
-| `clutch_list_worktrees` | 可选 `workspaceId`                                            | 列出受管 Worktree 的 id、分支、路径、生命周期和健康状态，以及可用的本地基线分支。默认查询调用方 Workspace。                                                               |
+| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 所在的健康 Worktree 分支创建新分支；Local/Main 使用根 checkout 当前分支。显式本地或已获取的远端 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
+| `clutch_list_worktrees` | 可选 `workspaceId`                                            | 列出受管 Worktree 的 id、分支、路径、生命周期和健康状态，以及可用的本地和已获取的远端基线分支。默认查询调用方 Workspace。                                                               |
 | `clutch_span_worktree`  | `worktreeId` 或旧参数 `name`、`prompt`、可选 `model`、`title` | 创建新的原生 Session、建立绑定、配置初始模型并提交 prompt。返回 `sessionId` 和投递阶段状态。                                                                              |
 | `clutch_list_models`    | 可选 `provider`                                               | 列出原生 provider/model、推理强度和 provider 错误，同时返回当前 Session 模型及部署默认模型。                                                                              |
 | `clutch_list_sessions`  | 可选 `workspaceId`、`worktreeId`                              | 查找已有 Session、绑定状态、运行状态和标题。不可用关系仅返回诊断，不读取其历史。                                                                                          |
@@ -170,7 +216,7 @@ Git 分支名；指派时优先使用稳定的 `worktreeId`。单独创建 Workt
 仅继承已提交状态；不会复制 staged、unstaged 或 untracked 文件。
 绑定不健康时不会悄悄退回 Main。默认固定调用 checkout 的已提交 HEAD，包括根目录的
 detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
-仍可显式指定本地 `baseBranch` 覆盖默认值。
+仍可显式指定本地或已获取的远端 `baseBranch` 覆盖默认值。
 
 新委派的 Session 默认仅自动获得
 `clutch_report_result({ status, summary, evidence?, requestId? })`。Host 将回报目标固定为
@@ -234,12 +280,12 @@ Workspace 根目录缺失时仍拒绝消息投递。
 ### 导入已有 Worktree
 
 1. 选择 Workspace，打开分支图标的 **新建 Worktree** 操作，然后切换到 **Import**。
-2. 从 branch 和 path 列表中选择候选项。
+2. 打开可搜索的 Worktree 选择器，按分支名或路径过滤。每项展示分支和目录，选择要导入的 Worktree。
 3. 选择 **Import Worktree**。插件会原地登记已有目录，不移动、复制或修改其中的文件，随后
    使用与新建 Worktree 相同的 Session 流程。
 
 第一版只列出尚未被插件管理、状态 ready、绑定 branch 且不是 repository root 的 Git Worktree。
-Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 仍可在选择本地基线 branch 后
+Detached、bare、prunable、缺失或无效条目会被省略。导入的 Worktree 仍可在选择本地或已获取的远端基线 branch 后
 使用 Git 与变更。
 
 导入遵循同样的 Workspace 相对目录规则，只提供该目录可用的候选项。原 Workspace 可用时，
@@ -298,31 +344,36 @@ Dashboard 的 **Open in ...** 分割按钮保留插件自己的按钮 UI，但�
 
 从受管理 Worktree 或 Main Dashboard 打开 **Git 与变更** Tab。Main 直接读取当前 Workspace 根目录 HEAD 的
 commit history；当根目录存在 tracked、staged、unstaged 或 untracked 改动时，顶部会加入**未提交的改动** entry。
-默认最多展示 200 个已提交 commit，选中第一个可见目标，并对工作区目标和已提交 history 使用相同的变更文件与 Diff 面板。对于持久化 `baseBranch` 存在且不同于当前
+基线选择器默认**无**，展示 HEAD history，不显示总提交数。选择本地或已获取的远端对比分支后，
+展示基线汇总、完整对比提交总数和 ahead/behind 事实；选择**无**会返回直接历史。这些选择只保留在页面内存。
+直接历史选中第一个可见目标，并对工作区目标和已提交 history 使用相同的变更文件与 Diff 面板。对于持久化 `baseBranch` 存在且不同于当前
 branch，或带有作为隐式基线的获取 commit 的 managed Worktree，Overview 会通过现有 `/api` Connection
 做一次轻量、按需的 Git 状态读取，分别展示 ahead/behind commit 数量、已提交（基线到 HEAD）和未提交
-（当前工作区）的文件行数。这是临时 projection，不是 watcher，也不会写入 Worktree 记录。Main 没有 Worktree 基线
-比较，因此 Overview 对 ahead/behind 事实仍显示 **待接入**，但 Git Tab 可以展示 Main history。不可用或未选择基线的
+（当前工作区）的文件行数。这是临时 projection，不是 watcher，也不会写入 Worktree 记录。Local/Main 对比只是 Git Tab 的临时选择，
+因此 Overview 对 ahead/behind 事实仍显示 **待接入**，但 Git Tab 可以展示 Main history。不可用或未选择基线的
 managed 视图会诚实显示 **待接入**。打开 Overview 不会加载 branch 列表；
-第一次进入 Git Tab 时才加载本地 branch，并在基线解析后加载 commit history。要替换基线，可以点击
+Git Tab 挂载时直接按已保存分支或获取 commit 读取 history。只有打开选择器才加载分支候选，
+Fetch 直接消费返回的候选列表。要替换基线，可以点击
 Base fact 旁的铅笔图标打开 branch 选择器：搜索框固定在选择器顶部，下方是有固定高度的 branch 列表
 （默认展示约七条），超出部分在列表内滚动，因此过滤 branch 时整个弹窗尺寸保持不变。选择除当前
-Worktree branch 之外的任一本地 branch，再保存。
+Worktree branch 之外的任一本地或已获取的远端 branch，再保存。
 保存会替换 plugin sidecar 中持久化的 `baseBranch`；下次打开 Git Tab 时，选择器会以保存后的值作为默认值。
 Git Tab 打开后，直接修改其中的选择器仍只是临时查看选择，会重新加载 history、changed files 和 Diff，
 不会再次写入 Worktree 记录。如果不存在可用的已保存基线（缺失或等于当前 Worktree branch），Git Tab
 和 Overview 会改用 Worktree 不可变的获取 commit 读取，并将该解析出的 commit 显示为 Base fact；只有
 既无可用已保存基线、也无获取 commit 的 Worktree 才会保持未选择状态并提示用户选择。当所选 branch
 已分叉时，Git 会解析两个 branch head 的共同先祖；
-Worktree 在共同先祖之后的 commit 计为 `+N` 领先，base branch 在共同先祖之后的 commit 计为 `-N` 落后，
+Worktree 在共同先祖之后的 commit 计为 `↑ N` 领先，base branch 在共同先祖之后的 commit 计为 `↓ N` 落后，
 history 和文件读取仍然可用。如果两个 head 没有共同先祖，则基线汇总退化为 base branch head 与
 Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base head 独有的 commit。
 在有效的 managed Worktree 基线加载后，Git 与变更 Tab 初始会选择**基线汇总**，而不是第一个 commit；切换基线 branch
-也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。Main 跳过这个仅用于比较的汇总，但使用相同的已提交 history 与多选行为；Workspace 根目录有改动时也展示实时工作区目标。
+也会回到该汇总。需要更窄的查看范围时，再选择 commit 或**未提交的改动**。Local/Main 选择**无**时跳过这个仅用于比较的汇总，但使用相同的已提交 history 与多选行为；Workspace 根目录有改动时也展示实时工作区目标。
 选择**未提交的改动**会比较当前 Workspace 根目录与 `HEAD`，不会创建基线或写入 Git 状态。
 
-所选 branch 每次读取都会重新解析。浏览器只能选择普通的本地 branch 名，不能直接选择 commit SHA 或
-任意 Git ref：完整 ref 路径、tag 或 remote-tracking ref 会被直接拒绝，而已选 branch 不复存在时会显示
+所选 branch 每次读取都会重新解析。选择器展示短名，以枚举出的 `refs/heads/...` 或
+`refs/remotes/...` 作为稳定身份。新保存的远端基线保留精确远端 ref，新增或删除同名本地分支不会改变基线。
+旧短名仅在无歧义时兼容；有歧义的已保存值返回 `WORKTREE_STATE_CONFLICT`，需要重新选择目标分支。
+commit SHA、tag 和任意 revision expression 仍被拒绝。已选精确分支不复存在时会显示
 诚实的不可用状态，而不是泛化的 Git 失败。`baseCommit` 是不可变的获取元数据，永远不能由用户直接选择，
 并在没有可用已保存 branch 基线时作为隐式基线；创建恢复也绝不会改写它。当 managed Worktree 或 Main Workspace 根目录存在 staged、unstaged 或 untracked 文件时，列表顶部会加入**未提交的改动**；
 选择它会将对应的当前工作区与 `HEAD` 比较，并使用相同的变更文件和 Diff 视图。
@@ -332,15 +383,27 @@ Worktree `HEAD` 之间的完整 tree diff，history 展示 Worktree 相对 base 
 打开 **包含工作区改动** 后，该目标会改为展示从同一比较边界到当前工作区的一次净差异，其中包含已提交、
 staged、unstaged、untracked、删除和重命名改动。这是按需读取的新鲜 projection，而不是简单拼接两段
 Diff。点击 commit 会展示该 commit 自己的 Diff；对于 managed Worktree 和 Main，打开提交栏标题中的**多选提交**开关后，可以同时选择
-多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。Main 不提供基线汇总或工作区包含开关；该开关默认关闭，关闭时会把已选
+多个已提交行，查看这些 commit 各自 first-parent delta 的精确并集。Local/Main 选择**无**时不提供基线汇总或工作区包含开关；多选开关默认关闭，关闭时会把已选
 集合收敛回当前聚焦的 commit。变更文件会记录贡献它的
 commit；每个所选 commit 会作为独立 Diff segment 展示，不会隐式扩展成范围，也不会包含未选择的
 commit。变更文件栏标题会展示当前目标（基线汇总、所选 commit 或未提交改动）对应的绿色 `+N` 和红色
-`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。汇总 Diff 工具栏中的
-**在侧栏打开**会使用当前 Session 在原生右侧栏中显示当前文件，但前提是该 Session 属于 Dashboard
-对应的 Worktree。空 Worktree 或无关的当前 Session 不会通过此操作打开文件。
+`-N` 总行数；仅包含 binary 时显示未知。未提交改动 entry 与已提交的多选互斥。Diff 工具栏和仍存在的
+变更文件行均提供 **在侧栏打开**。当前 Session 属于 Dashboard 分组时优先使用，否则回退到该分组
+首个可见 Session，并显式展开原生右侧栏。没有目标 Session 时提示先创建会话，概览的空会话卡片
+也提供 **新建会话**。Main 和托管 Worktree 的文件树路径、Diff 标题和文件请求均相对 Workspace
+工作目录。在 `/repo/packages/app` 中，`src/index.ts` 指向 `/repo/packages/app/src/index.ts`；
+仓库根目录的 `README.md` 显示为 `../../README.md`。视图保留整个 checkout 范围的变更。
+目标 Session cwd 外的文件会显示提示，不会生成无效资源地址。
 
-managed Worktree 和 Main history 都最多展示 200 个 commit，更多内容会标记为 truncated；超过 Git adapter 输出上限的变更文件列表
+Main 显示本地 checkout 状态，省略派生 Worktree 的创建时间与基线事实。
+Ahead/Behind 使用中性的提交计数（`↑ N` / `↓ N`），代码增删行数保留绿色/红色计数。
+粘性顶栏将长引用名称截断为单行，只有引用文本本身触发复制。
+
+managed Worktree 和 Local/Main history 首次加载最近 50 个 commit，滚动到底部继续追加后续 50 个，
+保留当前选择和 Diff；也可以用键盘操作加载更多按钮。对比视图使用 ahead 数量展示完整已提交总数，
+与已加载页数无关。HEAD 或基线在分页间移动时，需要刷新后继续，已有行保持可见。
+发生该冲突后，加载后续提交按钮改为**刷新**。提交文件和 Diff 读取也要求 HEAD 在授权及读取期间保持一致。
+多选最多支持 200 个所选 commit。超过 Git adapter 输出上限的变更文件列表
 也会显式标记为 truncated，而不是报泛化错误。commit 详情使用 first-parent 比较，root
 commit 与空 tree 比较，rename/copy 行保留两个路径；binary 或过大的 diff 会显示明确的安全状态。变更
 文件行会用绿色 `+N` 表示新增、红色 `-N` 表示删除；binary 文件不显示这些数量。文件名会用绿色表示新增、红色表示删除、蓝色表示其他变更，每一行的标题与无障碍标签也会写出对应状态。文件夹 icon 会直接表示文件夹当前是展开还是折叠。
@@ -356,7 +419,7 @@ Git 与变更使用受页面 viewport 限制的固定尺寸布局。宽度足够
 固定尺寸的 Diff 栏内滚动；只读选择和刷新行为保持不变。
 
 视图是只读的，不提供 commit 或 staging 控件。managed Worktree 会依据所选 branch 到 `HEAD` 的 projection 验证
-commit；Main 会依据有界的 HEAD history projection 验证 commit。插件随后依据最新状态重新读取和授权工作区 path，因此这些 endpoint 不是通用 Git object 或文件读取器。
+commit；Local/Main 根据 HEAD 可达性验证 commit，对比时排除基线先祖。插件随后依据最新状态重新读取和授权工作区 path，因此这些 endpoint 不是通用 Git object 或文件读取器。
 刷新会在替换数据加载期间保留 ready 内容；旧 commit 或文件选择的迟到响应会被忽略。
 
 ### 添加 Worktree 或 Main 指令
@@ -409,7 +472,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   和历史。插件不会复制或改写这些数据。
 - 插件外部索引保存 Worktree 路径、branch、来源、生命周期状态、binding、排序、指令、获取事实
   及相关元数据。对于受管理 Worktree，Dashboard Base fact 是持久化的 `baseBranch`；用户可以将其
-  替换为除当前 Worktree branch 之外的本地 branch，保存后的值会成为 Git Tab 选择器的默认值。
+  替换为除当前 Worktree branch 之外的本地或已获取的远端 branch，保存后的值会成为 Git Tab 选择器的默认值。
   不可变的获取 `baseCommit` 与它分开保存，不会因该编辑被重写。索引位于 DSH host 的 plugin data
   directory，不写入项目目录或 DSH raw data，也不保存 Session 内容或 Workspace 根目录副本。
 - runtime `cwd` 在每次执行时派生。无 binding、Main 或 detached binding 使用 Workspace root；
@@ -431,8 +494,8 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - Git Dashboard 只实现 commit history、只读的**基线汇总**（可选包含一次从基线到工作区的
   新鲜 projection）、顶部的只读**未提交的改动**快照、changed files 和一次一个 unified diff。
   按请求启用时，这些 projection 会合并 staged、unstaged 和 untracked 文件，但不会写回 Git。
-  Dashboard 不提供 commit、staging、reset、revert、cherry-pick、fetch、push、pull、pull request、
-  graph lanes、pagination 或 syntax highlighting。
+  Dashboard 不提供 commit、staging、reset、revert、cherry-pick、push、pull、pull request、
+  graph lanes 或 syntax highlighting。
 - Session 行和 Dashboard 卡片使用 DSH 原生的状态和相对时间展示。绿色完成 dot 是 DSH 对非当前
   主视图中停止的 Session 的未读提醒；打开该 Session 或再次运行时清除。冷启动时的 idle Session
   不视为已完成。提醒仍由 DSH 拥有，插件不会持久化该状态。折叠的 Workspace、Main 和 Worktree 分组会

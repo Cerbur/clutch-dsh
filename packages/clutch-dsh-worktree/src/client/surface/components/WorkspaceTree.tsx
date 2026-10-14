@@ -177,11 +177,14 @@ export function WorkspaceTree({
         ) : (
           visibleWorkspaces.map((workspace) => {
             const view = viewByWorkspace.get(workspace.workspaceId);
-            const currentBranch = view?.branches.find((branch) => branch.isCurrent)?.name;
+            const currentBranch = view?.currentBranch === null ? undefined
+              : view?.currentBranch ?? view?.branches.find((branch) => branch.isCurrent)?.name;
+            const currentHead = view?.checkout?.currentHead;
+            const mainRef = currentHead?.name ?? currentBranch;
             const mainLabel =
-              currentBranch === undefined
+              mainRef === undefined
                 ? t('worktree.main')
-                : t('worktree.mainWithBranch', { branch: currentBranch });
+                : t('worktree.mainWithBranch', { branch: mainRef });
             const expanded =
               isWorkspaceExpanded(expandSnapshot, workspace.workspaceId) ||
               isCurrentSessionReveal('workspace:' + workspace.workspaceId);
@@ -331,25 +334,25 @@ export function WorkspaceTree({
                             ? undefined
                             : () =>
                                 props.openDashboard?.(
-                                  createMainWorktreeRecord(workspace, currentBranch),
+                                  createMainWorktreeRecord(workspace, currentBranch, view?.mainInstructions, view?.checkout),
                                 ),
                         open: openMainMenuId === workspace.workspaceId,
                         label: mainLabel,
                         copyPath: workspace.path,
-                        showCreate: currentBranch !== undefined,
+                        showCreate: mainRef !== undefined,
                         showRemove: false,
                         disabled: actionPending,
                         onOpenChange: (open) => {
                           setOpenMainMenuId(open ? workspace.workspaceId : undefined);
                         },
                         onCreateWorktree:
-                          currentBranch === undefined
+                          mainRef === undefined
                             ? undefined
                             : () => {
                                 openWorktreeCreator(workspace, {
-                                  baseBranch: currentBranch,
+                                  baseBranch: currentHead?.kind !== 'branch' && currentHead !== undefined ? 'HEAD' : currentBranch,
                                   newBranch: createNumberedWorktreeName(
-                                    currentBranch,
+                                    mainRef,
                                     workspaceWorktreeNames,
                                   ),
                                 });
