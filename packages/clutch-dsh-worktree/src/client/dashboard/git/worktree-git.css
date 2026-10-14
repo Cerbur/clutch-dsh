@@ -2,6 +2,21 @@
   min-width: 0;
   min-height: 0;
 }
+.gitCommitStats {
+  display: inline-flex;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary, #677080);
+  font-variant-numeric: tabular-nums;
+}
+.gitFileRow {
+  display: flex;
+  min-width: 0;
+}
+.gitFileRow > button:first-child { flex: 1; min-width: 0; }
+.gitFileRow > .gitFileOpen { width: 28px; min-width: 28px; flex: none; padding: 4px; opacity: 0; }
+.gitFileRow > .gitFileOpen svg { width: 14px; height: 14px; }
+.gitFileRow:hover > .gitFileOpen,
+.gitFileRow:focus-within > .gitFileOpen { opacity: 1; }
 
 .gitPanelHeader {
   display: flex;
@@ -973,6 +988,8 @@
     min-height: 260px;
     border-bottom: 1px solid var(--dsw-alias-border-l3, #e5e8ef);
   }
+  .gitColumn:has(> .gitEmpty),
+  .gitColumn:has(.gitDiffEmpty) { height: auto; min-height: 100px; }
   .gitColumns > .gitColumn:last-child {
     border-bottom: 0;
   }

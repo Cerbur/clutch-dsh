@@ -79,12 +79,31 @@ async function harness() {
     return { registration, registrationState, dialog: dialog.props.children.props,
       dialogKey: dialog.props.children.key ?? dialog.props.children.props.key };
   };
-  return { render, workspace, props, counts: () => ({ reads, fetches, refreshes }),
+  return { render, workspace, props, projection, counts: () => ({ reads, fetches, refreshes }),
     replayEffects() { state.filter((entry) => entry?.setup).forEach((entry) => {
       entry.cleanup?.();
       entry.cleanup = entry.setup();
     }); } };
 }
+
+test('HEAD creation carries the observed commit from the modal projection', async () => {
+  const { render, workspace, props, projection } = await harness();
+  projection.checkout = { currentHead: { kind: 'tag', name: 'v1.0.0', commit: 'a'.repeat(40) } };
+  const requests = [];
+  props.manager.createWorktree = async (input) => {
+    requests.push(input);
+    return { workspaceId: 'ws', worktreeId: 'created', absolutePath: '/created' };
+  };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  let current = render();
+  current.registrationState.setSelectedBranch('HEAD');
+  current = render();
+  await current.registration.submitWorktree();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].fromHead, true);
+  assert.equal(requests[0].expectedHeadCommit, projection.checkout.currentHead.commit);
+});
 
 test('creation defers branch reads until its picker opens and keeps candidates through lightweight refresh', async () => {
   const { render, workspace, counts } = await harness();

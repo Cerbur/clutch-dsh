@@ -37,7 +37,7 @@ import {
   settlePendingDashboardNavigation,
   type PendingDashboardNavigation,
 } from './dashboard/dashboard-navigation.js';
-import { buildSessionFileAddress } from './dashboard/git/file-address.js';
+import { buildSessionFileAddress, GitFileAddressError } from './dashboard/git/file-address.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
@@ -113,6 +113,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           targetWorkspace,
           dashboardMainBranch,
           targetView?.mainInstructions,
+          targetView?.checkout,
         );
 
   const dashboardRecord = resolveDashboardRecord(
@@ -280,22 +281,40 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             ),
       );
       // A file opened from Git must stay inside the Dashboard Worktree.
-      // Never fall back to the current or another Workspace Session.
+      // Prefer the current Session only when it belongs to this target group.
       const targetSessionId =
         source.currentSessionId !== undefined && worktreeSessions.includes(source.currentSessionId)
           ? source.currentSessionId
-          : undefined;
-      if (targetSessionId === undefined) return;
-      const address = buildSessionFileAddress(
-        targetSessionId,
-        filePath,
-        dashboardRecord.gitRootPath ?? dashboardRecord.absolutePath,
-        source.sessions.byId[targetSessionId]?.cwd ?? dashboardRecord.absolutePath,
-      );
+          : worktreeSessions[0];
+      if (targetSessionId === undefined) {
+        mutation.setActionError({ code: 'GIT_FILE_SESSION_REQUIRED', message: props.t('dashboard.git.sessionRequired'), retryable: false });
+        return;
+      }
+      let address: string;
+      try {
+        address = buildSessionFileAddress(
+          targetSessionId,
+          filePath,
+          dashboardRecord.absolutePath,
+          isMainWorktreeId(dashboardRecord.worktreeId) &&
+            source.sessions.byId[targetSessionId]?.cwd === dashboardWorkspace?.path
+            ? dashboardRecord.absolutePath
+            : source.sessions.byId[targetSessionId]?.cwd ?? dashboardRecord.absolutePath,
+          dashboardRecord.gitRootPath ?? dashboardRecord.absolutePath,
+        );
+      } catch (error) {
+        if (!(error instanceof GitFileAddressError)) throw error;
+        mutation.setActionError({ code: error.code, message: props.t('dashboard.git.outsideSession'), retryable: false });
+        return;
+      }
       props.openResource(address, options);
+      props.openRightSidebar?.();
     },
     [
       props.openResource,
+      props.openRightSidebar,
+      props.t,
+      mutation.setActionError,
       dashboardRecord,
       source.currentSessionId,
       source.sessions,
@@ -500,7 +519,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           }
           onCreateWorktree={
             dashboardCanCreate &&
-            dashboardRecord.currentBranch !== null &&
+            (dashboardRecord.currentBranch !== null || isMainWorktreeId(dashboardRecord.worktreeId)) &&
             dashboardRecord.branch.length > 0 &&
             dashboardWorkspace !== undefined &&
             dashboardView !== undefined
@@ -508,7 +527,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                   if (mutation.actionPending) return;
                   const branch = dashboardRecord.currentBranch ?? dashboardRecord.branch;
                   registration.openWorktreeCreator(dashboardWorkspace, {
-                    baseBranch: branch,
+                    baseBranch: dashboardRecord.currentBranch === null ? 'HEAD' : branch,
                     newBranch: createNumberedWorktreeName(branch, [
                       ...dashboardView.branches.map((candidate) => candidate.name),
                       ...dashboardView.worktrees.map((candidate) => candidate.branch),

@@ -15,6 +15,7 @@ import type { WorktreeLocaleKey } from '../../locales.js';
 import { isMainWorktreeId, normalizeBaselineBranch, sumLineTotals } from './git-facts.js';
 import { GitChangedFiles } from './GitChangedFiles.js';
 import { GitLineStats } from './GitLineStats.js';
+import { GitCommitStats } from './GitCommitStats.js';
 import { GitCommitList } from './GitCommitList.js';
 import { GitDiffView } from './GitDiffView.js';
 import {
@@ -56,7 +57,7 @@ function selectedCommit(
 }
 
 function commitCountLabel(history: WorktreeGitHistory, t: WorktreeTranslate): string {
-  const committedCount = history.commits.filter((commit) => commit.kind !== 'working-tree').length;
+  const committedCount = history.ahead ?? history.commits.filter((commit) => commit.kind !== 'working-tree').length;
   return history.commits.some((commit) => commit.kind === 'working-tree')
     ? t('dashboard.git.commitCountWithWorkingTree', { commits: committedCount })
     : t('dashboard.git.commitCount', { n: committedCount });
@@ -144,6 +145,7 @@ export function WorktreeGitPanel({
     fallback: GIT_SPLIT_DEFAULT_COLUMN_PERCENT,
   });
   const historyValue = state.history.status === 'ready' ? state.history.value : undefined;
+  const comparison = !isMain || historyValue?.baseline !== undefined;
   const commit = selectedCommit(historyValue, state.selectedCommit);
   const files = state.files.status === 'ready' ? readyFiles(state.files.value) : [];
   const diff = state.diff.status === 'ready' ? state.diff.value : undefined;
@@ -168,12 +170,15 @@ export function WorktreeGitPanel({
         : commitLabel(commit, t);
   const hasTarget = state.view === 'summary' || commit !== undefined;
   const lineTotals = state.files.status === 'ready' && hasTarget ? sumLineTotals(files) : undefined;
+  const refreshRequired = state.loadMoreError !== undefined &&
+    toWorktreeViewError(state.loadMoreError).code === 'WORKTREE_STATE_CONFLICT';
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
       <NotificationToasts
         notices={[
           ['branches', branchError],
+          ['pagination', state.loadMoreError],
           [
             'history',
             state.history.status === 'error' || state.history.status === 'ready'
@@ -208,6 +213,7 @@ export function WorktreeGitPanel({
                   label: t('dashboard.git.retry'),
                   onClick: () => {
                     if (scope === 'branches') void state.loadBranches();
+                    else if (scope === 'pagination' && diagnostic.code !== 'WORKTREE_STATE_CONFLICT') void state.loadMore();
                     else void state.refresh();
                   },
                 },
@@ -219,35 +225,33 @@ export function WorktreeGitPanel({
       <header className={styles.gitPanelHeader}>
         <div className={styles.gitPanelHeading}>
           <h2>{t('dashboard.git.title')}</h2>
-          {!isMain && (
-            <div className={styles.gitBaselineSelector}>
-              <span>{t('dashboard.git.baselineSelector')}</span>
-              <GitBranchSelector
-                t={t}
-                size="compact"
-                label={t('dashboard.git.baselineSelector')}
-                placeholder={t('dashboard.git.selectBaseline')}
-                emptyLabel={t('dashboard.git.selectBaseline')}
-                branches={branchOptions}
-                value={state.baselineBranch ?? ''}
-                loading={state.branches.status === 'loading'
-                  || (state.branches.status === 'ready' && state.branches.refreshing === true)}
-                onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
-                  try {
-                    const branches = await manager.fetchRemoteBranches!({ workspaceId });
-                    state.acceptBranches(branches);
-                    return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
-                  } finally {
-                    await state.refresh();
-                  }
-                }}
-                onChange={(value) => state.selectBaselineBranch(value || undefined)}
-                onLoad={manager?.listBranches === undefined ? undefined
-                  : async () => (await state.readFreshBranches())
-                    .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
-              />
-            </div>
-          )}
+          <div className={styles.gitBaselineSelector}>
+            <span>{t('dashboard.git.baselineSelector')}</span>
+            <GitBranchSelector
+              t={t}
+              size="compact"
+              label={t('dashboard.git.baselineSelector')}
+              placeholder={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
+              emptyLabel={t(isMain ? 'dashboard.git.noBaseline' : 'dashboard.git.selectBaseline')}
+              branches={branchOptions}
+              value={state.baselineBranch ?? ''}
+              loading={state.branches.status === 'loading'
+                || (state.branches.status === 'ready' && state.branches.refreshing === true)}
+              onFetch={manager?.fetchRemoteBranches === undefined ? undefined : async () => {
+                try {
+                  const branches = await manager.fetchRemoteBranches!({ workspaceId });
+                  state.acceptBranches(branches);
+                  return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
+                } finally {
+                  await state.refresh();
+                }
+              }}
+              onChange={(value) => state.selectBaselineBranch(value || undefined)}
+              onLoad={manager?.listBranches === undefined ? undefined
+                : async () => (await state.readFreshBranches())
+                  .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch)}
+            />
+          </div>
           {baselineCommit !== undefined && (
             <dl className={styles.gitBaselineFacts}>
               <div>
@@ -280,14 +284,7 @@ export function WorktreeGitPanel({
                     <div>
                       <dt>{t('dashboard.aheadBehind')}</dt>
                       <dd>
-                        <GitLineStats
-                          additions={historyValue.ahead}
-                          deletions={historyValue.behind}
-                          ariaLabel={t('dashboard.git.aheadBehindStats', {
-                            ahead: historyValue.ahead,
-                            behind: historyValue.behind,
-                          })}
-                        />
+                        <GitCommitStats ahead={historyValue.ahead} behind={historyValue.behind} t={t} />
                       </dd>
                     </div>
                   )}
@@ -295,15 +292,11 @@ export function WorktreeGitPanel({
               )}
             </dl>
           )}
-          {isMain && historyValue !== undefined && (
+          {isMain && historyValue !== undefined && baselineCommit === undefined && (
             <dl className={styles.gitBaselineFacts}>
               <div>
                 <dt>{t('dashboard.git.head')}</dt>
                 <dd><code>{shortCommit(historyValue.headCommit)}</code></dd>
-              </div>
-              <div>
-                <dt>{t('dashboard.git.commits')}</dt>
-                <dd>{commitCountLabel(historyValue, t)}</dd>
               </div>
             </dl>
           )}
@@ -346,7 +339,7 @@ export function WorktreeGitPanel({
             <div className={styles.gitColumnHeader}>
               <h3>{t('dashboard.git.commits')}</h3>
               <div className={styles.gitColumnHeaderControls}>
-                {historyValue.truncated && <span>{t('dashboard.git.truncatedHistory')}</span>}
+                {state.loadingMore && <span role="status">{t('dashboard.git.loadingMore')}</span>}
                 <label
                   className={styles.gitCommitMultiSelect}
                   title={t('dashboard.git.multiSelectCommitsDescription')}
@@ -368,7 +361,7 @@ export function WorktreeGitPanel({
                 </label>
               </div>
             </div>
-            {!isMain && (
+            {comparison && (
               <button
                 type="button"
                 className={styles.gitSummaryButton}
@@ -380,7 +373,7 @@ export function WorktreeGitPanel({
                 <small>{t('dashboard.git.baselineSummaryDescription')}</small>
               </button>
             )}
-            {!isMain && state.view === 'summary' && (
+            {comparison && state.view === 'summary' && (
               <label className={styles.gitSummaryToggle} data-dashboard-git-include-working-tree>
                 <input
                   type="checkbox"
@@ -397,12 +390,19 @@ export function WorktreeGitPanel({
             <span id="dashboard-git-commit-selection-hint" className={styles.gitSrOnly}>{t('dashboard.git.commitSelectionHint')}</span>
             {historyValue.commits.length === 0 && <div className={styles.gitEmpty}>{t('dashboard.git.noCommits')}</div>}
             <GitCommitList
+              key={JSON.stringify([state.baselineBranch, historyValue.headCommit, baselineCommit])}
               commits={historyValue.commits}
               selectedCommit={state.selectedCommit}
               selectedCommits={state.selectedCommits}
               multiSelect={state.commitMultiSelect}
               onSelect={state.selectCommit}
               onToggle={state.toggleCommit}
+              hasMore={historyValue.nextOffset !== undefined}
+              loadingMore={state.loadingMore}
+              loadMoreError={state.loadMoreError !== undefined}
+              onLoadMore={() => void (refreshRequired
+                ? state.refresh() : state.loadMore())}
+              refreshRequired={refreshRequired}
               t={t}
             />
           </section>
@@ -468,7 +468,7 @@ export function WorktreeGitPanel({
                       : t('dashboard.git.noFiles')}
                   </div>
                 ) : (
-                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} t={t} />
+                  <GitChangedFiles files={files} selectedPath={state.selectedPath} onSelect={state.selectPath} onOpenFile={onOpenFile} t={t} />
                 )}
               </>
             )}

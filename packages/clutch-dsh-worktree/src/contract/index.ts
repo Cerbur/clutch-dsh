@@ -111,8 +111,16 @@ export interface WorktreeGitRequestContext {
   readonly baseBranch?: string;
 }
 
+export interface WorktreeGitHistoryRequest extends WorktreeGitRequestContext {
+  readonly offset?: number;
+  /** Subsequent pages must still belong to this comparison projection. */
+  readonly expectedHeadCommit?: string;
+  readonly expectedBaselineCommit?: string;
+}
+
 export type WorktreeGitCommitFilesRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest;
 export type WorktreeGitFileDiffRequest = WorktreeGitRequestContext & WorktreeGitDiffRequest & {
+  /** Canonical Workspace-relative path returned by listWorktreeCommitFiles; ../ may name other checkout files. */
   readonly path: string;
 };
 
@@ -128,6 +136,8 @@ export interface WorktreeGitCommit {
 }
 
 export interface WorktreeGitHistory {
+  /** Offset of the next 50-commit page; absent at the end of history. */
+  readonly nextOffset?: number;
   readonly headCommit?: string;
   readonly baseline?: WorktreeGitBaseline;
   /** Number of commits reachable only from the Worktree HEAD. */
@@ -148,7 +158,9 @@ export type WorktreeGitFileStatus =
   | 'type-changed';
 
 export interface WorktreeGitChangedFile {
+  /** Relative to this Worktree's Workspace directory, not the Git checkout root. */
   readonly path: string;
+  /** Previous name in the same Workspace coordinates, including cross-directory renames. */
   readonly oldPath?: string;
   readonly status: WorktreeGitFileStatus;
   /** Added text lines; omitted when Git reports a binary file. */
@@ -179,6 +191,7 @@ export interface WorktreeGitDiffSegment {
 export interface WorktreeGitFileDiff {
   /** The requested commit for legacy reads, or the synthetic summary/first selected commit id. */
   readonly commit: string;
+  /** The requested Workspace-relative changed-file identity. Patch text retains Git's native headers. */
   readonly path: string;
   readonly patch: string;
   readonly binary: boolean;
@@ -218,9 +231,24 @@ export interface WorktreeLifecycleInput {
  */
 export type BindingStatus = 'active' | 'detached';
 
+/** Observed checkout HEAD; never a local-branch selector or durable sidecar fact. */
+export interface GitCheckoutHead {
+  readonly kind: 'branch' | 'tag' | 'commit';
+  readonly name: string;
+  readonly commit: string;
+}
+
+/** Git paths use this root; Session cwd remains the DSH Workspace working directory. */
+export interface WorkspaceCheckout {
+  readonly gitRootPath: string;
+  /** Physical Workspace directory, paired with the physical checkout root. */
+  readonly workspacePath?: string;
+  readonly currentHead?: GitCheckoutHead;
+}
+
 /**
- * 插件 sidecar 持久化的 Worktree 元数据，不包含 DSH Workspace 或 Session 内容。
- * Worktree metadata persisted by the plugin sidecar; it contains no DSH Workspace or Session content.
+ * 插件 sidecar 的 Worktree 元数据及显式标记为 runtime-only 的只读投影，不包含 DSH 原始数据。
+ * Sidecar metadata plus explicitly marked runtime-only projections; contains no original DSH data.
  */
 export interface WorktreeRecord {
   /** User-authored shared instructions; empty or absent disables injection. */
@@ -246,6 +274,8 @@ export interface WorktreeRecord {
   readonly health?: WorktreeHealth;
   /** Runtime-only Git branch; null means detached HEAD, undefined means unavailable. */
   readonly currentBranch?: string | null;
+  /** Runtime-only observed HEAD; never written to the sidecar. */
+  readonly currentHead?: GitCheckoutHead;
   /** Runtime-only; never written to the sidecar. */
   readonly activity?: WorktreeActivity;
   /** Opaque runtime-only snapshot token for destructive-action stale-state checks. */
@@ -354,12 +384,7 @@ export interface WorktreeManager {
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
-  listWorktreeCommits(input: {
-    readonly workspaceId: WorkspaceId;
-    readonly worktreeId: WorktreeId;
-    /** Optional local or fetched remote branch selected as the comparison baseline. */
-    readonly baseBranch?: string;
-  }): Promise<WorktreeGitHistory>;
+  listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory>;
 
   listWorktreeCommitFiles(input: WorktreeGitCommitFilesRequest): Promise<WorktreeGitCommitFiles>;
 
@@ -376,6 +401,8 @@ export interface WorktreeManager {
   listBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
   /** Explicitly fetch all configured remotes' branch heads and return refreshed branch facts. */
   fetchRemoteBranches(input: { workspaceId: WorkspaceId }): Promise<readonly BranchRecord[]>;
+  /** Optional for older injected managers; the local Host always implements this read. */
+  getWorkspaceCheckout?(input: { workspaceId: WorkspaceId }): Promise<WorkspaceCheckout>;
 
   /**
    * 从已有本地分支创建路径受管的 Worktree；当 base branch 已 checkout 时，`newBranch`
@@ -388,6 +415,10 @@ export interface WorktreeManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+    /** Create a new branch from the Workspace checkout's captured HEAD. */
+    fromHead?: boolean;
+    /** Observed HEAD for optimistic concurrency when creating from HEAD. */
+    expectedHeadCommit?: string;
   }): Promise<WorktreeRecord>;
 
   importWorktree(input: {
@@ -467,6 +498,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'listImportCandidates',
   'listBranches',
   'fetchRemoteBranches',
+  'getWorkspaceCheckout',
   'createWorktree',
   'importWorktree',
   'removeWorktree',
@@ -497,6 +529,7 @@ export type WorktreeRemoteResult<Value> =
  * Browser-safe Host projection containing only domain values and serializable results, never Provider objects.
  */
 export interface WorktreeRemoteManager {
+  getWorkspaceCheckout(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceCheckout>>;
   getWorktreeInstructions(input: {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
@@ -545,6 +578,8 @@ export interface WorktreeRemoteManager {
     workspaceId: WorkspaceId;
     branch: string;
     newBranch?: string;
+    fromHead?: boolean;
+    expectedHeadCommit?: string;
   }): Promise<WorktreeRemoteResult<WorktreeRecord>>;
 
   importWorktree(input: {

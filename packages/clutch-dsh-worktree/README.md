@@ -8,8 +8,8 @@ Workspace identity, Session metadata, native lists, messages, and conversation h
 
 Tool preferences are stored in separate Host-owned files, outside relationship indexes and native
 Session metadata. The plugin stores Worktree relationships, acquisition facts, shared Worktree instructions, and Workspace-root
-Main instructions in its own sidecar. Managed Worktrees expose a read-only baseline-relative Git & Changes dashboard, while Main exposes
-its Workspace-root HEAD history; the plugin does not copy transcripts or rewrite DSH Sessions.
+Main instructions in its own sidecar. Managed Worktrees expose a read-only baseline-relative Git & Changes dashboard, while Local/Main exposes
+its Workspace-root HEAD history with an optional comparison branch; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
 > Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
@@ -166,7 +166,13 @@ Listing branches never contacts a remote automatically.
 Remote baselines require a new local branch when creating a Worktree; its short name may match the remote baseline
 when that local branch does not exist. Symbolic remote HEAD entries are excluded.
 
-Git must have a usable repository, local branch, and initial commit. If setup is incomplete, DSH
+Git must have a usable repository and initial commit. Choose a local branch, or choose **HEAD** to
+create a new branch from Main's current checkout, including an exact Tag or detached Commit.
+The localized HEAD option includes the current reference name, for example **HEAD (v1.0.0)**.
+Creation uses the commit shown when selected. If HEAD changes before submission, creation is rejected
+with `WORKTREE_STATE_CONFLICT`; refresh the dialog and select the source again.
+Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
+If setup is incomplete, DSH
 shows the relevant readiness message and copyable setup guidance.
 
 When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
@@ -179,8 +185,8 @@ Already-bound Sessions with a legacy Git-root cwd remain usable after a subdirec
 including automatic tool injection, Session discovery, follow-ups, result reports and default
 Worktree creation from their own checkout's HEAD. Their original cwd and history remain unchanged;
 new Session bindings still require the Workspace directory inside the checkout. Git file previews use
-relative addresses inside the current Session cwd and absolute addresses for other checkout files,
-subject to DSH's native file-access checks.
+relative addresses inside the target Session cwd. Files outside that cwd show a prompt to use an IDE
+or a Session at the repository root; already-bound Git-root Sessions keep their original preview scope.
 
 ### Enable Agent Worktree tools
 
@@ -381,13 +387,16 @@ existing VS Code protocol-link fallback.
 
 Open the **Git & Changes** tab from a managed Worktree or Main Dashboard. Main reads the current Workspace-root
 commit history directly and prepends an **Uncommitted changes** entry when the root has tracked, staged, unstaged, or
-untracked changes. It shows at most the first 200 committed commits, selects the first visible target, and uses the same
+untracked changes. Its baseline selector defaults to **None**, showing HEAD history without a total commit count.
+Choose a local or fetched remote comparison branch to show Baseline summary, the full comparison commit count,
+and ahead/behind facts. Selecting **None** returns to direct history. These choices stay in page memory.
+Direct history selects the first visible target and uses the same
 changed-file and diff panes for either a live working-tree target or a committed history entry. For a managed Worktree with a
 persisted `baseBranch` that differs from the current branch, or with a captured acquisition commit that
 supplies the implicit baseline, the Overview performs one compact, on-demand Git status read through the
 existing `/api` Connection. It shows ahead/behind commit counts plus separate
 committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
-projection, not a watcher or a Worktree-record field. Main has no Worktree baseline comparison, so Overview remains
+projection, not a watcher or a Worktree-record field. Local/Main's comparison is a transient Git-tab choice, so Overview remains
 **Not connected** for ahead/behind facts while its Git tab still exposes Main history. Unavailable or baseline-unselected
 managed views honestly remain **Not connected**. Opening Overview does not load the branch list; mounting the Git tab
 reads history against the saved branch or captured acquisition commit. Branch candidates load only when a
@@ -402,13 +411,13 @@ history, changed files, and diffs without another Worktree-record write. If no u
 immutable captured acquisition commit and show that resolved commit as the Base fact; only a Worktree with
 neither a usable saved baseline nor a captured commit stays baseline-unselected and prompts you to choose
 one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
-Git & Changes view reports Worktree commits after that ancestor as `+N` ahead and base-branch commits after it
-as `-N` behind; history and file reads remain available. If the two heads have no common ancestor, the
+Git & Changes view reports Worktree commits after that ancestor as `↑ N` ahead and base-branch commits after it
+as `↓ N` behind; history and file reads remain available. If the two heads have no common ancestor, the
 committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
 history uses the Worktree commits not reachable from that base tip.
 With a valid managed Worktree baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
 first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
-changes** when you need a narrower target. Main skips this comparison-only summary but presents the same committed history and multi-commit selection behavior, plus a live working-tree target when the
+changes** when you need a narrower target. Local/Main with **None** skips this comparison-only summary but presents the same committed history and multi-commit selection behavior, plus a live working-tree target when the
 Workspace root has changes. Selecting **Uncommitted changes** compares the current Workspace root with `HEAD`; it does not
 create a baseline or write any Git state.
 
@@ -431,18 +440,32 @@ one net diff from the same comparison boundary to the current working tree, incl
 unstaged, untracked, deleted, and renamed changes. This is a
 fresh on-demand projection rather than a concatenation of two diffs. Clicking a commit shows that
 commit's own diff. For managed Worktrees and Main, turn on **Multi-select commits** in the commits header to pick several committed rows
-and view the exact union of their first-parent deltas; Main has no baseline-summary or working-tree-inclusion controls, and the switch is off by default; turning it off
+and view the exact union of their first-parent deltas; Local/Main with **None** has no baseline-summary or working-tree-inclusion controls, and the switch is off by default; turning it off
 collapses the selection back to the focused commit. The changed-file list
 records the contributing commits, and each selected commit is rendered as its own diff segment; this is
 not an implicit range and does not include unselected commits. The changed-files column header shows the
 aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
 commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
-exclusive with committed multi-selection. The **Open in Sidebar** action in the summary diff toolbar
-reveals the current file in the native right sidebar using the current Session, only when that Session
-belongs to the Dashboard Worktree. An empty Worktree
-or an unrelated current Session cannot open a file through this action.
+exclusive with committed multi-selection. **Open in Sidebar** is available in the diff toolbar and on
+existing changed-file rows. It uses the current Session when it belongs to the Dashboard group,
+otherwise the group's first visible Session, and explicitly expands the native right sidebar.
+With no target Session it prompts you to create one; the Overview's empty Session card includes **New Session**.
+File-tree paths, Diff titles and file requests are relative to the Workspace directory, for both Main and
+managed Worktrees. At `/repo/packages/app`, `src/index.ts` names `/repo/packages/app/src/index.ts`;
+repository-root `README.md` appears as `../../README.md`. The view retains changes across the checkout.
+Files outside the target Session cwd show a prompt instead of an invalid resource address.
 
-Managed Worktree and Main history are each capped at 200 commits and mark longer histories as truncated. A changed-file list larger
+Main shows a local checkout status and omits derived Worktree creation-time and baseline facts.
+Ahead/Behind uses neutral commit counts (`↑ N` / `↓ N`), while added/deleted code lines keep their green/red counts.
+The sticky top bar truncates long references on one line, and only the reference text copies to the clipboard.
+
+Managed Worktree and Local/Main history load the newest 50 commits first. Scrolling to the bottom appends
+the next 50 without replacing the current selection or diff; the load-more button also supports keyboard use.
+Comparison views show the full committed total from ahead counts, independent of loaded pages.
+If HEAD or the baseline moves between pages, refresh before continuing; existing rows remain visible.
+The load-more button becomes **Refresh** after this conflict. Commit file and Diff reads also require
+a stable HEAD throughout authorization and reading.
+Multi-selection supports up to 200 selected commits. A changed-file list larger
 than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
 Commit details use
 first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
@@ -468,7 +491,7 @@ and refresh behavior remains unchanged.
 
 The view is read-only and does not provide commit or staging controls. For managed Worktrees, the plugin validates committed
 entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh status projection;
-Main validates committed entries against its bounded HEAD-history projection. These endpoints are not generic Git object or file readers. Refresh keeps ready
+Local/Main validates committed entries against HEAD reachability, excluding baseline ancestors when comparing. These endpoints are not generic Git object or file readers. Refresh keeps ready
 content visible while replacement data loads, and late responses for an older commit or file selection
 are ignored.
 
@@ -556,7 +579,7 @@ text, actions and diagnostic details follow the font size selected in **Settings
   (optionally including one fresh baseline-to-working-tree projection), one **Uncommitted changes**
   snapshot, changed files, and one unified diff at a time. These projections combine staged, unstaged,
   and untracked files when requested but are never written back to Git. The Dashboard does not provide
-  commit, staging, reset, revert, cherry-pick, push, pull, pull requests, graph lanes, pagination,
+  commit, staging, reset, revert, cherry-pick, push, pull, pull requests, graph lanes,
   or syntax highlighting.
 - Session rows and Dashboard cards use DSH's native status and relative-time presentation. The green
   completion dot is DSH's unread reminder for a Session that stops outside the current main view;

@@ -46,6 +46,9 @@ test('Workspace reads inspect current HEAD without loading the branch catalog', 
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const manager = createManager(calls);
   manager.getWorkspaceGitState = async () => ({ currentBranch: 'terminal/checkout' });
+  manager.getWorkspaceCheckout = async () => ({ currentHead: {
+    kind: 'branch', name: 'terminal/checkout', commit: 'a'.repeat(40),
+  } });
   const reader = createWorktreeViewReader(manager);
   const result = await reader.read('ws1');
   assert.equal(calls.listBranches.length, 0);

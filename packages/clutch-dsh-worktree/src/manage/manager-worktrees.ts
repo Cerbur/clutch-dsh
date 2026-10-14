@@ -40,11 +40,12 @@ function projectRuntimeRecord(
   health?: WorktreeRecord['health'],
   activity?: WorktreeActivity,
 ): WorktreeRecord {
-  const { health: _health, mutationToken: _mutationToken, activity: _activity, currentBranch: _currentBranch, ...durableRecord } = record;
+  const { health: _health, mutationToken: _mutationToken, activity: _activity, currentBranch: _currentBranch, currentHead: _currentHead, ...durableRecord } = record;
   void _health;
   void _mutationToken;
   void _activity;
   void _currentBranch;
+  void _currentHead;
   return {
     ...durableRecord,
     mutationToken: createWorktreeMutationToken(snapshot, record),
@@ -136,6 +137,7 @@ export async function listWorktrees(
     }
     let ready = false;
     let currentBranch: string | null | undefined;
+    let currentHead: WorktreeRecord['currentHead'];
     for (const gitWorktree of gitWorktrees) {
       if (
         path.resolve(gitWorktree.absolutePath) === path.resolve(gitWorktreeRoot(record)) ||
@@ -144,6 +146,16 @@ export async function listWorktrees(
         const status = await readWorktreeStatus(gitWorktree);
         ready = workspaceAvailable && (status === 'ready' || status === 'detached');
         currentBranch = gitWorktree.detached ? null : gitWorktree.branch;
+        currentHead = gitWorktree.currentHead;
+        try {
+          if (context.git.resolveCheckoutHead) {
+            currentHead = await context.git.resolveCheckoutHead(gitRoot!, gitWorktree, { signal: context.signal });
+          } else if (currentHead === undefined && gitWorktree.headCommit && gitWorktree.branch && !gitWorktree.detached) {
+            currentHead = { kind: 'branch', name: gitWorktree.branch, commit: gitWorktree.headCommit };
+          }
+        } catch {
+          currentHead = undefined;
+        }
         break;
       }
     }
@@ -155,6 +167,7 @@ export async function listWorktrees(
         activity,
       ),
       ...(currentBranch === undefined ? {} : { currentBranch }),
+      ...(currentHead === undefined ? {} : { currentHead }),
     });
   }
   const storedById = new Map(records.map((record) => [record.worktreeId, record]));

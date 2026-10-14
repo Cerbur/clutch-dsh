@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
-import { en } from '../lib/client/locales.js';
+import { en, zh } from '../lib/client/locales.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 
@@ -486,6 +486,30 @@ function registrationProps() {
     actionPending: false, onClose() {}, onModeChange() {}, onRetryImportCandidates() {},
     onSelectedBranchChange() {}, onSelectedImportPathChange() {}, onNewBranchChange() {}, onSubmit() {} };
 }
+
+test('HEAD choices show localized branch, Tag and Commit labels while retaining HEAD identity', () => {
+  for (const locale of [en, zh]) {
+    for (const head of [
+      { kind: 'branch', name: 'main' }, { kind: 'tag', name: 'v1.0.0' }, { kind: 'commit', name: 'abcdef0' },
+    ]) {
+      const h = harness();
+      const chosen = [];
+      const props = { ...registrationProps(), branchesLoading: false, canCreate: true,
+        selectedBranch: 'HEAD', onSelectedBranchChange: (value) => chosen.push(value),
+        t: (key, values = {}) => locale[key]?.replace(/\{(\w+)\}/gu, (_, name) => String(values[name])),
+        view: { checkout: { currentHead: { ...head, commit: 'a'.repeat(40) } }, branches: [] },
+      };
+      const render = () => h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
+      find(render(), (item) => item.props?.['aria-haspopup'] === 'dialog')[0].props.onClick();
+      const option = options(render())[0];
+      assert.equal(option.props['data-single-select-option'], 'HEAD');
+      assert.ok(JSON.stringify(option).includes(props.t('worktree.headOption', { name: head.name })));
+      option.props.onClick();
+      assert.deepEqual(chosen, ['HEAD']);
+      h.dispose();
+    }
+  }
+});
 
 test('creation branch picker opens before the Workspace callback and refreshes without losing search', () => {
   const h = harness();

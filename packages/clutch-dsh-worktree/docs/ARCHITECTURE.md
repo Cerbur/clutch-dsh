@@ -166,6 +166,29 @@ Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 
 
 ### Git 根目录与 Workspace 工作目录
 
+Main 与 managed Worktree 共用 checkout projection：工作目录与 Git checkout 根目录独立，
+`currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
+不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
+通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+`getWorkspaceCheckout` 只解析 Main checkout，Manage 的列表只解析匹配到的受管 Worktree：
+detached 时对捕获的 commit 做 exact-tag 探测，无 tag 直接取 `commit.slice(0, 7)`；解析失败仅省略
+`currentHead`，不阻断列表或将其他目录标为 repair。读取采用
+结构化 argv 和既有 subprocess 超时/取消规则，缺失或可 prune 的 checkout 不获得虚构引用。
+`getWorkspaceCheckout` 在既有 `/api` transport 上提供物理 `gitRootPath`、物理 `workspacePath`
+与 `currentHead`，Client 的 Main 使用同一物理路径对，避免子目录和 `/var`/`/private/var`
+等别名重复拼接；DSH 原始 Workspace/Session cwd 从不改写。该 projection 复用 Workspace
+reader 的 generation、共享请求及最小刷新作用域，不建立第二数据源。
+Client 将 checkout 视为可降级的可选数据：任何读取失败只省略该字段，保留已成功读取的 branches；
+readiness 错误仅由 branch/Git state 读取决定。成功的空分支列表仅在 checkout 提供 currentHead 时 ready。
+
+Sidecar schema 仍为 v7，v1–v6 的迁移链保持不变。`currentHead` 和 `currentBranch` 均只在
+运行时返回，upsert 必须剥离它们，mutation token 继续只依据持久事实。managed Worktree
+detached 时仍显示 branch drift 并保留既有清理/分支接纳门禁，但展示具体 Tag 或 Commit。
+Main 新建支持显式 `fromHead`：Client 的本地化 HEAD 选项显示当前 branch/Tag/Commit 名称，
+并传入观察到的 `expectedHeadCommit`。Host 在已验证 Workspace 中解析 HEAD full commit，
+与该预期值比对；不一致以 `WORKTREE_STATE_CONFLICT` 拒绝创建，要求刷新。校验成功后复用已有
+固定 commit 的创建事务、获取事实和恢复 journal；不把 Tag 当成本地 branch，不放宽基线选择器。
+
 `WorktreeRecord.absolutePath` 是面向 Workspace 的工作目录，供 Session 创建、运行时 cwd、
 Dashboard 显示、复制地址与 Open In 共用。`gitRootPath` 是完整 Git checkout 根目录，仅在
 Workspace 为仓库子目录时保存；缺省时根目录与工作目录相同。Git 身份校验、仓库读取、分支
@@ -189,12 +212,21 @@ mutation token 仍基于持久记录，避免投影变化破坏生命周期门�
 目录可用性、身份、歧义、detached 和 cleaned 检查保持原有规则，任意后代目录不构成匹配。但新绑定
 必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
 
-Git Dashboard 的文件路径保持 checkout-relative；原生文件预览先将其锚定到
-`gitRootPath`（根 Workspace 使用 `absolutePath`），再通过 DSH 官方 `fileAddressFor`
+Git Dashboard 的公开路径统一为 Workspace-relative，Main 与 managed Worktree 均相对其工作目录。
+文件树、rename oldPath、Diff 请求和返回 path 使用同一坐标；目录外的 checkout 文件保留为
+`../` 路径（例如 `../../README.md`），不静默过滤。Provider Git adapter 内部仍使用
+checkout-relative 路径。Manager 在唯一边界转换列表与请求，并保留原有 changed-file 成员授权；
+请求必须规范且不能越出 checkout，不自动猜测旧 root-relative 路径，以免重名时读取错误文件。
+原始 patch 文本保留 Git headers，避免改写真实 diff 内容。Main 的 tracked/untracked 读取统一在
+Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。旧 v7 前记录仍通过只读工作目录投影转换。
+原生文件预览先将公开路径锚定到工作目录，校验 Git 根边界，再通过 DSH 官方 `fileAddressFor`
 按当前 Session 的原始 cwd 构造地址，快照缺少 cwd 时使用 `absolutePath`。cwd 内文件
-使用相对地址，其余 checkout 文件使用 Session 作用域的绝对地址，并遵循 Host 原生访问校验。
+使用相对地址；其余 checkout 文件显式提示使用 IDE 或 Git-root Session，不构造越出 cwd 的地址。
 这同时保留已绑定旧 Git-root Session 的文件预览；Client 无 Host 物理校验时也接受旧绑定
 的 Git-root cwd，但复用未绑定空白 Session 的候选筛选仍只接受工作目录。
+
+此变更只调整运行时路径契约，不升级 Sidecar v7 schema，也不持久化路径 projection。
+仓库根 Workspace 的公开路径不变；子目录 API 调用方必须使用当前文件列表返回的路径请求 Diff。
 
 ### 外部导入（External Import）规则
 
@@ -412,22 +444,30 @@ projection 超过 adapter 既有输出上限时返回显式的 truncated 结果�
 commit history 使用所选 branch 当前 tip 到 Worktree `HEAD` 的范围，只展示 Worktree 独有的 commit；
 基线汇总与文件 tree diff 使用两者共同先祖到 Worktree `HEAD` 的范围。若没有共同先祖，tree diff
 安全降级为两个 branch head 之间的完整范围，且 history 使用 Worktree head 相对 base tip 的完整可达 commit。
-受管理 Worktree 与 Main history 都最多返回 200 个 committed history entries。Main 展示从 Workspace root `HEAD` 可达的 committed history，
+受管理 Worktree 与 Local/Main history 每次最多返回 50 个 committed entries，Provider 额外读取一个 entry 判断是否存在下一页，
+返回 `nextOffset`，不再按 200 个截断。Client 滚动到底部追加下一页，分享等价的待完成请求并保留选择与 ready diff。
+后续页必须携带 `expectedHeadCommit`，对比页还需 `expectedBaselineCommit`；ref 移动时拒绝混合 projection，要求刷新。
+Local/Main 基线默认无，展示从 Workspace root `HEAD` 可达的 committed history 且不显示提交总数；
+选择枚举出的本地或已获取远端 branch 后，复用 managed comparison 的只读解析、汇总和路径授权。
+该 checkout context 仅存在于请求内存，绝不写入 Sidecar、DSH Workspace 或 Session。所有对比视图使用 `ahead` 展示完整已提交总数。
 并在 tracked、staged、unstaged 或 untracked 文件存在时，在顶部额外投影一个临时的 `working-tree` entry；受管理 Worktree 也沿用同一规则。
 默认选中第一个可见目标；working-tree entry 的文件和 unified diff 都相对于当前 `HEAD`。
-该 entry 不写入 Sidecar 或 DSH，也不计入 committed history 的 200 个 commit 上限。Main 的 working-tree 文件与 Diff 读取使用 Workspace root；Sidecar 中的
+该 entry 不写入 Sidecar 或 DSH，只在第一页出现且不计入 50 个 commit 的分页数量。Main 的 working-tree 文件与 Diff 在解析出的 Git checkout 根目录读取，
+公开文件路径以 Workspace 工作目录为坐标（checkout 内其他文件使用 `../`）；与 managed Worktree 共用路径转换。realpath 失败返回
+`WORKTREE_NOT_FOUND` 的缺失/repair 语义，不能泄漏为未知 Remote 异常。Sidecar 中的
 `baseCommit` 仍保留给历史 API 兼容和恢复逻辑，但不是新的用户选择类型。
 
-Manage 在每次 Main committed 文件/差异读取前，使用同一次有界的 Workspace-root history projection 授权可见 commit；Main 的 working-tree 文件/差异读取则重新授权 Workspace-root changed paths。对受管理 Worktree
-则校验 Worktree 仍是当前 Git registration，并验证 commit 可从 Worktree `HEAD` 到达；存在共同先祖时，commit 还必须位于共同先祖之后的 Worktree 增量范围内，
-没有共同先祖时则允许当前 branch 的完整 commit history。working-tree entry 则重新读取当前状态。
+Manage 在每次 committed 文件/差异读取前验证 commit 从当前 checkout `HEAD` 可达；
+对比时还排除从基线 head 可达的 commit，授权不依赖已加载页数。Provider 使用结构化的 `merge-base --is-ancestor`，
+对象不存在时拒绝；权限、超时和输出截断仍 fail closed。旧 adapter 缺少 membership capability 时保留 bounded history 授权。
+Main 的 working-tree 文件/差异读取重新授权 Git-root changed paths，再转换为 Workspace-relative 路径；managed Worktree 还校验当前 Git registration。
 随后只允许 changed-file projection 中的精确 `path`（rename/copy 也保留 `oldPath`），因此文件在两次读取之间消失或变化时请求会安全失败，Remote 不提供通用 Git
 object、ref、文件或命令读取能力。正常 commit 使用 first-parent，root commit 使用 empty tree；
 diff 固定禁用 external diff 与 textconv。Provider 的统一 `runGit` 边界负责结构化 argv、显式 cwd、
 输出上限、超时、cleanup deadline 和 AbortSignal。
 
 受管理 Worktree 的 Git projection 提供 committed selection aggregate 与两个 comparison aggregate target，而不增加新的 RPC transport；Main 提供 committed selection aggregate，
-但不提供比较型 `summary` 或 working-tree inclusion target。`summary` 默认使用同一次
+未选基线时不提供比较型 `summary` 或 working-tree inclusion target，选定基线后复用相同实现。`summary` 默认使用同一次
 授权中解析并固定的 tree comparison boundary（共同先祖，或无共同先祖时的 base head）与 `HEAD` SHA，
 读取真正的 boundary-to-HEAD 净 committed tree diff；它不把 working tree 变化混入默认 summary。打开
 `includeWorkingTree` 后，`summary` 改为读取从同一 boundary 到当前 live working tree 的一次净 projection，包含 committed、staged、unstaged、
@@ -435,7 +475,10 @@ untracked、删除和重命名改动，而不是拼接两个 Diff。`commits` se
 请求顺序读取每个 commit 的 first-parent changed-file/diff projection。Manage 返回文件并集以及
 每个 commit 的独立 diff segment，绝不把任意多选静默解释为连续 range，因此未选择的中间 commit
 不会出现在结果中。`working-tree` 仍是单选目标，与 committed aggregate selection 互斥。受管理 Worktree 的 comparison aggregate 继续经过 baseline、HEAD、commit、path
-授权；Main committed aggregate 则以同一次有界的可见 Main history 作为 commit 授权边界。所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
+授权；Main committed aggregate 也基于当前 HEAD 可达性授权。每次授权复用 comparison/live 或 Main 请求中固定的 HEAD，
+不逐 commit 重新解析 HEAD。大 selection 使用一次有界 `rev-list <head> ^<base>` 构造成员集合，
+输出超限或失败时 fail closed。文件/Diff 返回前再次校验 HEAD，读取期间移动时返回 `WORKTREE_STATE_CONFLICT`。
+aggregate 最多选择 200 个 commit，所有 aggregate 请求都必须满足 commit/selection 二选一。两种 summary projection 都使用 `--literal-pathspecs` 与安全的 Git diff；文件路径不会成为
 Git magic pathspec。包含 live working tree 的 summary 不复用 committed-summary cache，每次按需重读
 当前状态；`baseCommit`/`HEAD` projection token 也参与 browser cache key，避免 branch ref 漂移复用旧结果。
 
@@ -583,7 +626,8 @@ Refresh scope is determined by the smallest affected identity.
 - Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
-- Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件只在当前 Session 属于目标 Worktree 时通过原生 `openResource` 打开并展开 rightbar，不回退到无关 Session。
+- Rightbar 是可选的 sibling service，通过 Cordis `ctx.get('sidebarRight')` 在操作时解析，避免未声明 inject 的属性读取抛错阻断空 Dashboard。Git 文件优先使用目标分组的当前 Session，否则回退该分组首个可见 Session；无目标时提供创建提示。调用原生 `openResource` 后显式展开 rightbar，不回退到无关分组。
+- Main 的健康展示为本地 checkout，不展示派生 Worktree 的获取时间与基线。HEAD 引用文本独立承载复制交互；Topline 单行截断，Ahead/Behind 使用中性提交计数，代码行数继续使用增删配色。窄屏空 Git pane 缩小高度；这些 UI 调整取代历史 Dashboard 计划中的旧展示规则，历史计划保持只读。
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
 
 ### 错误通知与恢复入口

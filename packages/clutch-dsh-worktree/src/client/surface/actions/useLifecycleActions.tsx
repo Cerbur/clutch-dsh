@@ -189,7 +189,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   };
   const branchLabel = (record: WorktreeRecord): string =>
     record.health === 'branch-drift'
-      ? `${record.branch} → ${record.currentBranch ?? t('worktree.detachedHead')}`
+      ? `${record.branch} → ${record.currentHead?.name ?? record.currentBranch ?? t('worktree.detachedHead')}`
       : record.branch;
   return {
     latestLifecycleTarget,

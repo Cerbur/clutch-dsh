@@ -1,4 +1,4 @@
-import type { BranchRecord, SessionBinding, WorktreeRecord } from '../../contract/index.js';
+import type { BranchRecord, SessionBinding, WorktreeRecord, WorkspaceCheckout } from '../../contract/index.js';
 
 export type WorktreeSessionContextReason =
   | 'no-session'
@@ -14,7 +14,7 @@ export type WorktreeSessionContext =
       readonly kind: 'main';
       readonly workspaceId: string;
       readonly label: string;
-      readonly source: 'current-branch';
+      readonly source: 'current-branch' | 'current-head';
     }
   | {
       readonly kind: 'worktree';
@@ -29,6 +29,7 @@ export type WorktreeSessionContext =
     };
 
 export interface WorktreeContextInput {
+  readonly checkout?: WorkspaceCheckout;
   readonly currentSessionId?: string;
   /** Selected Workspace used by the blank Hero before a Session exists. */
   readonly currentWorkspaceId?: string;
@@ -89,12 +90,14 @@ export function resolveWorktreeSessionContext(
   }
 
   const currentBranch = input.branches.find(({ isCurrent }) => isCurrent);
-  if (currentBranch === undefined || currentBranch.name.length === 0) return none('not-ready');
+  const currentHead = input.checkout?.currentHead;
+  const label = currentHead?.name ?? currentBranch?.name;
+  if (label === undefined || label.length === 0) return none('not-ready');
 
   return {
     kind: 'main',
     workspaceId: workspace.workspaceId,
-    label: currentBranch.name,
-    source: 'current-branch',
+    label,
+    source: currentHead !== undefined && currentHead.kind !== 'branch' ? 'current-head' : 'current-branch',
   };
 }

@@ -1928,10 +1928,10 @@ test('offers Local and Worktree creation through shared menu parameters', async 
   // menu handlers in client-branch-drift.test.mjs.
 
   const mainCallSource = await readSurfaceGroupRow('components/WorkspaceTree.tsx', 'main');
-  assert.match(mainCallSource, /showCreate: currentBranch !== undefined/);
+  assert.match(mainCallSource, /showCreate: mainRef !== undefined/);
   assert.match(mainCallSource, /onCreateWorktree:/);
-  assert.match(mainCallSource, /baseBranch: currentBranch/);
-  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*currentBranch/);
+  assert.match(mainCallSource, /baseBranch: currentHead\?\.kind/);
+  assert.match(mainCallSource, /newBranch: createNumberedWorktreeName\(\s*mainRef/);
 
   const worktreeCallSource = await readSurfaceGroupRow('components/ActiveWorktree.tsx', 'worktree');
   assert.match(worktreeCallSource, /showCreate:\s*record\.status === 'active'/);
@@ -2025,7 +2025,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   );
   assert.match(
     source,
-    /const\s+mainLabel\s*=\s*currentBranch\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*currentBranch\s*\}\);/,
+    /const\s+mainLabel\s*=\s*mainRef\s*===\s*undefined\s*\?\s*t\('worktree\.main'\)\s*:\s*t\('worktree\.mainWithBranch',\s*\{\s*branch:\s*mainRef\s*\}\);/,
   );
   assert.match(source, /kind="main"[\s\S]*label=\{mainLabel\}/);
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);

@@ -1,4 +1,4 @@
-import type { WorktreeRecord } from '../../contract/index.js';
+import type { WorktreeRecord, WorkspaceCheckout, GitCheckoutHead } from '../../contract/index.js';
 
 /** Navigation identity only; an undefined Session id denotes a page-level Dashboard. */
 export interface DashboardSelection {
@@ -9,7 +9,8 @@ export interface DashboardSelection {
 
 /** Browser-only Main projection; it is not a persisted WorktreeRecord. */
 export interface MainDashboardRecord {
-  readonly gitRootPath?: undefined;
+  readonly gitRootPath?: string;
+  readonly currentHead?: GitCheckoutHead;
   readonly worktreeId: string;
   readonly workspaceId: string;
   readonly branch: string;
@@ -41,15 +42,18 @@ export function createMainWorktreeRecord(
   workspace: { readonly workspaceId: string; readonly path: string },
   currentBranch?: string | null,
   instructions = '',
+  checkout?: WorkspaceCheckout,
 ): MainDashboardRecord {
   return {
     worktreeId: `main:${workspace.workspaceId}`,
     workspaceId: workspace.workspaceId,
     // Main is a browser-local projection, not a plugin-managed Worktree. Keep
     // unavailable branch and health facts empty instead of inventing values.
-    branch: currentBranch ?? '',
-    currentBranch,
-    absolutePath: workspace.path,
+    branch: checkout?.currentHead?.name ?? currentBranch ?? '',
+    currentBranch: checkout?.currentHead === undefined ? currentBranch
+      : checkout.currentHead.kind === 'branch' ? checkout.currentHead.name : null,
+    ...(checkout === undefined ? {} : { gitRootPath: checkout.gitRootPath, currentHead: checkout.currentHead }),
+    absolutePath: checkout?.workspacePath ?? workspace.path,
     status: 'active',
     instructions,
   };

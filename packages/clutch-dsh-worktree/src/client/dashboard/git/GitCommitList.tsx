@@ -12,6 +12,11 @@ export interface GitCommitListProps {
   readonly onSelect: (commit: string) => void;
   readonly onToggle?: (commit: string) => void;
   readonly t: WorktreeTranslate;
+  readonly hasMore?: boolean;
+  readonly loadingMore?: boolean;
+  readonly loadMoreError?: boolean;
+  readonly onLoadMore?: () => void;
+  readonly refreshRequired?: boolean;
 }
 
 function commitDate(value: string): string {
@@ -20,7 +25,8 @@ function commitDate(value: string): string {
 }
 
 /** Keyboard-navigable, optionally multi-selectable, graph-free commit list for the Dashboard. */
-export function GitCommitList({ commits, selectedCommit, selectedCommits = [], multiSelect = false, onSelect, onToggle, t }: GitCommitListProps) {
+export function GitCommitList({ commits, selectedCommit, selectedCommits = [], multiSelect = false, onSelect, onToggle,
+  hasMore, loadingMore, loadMoreError, refreshRequired, onLoadMore, t }: GitCommitListProps) {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const move = (index: number, direction: -1 | 1 | 'first' | 'last'): void => {
     const nextIndex = direction === 'first'
@@ -44,6 +50,13 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], m
       data-dashboard-git-commit-multiselect={multiSelect ? 'on' : 'off'}
       aria-label={t('dashboard.git.commits')}
       aria-describedby={multiSelect ? 'dashboard-git-commit-selection-hint' : undefined}
+      aria-busy={loadingMore}
+      onScroll={(event) => {
+        const list = event.currentTarget;
+        if (hasMore && !loadingMore && !loadMoreError && list.scrollHeight - list.scrollTop - list.clientHeight <= 24) {
+          onLoadMore?.();
+        }
+      }}
     >
       {commits.map((commit, index) => {
         const isWorkingTree = commit.kind === 'working-tree';
@@ -104,6 +117,13 @@ export function GitCommitList({ commits, selectedCommit, selectedCommits = [], m
           </li>
         );
       })}
+      {hasMore && (
+        <li>
+          <button type="button" data-dashboard-git-load-more disabled={loadingMore} onClick={onLoadMore}>
+            {t(loadingMore ? 'dashboard.git.loadingMore' : refreshRequired ? 'dashboard.git.refresh' : 'dashboard.git.loadMore')}
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
