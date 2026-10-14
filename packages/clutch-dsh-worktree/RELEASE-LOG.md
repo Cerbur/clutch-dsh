@@ -1,5 +1,47 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.18 — 2026-10-14
+
+### 中文
+
+#### 新增
+
+- 支持以远端跟踪分支和本地分支作为 Worktree 创建基线与看板比对基线，并提供一键获取远端分支（Fetch Remote）能力。
+- 提取并统一带虚拟化列表与延迟过滤的单选搜索选择器（SearchableSingleSelect），用于分支选择、导入绑定与看板基线切换。
+- 看板新增本地基线比对与分页 Git 提交历史查看能力。
+- `clutch_list_worktrees` 工具契约扩展返回当前仓库的本地与远端分支列表。
+
+#### 优化
+
+- 优化分支选择器的候选分支缓存、后台预取与按需延迟读取机制，提升新建与导入弹窗的响应速度与交互稳定性。
+- 统一创建与导入弹窗的输入框高度与布局，并消除下拉菜单展开时的容器高度抖动。
+- 在桌面端插件打包产物中内联捆绑 `zustand` 与 `immer`，避免桌面环境外部模块解析失败。
+
+#### 修复
+
+- 修复主工作区（main checkout）识别、非主 Worktree 投影与 HEAD 授权边界，避免分离 HEAD 或非常规分支下的工作树状态异常。
+- 修复改动文件列表中点击打开原生侧栏 Git Diff 的文件路径投影，确保子目录 Workspace 与仓库根目录对齐。
+
+### English
+
+#### Added
+
+- Support remote tracking branches and local branches as baselines for Worktree creation and Dashboard comparisons, along with a one-click fetch remote branches capability.
+- Extract a unified searchable single selector (`SearchableSingleSelect`) with list virtualization and deferred candidate matching for branch selection, worktree import, and baseline switching.
+- Add local baseline comparisons and paged Git commit history browsing to the Worktree Dashboard.
+- Extend the `clutch_list_worktrees` tool schema to return repository local and remote tracking branches.
+
+#### Improved
+
+- Optimize branch selector caching, background prefetching, and on-demand branch loading to improve dialog responsiveness and interaction stability.
+- Align dialog layouts and input field sizing across create and import modals, eliminating dropdown height jumps.
+- Bundle `zustand` and `immer` directly into the desktop client distribution to prevent external dependency resolution errors in desktop environments.
+
+#### Fixed
+
+- Fix main checkout recognition, non-main worktree projections, and HEAD authorization guards under detached HEAD or alternative checkout states.
+- Fix file path resolution when opening Git diffs in the native sidebar file viewer, ensuring subdirectory workspaces correctly align with the repository root.
+
 ## 0.1.17 — 2026-10-11
 
 ### 中文
