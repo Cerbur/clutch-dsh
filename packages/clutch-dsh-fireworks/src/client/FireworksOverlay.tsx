@@ -1,17 +1,39 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client';
-import { FIREWORKS_DURATION_MS, type FireworksSignal } from '../contract/index.js';
+import {
+  FIREWORKS_DURATION_MS,
+  FIREWORKS_LIMITS,
+  type FireworksShowPreferences,
+  type FireworksSignal,
+} from '../contract/index.js';
 import { emojiFireworksRenderer, type FireworksVisual } from './fireworks-renderer.js';
+import { mountFireworksShow } from './fireworks-show.js';
 import { selectCurrentFireworksSession } from './fireworks-session.js';
 import styles from './fireworks.css';
 
 interface FireworksOverlayProps {
   readonly useSessions: UseSessions;
+  readonly prefs: FireworksShowPreferences;
 }
 
 interface Burst {
   readonly key: string;
   readonly signal: FireworksSignal;
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
 function VisualNode({ visual }: { visual: FireworksVisual }) {
@@ -36,11 +58,16 @@ function VisualNode({ visual }: { visual: FireworksVisual }) {
   );
 }
 
-export function FireworksOverlay({ useSessions }: FireworksOverlayProps) {
+export function FireworksOverlay({ useSessions, prefs }: FireworksOverlayProps) {
   const current = useSessions(selectCurrentFireworksSession);
   const seen = useRef(new Map<string, string | null>());
   const activeSession = useRef<string | undefined>();
   const [burst, setBurst] = useState<Burst | undefined>();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const mode = prefs.mode ?? 'realistic';
+  const reducedMotion = prefersReducedMotion();
+  const useShow = mode === 'realistic' && !reducedMotion;
 
   useEffect(() => {
     if (current === undefined) {
@@ -71,25 +98,80 @@ export function FireworksOverlay({ useSessions }: FireworksOverlayProps) {
         signal: current.signal,
       });
     }
-  }, [current?.sessionId, current?.signal?.id, current?.signal?.message]);
+  }, [current?.sessionId, current?.signal?.id, current?.signal?.message, current?.signal?.splash]);
 
+  // Emoji celebration keeps the fixed lifetime; the canvas show ends when the
+  // scene burns out, with a wall-clock guard for paused background frames.
   useEffect(() => {
-    if (burst === undefined) return undefined;
+    if (burst === undefined || useShow) return undefined;
     const timer = window.setTimeout(() => setBurst(undefined), FIREWORKS_DURATION_MS);
     return () => window.clearTimeout(timer);
-  }, [burst]);
+  }, [burst, useShow]);
+
+  useEffect(() => {
+    if (burst === undefined || !useShow) return undefined;
+    const canvas = canvasRef.current;
+    if (canvas === null) return undefined;
+    const windowMs = Math.min(
+      FIREWORKS_LIMITS.maxDurationMs,
+      Math.max(FIREWORKS_LIMITS.minDurationMs, prefs.showDurationMs ?? FIREWORKS_DURATION_MS),
+    );
+    const handle = mountFireworksShow(
+      canvas,
+      burst.signal,
+      {
+        showDurationMs: windowMs,
+        showRatePerSec: prefs.showRatePerSec,
+      },
+      () => setBurst(undefined),
+    );
+    const guard = window.setTimeout(
+      () => setBurst(undefined),
+      windowMs + 12_000,
+    );
+    return () => {
+      window.clearTimeout(guard);
+      handle.dispose();
+    };
+  }, [burst, useShow, prefs.showDurationMs, prefs.showRatePerSec]);
 
   if (burst === undefined) return null;
-  return (
-    <div className={styles.overlay} key={burst.key} aria-live="polite">
-      <div className={styles.banner} role="status">
-        {burst.signal.message ?? 'A big milestone deserves fireworks!'} 🎉
-      </div>
+  let celebration: ReactNode;
+  if (useShow) {
+    celebration = <canvas ref={canvasRef} className={styles.show} aria-hidden="true" />;
+  } else {
+    celebration = (
       <div className={styles.particles} aria-hidden="true">
         {emojiFireworksRenderer.createVisuals(burst.signal).map((visual, index) => (
           <VisualNode key={`${burst.key}:${index}`} visual={visual} />
         ))}
       </div>
+    );
+  }
+  return (
+    <div className={styles.overlay} key={burst.key} aria-live="polite">
+      <div className={styles.banner} role="status">
+        {burst.signal.message ?? 'A big milestone deserves fireworks!'} 🎉
+      </div>
+      {celebration}
     </div>
   );
+}
+
+/** Minimal reactive view of the plugin settings namespace. */
+export interface PreferencesScope {
+  subscribe(listener: () => void): () => void;
+  getSnapshot(): FireworksShowPreferences;
+}
+
+/** Bind the overlay to a settings scope for slot registration. */
+export function createFireworksOverlay(scope: PreferencesScope) {
+  return function FireworksOverlayConnected(props: { readonly useSessions: UseSessions }) {
+    const prefs = useSyncExternalStore(
+      scope.subscribe,
+      scope.getSnapshot,
+      scope.getSnapshot,
+    );
+    return <FireworksOverlay {...props} prefs={prefs} />;
+  };
 }
