@@ -47,8 +47,8 @@ pnpm dsh web
 | 功能                 | 预览                                                                                          | 作用                                                                                                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **自动庆祝里程碑**   | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks 庆祝预览">   | bundled guidance 会引导 Agent 在完成设计或计划、完成并验证功能、解决复杂 Bug，或重构后通过全量验证时调用 `happy_fireworks`。读取文件和单次检查等日常动作不算里程碑。 |
-| **Fireworks 覆盖层** | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="DSH Web UI 中的礼花覆盖层"> | 成功调用后，在当前选中的 DSH conversation 上显示短暂、可穿透点击的覆盖层，并可显示可选的庆祝消息。                                                                   |
-| **真实感庆祝烟花**   | —                                                                                             | 默认渲染器播放 canvas 烟花：火箭从底部升空，炸开成带重力、阻力和渐隐拖尾的发光弹型。传统 emoji 庆祝仍可在插件设置中选择。                                            |
+| **Fireworks 覆盖层** | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="DSH Web UI 中的礼花覆盖层">  | 成功调用后，在当前选中的 DSH conversation 上显示短暂、可穿透点击的覆盖层，并可显示可选的庆祝消息。                                                                   |
+| **真实感庆祝烟花**   | <img src="assets/screenshots/screenshots-realistic.png" width="420" alt="DSH Web UI 中的真实感礼花覆盖层"> | 默认渲染器播放 canvas 烟花：火箭从底部升空，炸开成带重力、阻力和渐隐拖尾的发光弹型。传统 emoji 庆祝仍可在插件设置中选择。                                            |
 | **安全的回放行为**   | —                                                                                             | 失败或取消的调用保持安静。打开 Session、刷新页面或切换 Session 都不会重新播放旧礼花。                                                                                |
 
 ## 使用
