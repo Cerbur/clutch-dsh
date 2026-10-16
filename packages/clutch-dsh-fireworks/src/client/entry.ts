@@ -23,7 +23,25 @@ export function apply(ctx: Context): void {
     const form = ctx.configForms.get<FireworksShowPreferences>(SETTINGS_NAMESPACE);
     scope = {
       subscribe: (listener: () => void) => form.subscribe(listener),
-      getSnapshot: () => form.getSnapshot() as FireworksShowPreferences,
+      // DSH settings services differ by deployment: newer releases return
+      // the effective preferences directly, while older desktop builds
+      // return a per-namespace record whose merged preferences live under
+      // `value` and whose own `mode` field names the owning side ("host" or
+      // "user") — never the fireworks mode. Accept both shapes.
+      getSnapshot: () => {
+        const raw = form.getSnapshot() as unknown as {
+          readonly mode?: string;
+          readonly value?: FireworksShowPreferences;
+        };
+        if (raw === null || typeof raw !== 'object') return {};
+        if (raw.value !== undefined && raw.value !== null) {
+          return raw.value;
+        }
+        if (raw.mode === 'emoji' || raw.mode === 'realistic') {
+          return raw as unknown as FireworksShowPreferences;
+        }
+        return {};
+      },
     };
   } catch {
     scope = { subscribe: () => () => {}, getSnapshot: () => ({}) };
