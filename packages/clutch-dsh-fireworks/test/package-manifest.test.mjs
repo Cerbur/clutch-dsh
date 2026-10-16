@@ -21,6 +21,7 @@ test('declares an installable DSH plugin package', () => {
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
     '@deepseek-ai/dsh-client-ui-session',
+    '@deepseek-ai/dsh-client-ui-settings',
   ]);
   assert.equal(manifest.scripts.prepare, undefined);
   assert.equal(manifest.scripts.prepublishOnly, 'pnpm run build');
@@ -37,6 +38,7 @@ test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
     '@deepseek-ai/dsh-client-ui-session',
+    '@deepseek-ai/dsh-client-ui-settings',
     '@deepseek-ai/dsh-client-ui-slots',
     '@deepseek-ai/dsh-session',
     '@deepseek-ai/dsh-session-projection',
@@ -73,11 +75,23 @@ test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
     }
   }
 
-  for (const version of ['4.0.1', '4.0.4']) {
+  for (const version of ['4.0.4', '4.0.5', '4.1.0']) {
     assert.equal(
       semver.satisfies(version, manifest.peerDependencies['@deepseek-ai/cordis']),
       true,
       `@deepseek-ai/cordis must accept ${version}`,
+    );
+  }
+  assert.equal(
+    semver.satisfies('4.0.1', manifest.peerDependencies['@deepseek-ai/cordis']),
+    false,
+    '@deepseek-ai/cordis must reject versions without Volatile config references',
+  );
+  for (const version of ['3.18.4', '3.19.0']) {
+    assert.equal(
+      semver.satisfies(version, manifest.peerDependencies['@deepseek-ai/schemastery']),
+      true,
+      `@deepseek-ai/schemastery must accept ${version}`,
     );
   }
 });

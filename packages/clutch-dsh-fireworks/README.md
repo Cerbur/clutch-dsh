@@ -49,6 +49,7 @@ changing `package.json` or `cordis.patch.yml`.
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Automatic milestone celebrations** | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">  | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
 | **Fireworks overlay**                | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI"> | A successful call displays a short, click-through overlay over the selected DSH conversation and can show the optional celebration message.                                                                                                                |
+| **Realistic celebration shows**      | —                                                                                                       | The default renderer launches canvas fireworks: rockets rise from the bottom and burst into glowing shells with gravity, drag, and fading trails. The classic emoji celebration stays available through the plugin settings.                              |
 | **Safe replay behavior**             | —                                                                                                       | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
 
 ## Usage
@@ -75,18 +76,31 @@ A successful call appears in the conversation and plays the overlay for a few se
 optional message is trimmed and limited to a short banner. Programmatic tool-call dispatches are
 supported as well as direct top-level tool results.
 
+### Configure the celebration
+
+The plugin settings page exposes three options:
+
+| Setting          | Default     | What it does                                                                                                                                                                                                                                     |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`           | `realistic` | Celebration renderer. `realistic` plays canvas fireworks shows; `emoji` keeps the classic emoji celebration.                                                                                                                                     |
+| `showDurationMs` | `3200`      | Launch window of one show in milliseconds (1500–15000). Rockets stop launching when the window closes, and the show ends after the last shell burns out. Realistic mode only.                                                                    |
+| `showRatePerSec` | `1.5`       | Average launches per second inside the launch window (0.3–4). The rocket count of each show varies around `rate × window` for an organic rhythm. Realistic mode only.                                                                            |
+
+Browsers that request reduced motion always use the emoji celebration.
+
 ## Requirements
 
 | Component | Requirement                                                                                                                                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH       | A Web profile providing the DSH Session, Session Projection, Tools, UI Renderer, UI Session, and UI Slots services. Peer ranges require `>=0.1.7-rc.1`; compatible stable releases are accepted by the same ranges. |
-| Cordis    | `@deepseek-ai/cordis` `4.0.1` or a compatible `4.x` version allowed by the package peer range; DSH 0.1.7-rc.2 uses `4.0.4`.                                                                                         |
+| DSH       | A Web profile providing the DSH Session, Session Projection, Tools, UI Renderer, UI Session, UI Slots, and Settings services. Peer ranges require `>=0.1.7-rc.1`; compatible stable releases are accepted by the same ranges. |
+| Cordis    | `@deepseek-ai/cordis` `4.0.4` or a compatible `4.x` version allowed by the package peer range; DSH 0.2.x uses a newer `4.x`.                                                                                   |
 | Browser   | DSH Web UI with the plugin's Web client bundle loaded.                                                                                                                                                              |
 
 ## Behavior and limitations
 
-- The overlay lasts for a short burst and renders deterministic emoji visuals for each successful
-  signal. The optional `message` is normalized to a maximum of 120 characters.
+- Realistic shows launch rockets on a randomized schedule inside the configured window and end
+  once every shell has burned out; emoji shows last a fixed few seconds. The optional `message`
+  is normalized to a maximum of 120 characters.
 - The plugin reacts only to successful fireworks results. Errors and cancellations do not show an
   overlay, and the first historical signal observed when a Session opens is intentionally silent.
 - Switching Sessions clears the active overlay. A new signal must have a new tool-call identity

@@ -48,6 +48,7 @@ pnpm dsh web
 | -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **自动庆祝里程碑**   | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks 庆祝预览">   | bundled guidance 会引导 Agent 在完成设计或计划、完成并验证功能、解决复杂 Bug，或重构后通过全量验证时调用 `happy_fireworks`。读取文件和单次检查等日常动作不算里程碑。 |
 | **Fireworks 覆盖层** | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="DSH Web UI 中的礼花覆盖层"> | 成功调用后，在当前选中的 DSH conversation 上显示短暂、可穿透点击的覆盖层，并可显示可选的庆祝消息。                                                                   |
+| **真实感庆祝烟花**   | —                                                                                             | 默认渲染器播放 canvas 烟花：火箭从底部升空，炸开成带重力、阻力和渐隐拖尾的发光弹型。传统 emoji 庆祝仍可在插件设置中选择。                                            |
 | **安全的回放行为**   | —                                                                                             | 失败或取消的调用保持安静。打开 Session、刷新页面或切换 Session 都不会重新播放旧礼花。                                                                                |
 
 ## 使用
@@ -71,18 +72,30 @@ pnpm dsh web
 成功调用会出现在 conversation 中，并播放几秒覆盖层。可选消息会被 trim，并限制为适合横幅的
 短文本。程序化 tool-call dispatch 和直接顶层 tool result 都支持。
 
+### 配置庆祝效果
+
+插件设置页提供三个选项：
+
+| 设置项           | 默认值      | 作用                                                                                                                                       |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`           | `realistic` | 庆祝渲染器。`realistic` 播放 canvas 烟花秀；`emoji` 保留传统 emoji 庆祝。                                                                   |
+| `showDurationMs` | `3200`      | 一场烟花秀的发射窗口（毫秒，1500–15000）。窗口关闭后不再发射新火箭，整场秀在最后一发散尽后结束。仅对 realistic 模式生效。                   |
+| `showRatePerSec` | `1.5`       | 发射窗口内的平均发射频率（发/秒，0.3–4）。每场秀的火箭数量在 `频率 × 窗口` 附近随机浮动，节奏更自然。仅对 realistic 模式生效。             |
+
+请求减弱动态效果（reduced motion）的浏览器始终使用 emoji 庆祝。
+
 ## 要求
 
 | 组件    | 要求                                                                                                                                                                    |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH     | 提供 DSH Session、Session Projection、Tools、UI Renderer、UI Session 和 UI Slots service 的 Web profile。peer 范围要求 `>=0.1.7-rc.1`；同一范围内的兼容稳定版也可使用。 |
-| Cordis  | `@deepseek-ai/cordis` `4.0.1`，或 package peer range 允许的兼容 `4.x` 版本；DSH 0.1.7-rc.2 使用 `4.0.4`。                                                               |
+| DSH     | 提供 DSH Session、Session Projection、Tools、UI Renderer、UI Session、UI Slots 和 Settings service 的 Web profile。peer 范围要求 `>=0.1.7-rc.1`；同一范围内的兼容稳定版也可使用。 |
+| Cordis  | `@deepseek-ai/cordis` `4.0.4`，或 package peer range 允许的兼容 `4.x` 版本；DSH 0.2.x 使用更新的 `4.x`。                                                                          |
 | Browser | 已加载该 plugin Web client bundle 的 DSH Web UI。                                                                                                                       |
 
 ## 行为与限制
 
-- 覆盖层只播放短暂的一次礼花；每个成功 signal 会生成确定性的 emoji 视觉元素。可选的 `message`
-  会被规范化为最多 120 个字符。
+- realistic 烟花秀按随机节奏在配置的发射窗口内升空，最后一发散尽后整场结束；emoji 庆祝时长
+  固定为几秒。可选的 `message` 会被规范化为最多 120 个字符。
 - 插件只响应成功的 fireworks 结果。错误和取消不会显示覆盖层；Session 打开时第一次观察到
   的历史 signal 会被刻意静默。
 - 切换 Session 会清除当前覆盖层；只有新的 tool-call identity 才能再次播放。
