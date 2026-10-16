@@ -90,14 +90,6 @@
   background: transparent;
 }
 
-.show {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 .particle {
   position: absolute;
   display: block;
@@ -149,4 +141,15 @@
   .toast {
     animation-duration: 1ms;
   }
+}
+
+/* The canvas show sits above the banner (z-index: 2) so shells burst in
+   front of it; the emoji celebration keeps the banner in front. */
+.show {
+  position: absolute;
+  inset: 0;
+  display: block;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
 }
