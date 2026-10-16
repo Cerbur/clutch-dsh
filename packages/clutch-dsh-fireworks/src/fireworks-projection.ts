@@ -11,7 +11,7 @@ import {
 } from './contract/index.js';
 
 export const fireworksProjectionSchema = z.union([
-  z.object({ id: z.string(), message: z.string().optional() }),
+  z.object({ id: z.string(), message: z.string().optional(), splash: z.boolean().optional() }),
   z.null(),
 ]);
 
@@ -26,6 +26,7 @@ interface FireworksMeta {
   readonly kind: typeof FIREWORKS_META_KIND;
   readonly id: string;
   readonly message?: string;
+  readonly splash?: boolean;
 }
 
 export function parseFireworksMeta(input: unknown): FireworksMeta | undefined {
@@ -39,11 +40,13 @@ export function parseFireworksMeta(input: unknown): FireworksMeta | undefined {
     return undefined;
   }
   if (record.message !== undefined && typeof record.message !== 'string') return undefined;
+  if (record.splash !== undefined && typeof record.splash !== 'boolean') return undefined;
   const message = normalizeFireworksMessage(record.message);
   return {
     kind: FIREWORKS_META_KIND,
     id: record.id,
     ...(message === undefined ? {} : { message }),
+    ...(record.splash === true ? { splash: true } : {}),
   };
 }
 
@@ -57,6 +60,7 @@ export function applyFireworksProjection(
       return {
         id: meta.id,
         ...(meta.message === undefined ? {} : { message: meta.message }),
+        ...(meta.splash === true ? { splash: true } : {}),
       };
     }
   }

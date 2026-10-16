@@ -1,73 +1,65 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { type Context, type Volatile } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import { DEFAULT_STORED_ANIMATION_PREFERENCES } from './animation.js';
-import { AnimationFiles } from './animation-files.js';
-import { AnimationLibrary, type AnimationSettingsPort } from './animation-library.js';
 import {
+  FIREWORKS_DEFAULTS,
   FIREWORKS_GUIDANCE_PROMPT,
   FIREWORKS_GUIDANCE_SECTION_NAME,
   FIREWORKS_GUIDANCE_SECTION_ORDER,
-  FIREWORKS_EVENT_TTL_MS,
-  FIREWORKS_LAUNCH_EVENT,
+  FIREWORKS_LIMITS,
+  type FireworksMode,
 } from './contract/index.js';
-import {
-  applyFireworksProjection,
-  createFireworksProjectionDefinition,
-} from './fireworks-projection.js';
-import { happyFireworksTool } from './fireworks-tool.js';
-import { FireworksEventFeed } from './fireworks-events.js';
-import { FireworksRemoteService } from './fireworks-remote.js';
-import { FIREWORKS_HOST } from './remote-contract.js';
-import type {} from '@deepseek-ai/dsh-typert-registry';
+import { createFireworksProjectionDefinition } from './fireworks-projection.js';
+import { createHappyFireworksTool } from './fireworks-tool.js';
 
 export * from './contract/index.js';
 export { createFireworksProjectionDefinition } from './fireworks-projection.js';
-export { happyFireworksTool } from './fireworks-tool.js';
+export {
+  createHappyFireworksTool,
+  rollSplash,
+  splashAnnouncement,
+  type FireworksToolPreferences,
+} from './fireworks-tool.js';
+
+/** Live plugin configuration surfaced on the plugin settings page. */
+export interface Config {
+  /** Celebration renderer used by the Web overlay. */
+  mode: Volatile<FireworksMode>;
+  /** Launch window of one show, in milliseconds. */
+  showDurationMs: Volatile<number>;
+  /** Average launches per second inside the launch window. */
+  showRatePerSec: Volatile<number>;
+  /** Chance for one show to carry a splash shell. */
+  splashChance: number;
+}
+
+/** Schemastery validation for {@link Config}. */
+export const Config = z.object({
+  mode: z.union(['emoji', 'realistic']).default(FIREWORKS_DEFAULTS.mode).volatile(),
+  showDurationMs: z
+    .number()
+    .min(FIREWORKS_LIMITS.minDurationMs)
+    .max(FIREWORKS_LIMITS.maxDurationMs)
+    .default(FIREWORKS_DEFAULTS.showDurationMs)
+    .volatile(),
+  showRatePerSec: z
+    .number()
+    .min(FIREWORKS_LIMITS.minRatePerSec)
+    .max(FIREWORKS_LIMITS.maxRatePerSec)
+    .default(FIREWORKS_DEFAULTS.showRatePerSec)
+    .volatile(),
+  splashChance: z.number().min(0).max(1).default(FIREWORKS_DEFAULTS.splashChance),
+});
 
 export const name = 'clutch-dsh-fireworks';
 export const inject = ['tools'];
-export const Config = z.object({
-  animation: z.any().default(DEFAULT_STORED_ANIMATION_PREFERENCES).volatile(),
-});
 
-export function apply(ctx: Context): void {
-  ctx.inject(['settings'], (scope) => {
-    const settings = (
-      scope as unknown as {
-        settings: { configure(presentation: { auto: boolean }, owner: unknown): () => void };
-      }
-    ).settings;
-    scope.effect(() => settings.configure({ auto: false }, scope.fiber));
-  });
-  ctx.inject(['typert'], (connectionContext) => {
-    const feed = new FireworksEventFeed();
-    connectionContext.effect(() => () => feed.dispose());
-    const service = new FireworksRemoteService(connectionContext, feed);
-    connectionContext.inject(['settings', 'dshHomePath'], (scope) => {
-      const ports = scope as unknown as { settings: AnimationSettingsPort; dshHomePath(): string };
-      const library = new AnimationLibrary(new AnimationFiles(ports.dshHomePath()), ports.settings);
-      scope.effect(() => service.setAnimationLibrary(library));
-    });
-    // Keep the public port local: this workspace also compiles plugins against
-    // older DSH faces whose Context declaration merges have different brands.
-    const registry = connectionContext.typert as unknown as {
-      register(contribution: typeof FIREWORKS_HOST): () => Promise<void>;
-    };
-    connectionContext.effect(() => registry.register(FIREWORKS_HOST));
-    connectionContext.on(FIREWORKS_LAUNCH_EVENT, (event) => feed.publish(event));
-    connectionContext.on('session/event', (session, event) => {
-      const signal = applyFireworksProjection(null, event);
-      if (signal === null) return;
-      const issuedAt = Date.now();
-      connectionContext.emit(FIREWORKS_LAUNCH_EVENT, {
-        ...signal,
-        type: FIREWORKS_LAUNCH_EVENT,
-        sessionId: String(session.id),
-        issuedAt,
-        expiresAt: issuedAt + FIREWORKS_EVENT_TTL_MS,
-      });
-    });
-  });
+/** Standalone tool instance with splash disabled, kept for direct embedding. */
+export const happyFireworksTool = createHappyFireworksTool(() => ({
+  mode: FIREWORKS_DEFAULTS.mode,
+  splashChance: 0,
+}));
+
+export function apply(ctx: Context, config?: Config): void {
   ctx.inject(['sessionProjections'], (projectionContext) => {
     projectionContext.sessionProjections.register(createFireworksProjectionDefinition());
   });
@@ -78,5 +70,11 @@ export function apply(ctx: Context): void {
       text: FIREWORKS_GUIDANCE_PROMPT,
     });
   });
-  ctx.tools.register(happyFireworksTool);
+  ctx.tools.register(
+    createHappyFireworksTool(
+      config === undefined
+        ? () => ({ mode: FIREWORKS_DEFAULTS.mode, splashChance: FIREWORKS_DEFAULTS.splashChance })
+        : () => ({ mode: config.mode.get(), splashChance: config.splashChance }),
+    ),
+  );
 }
