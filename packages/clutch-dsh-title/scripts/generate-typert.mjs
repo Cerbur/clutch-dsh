@@ -21,7 +21,7 @@ assertExport('./remote', {
 
 const workspace = new WorkspaceAnalyzer({
   root: workspaceRoot,
-  hostConfig: 'packages/clutch-dsh-title/tsconfig.host.json',
+  hostConfig: path.relative(workspaceRoot, path.join(packageDirectory, 'tsconfig.host.json')),
   faces: ['host'],
   packages: [packageName],
 }).analyze();

@@ -119,7 +119,7 @@ does not change merely because the title was refreshed.
 ### Disable custom titles
 
 Turn off Use title templates in Settings → Session Title. The package keeps the saved templates and
-selection, but DSH resumes its native first-prompt title generator.
+selection, but the plugin generates a plain first-prompt title through DSH's shared title-model executor.
 
 ### View generation statistics
 
@@ -184,7 +184,7 @@ malformed YAML, and invalid field definitions are rejected during validation.
 ## Configuration
 
 Title settings remain keyed by the `clutch-dsh-title` DSH profile entry. DSH 0.1.6 and earlier store
-the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.2.0-rc.1` stores the same enabled, selected,
+the section in `$DSH_HOME/settings.yaml`. DSH `dsh-v0.2.1-rc.2` stores the same enabled, selected,
 and template values as volatile fields in the active Web profile's `cordis.yml`; its one-time
 settings importer moves an existing `$DSH_HOME/settings.yaml` section into the profile and renames
 the old file to `settings.yaml.imported`.
@@ -216,8 +216,9 @@ Profile configuration and Settings → Session Title can set:
   it does not follow the template.
 - The model is asked for exactly one JSON object whose keys are the referenced LLM fields, one of
   the declared literal values for each enum field, and a literal shape example. When a response is
-  still unusable, the package sends one bounded corrective turn that quotes the rejected response
-  back verbatim and states the rejection reason, up to repairAttempts extra calls.
+  still unusable, a repair request retains the original user input and adds the bounded rejected
+  response and rejection reason to the system instructions, up to repairAttempts extra calls.
+  This keeps repaired titles readable under DSH's native Session format.
 - Unusable output, including max-tokens truncation and unexpected tool-calls, is repaired within
   the configured budget. A transport error, a cancellation, or an exhausted deadline
   keeps its own error and falls back immediately; every attempt shares the one timeoutMs budget.
@@ -237,17 +238,27 @@ Profile configuration and Settings → Session Title can set:
 ## Requirements
 
 - DSH peers: @deepseek-ai/dsh-settings, @deepseek-ai/dsh-storage-domain,
-  @deepseek-ai/dsh-typert-protocol, @deepseek-ai/dsh-api-remotes, @deepseek-ai/dsh-client-locale,
+  @deepseek-ai/dsh-typert-protocol, @deepseek-ai/dsh-api-remotes, @deepseek-ai/dsh-client-connection,
+  @deepseek-ai/dsh-client-locale,
   @deepseek-ai/dsh-client-ui-settings, @deepseek-ai/dsh-client-ui-slots,
   @deepseek-ai/dsh-client-ui-primitives, @deepseek-ai/dsh-llm, @deepseek-ai/dsh-session,
   @deepseek-ai/dsh-session-title, @deepseek-ai/dsh-session-title-llm, @deepseek-ai/dsh-timeout,
-  and @deepseek-ai/dsh-util-values, all at >=0.2.0-rc.1.
-- Cordis: @deepseek-ai/cordis ^4.0.1.
-- Running DSH `dsh-v0.2.0-rc.1` requires Node.js `^22.19.0 || >=24.0.0`.
+  and @deepseek-ai/dsh-util-values, all at >=0.2.1-rc.1.
+- Cordis: @deepseek-ai/cordis ^4.0.5.
+- Running DSH `dsh-v0.2.1-rc.2` requires Node.js `^22.19.0 || >=24.0.0`.
 - Profile: a DSH Web profile that provides the session, session-title, LLM, settings, storage,
   remote, and browser settings services declared by the package.
 
 ### Compatibility
+
+This package requires DSH `dsh-v0.2.1-rc.1` or later and has passed the automated
+regression matrix on both `dsh-v0.2.1-rc.1` and `dsh-v0.2.1-rc.2`; older releases
+need a compatible plugin release. DSH now separates title execution from each provider's prompt and
+output policy. Invalid model routes, unsupported reasoning effort, and model-metadata failures
+fall back before a title-model request is recorded or dispatched. Custom extraction and repair
+record the resolved reasoning effort actually sent to the model. Turning templates off uses a
+plain-text first-prompt policy with a 64-token output cap and the model's least supported reasoning
+effort. It remains attributed to `clutch-dsh-title`, the registered provider.
 
 Cordis configuration using template and fields remains supported. When those values come from the
 profile configuration, Settings exposes them as an editable legacy row. The current Settings template
@@ -271,6 +282,19 @@ pnpm --filter @cerbur/clutch-dsh-title typecheck
 pnpm --filter @cerbur/clutch-dsh-title build
 pnpm --filter @cerbur/clutch-dsh-title test
 ```
+
+Run the isolated RC regression matrix against all local `dsh-v0.2.1-rc.*` tags:
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-title test:compat --dsh-source /absolute/path/to/deepseek-harness
+```
+
+The matrix installs each RC's published CLI and development dependencies in temporary workspaces,
+keeps non-DSH direct dependencies aligned with the repository lockfile, and runs a clean build,
+the full package suite, typecheck, and real Web/Session-persistence/RPC checks with a deterministic
+model adapter. It prints the artifact directory containing per-version logs and `results.json`.
+Use `--versions 0.2.1-rc.1,0.2.1-rc.2` instead of `--dsh-source` to select versions explicitly.
+The existing checkout, development dependency pins, and DSH profiles are preserved.
 
 Package-specific release parameters and source-install constraints are documented in
 [docs/RELEASING.md](docs/RELEASING.md). User-facing release history is in

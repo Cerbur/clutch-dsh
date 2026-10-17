@@ -3,10 +3,7 @@ import z from '@deepseek-ai/schemastery';
 import { TitleConfigSchema, resolveTitleConfig } from './config.js';
 import { createTitleProvider } from './provider.js';
 import type { TitleConfig } from './types.js';
-import {
-  generateSessionTitleWithLlm,
-  resolveSessionTitleLlmConfig,
-} from '@deepseek-ai/dsh-session-title-llm';
+import { createPlainTitleGenerator } from './plain-title.js';
 import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title';
 import { registerTemplateSettings } from './settings.js';
 import { createTitleStatsStore, installTitleTokenStatsRecorder } from './storage.js';
@@ -28,25 +25,15 @@ export function apply(ctx: Context, config: Config): void {
   const initial = resolveTitleConfig(config);
   const unmanaged = () => ({ enabled: true, config: resolveTitleConfig(config) });
   let read = unmanaged;
-  let settingsContext: Context | undefined;
   // Retain the host-only composition path when no settings provider is composed.
   ctx.inject(['settings'], (settingsCtx) => {
-    settingsContext = settingsCtx;
-    const next = registerTemplateSettings(settingsCtx, config);
+    const next = registerTemplateSettings(settingsCtx, config, ctx.fiber);
     read = next;
     settingsCtx.effect(() => () => {
-      settingsContext = undefined;
       read = unmanaged;
     });
   });
-  const native = resolveSessionTitleLlmConfig({
-    targetWords: 5,
-    targetCjkCharacters: 10,
-    maxInputBytes: initial.maxInputBytes,
-    maxOutputTokens: 64,
-    timeoutMs: initial.timeoutMs,
-    ...(initial.provider === undefined ? {} : { provider: initial.provider, model: initial.model }),
-  });
+  const native = createPlainTitleGenerator(ctx, initial);
   ctx.sessionTitle.register({
     id: SessionTitleProviderId('clutch-dsh-title'),
     automatic: 'first-prompt',
@@ -54,13 +41,7 @@ export function apply(ctx: Context, config: Config): void {
       return recordGeneration(async () => {
         const state = read();
         if (!state.enabled) {
-          return generateSessionTitleWithLlm(
-            ctx,
-            native,
-            request,
-            request.messages.slice(0, 1),
-            SessionTitleProviderId('session-title-first-prompt-llm'),
-          );
+          return native(request);
         }
         const selected = {
           ...state.config,
@@ -72,9 +53,7 @@ export function apply(ctx: Context, config: Config): void {
             ? {}
             : { provider: initial.provider, model: initial.model }),
         };
-        return createTitleProvider(settingsContext ?? ctx, selected, diagnosticsStore).generate(
-          request,
-        );
+        return createTitleProvider(ctx, selected, diagnosticsStore).generate(request);
       }, request.signal);
     },
   });

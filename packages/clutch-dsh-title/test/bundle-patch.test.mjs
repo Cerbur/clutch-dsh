@@ -197,8 +197,14 @@ test('loads the custom provider through the real DSH Loader composition path', a
 });
 
 test('keeps the native single-provider invariant when the old provider is also enabled', async () => {
-  await assert.rejects(
-    loadComposition({ includeDefaultProvider: true }),
-    /provider|registered|one/i,
+  const ctx = await loadComposition({ includeDefaultProvider: true });
+  const entries = [...ctx.loader.entries()].filter((entry) =>
+    ['@cerbur/clutch-dsh-title', '@deepseek-ai/dsh-session-title-first-prompt-llm'].includes(
+      entry.options.name,
+    ),
   );
+  assert.equal(entries.length, 2);
+  assert.equal(entries.filter((entry) => entry.fiber?.state === 2 /* Cordis ACTIVE */).length, 1);
+  const failed = entries.find((entry) => entry.fiber?.state === 3 /* Cordis FAILED */);
+  assert.ok(failed);
 });

@@ -77,6 +77,7 @@ function managedSettingsBase(config: TitleConfig): Record<string, unknown> {
 export function registerTemplateSettings(
   ctx: Context,
   config: TitleConfig,
+  owner: Context['fiber'] = ctx.fiber,
 ): () => ReturnType<typeof decodeTemplates> {
   const base = managedSettingsBase(config);
   const settings = (ctx as unknown as { settings?: CompatibleSettingsService }).settings;
@@ -85,7 +86,7 @@ export function registerTemplateSettings(
     settings.register(TITLE_NAMESPACE, TemplateSettingsSchema, { base, applies: 'live' });
   } else if (typeof settings?.configure === 'function') {
     // DSH 0.1.7 stores volatile settings on the profile's plugin Config entry.
-    const dispose = settings.configure({ auto: false }, ctx.fiber);
+    const dispose = settings.configure({ auto: false }, owner);
     ctx.effect(() => dispose);
   }
   return () => {
