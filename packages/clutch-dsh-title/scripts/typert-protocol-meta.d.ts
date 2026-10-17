@@ -1,8 +1,7 @@
 /**
- * Build-only Typert metadata bridge for an out-of-tree package on DSH rc.7.
- * Runtime code still imports the published protocol package. The rc.7 analyzer
- * recognizes protocol meta symbols through an ambient module, matching its
- * own remote-model fixture.
+ * Build-only Typert metadata bridge for this out-of-tree Host analysis.
+ * Runtime code imports the published protocol package. The analyzer recognizes
+ * protocol meta symbols through this ambient module, matching DSH remote-model fixtures.
  */
 declare module '@deepseek-ai/dsh-typert-protocol' {
   export abstract class TypertRemoteService {

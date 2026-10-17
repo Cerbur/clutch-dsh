@@ -1,5 +1,27 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.7 — 2026-10-18
+
+### 中文
+
+#### 修复
+
+- 适配 DSH 0.2.1 架构与生命周期变更，完善 Provider 独立策略与 Remote 挂载，并修复官方 RC 下会话持久化与结构化提取修复问题。
+
+#### 优化
+
+- 将支持的最低 DSH 版本基线提高至 `dsh-v0.2.1-rc.1`，更新 peerDependencies 至 `>=0.2.1-rc.1` 并对齐 Cordis 依赖至 `^4.0.5`。
+
+### English
+
+#### Fixed
+
+- Align provider, Remote mounting, and lifecycle integration with DSH 0.2.1, resolving session persistence and structured extraction repair issues across official RCs.
+
+#### Improved
+
+- Raise the minimum DSH compatibility floor to `dsh-v0.2.1-rc.1`, update peerDependencies to `>=0.2.1-rc.1`, and align Cordis peer dependency to `^4.0.5`.
+
 ## 0.1.6 — 2026-10-02
 
 ### 中文

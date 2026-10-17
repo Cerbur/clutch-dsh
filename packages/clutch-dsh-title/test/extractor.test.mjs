@@ -7,6 +7,18 @@ import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title';
 const { extractLlmFields } = await import('../lib/extractor.js');
 const { resolveTitleConfig } = await import('../lib/config.js');
 
+// Unit doubles expose the prepared-call protocol; composition tests exercise real adapters.
+function preparedLlm(llm) {
+  llm.prepareCall = async (config, signal, configure) => {
+    signal.throwIfAborted();
+    const { provider, model, ...controls } = config;
+    const info = await (llm.resolveModelInfo?.(provider, model, signal) ?? Promise.resolve({}));
+    const selected = configure(controls, info);
+    return { config: { ...selected, provider, model }, stream: llm.stream.bind(llm) };
+  };
+  return llm;
+}
+
 const titleProvider = SessionTitleProviderId('clutch-dsh-title');
 const route = { provider: 'main-route', model: 'main-model' };
 const selectedMessages = [{ seq: 7, text: '请优化 session title 生成规则' }];
@@ -91,6 +103,7 @@ async function runExtraction({
       },
     },
   };
+  preparedLlm(ctx.llm);
   const result = await extractLlmFields(ctx, config, request, sourceMessages, titleProvider);
   return { result, request, events, requests };
 }
@@ -135,6 +148,7 @@ test('builds one structured JSON request and records the native request event fi
     system: options.system,
     messages: options.messages,
     maxTokens: options.maxTokens,
+    reasoningEffort: options.reasoningEffort,
   });
   assert.notEqual(options.messages, request.messages);
   assert.ok(Object.isFrozen(result.values));
@@ -280,12 +294,14 @@ test('automatically selects lowest reasoning effort from model capabilities when
   });
   assert.equal(Object.hasOwn(textOnly.requests[0], 'reasoningEffort'), false);
 
-  const resolveFailed = await runExtraction({
-    resolveModelInfo: async () => {
-      throw new Error('resolve failed');
-    },
-  });
-  assert.equal(Object.hasOwn(resolveFailed.requests[0], 'reasoningEffort'), false);
+  await assert.rejects(
+    runExtraction({
+      resolveModelInfo: async () => {
+        throw new Error('resolve failed');
+      },
+    }),
+    /resolve failed/,
+  );
 });
 
 test('does not retry an unsupported effort with thinking enabled', async () => {
@@ -405,6 +421,7 @@ test('honors abort during streaming and translates deadline timeout', async () =
       },
     },
   };
+  preparedLlm(ctx.llm);
   await assert.rejects(
     extractLlmFields(ctx, makeConfig(), request, selectedMessages, titleProvider),
     /abort/i,
@@ -421,6 +438,7 @@ test('honors abort during streaming and translates deadline timeout', async () =
       },
     },
   };
+  preparedLlm(timeoutCtx.llm);
   await assert.rejects(
     extractLlmFields(
       timeoutCtx,
@@ -470,6 +488,7 @@ async function runRepair({
       },
     },
   };
+  preparedLlm(ctx.llm);
   let outcome;
   try {
     outcome = {
@@ -505,22 +524,15 @@ test('rejects an unusable response, then repairs it by quoting the response back
   });
   assert.equal(requests.length, 2);
   assert.equal(requests[0].messages.length, 1);
-  assert.equal(requests[0].system, requests[1].system);
-
-  const repairMessages = requests[1].messages;
-  assert.equal(repairMessages.length, 3);
-  assert.equal(repairMessages[1].role, 'assistant');
-  assert.equal(
-    repairMessages[1].content[0].text,
-    '{"type":"配置","desc":"优化","extra":"unexpected"}',
+  assert.ok(requests[1].system.startsWith(requests[0].system));
+  assert.deepEqual(requests[1].messages, requests[0].messages);
+  assert.equal(requests[1].messages.length, 1);
+  assert.ok(
+    requests[1].system.includes(
+      JSON.stringify('{"type":"配置","desc":"优化","extra":"unexpected"}'),
+    ),
   );
-  assert.deepEqual(repairMessages[1].source, {
-    kind: 'model',
-    provider: 'main-route',
-    model: 'main-model',
-  });
-  assert.equal(repairMessages[2].role, 'user');
-  const instruction = repairMessages[2].content[0].text;
+  const instruction = requests[1].system;
   assert.match(instruction, /Rejection reason:/);
   assert.match(instruction, /exactly the configured dynamic fields/);
   assert.match(instruction, /quoted as data to correct/);
@@ -545,7 +557,7 @@ test('repairs an undeclared enum value without inventing one', async () => {
   assert.equal(outcome.ok, true);
   assert.deepEqual(outcome.result.values, { type: '配置', desc: '更新取数通道' });
   assert.equal(requests.length, 2);
-  assert.match(requests[1].messages[2].content[0].text, /is not declared/);
+  assert.match(requests[1].system, /is not declared/);
 });
 
 for (const kind of ['max-tokens', 'tool-calls']) {
@@ -558,7 +570,7 @@ for (const kind of ['max-tokens', 'tool-calls']) {
     });
     assert.equal(outcome.ok, true);
     assert.equal(requests.length, 2);
-    assert.equal(requests[1].messages[1].content[0].text, output);
+    assert.ok(requests[1].system.includes(JSON.stringify(output)));
     assert.equal(incidents[0].recovered, true);
     assert.equal(incidents[0].repairAttempts, 1);
     assert.equal(incidents[0].attempts[0].output, output);

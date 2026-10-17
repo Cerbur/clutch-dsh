@@ -395,7 +395,7 @@ for (const scenario of [
         reason: 'initial',
       });
       await delay(50);
-      const stats = await ctx.get('titleRemote').getStats();
+      const stats = await ctx.get('titleRemote').getStats(new globalThis.AbortController().signal);
       assert.equal(calls, scenario.calls);
       assert.equal(stats.totalCalls, scenario.count);
       const usage = scenario.usage ?? { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
@@ -538,15 +538,15 @@ test('TitleRemoteService exposes getStats and resetStats over Typert Remote prot
     assert.equal(remoteService.typertRemote.serviceKey, 'titleRemote');
     assert.equal(remoteService.typertRemote.namespace, 'titleStats');
 
-    const stats = await remoteService.getStats();
+    const stats = await remoteService.getStats(new globalThis.AbortController().signal);
     assert.equal(stats.totalCalls, 1);
     assert.equal(stats.totalTokens, 60);
 
-    const resetStats = await remoteService.resetStats();
+    const resetStats = await remoteService.resetStats(new globalThis.AbortController().signal);
     assert.equal(resetStats.totalCalls, 0);
     assert.equal(resetStats.totalTokens, 0);
 
-    const statsAfter = await remoteService.getStats();
+    const statsAfter = await remoteService.getStats(new globalThis.AbortController().signal);
     assert.equal(statsAfter.totalCalls, 0);
   } finally {
     await ctx.fiber.dispose();
@@ -610,7 +610,7 @@ test('end-to-end title generation records token stats into TitleStatsStore and l
     // 2. Check TitleRemoteService: stats recorded in store and accessible via Remote RPC
     const remote = ctx.get('titleRemote');
     assert.ok(remote, 'TitleRemoteService must be registered');
-    const stats = await remote.getStats();
+    const stats = await remote.getStats(new globalThis.AbortController().signal);
     assert.equal(stats.totalCalls, 1);
     assert.equal(stats.totalInputTokens, 80);
     assert.equal(stats.totalOutputTokens, 12);
@@ -619,8 +619,8 @@ test('end-to-end title generation records token stats into TitleStatsStore and l
     assert.equal(stats.lastUsage.outputTokens, 12);
 
     // 3. Reset stats via TitleRemoteService RPC
-    await remote.resetStats();
-    const statsAfter = await remote.getStats();
+    await remote.resetStats(new globalThis.AbortController().signal);
+    const statsAfter = await remote.getStats(new globalThis.AbortController().signal);
     assert.equal(statsAfter.totalCalls, 0);
     assert.equal(statsAfter.totalTokens, 0);
   } finally {
@@ -1254,7 +1254,7 @@ test('native title generation usage is included in title statistics', async () =
     });
     await delay(50);
 
-    const stats = await ctx.get('titleRemote').getStats();
+    const stats = await ctx.get('titleRemote').getStats(new globalThis.AbortController().signal);
     assert.equal(stats.totalCalls, 1);
     assert.equal(stats.totalInputTokens, 60);
     assert.equal(stats.totalTokens, 69);
