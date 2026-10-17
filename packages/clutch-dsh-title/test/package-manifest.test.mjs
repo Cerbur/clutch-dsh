@@ -20,7 +20,7 @@ test('package manifest exposes a public DSH plugin with a settings browser entry
   assert.equal(packageJson.clutchDsh.role, 'plugin');
   assert.equal(packageJson.clutchDsh.serviceDefinition, '@cerbur/clutch-dsh-title');
   assert.equal(packageJson.publishConfig.access, 'public');
-  const supportedDshVersions = '>=0.2.0-rc.1';
+  const supportedDshVersions = '>=0.2.1-rc.1';
   assert.equal(
     packageJson.peerDependencies['@deepseek-ai/dsh-session-title'],
     supportedDshVersions,
@@ -31,7 +31,7 @@ test('package manifest exposes a public DSH plugin with a settings browser entry
   );
   assert.equal(packageJson.peerDependencies['@deepseek-ai/dsh-llm'], supportedDshVersions);
   assert.equal(packageJson.peerDependencies['@deepseek-ai/dsh-session'], supportedDshVersions);
-  assert.equal(packageJson.peerDependencies['@deepseek-ai/cordis'], '^4.0.1');
+  assert.equal(packageJson.peerDependencies['@deepseek-ai/cordis'], '^4.0.5');
   assert.equal(packageJson.dependencies['@deepseek-ai/schemastery'], '^3.18.4');
   assert.equal(packageJson.scripts.prepublishOnly, 'pnpm run build');
   assert.equal(packageJson.scripts.test, 'pnpm run build && node --test test/*.test.mjs');

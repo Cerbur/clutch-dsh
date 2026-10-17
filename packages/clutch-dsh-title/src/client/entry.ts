@@ -1,4 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
+import titleRemote from '@cerbur/clutch-dsh-title/remote';
+import type {} from '@deepseek-ai/dsh-client-connection/client';
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
@@ -12,35 +14,13 @@ import { TITLE_NAMESPACE, settingsDocument } from '../templates.js';
 import { parseDiagnostics, parseStats } from '../types.js';
 import type { TitleTokenStats } from '../types.js';
 import { en, zh } from './locales.js';
-import type { Translate } from './locales.js';
 import { RestartNotice } from './restart-notice.js';
 import { RestartToast } from './RestartToast.js';
 
-interface TitleLocaleService {
-  register(namespace: string, dictionaries: { en: typeof en; zh: typeof zh }): () => void;
-  bind(namespace: string): Translate;
-}
-
-interface RemoteResult<T> {
-  ok: boolean;
-  value?: T;
-  error?: { code?: string; message: string };
-}
-
-interface ConnectionRpc {
-  call(
-    channel: string,
-    endpoint: string,
-    payload: unknown,
-    signal?: AbortSignal,
-  ): Promise<RemoteResult<unknown>>;
-}
-
-function connectionRpc(ctx: Context): ConnectionRpc | undefined {
-  const candidate = ctx as unknown as { get?: (key: string) => unknown };
-  if (typeof candidate.get !== 'function') return undefined;
-  const connection = candidate.get('connection') as { rpc?: ConnectionRpc } | undefined;
-  return connection?.rpc;
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    'clutch.title': keyof typeof en;
+  }
 }
 
 async function withStatsDeadline<T>(
@@ -67,9 +47,24 @@ async function withStatsDeadline<T>(
 }
 
 export const inject = ['slots', 'locale', 'remote', 'remote.settings'];
-export function apply(ctx: Context): void {
-  // DSH releases may resolve nested slot types to a different peer copy; the locale runtime API is stable.
-  const locale = (ctx as unknown as { locale: TitleLocaleService }).locale;
+export async function apply(ctx: Context): Promise<() => Promise<void>> {
+  const unmount = await ctx.remote.$mount(titleRemote);
+  const ui = ctx.inject(['remote.titleStats'], registerUi);
+  try {
+    await ui;
+  } catch (error) {
+    await ui.dispose();
+    await unmount();
+    throw error;
+  }
+  return async () => {
+    await ui.dispose();
+    await unmount();
+  };
+}
+
+function registerUi(ctx: Context): void {
+  const locale = ctx.locale;
   ctx.effect(() => locale.register('clutch.title', { en, zh }));
   const t = locale.bind('clutch.title');
   const operations: TemplateOperations = {
@@ -90,44 +85,31 @@ export function apply(ctx: Context): void {
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
     },
     async getStats(): Promise<TitleTokenStats> {
-      const rpc = connectionRpc(ctx);
-      if (!rpc) throw new Error('clutch-dsh-title: statistics connection unavailable');
       const result = await withStatsDeadline('read', (signal) =>
-        rpc.call('/api', 'titleStats/getStats', { args: {} }, signal),
+        ctx.remote.titleStats.getStats(signal),
       );
-      if (!result.ok || result.value === undefined)
-        throw new Error(result.error?.message ?? 'Failed to get title stats');
+      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to get title stats');
       return parseStats(result.value);
     },
     async getDiagnostics() {
-      const rpc = connectionRpc(ctx);
-      if (!rpc) throw new Error('clutch-dsh-title: diagnostics connection unavailable');
       const result = await withStatsDeadline('diagnostics read', (signal) =>
-        rpc.call('/api', 'titleStats/getDiagnostics', { args: {} }, signal),
+        ctx.remote.titleStats.getDiagnostics(signal),
       );
-      if (!result.ok || result.value === undefined)
-        throw new Error(result.error?.message ?? 'Failed to get title diagnostics');
+      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to get title diagnostics');
       return parseDiagnostics(result.value);
     },
-    // Plugin namespaces need not exist in DSH's generated proxy; use the same live RPC as reads.
     async resetStats() {
-      const rpc = connectionRpc(ctx);
-      if (!rpc) throw new Error('clutch-dsh-title: statistics connection unavailable');
       const result = await withStatsDeadline('reset', (signal) =>
-        rpc.call('/api', 'titleStats/resetStats', { args: {} }, signal),
+        ctx.remote.titleStats.resetStats(signal),
       );
-      if (!result.ok || result.value === undefined)
-        throw new Error(result.error?.message ?? 'Failed to reset title stats');
+      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to reset title stats');
       return parseStats(result.value);
     },
     async resetDiagnostics() {
-      const rpc = connectionRpc(ctx);
-      if (!rpc) throw new Error('clutch-dsh-title: diagnostics connection unavailable');
       const result = await withStatsDeadline('diagnostics reset', (signal) =>
-        rpc.call('/api', 'titleStats/resetDiagnostics', { args: {} }, signal),
+        ctx.remote.titleStats.resetDiagnostics(signal),
       );
-      if (!result.ok || result.value === undefined)
-        throw new Error(result.error?.message ?? 'Failed to reset title diagnostics');
+      if (!result.ok) throw new Error(result.error?.message ?? 'Failed to reset title diagnostics');
       return parseDiagnostics(result.value);
     },
   };
@@ -136,13 +118,7 @@ export function apply(ctx: Context): void {
     const refresh = () => {
       if (controller.getSnapshot().status !== 'idle') void controller.load();
     };
-    const remoteEvents = ctx.remote as unknown as {
-      $on(
-        event: 'settings/document-updated',
-        listener: (namespace: string, revision: number) => void,
-      ): () => void;
-    };
-    const dispose = remoteEvents.$on('settings/document-updated', (ns) => {
+    const dispose = ctx.remote.$on('settings/document-updated', (ns) => {
       if (ns === TITLE_NAMESPACE) refresh();
     });
     const reset = ctx.on('connection/reset', refresh);
@@ -164,10 +140,7 @@ export function apply(ctx: Context): void {
     ),
   );
   ctx.effect(() => {
-    const notice = new RestartNotice(async (signal) => {
-      const rpc = connectionRpc(ctx);
-      return rpc?.call('/api', 'titleStats/getStats', { args: {} }, signal);
-    });
+    const notice = new RestartNotice((signal) => ctx.remote.titleStats.getStats(signal));
     const check = () => void notice.check();
     const reset = ctx.on('connection/reset', check);
     const changed = ctx.remote.$on('plugin-manager/changed', check);

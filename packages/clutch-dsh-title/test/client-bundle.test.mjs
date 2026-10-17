@@ -6,6 +6,44 @@ import { setImmediate } from 'node:timers';
 import { URL } from 'node:url';
 import console from 'node:console';
 
+async function mountClient(plugin, ctx) {
+  const remote = ctx.remote;
+  let mounted = false;
+  remote.$mount = async (contribution) => {
+    assert.equal(contribution.package, '@cerbur/clutch-dsh-title');
+    assert.equal(mounted, false);
+    mounted = true;
+    remote.titleStats = Object.fromEntries(
+      contribution.descriptors.map((descriptor) => [
+        descriptor.method,
+        async (signal) => {
+          const rpc = ctx.get?.('connection')?.rpc;
+          if (!rpc) throw new Error('clutch-dsh-title: statistics connection unavailable');
+          const result = await rpc.call(
+            '/api',
+            `${descriptor.namespace}/${descriptor.method}`,
+            { args: {} },
+            signal,
+          );
+          return result.ok
+            ? { ok: true, value: descriptor.result.create().parse(result.value) }
+            : result;
+        },
+      ]),
+    );
+    return async () => {
+      mounted = false;
+      delete remote.titleStats;
+    };
+  };
+  ctx.inject = (names, setup) => {
+    assert.deepEqual(Array.from(names), ['remote.titleStats']);
+    setup(ctx);
+    return Object.assign(Promise.resolve(), { dispose: async () => {} });
+  };
+  return plugin.apply(ctx);
+}
+
 test('published browser bundle needs only DSH shared browser modules and registers the settings section', async () => {
   let plugin;
   const allowed = new Set(['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives']);
@@ -48,14 +86,15 @@ test('published browser bundle needs only DSH shared browser modules and registe
       },
     },
   };
-  plugin.apply(ctx);
+  const unmount = await mountClient(plugin, ctx);
   assert.equal(registrations[0].options.name, 'settings.section');
   assert.equal(registrations[0].options.id, 'clutch-dsh-title');
   assert.equal(typeof registrations[0].component, 'function');
   for (const dispose of disposers) dispose();
+  await unmount();
 });
 
-test('entry enables both resets from live RPC without generated plugin methods', async () => {
+test('entry enables both resets through the mounted generated Remote', async () => {
   let plugin;
   const allowed = new Set(['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives']);
   const code = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8');
@@ -165,7 +204,7 @@ test('entry enables both resets from live RPC without generated plugin methods',
       },
     },
   };
-  plugin.apply(ctx);
+  const unmount = await mountClient(plugin, ctx);
   const controller = registrations[0].options.inject().controller;
   assert.equal(controller.canResetStats, false);
   await controller.load();
@@ -201,6 +240,7 @@ test('entry enables both resets from live RPC without generated plugin methods',
   await assert.rejects(controller.resetStats(), /unavailable/);
   assert.equal(resetCalls, 1);
   for (const dispose of disposers) dispose();
+  await unmount();
 });
 
 test('missing installed host shows a localized native toast outside Settings and clears after restart', async () => {
@@ -236,7 +276,7 @@ test('missing installed host shows a localized native toast outside Settings and
     events.set(event, listener);
     return () => events.delete(event);
   };
-  plugin.apply({
+  const unmount = await mountClient(plugin, {
     locale: {
       register: (_ns, dictionaries) => {
         copy = dictionaries;
@@ -257,7 +297,15 @@ test('missing installed host shows a localized native toast outside Settings and
             assert.deepEqual(JSON.parse(JSON.stringify(payload)), { args: {} });
             assert.equal(signal.aborted, false);
             return hostAvailable
-              ? { ok: true, value: {} }
+              ? {
+                  ok: true,
+                  value: {
+                    totalCalls: 0,
+                    totalInputTokens: 0,
+                    totalOutputTokens: 0,
+                    totalTokens: 0,
+                  },
+                }
               : { ok: false, error: { code: 'gateway/invocation-unavailable' } };
           },
         },
@@ -294,6 +342,7 @@ test('missing installed host shows a localized native toast outside Settings and
     assert.equal(overlay.component(props), null);
   } finally {
     for (const dispose of disposers) dispose?.();
+    await unmount();
   }
   assert.equal(events.size, 0);
 });

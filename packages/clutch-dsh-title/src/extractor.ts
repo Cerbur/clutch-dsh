@@ -1,11 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis';
-import {
-  BlockAssembler,
-  createAssistantMessage,
-  createUserMessage,
-  ReasoningEffortId,
+import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
+import type {
+  FinishReason,
+  GenerateOptions,
+  LlmResolvedModelInfo,
+  Message,
+  PreparedLlmCall,
 } from '@deepseek-ai/dsh-llm';
-import type { FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
 import type { SessionTitleLlmRequestEventData } from '@deepseek-ai/dsh-session-title-llm';
 import { SESSION_TITLE_TIMEOUT_CODE } from '@deepseek-ai/dsh-session-title-llm';
 import { deadline } from '@deepseek-ai/dsh-timeout';
@@ -34,7 +35,7 @@ import type {
 
 type DynamicField = Extract<TitleFieldConfig, { kind: 'llm-enum' | 'llm-text' }>;
 
-/** Message source kind used for title extraction wrapper messages in DSH 0.1.7. */
+/** Native source kind required for durable title-request replay. */
 const TITLE_MESSAGE_SOURCE = { kind: 'dsh-session-title-llm' } as const;
 
 /** Raw response text replayed inside one repair prompt. */
@@ -119,7 +120,7 @@ function systemPrompt(fields: Readonly<Record<string, TitleFieldConfig>>): strin
   return lines.join('\n');
 }
 
-/** Corrective turn sent after one rejected response, quoting it back as data. */
+/** Corrective system instruction; the native user input remains unchanged for replay. */
 function repairPrompt(
   fields: Readonly<Record<string, TitleFieldConfig>>,
   previousOutput: string,
@@ -128,7 +129,7 @@ function repairPrompt(
   const dynamic = dynamicFields(fields);
   const lines = [
     'Your previous response could not be used for this session title.',
-    `Previous response, quoted as data to correct:\n${previousOutput}`,
+    `Previous response, quoted as data to correct:\n${JSON.stringify(previousOutput)}`,
     `Rejection reason: ${rejectionMessage}`,
     'Return the corrected result now.',
     `Reply with exactly one JSON object and nothing else. Its keys must be exactly ${quotedList(dynamic.map(([name]) => name))}.`,
@@ -191,37 +192,11 @@ function finishError(finish: FinishReason): Error | undefined {
   }
 }
 
-async function determineReasoningEffort(
-  ctx: Context,
-  config: ResolvedTitleConfig,
-  route: ExtractedLlmFields['model'],
-  signal: AbortSignal,
-): Promise<string | undefined> {
-  if (config.reasoningEffort !== undefined) {
-    return config.reasoningEffort === null ? undefined : config.reasoningEffort;
-  }
-  try {
-    const llm = (
-      ctx as {
-        llm?: {
-          resolveModelInfo?(
-            provider: string,
-            model: string,
-            signal?: AbortSignal,
-          ): Promise<{ reasoning?: { efforts?: readonly { id: string }[] } }>;
-        };
-      }
-    ).llm;
-    if (typeof llm?.resolveModelInfo === 'function') {
-      const info = await llm.resolveModelInfo(route.provider, route.model, signal);
-      if (info?.reasoning?.efforts && info.reasoning.efforts.length > 0) {
-        return info.reasoning.efforts[0].id;
-      }
-    }
-  } catch {
-    // Model metadata resolution failure falls back to omitting reasoning effort
-  }
-  return undefined;
+/** Select controls from the same model generation that will execute the request. */
+function selectReasoningEffort(config: ResolvedTitleConfig, model: Readonly<LlmResolvedModelInfo>) {
+  if (config.reasoningEffort === null) return undefined;
+  if (config.reasoningEffort !== undefined) return ReasoningEffortId(config.reasoningEffort);
+  return model.reasoning?.efforts[0]?.id;
 }
 
 function cloneSelectedMessages(
@@ -252,12 +227,12 @@ interface StreamedResponse {
 
 /** Drain one auxiliary stream and return its usable text. */
 async function streamResponse(
-  ctx: Context,
+  call: PreparedLlmCall,
   options: GenerateOptions,
   signal: AbortSignal,
 ): Promise<StreamedResponse> {
   const assembler = new BlockAssembler();
-  for await (const chunk of ctx.llm.stream(options)) {
+  for await (const chunk of call.stream(options)) {
     signal.throwIfAborted();
     assembler.push(chunk);
   }
@@ -287,53 +262,15 @@ async function streamResponse(
   };
 }
 
-function buildOptions(
-  route: ExtractedLlmFields['model'],
-  system: string,
-  messages: Message[],
-  config: ResolvedTitleConfig,
-  reasoningEffort: string | undefined,
-  sessionId: GenerateOptions['sessionId'],
-  signal: AbortSignal,
-): GenerateOptions {
-  return deepFreeze({
-    provider: route.provider,
-    model: route.model,
-    messages,
-    system,
-    maxTokens: config.maxOutputTokens,
-    ...(reasoningEffort === undefined
-      ? {}
-      : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
-    sessionId,
-    purpose: 'session-title',
-    signal,
-  });
-}
-
-/** Build the corrective message list: original input, the rejected answer, then one instruction. */
-function repairMessages(
-  baseMessages: readonly Message[],
+/** Keep repair context out of the single user message required by Session V4. */
+function repairSystem(
+  baseSystem: string,
   previousOutput: string,
   rejectionMessage: string,
   fields: Readonly<Record<string, TitleFieldConfig>>,
-  route: ExtractedLlmFields['model'],
-): Message[] {
-  const quoted =
-    previousOutput.length > MAX_REPAIR_OUTPUT_CHARS
-      ? previousOutput.slice(0, MAX_REPAIR_OUTPUT_CHARS)
-      : previousOutput;
-  return [
-    ...baseMessages,
-    createAssistantMessage({
-      content: [textBlock(quoted)],
-      source: { provider: route.provider, model: route.model },
-    }),
-    createUserMessage({
-      content: [textBlock(repairPrompt(fields, quoted, rejectionMessage))],
-      source: TITLE_MESSAGE_SOURCE,
-    }),
-  ];
+): string {
+  const quoted = previousOutput.slice(0, MAX_REPAIR_OUTPUT_CHARS);
+  return baseSystem + '\n\n' + repairPrompt(fields, quoted, rejectionMessage);
 }
 
 function warn(ctx: Context, message: string): void {
@@ -382,18 +319,17 @@ export async function extractLlmFields(
   const framedInput = frameBoundedInput(sourceMessages, config.maxInputBytes);
 
   const route = resolveRoute(config, request);
-  const system = systemPrompt(fields);
+  const baseSystem = systemPrompt(fields);
   const messageSeqs = sourceMessages.map((message) => message.seq);
   const baseMessages: Message[] = [
     createUserMessage({ content: [textBlock(framedInput)], source: TITLE_MESSAGE_SOURCE }),
   ];
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE);
 
-  const reasoningEffort = await determineReasoningEffort(ctx, config, route, callDeadline.signal);
-
   const attempts: TitleExtractionAttemptRecord[] = [];
   const dispatches = 1 + config.repairAttempts;
-  let messages: Message[] = baseMessages;
+  let system = baseSystem;
+  const messages: Message[] = baseMessages;
   let result: ExtractedLlmFields | undefined;
   let failure: Error | undefined;
   let dispatched = 0;
@@ -401,31 +337,38 @@ export async function extractLlmFields(
   try {
     for (let attempt = 1; attempt <= dispatches; attempt += 1) {
       callDeadline.signal.throwIfAborted();
+      const call = await ctx.llm.prepareCall(
+        { ...route, maxTokens: config.maxOutputTokens },
+        callDeadline.signal,
+        (controls, model) => {
+          const effort = selectReasoningEffort(config, model);
+          return { ...controls, ...(effort === undefined ? {} : { reasoningEffort: effort }) };
+        },
+      );
+      const options: GenerateOptions = deepFreeze({
+        ...call.config,
+        system,
+        messages,
+        sessionId: request.session.id,
+        purpose: 'session-title',
+        signal: callDeadline.signal,
+      });
       const event: SessionTitleLlmRequestEventData = deepFreeze({
         titleProvider,
         messageSeqs,
         route,
         system,
         messages,
-        maxTokens: config.maxOutputTokens,
+        maxTokens: options.maxTokens!,
+        ...(options.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: options.reasoningEffort }),
       });
       request.session.append('session/title-llm-request', event);
       callDeadline.signal.throwIfAborted();
 
       dispatched = attempt;
-      const response = await streamResponse(
-        ctx,
-        buildOptions(
-          route,
-          system,
-          messages,
-          config,
-          reasoningEffort,
-          request.session.id,
-          callDeadline.signal,
-        ),
-        callDeadline.signal,
-      );
+      const response = await streamResponse(call, options, callDeadline.signal);
 
       try {
         if (response.outputError !== undefined) throw response.outputError;
@@ -451,7 +394,7 @@ export async function extractLlmFields(
         });
         failure = outputError;
         if (attempt >= dispatches) break;
-        messages = repairMessages(baseMessages, response.text, outputError.message, fields, route);
+        system = repairSystem(baseSystem, response.text, outputError.message, fields);
       }
     }
   } catch (error) {

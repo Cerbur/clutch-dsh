@@ -8,8 +8,6 @@ import type { TitleDiagnostics, TitleTokenStats } from '../types.js';
  * Host Remote service providing session title token usage statistics over Typert Gateway.
  */
 export class TitleRemoteService extends TypertRemoteService {
-  static inject = ['storageDomain'];
-
   constructor(
     ctx: Context,
     private readonly statsStore: TitleStatsStore,
@@ -19,17 +17,20 @@ export class TitleRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  getStats(): Promise<TitleTokenStats> {
+  getStats(signal: AbortSignal): Promise<TitleTokenStats> {
+    signal.throwIfAborted();
     return this.statsStore.get();
   }
 
   @Remote
-  resetStats(): Promise<TitleTokenStats> {
+  resetStats(signal: AbortSignal): Promise<TitleTokenStats> {
+    signal.throwIfAborted();
     return this.statsStore.reset();
   }
 
   @Remote
-  getDiagnostics(): Promise<TitleDiagnostics> {
+  getDiagnostics(signal: AbortSignal): Promise<TitleDiagnostics> {
+    signal.throwIfAborted();
     if (this.diagnosticsStore === undefined) {
       throw new Error('clutch-dsh-title: diagnostics storage is not composed');
     }
@@ -37,7 +38,8 @@ export class TitleRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  resetDiagnostics(): Promise<TitleDiagnostics> {
+  resetDiagnostics(signal: AbortSignal): Promise<TitleDiagnostics> {
+    signal.throwIfAborted();
     if (this.diagnosticsStore === undefined) {
       throw new Error('clutch-dsh-title: diagnostics storage is not composed');
     }

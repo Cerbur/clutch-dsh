@@ -232,14 +232,14 @@ test('native settings file preserves other namespaces and rejects stale writes a
   }
 });
 
-test('uses DSH 0.1.7 profile fields while retaining the custom title settings UI', () => {
+test('uses profile fields and registers presentation on the outer title fiber', () => {
   const owner = {};
   let configureOptions;
   let configuredOwner;
   let disposeConfiguration;
   let disposed = false;
   const context = {
-    fiber: owner,
+    fiber: { child: true },
     effect(effect) {
       disposeConfiguration = effect();
     },
@@ -267,7 +267,7 @@ test('uses DSH 0.1.7 profile fields while retaining the custom title settings UI
     },
   };
 
-  const read = registerTemplateSettings(context, { preset: 'default' });
+  const read = registerTemplateSettings(context, { preset: 'default' }, owner);
   assert.deepEqual(configureOptions, { auto: false });
   assert.equal(configuredOwner, owner);
   assert.equal(read().enabled, false);

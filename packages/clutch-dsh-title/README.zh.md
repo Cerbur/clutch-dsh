@@ -112,8 +112,8 @@ Session 原始的 createdAt，因此仅刷新标题不会改变日期字段。
 
 ### 关闭自定义标题
 
-在设置 → 会话标题中关闭使用标题模板。已保存的模板和选择会保留，但 DSH 会恢复使用原生
-的首条 prompt 标题生成器。
+在设置 → 会话标题中关闭使用标题模板。已保存的模板和选择会保留，本插件通过 DSH 共享的
+标题模型执行器生成首条 prompt 的纯文本标题。
 
 ### 查看生成统计
 
@@ -172,7 +172,7 @@ warning。诊断读取失败时，面板会显示错误，并禁用重置操作�
 ## 配置
 
 模板设置仍以 DSH profile 中的 `clutch-dsh-title` 条目为键。DSH 0.1.6 及更早版本将其保存在
-`$DSH_HOME/settings.yaml`；DSH `dsh-v0.2.0-rc.1` 将相同的启用状态、当前模板和模板映射保存为
+`$DSH_HOME/settings.yaml`；DSH `dsh-v0.2.1-rc.2` 将相同的启用状态、当前模板和模板映射保存为
 活动 Web profile `cordis.yml` 中的 volatile 字段。DSH 的一次性设置导入器会将已有
 `$DSH_HOME/settings.yaml` 区段迁入 profile，并将旧文件重命名为 `settings.yaml.imported`。
 
@@ -197,8 +197,9 @@ profile 配置和设置 → 会话标题可以设置：
 - 如果字段提取、渲染或自定义标题生成失败，DSH 会使用正常的首条 prompt 标题生成器。该
   fallback 是 DSH 自己对首条 prompt 的截断结果，因此不遵循模板。
 - 模型会被要求只输出一个 JSON 对象：键集合必须精确等于模板引用的 LLM 字段，枚举字段必须使用声明的
-  字面值之一，并给出字面形状示例。当响应仍不可用时，package 会再发一次有界的纠正轮，把被
-  拒绝的响应原文引用回去并说明拒绝原因，最多 repairAttempts 次额外调用。
+  字面值之一，并给出字面形状示例。当响应仍不可用时，修复请求保留原始用户输入，在 system
+  指令中加入有界的被拒绝响应和拒绝原因，最多 repairAttempts 次额外调用，确保经历修复的标题
+  仍符合 DSH 原生 Session 格式并可重新读取。
 - 不可用的输出（包括 max-tokens 截断和意外的 tool-calls）会在配置的预算内修复。
   传输错误、取消或超时耗尽会保留自身错误并立即 fallback；所有
   尝试共用同一个 timeoutMs 预算。
@@ -216,18 +217,26 @@ profile 配置和设置 → 会话标题可以设置：
 ## 要求
 
 - DSH peer 包括 @deepseek-ai/dsh-settings、@deepseek-ai/dsh-storage-domain、
-  @deepseek-ai/dsh-typert-protocol、@deepseek-ai/dsh-api-remotes、
+  @deepseek-ai/dsh-typert-protocol、@deepseek-ai/dsh-api-remotes、@deepseek-ai/dsh-client-connection、
   @deepseek-ai/dsh-client-locale、@deepseek-ai/dsh-client-ui-settings、
   @deepseek-ai/dsh-client-ui-slots、@deepseek-ai/dsh-client-ui-primitives、
   @deepseek-ai/dsh-llm、@deepseek-ai/dsh-session、@deepseek-ai/dsh-session-title、
   @deepseek-ai/dsh-session-title-llm、@deepseek-ai/dsh-timeout 和
-  @deepseek-ai/dsh-util-values，全部要求 >=0.2.0-rc.1。
-- Cordis：@deepseek-ai/cordis ^4.0.1。
-- 运行 DSH `dsh-v0.2.0-rc.1` 需要 Node.js `^22.19.0 || >=24.0.0`。
+  @deepseek-ai/dsh-util-values，全部要求 >=0.2.1-rc.1。
+- Cordis：@deepseek-ai/cordis ^4.0.5。
+- 运行 DSH `dsh-v0.2.1-rc.2` 需要 Node.js `^22.19.0 || >=24.0.0`。
 - Profile：提供 package 所声明的 session、session-title、LLM、settings、storage、remote
   和 browser settings service 的 DSH Web profile。
 
 ### 兼容性
+
+本包要求 DSH `dsh-v0.2.1-rc.1` 或更高版本，已在 `dsh-v0.2.1-rc.1` 和 `dsh-v0.2.1-rc.2`
+上通过自动化回归矩阵；更早的 DSH 需要使用与其兼容的插件版本。
+DSH 现在将标题执行与 provider 各自的提示词和输出策略分开。模型路由无效、reasoning effort
+不受支持或模型元数据解析失败时，会在记录或发起标题模型请求之前 fallback。自定义字段提取和
+修复会记录实际发给模型的 reasoning effort。关闭模板后，使用首条 prompt 的纯文本策略，
+输出上限为 64 token，并选择模型支持的最低 reasoning effort；请求仍归属于实际注册的
+`clutch-dsh-title` provider。
 
 通过 Cordis 配置提供的 template 和 fields 仍然兼容。当这些值来自 profile 配置时，设置页面
 会将它们显示为可编辑的 legacy 行。当前设置模板管理器和 legacy 配置使用相同的校验规则。
@@ -248,6 +257,18 @@ pnpm --filter @cerbur/clutch-dsh-title typecheck
 pnpm --filter @cerbur/clutch-dsh-title build
 pnpm --filter @cerbur/clutch-dsh-title test
 ```
+
+针对本地所有 `dsh-v0.2.1-rc.*` 标签运行隔离的 RC 回归矩阵：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-title test:compat --dsh-source /absolute/path/to/deepseek-harness
+```
+
+矩阵会在临时 workspace 中安装各 RC 已发布的 CLI 和开发依赖，按仓库锁文件固定非 DSH 的直接
+依赖，并使用确定性模型 adapter 执行干净构建、完整 package 测试、typecheck 及真实 Web、Session
+持久化和 RPC 检查。命令会输出保存各版本日志和 `results.json` 的目录。
+也可以用 `--versions 0.2.1-rc.1,0.2.1-rc.2` 替代 `--dsh-source` 来显式选择版本。
+现有 checkout、开发依赖固定版本和 DSH profile 均会保留。
 
 package 特有的发布参数和源码安装限制见
 [docs/RELEASING.md](docs/RELEASING.md)。面向用户的发布历史见
