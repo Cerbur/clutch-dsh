@@ -1,5 +1,12 @@
 # 发布记录
 
+## 未发布
+
+- 通过 `clutch_fireworks/launch` 事件在整个 DSH 窗口播放礼花，支持后台 Session 和跨页面排队。
+- 新增可点击跳转到来源 Session 的庆祝 toast，刷新不重播，短暂断线按有效期补收。
+- 使用已鉴权的 Connection 共享路由，最低支持 DSH 0.2.0，并显式接受 0.2.1 预发布版。
+- 修复独立 RPC 通道路由因 Cordis 服务依赖边界注册失败而无法展示烟花的问题；通过真实 Cordis/Connection 回归测试及已安装 DSH 的浏览器验收。
+
 ## 0.1.4 — 2026-09-26
 
 ### 中文
@@ -50,6 +57,13 @@
 - 将每次礼花扩展为 40 个视觉元素，并保证 🎉、🌟 和 ✨ 的最低数量，同时提供 seeded variety。
 
 # Release log
+
+## Unreleased
+
+- Play global fireworks through `clutch_fireworks/launch`, including background Sessions and queued celebrations across app pages.
+- Add clickable toasts that open the source Session, with silent refresh baselines and bounded reconnect catch-up.
+- Use the authenticated Connection shared route, requiring DSH 0.2.0 and explicitly accepting 0.2.1 prereleases.
+- Fix missing fireworks caused by Cordis dependency boundaries preventing dedicated RPC route registration; verify with real Cordis/Connection regression coverage and browser checks in installed DSH.
 
 ## 0.1.4 — 2026-09-26
 
