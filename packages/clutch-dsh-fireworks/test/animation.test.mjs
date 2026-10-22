@@ -170,6 +170,7 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
           (_target, key) =>
           (...args) => {
             draws.push([key, args]);
+            if (key === 'measureText') return { width: 64 };
           },
         set: () => true,
       },
@@ -204,6 +205,146 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
       assert.ok(glyphs.filter((glyph) => glyph === '🌟').length >= 5);
       assert.ok(glyphs.filter((glyph) => glyph === '✨').length >= 5);
     }
+    harness.hide();
+  }
+});
+
+test('helpers reuse emoji and glow rasters as particles move, scale, rotate and fade', () => {
+  const harness = sandboxHarness(
+    parseAnimation(
+      source(`
+    for (let i = 0; i < 40; i++) {
+      fx.emoji('🎉', i * 10, 100, 20 + frame.time / 100 + i / 10, 1, frame.time / 1000);
+      fx.circle(i * 10, frame.time / 10, 2.5, 'red', frame.time / 1000, 10);
+      fx.emoji('hidden', 0, 0, 32, 0);
+    }
+  `),
+      'custom-cache',
+    ),
+  );
+  let rasterizations = 0;
+  let glows = 0;
+  let blits = 0;
+  const context = () =>
+    new Proxy(
+      {
+        globalCompositeOperation: 'source-over',
+        measureText: () => ({ width: 64 }),
+        arc: () => {
+          glows++;
+        },
+        fillText: () => {
+          rasterizations++;
+        },
+        drawImage: () => {
+          blits++;
+        },
+      },
+      { get: (target, name) => target[name] ?? (() => {}) },
+    );
+  const canvas = { width: 500, height: 300, getContext: context };
+  const worker = vm.createContext({
+    postMessage: () => {},
+    OffscreenCanvas: class {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+      }
+      getContext() {
+        return context();
+      }
+    },
+  });
+  vm.runInContext(harness.workerSource, worker);
+  worker.onmessage({ data: { type: 'init', canvas } });
+  for (let time = 100; time <= 1000; time += 100)
+    worker.onmessage({
+      data: {
+        type: 'frame',
+        frame: {
+          width: 500,
+          height: 300,
+          dpr: 1,
+          seed: 42,
+          time,
+        },
+      },
+    });
+  assert.equal(rasterizations, 1, 'changing size must not rasterize every particle on every frame');
+  assert.equal(glows, 1, 'all glowing particles share the same blurred sprite');
+  assert.equal(blits, 800, 'all visible particles still draw on every frame');
+  worker.onmessage({
+    data: {
+      type: 'frame',
+      frame: {
+        width: 500,
+        height: 300,
+        dpr: 2,
+        seed: 42,
+        time: 1100,
+      },
+    },
+  });
+  assert.equal(rasterizations, 2, 'DPR changes refresh glyph resolution');
+  assert.equal(glows, 2, 'DPR changes refresh glow resolution');
+  for (const time of [8000, 20000])
+    worker.onmessage({
+      data: { type: 'frame', frame: { width: 500, height: 300, dpr: 2, seed: 42, time } },
+    });
+  assert.equal(
+    rasterizations,
+    43,
+    'large emoji draw directly even after a smaller size was cached',
+  );
+  harness.hide();
+});
+
+test('sprite caches bound entries and pixels while overflow still draws', () => {
+  for (const dpr of [0.5, 2]) {
+    const harness = sandboxHarness(
+      parseAnimation(
+        source(`
+      for (let i = 0; i < 150; i++) fx.emoji(String(i), i, 100);
+    `),
+        'custom-budget',
+      ),
+    );
+    const allocated = [];
+    let draws = 0;
+    const drawing = new Proxy(
+      {
+        measureText: () => ({ width: 64 }),
+        drawImage: () => {
+          draws++;
+        },
+        fillText: () => {
+          draws++;
+        },
+      },
+      { get: (target, name) => target[name] ?? (() => {}) },
+    );
+    const worker = vm.createContext({
+      postMessage: () => {},
+      OffscreenCanvas: class {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+          allocated.push(width * height);
+        }
+        getContext() {
+          return drawing;
+        }
+      },
+    });
+    vm.runInContext(harness.workerSource, worker);
+    worker.onmessage({ data: { type: 'init', canvas: { getContext: () => drawing } } });
+    worker.onmessage({
+      data: { type: 'frame', frame: { width: 500, height: 300, dpr, seed: 42 } },
+    });
+    assert.equal(allocated.length, dpr === 0.5 ? 128 : 30);
+    assert.ok(allocated.reduce((sum, pixels) => sum + pixels, 0) <= 2_000_000);
+    // Cached particles paint once into the sprite and once onto the frame; overflow paints directly.
+    assert.equal(draws - allocated.length, 150);
     harness.hide();
   }
 });

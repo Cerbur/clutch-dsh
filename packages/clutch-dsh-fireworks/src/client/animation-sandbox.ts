@@ -4,6 +4,10 @@ import type { AnimationTemplate, AnimationRender } from '../animation.js';
 function workerRuntime(render: AnimationRender) {
   let canvas: OffscreenCanvas;
   let ctx: OffscreenCanvasRenderingContext2D;
+  // Per-playback sprites avoid re-rasterizing changing emoji fonts and blurred particles.
+  const sprites = new Map<string, OffscreenCanvas>();
+  let spritePixels = 0;
+  let spriteDpr = 0;
   const scope = globalThis as unknown as {
     onmessage: (event: MessageEvent) => void;
     postMessage: (value: unknown) => void;
@@ -19,6 +23,39 @@ function workerRuntime(render: AnimationRender) {
         return;
       }
       const { width, height, dpr, seed } = data.frame;
+      if (spriteDpr !== dpr) {
+        sprites.clear();
+        spritePixels = 0;
+        spriteDpr = dpr;
+      }
+      const sprite = (
+        key: string,
+        width: number,
+        height: number,
+        draw: (context: OffscreenCanvasRenderingContext2D) => void,
+      ) => {
+        const cached = sprites.get(key);
+        if (cached) return cached;
+        const w = Math.ceil(width * dpr);
+        const h = Math.ceil(height * dpr);
+        if (
+          typeof OffscreenCanvas !== 'function' ||
+          !Number.isFinite(w * h) ||
+          w <= 0 ||
+          h <= 0 ||
+          sprites.size >= 128 ||
+          spritePixels + w * h > 2_000_000
+        )
+          return;
+        const image = new OffscreenCanvas(w, h);
+        const context = image.getContext('2d');
+        if (!context) return;
+        context.setTransform(dpr, 0, 0, dpr, w / 2, h / 2);
+        draw(context);
+        sprites.set(key, image);
+        spritePixels += w * h;
+        return image;
+      };
       const pixelWidth = Math.round(width * dpr);
       const pixelHeight = Math.round(height * dpr);
       if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
@@ -29,6 +66,7 @@ function workerRuntime(render: AnimationRender) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       let randomState = seed >>> 0;
       const paint = (alpha: number, color: string, draw: () => void) => {
+        if (alpha <= 0 && ctx.globalCompositeOperation === 'source-over') return;
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         ctx.fillStyle = color;
@@ -45,6 +83,31 @@ function workerRuntime(render: AnimationRender) {
         easeOut: (p: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3),
         circle(x: number, y: number, r: number, color: string, alpha = 1, glow = 0) {
           paint(alpha, color, () => {
+            const radius = Math.max(0, r);
+            const image =
+              glow > 0
+                ? sprite(
+                    JSON.stringify(['circle', radius, color, glow]),
+                    (radius + glow * 2) * 2,
+                    (radius + glow * 2) * 2,
+                    (context) => {
+                      context.fillStyle = color;
+                      context.shadowColor = color;
+                      context.shadowBlur = glow;
+                      context.beginPath();
+                      context.arc(0, 0, radius, 0, Math.PI * 2);
+                      context.fill();
+                    },
+                  )
+                : undefined;
+            if (image) {
+              const w = image.width / dpr;
+              const h = image.height / dpr;
+              ctx.shadowBlur = 0;
+              ctx.shadowColor = 'transparent';
+              ctx.drawImage(image, x - w / 2, y - h / 2, w, h);
+              return;
+            }
             ctx.shadowColor = color;
             ctx.shadowBlur = glow;
             ctx.beginPath();
@@ -96,6 +159,33 @@ function workerRuntime(render: AnimationRender) {
           paint(alpha, '#fff', () => {
             ctx.translate(x, y);
             ctx.rotate(rotation);
+            // Rasterize at one stable resolution, then scale the bitmap with the particle.
+            // A DPR-specific cache keeps retina displays sharp without a font per frame.
+            const rasterSize = size <= 64 ? 64 : 128;
+            ctx.font = `${rasterSize}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`;
+            const key = JSON.stringify(['emoji', text, rasterSize]);
+            const image =
+              size > 0 && size <= 128
+                ? (sprites.get(key) ??
+                  sprite(
+                    key,
+                    ctx.measureText(text).width + rasterSize,
+                    rasterSize * 2,
+                    (context) => {
+                      context.font = ctx.font;
+                      context.fillStyle = '#fff';
+                      context.textAlign = 'center';
+                      context.textBaseline = 'middle';
+                      context.fillText(text, 0, 0);
+                    },
+                  ))
+                : undefined;
+            if (image) {
+              const w = (image.width / dpr) * (size / rasterSize);
+              const h = (image.height / dpr) * (size / rasterSize);
+              ctx.drawImage(image, -w / 2, -h / 2, w, h);
+              return;
+            }
             ctx.font = `${size}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';

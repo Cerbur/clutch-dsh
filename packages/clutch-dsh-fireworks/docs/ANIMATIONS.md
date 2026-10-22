@@ -92,6 +92,40 @@ restore their own Canvas state. Keep the background transparent, fade in and
 out, and aim for fewer than about 1000 particles per frame. A reduced-motion
 preference renders a static midpoint frame.
 
+## Performance
+
+The helpers reuse emoji and glowing-circle bitmaps within each playback. Emoji
+use stable raster sizes while their position, size, rotation and opacity can
+change each frame. Glowing circles reuse a sprite when radius, color and glow
+stay the same; animate position and alpha instead of re-blurring each particle.
+Large emoji above 128 CSS pixels draw directly to retain their resolution.
+Direct `ctx` drawing remains available and does not use these caches.
+
+The shared sprite cache holds at most 128 entries and two million pixels,
+refreshes on DPR changes, and is released with the Worker. When full, helpers
+draw directly so particles are retained. Built-ins keep their particle counts;
+Starburst uses fixed-size glowing dots that fade instead of shrinking and
+recomputing the blur every frame. Transparent helper calls skip painting with
+normal `source-over` compositing.
+
+Skip particles before their start and after their end. Consume their random
+values before skipping so later particles retain stable positions. Compute
+shared values such as burst radius and easing once outside the particle loop.
+The suggested particle count is a starting point, not a frame-rate guarantee:
+text rasterization, shadows, display size and DPR also affect drawing cost.
+
+绘图助手会在单次播放内复用 emoji 与发光圆点的位图。emoji 仍可逐帧移动、缩放、旋转、
+淡入淡出；发光圆点保持固定半径、颜色与 glow，通过位置和 alpha 表达运动，避免重复模糊。
+超过 128 CSS 像素的大 emoji 直接绘制以保持分辨率。直接调用 `ctx` 不经过这些缓存。
+
+共享缓存最多 128 项、总计 200 万像素，DPR 改变时刷新，随 Worker 释放；缓存满后回到
+直接绘制，不丢弃粒子。内置效果保留原有粒子数量；星空烟花的发光圆点改为固定大小并淡出，
+不再通过逐帧缩小圆点重复计算模糊。正常 `source-over` 混合下，完全透明的助手调用跳过绘制。
+
+跳过尚未开始或已经结束的粒子前，先消费它的随机数，避免后续粒子位置跳动。将同组粒子共享
+的半径、缓动等计算移到循环外。粒子数量建议不是帧率保证，文字栅格化、阴影、窗口尺寸与
+DPR 都会影响开销。
+
 ## Responsibilities and failure handling
 
 ```mermaid

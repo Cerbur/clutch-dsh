@@ -35,6 +35,7 @@ fx.line(x1,y1,x2,y2,color,lineWidth=2,alpha=1)
 fx.star(x,y,r,color,alpha=1,rotation=0)
 fx.emoji(text,x,y,size=32,alpha=1,rotation=0)
 alpha 为 0..1，rotation 为弧度，color 使用 CSS 颜色。每帧最多约 1000 个粒子；开始和结束平滑淡入淡出；透明背景，兼顾深浅主题。
+性能：跳过尚未开始、已经结束或完全透明的粒子，但保持 fx.random() 的每帧消费顺序稳定。把同组粒子共享的计算移到循环外。优先使用 fx.emoji 和固定半径/颜色/glow 的 fx.circle，它们会复用位图；通过位置、旋转、缩放和 alpha 表达运动，避免每帧创建不同的字体或重复模糊阴影。
 脚本在隔离 Worker 内运行，没有 DOM、DSH、网络、存储、模块导入或导航能力。不要使用 fetch/import/importScripts/require/window/document，不要调用 postMessage 或覆盖全局函数。只用 frame、fx、ctx 和纯数学。
 toast 与会话跳转由宿主统一管理，请勿绘制通知、按钮或管理 Session。
 请把动画风格改成：<在这里描述你想要的视觉效果>。`;

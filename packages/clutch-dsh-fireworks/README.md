@@ -95,7 +95,8 @@ Use **导入 .js 动画** to add a standalone script. A custom selection must fi
 without errors before saving is enabled. Download any selected script as a starting point, or
 expand **用 AI 生成自己的动画**, copy the prompt, describe your effect, and import the generated
 `.js` file. A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
-The file format and drawing interface are documented in [Animation scripts](docs/ANIMATIONS.md).
+The file format, drawing interface, and tips for smooth custom effects are documented in
+[Animation scripts](docs/ANIMATIONS.md).
 
 Selections and script source are stored through DSH Host settings, shared by connected pages,
 and survive refresh/restart. A launch refreshes the saved choice before playback. After upgrading

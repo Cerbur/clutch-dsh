@@ -85,6 +85,79 @@ Do not commit, push, pack or publish this follow-up without user instruction.
 
 ## Acceptance record
 
+### Animation performance follow-up
+
+- Reproduced stuttering in a standalone built-in-browser harness using the real
+  sandbox document and Worker. Compared the clean Git baseline and optimized
+  implementation, with seed 42 and a 3.2-second sample for each effect. The
+  benchmark page explicitly declares UTF-8 so it measures actual emoji glyphs.
+- Emoji changed font size for every particle on every frame; stable glyph
+  rasters remove repeated text rasterization. Glowing circles reuse bounded
+  sprites; Starburst keeps its dots at radius 2.5 and fades alpha to preserve
+  glow without rebuilding blur. Scripts skip inactive bursts only after
+  consuming their random values and share per-burst calculations.
+- Browser sample: Emoji drawing P95 fell from 39.3 ms to 0.5 ms and frame
+  interval P95 from 60.5 ms to 11.3 ms. Starburst frame interval P95 fell from
+  50.6 ms to 11.3 ms. These are local harness measurements, not a frame-rate
+  guarantee for every DSH workload or display.
+- A final-build repeat with no other preview active confirmed Emoji drawing
+  P95 of 29.4 ms → 1.1 ms, Emoji frame interval P95 of 42.3 ms → 12.0 ms and
+  Starburst frame interval P95 of 50.0 ms → 12.5 ms. Final Aurora/imported-example
+  frame interval P95 was 11.4/12.4 ms. Both runs show the same improvement;
+  absolute timings vary with browser/GPU load and warm caches.
+- Sprite caching is per Worker, bounded to 128 entries/two million pixels,
+  resets on DPR changes and falls back to direct drawing on overflow. Helpers
+  retain their public signatures. The source-over transparent fast path leaves
+  other compositing operations available. No frame-driver, iframe theme,
+  transport, toast or queue changes were needed.
+- Regression tests cover raster reuse while particles move/scale/rotate/fade,
+  transparent draws, DPR changes, bounded caches and visible overflow. Package
+  build and all 53 tests pass. Both READMEs link the bilingual authoring tips.
+- Standalone browser visual checks cover built-ins and the imported example
+  against light and dark backgrounds. Installed-host verification followed in
+  the separate acceptance record below.
+
+Validation commands (from the package, except the two workspace checks):
+
+```bash
+pnpm run test
+pnpm run typecheck
+pnpm exec eslint src test assets/animations scripts
+pnpm exec prettier --check src/client/animation-sandbox.ts src/client/animation-templates.ts assets/animations/classic.js assets/animations/rings.js test/animation.test.mjs README.md README.zh.md docs/ANIMATIONS.md docs/plans/2026-10-22-animation-templates.md
+pnpm -C ../.. run check:workspace
+pnpm -C ../.. run check:patches
+git diff --check
+```
+
+### Installed-host verification after the performance follow-up
+
+- Used the existing `DSH_HOME=~/.dsh-test` instance at `http://127.0.0.1:3088`,
+  DSH 0.2.1-rc.2, through the built-in browser. No restart was needed. The plugin
+  details confirmed the source link points to this feature worktree. The UI's
+  generation prompt includes the new performance advice, and the actual preview
+  iframe's `srcdoc` contains the optimized sprite-cache runtime.
+- Emoji, Starburst, Aurora and the previously imported Golden Spiral each
+  completed with the UI reporting script validation passed. Confirmed transparent
+  rendering over the real settings/sidebar in the dark system theme and after
+  temporarily selecting the light theme. Preview creates no celebration toast.
+- Manual stop reports stopped and removes the preview iframe immediately.
+  Natural completion also leaves zero preview iframes. The narrow-window preview
+  spans the full 634 × 777 CSS-pixel viewport with `sandbox="allow-scripts"`.
+- Submitted real `happy_fireworks` requests in the existing fireworks regression
+  Session, then opened Plugins while it ran in the background. Captured the live
+  Emoji effect with the `动画优化实测 B：点击返回会话` toast on the Plugins page.
+  Clicking it returned to the originating `fireworks 插件集成回归测试` Session;
+  the tool call and completed agent response are visible there.
+- Refresh after playback established a silent baseline with no replayed effect
+  or toast. No browser warnings or errors were captured during these checks.
+- Restored follow-system appearance and retained the original saved Emoji
+  selection; custom scripts were retained and no animation draft was saved.
+  Left the existing test Host and plugin enabled. This is installed-UI functional
+  and visual acceptance; the numerical frame measurements above remain from
+  the standalone comparison harness.
+
+### Installed-host acceptance before the performance follow-up
+
 - Installed in `~/.dsh-test`, DSH 0.2.1-rc.2, port 3088. Used only the Codex
   built-in browser for browser interaction.
 - Imported `example-custom.js` through the real file picker, previewed the

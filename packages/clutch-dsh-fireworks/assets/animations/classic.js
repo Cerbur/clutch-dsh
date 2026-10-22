@@ -8,22 +8,18 @@ function render(frame, fx) {
     const delay = b * 360;
     const p = fx.clamp((frame.time - delay) / 1900);
     const radius = Math.min(frame.width, frame.height) * (0.15 + fx.random() * 0.12);
+    if (p === 0 || p === 1) continue;
+    const reach = radius * fx.easeOut(p);
+    const opacity = (1 - p) * 0.95;
     for (let j = 0; j < 48; j++) {
       const angle = (j / 48) * Math.PI * 2;
-      const reach = radius * fx.easeOut(p);
-      const x = cx + Math.cos(angle) * reach;
-      const y = cy + Math.sin(angle) * reach + p * p * 90;
-      const opacity = p === 0 ? 0 : (1 - p) * 0.95;
-      fx.line(
-        x - Math.cos(angle) * 14 * p,
-        y - Math.sin(angle) * 14 * p,
-        x,
-        y,
-        colors[b % colors.length],
-        2.2,
-        opacity,
-      );
-      fx.circle(x, y, 2.5 * (1 - p), colors[b % colors.length], opacity, 10);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const x = cx + cos * reach;
+      const y = cy + sin * reach + p * p * 90;
+      fx.line(x - cos * 14 * p, y - sin * 14 * p, x, y, colors[b % colors.length], 2.2, opacity);
+      // Stable geometry lets the renderer reuse each color's glow sprite; alpha fades it out.
+      fx.circle(x, y, 2.5, colors[b % colors.length], opacity, 10);
     }
   }
 }
