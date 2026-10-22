@@ -52,13 +52,17 @@ test('validates imported files without executing code, bounds scripts and templa
     assert.throws(() => parseAnimationPreferences(invalid));
 });
 
-function sandboxHarness(template) {
+function sandboxHarness(
+  template,
+  { reducedMotion = false, width = 500, height = 300, dpr = 1 } = {},
+) {
   let workerSource;
   let worker;
   let onHide;
   let terminated = 0;
   let revoked = 0;
   let raf;
+  let now = 0;
   const timers = new Map();
   const reports = [];
   const html = animationDocument(template, 'playback-token', 42, '</script><script>bad()</script>');
@@ -106,10 +110,11 @@ function sandboxHarness(template) {
     cancelAnimationFrame: () => {
       raf = undefined;
     },
-    innerWidth: 500,
-    matchMedia: () => ({ matches: false }),
-    innerHeight: 300,
-    devicePixelRatio: 1,
+    innerWidth: width,
+    matchMedia: () => ({ matches: reducedMotion }),
+    innerHeight: height,
+    devicePixelRatio: dpr,
+    performance: { now: () => now },
   });
   return {
     html,
@@ -117,7 +122,12 @@ function sandboxHarness(template) {
     reports,
     worker,
     timers,
-    frame: (time) => raf(time),
+    frame: (time) => {
+      now = time;
+      const callback = raf;
+      raf = undefined;
+      callback(time);
+    },
     hide: () => onHide(),
     get terminated() {
       return terminated;
@@ -127,6 +137,147 @@ function sandboxHarness(template) {
     },
   };
 }
+
+test('reduced-motion midpoint stays visible for the duration and completes only after validation', () => {
+  const harness = sandboxHarness(parseAnimation(source(), 'custom-static'), {
+    reducedMotion: true,
+  });
+  harness.worker.onmessage({ data: { type: 'ready' } });
+  harness.frame(100);
+  assert.equal(harness.worker.sent.at(-1).frame.time, 600);
+  harness.worker.onmessage({ data: { type: 'painted' } });
+  assert.deepEqual(
+    harness.reports.map(({ type }) => type),
+    ['clutch_fireworks/ready'],
+  );
+  assert.equal(harness.terminated, 0, 'a single midpoint frame must not end playback');
+  for (const now of [101, 700, 1299]) {
+    harness.frame(now);
+    if (now === 101) assert.equal(harness.worker.sent.at(-1).frame.time, 0);
+    harness.worker.onmessage({ data: { type: 'painted' } });
+    assert.equal(harness.reports.length, 1, 'must retain the frame until the configured end');
+  }
+  harness.frame(1301);
+  assert.equal(harness.worker.sent.at(-1).frame.progress, 1, 'validate the end frame too');
+  assert.equal(harness.reports.length, 1, 'wait for the final frame acknowledgement');
+  harness.worker.onmessage({ data: { type: 'painted' } });
+  assert.equal(harness.reports.at(-1).type, 'clutch_fireworks/done');
+  assert.equal(harness.terminated, 1);
+  assert.equal(harness.revoked, 1);
+  assert.equal(harness.timers.size, 0);
+});
+
+for (const [name, body, result] of [
+  ['success', '', 'done'],
+  ['error after midpoint', 'if (frame.progress > 0.75) throw new Error("late failure");', 'error'],
+  ['error at endpoint', 'if (frame.progress === 1) throw new Error("end failure");', 'error'],
+])
+  test('reduced-motion full preview: ' + name, () => {
+    const template = parseAnimation(
+      source(body + 'fx.circle(30, 40, 12, "red");'),
+      'custom-late-error',
+    );
+    const controller = new FireworksController(async () => {});
+    const statuses = [];
+    controller.previewAnimation(template, (status) => statuses.push(status));
+    const preview = controller.getSnapshot().burst;
+    const harness = sandboxHarness(template, { reducedMotion: true });
+    let shown = 0;
+    let hidden = 0;
+    const context = (draw) =>
+      new Proxy({ arc: draw }, { get: (target, key) => target[key] ?? (() => {}) });
+    const runtime = vm.createContext({
+      postMessage: (data) => {
+        harness.worker.onmessage({ data });
+        for (const report of harness.reports.splice(0))
+          controller.reportPlayback(preview, report.type.split('/')[1], report.message);
+      },
+      OffscreenCanvas: class {
+        getContext() {
+          return context(() => hidden++);
+        }
+      },
+    });
+    vm.runInContext(harness.workerSource, runtime);
+    runtime.onmessage({
+      data: { type: 'init', canvas: { getContext: () => context(() => shown++) } },
+    });
+    try {
+      for (const time of [100, 101, 700, 1100]) {
+        harness.frame(time);
+        runtime.onmessage({ data: harness.worker.sent.at(-1) });
+        if (time === 100)
+          assert.deepEqual(statuses, ['ready'], 'midpoint success must leave validation pending');
+      }
+      if (statuses.length === 1) {
+        harness.frame(1301);
+        runtime.onmessage({ data: harness.worker.sent.at(-1) });
+      }
+      assert.deepEqual(
+        statuses,
+        ['ready', result],
+        'one painted midpoint cannot validate the draft',
+      );
+      assert.equal(controller.getSnapshot().preview, undefined);
+      assert.equal(shown, 1, 'only the static midpoint may paint to the displayed canvas');
+      assert.ok(hidden > 0, 'timeline validation must draw on a separate canvas');
+      assert.equal(harness.terminated, 1);
+      assert.equal(harness.revoked, 1);
+    } finally {
+      controller.stop();
+      harness.hide();
+    }
+  });
+
+test('reduced-motion validation remains bounded by watchdog and page cleanup', () => {
+  for (const cleanup of ['timeout', 'pagehide']) {
+    const harness = sandboxHarness(parseAnimation(source(), 'custom-cleanup'), {
+      reducedMotion: true,
+    });
+    harness.worker.onmessage({ data: { type: 'ready' } });
+    harness.frame(100);
+    harness.worker.onmessage({ data: { type: 'painted' } });
+    harness.frame(101);
+    if (cleanup === 'timeout') [...harness.timers.values()][0].listener();
+    else harness.hide();
+    assert.equal(harness.terminated, 1);
+    assert.equal(harness.revoked, 1);
+    assert.equal(harness.timers.size, 0);
+    assert.equal(
+      harness.reports.some(({ type }) => type === 'clutch_fireworks/done'),
+      false,
+    );
+    harness.worker.onmessage({ data: { type: 'painted' } });
+    harness.hide();
+    assert.equal(harness.terminated, 1, 'late callbacks cannot revive a completed playback');
+  }
+});
+
+test('large windows retain CSS dimensions and aspect ratio within the backing-pixel budget', () => {
+  for (const [width, height, dpr] of [
+    [5120, 1440, 1],
+    [5120, 1440, 2],
+    [7680, 4320, 2],
+    [1440, 5120, 2],
+  ]) {
+    const harness = sandboxHarness(parseAnimation(source(), 'custom-wide'), { width, height, dpr });
+    harness.worker.onmessage({ data: { type: 'ready' } });
+    harness.frame(100);
+    const frame = harness.worker.sent.at(-1).frame;
+    assert.equal(frame.width, width);
+    assert.equal(frame.height, height);
+    assert.ok(frame.dpr <= Math.min(dpr, 2));
+    const canvas = { getContext: () => new Proxy({}, { get: () => () => {} }) };
+    const runtime = vm.createContext({ postMessage: () => {} });
+    vm.runInContext(harness.workerSource, runtime);
+    runtime.onmessage({ data: { type: 'init', canvas } });
+    runtime.onmessage({ data: harness.worker.sent.at(-1) });
+    const { width: pixelWidth, height: pixelHeight } = canvas;
+    assert.ok(pixelWidth * pixelHeight <= 8_000_000);
+    assert.ok(Math.abs(pixelWidth / pixelHeight - width / height) < 0.002);
+    harness.hide();
+  }
+});
 
 test('sandbox escapes script terminators and locks down parent DOM, network and inline resources', () => {
   const harness = sandboxHarness(parseAnimation(source('const text = "</script>";'), 'custom-a'));

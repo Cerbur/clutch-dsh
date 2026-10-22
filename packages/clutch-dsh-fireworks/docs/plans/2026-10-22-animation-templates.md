@@ -85,6 +85,39 @@ Do not commit, push, pack or publish this follow-up without user instruction.
 
 ## Acceptance record
 
+### Review fixes: reduced motion and large windows
+
+- Reduced-motion playback paints one visible midpoint and keeps it for the
+  configured duration after first paint. Subsequent frames validate the full
+  timeline from time zero on a separate offscreen canvas in the same sandboxed Worker; only
+  a successful final-frame acknowledgement reports completion. A midpoint paint
+  cannot validate a custom draft, and later errors retain the existing preview
+  error/live fallback behavior. Watchdogs and disposal still release the Worker
+  and Blob URL.
+- Preserve actual CSS window dimensions instead of independently clipping width
+  and height. Limit DPR uniformly and round backing dimensions down to respect
+  the eight-million-pixel budget without distorting wide or tall windows.
+- Regressions reproduce immediate reduced-motion completion, a script failing
+  after the midpoint and the 5120 × 1440 width truncation before the fix. Cover
+  static-frame retention, full-timeline validation, end-frame acknowledgement,
+  cleanup and pixel budgets at ultrawide, 8K and portrait dimensions.
+- Event queue barriers, independent toasts, the fixed 12-second deadline and
+  sandbox origin/CSP boundaries are unchanged. Update both READMEs and bilingual
+  unreleased notes, including the earlier sprite-cache and invisible-particle
+  optimizations.
+- Validation: package build and all 59 tests pass; package typecheck, ESLint over
+  source/tests/templates/scripts, scoped Prettier, workspace shape, Cordis patch
+  checks and `git diff --check` pass. The patch validator still emits its existing
+  `!!js` YAML custom-tag warning.
+- Standalone built-in-browser check with the real opaque-origin sandbox and
+  Worker at 5120 × 1440: a 1200 ms successful reduced-motion effect completed
+  after about 1.21 seconds, while a script throwing after progress 0.75 reported
+  an error after about 0.91 seconds. Both displayed only the green midpoint;
+  subsequent offscreen frames would have painted red if visible. The script
+  asserted actual CSS dimensions and backing pixels within budget. Only the
+  standalone harness forced reduced motion; no DSH settings or saved drafts
+  changed, and its temporary browser tab/server were closed after verification.
+
 ### Animation performance follow-up
 
 - Reproduced stuttering in a standalone built-in-browser harness using the real

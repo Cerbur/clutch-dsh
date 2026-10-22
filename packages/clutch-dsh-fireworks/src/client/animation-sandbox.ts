@@ -4,6 +4,7 @@ import type { AnimationTemplate, AnimationRender } from '../animation.js';
 function workerRuntime(render: AnimationRender) {
   let canvas: OffscreenCanvas;
   let ctx: OffscreenCanvasRenderingContext2D;
+  let validating = false;
   // Per-playback sprites avoid re-rasterizing changing emoji fonts and blurred particles.
   const sprites = new Map<string, OffscreenCanvas>();
   let spritePixels = 0;
@@ -23,6 +24,13 @@ function workerRuntime(render: AnimationRender) {
         return;
       }
       const { width, height, dpr, seed } = data.frame;
+      if (data.type === 'validate' && !validating) {
+        // Preserve the visible midpoint while exercising the full timeline offscreen.
+        canvas = new OffscreenCanvas(1, 1);
+        ctx = canvas.getContext('2d')!;
+        if (!ctx) throw new Error('Canvas 2D unavailable');
+        validating = true;
+      }
       if (spriteDpr !== dpr) {
         sprites.clear();
         spritePixels = 0;
@@ -56,8 +64,9 @@ function workerRuntime(render: AnimationRender) {
         spritePixels += w * h;
         return image;
       };
-      const pixelWidth = Math.round(width * dpr);
-      const pixelHeight = Math.round(height * dpr);
+      // Round down so integer backing dimensions cannot exceed the pixel budget.
+      const pixelWidth = Math.floor(width * dpr);
+      const pixelHeight = Math.floor(height * dpr);
       if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
         canvas.width = pixelWidth;
         canvas.height = pixelHeight;
@@ -217,9 +226,10 @@ function frameRuntime(options: {
   let watchdog: ReturnType<typeof setTimeout>;
   let raf = 0;
   let finished = false;
-  let start = 0;
+  let start: number | undefined;
   let last = 0;
   let firstPaint = true;
+  let finalFrame = false;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const report = (type: string, message?: string) =>
     parent.postMessage({ type: 'clutch_fireworks/' + type, token: options.token, message }, '*');
@@ -232,26 +242,24 @@ function frameRuntime(options: {
     if (url) URL.revokeObjectURL(url);
   };
   const fail = (message: string) => {
+    if (finished) return;
     stop();
     report('error', message.slice(0, 240));
   };
   const tick = (now: number) => {
     if (finished) return;
-    if (!start) start = now;
-    const time = reducedMotion
-      ? options.durationMs * 0.5
-      : Math.min(now - start, options.durationMs);
-    if (now - start > options.durationMs) {
-      stop();
-      report('done');
-      return;
-    }
-    const width = Math.min(innerWidth, 3840);
-    const height = Math.min(innerHeight, 2160);
+    if (!firstPaint && start === undefined) start = now;
+    const time =
+      reducedMotion && firstPaint
+        ? options.durationMs * 0.5
+        : Math.min(start === undefined ? 0 : now - start, options.durationMs);
+    finalFrame = time === options.durationMs;
+    const width = innerWidth;
+    const height = innerHeight;
     const dpr = Math.min(devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / (width * height)));
     watchdog = setTimeout(() => fail('动画帧超时 / Animation frame timed out'), 750);
     worker.postMessage({
-      type: 'frame',
+      type: reducedMotion && !firstPaint ? 'validate' : 'frame',
       frame: {
         width,
         height,
@@ -281,9 +289,11 @@ function frameRuntime(options: {
       }
       if (data.type === 'painted' && firstPaint) {
         firstPaint = false;
+        // Reduced motion validates from time zero on its first offscreen frame.
+        start = reducedMotion ? undefined : performance.now();
         report('ready');
       }
-      if (data.type === 'painted' && reducedMotion) {
+      if (data.type === 'painted' && finalFrame) {
         stop();
         report('done');
         return;

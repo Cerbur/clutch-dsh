@@ -120,7 +120,10 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
   with Canvas 2D, time, seeded randomness and drawing helpers. Network, application DOM, Session
   navigation and toast controls are unavailable to scripts. The renderer owns cleanup and
   terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
-  the error. Reduced-motion preferences show a static frame.
+  the error. Reduced-motion preferences keep a static midpoint frame visible for the configured
+  duration while the full timeline is checked offscreen; a single frame does not validate an import.
+- Animations use the window's actual CSS-pixel width and height. Large windows retain their aspect
+  ratio; the renderer lowers DPR as needed to stay within its 8-million-pixel canvas budget.
 - Only successful live fireworks results trigger playback. Errors, cancellations, historical
   Session loads, and page refreshes do not replay old celebrations.
 - Switching Sessions or app pages does not clear the animation. The toast remains for up to

@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 修复减少动态效果的生命周期：静态中点帧保留至配置时长结束，完整时间轴在离屏画布验证，避免中点后出错的自定义脚本被误判通过。
+- 保留实际窗口的 CSS 像素宽高，以统一 DPR 控制 800 万像素预算，避免超宽或超高窗口非等比拉伸。
+- 通过有界 sprite 缓存复用 emoji 与发光圆点位图，DPR 变化时刷新、超限后直接绘制；跳过不可见粒子并保留随机序列，减少重复栅格化、模糊和逐帧计算。
+
 - 使用 DSH 原生 Remote stream 复用共享 WebSocket，撤除插件 SSE、心跳与空闲计时器；运行时注册随插件启停清理，保留静默刷新、游标补收和完整事件队列。
 
 - 按完整事件串行播放动画与 toast，两条链路都结束后才推进下一事件；增加固定 12 秒超时、不重试及迟到回调隔离。
@@ -69,6 +73,10 @@
 # Release log
 
 ## Unreleased
+
+- Fix reduced-motion lifecycle: retain the static midpoint for the configured duration and validate the full timeline offscreen, so custom scripts failing after the midpoint cannot pass validation.
+- Preserve the actual window dimensions in CSS pixels and bound the 8-million-pixel budget through a uniform DPR, avoiding aspect-ratio distortion in very wide or tall windows.
+- Reuse emoji and glowing-circle bitmaps through a bounded sprite cache, refreshing on DPR changes and drawing directly on overflow; skip invisible particles while preserving random sequences to reduce repeated rasterization, blur and per-frame calculations.
 
 - Reuse DSH's shared WebSocket through native Remote streams; remove plugin SSE, heartbeats and idle timers. Scope runtime registrations to plugin lifecycle while retaining silent refresh, cursor catch-up and complete-event serialization.
 
