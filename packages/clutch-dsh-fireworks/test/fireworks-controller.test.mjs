@@ -175,7 +175,7 @@ test('dismissal preserves animation; expired queued calls never play', (t) => {
   assert.equal(controller.getSnapshot().burst, undefined);
 });
 
-test('polling is Session-independent and refresh/restarted Host baselines are silent', async (t) => {
+test('one persistent stream is Session-independent and refresh/restarted Host baselines are silent', async (t) => {
   const urls = [];
   let abortSignal;
   const replies = [
@@ -184,11 +184,11 @@ test('polling is Session-independent and refresh/restarted Host baselines are si
     { epoch: 'host-b', cursor: 1, events: [launch('restart-history')] },
     { epoch: 'host-b', cursor: 2, events: [launch('fresh')] },
   ];
-  const controller = new FireworksController(async (query, signal) => {
+  const controller = new FireworksController(async function* (query, signal) {
     urls.push(query);
-    if (replies.length > 0) return replies.shift();
+    while (replies.length > 0) yield replies.shift();
     abortSignal = signal;
-    return new Promise((_resolve, reject) =>
+    await new Promise((_resolve, reject) =>
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }),
     );
   });
@@ -203,35 +203,34 @@ test('polling is Session-independent and refresh/restarted Host baselines are si
   assert.ok(!displayed.includes('history'));
   assert.ok(!displayed.includes('restart-history'));
   assert.deepEqual(urls[0], {});
-  assert.deepEqual(urls[1], { epoch: 'host-a', after: 1 });
-  assert.deepEqual(urls[4], { epoch: 'host-b', after: 2 });
+  assert.equal(urls.length, 1, 'all batches arrive over one stream');
   stop();
   assert.equal(abortSignal.aborted, true);
   assert.deepEqual(controller.getSnapshot(), {});
 });
 
-test('failed polls retain their cursor for reconnect catch-up and stop cancels retry', async (t) => {
+test('failed streams retain their cursor for catch-up and stop cancels reconnect', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  let count = 0;
   const urls = [];
-  const controller = new FireworksController(async (query, signal) => {
+  const controller = new FireworksController(async function* (query, signal) {
     urls.push(query);
-    count++;
-    if (count === 1) return { epoch: 'host', cursor: 1, events: [] };
-    if (count === 2) throw new Error('temporary disconnect');
-    if (count === 3) return { epoch: 'host', cursor: 2, events: [launch('caught-up')] };
-    return new Promise((_resolve, reject) =>
+    if (urls.length === 1) {
+      yield { epoch: 'host', cursor: 1, events: [] };
+      throw new Error('disconnect');
+    }
+    yield { epoch: 'host', cursor: 2, events: [launch('caught-up')] };
+    await new Promise((_resolve, reject) =>
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }),
     );
   });
   controller.start();
   await setImmediate();
-  t.mock.timers.tick(1_000);
+  t.mock.timers.tick(1000);
   await setImmediate();
-  assert.deepEqual(urls[1], urls[2]);
+  assert.deepEqual(urls, [{}, { epoch: 'host', after: 1 }]);
   assert.equal(controller.getSnapshot().burst.id, 'caught-up');
   controller.stop();
   t.mock.timers.tick(60_000);
   await setImmediate();
-  assert.equal(count, 4);
+  assert.equal(urls.length, 2);
 });

@@ -6,11 +6,9 @@ export const FIREWORKS_META_KIND = 'clutch-dsh-fireworks' as const;
 export const FIREWORKS_DURATION_MS = 3_200;
 export const MAX_FIREWORKS_MESSAGE_CHARS = 120;
 export const FIREWORKS_LAUNCH_EVENT = 'clutch_fireworks/launch' as const;
-export const FIREWORKS_CONNECTION_CHANNEL = '/api';
 export const FIREWORKS_EVENTS_ENDPOINT = 'clutch_fireworks/events';
 export const FIREWORKS_EVENT_TTL_MS = 30_000;
 export const FIREWORKS_EVENT_LIMIT = 128;
-export const FIREWORKS_POLL_TIMEOUT_MS = 25_000;
 export const FIREWORKS_TOAST_DURATION_MS = 8_000;
 /** Fixed per-event deadline, including sandbox startup and both rendering branches. */
 export const FIREWORKS_EVENT_TIMEOUT_MS = 12_000;
@@ -56,7 +54,7 @@ export interface FireworksEventBatch {
   readonly events: readonly FireworksLaunchEvent[];
 }
 
-export interface FireworksPollRequest {
+export interface FireworksResumeCursor {
   readonly epoch?: string;
   readonly after?: number;
 }

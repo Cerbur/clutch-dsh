@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 使用 DSH 原生 Remote stream 复用共享 WebSocket，撤除插件 SSE、心跳与空闲计时器；运行时注册随插件启停清理，保留静默刷新、游标补收和完整事件队列。
+
 - 按完整事件串行播放动画与 toast，两条链路都结束后才推进下一事件；增加固定 12 秒超时、不重试及迟到回调隔离。
 
 - 修复深色主题下动画 iframe 配色模式不一致导致的白屏遮挡；预览和工具调用共用播放入口、渲染组件与生命周期。
@@ -12,7 +14,7 @@
 - 通过 DSH Host 设置持久化动画选择和脚本，以修订号保护并发保存；正式播放失败时回退到 emoji。
 - 通过 `clutch_fireworks/launch` 事件在整个 DSH 窗口播放礼花，支持后台 Session 和跨页面排队。
 - 新增可点击跳转到来源 Session 的庆祝 toast，刷新不重播，短暂断线按有效期补收。
-- 使用已鉴权的 Connection 共享路由，最低支持 DSH 0.2.0，并显式接受 0.2.1 预发布版。
+- 使用已鉴权的原生 Gateway，最低支持 DSH 0.2.1-rc.1。
 - 修复独立 RPC 通道路由因 Cordis 服务依赖边界注册失败而无法展示烟花的问题；通过真实 Cordis/Connection 回归测试及已安装 DSH 的浏览器验收。
 
 ## 0.1.4 — 2026-09-26
@@ -68,6 +70,8 @@
 
 ## Unreleased
 
+- Reuse DSH's shared WebSocket through native Remote streams; remove plugin SSE, heartbeats and idle timers. Scope runtime registrations to plugin lifecycle while retaining silent refresh, cursor catch-up and complete-event serialization.
+
 - Serialize animation and toast as complete events; advance after both branches finish, with a fixed 12-second deadline, no retries, and stale-callback isolation.
 
 - Fix the opaque white animation viewport in dark themes by matching the iframe and document color schemes; share playback entry, surface and lifecycle between preview and tool launches.
@@ -78,7 +82,7 @@
 - Persist selections and scripts through DSH Host settings with revision-checked saves; fall back to emoji when live effects fail.
 - Play global fireworks through `clutch_fireworks/launch`, including background Sessions and queued celebrations across app pages.
 - Add clickable toasts that open the source Session, with silent refresh baselines and bounded reconnect catch-up.
-- Use the authenticated Connection shared route, requiring DSH 0.2.0 and explicitly accepting 0.2.1 prereleases.
+- Use the authenticated native Gateway, requiring DSH 0.2.1-rc.1.
 - Fix missing fireworks caused by Cordis dependency boundaries preventing dedicated RPC route registration; verify with real Cordis/Connection regression coverage and browser checks in installed DSH.
 
 ## 0.1.4 — 2026-09-26

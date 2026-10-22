@@ -2,62 +2,84 @@ import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
+import { Peer } from '@deepseek-ai/dsh-client-connection';
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry';
+import TypertGateway from '@deepseek-ai/dsh-api-gateway';
 import { apply, inject } from '../lib/index.js';
-import { FIREWORKS_EVENTS_ENDPOINT } from '../lib/contract/index.js';
+import { FIREWORKS_LAUNCH_EVENT, FIREWORKS_META_KIND } from '../lib/contract/index.js';
 
-const { Request } = globalThis;
-
-test('serves its route through real Cordis and Connection, and removes it on unload', async (t) => {
+const { AbortController } = globalThis;
+async function harness(t) {
   const ctx = new Context();
-  const fibers = [];
-  t.after(async () => {
-    for (const fiber of fibers.reverse()) await fiber.dispose();
+  t.after(() => ctx.fiber.dispose());
+  await ctx.plugin(TypertRegistry);
+  ctx.provide('remoteAccess', { decide: () => ({ kind: 'allow' }) });
+  await ctx.plugin(TypertGateway);
+  ctx.provide('tools', { register() {} });
+  const owner = new Peer(ctx, { principal: { kind: 'owner' } });
+  const mount = async () => {
+    const fiber = ctx.plugin({ name: 'test-fireworks', inject, apply });
+    await fiber;
+    await setImmediate();
+    return fiber;
+  };
+  const stream = async (query = {}, peer = owner, abort = new AbortController()) => ({
+    abort,
+    reader: (
+      await ctx.typertGateway.stream({
+        namespace: 'clutch_fireworks',
+        method: 'events',
+        args: { query },
+        peer,
+        signal: abort.signal,
+      })
+    )[Symbol.asyncIterator](),
   });
-  // Plugin-owned Services enforce dependency boundaries, unlike root-provided
-  // mocks. Exercise the real shared Fetch dispatcher, not a captured callback.
-  const connection = ctx.plugin({
-    name: 'test-connection',
-    apply(scope) {
-      new HostConnectionService(scope, [], {});
+  return { ctx, mount, stream };
+}
+
+test('native Gateway sees late registration, routes live tools, withdraws and re-enables without restart', async (t) => {
+  const { ctx, mount, stream } = await harness(t);
+  const first = await mount();
+  assert.ok(ctx.typert.local.get('clutch_fireworks/events'));
+  const a = await stream();
+  const baseline = (await a.reader.next()).value;
+  assert.deepEqual(baseline.events, []);
+  const pending = a.reader.next();
+  ctx.emit(
+    'session/event',
+    { id: 'background' },
+    {
+      type: 'tool/result',
+      seq: 2,
+      data: {
+        message: { source: { callId: 'call-1' } },
+        meta: { kind: FIREWORKS_META_KIND, id: 'call-1', message: 'Native stream verified' },
+      },
     },
-  });
-  fibers.push(connection);
-  await connection.await();
-  const tools = ctx.plugin({
-    name: 'test-tools',
-    apply(scope) {
-      scope.provide('tools', { register() {} });
-    },
-  });
-  fibers.push(tools);
-  await tools.await();
-  const fireworks = ctx.plugin({ name: 'test-fireworks', inject, apply });
-  fibers.push(fireworks);
-  await fireworks.await();
-  await setImmediate();
-  const service = ctx.get('connection');
-  const dispatcher = service.createSharedFetchHandler('/api');
-  const request = () =>
-    new Request('http://127.0.0.1/api/' + FIREWORKS_EVENTS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        type: 'client-request',
-        rpcId: 'integration',
-        method: FIREWORKS_EVENTS_ENDPOINT,
-        payload: {},
-      }),
-    });
-  const response = await dispatcher.fetch(request(), service.operator ?? service.browserPeer);
-  assert.equal(response.status, 200, 'real Connection must serve the fireworks route');
-  const body = await response.json();
-  assert.equal(body.rpcId, 'integration');
-  assert.equal(body.result.ok, true);
-  assert.deepEqual(body.result.value.events, []);
-  await fireworks.dispose();
-  assert.equal(
-    (await dispatcher.fetch(request(), service.operator ?? service.browserPeer)).status,
-    404,
   );
+  const pushed = (await pending).value;
+  assert.equal(pushed.events[0].type, FIREWORKS_LAUNCH_EVENT);
+  assert.equal(pushed.events[0].sessionId, 'background');
+  const ended = a.reader.next();
+  await first.dispose();
+  assert.equal((await ended).done, true);
+  assert.equal(ctx.typert.local.get('clutch_fireworks/events'), undefined);
+  await assert.rejects(stream(), (error) => error.code === 'gateway/definition-unavailable');
+  const second = await mount();
+  const b = await stream({ epoch: baseline.epoch, after: pushed.cursor });
+  const nextBaseline = (await b.reader.next()).value;
+  assert.notEqual(nextBaseline.epoch, baseline.epoch);
+  assert.deepEqual(nextBaseline.events, []);
+  b.abort.abort();
+  await b.reader.return();
+  await second.dispose();
+});
+
+test('native Gateway rejects invalid cursors and non-owner aggregate reads even with an allow policy', async (t) => {
+  const { ctx, mount, stream } = await harness(t);
+  await mount();
+  await assert.rejects(stream({ epoch: 'only-one-field' }));
+  const guest = new Peer(ctx, { principal: { kind: 'fixture-guest' }, interactions: 'none' });
+  await assert.rejects(stream({}, guest), /owner required/);
 });

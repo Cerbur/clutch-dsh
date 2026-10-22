@@ -103,11 +103,11 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
 
 ## Requirements
 
-| Component | Requirement                                                                                                                                                                                                                                                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| DSH       | A Web UI providing DSH Connection RPC, Host settings, plugin detail configuration slots, Session, Session Projection, Tools, UI Renderer, UI Slots, and UI Workspace navigation. Requires DSH 0.2.0 or later; 0.2.0 and 0.2.1 prereleases are explicitly supported. The peer ranges in `package.json` are the source of truth. |
-| Cordis    | Compatible Cordis `4.x`; development uses `4.0.4`.                                                                                                                                                                                                                                                                             |
-| Browser   | DSH Web UI with the plugin's Web client bundle loaded; Workers and OffscreenCanvas for script effects (emoji fallback otherwise).                                                                                                                                                                                              |
+| Component | Requirement                                                                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH       | A Web UI providing DSH Connection RPC, Host settings, plugin detail configuration slots, Session, Session Projection, Tools, UI Renderer, UI Slots, and UI Workspace navigation. Requires DSH 0.2.1-rc.1 or later with the native Gateway and Typert registry. The peer ranges in `package.json` are the source of truth. |
+| Cordis    | Compatible Cordis `4.x`; development uses `4.0.5`.                                                                                                                                                                                                                                                                        |
+| Browser   | DSH Web UI with the plugin's Web client bundle loaded; Workers and OffscreenCanvas for script effects (emoji fallback otherwise).                                                                                                                                                                                         |
 
 ## Behavior and limitations
 
@@ -136,9 +136,16 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
 - Each connected owner page consumes independently. The effect stays inside its DSH window;
   it does not create an operating-system desktop overlay. A successful tool result records the
   request, not confirmation that a browser displayed it.
-- The plugin uses the authenticated DSH Connection shared route `/api/clutch_fireworks/events`
-  and event `clutch_fireworks/launch`. It adds no generated DSH catalog entries or custom Session event
-  types. The global feed is available to the Host owner; restricted non-owner peers cannot read it.
+- The plugin delivers `clutch_fireworks/launch` through the native Remote stream
+  `clutch_fireworks/events`, multiplexed on DSH's authenticated `/api/remote.mux`
+  WebSocket. DSH owns the connection, authentication, heartbeats and connection
+  recovery. The plugin adds a logical subscription and reopens it after loss,
+  without a separate SSE connection or polling. Short reconnects resume the
+  retained cursor; fresh pages and restarted Hosts establish silent baselines.
+  Host registration and Client mounts belong to the plugin lifecycle and are
+  withdrawn on unload. The aggregate feed explicitly rejects non-owner peers.
+  No DSH source or generated catalog edits are required. Rebuilt Host modules
+  or changed package metadata can still require a DSH reload/restart.
 - When the Host exposes DSH's `systemPrompt` service, the plugin adds milestone guidance.
   Without that optional service, the tool remains available without the guidance section.
 - The package does not patch DSH source code or persist a copy of the conversation.

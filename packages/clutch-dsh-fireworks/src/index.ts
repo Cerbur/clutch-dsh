@@ -13,7 +13,10 @@ import {
   createFireworksProjectionDefinition,
 } from './fireworks-projection.js';
 import { happyFireworksTool } from './fireworks-tool.js';
-import { FireworksEventFeed, registerFireworksEvents } from './fireworks-events.js';
+import { FireworksEventFeed } from './fireworks-events.js';
+import { FireworksRemoteService } from './fireworks-remote.js';
+import { FIREWORKS_HOST } from './remote-contract.js';
+import type {} from '@deepseek-ai/dsh-typert-registry';
 
 export * from './contract/index.js';
 export { createFireworksProjectionDefinition } from './fireworks-projection.js';
@@ -34,8 +37,16 @@ export function apply(ctx: Context): void {
     ).settings;
     scope.effect(() => settings.configure({ auto: false }, scope.fiber));
   });
-  ctx.inject(['connection'], (connectionContext) => {
+  ctx.inject(['typert'], (connectionContext) => {
     const feed = new FireworksEventFeed();
+    connectionContext.effect(() => () => feed.dispose());
+    new FireworksRemoteService(connectionContext, feed);
+    // Keep the public port local: this workspace also compiles plugins against
+    // older DSH faces whose Context declaration merges have different brands.
+    const registry = connectionContext.typert as unknown as {
+      register(contribution: typeof FIREWORKS_HOST): () => Promise<void>;
+    };
+    connectionContext.effect(() => registry.register(FIREWORKS_HOST));
     connectionContext.on(FIREWORKS_LAUNCH_EVENT, (event) => feed.publish(event));
     connectionContext.on('session/event', (session, event) => {
       const signal = applyFireworksProjection(null, event);
@@ -48,13 +59,6 @@ export function apply(ctx: Context): void {
         issuedAt,
         expiresAt: issuedAt + FIREWORKS_EVENT_TTL_MS,
       });
-    });
-    connectionContext.effect(() => {
-      const unregister = registerFireworksEvents(connectionContext.connection, feed);
-      return async () => {
-        feed.dispose();
-        await unregister();
-      };
     });
   });
   ctx.inject(['sessionProjections'], (projectionContext) => {

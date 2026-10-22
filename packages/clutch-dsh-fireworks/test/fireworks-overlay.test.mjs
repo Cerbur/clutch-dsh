@@ -5,9 +5,22 @@ import test from 'node:test';
 import { FireworksController } from '../lib/client/fireworks-controller.js';
 import { FIREWORKS_LAUNCH_EVENT, FIREWORKS_EVENT_TTL_MS } from '../lib/contract/index.js';
 
-const { URL, setTimeout, clearTimeout, AbortController, TextEncoder } = globalThis;
+const {
+  URL,
+  URLSearchParams,
+  setTimeout,
+  clearTimeout,
+  AbortController,
+  TextEncoder,
+  TextDecoder,
+  TransformStream,
+} = globalThis;
 
-async function clientModule() {
+async function clientModule(
+  fetchSse = () => {
+    throw new Error('unused stream');
+  },
+) {
   let plugin;
   const jsx = (type, props, key) => ({ type, props: { ...props, key } });
   const react = {
@@ -31,6 +44,10 @@ async function clientModule() {
     clearTimeout,
     AbortController,
     TextEncoder,
+    TextDecoder,
+    URLSearchParams,
+    TransformStream,
+    fetch: fetchSse,
   });
   return plugin;
 }
@@ -111,19 +128,46 @@ test('preview and tool launches mount the same surface with the same completion 
   controller.stop();
 });
 
-test('client registers one root overlay and uses the namespaced authenticated RPC channel', async () => {
-  const plugin = await clientModule();
+test('client registers one root overlay and mounts one native Remote contribution', async () => {
+  const streams = [];
+  const plugin = await clientModule(() => {
+    throw new Error('fireworks must not fetch its own stream');
+  });
   const effects = [];
-  let injected;
-  let controller;
-  let settingsPlayback;
-  const calls = [];
+  let injected, controller, settingsPlayback;
+  let mounts = 0,
+    unmounts = 0;
   const opened = [];
-  plugin.apply({
+  const context = {
+    remote: {
+      async $mount(contribution) {
+        assert.equal(contribution.package, '@cerbur/clutch-dsh-fireworks');
+        assert.equal(contribution.descriptors[0].mode, 'stream');
+        mounts++;
+        return async () => {
+          unmounts++;
+        };
+      },
+      clutch_fireworks: {
+        events(query, signal) {
+          streams.push({ query, signal });
+          return {
+            [Symbol.asyncIterator]() {
+              return {
+                next: () =>
+                  new Promise((resolve) =>
+                    signal.addEventListener('abort', () => resolve({ done: true }), { once: true }),
+                  ),
+              };
+            },
+            dispose() {},
+          };
+        },
+      },
+    },
     connection: {
       rpc: {
-        async call(channel, endpoint, query, signal) {
-          calls.push({ channel, endpoint, query });
+        async call(_channel, _endpoint, _query, signal) {
           return new Promise((_resolve, reject) =>
             signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }),
           );
@@ -131,8 +175,9 @@ test('client registers one root overlay and uses the namespaced authenticated RP
       },
     },
     uiWorkspace: { openSession: (id) => opened.push(id) },
-    effect(effect) {
-      effects.push(effect());
+    async effect(effect) {
+      const cleanup = await effect();
+      effects.push(cleanup);
     },
     slots: {
       inject(name, register) {
@@ -151,17 +196,20 @@ test('client registers one root overlay and uses the namespaced authenticated RP
         controller = injected.controller;
       },
     },
-  });
-  const eventCall = calls.find((call) => call.endpoint === 'clutch_fireworks/events');
-  assert.equal(eventCall.channel, '/api');
-  assert.equal(eventCall.endpoint, 'clutch_fireworks/events');
-  assert.equal(
-    settingsPlayback,
-    controller,
-    'settings preview must use the actual global playback controller',
-  );
+  };
+  context.inject = (deps, callback) => {
+    assert.deepEqual(Array.from(deps), ['remote.clutch_fireworks']);
+    return callback(context);
+  };
+  await plugin.apply(context);
+  assert.equal(mounts, 1);
+  assert.equal(streams.length, 1);
+  assert.equal(Object.keys(streams[0].query).length, 0);
+  assert.equal(settingsPlayback, controller);
   injected.openSession('origin');
   assert.deepEqual(opened, ['origin']);
-  for (const cleanup of effects) cleanup();
+  for (const cleanup of effects.reverse()) await cleanup();
+  assert.equal(unmounts, 1);
+  assert.equal(streams[0].signal.aborted, true);
   assert.equal(controller.getSnapshot().burst, undefined);
 });

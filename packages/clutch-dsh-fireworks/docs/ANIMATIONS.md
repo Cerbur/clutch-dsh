@@ -110,6 +110,25 @@ DOM, storage, network, DSH services, navigation, or toast controls. Do not use
 `postMessage`, or change global functions. Use only the frame, helpers, Canvas
 and pure math. Custom scripts never execute in the Host or DSH main renderer.
 
+Host delivery uses the native `clutch_fireworks/events` Remote stream on DSH's
+shared authenticated `/api/remote.mux` WebSocket. The plugin registers its Host
+service and explicit strict descriptor through public runtime APIs; the Client
+mounts the same descriptor once per plugin fiber. No automatic `./typert` loader
+registration, generated DSH catalog edits, separate SSE socket or plugin heartbeat
+is involved. DSH handles connection authentication and recovery. On stream loss,
+the controller reopens the logical subscription after one second with its epoch
+and cursor; fresh pages and restarted Hosts establish silent baselines. Replay
+stays bounded to 128 events/30 seconds and slow readers coalesce from that buffer.
+
+Animation settings still use native unary settings RPC. The toast and animation
+share one event slot and their 12-second deadline is independent of delivery.
+Unmount cancels the logical stream, removes the UI and withdraws the Host/Client
+descriptors; re-enable creates a new epoch. Updating loaded Host JavaScript or
+package metadata may still need a DSH reload/restart. The supported SDK baseline
+is DSH 0.2.1-rc.1. Development SDK and browser acceptance use 0.2.1-rc.2.
+The global feed rejects non-owner callers even if their Remote
+access policy otherwise permits the endpoint.
+
 The renderer detects startup errors and frames taking over 750 ms, terminates
 the Worker, and releases its Blob URL and iframe. A preview reports errors and
 does not enable saving a failed custom selection. During a real celebration,

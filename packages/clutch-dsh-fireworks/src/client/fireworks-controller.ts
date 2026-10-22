@@ -5,7 +5,7 @@ import {
   FIREWORKS_EVENT_TIMEOUT_MS,
   parseFireworksEventBatch,
   type FireworksLaunchEvent,
-  type FireworksPollRequest,
+  type FireworksResumeCursor,
   type FireworksSignal,
 } from '../contract/index.js';
 import type { AnimationTemplate } from '../animation.js';
@@ -26,7 +26,10 @@ interface ActiveCelebration {
   toastDone: boolean;
 }
 
-export type FireworksPoll = (query: FireworksPollRequest, signal: AbortSignal) => Promise<unknown>;
+export type FireworksStream = (
+  query: FireworksResumeCursor,
+  signal: AbortSignal,
+) => AsyncIterable<unknown>;
 
 /** Own transport and playback outside the selected Session and React render lifecycle. */
 export class FireworksController {
@@ -43,7 +46,7 @@ export class FireworksController {
   private previewListener?: PreviewListener;
 
   constructor(
-    private readonly request: FireworksPoll,
+    private readonly request: FireworksStream,
     private readonly now: () => number = Date.now,
     private readonly animation?: () => AnimationTemplate,
   ) {}
@@ -217,38 +220,31 @@ export class FireworksController {
     this.stop();
     const connection = new AbortController();
     this.connection = connection;
-    void this.poll(connection.signal);
+    void this.listen(connection.signal);
     return () => {
       if (this.connection === connection) this.stop();
     };
   }
 
-  private async poll(signal: AbortSignal): Promise<void> {
+  private async listen(signal: AbortSignal): Promise<void> {
     let epoch: string | undefined;
     let cursor: number | undefined;
     while (!signal.aborted) {
-      const request = new AbortController();
-      const abort = () => request.abort();
-      signal.addEventListener('abort', abort, { once: true });
-      const timeout = setTimeout(abort, 35_000);
-      let failed = false;
       try {
         const query = epoch === undefined ? {} : { epoch, after: cursor };
-        const batch = parseFireworksEventBatch(await this.request(query, request.signal));
-        if (signal.aborted) return;
-        // Initial/restarted Host baselines are silent, even if a malformed peer includes events.
-        if (epoch === batch.epoch && cursor !== undefined && batch.cursor >= cursor) {
-          this.accept(batch.events);
+        for await (const value of this.request(query, signal)) {
+          if (signal.aborted) return;
+          const batch = parseFireworksEventBatch(value);
+          // Fresh/restarted Host baselines stay silent. Reconnects resume the cursor.
+          if (epoch === batch.epoch && cursor !== undefined && batch.cursor >= cursor)
+            this.accept(batch.events);
+          epoch = batch.epoch;
+          cursor = batch.cursor;
         }
-        epoch = batch.epoch;
-        cursor = batch.cursor;
       } catch {
-        failed = true;
-      } finally {
-        clearTimeout(timeout);
-        signal.removeEventListener('abort', abort);
+        // Playback owns its own lifetime; losing transport never stops an active event.
       }
-      if (failed && !signal.aborted) {
+      if (!signal.aborted) {
         await new Promise<void>((resolve) => {
           const finish = () => {
             clearTimeout(timer);

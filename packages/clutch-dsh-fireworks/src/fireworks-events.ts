@@ -1,26 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { clientRequestSchema, type HostConnectionHandle } from '@deepseek-ai/dsh-client-connection';
 import {
   FIREWORKS_EVENT_LIMIT,
-  FIREWORKS_CONNECTION_CHANNEL,
-  FIREWORKS_EVENTS_ENDPOINT,
-  FIREWORKS_POLL_TIMEOUT_MS,
   type FireworksEventBatch,
   type FireworksLaunchEvent,
-  type FireworksPollRequest,
+  type FireworksResumeCursor,
 } from './contract/index.js';
 
-interface FeedEntry {
-  readonly cursor: number;
-  readonly event: FireworksLaunchEvent;
-}
-
-/** Transient Host-wide event feed. Opening a new subscriber never replays history. */
+/** Bounded transient replay shared by all native Remote subscribers. No idle timers. */
 export class FireworksEventFeed {
   readonly epoch = randomUUID();
   private cursor = 0;
-  private entries: FeedEntry[] = [];
-  private readonly waiters = new Set<() => void>();
+  private entries: { cursor: number; event: FireworksLaunchEvent }[] = [];
+  private readonly subscribers = new Set<() => void>();
   private disposed = false;
 
   constructor(private readonly now: () => number = Date.now) {}
@@ -36,7 +27,7 @@ export class FireworksEventFeed {
       return;
     this.entries.push({ cursor: ++this.cursor, event });
     this.entries = this.entries.slice(-FIREWORKS_EVENT_LIMIT);
-    for (const wake of [...this.waiters]) wake();
+    for (const wake of [...this.subscribers]) wake();
   }
 
   private read(epoch?: string, cursor?: number): FireworksEventBatch {
@@ -52,87 +43,49 @@ export class FireworksEventFeed {
     };
   }
 
-  async poll(epoch?: string, cursor?: number, signal?: AbortSignal): Promise<FireworksEventBatch> {
-    signal?.throwIfAborted();
+  async *open(
+    query: FireworksResumeCursor,
+    signal: AbortSignal,
+  ): AsyncGenerator<FireworksEventBatch> {
+    signal.throwIfAborted();
     if (this.disposed) throw new Error('clutch_fireworks: feed disposed');
-    if (epoch !== this.epoch || cursor !== this.cursor) return this.read(epoch, cursor);
-    return new Promise((resolve, reject) => {
-      const finish = () => {
-        clearTimeout(timer);
-        this.waiters.delete(finish);
-        signal?.removeEventListener('abort', finish);
-        if (signal?.aborted) reject(signal.reason);
-        else if (this.disposed) reject(new Error('clutch_fireworks: feed disposed'));
-        else resolve(this.read(epoch, cursor));
-      };
-      const timer = setTimeout(finish, FIREWORKS_POLL_TIMEOUT_MS);
-      timer.unref?.();
-      this.waiters.add(finish);
-      signal?.addEventListener('abort', finish, { once: true });
-    });
+    let resume: (() => void) | undefined;
+    const wake = () => {
+      resume?.();
+      resume = undefined;
+    };
+    this.subscribers.add(wake);
+    signal.addEventListener('abort', wake, { once: true });
+    let epoch = query.epoch;
+    let cursor = query.after;
+    try {
+      // Capture before yielding: slow consumers coalesce from the shared feed.
+      const baseline = this.read(epoch, cursor);
+      epoch = baseline.epoch;
+      cursor = baseline.cursor;
+      yield baseline;
+      while (!this.disposed && !signal.aborted) {
+        const batch = this.read(epoch, cursor);
+        if (batch.cursor !== cursor) {
+          cursor = batch.cursor;
+          yield batch;
+        } else {
+          await new Promise<void>((resolve) => {
+            resume = resolve;
+          });
+        }
+      }
+    } finally {
+      this.subscribers.delete(wake);
+      signal.removeEventListener('abort', wake);
+      wake();
+    }
   }
 
   dispose(): void {
     this.disposed = true;
     this.entries = [];
-    for (const wake of [...this.waiters]) wake();
+    for (const wake of [...this.subscribers]) wake();
+    this.subscribers.clear();
   }
-}
-
-/** Register on Connection's authenticated shared route; never mount a private WebServer. */
-export function registerFireworksEvents(
-  connection: Pick<HostConnectionHandle, 'fetch'>,
-  feed: FireworksEventFeed,
-): () => Promise<void> {
-  return connection.fetch.register({
-    path: FIREWORKS_CONNECTION_CHANNEL + '/' + FIREWORKS_EVENTS_ENDPOINT,
-    methods: ['POST'],
-    requestBody: 'buffered',
-    async fetch(request) {
-      const failure = (code: string, message: string) => ({
-        ok: false as const,
-        error: { code: 'clutch_fireworks/' + code, message, details: {} },
-      });
-      let raw: unknown;
-      try {
-        raw = await request.json();
-      } catch {
-        return Response.json(failure('invalid-request', 'Expected a JSON RPC request'), {
-          status: 400,
-        });
-      }
-      const parsed = clientRequestSchema.safeParse(raw);
-      if (!parsed.success)
-        return Response.json(failure('invalid-request', 'Invalid RPC envelope'), { status: 400 });
-      const message = parsed.data;
-      const reply = (result: unknown) =>
-        Response.json({
-          type: 'server-response',
-          rpcId: message.rpcId,
-          result,
-        });
-      if (message.method !== FIREWORKS_EVENTS_ENDPOINT)
-        return reply(failure('not-found', 'Unknown fireworks endpoint'));
-      const query = message.payload as FireworksPollRequest | null;
-      if (
-        query === null ||
-        typeof query !== 'object' ||
-        Array.isArray(query) ||
-        Object.keys(query).some((key) => key !== 'epoch' && key !== 'after') ||
-        (query.epoch === undefined) !== (query.after === undefined) ||
-        (query.epoch !== undefined &&
-          (typeof query.epoch !== 'string' || query.epoch.length === 0)) ||
-        (query.after !== undefined && (!Number.isSafeInteger(query.after) || query.after < 0))
-      )
-        return reply(failure('invalid-cursor', 'Invalid fireworks cursor'));
-      try {
-        return reply({
-          ok: true,
-          value: await feed.poll(query.epoch, query.after, request.signal),
-        });
-      } catch {
-        return reply(failure('unavailable', 'Fireworks feed unavailable'));
-      }
-    },
-  });
 }

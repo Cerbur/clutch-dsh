@@ -15,26 +15,34 @@ no plugin transport endpoint and no interactive controls.
   result/PTC parser. Historical projection hydration is never an event source.
 - Publish `clutch_fireworks/launch` notifications. All new event names and the
   shared route endpoint use the `clutch_fireworks` namespace.
-- A plugin-owned in-memory feed supplies `/api/clutch_fireworks/events` through
-  the public `connection.fetch.register` API. The client uses Connection RPC
-  envelopes over the existing authenticated `/api` channel. No DSH edits,
-  private WebServer, or generated Typert catalog are needed. Connection owns
-  admission: only owner peers can read exact Fetch routes; DSH 0.2.0 has one
-  authenticated operator. The supported client target is Web.
+- A plugin-owned in-memory feed supplies the native Remote stream
+  `clutch_fireworks/events`. Register the Host service plus an explicit strict
+  descriptor with the public Typert runtime registry, and mount its shared Client
+  contribution with `remote.$mount`. Both owners follow the plugin fiber lifetime.
+  No automatic `./typert` loader discovery or DSH catalog/source edits.
+- Reuse DSH Gateway's authenticated `/api/remote.mux` WebSocket. Only a logical
+  subscription is added; DSH owns connection, authentication, heartbeat and
+  connection recovery. Remove plugin Fetch routes, SSE decoding and idle timers.
+  The global feed explicitly rejects non-owner Peers.
 - A fresh subscriber receives an empty baseline with a cursor and Host epoch.
-  Later polls receive ordered events after that cursor.
+  Short reconnects reopen the logical stream after one second with that cursor;
+  normal idle subscriptions wait for publication without polling or timers.
+  Slow subscribers coalesce from the bounded feed, with no private event queues.
 - Retain at most 128 events for 30 seconds. Deduplicate Session/tool identities,
   expire stale events, reset the baseline on Host restart, and cancel pending
   requests on disconnect or plugin disposal. This is transient delivery, not
   persisted history or a browser playback acknowledgement.
 - Keep one `shell.overlay` subscribed independently of the selected Session.
-  Queue animations; show a clickable toast carrying its source Session identity.
+  Queue whole events; each event starts its animation and source-Session toast
+  together and advances only after both finish, with a fixed 12-second deadline.
   Use DSH's `uiWorkspace.openSession` for navigation. Only the toast intercepts
   pointer input. Each connected owner page consumes independently.
 - Refresh starts a new baseline without replay. Brief connection losses can
   catch up within retention; expired events are discarded before playback.
-- Raise the DSH minimum to 0.2.0 for Connection RPC, explicitly including the
-  current 0.2.1 prerelease family, and align development dependencies.
+- Require DSH 0.2.1-rc.1 or later for the native Remote stream interface,
+  and align this plugin's development SDK. Rebuilding loaded Host modules or
+  changing package metadata can still require reload/restart; sharing a socket
+  does not promise module-graph hot replacement.
 - Update both README files, release notes, and a feature screenshot.
 
 ## Verification

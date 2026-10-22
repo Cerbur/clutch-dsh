@@ -97,11 +97,11 @@ DSH，让 Host 加载新的 Config schema。
 
 ## 要求
 
-| 组件    | 要求                                                                                                                                                                                                                                                   |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| DSH     | 提供 DSH Connection RPC、Host 设置、插件详情配置 slot、Session、Session Projection、Tools、UI Renderer、UI Slots 和 UI Workspace 导航的 Web UI。要求 DSH 0.2.0 或更高版本，显式支持 0.2.0 和 0.2.1 预发布版；`package.json` 中的 peer 范围是唯一来源。 |
-| Cordis  | 兼容的 Cordis `4.x`；开发使用 `4.0.4`。                                                                                                                                                                                                                |
-| Browser | 已加载该 plugin Web client bundle 的 DSH Web UI；脚本效果需要 Worker 和 OffscreenCanvas，否则回退到 emoji。                                                                                                                                            |
+| 组件    | 要求                                                                                                                                                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH     | 提供 DSH Connection RPC、Host 设置、插件详情配置 slot、Session、Session Projection、Tools、UI Renderer、UI Slots 和 UI Workspace 导航的 Web UI。要求 DSH 0.2.1-rc.1 或更高版本，并提供原生 Gateway 与 Typert registry；`package.json` 中的 peer 范围是唯一来源。 |
+| Cordis  | 兼容的 Cordis `4.x`；开发使用 `4.0.5`。                                                                                                                                                                                                                          |
+| Browser | 已加载该 plugin Web client bundle 的 DSH Web UI；脚本效果需要 Worker 和 OffscreenCanvas，否则回退到 emoji。                                                                                                                                                      |
 
 ## 行为与限制
 
@@ -124,9 +124,12 @@ DSH，让 Host 加载新的 Config schema。
   短暂断线可以在这些限制内补收。
 - 每个已连接的 owner 页面独立消费事件。效果仅显示在对应 DSH 窗口内，不创建操作系统桌面
   覆盖层。工具成功结果表示请求已记录，不表示浏览器确认完成了播放。
-- 插件通过已鉴权的 DSH Connection 共享路由 `/api/clutch_fireworks/events` 传输
-  `clutch_fireworks/launch` 事件，不添加 DSH 生成目录项或自定义 Session 事件类型。
-  全局事件源仅对 Host owner 开放，受限的非 owner peer 无法读取。
+- 插件通过原生 Remote stream `clutch_fireworks/events` 推送
+  `clutch_fireworks/launch`，复用 DSH 已鉴权的 `/api/remote.mux` WebSocket。
+  连接、认证、心跳与连接恢复由 DSH 管理；插件只增加逻辑订阅，断流后重新订阅，
+  不另建 SSE 连接或轮询。短暂断线按游标补收，刷新页面或 Host 重启只建立静默基线。
+  Host 注册与客户端挂载跟随插件生命周期，卸载时撤销；全局事件源显式拒绝非 owner。
+  不修改 DSH 源码或生成目录。重新构建 Host 模块或修改包元数据后，仍可能需要重载或重启 DSH。
 - 如果 Host 提供 DSH 的 `systemPrompt` service，插件会添加里程碑指引。没有该可选 service
   时，工具仍然可用，但不会添加这段指引。
 - package 不 patch DSH 源码，也不持久化 conversation 副本。

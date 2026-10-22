@@ -57,7 +57,7 @@ validates custom drafts before saving.
 
 Both requests now enter the same burst channel through `play()` and use the
 same `AnimationSurface` and `reportPlayback()` callback. Preview only overrides
-the captured draft template and omits creation of a task toast. Empty polls
+the captured draft template and omits creation of a task toast. Empty delivery batches
 must not stop a preview. A live animation's duration starts after its first
 paint; stale callbacks cannot advance a newer playback.
 
@@ -67,6 +67,14 @@ embedding scheme while the child used its default light scheme. Matching the
 schemes restores transparency without changing templates or sandbox isolation.
 
 ## Validation
+
+Delivery uses DSH native Remote streams over its shared Gateway WebSocket.
+Register/unregister Host and Client descriptors with the plugin lifecycle.
+DSH owns authentication, heartbeat and connection recovery; the plugin reopens
+only its logical subscription after loss. Preserve silent baselines, cursor
+catch-up and bounded retention/backpressure. Keep the complete-event playback
+barrier independent of transport recovery. Restart only the
+`DSH_HOME=~/.dsh-test` instance on port 3088, then verify in the built-in browser.
 
 Exercise file contracts, malformed/oversized imports, native settings persistence
 and conflicts, template capture and duration, sandbox frame errors/timeouts,
@@ -118,3 +126,44 @@ Do not commit, push, pack or publish this follow-up without user instruction.
   Cordis patch checks and `git diff --check` passed.
 - Confirmed the required configuration slot and settings methods also exist in
   the DSH `dsh-v0.2.0-rc.1` source tag. Actual browser acceptance used 0.2.1-rc.2.
+- Historical SSE follow-up (superseded by native Remote streams below): `pnpm run test` passed all 53 tests. Covers persistent
+  multi-event delivery, comment heartbeats, bounded slow subscribers, stream
+  abort/disposal, epoch/cursor recovery, split UTF-8/CRLF decoding, malformed
+  frames and the 45-second idle watchdog. Typecheck, ESLint, Prettier, workspace
+  and patch checks pass. Existing YAML custom-tag warning is unchanged.
+- Restarted only port 3088 with `DSH_HOME=~/.dsh-test`. In the built-in browser,
+  a real background tool call displayed transparent fireworks and its toast
+  on the Plugins page; clicking returned to the regression Session. Refresh
+  established a quiet baseline. Unauthenticated SSE access returned HTTP 401.
+
+## Native Remote stream acceptance
+
+- Replaced the plugin Fetch/SSE route with an explicit runtime-registered
+  `clutch_fireworks/events` Remote stream. Host and Client use the same strict
+  descriptor. Registration is fiber-owned; no automatic `./typert` loader,
+  DSH source changes or generated catalog edits. Minimum Host version is
+  0.2.1-rc.1; development SDK and installed-browser acceptance remain on rc.2.
+- The installed Host delivered native WebSocket baseline and live batches, but
+  the first Client implementation did not subscribe: injecting `remote` alone
+  cannot access the newly mounted `remote.clutch_fireworks` service in Cordis.
+  Reproduced with a minimal real Client Context, then with the actual bundled
+  entry. Inject the namespace after `$mount`, with playback and UI owned by that
+  dependent fiber. The regression failed before this fix and passes after it.
+- Native Gateway regressions cover late Host registration, withdrawal,
+  re-enable, strict cursor validation and owner-only aggregate reads even with
+  an otherwise permissive access policy. Native Client regression verifies
+  multiple subscriptions share one socket, logical cancellation, remount and
+  Connection-driven socket replacement/cursor recovery.
+- `~/.dsh-test`, port 3088, built-in browser: a real background tool produced
+  transparent emoji fireworks and a toast on the Plugins page. Clicking the
+  toast returned to the source Session. Disabling/re-enabling the plugin without
+  restarting DSH restored real tool playback. Restarting only the test Host,
+  without refreshing the page, also restored tool playback and toast navigation.
+- Frozen pnpm installation accepts the automatically generated workspace lockfile.
+  No hand edits to cross-plugin dependency resolution were applied.
+- Final package test run: all 51 tests passed. Package build/typecheck, ESLint
+  over source/tests/scripts, scoped Prettier, workspace/patch validation and
+  `git diff --check` passed. The pre-existing YAML `!!js` tag warning remains.
+- Final browser checks confirmed silent refresh, full-window Starburst preview
+  with no toast, successful script completion and cleanup. Discarded the draft
+  to restore the saved Emoji selection; left the plugin enabled and 3088 running.
