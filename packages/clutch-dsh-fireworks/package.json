@@ -29,6 +29,10 @@
       "import": "./lib/contract/index.js",
       "default": "./lib/contract/index.js"
     },
+    "./animation": {
+      "types": "./lib/animation.d.ts",
+      "default": "./lib/animation.js"
+    },
     "./client": {
       "types": "./lib/client/entry.d.ts",
       "default": "./lib/client.js"
@@ -71,6 +75,7 @@
     "serviceDefinition": "@cerbur/clutch-dsh-fireworks"
   },
   "dependencies": {
+    "@deepseek-ai/schemastery": "~3.18.4",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

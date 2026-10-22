@@ -2,14 +2,28 @@ import {
   FIREWORKS_DURATION_MS,
   FIREWORKS_EVENT_LIMIT,
   FIREWORKS_TOAST_DURATION_MS,
+  FIREWORKS_EVENT_TIMEOUT_MS,
   parseFireworksEventBatch,
   type FireworksLaunchEvent,
   type FireworksPollRequest,
+  type FireworksSignal,
 } from '../contract/index.js';
+import type { AnimationTemplate } from '../animation.js';
 
 export interface FireworksSnapshot {
-  readonly burst?: FireworksLaunchEvent;
+  readonly preview?: { readonly id: string };
+  readonly animation?: AnimationTemplate;
+  readonly burst?: FireworksSignal & { readonly sessionId?: string };
   readonly toast?: FireworksLaunchEvent;
+}
+
+export type AnimationPreviewStatus = 'ready' | 'done' | 'error' | 'cancelled';
+type PreviewListener = (status: AnimationPreviewStatus, message?: string) => void;
+
+interface ActiveCelebration {
+  readonly event: FireworksLaunchEvent;
+  animation: 'starting' | 'playing' | 'fallback' | 'done';
+  toastDone: boolean;
 }
 
 export type FireworksPoll = (query: FireworksPollRequest, signal: AbortSignal) => Promise<unknown>;
@@ -22,11 +36,16 @@ export class FireworksController {
   private pending: FireworksLaunchEvent[] = [];
   private burstTimer?: ReturnType<typeof setTimeout>;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private eventTimer?: ReturnType<typeof setTimeout>;
+  private active?: ActiveCelebration;
   private connection?: AbortController;
+  private previewSequence = 0;
+  private previewListener?: PreviewListener;
 
   constructor(
     private readonly request: FireworksPoll,
     private readonly now: () => number = Date.now,
+    private readonly animation?: () => AnimationTemplate,
   ) {}
 
   readonly getSnapshot = (): FireworksSnapshot => this.snapshot;
@@ -56,28 +75,143 @@ export class FireworksController {
     while (this.seen.size > FIREWORKS_EVENT_LIMIT) {
       this.seen.delete(this.seen.keys().next().value!);
     }
-    if (this.snapshot.burst === undefined) this.next();
+    if (!this.active && this.pending.length > 0) this.next();
   }
 
   private next(): void {
+    if (this.active) return;
     let event: FireworksLaunchEvent | undefined;
     do {
       event = this.pending.shift();
     } while (event !== undefined && event.expiresAt <= this.now());
     if (event === undefined) {
-      this.publish({ ...this.snapshot, burst: undefined });
+      this.publish({});
       return;
     }
+    this.cancelPreview('任务庆祝已开始，请稍后重新预览。');
     clearTimeout(this.toastTimer);
-    this.publish({ burst: event, toast: event });
-    this.burstTimer = setTimeout(() => this.next(), FIREWORKS_DURATION_MS);
-    this.toastTimer = setTimeout(() => this.dismissToast(), FIREWORKS_TOAST_DURATION_MS);
+    const animation = this.animation?.();
+    const active: ActiveCelebration = { event, animation: 'starting', toastDone: false };
+    this.active = active;
+    this.eventTimer = setTimeout(() => this.finishEvent(active), FIREWORKS_EVENT_TIMEOUT_MS);
+    this.play(event, animation, undefined, event);
+    this.toastTimer = setTimeout(() => this.dismissToast(event), FIREWORKS_TOAST_DURATION_MS);
   }
 
-  readonly dismissToast = (): void => {
+  private finishAnimation(burst: NonNullable<FireworksSnapshot['burst']>): void {
+    const active = this.active;
+    if (!active || this.snapshot.burst !== burst) return;
+    clearTimeout(this.burstTimer);
+    active.animation = 'done';
+    this.publish({ ...this.snapshot, burst: undefined, animation: undefined });
+    this.finishIfComplete(active);
+  }
+
+  private finishIfComplete(active: ActiveCelebration): void {
+    if (active.animation === 'done' && active.toastDone) this.finishEvent(active);
+  }
+
+  private finishEvent(active: ActiveCelebration): void {
+    if (this.active !== active) return;
+    clearTimeout(this.burstTimer);
+    clearTimeout(this.toastTimer);
+    clearTimeout(this.eventTimer);
+    this.active = undefined;
+    // Completion and the fixed deadline both consume the event once; never retry.
+    this.next();
+  }
+
+  /** All launches enter one burst channel and mount the same rendering surface. */
+  private play(
+    burst: NonNullable<FireworksSnapshot['burst']>,
+    animation?: AnimationTemplate,
+    preview?: FireworksSnapshot['preview'],
+    toast = this.snapshot.toast,
+  ): void {
+    clearTimeout(this.burstTimer);
+    this.publish({ burst, animation, preview, toast });
+    this.burstTimer = setTimeout(
+      () =>
+        preview
+          ? this.reportPreview(preview.id, 'error', '动画预览超时，请重试。')
+          : this.finishAnimation(burst),
+      (animation?.durationMs ?? FIREWORKS_DURATION_MS) + (animation ? 3000 : 0),
+    );
+  }
+
+  readonly reportPlayback = (
+    burst: NonNullable<FireworksSnapshot['burst']>,
+    status: 'ready' | 'done' | 'error',
+    message?: string,
+  ): void => {
+    if (this.snapshot.burst !== burst) return;
+    if (this.snapshot.preview) {
+      this.reportPreview(this.snapshot.preview.id, status, message);
+    } else if (status === 'ready' && this.active?.animation === 'starting') {
+      this.active.animation = 'playing';
+      // Allow a completion acknowledgement after the first painted frame.
+      clearTimeout(this.burstTimer);
+      this.burstTimer = setTimeout(
+        () => this.finishAnimation(burst),
+        (this.snapshot.animation?.durationMs ?? FIREWORKS_DURATION_MS) + 1000,
+      );
+    } else if (status === 'done') {
+      this.finishAnimation(burst);
+    } else if (status === 'error' && this.active && this.active.animation !== 'fallback') {
+      // The existing trusted fallback is the terminal error presentation, not a retry.
+      this.active.animation = 'fallback';
+      clearTimeout(this.burstTimer);
+      this.burstTimer = setTimeout(() => this.finishAnimation(burst), FIREWORKS_DURATION_MS);
+    }
+  };
+
+  readonly dismissToast = (toast = this.snapshot.toast): void => {
+    if (!toast || this.snapshot.toast !== toast) return;
     clearTimeout(this.toastTimer);
     this.publish({ ...this.snapshot, toast: undefined });
+    const active = this.active;
+    if (active?.event === toast) {
+      active.toastDone = true;
+      this.finishIfComplete(active);
+    }
   };
+
+  /** Preview drafts through the same root renderer, without a tool event or toast. */
+  readonly previewAnimation = (
+    animation: AnimationTemplate,
+    listener: PreviewListener,
+  ): (() => void) => {
+    if (this.active) {
+      listener('cancelled', '正在播放任务庆祝，请稍后预览。');
+      return () => {};
+    }
+    this.cancelPreview('已开始新的预览。');
+    const id = 'clutch_fireworks/preview-' + ++this.previewSequence;
+    this.previewListener = listener;
+    this.play({ id, message: '动画预览' }, animation, { id });
+    return () => this.reportPreview(id, 'cancelled');
+  };
+
+  readonly reportPreview = (id: string, status: AnimationPreviewStatus, message?: string): void => {
+    if (this.snapshot.preview?.id !== id) return;
+    const listener = this.previewListener;
+    if (status !== 'ready') {
+      clearTimeout(this.burstTimer);
+      this.previewListener = undefined;
+      this.publish({
+        ...this.snapshot,
+        burst: undefined,
+        animation: undefined,
+        preview: undefined,
+      });
+    }
+    listener?.(status, message);
+  };
+
+  private cancelPreview(message?: string): void {
+    const preview = this.snapshot.preview;
+    if (preview) this.reportPreview(preview.id, 'cancelled', message);
+  }
 
   start(): () => void {
     this.stop();
@@ -129,10 +263,13 @@ export class FireworksController {
   }
 
   stop(): void {
+    this.cancelPreview();
     this.connection?.abort();
     this.connection = undefined;
     clearTimeout(this.burstTimer);
     clearTimeout(this.toastTimer);
+    clearTimeout(this.eventTimer);
+    this.active = undefined;
     this.pending = [];
     this.seen.clear();
     this.publish({});

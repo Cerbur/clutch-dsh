@@ -1,38 +1,19 @@
-import { useState, useSyncExternalStore, type CSSProperties } from 'react';
-import { emojiFireworksRenderer, type FireworksVisual } from './fireworks-renderer.js';
+import { useState, useSyncExternalStore } from 'react';
 import type { FireworksController } from './fireworks-controller.js';
 import type { FireworksLaunchEvent } from '../contract/index.js';
 import styles from './fireworks.css';
+import { AnimationSurface, EmojiFallback } from './AnimationSurface.js';
 
 interface FireworksOverlayProps {
   readonly controller: FireworksController;
   readonly openSession: (sessionId: string) => void;
 }
 
-function VisualNode({ visual }: { visual: FireworksVisual }) {
-  const style = {
-    left: `${visual.left}%`,
-    top: `${visual.top}%`,
-    '--fireworks-delay': `${visual.delayMs}ms`,
-    '--fireworks-duration': `${visual.durationMs}ms`,
-    '--fireworks-rotation': `${visual.rotationDeg}deg`,
-    '--fireworks-scale': String(visual.scale),
-  } as CSSProperties;
-
-  if (visual.kind === 'svg') {
-    return (
-      <img className={styles.particle} src={visual.src} alt={visual.alt ?? ''} style={style} />
-    );
-  }
-  return (
-    <span className={styles.particle} aria-hidden="true" style={style}>
-      {visual.glyph}
-    </span>
-  );
-}
-
 export function FireworksOverlay({ controller, openSession }: FireworksOverlayProps) {
-  const { burst, toast } = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const { burst, toast, animation, preview } = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+  );
   if (burst === undefined && toast === undefined) return null;
   return (
     <div className={styles.overlay}>
@@ -41,7 +22,7 @@ export function FireworksOverlay({ controller, openSession }: FireworksOverlayPr
           key={`toast:${JSON.stringify([toast.sessionId, toast.id])}`}
           toast={toast}
           openSession={openSession}
-          dismiss={controller.dismissToast}
+          dismiss={() => controller.dismissToast(toast)}
         />
       )}
       {burst !== undefined && (
@@ -50,9 +31,16 @@ export function FireworksOverlay({ controller, openSession }: FireworksOverlayPr
           key={`burst:${JSON.stringify([burst.sessionId, burst.id])}`}
           aria-hidden="true"
         >
-          {emojiFireworksRenderer.createVisuals(burst).map((visual, index) => (
-            <VisualNode key={index} visual={visual} />
-          ))}
+          {animation ? (
+            <AnimationSurface
+              template={animation}
+              signal={burst}
+              preview={preview !== undefined}
+              onStatus={(status, message) => controller.reportPlayback(burst, status, message)}
+            />
+          ) : (
+            <EmojiFallback signal={burst} />
+          )}
         </div>
       )}
     </div>

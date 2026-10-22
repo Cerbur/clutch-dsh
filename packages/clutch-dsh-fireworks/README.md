@@ -46,12 +46,13 @@ changing `package.json` or `cordis.patch.yml`.
 
 ## Features
 
-| Feature                              | Preview                                                                                                                                                   | What it does                                                                                                                                                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Automatic milestone celebrations** | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">                                                    | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
-| **Fireworks overlay**                | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI">                                                   | A successful call displays a short, click-through overlay across the DSH window, independently of the selected Session, and shows a clickable celebration toast.                                                                                           |
-| **Jump to the source Session**       | <img src="assets/screenshots/global-fireworks-toast.png" width="420" alt="Background Session fireworks and clickable toast on the real DSH plugins page"> | Click the toast to open its originating Session through DSH navigation. Dismiss it without interrupting the animation. Captured from an installed plugin after a real background tool call.                                                                |
-| **Safe replay behavior**             | —                                                                                                                                                         | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
+| Feature                                    | Preview                                                                                                                                                   | What it does                                                                                                                                                                                                                                               |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Automatic milestone celebrations**       | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">                                                    | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
+| **Fireworks overlay**                      | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI">                                                   | A successful call displays a short, click-through overlay across the DSH window, independently of the selected Session, and shows a clickable celebration toast.                                                                                           |
+| **Jump to the source Session**             | <img src="assets/screenshots/global-fireworks-toast.png" width="420" alt="Background Session fireworks and clickable toast on the real DSH plugins page"> | Click the toast to open its originating Session through DSH navigation. Dismiss it without interrupting the animation. Captured from an installed plugin after a real background tool call.                                                                |
+| **Animation templates and script imports** | <img src="assets/screenshots/animation-settings.png" width="420" alt="Installed DSH animation settings and transparent full-window preview">              | Choose three built-in effects or import your own JavaScript animation. Preview, save, download scripts, and copy a complete AI generation prompt on the plugin details page.                                                                               |
+| **Safe replay behavior**                   | —                                                                                                                                                         | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
 
 ## Usage
 
@@ -79,24 +80,56 @@ supported as well as direct top-level tool results. You can switch to another Se
 while the work runs: the global effect still plays. Click **Open session →** on the toast to return
 to the originating Session, or use **×** to dismiss the toast.
 
+### Choose, import, or generate animations
+
+Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Choose **Emoji**, **Starburst**,
+or **Aurora**, preview it, then click **保存动画设置**. Changes take effect on the next celebration;
+leaving without saving discards the draft. Existing animations keep their captured template.
+
+**预览动画** sends the current draft through the same playback path as a tool launch, directly
+over the current DSH page with a transparent background in light and dark themes. It creates no
+toast or tool call and does not save the draft. Use **停止预览** to stop;
+changing templates or leaving the page also cleans it up. Real task celebrations take priority.
+
+Use **导入 .js 动画** to add a standalone script. A custom selection must finish its preview
+without errors before saving is enabled. Download any selected script as a starting point, or
+expand **用 AI 生成自己的动画**, copy the prompt, describe your effect, and import the generated
+`.js` file. A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
+The file format and drawing interface are documented in [Animation scripts](docs/ANIMATIONS.md).
+
+Selections and script source are stored through DSH Host settings, shared by connected pages,
+and survive refresh/restart. A launch refreshes the saved choice before playback. After upgrading
+an already-running local checkout, restart DSH so its Host loads the new Config schema.
+
 ## Requirements
 
-| Component | Requirement                                                                                                                                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH       | A Web UI providing DSH Connection RPC, Session, Session Projection, Tools, UI Renderer, UI Slots, and UI Workspace navigation. Requires DSH 0.2.0 or later; 0.2.0 and 0.2.1 prereleases are explicitly supported. The peer ranges in `package.json` are the source of truth. |
-| Cordis    | Compatible Cordis `4.x`; development uses `4.0.4`.                                                                                                                                                                                                                           |
-| Browser   | DSH Web UI with the plugin's Web client bundle loaded.                                                                                                                                                                                                                       |
+| Component | Requirement                                                                                                                                                                                                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DSH       | A Web UI providing DSH Connection RPC, Host settings, plugin detail configuration slots, Session, Session Projection, Tools, UI Renderer, UI Slots, and UI Workspace navigation. Requires DSH 0.2.0 or later; 0.2.0 and 0.2.1 prereleases are explicitly supported. The peer ranges in `package.json` are the source of truth. |
+| Cordis    | Compatible Cordis `4.x`; development uses `4.0.4`.                                                                                                                                                                                                                                                                             |
+| Browser   | DSH Web UI with the plugin's Web client bundle loaded; Workers and OffscreenCanvas for script effects (emoji fallback otherwise).                                                                                                                                                                                              |
 
 ## Behavior and limitations
 
-- Each burst lasts about 3 seconds and uses deterministic emoji visuals. The optional `message`
+- Built-ins include a 3.2-second emoji burst, 4.2-second starbursts and 3.6-second aurora rings.
+  Custom effects last 0.5–8 seconds. The optional `message`
   is normalized to a maximum of 120 characters. Only the toast accepts clicks; particles remain
   click-through.
+- Up to eight custom scripts are allowed, each at most 64 KiB. Scripts draw in an isolated Worker
+  with Canvas 2D, time, seeded randomness and drawing helpers. Network, application DOM, Session
+  navigation and toast controls are unavailable to scripts. The renderer owns cleanup and
+  terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
+  the error. Reduced-motion preferences show a static frame.
 - Only successful live fireworks results trigger playback. Errors, cancellations, historical
   Session loads, and page refreshes do not replay old celebrations.
 - Switching Sessions or app pages does not clear the animation. The toast remains for up to
-  8 seconds unless it is dismissed or replaced by the next queued celebration.
-- Celebrations queue across Sessions. Duplicate Session/tool-call identities are ignored. The
+  8 seconds; closing it or successfully clicking through to its Session ends the toast early.
+- Celebrations queue as whole events across Sessions. Each event starts its animation and toast
+  together; the next event waits until both finish. An ended animation does not replace a
+  remaining toast, and closing a toast does not cut off its animation. A fixed 12-second event
+  deadline clears stalled rendering and advances without retry. Preview waits while a real
+  event is active, including any remaining toast time.
+- Duplicate Session/tool-call identities are ignored. The
   transient feed and playback queue are bounded to 128 entries each, and events expire after
   30 seconds. Expired or overflowed pending events are dropped. Brief disconnects can catch up
   within those limits.

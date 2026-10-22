@@ -1,0 +1,152 @@
+# Animation scripts / 动画脚本
+
+An animation is a standalone UTF-8 `.js` file. Import it on the plugin details
+page, let its full-window preview finish without errors, then save. The built-ins in
+[`assets/animations`](../assets/animations/) use exactly the same interface.
+Download a built-in or start with
+[`example-custom.js`](../assets/animations/example-custom.js). The configuration
+page contains a complete AI generation prompt with this contract.
+
+动画是独立 UTF-8 `.js` 文件，在插件详情页导入，完整预览通过后保存。
+所有内置效果与自定义效果使用同一个接口。设置页提供可复制的完整 AI 生成提示词。
+
+Preview sends the draft to the same global renderer as a real launch, without a
+separate preview canvas, toast, tool call or settings write. Stop it explicitly,
+change templates, or leave the settings page to release its resources. A real
+task celebration preempts a preview; stale preview callbacks cannot validate
+another draft or cancel that task's effect.
+
+Both requests use the same burst channel, rendering surface and lifecycle
+callbacks. The iframe explicitly uses `color-scheme: normal`, matching its
+srcDoc document. Otherwise Chromium can composite a transparent default-light
+document as an opaque white viewport when DSH supplies a dark embedding scheme.
+The effect keeps the underlying page visible in either theme.
+
+预览直接通知全局渲染层全屏播放草稿，不使用预览框，也不触发通知或保存。
+停止、切换模板或离开页面会清理预览；真实任务庆祝优先。
+两种请求共用播放通道、渲染组件和生命周期回调。iframe 配色模式与内部文档保持一致，
+避免深色主题下 Chromium 将透明内容合成为白色整窗背景。
+
+## File format
+
+The first line is a literal comment with JSON metadata. `version` is `1`,
+`name` is a nonempty string of at most 60 characters, and `durationMs` is an
+integer from 500 to 8000. Files are limited to 64 KiB; at most eight custom
+templates can be saved. No module wrapper, imports, exports, React, or build
+step is needed.
+
+```js
+// clutch_fireworks: {"version":1,"name":"Golden stars","durationMs":4000}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Animation entry.
+function render(frame, fx) {
+  const alpha = Math.min(frame.progress * 5, (1 - frame.progress) * 4);
+  for (let i = 0; i < 80; i++) {
+    const angle = fx.random() * Math.PI * 2;
+    const reach = Math.min(frame.width, frame.height) * 0.4 * fx.easeOut(frame.progress);
+    fx.star(
+      frame.width / 2 + Math.cos(angle) * reach,
+      frame.height / 2 + Math.sin(angle) * reach,
+      4 + fx.random() * 7,
+      '#ffcf66',
+      alpha,
+      angle + frame.progress,
+    );
+  }
+}
+```
+
+`render(frame, fx)` must be synchronous. The renderer calls it for each frame,
+clears and resets drawing state, applies pixel scaling, follows resizing, and
+owns the animation's duration and resource cleanup. Compute movement from
+absolute `time` or `progress`, rather than counting frames. Each frame's random
+sequence restarts from the same seed so initial positions remain stable.
+
+## Drawing interface
+
+Types are exported from `@cerbur/clutch-dsh-fireworks/animation` as
+`AnimationFrame`, `AnimationHelpers`, and `AnimationRender`.
+
+| Frame property           | Meaning                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ctx`                    | Standard `OffscreenCanvasRenderingContext2D`: paths, curves, gradients, text, shadows, compositing and other Canvas 2D drawing operations. |
+| `width`, `height`        | Full DSH window drawing area in CSS pixels, shared by live playback and preview.                                                           |
+| `dpr`                    | Applied pixel ratio, at most 2 and bounded by an 8-million-pixel canvas budget. Do not scale `ctx` again.                                  |
+| `time`, `delta`          | Elapsed time and time since the previous frame, in milliseconds.                                                                           |
+| `progress`, `durationMs` | Normalized time from 0 to 1, and the template's configured duration.                                                                       |
+| `seed`                   | Deterministic integer seed for this celebration.                                                                                           |
+| `message`                | Optional celebration text, or an empty string. No Session identity or DSH handles are exposed.                                             |
+
+| Helper              | Arguments                                         |
+| ------------------- | ------------------------------------------------- |
+| `fx.random()`       | Seeded random number in `[0, 1)`.                 |
+| `fx.clamp(value)`   | Clamp to `[0, 1]`.                                |
+| `fx.easeOut(value)` | Cubic ease-out, input clamped to `[0, 1]`.        |
+| `fx.circle(...)`    | `x, y, radius, color, alpha = 1, glow = 0`        |
+| `fx.ring(...)`      | `x, y, radius, color, lineWidth = 2, alpha = 1`   |
+| `fx.line(...)`      | `x1, y1, x2, y2, color, lineWidth = 2, alpha = 1` |
+| `fx.star(...)`      | `x, y, radius, color, alpha = 1, rotation = 0`    |
+| `fx.emoji(...)`     | `text, x, y, size = 32, alpha = 1, rotation = 0`  |
+
+Colors are CSS colors; rotations are radians; sizes are CSS pixels. Helpers
+restore their own Canvas state. Keep the background transparent, fade in and
+out, and aim for fewer than about 1000 particles per frame. A reduced-motion
+preference renders a static midpoint frame.
+
+## Responsibilities and failure handling
+
+```mermaid
+flowchart LR
+    tool[happy_fireworks result] --> event[clutch_fireworks/launch]
+    event --> playback[Global playback controller]
+    settings[Saved animation selection] --> playback
+    playback --> animation[Selected script and Canvas renderer]
+    playback --> toast[Plugin toast and Session navigation]
+```
+
+Scripts run in a dedicated Worker inside a `sandbox="allow-scripts"` iframe
+with an opaque origin and a restrictive CSP. They cannot access the application
+DOM, storage, network, DSH services, navigation, or toast controls. Do not use
+`fetch`, `import`, `importScripts`, `require`, DOM APIs, timers, event listeners,
+`postMessage`, or change global functions. Use only the frame, helpers, Canvas
+and pure math. Custom scripts never execute in the Host or DSH main renderer.
+
+The renderer detects startup errors and frames taking over 750 ms, terminates
+the Worker, and releases its Blob URL and iframe. A preview reports errors and
+does not enable saving a failed custom selection. During a real celebration,
+script errors or unavailable Worker/OffscreenCanvas support trigger the trusted
+emoji fallback. The independent toast remains clickable and dismissible.
+
+Animation and toast share one event time slot. Both start together, and the
+controller advances the queue only after both finish. Closing or successfully
+following a toast completes that branch; its automatic lifetime is eight
+seconds. Each event has an absolute 12-second deadline from launch, independent
+of renderer acknowledgements. The deadline clears both branches and consumes
+the event without retry. Old callbacks cannot complete a newer event. Preview
+cannot interrupt an active event's remaining toast.
+
+动画与 toast 共用一个事件时间片，同时启动、全部完成后再出队。toast 在自动消失、
+手动关闭或成功跳转后结束；每个事件从启动起最多等待 12 秒，超时清理并继续，
+不重试。旧回调不能结束新事件，预览也不能插入真实事件剩余的 toast 时间。
+
+Saved selections and sources belong to the Host settings namespace
+`clutch-dsh-fireworks`, in its `animation` field. Writes use the revision the
+page read; a concurrent edit is rejected instead of overwritten. Imported or
+removed templates remain drafts until saved. Each queued launch captures the
+currently saved template and duration when it begins. No script or preference
+is written into Session history.
+
+## Acceptance
+
+Validated in installed DSH 0.2.1-rc.2 with `DSH_HOME=~/.dsh-test`, using Codex's
+built-in browser: built-in preview, file import, custom preview and save,
+refresh persistence, real background `happy_fireworks` playback of the imported
+template, toast navigation to the source Session, and termination of a
+deliberately looping preview while the settings page remains responsive.
+
+Rendering regression gate: use a dark DSH theme, click preview, and verify the
+settings text and sidebar remain visible behind the moving particles. Repeat
+in a light theme and with a real background tool call; click its toast to
+verify Session navigation. The iframe and srcDoc color schemes must match.
+Node unit tests do not reproduce Chromium's iframe compositing behavior, so
+this browser check is required when changing the rendering surface or theme
+styles.

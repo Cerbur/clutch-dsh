@@ -1,4 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
+import z from '@deepseek-ai/schemastery';
+import { DEFAULT_ANIMATION_PREFERENCES } from './animation.js';
 import {
   FIREWORKS_GUIDANCE_PROMPT,
   FIREWORKS_GUIDANCE_SECTION_NAME,
@@ -19,8 +21,19 @@ export { happyFireworksTool } from './fireworks-tool.js';
 
 export const name = 'clutch-dsh-fireworks';
 export const inject = ['tools'];
+export const Config = z.object({
+  animation: z.any().default(DEFAULT_ANIMATION_PREFERENCES).volatile(),
+});
 
 export function apply(ctx: Context): void {
+  ctx.inject(['settings'], (scope) => {
+    const settings = (
+      scope as unknown as {
+        settings: { configure(presentation: { auto: boolean }, owner: unknown): () => void };
+      }
+    ).settings;
+    scope.effect(() => settings.configure({ auto: false }, scope.fiber));
+  });
   ctx.inject(['connection'], (connectionContext) => {
     const feed = new FireworksEventFeed();
     connectionContext.on(FIREWORKS_LAUNCH_EVENT, (event) => feed.publish(event));

@@ -12,6 +12,8 @@ export const FIREWORKS_EVENT_TTL_MS = 30_000;
 export const FIREWORKS_EVENT_LIMIT = 128;
 export const FIREWORKS_POLL_TIMEOUT_MS = 25_000;
 export const FIREWORKS_TOAST_DURATION_MS = 8_000;
+/** Fixed per-event deadline, including sandbox startup and both rendering branches. */
+export const FIREWORKS_EVENT_TIMEOUT_MS = 12_000;
 
 export const FIREWORKS_GUIDANCE_SECTION_NAME = 'tool:fireworks' as const;
 export const FIREWORKS_GUIDANCE_SECTION_ORDER = 2950;

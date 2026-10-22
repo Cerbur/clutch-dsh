@@ -5,7 +5,7 @@ import test from 'node:test';
 import { FireworksController } from '../lib/client/fireworks-controller.js';
 import { FIREWORKS_LAUNCH_EVENT, FIREWORKS_EVENT_TTL_MS } from '../lib/contract/index.js';
 
-const { URL, setTimeout, clearTimeout, AbortController } = globalThis;
+const { URL, setTimeout, clearTimeout, AbortController, TextEncoder } = globalThis;
 
 async function clientModule() {
   let plugin;
@@ -30,6 +30,7 @@ async function clientModule() {
     setTimeout,
     clearTimeout,
     AbortController,
+    TextEncoder,
   });
   return plugin;
 }
@@ -72,11 +73,50 @@ test('clickable toast opens its own Session and leaves the global animation runn
   controller.stop();
 });
 
+test('preview and tool launches mount the same surface with the same completion callback', async () => {
+  const plugin = await clientModule();
+  const animation = { id: 'emoji', name: 'Emoji', durationMs: 3200, source: '' };
+  const controller = new FireworksController(
+    async () => {},
+    Date.now,
+    () => animation,
+  );
+  const surface = () => {
+    const tree = plugin.FireworksOverlay({ controller, openSession: () => {} });
+    const particles = tree.props.children.filter(Boolean).find((node) => node.props['aria-hidden']);
+    return particles.props.children;
+  };
+  controller.previewAnimation(animation, () => {});
+  const previewSurface = surface();
+  assert.equal(previewSurface.props.signal, controller.getSnapshot().burst);
+  assert.equal(previewSurface.props.template, animation);
+  previewSurface.props.onStatus('done');
+  assert.equal(controller.getSnapshot().burst, undefined);
+  controller.accept([
+    {
+      type: FIREWORKS_LAUNCH_EVENT,
+      id: 'live',
+      sessionId: 'origin',
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + FIREWORKS_EVENT_TTL_MS,
+    },
+  ]);
+  const liveSurface = surface();
+  assert.equal(liveSurface.type, previewSurface.type);
+  assert.equal(liveSurface.props.signal, controller.getSnapshot().burst);
+  assert.equal(liveSurface.props.template, animation);
+  liveSurface.props.onStatus('done');
+  assert.equal(controller.getSnapshot().burst, undefined);
+  assert.equal(controller.getSnapshot().toast.sessionId, 'origin');
+  controller.stop();
+});
+
 test('client registers one root overlay and uses the namespaced authenticated RPC channel', async () => {
   const plugin = await clientModule();
   const effects = [];
   let injected;
   let controller;
+  let settingsPlayback;
   const calls = [];
   const opened = [];
   plugin.apply({
@@ -96,10 +136,15 @@ test('client registers one root overlay and uses the namespaced authenticated RP
     },
     slots: {
       inject(name, register) {
-        assert.equal(name, 'shell.overlay');
+        assert.ok(['shell.overlay', 'plugins.bundle.config'].includes(name));
         register();
       },
       register(options, component) {
+        if (options.name === 'plugins.bundle.config') {
+          assert.equal(options.key, '@cerbur/clutch-dsh-fireworks');
+          settingsPlayback = options.inject().playback;
+          return;
+        }
         assert.equal(options.name, 'shell.overlay');
         assert.equal(component, plugin.FireworksOverlay);
         injected = options.inject();
@@ -107,8 +152,14 @@ test('client registers one root overlay and uses the namespaced authenticated RP
       },
     },
   });
-  assert.equal(calls[0].channel, '/api');
-  assert.equal(calls[0].endpoint, 'clutch_fireworks/events');
+  const eventCall = calls.find((call) => call.endpoint === 'clutch_fireworks/events');
+  assert.equal(eventCall.channel, '/api');
+  assert.equal(eventCall.endpoint, 'clutch_fireworks/events');
+  assert.equal(
+    settingsPlayback,
+    controller,
+    'settings preview must use the actual global playback controller',
+  );
   injected.openSession('origin');
   assert.deepEqual(opened, ['origin']);
   for (const cleanup of effects) cleanup();
