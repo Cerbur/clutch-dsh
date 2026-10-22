@@ -121,7 +121,8 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
   navigation and toast controls are unavailable to scripts. The renderer owns cleanup and
   terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
   the error. Reduced-motion preferences keep a static midpoint frame visible for the configured
-  duration while the full timeline is checked offscreen; a single frame does not validate an import.
+  duration and redraw it when the window size or DPR changes, while the full timeline is checked
+  offscreen; a single frame does not validate an import.
 - Animations use the window's actual CSS-pixel width and height. Large windows retain their aspect
   ratio; the renderer lowers DPR as needed to stay within its 8-million-pixel canvas budget.
 - Only successful live fireworks results trigger playback. Errors, cancellations, historical
@@ -140,16 +141,11 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
 - Each connected owner page consumes independently. The effect stays inside its DSH window;
   it does not create an operating-system desktop overlay. A successful tool result records the
   request, not confirmation that a browser displayed it.
-- The plugin delivers `clutch_fireworks/launch` through the native Remote stream
-  `clutch_fireworks/events`, multiplexed on DSH's authenticated `/api/remote.mux`
-  WebSocket. DSH owns the connection, authentication, heartbeats and connection
-  recovery. The plugin adds a logical subscription and reopens it after loss,
-  without a separate SSE connection or polling. Short reconnects resume the
-  retained cursor; fresh pages and restarted Hosts establish silent baselines.
-  Host registration and Client mounts belong to the plugin lifecycle and are
-  withdrawn on unload. The aggregate feed explicitly rejects non-owner peers.
-  No DSH source or generated catalog edits are required. Rebuilt Host modules
-  or changed package metadata can still require a DSH reload/restart.
+- Global celebrations are available only to owner pages and use DSH's authenticated connection.
+  Brief disconnects catch up within the limits above; fresh pages and restarted Hosts do not
+  replay old celebrations. Unloading the plugin stops delivery and removes its UI. Rebuilt Host
+  modules or changed package metadata can still require a DSH reload/restart. Transport and
+  lifecycle details are documented in [Animation scripts](docs/ANIMATIONS.md#responsibilities-and-failure-handling).
 - When the Host exposes DSH's `systemPrompt` service, the plugin adds milestone guidance.
   Without that optional service, the tool remains available without the guidance section.
 - The package does not patch DSH source code or persist a copy of the conversation.

@@ -111,7 +111,7 @@ DSH，让 Host 加载新的 Config schema。
   确定性随机数和绘图助手，不具备网络、应用 DOM、Session 导航和 toast 控制能力。渲染器统一
   清理资源并终止超时帧。正式播放失败或浏览器不支持时回退到 emoji，预览则显示错误；
   系统开启减少动态效果时，静态中点帧保留至配置的播放时长结束，同时在离屏画布验证完整时间轴；
-  单帧成功不会使导入脚本通过验证。
+  窗口尺寸或 DPR 改变时重绘中点帧，单帧成功不会使导入脚本通过验证。
 - 动画使用窗口实际的 CSS 像素宽高。大窗口保持原有宽高比，渲染器按需降低 DPR，
   将画布限制在 800 万像素预算内。
 - 只有实时成功的 fireworks 结果会触发播放。错误、取消、加载历史 Session 和刷新页面都不会
@@ -127,12 +127,10 @@ DSH，让 Host 加载新的 Config schema。
   短暂断线可以在这些限制内补收。
 - 每个已连接的 owner 页面独立消费事件。效果仅显示在对应 DSH 窗口内，不创建操作系统桌面
   覆盖层。工具成功结果表示请求已记录，不表示浏览器确认完成了播放。
-- 插件通过原生 Remote stream `clutch_fireworks/events` 推送
-  `clutch_fireworks/launch`，复用 DSH 已鉴权的 `/api/remote.mux` WebSocket。
-  连接、认证、心跳与连接恢复由 DSH 管理；插件只增加逻辑订阅，断流后重新订阅，
-  不另建 SSE 连接或轮询。短暂断线按游标补收，刷新页面或 Host 重启只建立静默基线。
-  Host 注册与客户端挂载跟随插件生命周期，卸载时撤销；全局事件源显式拒绝非 owner。
-  不修改 DSH 源码或生成目录。重新构建 Host 模块或修改包元数据后，仍可能需要重载或重启 DSH。
+- 全局庆祝仅向 owner 页面开放，使用 DSH 已鉴权的连接。短暂断线可在上述限制内补收；
+  刷新页面或 Host 重启不会重播旧庆祝。卸载插件会停止事件接收并移除其 UI。
+  重新构建 Host 模块或修改包元数据后，仍可能需要重载或重启 DSH。
+  传输与生命周期细节见[动画脚本文档](docs/ANIMATIONS.md#responsibilities-and-failure-handling)。
 - 如果 Host 提供 DSH 的 `systemPrompt` service，插件会添加里程碑指引。没有该可选 service
   时，工具仍然可用，但不会添加这段指引。
 - package 不 patch DSH 源码，也不持久化 conversation 副本。

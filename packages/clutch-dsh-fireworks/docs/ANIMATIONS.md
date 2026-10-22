@@ -93,8 +93,10 @@ out, and aim for fewer than about 1000 particles per frame. A reduced-motion
 preference keeps a static midpoint frame visible for the configured duration. The
 full timeline, including its end frame, still runs on a separate offscreen canvas
 inside the same isolated Worker. Only successful completion validates a custom
-preview; errors after the midpoint still fail validation. The displayed canvas
-does not animate during these checks.
+preview; errors after the midpoint still fail validation. When the window size or
+DPR changes, the visible canvas redraws the midpoint at the new dimensions before
+continuing offscreen validation. This does not restart the playback clock or
+complete validation; otherwise the displayed canvas stays static.
 
 CSS dimensions always match the actual window, including ultrawide and portrait
 windows. The renderer lowers DPR uniformly to fit the 8-million-pixel backing
@@ -102,7 +104,9 @@ canvas budget, rounding backing dimensions down to stay within that limit.
 
 减少动态效果开启时，静态中点帧保留至配置时长结束；完整时间轴（包括终点帧）仍在同一个
 隔离 Worker 的独立离屏画布中验证，显示画布不播放动态。自定义预览必须完整成功才算通过，
-中点之后的错误仍会使验证失败。CSS 宽高始终使用实际窗口尺寸，包括超宽屏和竖屏；统一降低
+中点之后的错误仍会使验证失败。窗口尺寸或 DPR 改变时，可见画布按新尺寸重绘中点帧后继续
+离屏验证，不重置播放期限，也不提前通过验证；其余时间保持静态。
+CSS 宽高始终使用实际窗口尺寸，包括超宽屏和竖屏；统一降低
 DPR，并向下取整画布像素尺寸，将总像素数限制在 800 万以内。
 
 ## Performance

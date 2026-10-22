@@ -85,6 +85,27 @@ Do not commit, push, pack or publish this follow-up without user instruction.
 
 ## Acceptance record
 
+### Reduced-motion resize follow-up
+
+- Reproduced a 500 × 300 visible canvas retaining its old backing width after
+  switching to a 300 × 500 viewport during reduced-motion validation.
+- Keep the transferred visible canvas and a separate validation canvas for the
+  entire playback. On CSS-size or applied-DPR changes, acknowledge a freshly
+  drawn midpoint before validating the current timeline frame. Preserve the
+  original clock, final-frame acknowledgement and eight-million-pixel budget.
+- Regression tests cover aspect-ratio changes, DPR-only changes, an 8K viewport,
+  resizing at the original endpoint, redraw and later timeline errors, and
+  timeout/pagehide cleanup during either pending paint. Late acknowledgements
+  cannot resume validation or complete a stopped playback.
+- Both READMEs describe resize behavior and retain user-facing permission,
+  reconnect, replay and restart guidance. Transport implementation details stay
+  in `docs/ANIMATIONS.md`.
+- Validation: package test (including build) passes all 67 tests; package
+  typecheck, ESLint, scoped Prettier, workspace shape, Cordis patch validation
+  and `git diff --check` pass. Cordis validation retains the existing `!!js`
+  YAML custom-tag warning. This follow-up uses deterministic sandbox/Worker
+  regression tests; installed-browser acceptance was not repeated.
+
 ### Review fixes: reduced motion and large windows
 
 - Reduced-motion playback paints one visible midpoint and keeps it for the

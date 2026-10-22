@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- 修复减少动态效果模式下的窗口缩放：保留可见画布，窗口尺寸或 DPR 改变时重绘静态中点帧，并继续独立验证完整时间轴，不重置播放期限。
 - 修复减少动态效果的生命周期：静态中点帧保留至配置时长结束，完整时间轴在离屏画布验证，避免中点后出错的自定义脚本被误判通过。
 - 保留实际窗口的 CSS 像素宽高，以统一 DPR 控制 800 万像素预算，避免超宽或超高窗口非等比拉伸。
 - 通过有界 sprite 缓存复用 emoji 与发光圆点位图，DPR 变化时刷新、超限后直接绘制；跳过不可见粒子并保留随机序列，减少重复栅格化、模糊和逐帧计算。
@@ -74,6 +75,7 @@
 
 ## Unreleased
 
+- Fix reduced-motion resizing: retain the visible canvas, redraw its static midpoint when window dimensions or DPR change, and continue independent full-timeline validation without restarting playback.
 - Fix reduced-motion lifecycle: retain the static midpoint for the configured duration and validate the full timeline offscreen, so custom scripts failing after the midpoint cannot pass validation.
 - Preserve the actual window dimensions in CSS pixels and bound the 8-million-pixel budget through a uniform DPR, avoiding aspect-ratio distortion in very wide or tall windows.
 - Reuse emoji and glowing-circle bitmaps through a bounded sprite cache, refreshing on DPR changes and drawing directly on overflow; skip invisible particles while preserving random sequences to reduce repeated rasterization, blur and per-frame calculations.

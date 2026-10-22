@@ -3,8 +3,7 @@ import type { AnimationTemplate, AnimationRender } from '../animation.js';
 /** Runs only inside a CSP-restricted, opaque-origin iframe's dedicated Worker. */
 function workerRuntime(render: AnimationRender) {
   let canvas: OffscreenCanvas;
-  let ctx: OffscreenCanvasRenderingContext2D;
-  let validating = false;
+  let validationCanvas: OffscreenCanvas | undefined;
   // Per-playback sprites avoid re-rasterizing changing emoji fonts and blurred particles.
   const sprites = new Map<string, OffscreenCanvas>();
   let spritePixels = 0;
@@ -18,19 +17,16 @@ function workerRuntime(render: AnimationRender) {
       if (data.type === 'init') {
         if (typeof render !== 'function') throw new Error('请定义 function render(frame, fx)');
         canvas = data.canvas;
-        ctx = canvas.getContext('2d')!;
-        if (!ctx) throw new Error('Canvas 2D unavailable');
+        if (!canvas.getContext('2d')) throw new Error('Canvas 2D unavailable');
         scope.postMessage({ type: 'ready' });
         return;
       }
       const { width, height, dpr, seed } = data.frame;
-      if (data.type === 'validate' && !validating) {
-        // Preserve the visible midpoint while exercising the full timeline offscreen.
-        canvas = new OffscreenCanvas(1, 1);
-        ctx = canvas.getContext('2d')!;
-        if (!ctx) throw new Error('Canvas 2D unavailable');
-        validating = true;
-      }
+      // Retain the visible canvas for midpoint redraws after validation has begun.
+      const target =
+        data.type === 'validate' ? (validationCanvas ??= new OffscreenCanvas(1, 1)) : canvas;
+      const ctx = target.getContext('2d')!;
+      if (!ctx) throw new Error('Canvas 2D unavailable');
       if (spriteDpr !== dpr) {
         sprites.clear();
         spritePixels = 0;
@@ -67,11 +63,11 @@ function workerRuntime(render: AnimationRender) {
       // Round down so integer backing dimensions cannot exceed the pixel budget.
       const pixelWidth = Math.floor(width * dpr);
       const pixelHeight = Math.floor(height * dpr);
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-        canvas.width = pixelWidth;
-        canvas.height = pixelHeight;
+      if (target.width !== pixelWidth || target.height !== pixelHeight) {
+        target.width = pixelWidth;
+        target.height = pixelHeight;
       } else if (typeof ctx.reset === 'function') ctx.reset();
-      else canvas.width = pixelWidth;
+      else target.width = pixelWidth;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       let randomState = seed >>> 0;
       const paint = (alpha: number, color: string, draw: () => void) => {
@@ -230,12 +226,17 @@ function frameRuntime(options: {
   let last = 0;
   let firstPaint = true;
   let finalFrame = false;
+  let lastWidth = 0;
+  let lastHeight = 0;
+  let lastDpr = 0;
+  let validateAfterRedraw: (() => void) | undefined;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const report = (type: string, message?: string) =>
     parent.postMessage({ type: 'clutch_fireworks/' + type, token: options.token, message }, '*');
   const stop = () => {
     if (finished) return;
     finished = true;
+    validateAfterRedraw = undefined;
     clearTimeout(watchdog);
     cancelAnimationFrame(raf);
     worker?.terminate();
@@ -249,29 +250,43 @@ function frameRuntime(options: {
   const tick = (now: number) => {
     if (finished) return;
     if (!firstPaint && start === undefined) start = now;
-    const time =
-      reducedMotion && firstPaint
-        ? options.durationMs * 0.5
-        : Math.min(start === undefined ? 0 : now - start, options.durationMs);
-    finalFrame = time === options.durationMs;
+    const time = Math.min(start === undefined ? 0 : now - start, options.durationMs);
     const width = innerWidth;
     const height = innerHeight;
     const dpr = Math.min(devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / (width * height)));
-    watchdog = setTimeout(() => fail('动画帧超时 / Animation frame timed out'), 750);
-    worker.postMessage({
-      type: reducedMotion && !firstPaint ? 'validate' : 'frame',
-      frame: {
-        width,
-        height,
-        dpr,
-        time,
-        delta: last ? now - last : 0,
-        progress: time / options.durationMs,
-        durationMs: options.durationMs,
-        seed: options.seed,
-        message: options.message,
-      },
-    });
+    const frame = {
+      width,
+      height,
+      dpr,
+      time,
+      delta: last ? now - last : 0,
+      progress: time / options.durationMs,
+      durationMs: options.durationMs,
+      seed: options.seed,
+      message: options.message,
+    };
+    const sendFrame = (midpoint: boolean) => {
+      finalFrame = !midpoint && time === options.durationMs;
+      watchdog = setTimeout(() => fail('动画帧超时 / Animation frame timed out'), 750);
+      worker.postMessage({
+        type: reducedMotion && !midpoint ? 'validate' : 'frame',
+        frame: midpoint
+          ? { ...frame, time: options.durationMs * 0.5, progress: 0.5, delta: 0 }
+          : frame,
+      });
+    };
+    if (
+      reducedMotion &&
+      !firstPaint &&
+      (width !== lastWidth || height !== lastHeight || dpr !== lastDpr)
+    ) {
+      // Acknowledge the redraw before validating this tick, without restarting its clock.
+      validateAfterRedraw = () => sendFrame(false);
+      sendFrame(true);
+    } else sendFrame(reducedMotion && firstPaint);
+    lastWidth = width;
+    lastHeight = height;
+    lastDpr = dpr;
     last = now;
   };
   try {
@@ -292,6 +307,12 @@ function frameRuntime(options: {
         // Reduced motion validates from time zero on its first offscreen frame.
         start = reducedMotion ? undefined : performance.now();
         report('ready');
+      }
+      if (data.type === 'painted' && validateAfterRedraw) {
+        const validate = validateAfterRedraw;
+        validateAfterRedraw = undefined;
+        validate();
+        return;
       }
       if (data.type === 'painted' && finalFrame) {
         stop();

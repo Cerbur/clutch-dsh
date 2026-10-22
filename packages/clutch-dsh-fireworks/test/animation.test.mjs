@@ -67,7 +67,7 @@ function sandboxHarness(
   const reports = [];
   const html = animationDocument(template, 'playback-token', 42, '</script><script>bad()</script>');
   const runtime = html.split('<script>')[1].split('</script>')[0];
-  vm.runInNewContext(runtime, {
+  const environment = {
     document: { querySelector: () => ({ transferControlToOffscreen: () => ({}) }) },
     Blob: class {
       constructor(parts) {
@@ -115,13 +115,19 @@ function sandboxHarness(
     innerHeight: height,
     devicePixelRatio: dpr,
     performance: { now: () => now },
-  });
+  };
+  vm.runInNewContext(runtime, environment);
   return {
     html,
     workerSource,
     reports,
     worker,
     timers,
+    resize: (width, height, dpr) => {
+      environment.innerWidth = width;
+      environment.innerHeight = height;
+      environment.devicePixelRatio = dpr;
+    },
     frame: (time) => {
       now = time;
       const callback = raf;
@@ -252,6 +258,160 @@ test('reduced-motion validation remains bounded by watchdog and page cleanup', (
     assert.equal(harness.terminated, 1, 'late callbacks cannot revive a completed playback');
   }
 });
+
+function connectSandboxWorker(harness) {
+  const draws = [];
+  const hidden = [];
+  const context = (target) =>
+    new Proxy(
+      { fillRect: (...args) => target.push(args) },
+      { get: (target, key) => target[key] ?? (() => {}) },
+    );
+  const canvas = { getContext: () => context(draws) };
+  const runtime = vm.createContext({
+    postMessage: (data) => harness.worker.onmessage({ data }),
+    OffscreenCanvas: class {
+      getContext() {
+        return context(hidden);
+      }
+    },
+  });
+  vm.runInContext(harness.workerSource, runtime);
+  let delivered = harness.worker.sent.length;
+  runtime.onmessage({ data: { type: 'init', canvas } });
+  const step = () => runtime.onmessage({ data: harness.worker.sent[delivered++] });
+  const flush = () => {
+    while (delivered < harness.worker.sent.length) step();
+  };
+  return { canvas, draws, hidden, step, flush };
+}
+
+test('reduced-motion resize redraws the visible midpoint while preserving timeline and deadline', () => {
+  const harness = sandboxHarness(
+    parseAnimation(
+      source('frame.ctx.fillRect(frame.width / 2, frame.height / 2, frame.time, frame.dpr);'),
+      'custom-resize',
+    ),
+    { reducedMotion: true },
+  );
+  const { canvas, draws, hidden, step, flush } = connectSandboxWorker(harness);
+  harness.frame(100);
+  flush();
+  assert.deepEqual(draws, [[250, 150, 600, 1]]);
+  harness.frame(101);
+  flush();
+  assert.deepEqual(hidden, [[250, 150, 0, 1]]);
+
+  for (const [time, width, height, dpr] of [
+    [400, 300, 500, 1],
+    [700, 300, 500, 2],
+    [1000, 7680, 4320, 3],
+  ]) {
+    harness.resize(width, height, dpr);
+    harness.frame(time);
+    flush();
+    const appliedDpr = Math.min(dpr, 2, Math.sqrt(8_000_000 / (width * height)));
+    assert.equal(canvas.width, Math.floor(width * appliedDpr));
+    assert.equal(canvas.height, Math.floor(height * appliedDpr));
+    assert.ok(canvas.width * canvas.height <= 8_000_000);
+    assert.deepEqual(draws.at(-1), [width / 2, height / 2, 600, appliedDpr]);
+    assert.deepEqual(hidden.at(-1), [width / 2, height / 2, time - 101, appliedDpr]);
+    assert.equal(harness.reports.length, 1, 'resize must not report ready or finish again');
+  }
+  assert.equal(draws.length, 4, 'redraw only when dimensions or DPR change');
+  harness.frame(1200);
+  flush();
+  assert.equal(draws.length, 4);
+  assert.equal(harness.reports.length, 1);
+
+  // Resize at the original deadline; even a midpoint acknowledgement cannot complete validation.
+  harness.resize(500, 300, 1);
+  harness.frame(1301);
+  assert.equal(harness.reports.length, 1);
+  step();
+  assert.equal(harness.reports.length, 1, 'midpoint redraw must not complete playback');
+  assert.equal(harness.terminated, 0);
+  assert.equal(harness.worker.sent.at(-1).type, 'validate');
+  step();
+  assert.deepEqual(draws.at(-1), [250, 150, 600, 1]);
+  assert.deepEqual(hidden.at(-1), [250, 150, 1200, 1]);
+  assert.deepEqual(
+    harness.reports.map(({ type }) => type),
+    ['clutch_fireworks/ready', 'clutch_fireworks/done'],
+  );
+  assert.equal(harness.terminated, 1);
+  assert.equal(harness.revoked, 1);
+  assert.equal(harness.timers.size, 0);
+  harness.hide();
+  assert.equal(harness.terminated, 1);
+});
+
+for (const [name, body, time] of [
+  [
+    'midpoint redraw',
+    'if (frame.width === 300 && frame.progress === 0.5) throw new Error("resize failure");',
+    700,
+  ],
+  ['timeline after resize', 'if (frame.time > 800) throw new Error("late failure");', 1000],
+  ['endpoint after resize', 'if (frame.progress === 1) throw new Error("end failure");', 1301],
+])
+  test('reduced-motion resize contains errors during ' + name, () => {
+    const harness = sandboxHarness(parseAnimation(source(body), 'custom-resize-error'), {
+      reducedMotion: true,
+    });
+    const { flush } = connectSandboxWorker(harness);
+    harness.frame(100);
+    flush();
+    harness.frame(101);
+    flush();
+    harness.resize(300, 500, 2);
+    harness.frame(time);
+    flush();
+    assert.deepEqual(
+      harness.reports.map(({ type }) => type),
+      ['clutch_fireworks/ready', 'clutch_fireworks/error'],
+    );
+    assert.equal(harness.terminated, 1);
+    assert.equal(harness.revoked, 1);
+    assert.equal(harness.timers.size, 0);
+    harness.worker.onmessage({ data: { type: 'painted' } });
+    harness.hide();
+    assert.equal(harness.reports.length, 2);
+    assert.equal(harness.terminated, 1);
+  });
+
+for (const cleanup of ['timeout', 'pagehide'])
+  for (const phase of ['redraw', 'validation'])
+    test('reduced-motion resize releases resources on ' + cleanup + ' during ' + phase, () => {
+      const harness = sandboxHarness(parseAnimation(source(), 'custom-resize-cleanup'), {
+        reducedMotion: true,
+      });
+      const { step, flush } = connectSandboxWorker(harness);
+      harness.frame(100);
+      flush();
+      harness.frame(101);
+      flush();
+      harness.resize(300, 500, 2);
+      harness.frame(700);
+      if (phase === 'validation') step();
+      assert.equal(harness.timers.size, 1, 'each pending paint is guarded');
+      assert.equal([...harness.timers.values()][0].delay, 750);
+      const sent = harness.worker.sent.length;
+      if (cleanup === 'timeout') [...harness.timers.values()][0].listener();
+      else harness.hide();
+      harness.worker.onmessage({ data: { type: 'painted' } });
+      harness.hide();
+      assert.equal(harness.worker.sent.length, sent, 'late redraw cannot resume validation');
+      assert.equal(harness.terminated, 1);
+      assert.equal(harness.revoked, 1);
+      assert.equal(harness.timers.size, 0);
+      assert.deepEqual(
+        harness.reports.map(({ type }) => type),
+        cleanup === 'timeout'
+          ? ['clutch_fireworks/ready', 'clutch_fireworks/error']
+          : ['clutch_fireworks/ready'],
+      );
+    });
 
 test('large windows retain CSS dimensions and aspect ratio within the backing-pixel budget', () => {
   for (const [width, height, dpr] of [
