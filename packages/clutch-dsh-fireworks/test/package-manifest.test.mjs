@@ -18,9 +18,11 @@ test('declares an installable DSH plugin package', () => {
   });
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.deepEqual(manifest.dsh.client.inject, [
+    '@deepseek-ai/dsh-api-gateway',
+    '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
-    '@deepseek-ai/dsh-client-ui-session',
+    '@deepseek-ai/dsh-client-ui-workspace',
   ]);
   assert.equal(manifest.scripts.prepare, undefined);
   assert.equal(manifest.scripts.prepublishOnly, 'pnpm run build');
@@ -29,29 +31,33 @@ test('declares an installable DSH plugin package', () => {
   }
 });
 
-test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
+test('accepts native Remote stream hosts from 0.2.1-rc.1', () => {
   const dshPeerNames = Object.keys(manifest.peerDependencies)
     .filter((name) => name.startsWith('@deepseek-ai/dsh-'))
     .sort();
   assert.deepEqual(dshPeerNames, [
+    '@deepseek-ai/dsh-api-gateway',
+    '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
-    '@deepseek-ai/dsh-client-ui-session',
     '@deepseek-ai/dsh-client-ui-slots',
+    '@deepseek-ai/dsh-client-ui-workspace',
     '@deepseek-ai/dsh-session',
     '@deepseek-ai/dsh-session-projection',
     '@deepseek-ai/dsh-tools',
+    '@deepseek-ai/dsh-typert-protocol',
+    '@deepseek-ai/dsh-typert-registry',
   ]);
 
   for (const name of dshPeerNames) {
     assert.equal(
       manifest.peerDependencies[name],
-      '>=0.1.7-rc.1',
-      `${name} peer dependency must be >=0.1.7-rc.1`,
+      '>=0.2.1-rc.1',
+      `${name} peer dependency must be >=0.2.1-rc.1`,
     );
   }
 
-  for (const version of ['0.1.7-rc.1', '0.1.7-rc.2', '0.1.7', '0.1.8']) {
+  for (const version of ['0.2.1-rc.1', '0.2.1-rc.2', '0.2.1']) {
     for (const name of dshPeerNames) {
       const range = manifest.peerDependencies[name];
       assert.equal(
@@ -62,18 +68,18 @@ test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
     }
   }
 
-  for (const version of ['0.1.2-rc.1', '0.1.5-rc.1', '0.1.6']) {
+  for (const version of ['0.1.7', '0.2.0-rc.1', '0.2.0', '0.2.1-rc.0']) {
     for (const name of dshPeerNames) {
       const range = manifest.peerDependencies[name];
       assert.equal(
         semver.satisfies(version, range),
         false,
-        `${name} must reject DSH ${version} below 0.1.7-rc.1 (range: ${range})`,
+        `${name} must reject DSH ${version} below 0.2.1-rc.1 (range: ${range})`,
       );
     }
   }
 
-  for (const version of ['4.0.1', '4.0.4']) {
+  for (const version of ['4.0.5', '4.1.0']) {
     assert.equal(
       semver.satisfies(version, manifest.peerDependencies['@deepseek-ai/cordis']),
       true,

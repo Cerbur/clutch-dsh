@@ -44,6 +44,22 @@ await build({
   },
   plugins: [
     {
+      name: 'clutch-fireworks-animation-scripts',
+      resolveId(source) {
+        if (!source.endsWith('?raw')) return null;
+        return (
+          '\0clutch-fireworks-raw:' +
+          path.resolve(packageDirectory, source.replace(/^\.\.\/\.\.\//, '').replace(/\?raw$/, ''))
+        );
+      },
+      async load(id) {
+        if (!id.startsWith('\0clutch-fireworks-raw:')) return null;
+        const filename = id.slice('\0clutch-fireworks-raw:'.length);
+        this.addWatchFile(filename);
+        return 'export default ' + JSON.stringify(await readFile(filename, 'utf8'));
+      },
+    },
+    {
       name: 'clutch-dsh-fireworks-css',
       resolveId(source, importer) {
         if (!source.endsWith('.css')) return null;
