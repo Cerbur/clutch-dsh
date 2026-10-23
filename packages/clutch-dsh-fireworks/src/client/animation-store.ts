@@ -1,9 +1,10 @@
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
+import type { FireworksRemote } from './fireworks-stream.js';
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol';
 import {
-  ANIMATION_NAMESPACE,
   DEFAULT_ANIMATION_PREFERENCES,
   parseAnimationPreferences,
   type AnimationPreferences,
+  type AnimationSettingsValue,
 } from '../animation.js';
 
 interface SettingsSnapshot {
@@ -25,7 +26,12 @@ export class AnimationStore {
   private readonly requests = new Set<AbortController>();
   private loading?: Promise<void>;
   private disposed = false;
-  constructor(private readonly rpc: ConnectionHandle['rpc']) {}
+  constructor(
+    private readonly remote: Pick<
+      FireworksRemote['clutch_fireworks'],
+      'loadAnimations' | 'saveAnimations'
+    >,
+  ) {}
   readonly getSnapshot = () => this.snapshot;
   readonly subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -38,13 +44,15 @@ export class AnimationStore {
     this.snapshot = value;
     for (const listener of this.listeners) listener();
   }
-  private async call(endpoint: string, args: unknown) {
+  private async call(
+    invoke: (signal: AbortSignal) => Promise<RemoteResult<AnimationSettingsValue>>,
+  ) {
     if (this.disposed) throw new Error('Animation settings disposed');
     const abort = new AbortController();
     this.requests.add(abort);
     const timeout = setTimeout(() => abort.abort(), 5000);
     try {
-      const result = await this.rpc.call('/api', 'settings/' + endpoint, { args }, abort.signal);
+      const result = await invoke(abort.signal);
       if (!result.ok) throw new Error(result.error.code + ': ' + result.error.message);
       return result.value;
     } finally {
@@ -61,39 +69,59 @@ export class AnimationStore {
   }
   private async read() {
     try {
-      const value = (await this.call('describe', {})) as {
-        writable: boolean;
-        namespaces: { ns: string; revision: number; value: { animation?: unknown } }[];
-      };
-      const descriptor = value.namespaces.find((entry) => entry.ns === ANIMATION_NAMESPACE);
-      if (!descriptor)
-        throw new Error(
-          '动画设置不可用，请重启 DSH 加载新版插件 / Restart DSH to load animation settings',
-        );
+      const value = await this.call((signal) => this.remote.loadAnimations(signal));
       this.publish({
-        preferences: parseAnimationPreferences(descriptor.value.animation),
-        revision: descriptor.revision,
-        writable: value.writable,
+        ...value,
+        preferences: parseAnimationPreferences(value.preferences),
         loaded: true,
       });
     } catch (error) {
-      this.publish({ ...this.snapshot, loaded: true, error: String(error) });
+      this.publish({
+        preferences: DEFAULT_ANIMATION_PREFERENCES,
+        writable: false,
+        loaded: true,
+        error: String(error),
+      });
     }
   }
   async save(preferences: AnimationPreferences, revision: number | undefined): Promise<void> {
     const value = parseAnimationPreferences(preferences);
     if (revision === undefined || !this.snapshot.writable)
       throw new Error('当前配置不可写 / Settings are read-only');
+    const baseline =
+      this.snapshot.revision === revision && !this.snapshot.error
+        ? this.snapshot.preferences
+        : undefined;
     try {
-      const descriptor = (await this.call('mutate', {
-        ns: ANIMATION_NAMESPACE,
-        ops: [{ op: 'set', path: ['animation'], value }],
-        expectedRevision: revision,
-      })) as { revision: number; value: { animation: unknown } };
+      const write = (expectedRevision: number) =>
+        this.call((signal) =>
+          this.remote.saveAnimations({ preferences: value, expectedRevision }, signal),
+        );
+      let saved: AnimationSettingsValue;
+      try {
+        saved = await write(revision);
+      } catch (error) {
+        if (!baseline || !String(error).includes('SETTINGS_CONFLICT')) throw error;
+        const fresh = await this.call((signal) => this.remote.loadAnimations(signal));
+        const current = parseAnimationPreferences(fresh.preferences);
+        if (
+          !fresh.writable ||
+          fresh.error ||
+          fresh.revision === revision ||
+          current.active !== baseline.active ||
+          Object.keys(current.scripts).length !== Object.keys(baseline.scripts).length ||
+          JSON.stringify(current.unavailable ?? {}) !==
+            JSON.stringify(baseline.unavailable ?? {}) ||
+          Object.entries(baseline.scripts).some(([id, source]) => current.scripts[id] !== source)
+        )
+          throw error;
+        // Host lifecycle can advance revisions without changing animation bytes.
+        // Retry once only after exact content comparison, still using Host CAS.
+        saved = await write(fresh.revision);
+      }
       this.publish({
-        preferences: parseAnimationPreferences(descriptor.value.animation),
-        revision: descriptor.revision,
-        writable: true,
+        ...saved,
+        preferences: parseAnimationPreferences(saved.preferences),
         loaded: true,
       });
     } catch (error) {

@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import { DEFAULT_ANIMATION_PREFERENCES } from './animation.js';
+import { DEFAULT_STORED_ANIMATION_PREFERENCES } from './animation.js';
+import { AnimationFiles } from './animation-files.js';
+import { AnimationLibrary, type AnimationSettingsPort } from './animation-library.js';
 import {
   FIREWORKS_GUIDANCE_PROMPT,
   FIREWORKS_GUIDANCE_SECTION_NAME,
@@ -25,7 +27,7 @@ export { happyFireworksTool } from './fireworks-tool.js';
 export const name = 'clutch-dsh-fireworks';
 export const inject = ['tools'];
 export const Config = z.object({
-  animation: z.any().default(DEFAULT_ANIMATION_PREFERENCES).volatile(),
+  animation: z.any().default(DEFAULT_STORED_ANIMATION_PREFERENCES).volatile(),
 });
 
 export function apply(ctx: Context): void {
@@ -40,7 +42,12 @@ export function apply(ctx: Context): void {
   ctx.inject(['typert'], (connectionContext) => {
     const feed = new FireworksEventFeed();
     connectionContext.effect(() => () => feed.dispose());
-    new FireworksRemoteService(connectionContext, feed);
+    const service = new FireworksRemoteService(connectionContext, feed);
+    connectionContext.inject(['settings', 'dshHomePath'], (scope) => {
+      const ports = scope as unknown as { settings: AnimationSettingsPort; dshHomePath(): string };
+      const library = new AnimationLibrary(new AnimationFiles(ports.dshHomePath()), ports.settings);
+      scope.effect(() => service.setAnimationLibrary(library));
+    });
     // Keep the public port local: this workspace also compiles plugins against
     // older DSH faces whose Context declaration merges have different brands.
     const registry = connectionContext.typert as unknown as {

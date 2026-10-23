@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import { Peer } from '@deepseek-ai/dsh-client-connection';
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry';
@@ -35,8 +38,65 @@ async function harness(t) {
       })
     )[Symbol.asyncIterator](),
   });
-  return { ctx, mount, stream };
+  const invoke = (method, args = {}, peer = owner) =>
+    ctx.typertGateway.invoke({
+      namespace: 'clutch_fireworks',
+      method,
+      args,
+      peer,
+      signal: new AbortController().signal,
+    });
+  return { ctx, mount, stream, invoke };
 }
+
+test('native Gateway hydrates and saves owner-only animation files and withdraws methods with the plugin', async (t) => {
+  const { ctx, mount, invoke } = await harness(t);
+  const home = await mkdtemp(join(tmpdir(), 'fireworks-gateway-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  let revision = 1;
+  let animation = { active: 'emoji', scripts: {} };
+  ctx.provide('dshHomePath', () => home);
+  ctx.provide('settings', {
+    writable: true,
+    configure: () => () => {},
+    describe: () => [{ ns: 'clutch-dsh-fireworks', revision, value: { animation } }],
+    async mutate(ns, ops, expectedRevision) {
+      assert.equal(ns, 'clutch-dsh-fireworks');
+      assert.equal(expectedRevision, revision);
+      animation = ops[0].value;
+      revision++;
+    },
+  });
+  const fiber = await mount();
+  assert.equal((await invoke('loadAnimations')).preferences.active, 'emoji');
+  const source =
+    '// clutch_fireworks: {"version":1,"name":"Remote","durationMs":500}\nfunction render() {}';
+  const request = {
+    preferences: { active: 'custom-a', scripts: { 'custom-a': source } },
+    expectedRevision: 1,
+  };
+  const guest = new Peer(ctx, { principal: { kind: 'fixture-guest' }, interactions: 'none' });
+  await assert.rejects(invoke('loadAnimations', {}, guest), /owner required/);
+  await assert.rejects(invoke('saveAnimations', { request }, guest), /owner required/);
+  await assert.rejects(invoke('saveAnimations', { request: { ...request, expectedRevision: -1 } }));
+  await assert.rejects(
+    invoke('saveAnimations', {
+      request: { ...request, preferences: { active: 'custom-a', scripts: { 'custom-a': 'bad' } } },
+    }),
+  );
+  const saved = await invoke('saveAnimations', { request });
+  assert.equal(saved.revision, 2);
+  assert.deepEqual(saved.preferences, request.preferences);
+  assert.equal(animation.version, 2);
+  assert.equal(animation.scripts, undefined);
+  assert.deepEqual((await invoke('loadAnimations')).preferences, request.preferences);
+  await assert.rejects(invoke('saveAnimations', { request }), /CONFLICT/);
+  await fiber.dispose();
+  await assert.rejects(
+    invoke('loadAnimations'),
+    (error) => error.code === 'gateway/definition-unavailable',
+  );
+});
 
 test('native Gateway sees late registration, routes live tools, withdraws and re-enables without restart', async (t) => {
   const { ctx, mount, stream } = await harness(t);

@@ -3,65 +3,128 @@ import test from 'node:test';
 import { AnimationStore } from '../lib/client/animation-store.js';
 import { DEFAULT_ANIMATION_PREFERENCES } from '../lib/animation.js';
 
-test('loads Host settings, saves only the animation field with the read revision, and retains state on conflict', async () => {
-  const calls = [];
-  let conflict = false;
+test('a revision-only conflict retries once against unchanged source; concurrent content edits are never overwritten', async () => {
+  let revision = 1,
+    active = 'emoji';
+  const requests = [];
   const store = new AnimationStore({
-    async call(channel, endpoint, payload) {
-      calls.push({ channel, endpoint, payload });
-      if (endpoint.endsWith('describe'))
-        return {
-          ok: true,
-          value: {
-            writable: true,
-            namespaces: [
-              {
-                ns: 'clutch-dsh-fireworks',
-                revision: 3,
-                value: { animation: DEFAULT_ANIMATION_PREFERENCES },
-              },
-            ],
-          },
-        };
-      if (conflict) return { ok: false, error: { code: 'SETTINGS_CONFLICT', message: 'changed' } };
-      return { ok: true, value: { revision: 4, value: { animation: payload.args.ops[0].value } } };
+    async loadAnimations() {
+      return {
+        ok: true,
+        value: { writable: true, revision, preferences: { active, scripts: {} } },
+      };
+    },
+    async saveAnimations(request) {
+      requests.push(request.expectedRevision);
+      if (request.expectedRevision !== revision)
+        return { ok: false, error: { code: 'SETTINGS_CONFLICT', message: 'Changed' } };
+      active = request.preferences.active;
+      revision++;
+      return { ok: true, value: { writable: true, revision, preferences: request.preferences } };
     },
   });
   await store.load();
-  assert.equal(store.getSnapshot().revision, 3);
-  await store.save({ active: 'classic', scripts: {} }, 3);
+  revision = 2;
+  await store.save({ active: 'classic', scripts: {} }, 1);
+  assert.deepEqual(requests, [1, 2]);
   assert.equal(store.getSnapshot().preferences.active, 'classic');
-  assert.deepEqual(calls.at(-1), {
-    channel: '/api',
-    endpoint: 'settings/mutate',
-    payload: {
-      args: {
-        ns: 'clutch-dsh-fireworks',
-        ops: [{ op: 'set', path: ['animation'], value: { active: 'classic', scripts: {} } }],
-        expectedRevision: 3,
-      },
+  active = 'emoji';
+  revision++;
+  await assert.rejects(store.save({ active: 'rings', scripts: {} }, 3), /CONFLICT/);
+  assert.deepEqual(requests, [1, 2, 3]);
+  assert.equal(store.getSnapshot().preferences.active, 'classic');
+  store.dispose();
+});
+
+test('native animation settings preserve revisions and retain the saved snapshot on conflict', async () => {
+  let request;
+  let conflict = false;
+  const store = new AnimationStore({
+    async loadAnimations() {
+      return {
+        ok: true,
+        value: { writable: true, revision: 3, preferences: DEFAULT_ANIMATION_PREFERENCES },
+      };
+    },
+    async saveAnimations(value) {
+      request = value;
+      if (conflict) return { ok: false, error: { code: 'SETTINGS_CONFLICT', message: 'Changed' } };
+      return { ok: true, value: { writable: true, revision: 4, preferences: value.preferences } };
     },
   });
+  await store.load();
+  await store.save({ active: 'classic', scripts: {} }, 3);
+  assert.deepEqual(request, {
+    preferences: { active: 'classic', scripts: {} },
+    expectedRevision: 3,
+  });
+  assert.equal(store.getSnapshot().revision, 4);
   conflict = true;
   await assert.rejects(store.save({ active: 'rings', scripts: {} }, 3), /SETTINGS_CONFLICT/);
   assert.equal(store.getSnapshot().preferences.active, 'classic');
   store.dispose();
 });
 
-test('unavailable settings retain default playback and disposal aborts in-flight settings requests', async () => {
-  const unavailable = new AnimationStore({
-    async call() {
-      return { ok: true, value: { namespaces: [] } };
+for (const scenario of ['second-conflict', 'readonly', 'file-warning']) {
+  test(`revision-only retry remains bounded and refuses unsafe refresh: ${scenario}`, async () => {
+    let loads = 0,
+      writes = 0;
+    const store = new AnimationStore({
+      async loadAnimations() {
+        loads++;
+        return {
+          ok: true,
+          value: {
+            writable: loads === 1 || scenario !== 'readonly',
+            revision: loads,
+            preferences: DEFAULT_ANIMATION_PREFERENCES,
+            ...(loads > 1 && scenario === 'file-warning' ? { error: 'Restore files' } : {}),
+          },
+        };
+      },
+      async saveAnimations() {
+        writes++;
+        return { ok: false, error: { code: 'SETTINGS_CONFLICT', message: 'Changed again' } };
+      },
+    });
+    await store.load();
+    await assert.rejects(store.save({ active: 'classic', scripts: {} }, 1), /CONFLICT/);
+    assert.equal(writes, scenario === 'second-conflict' ? 2 : 1);
+    assert.equal(store.getSnapshot().revision, 1);
+    store.dispose();
+  });
+}
+
+test('file warnings reach settings; hard load failure clears stale playback and disables saving', async () => {
+  let unavailable = false;
+  const store = new AnimationStore({
+    async loadAnimations() {
+      if (unavailable) throw new Error('Restart DSH');
+      return {
+        ok: true,
+        value: {
+          writable: true,
+          revision: 1,
+          preferences: { active: 'rings', scripts: {} },
+          error: 'Restore or re-import',
+        },
+      };
     },
   });
-  await unavailable.load();
-  assert.match(unavailable.getSnapshot().error, /Restart/);
-  assert.equal(unavailable.getSnapshot().preferences.active, 'emoji');
-  await assert.rejects(unavailable.save(DEFAULT_ANIMATION_PREFERENCES, undefined), /read-only/);
-  unavailable.dispose();
+  await store.load();
+  assert.match(store.getSnapshot().error, /re-import/);
+  unavailable = true;
+  await store.load();
+  assert.match(store.getSnapshot().error, /Restart/);
+  assert.equal(store.getSnapshot().preferences.active, 'emoji');
+  await assert.rejects(store.save(DEFAULT_ANIMATION_PREFERENCES, 1), /read-only/);
+  store.dispose();
+});
+
+test('disposal aborts in-flight native settings requests and concurrent loads share one request', async () => {
   let requestSignal;
   const store = new AnimationStore({
-    call(_channel, _endpoint, _payload, signal) {
+    loadAnimations(signal) {
       requestSignal = signal;
       return new Promise((_resolve, reject) =>
         signal.addEventListener('abort', () => reject(new Error('aborted'))),

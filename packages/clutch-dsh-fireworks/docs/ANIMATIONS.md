@@ -1,20 +1,39 @@
 # Animation scripts / 动画脚本
 
 An animation is a standalone UTF-8 `.js` file. Import it on the plugin details
-page, let its full-window preview finish without errors, then save. The built-ins in
+page to validate it and open a confirmation dialog, with optional full-screen preview and export.
+Only Confirm Add writes it and makes it active; Cancel leaves settings and disk unchanged. The built-ins in
 [`assets/animations`](../assets/animations/) use exactly the same interface.
 Download a built-in or start with
 [`example-custom.js`](../assets/animations/example-custom.js). The configuration
 page contains a complete AI generation prompt with this contract.
 
-动画是独立 UTF-8 `.js` 文件，在插件详情页导入，完整预览通过后保存。
+动画是独立 UTF-8 `.js` 文件，选择后先校验，再弹出确认窗口，支持全屏预览和导出。
+确认添加后才写入并选中；取消不修改配置或磁盘。
 所有内置效果与自定义效果使用同一个接口。设置页提供可复制的完整 AI 生成提示词。
 
-Preview sends the draft to the same global renderer as a real launch, without a
+Preview sends any card's template to the same global renderer as a real launch, without a
 separate preview canvas, toast, tool call or settings write. Stop it explicitly,
 change templates, or leave the settings page to release its resources. A real
 task celebration preempts a preview; stale preview callbacks cannot validate
-another draft or cancel that task's effect.
+another preview or cancel that task's effect. It does not change the active template.
+
+Selection persists immediately; imports persist on Confirm Add and deletion requires inline
+Delete/Cancel confirmation replacing the existing action bar, with no card-height change. Pending deletion turns the card red; the confirmation prompt is left-aligned and Delete/Cancel are right-aligned, so Cancel occupies the original Delete position.
+There is no separate Save or Discard step and no mandatory full-preview gate. Imports check
+size, header, syntax, render entry and a bounded first frame inside the existing restricted
+iframe/Worker (never on Host). Hidden preflight schedules directly rather than waiting for RAF,
+and immediately terminates its Worker. Optional preview validates the full timeline; known failures
+block adding until a successful retry. Each card shows an icon, name, duration,
+and a built-in/custom tag (replaced by Current when selected), with Preview and
+Export below a divider. Only custom cards have Delete.
+Cards and import dialogs share one details renderer and typography/theme variables in
+`animation-settings.css`. Name, tag and duration stack vertically; names are single-line
+ellipses with the full text in the native title tooltip. Palette aliases use DSH `label-*`,
+not nonexistent `text-*`, and tags follow Agent Preset's outline/solid Tag colors and geometry.
+If only the Host revision changed, the update rereads and retries once only when all
+saved animation selections and source bytes still match the editor's baseline.
+A concurrent content edit is still rejected without overwriting it.
 
 Both requests use the same burst channel, rendering surface and lifecycle
 callbacks. The iframe explicitly uses `color-scheme: normal`, matching its
@@ -22,8 +41,15 @@ srcDoc document. Otherwise Chromium can composite a transparent default-light
 document as an opaque white viewport when DSH supplies a dark embedding scheme.
 The effect keeps the underlying page visible in either theme.
 
-预览直接通知全局渲染层全屏播放草稿，不使用预览框，也不触发通知或保存。
+预览直接通知全局渲染层全屏播放该卡片模板，不使用预览框，也不触发通知或修改当前选择。
 停止、切换模板或离开页面会清理预览；真实任务庆祝优先。
+切换立即持久化；导入需确认添加，删除在原操作栏内替换为确认提示和右侧删除/取消按钮，待删除卡片变红、高度不变，取消占据原删除位置。
+不再提供单独保存、放弃修改或强制完整预览门禁。导入检查大小、脚本头、语法、render 入口与首帧，
+代码只在现有隔离 iframe/Worker 中执行，不在 Host 执行；隐藏预检直接调度首帧并立即终止 Worker，
+避免 RAF 节流误报超时。可选预览检查完整时间轴，已知失败必须重试成功才能添加。卡片展示图标、名称、时长和内置/自定义标签，选中后标签改为当前使用。
+分隔线下方提供预览、导出，只有自定义卡片展示删除。
+若仅 Host 修订号变化，保存会重新读取并只在原有选择和脚本全文均未改变时重试一次；
+其他页面的内容修改仍受冲突保护，不会被覆盖。
 两种请求共用播放通道、渲染组件和生命周期回调。iframe 配色模式与内部文档保持一致，
 避免深色主题下 Chromium 将透明内容合成为白色整窗背景。
 
@@ -198,12 +224,47 @@ cannot interrupt an active event's remaining toast.
 手动关闭或成功跳转后结束；每个事件从启动起最多等待 12 秒，超时清理并继续，
 不重试。旧回调不能结束新事件，预览也不能插入真实事件剩余的 toast 时间。
 
-Saved selections and sources belong to the Host settings namespace
-`clutch-dsh-fireworks`, in its `animation` field. Writes use the revision the
-page read; a concurrent edit is rejected instead of overwritten. Imported or
-removed templates remain drafts until saved. Each queued launch captures the
-currently saved template and duration when it begins. No script or preference
-is written into Session history.
+Saved scripts are immutable, content-addressed files under
+`$DSH_HOME/clutch-dsh-fireworks/animations/<sha256>.js`. DSH Home defaults to
+`~/.dsh`; the injected Host `dshHomePath` respects a configured `DSH_HOME`.
+The Host settings namespace `clutch-dsh-fireworks` stores only references in
+its volatile `animation` field:
+
+```yaml
+animation:
+  version: 2
+  active: custom-example
+  files:
+    custom-example: clutch-dsh-fireworks/animations/<sha256>.js
+```
+
+The browser displays hydrated source. Authenticated owner-only native
+Remote methods load and update it; no public file URL or new browser permission
+is needed. Legacy `{ active, scripts }` settings remain readable and migrate
+only on a successful import/selection/deletion, never on startup or preview. Updating validates all
+scripts, atomically places private files (mode `0600`, new directories `0700`),
+then updates references through Host settings with the page's revision. A
+concurrent edit is rejected without changing existing referenced content.
+Only plugin-owned hash paths are accepted, with symlink and checksum checks.
+
+Deletion commits the reference update first, then removes the old hash file
+only if it is no longer referenced by another template, the live settings, or
+Home/profile `cordis.yml` / `cordis.patch.yml` documents (including legacy inline
+source). A conflict never deletes old referenced bytes. Cleanup failures are
+shown separately from successful configuration updates. An unselected deletion
+preserves the active choice; deleting the active template selects Emoji.
+Deletion only targets explicitly removed hashes, not unrelated files or old
+orphans. Arbitrary manual/profile edits in another process are not an atomic
+transaction with this cleanup. Unreadable/malformed profile documents prevent
+cleanup and produce a warning instead of risking shared data.
+Back up this directory together with settings when moving DSH Home. If a file
+is missing or damaged, settings shows its relative path and recovery advice;
+restore the original file or re-import the script. An unavailable selected
+template falls back to Emoji rather than stale source.
+
+Each queued launch captures the currently saved template and duration when it
+begins. No script or preference is written into Session history. Worker,
+renderer, script header format, 64 KiB limit and eight-template limit are unchanged.
 
 ## Acceptance
 
@@ -213,6 +274,12 @@ refresh persistence, real background `happy_fireworks` playback of the imported
 template, toast navigation to the source Session, and termination of a
 deliberately looping preview while the settings page remains responsive.
 
+File storage was additionally verified on port 3088: legacy migration,
+65,536-byte import/preview/save, exact on-disk bytes and `0600` permissions,
+relative-only configuration, refresh and Host restart persistence, real tool
+playback and toast navigation, missing-file Emoji fallback and recovery.
+See [storage verification](plans/2026-10-23-animation-file-storage.md).
+
 Rendering regression gate: use a dark DSH theme, click preview, and verify the
 settings text and sidebar remain visible behind the moving particles. Repeat
 in a light theme and with a real background tool call; click its toast to
@@ -220,3 +287,32 @@ verify Session navigation. The iframe and srcDoc color schemes must match.
 Node unit tests do not reproduce Chromium's iframe compositing behavior, so
 this browser check is required when changing the rendering surface or theme
 styles.
+
+## Missing files and display metadata
+
+The v2 manifest keeps optional `metadata: {id: {name, durationMs}}` beside the relative
+`files` paths. It never stores source code. Existing path-only entries acquire metadata
+on a successful owner load while files are readable. Loads and saves share the library's
+serial queue; recovery uses revision CAS and retries a conflict once against fresh settings.
+A missing/unreadable/corrupt selected script persists `active: emoji` without removing its
+reference. Runtime preferences expose `unavailable` metadata separately from executable
+`scripts`; a broken id cannot be active, previewed or exported. The settings card keeps its
+name, tag and duration and offers only list removal. Other updates preserve broken references;
+limits count both healthy and broken custom entries. Read-only/recovery-write failures retain
+the in-memory fallback and explain why it could not be persisted. A stale cached script cannot
+recreate an unreadable existing id: Host rejects that update, and the UI reloads the list.
+
+A visible settings panel refreshes every two seconds and on focus, suppressing overlapping
+local writes/file validation; preview and live launch also refresh availability. Only the
+first painted frame starts the progress ring. CSS/SVG advances it for the declared duration
+without per-frame React updates. Completion, cancellation, replacement, unmount and a newly
+unavailable preview clear the control. The existing footer is fixed at 40 px, including
+its confirmation state. The old preview-note and playback-status paragraphs are removed.
+
+v2 清单在相对路径旁保留可选名称/时长元数据，不存脚本全文；旧配置读取时补齐。
+读取与保存串行，恢复使用 CAS，冲突后最多重新读取重试一次。当前文件不可用时持久化
+`active: emoji`，保留原引用；运行时将损坏项放入独立 `unavailable` 显示清单，禁止选中、
+预览和导出，卡片仅能删除配置项。其他更新保留损坏项，数量上限也包含损坏项。
+只读或恢复写入失败时仅临时回退并提示。Host 拒绝用旧页面缓存重建不可读的原 id。
+可见设置页每两秒及聚焦时刷新，预览和正式播放前也检查；圆形进度从首帧确认开始，
+用 CSS/SVG 推进，无需逐帧触发 React。原操作栏固定 40px，确认删除不增加卡片高度。

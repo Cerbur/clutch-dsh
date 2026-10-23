@@ -54,7 +54,7 @@ test('validates imported files without executing code, bounds scripts and templa
 
 function sandboxHarness(
   template,
-  { reducedMotion = false, width = 500, height = 300, dpr = 1 } = {},
+  { reducedMotion = false, width = 500, height = 300, dpr = 1, validationOnly = false } = {},
 ) {
   let workerSource;
   let worker;
@@ -65,7 +65,13 @@ function sandboxHarness(
   let now = 0;
   const timers = new Map();
   const reports = [];
-  const html = animationDocument(template, 'playback-token', 42, '</script><script>bad()</script>');
+  const html = animationDocument(
+    template,
+    'playback-token',
+    42,
+    '</script><script>bad()</script>',
+    validationOnly,
+  );
   const runtime = html.split('<script>')[1].split('</script>')[0];
   const environment = {
     document: { querySelector: () => ({ transferControlToOffscreen: () => ({}) }) },
@@ -692,3 +698,19 @@ test('each queued event captures its template only after the previous animation 
   controller.reportPlayback(controller.getSnapshot().burst, 'done');
   assert.equal(controller.getSnapshot().burst, undefined);
 });
+
+for (const reducedMotion of [false, true]) {
+  test(`import preflight bypasses hidden iframe RAF throttling and terminates its Worker (${reducedMotion})`, () => {
+    const harness = sandboxHarness(parseAnimation(source(), 'custom-preflight'), {
+      validationOnly: true,
+      reducedMotion,
+    });
+    harness.worker.onmessage({ data: { type: 'ready' } });
+    assert.equal(harness.worker.sent.length, 2, 'init immediately schedules a frame without RAF');
+    harness.worker.onmessage({ data: { type: 'painted' } });
+    assert.equal(harness.reports.at(-1).type, 'clutch_fireworks/ready');
+    assert.equal(harness.terminated, 1);
+    assert.equal(harness.revoked, 1);
+    assert.equal(harness.timers.size, 0);
+  });
+}

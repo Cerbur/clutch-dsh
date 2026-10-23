@@ -8,6 +8,7 @@ import {
   inject as gatewayInject,
 } from '@deepseek-ai/dsh-api-gateway/client';
 import { mountFireworksRemote, openFireworksStream } from '../lib/client/fireworks-stream.js';
+import { AnimationStore } from '../lib/client/animation-store.js';
 
 const { Event, EventTarget, MessageEvent, AbortController, queueMicrotask } = globalThis;
 class Socket extends EventTarget {
@@ -43,6 +44,7 @@ test('native Client shares one physical socket across subscriptions, remounts an
   await ctx.plugin(TypertRegistry);
   const sockets = [];
   let onReconnect;
+  const unaryCalls = [];
   ctx.provide('connection', {
     interactions: 'answer',
     openWebSocket(path) {
@@ -55,8 +57,20 @@ test('native Client shares one physical socket across subscriptions, remounts an
     state: { getSnapshot: () => undefined, subscribe: () => () => {} },
     reconnect() {},
     rpc: {
-      call() {
-        throw new Error('stream must not use unary RPC');
+      async call(channel, endpoint, payload) {
+        unaryCalls.push({ channel, endpoint, payload });
+        assert.equal(channel, '/api');
+        assert.ok(
+          ['clutch_fireworks/loadAnimations', 'clutch_fireworks/saveAnimations'].includes(endpoint),
+        );
+        return {
+          ok: true,
+          value: {
+            writable: true,
+            revision: 3,
+            preferences: payload.args.request?.preferences ?? { active: 'emoji', scripts: {} },
+          },
+        };
       },
     },
     registerGenerationSource: () => () => {},
@@ -80,6 +94,31 @@ test('native Client shares one physical socket across subscriptions, remounts an
     return fiber;
   };
   const fiber = await mount();
+  let animations;
+  const settingsFiber = ctx.plugin({
+    inject: ['remote', 'remote.clutch_fireworks'],
+    apply(scope) {
+      animations = new AnimationStore(scope.remote.clutch_fireworks);
+    },
+  });
+  await settingsFiber;
+  await animations.load();
+  assert.equal(animations.getSnapshot().writable, true);
+  assert.equal(animations.getSnapshot().revision, 3);
+  await animations.save({ active: 'rings', scripts: {} }, 3);
+  assert.equal(animations.getSnapshot().preferences.active, 'rings');
+  assert.deepEqual(JSON.parse(JSON.stringify(unaryCalls)), [
+    { channel: '/api', endpoint: 'clutch_fireworks/loadAnimations', payload: { args: {} } },
+    {
+      channel: '/api',
+      endpoint: 'clutch_fireworks/saveAnimations',
+      payload: {
+        args: { request: { preferences: { active: 'rings', scripts: {} }, expectedRevision: 3 } },
+      },
+    },
+  ]);
+  animations.dispose();
+  await settingsFiber.dispose();
   const abortA = new AbortController(),
     abortB = new AbortController();
   const a = openFireworksStream(ctx.remote, {}, abortA.signal);

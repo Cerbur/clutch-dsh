@@ -2,8 +2,10 @@ import type {
   TypertClientRemote,
   TypertDisposer,
   RemoteStreamHandle,
+  RemoteResult,
 } from '@deepseek-ai/dsh-typert-protocol';
 import { FIREWORKS_REMOTE } from '../remote-contract.js';
+import type { AnimationSaveRequest, AnimationSettingsValue } from '../animation.js';
 import {
   parseFireworksEventBatch,
   type FireworksResumeCursor,
@@ -12,6 +14,11 @@ import {
 
 export interface FireworksRemote extends Pick<TypertClientRemote, '$mount'> {
   readonly clutch_fireworks: {
+    loadAnimations(signal: AbortSignal): Promise<RemoteResult<AnimationSettingsValue>>;
+    saveAnimations(
+      request: AnimationSaveRequest,
+      signal: AbortSignal,
+    ): Promise<RemoteResult<AnimationSettingsValue>>;
     events(
       query: FireworksResumeCursor,
       signal: AbortSignal,

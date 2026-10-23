@@ -46,13 +46,14 @@ changing `package.json` or `cordis.patch.yml`.
 
 ## Features
 
-| Feature                                    | Preview                                                                                                                                                   | What it does                                                                                                                                                                                                                                               |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Automatic milestone celebrations**       | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">                                                    | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
-| **Fireworks overlay**                      | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI">                                                   | A successful call displays a short, click-through overlay across the DSH window, independently of the selected Session, and shows a clickable celebration toast.                                                                                           |
-| **Jump to the source Session**             | <img src="assets/screenshots/global-fireworks-toast.png" width="420" alt="Background Session fireworks and clickable toast on the real DSH plugins page"> | Click the toast to open its originating Session through DSH navigation. Dismiss it without interrupting the animation. Captured from an installed plugin after a real background tool call.                                                                |
-| **Animation templates and script imports** | <img src="assets/screenshots/animation-settings.png" width="420" alt="Installed DSH animation settings and transparent full-window preview">              | Choose three built-in effects or import your own JavaScript animation. Preview, save, download scripts, and copy a complete AI generation prompt on the plugin details page.                                                                               |
-| **Safe replay behavior**                   | —                                                                                                                                                         | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
+| Feature                                    | Preview                                                                                                                                                     | What it does                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Automatic milestone celebrations**       | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">                                                      | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
+| **Fireworks overlay**                      | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI">                                                     | A successful call displays a short, click-through overlay across the DSH window, independently of the selected Session, and shows a clickable celebration toast.                                                                                           |
+| **Jump to the source Session**             | <img src="assets/screenshots/global-fireworks-toast.png" width="420" alt="Background Session fireworks and clickable toast on the real DSH plugins page">   | Click the toast to open its originating Session through DSH navigation. Dismiss it without interrupting the animation. Captured from an installed plugin after a real background tool call.                                                                |
+| **Animation templates and script imports** | <img src="assets/screenshots/animation-settings.png" width="420" alt="Compact animation cards with stacked details and readable light-theme tags">          | Choose three built-in effects or import JavaScript animations. Switch effects immediately; validate and preview imports before confirming, with per-card export and protected deletion.                                                                    |
+| **Confirm before importing**               | <img src="assets/screenshots/animation-import-confirmation.png" width="420" alt="Light-theme import dialog with readable titles, card details and preview"> | Validate the file first, preview before deciding, then confirm to save and activate it. Cancelling writes nothing.                                                                                                                                         |
+| **Safe replay behavior**                   | —                                                                                                                                                           | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
 
 ## Usage
 
@@ -82,25 +83,44 @@ to the originating Session, or use **×** to dismiss the toast.
 
 ### Choose, import, or generate animations
 
-Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Choose **Emoji**, **Starburst**,
-or **Aurora**, preview it, then click **保存动画设置**. Changes take effect on the next celebration;
-leaving without saving discards the draft. Existing animations keep their captured template.
+Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Click a card to use **Emoji**,
+**Starburst**, **Aurora**, or an imported animation immediately. The selected card shows
+**当前使用**. There is no separate Save step; existing animations finish with their captured template.
+Compact cards automatically fit more columns in wider panels and fewer in narrower panels.
+Card details stack the name, tag, and duration vertically. Long names use a single-line ellipsis;
+hover the title to read the full name. Cards and dialogs share typography and DSH theme colors,
+including the same outline and solid tag palette as Agent Presets in light and dark modes.
 
-**预览动画** sends the current draft through the same playback path as a tool launch, directly
+Each card's **预览** sends that template through the same playback path as a tool launch, directly
 over the current DSH page with a transparent background in light and dark themes. It creates no
-toast or tool call and does not save the draft. Use **停止预览** to stop;
+toast or tool call and does not change the current selection. During playback, the Preview action becomes a circular progress/stop control; click it to stop;
 changing templates or leaving the page also cleans it up. Real task celebrations take priority.
 
-Use **导入 .js 动画** to add a standalone script. A custom selection must finish its preview
-without errors before saving is enabled. Download any selected script as a starting point, or
+Use **导入 js 动画** at the top right to choose a standalone script. Invalid files show an error
+dialog. Valid files open a confirmation dialog showing the same icon, name, tag and duration as
+a card, with optional full-screen preview. Only **确认添加** writes the file and selects
+the new animation; cancelling leaves settings and disk unchanged. Use each card's **导出** to
+download its script. **删除** turns a custom card red and replaces its existing action bar with
+a confirmation prompt at the left and **删除 / 取消** at the right. The card height stays fixed,
+and Cancel occupies the former Delete position. Only the confirmation Delete removes it. Deleting the current template switches to Emoji; built-ins have no Delete action. You can also
 expand **用 AI 生成自己的动画**, copy the prompt, describe your effect, and import the generated
 `.js` file. A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
 The file format, drawing interface, and tips for smooth custom effects are documented in
 [Animation scripts](docs/ANIMATIONS.md).
 
-Selections and script source are stored through DSH Host settings, shared by connected pages,
-and survive refresh/restart. A launch refreshes the saved choice before playback. After upgrading
-an already-running local checkout, restart DSH so its Host loads the new Config schema.
+Saved scripts live at `$DSH_HOME/clutch-dsh-fireworks/animations/<sha256>.js`; Host settings
+store the selection, paths relative to DSH Home (`~/.dsh` by default), and small name/duration metadata. Confirmed imports and card selection
+persist immediately; preview does not write configuration. Existing inline settings migrate on the next update.
+Back up this directory with your settings. Deleting a template removes its file after the
+configuration update succeeds, unless another template or DSH profile still references it. Missing or
+damaged files keep a card marked **本地文件损坏** with only a Delete action. If the affected
+animation was selected, the Host persists Emoji as the new default while retaining the broken
+list entry. Removing that card clears its configuration entry. Visible settings refresh availability
+every two seconds and on focus; existing cards are rechecked before preview and live launches
+refresh before playing. Old path-only settings acquire display metadata when loaded. Read-only
+settings fall back in memory and report that persistence is unavailable.
+Saved choices are shared by connected pages, survive refresh/restart, and refresh before a launch.
+After upgrading an already-running local checkout, restart DSH to load the new Host endpoints.
 
 ## Requirements
 
@@ -122,7 +142,8 @@ an already-running local checkout, restart DSH so its Host loads the new Config 
   terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
   the error. Reduced-motion preferences keep a static midpoint frame visible for the configured
   duration and redraw it when the window size or DPR changes, while the full timeline is checked
-  offscreen; a single frame does not validate an import.
+  offscreen. Import preflight checks metadata, syntax, the render entry and one bounded frame;
+  optional preview checks the full timeline. A known preview failure blocks confirmation until a successful retry.
 - Animations use the window's actual CSS-pixel width and height. Large windows retain their aspect
   ratio; the renderer lowers DPR as needed to stay within its 8-million-pixel canvas budget.
 - Only successful live fireworks results trigger playback. Errors, cancellations, historical

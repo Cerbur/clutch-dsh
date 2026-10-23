@@ -215,6 +215,7 @@ function frameRuntime(options: {
   token: string;
   seed: number;
   message: string;
+  validationOnly: boolean;
 }) {
   const canvas = document.querySelector('canvas')!;
   let worker: Worker;
@@ -307,6 +308,10 @@ function frameRuntime(options: {
         // Reduced motion validates from time zero on its first offscreen frame.
         start = reducedMotion ? undefined : performance.now();
         report('ready');
+        if (options.validationOnly) {
+          stop();
+          return;
+        }
       }
       if (data.type === 'painted' && validateAfterRedraw) {
         const validate = validateAfterRedraw;
@@ -319,7 +324,8 @@ function frameRuntime(options: {
         report('done');
         return;
       }
-      if (data.type === 'ready' || data.type === 'painted') raf = requestAnimationFrame(tick);
+      if (data.type === 'ready' && options.validationOnly) tick(performance.now());
+      else if (data.type === 'ready' || data.type === 'painted') raf = requestAnimationFrame(tick);
     };
     watchdog = setTimeout(() => fail('脚本启动超时 / Animation startup timed out'), 1500);
     worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
@@ -334,6 +340,7 @@ export function animationDocument(
   token: string,
   seed: number,
   message = '',
+  validationOnly = false,
 ): string {
   const workerSource = `"use strict";\n${template.source}\n;(${workerRuntime.toString()})(typeof render === 'function' ? render : null);`;
   const options = JSON.stringify({
@@ -342,6 +349,7 @@ export function animationDocument(
     token,
     seed,
     message,
+    validationOnly,
   }).replaceAll('<', '\\u003c');
   return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}canvas{width:100%;height:100%;display:block}</style><canvas aria-hidden="true"></canvas><script>(${frameRuntime.toString()})(${options})</script>`;
 }

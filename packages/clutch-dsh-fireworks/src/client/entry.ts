@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type {} from '@deepseek-ai/dsh-client-ui-slots';
 import { FireworksOverlay } from './FireworksOverlay.js';
@@ -33,9 +32,7 @@ export async function apply(ctx: Context): Promise<void> {
 
 function registerFireworksClient(ctx: Context): void {
   const remote = (ctx as unknown as { remote: FireworksRemote }).remote;
-  // Host and Client Connection faces share this package's TypeScript program.
-  const connection = (ctx as unknown as { connection: ConnectionHandle }).connection;
-  const animations = new AnimationStore(connection.rpc);
+  const animations = new AnimationStore(remote.clutch_fireworks);
   ctx.effect(() => {
     void animations.load();
     return () => animations.dispose();
