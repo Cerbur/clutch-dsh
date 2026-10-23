@@ -119,7 +119,8 @@ export class FireworksController {
         start(animation);
       }
     } catch {
-      // Never reuse a cached script after a failed refresh; use trusted Emoji.
+      // AnimationStore handles settings read failures with default classic/Whale Show.
+      // An unexpected resolver throw leaves no template; the renderer uses trusted Emoji.
       start();
     }
   }

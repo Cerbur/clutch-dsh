@@ -139,7 +139,7 @@ test('file warnings reach settings; hard load failure clears stale playback and 
   unavailable = true;
   await store.load();
   assert.match(store.getSnapshot().error, /Restart/);
-  assert.equal(store.getSnapshot().preferences.active, 'emoji');
+  assert.equal(store.getSnapshot().preferences.active, 'classic');
   await assert.rejects(store.save(DEFAULT_ANIMATION_PREFERENCES, 1), /read-only/);
   store.dispose();
 });

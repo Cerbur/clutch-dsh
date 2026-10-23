@@ -1,4 +1,4 @@
-import type { AnimationTemplate, AnimationRender } from '../animation.js';
+import type { AnimationTemplate, AnimationRender, AnimationTheme } from '../animation.js';
 
 /** Runs only inside a CSP-restricted, opaque-origin iframe's dedicated Worker. */
 function workerRuntime(render: AnimationRender) {
@@ -216,6 +216,7 @@ function frameRuntime(options: {
   seed: number;
   message: string;
   validationOnly: boolean;
+  theme: AnimationTheme;
 }) {
   const canvas = document.querySelector('canvas')!;
   let worker: Worker;
@@ -230,6 +231,8 @@ function frameRuntime(options: {
   let lastWidth = 0;
   let lastHeight = 0;
   let lastDpr = 0;
+  let theme = options.theme;
+  let lastTheme = theme;
   let validateAfterRedraw: (() => void) | undefined;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const report = (type: string, message?: string) =>
@@ -240,6 +243,8 @@ function frameRuntime(options: {
     validateAfterRedraw = undefined;
     clearTimeout(watchdog);
     cancelAnimationFrame(raf);
+    removeEventListener('message', receiveTheme);
+    removeEventListener('pagehide', stop);
     worker?.terminate();
     if (url) URL.revokeObjectURL(url);
   };
@@ -247,6 +252,16 @@ function frameRuntime(options: {
     if (finished) return;
     stop();
     report('error', message.slice(0, 240));
+  };
+  const receiveTheme = (event: MessageEvent) => {
+    if (
+      finished ||
+      event.source !== parent ||
+      event.data?.token !== options.token ||
+      event.data?.type !== 'clutch_fireworks/theme'
+    )
+      return;
+    if (event.data.theme === 'light' || event.data.theme === 'dark') theme = event.data.theme;
   };
   const tick = (now: number) => {
     if (finished) return;
@@ -265,6 +280,7 @@ function frameRuntime(options: {
       durationMs: options.durationMs,
       seed: options.seed,
       message: options.message,
+      theme,
     };
     const sendFrame = (midpoint: boolean) => {
       finalFrame = !midpoint && time === options.durationMs;
@@ -279,7 +295,7 @@ function frameRuntime(options: {
     if (
       reducedMotion &&
       !firstPaint &&
-      (width !== lastWidth || height !== lastHeight || dpr !== lastDpr)
+      (width !== lastWidth || height !== lastHeight || dpr !== lastDpr || theme !== lastTheme)
     ) {
       // Acknowledge the redraw before validating this tick, without restarting its clock.
       validateAfterRedraw = () => sendFrame(false);
@@ -288,6 +304,7 @@ function frameRuntime(options: {
     lastWidth = width;
     lastHeight = height;
     lastDpr = dpr;
+    lastTheme = theme;
     last = now;
   };
   try {
@@ -329,6 +346,7 @@ function frameRuntime(options: {
     };
     watchdog = setTimeout(() => fail('脚本启动超时 / Animation startup timed out'), 1500);
     worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
+    addEventListener('message', receiveTheme);
     addEventListener('pagehide', stop, { once: true });
   } catch (error) {
     fail(String(error));
@@ -341,6 +359,7 @@ export function animationDocument(
   seed: number,
   message = '',
   validationOnly = false,
+  theme: AnimationTheme = 'dark',
 ): string {
   const workerSource = `"use strict";\n${template.source}\n;(${workerRuntime.toString()})(typeof render === 'function' ? render : null);`;
   const options = JSON.stringify({
@@ -350,6 +369,7 @@ export function animationDocument(
     seed,
     message,
     validationOnly,
+    theme: theme === 'light' ? 'light' : 'dark',
   }).replaceAll('<', '\\u003c');
   return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}canvas{width:100%;height:100%;display:block}</style><canvas aria-hidden="true"></canvas><script>(${frameRuntime.toString()})(${options})</script>`;
 }

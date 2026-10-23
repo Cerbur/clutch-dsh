@@ -6,9 +6,11 @@ import {
   parseAnimation,
   parseAnimationPreferences,
   DEFAULT_ANIMATION_PREFERENCES,
+  DEFAULT_STORED_ANIMATION_PREFERENCES,
+  parseStoredAnimationPreferences,
   MAX_SCRIPT_BYTES,
 } from '../lib/animation.js';
-import { animationDocument } from '../lib/client/animation-sandbox.js';
+import { sandboxHarness, connectSandboxWorker } from './helpers/animation-harness.mjs';
 import { FireworksController } from '../lib/client/fireworks-controller.js';
 import { FIREWORKS_EVENT_TTL_MS, FIREWORKS_LAUNCH_EVENT } from '../lib/contract/index.js';
 
@@ -18,6 +20,28 @@ const source = (body = 'fx.circle(30, 40, 12, "red");', durationMs = 1200) =>
   '\nfunction render(frame, fx) {' +
   body +
   '}';
+
+test('new profiles default to classic without replacing explicit animation selections', () => {
+  const expected = { active: 'classic', scripts: {} };
+  const stored = { version: 2, active: 'classic', files: {} };
+  assert.deepEqual(DEFAULT_ANIMATION_PREFERENCES, expected);
+  assert.deepEqual(parseAnimationPreferences(undefined), expected);
+  assert.deepEqual(DEFAULT_STORED_ANIMATION_PREFERENCES, stored);
+  assert.deepEqual(parseStoredAnimationPreferences(undefined), stored);
+  for (const active of ['emoji', 'rings', 'classic', 'custom-saved']) {
+    const scripts = { 'custom-saved': source() };
+    const preferences = { active, scripts };
+    assert.deepEqual(parseAnimationPreferences(preferences), preferences);
+    assert.deepEqual(parseStoredAnimationPreferences(preferences), preferences);
+    const persisted = {
+      version: 2,
+      active,
+      files: { 'custom-saved': 'clutch-dsh-fireworks/animations/' + 'a'.repeat(64) + '.js' },
+    };
+    assert.deepEqual(parseStoredAnimationPreferences(persisted), persisted);
+  }
+  assert.deepEqual(DEFAULT_ANIMATION_PREFERENCES, expected);
+});
 
 test('validates imported files without executing code, bounds scripts and template selections', () => {
   assert.equal(
@@ -51,104 +75,6 @@ test('validates imported files without executing code, bounds scripts and templa
   ])
     assert.throws(() => parseAnimationPreferences(invalid));
 });
-
-function sandboxHarness(
-  template,
-  { reducedMotion = false, width = 500, height = 300, dpr = 1, validationOnly = false } = {},
-) {
-  let workerSource;
-  let worker;
-  let onHide;
-  let terminated = 0;
-  let revoked = 0;
-  let raf;
-  let now = 0;
-  const timers = new Map();
-  const reports = [];
-  const html = animationDocument(
-    template,
-    'playback-token',
-    42,
-    '</script><script>bad()</script>',
-    validationOnly,
-  );
-  const runtime = html.split('<script>')[1].split('</script>')[0];
-  const environment = {
-    document: { querySelector: () => ({ transferControlToOffscreen: () => ({}) }) },
-    Blob: class {
-      constructor(parts) {
-        workerSource = parts.join('');
-      }
-    },
-    URL: {
-      createObjectURL: () => 'blob:opaque-origin',
-      revokeObjectURL: () => {
-        revoked++;
-      },
-    },
-    Worker: class {
-      constructor() {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias -- Expose the fake worker so the test can deliver its messages.
-        worker = this;
-        this.sent = [];
-      }
-      postMessage(value) {
-        this.sent.push(value);
-      }
-      terminate() {
-        terminated++;
-      }
-    },
-    parent: { postMessage: (value) => reports.push(value) },
-    addEventListener: (_name, listener) => {
-      onHide = listener;
-    },
-    setTimeout: (listener, delay) => {
-      const id = {};
-      timers.set(id, { listener, delay });
-      return id;
-    },
-    clearTimeout: (id) => timers.delete(id),
-    requestAnimationFrame: (listener) => {
-      raf = listener;
-      return 1;
-    },
-    cancelAnimationFrame: () => {
-      raf = undefined;
-    },
-    innerWidth: width,
-    matchMedia: () => ({ matches: reducedMotion }),
-    innerHeight: height,
-    devicePixelRatio: dpr,
-    performance: { now: () => now },
-  };
-  vm.runInNewContext(runtime, environment);
-  return {
-    html,
-    workerSource,
-    reports,
-    worker,
-    timers,
-    resize: (width, height, dpr) => {
-      environment.innerWidth = width;
-      environment.innerHeight = height;
-      environment.devicePixelRatio = dpr;
-    },
-    frame: (time) => {
-      now = time;
-      const callback = raf;
-      raf = undefined;
-      callback(time);
-    },
-    hide: () => onHide(),
-    get terminated() {
-      return terminated;
-    },
-    get revoked() {
-      return revoked;
-    },
-  };
-}
 
 test('reduced-motion midpoint stays visible for the duration and completes only after validation', () => {
   const harness = sandboxHarness(parseAnimation(source(), 'custom-static'), {
@@ -265,31 +191,471 @@ test('reduced-motion validation remains bounded by watchdog and page cleanup', (
   }
 });
 
-function connectSandboxWorker(harness) {
-  const draws = [];
-  const hidden = [];
-  const context = (target) =>
-    new Proxy(
-      { fillRect: (...args) => target.push(args) },
-      { get: (target, key) => target[key] ?? (() => {}) },
+// A strict Canvas adapter, not a rasterizer. Keep only the latest simulation tick's
+// paint records, plus counters, instead of retaining every particle in every tick.
+function pathDrawingContext(target) {
+  let path = [];
+  const stack = [];
+  const paintCounts = {};
+  const defaults = {
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    fillStyle: '#000',
+    strokeStyle: '#000',
+    lineWidth: 1,
+    lineCap: 'butt',
+    shadowColor: 'transparent',
+    shadowBlur: 0,
+  };
+  const numeric = (values) =>
+    values.forEach((value) => assert.ok(Number.isFinite(value), 'finite drawing coordinates'));
+  const record = (type, ...args) => {
+    paintCounts[type] = (paintCounts[type] ?? 0) + 1;
+    target.push([type, ...args]);
+  };
+  const context = {
+    ...defaults,
+    paintCounts,
+    reset() {
+      assert.equal(stack.length, 0, 'drawing state must be balanced between frames');
+      Object.assign(context, defaults);
+      path = [];
+    },
+    setTransform(...args) {
+      assert.equal(args.length, 6);
+      numeric(args);
+    },
+    save() {
+      stack.push(Object.fromEntries(Object.keys(defaults).map((key) => [key, context[key]])));
+    },
+    restore() {
+      assert.ok(stack.length, 'restore needs a matching save');
+      Object.assign(context, stack.pop());
+    },
+    clearRect(...args) {
+      numeric(args);
+      record('clearRect', ...args);
+    },
+    fillRect(...args) {
+      numeric(args);
+      // A reference trail tick starts by fading the previous pixels, not by
+      // clearing them. Dropping recorder history does not reset context state.
+      if (context.globalCompositeOperation === 'destination-out') target.length = 0;
+      record(
+        'fillRect',
+        args,
+        context.fillStyle,
+        context.globalAlpha,
+        context.globalCompositeOperation,
+      );
+    },
+    createRadialGradient(...args) {
+      numeric(args);
+      assert.equal(args.length, 6);
+      assert.ok(args[2] >= 0 && args[5] >= 0);
+      const gradient = {
+        stops: [],
+        addColorStop(offset, color) {
+          assert.ok(Number.isFinite(offset) && offset >= 0 && offset <= 1);
+          assert.equal(typeof color, 'string');
+          gradient.stops.push([offset, color]);
+        },
+      };
+      paintCounts.gradient = (paintCounts.gradient ?? 0) + 1;
+      return gradient;
+    },
+    beginPath() {
+      path = [];
+    },
+    arc(...args) {
+      numeric(args);
+      assert.ok(args[2] >= 0, 'circle radius cannot be negative');
+      path.push(['arc', ...args]);
+    },
+    moveTo(...args) {
+      numeric(args);
+      path.push(['moveTo', ...args]);
+    },
+    lineTo(...args) {
+      numeric(args);
+      path.push(['lineTo', ...args]);
+    },
+    fill() {
+      paint('fill', context.fillStyle);
+    },
+    stroke() {
+      paint('stroke', context.strokeStyle);
+    },
+    drawImage(image, ...args) {
+      numeric([image.width, image.height, ...args]);
+      assert.ok(image.width > 0 && image.height > 0, 'blit only an active, nonempty buffer');
+      if (context.globalAlpha > 0)
+        record(
+          'drawImage',
+          image.width,
+          image.height,
+          ...args,
+          context.globalAlpha,
+          context.globalCompositeOperation,
+        );
+    },
+  };
+  function paint(type, color) {
+    assert.ok(
+      Number.isFinite(context.globalAlpha) && context.globalAlpha >= 0 && context.globalAlpha <= 1,
     );
-  const canvas = { getContext: () => context(draws) };
-  const runtime = vm.createContext({
-    postMessage: (data) => harness.worker.onmessage({ data }),
-    OffscreenCanvas: class {
-      getContext() {
-        return context(hidden);
-      }
+    if (context.globalAlpha > 0) {
+      assert.ok(path.length > 0, 'a paint must have path geometry');
+      record(
+        type,
+        path.map((part) => [...part]),
+        color,
+        context.globalAlpha,
+        context.lineWidth,
+        context.globalCompositeOperation,
+      );
+    }
+  }
+  return new Proxy(context, {
+    get(target, key) {
+      assert.ok(key in target, 'unsupported Canvas method/property: ' + String(key));
+      return target[key];
+    },
+    set(target, key, value) {
+      assert.ok(key in target, 'unsupported Canvas property: ' + String(key));
+      target[key] = value;
+      return true;
     },
   });
-  vm.runInContext(harness.workerSource, runtime);
-  let delivered = harness.worker.sent.length;
-  runtime.onmessage({ data: { type: 'init', canvas } });
-  const step = () => runtime.onmessage({ data: harness.worker.sent[delivered++] });
-  const flush = () => {
-    while (delivered < harness.worker.sent.length) step();
-  };
-  return { canvas, draws, hidden, step, flush };
+}
+
+async function whaleTemplate() {
+  const script = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  const template = parseAnimation(script, 'classic');
+  assert.equal(template.id, 'classic');
+  assert.equal(template.durationMs, 5000);
+  return template;
+}
+
+function assertSandboxReleased(harness) {
+  assert.equal(harness.terminated, 1);
+  assert.equal(harness.revoked, 1);
+  assert.equal(harness.timers.size, 0);
+}
+
+test('real whale paints all 260 blue outline points near midpoint on a persistent trail buffer', async () => {
+  const template = await whaleTemplate();
+  const outline = JSON.parse(
+    JSON.stringify(vm.runInNewContext(template.source + '; SHELL_OUTLINE')),
+  );
+  assert.equal(outline.length, 260, 'retain the full whale rather than a generic burst');
+  const centers = new Set();
+  for (const seed of [0, 1, 42, 0xffffffff]) {
+    for (const [width, height, dpr] of [
+      [800, 600, 1],
+      [300, 500, 2],
+      [500, 220, 2],
+    ]) {
+      const harness = sandboxHarness(template, { seed, width, height, dpr });
+      const { draws, hidden, privateCanvases, render } = connectSandboxWorker(
+        harness,
+        pathDrawingContext,
+      );
+      const paintAt = (time, delta = 0) => {
+        draws.length = 0;
+        render({
+          type: 'frame',
+          frame: {
+            width,
+            height,
+            dpr,
+            seed,
+            time,
+            delta,
+            progress: time / template.durationMs,
+            durationMs: template.durationMs,
+            message: '',
+          },
+        });
+        assert.equal(
+          harness.reports.some(({ type }) => type === 'clutch_fireworks/error'),
+          false,
+          JSON.stringify(harness.reports),
+        );
+      };
+      try {
+        paintAt(300);
+        assert.ok(
+          hidden.some(([type]) => type === 'stroke'),
+          'rockets really paint private paths',
+        );
+        assert.equal(privateCanvases.length, 1);
+        const trail = privateCanvases[0];
+        assert.equal(trail.getContext('2d'), trail.getContext('2d'), 'private context persists');
+        assert.equal(trail.width, Math.floor(width * dpr));
+        assert.equal(trail.height, Math.floor(height * dpr));
+        paintAt(2500);
+        const midpoint = JSON.stringify(hidden);
+        assert.equal(privateCanvases.length, 1, 'forward seek reuses its trail canvas');
+        assert.deepEqual(
+          hidden[0],
+          ['fillRect', [0, 0, width, height], 'rgba(0,0,0,0.16)', 1, 'destination-out'],
+          'fade the trail toward transparency',
+        );
+        const paints = hidden.filter(([type]) => type === 'fill' || type === 'stroke');
+        assert.ok(paints.length >= 260);
+        assert.ok(
+          paints.every((paint) => paint[5] === 'lighter'),
+          'sparks blend additively in private buffer',
+        );
+        assert.equal(draws.length, 1, 'display only the private buffer, not individual particles');
+        assert.deepEqual(
+          draws[0],
+          ['drawImage', trail.width, trail.height, 0, 0, width, height, 1, 'source-over'],
+          'blit the transparent trail at CSS dimensions',
+        );
+
+        // Original shape points jitter and the launch center is random. Check the
+        // complete painted contour with a free center, not the obsolete fixed pose.
+        const radius = Math.min(width, height) * 0.19;
+        let whale;
+        for (let start = 0; start + outline.length <= paints.length; start++) {
+          const candidate = paints.slice(start, start + outline.length);
+          if (
+            !candidate.every(([type, path, color]) => {
+              const match =
+                typeof color === 'string' &&
+                /^hsla\(([^,]+),([^%]+)%,([^%]+)%,([^)]+)\)$/.exec(color);
+              return (
+                type === 'fill' &&
+                path.length === 1 &&
+                path[0][0] === 'arc' &&
+                path[0][3] >= 1.5 &&
+                path[0][3] <= 2.3 &&
+                match &&
+                +match[1] >= 183 &&
+                +match[1] <= 232 &&
+                +match[2] >= 88 &&
+                +match[2] <= 100 &&
+                +match[3] >= 62 &&
+                +match[3] <= 70 &&
+                +match[4] > 0.65
+              );
+            })
+          )
+            continue;
+          const offsets = candidate.map(([, path], index) => {
+            const [ox, oy] = outline[outline.length - 1 - index];
+            return [path[0][1] - ox * radius, path[0][2] - oy * radius * 0.92];
+          });
+          const cx = offsets.reduce((sum, [x]) => sum + x, 0) / outline.length;
+          const cy = offsets.reduce((sum, [, y]) => sum + y, 0) / outline.length;
+          if (offsets.every(([x, y]) => Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1)) {
+            whale = { candidate, cx, cy };
+            break;
+          }
+        }
+        assert.ok(whale, 'all 260 blue points must actually paint the whale contour at midpoint');
+        assert.ok(whale.cx > width * 0.3 && whale.cx < width * 0.7);
+        assert.ok(whale.cy > height * 0.1 && whale.cy < height * 0.45);
+        for (const [, path] of whale.candidate) {
+          assert.ok(path[0][1] >= 0 && path[0][1] <= width);
+          assert.ok(path[0][2] >= 0 && path[0][2] <= height);
+        }
+        centers.add([width, height, whale.cx.toFixed(2), whale.cy.toFixed(2)].join(':'));
+        paintAt(2500, 1000);
+        assert.equal(JSON.stringify(hidden), midpoint, 'delta cannot advance a repeated pose');
+        const clears = trail.drawing.paintCounts.clearRect;
+        paintAt(2713, 137);
+        paintAt(711, 137);
+        paintAt(2500, 137);
+        assert.ok(
+          trail.drawing.paintCounts.clearRect > clears,
+          'backtracking clears stale trail pixels',
+        );
+        assert.equal(
+          JSON.stringify(hidden),
+          midpoint,
+          'replay restores midpoint paints after a backtrack',
+        );
+        assert.equal(privateCanvases.length, 1, 'backtracking keeps the same private canvas');
+        paintAt(4999);
+        assert.equal(
+          hidden.some(([type]) => type === 'fill' || type === 'stroke'),
+          false,
+          'particles burn out naturally before endpoint',
+        );
+        paintAt(5000);
+        assert.equal(draws.length, 0, 'endpoint never blits a released buffer');
+        assert.equal(trail.width, 0, 'release private backing pixels at the endpoint');
+        assert.equal(trail.height, 0);
+      } finally {
+        harness.hide();
+      }
+      assertSandboxReleased(harness);
+    }
+  }
+  assert.ok(centers.size > 3, 'seed changes the original launch center across viewports');
+});
+
+for (const reducedMotion of [false, true]) {
+  test(`real classic whale completes its full 5000ms playback and releases resources (reduced motion: ${reducedMotion})`, async () => {
+    const harness = sandboxHarness(await whaleTemplate(), { reducedMotion, seed: 1 });
+    const { draws, hidden, privateCanvases, flush, step } = connectSandboxWorker(
+      harness,
+      pathDrawingContext,
+    );
+    try {
+      harness.frame(100);
+      flush();
+      assert.deepEqual(
+        harness.reports.map(({ type }) => type),
+        ['clutch_fireworks/ready'],
+      );
+      assert.equal(harness.worker.sent.at(-1).frame.time, reducedMotion ? 2500 : 0);
+      if (reducedMotion)
+        assert.ok(draws.length > 0, 'the static forming-whale midpoint must paint');
+      const midpoint = JSON.stringify(draws);
+      const start = reducedMotion ? 101 : 100;
+      if (reducedMotion) {
+        harness.frame(start);
+        flush();
+        assert.equal(harness.worker.sent.at(-1).type, 'validate');
+        assert.equal(harness.worker.sent.at(-1).frame.time, 0);
+      }
+      for (const time of [300, 1799, 1801, 2399, 2401, 2500, 2801, 3500, 4500, 4999]) {
+        harness.frame(start + time);
+        flush();
+        assert.equal(harness.worker.sent.at(-1).frame.time, time);
+        assert.equal(harness.worker.sent.at(-1).frame.progress, time / 5000);
+        assert.deepEqual(
+          harness.reports.map(({ type }) => type),
+          ['clutch_fireworks/ready'],
+        );
+        assert.equal(harness.terminated, 0, 'no successful intermediate frame ends playback');
+      }
+      if (reducedMotion) {
+        assert.equal(
+          JSON.stringify(draws),
+          midpoint,
+          'validation must not repaint the displayed midpoint',
+        );
+        assert.ok(hidden.length > 0, 'the real timeline paints to an offscreen validation canvas');
+      } else {
+        assert.ok(
+          privateCanvases.some(({ drawing }) => drawing.paintCounts.stroke > 0),
+          'real line paths must paint',
+        );
+        assert.ok(
+          privateCanvases.some(({ drawing }) => drawing.paintCounts.fill > 0) &&
+            draws.some(([type]) => type === 'drawImage'),
+          'real circle paths or their sprites must paint',
+        );
+      }
+      harness.frame(start + 5000);
+      assert.equal(harness.worker.sent.at(-1).frame.time, 5000);
+      assert.equal(harness.worker.sent.at(-1).frame.progress, 1);
+      assert.equal(harness.terminated, 0, 'the endpoint must be acknowledged before cleanup');
+      assert.equal(harness.reports.length, 1);
+      step();
+      assert.deepEqual(
+        harness.reports.map(({ type }) => type),
+        ['clutch_fireworks/ready', 'clutch_fireworks/done'],
+      );
+      assertSandboxReleased(harness);
+      harness.worker.onmessage({ data: { type: 'painted' } });
+      harness.worker.onmessage({ data: { type: 'error', message: 'late callback' } });
+      harness.hide();
+      assert.equal(harness.reports.length, 2);
+      assertSandboxReleased(harness);
+    } finally {
+      harness.hide();
+    }
+  });
+}
+
+test('real whale midpoint redraws after resize without restarting its 5000ms deadline', async () => {
+  const harness = sandboxHarness(await whaleTemplate(), { reducedMotion: true });
+  const { canvas, draws, hidden, step, flush } = connectSandboxWorker(harness, pathDrawingContext);
+  try {
+    harness.frame(100);
+    flush();
+    assert.ok(draws.length > 0);
+    harness.frame(101);
+    flush();
+    for (const [now, width, height, dpr] of [
+      [2000, 300, 500, 2],
+      [5101, 7680, 4320, 3],
+    ]) {
+      const previousDraws = draws.length;
+      harness.resize(width, height, dpr);
+      harness.frame(now);
+      assert.equal(harness.worker.sent.at(-1).type, 'frame');
+      assert.equal(harness.worker.sent.at(-1).frame.time, 2500);
+      step();
+      assert.ok(draws.length > previousDraws, 'resized midpoint must contain visible geometry');
+      assert.equal(harness.terminated, 0, 'a midpoint redraw cannot complete validation');
+      assert.equal(harness.reports.length, 1);
+      assert.equal(harness.worker.sent.at(-1).type, 'validate');
+      assert.equal(harness.worker.sent.at(-1).frame.time, now - 101);
+      const appliedDpr = Math.min(dpr, 2, Math.sqrt(8_000_000 / (width * height)));
+      assert.equal(canvas.width, Math.floor(width * appliedDpr));
+      assert.equal(canvas.height, Math.floor(height * appliedDpr));
+      assert.ok(canvas.width * canvas.height <= 8_000_000);
+      step();
+    }
+    assert.ok(hidden.length > 0);
+    assert.deepEqual(
+      harness.reports.map(({ type }) => type),
+      ['clutch_fireworks/ready', 'clutch_fireworks/done'],
+    );
+    assertSandboxReleased(harness);
+  } finally {
+    harness.hide();
+  }
+});
+
+for (const reducedMotion of [false, true]) {
+  for (const cleanup of ['pagehide', 'watchdog']) {
+    test(`real whale releases a pending frame on ${cleanup} (reduced motion: ${reducedMotion})`, async () => {
+      const harness = sandboxHarness(await whaleTemplate(), { reducedMotion });
+      const { flush } = connectSandboxWorker(harness, pathDrawingContext);
+      try {
+        harness.frame(100);
+        flush();
+        harness.frame(101);
+        flush();
+        harness.resize(300, 500, 2);
+        harness.frame(2600);
+        const sent = harness.worker.sent.length;
+        assert.equal(harness.timers.size, 1);
+        const watchdog = [...harness.timers.values()][0];
+        assert.equal(watchdog.delay, 750);
+        if (cleanup === 'watchdog') watchdog.listener();
+        else harness.hide();
+        harness.worker.onmessage({ data: { type: 'painted' } });
+        harness.worker.onmessage({ data: { type: 'error', message: 'late callback' } });
+        harness.hide();
+        assert.equal(
+          harness.worker.sent.length,
+          sent,
+          'late acknowledgements cannot resume playback',
+        );
+        assert.deepEqual(
+          harness.reports.map(({ type }) => type),
+          cleanup === 'watchdog'
+            ? ['clutch_fireworks/ready', 'clutch_fireworks/error']
+            : ['clutch_fireworks/ready'],
+        );
+        assertSandboxReleased(harness);
+      } finally {
+        harness.hide();
+      }
+    });
+  }
 }
 
 test('reduced-motion resize redraws the visible midpoint while preserving timeline and deadline', () => {
@@ -480,19 +846,55 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
     const harness = sandboxHarness(template);
     const posted = [];
     const draws = [];
-    const drawing = new Proxy(
-      {},
-      {
-        get:
-          (_target, key) =>
-          (...args) => {
-            draws.push([key, args]);
-            if (key === 'measureText') return { width: 64 };
-          },
-        set: () => true,
+    const hidden = [];
+    const privateCanvases = [];
+    const painted = { fill: 0, stroke: 0, fillText: 0 };
+    const paintedGlyphs = new Map();
+    const context = (target, image) =>
+      new Proxy(
+        {
+          globalCompositeOperation: 'source-over',
+          measureText: () => ({ width: 64 }),
+          createRadialGradient: () => ({
+            addColorStop: (offset, color) => {
+              assert.ok(offset >= 0 && offset <= 1);
+              assert.equal(typeof color, 'string');
+            },
+          }),
+        },
+        {
+          get: (state, key) =>
+            state[key] ??
+            ((...args) => {
+              if (key === 'fillRect' && state.globalCompositeOperation === 'destination-out')
+                target.length = 0;
+              if (Object.hasOwn(painted, key)) painted[key]++;
+              if (key === 'fillText' && image) paintedGlyphs.set(image, args[0]);
+              if (key === 'drawImage') {
+                assert.ok(args[0].width > 0 && args[0].height > 0);
+                assert.ok(args.slice(1).every(Number.isFinite));
+              }
+              if (['fill', 'stroke', 'fillText', 'drawImage'].includes(key))
+                target.push([key, args]);
+            }),
+        },
+      );
+    const drawing = context(draws);
+    const worker = vm.createContext({
+      postMessage: (value) => posted.push(value),
+      OffscreenCanvas: class {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+          this.drawing = context(hidden, this);
+          privateCanvases.push(this);
+        }
+        getContext(type) {
+          assert.equal(type, '2d');
+          return this.drawing;
+        }
       },
-    );
-    const worker = vm.createContext({ postMessage: (value) => posted.push(value) });
+    });
     vm.runInContext(harness.workerSource, worker);
     worker.onmessage({ data: { type: 'init', canvas: { getContext: () => drawing } } });
     worker.onmessage({
@@ -504,7 +906,7 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
           dpr: 1,
           seed: 42,
           time: 700,
-          progress: 0.2,
+          progress: 700 / template.durationMs,
           durationMs: template.durationMs,
         },
       },
@@ -512,15 +914,23 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
     assert.equal(posted.at(-1).type, id === 'broken' ? 'error' : 'painted');
     if (id !== 'broken')
       assert.ok(
-        draws.some(([name]) => ['fillText', 'arc', 'lineTo'].includes(name)),
+        draws.some(([name]) => ['fill', 'stroke', 'fillText', 'drawImage'].includes(name)) &&
+          painted.fill + painted.stroke + painted.fillText > 0,
         id + ' must paint',
       );
     if (id === 'emoji') {
-      const glyphs = draws.filter(([name]) => name === 'fillText').map(([, args]) => args[0]);
+      const glyphs = draws
+        .filter(([name]) => name === 'drawImage')
+        .map(([, args]) => paintedGlyphs.get(args[0]));
       assert.equal(glyphs.length, 40);
       assert.ok(glyphs.filter((glyph) => glyph === '🎉').length >= 10);
       assert.ok(glyphs.filter((glyph) => glyph === '🌟').length >= 5);
       assert.ok(glyphs.filter((glyph) => glyph === '✨').length >= 5);
+      assert.equal(
+        privateCanvases.length,
+        new Set(glyphs).size,
+        'reuse one persistent raster per emoji',
+      );
     }
     harness.hide();
   }

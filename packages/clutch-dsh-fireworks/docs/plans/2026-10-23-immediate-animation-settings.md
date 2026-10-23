@@ -162,7 +162,9 @@ Supersedes the expanded deletion panel, preview-status paragraphs, and previous 
   Expiry, a five-second refresh timeout and unload cancel the request, and preparation
   identity rejects late completion after cancellation or replacement. Recheck wall-clock
   expiry before rendering; the normal animation/toast deadline starts only afterward.
-  Failed refreshes use Emoji; timed-out or expired events advance without retry.
+  Failed settings reads use default `classic` / Whale Show without cached source;
+  unavailable selected templates still use Emoji. Timed-out or expired events
+  advance without retry.
 - Regression coverage includes cross-page selection/deletion, real missing/corrupt files,
   persisted Emoji recovery, slow reads, continued delivery, preview exclusion, expiry
   during refresh/suspended tabs, cancellation, timeout and actual plugin unload/re-enable.

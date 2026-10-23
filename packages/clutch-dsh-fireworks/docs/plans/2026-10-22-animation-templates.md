@@ -21,6 +21,40 @@ the existing trusted failure presentation remain bounded inside this deadline.
 Ignore old animation/toast callbacks by playback identity. Keep accepting new
 events while only the active toast remains, without starting them or a preview.
 
+## PR #7 whale template adaptation
+
+- Preserve all four PR commits through rebase, followed by an explicit cleanup
+  commit restoring the release integration before the scoped visual port.
+- Replace Starburst in `assets/animations/classic.js`, retaining `classic` for
+  existing selections. Unconfigured preferences now choose `classic`; explicit
+  Emoji, Aurora and custom choices are not migrated or overwritten.
+- Always launch the whale finale. Compress launches, bursts, sampled-outline
+  formation, anchored fountain and fade into 5000 ms, with no tool parameter,
+  probability gate, schema change or new playback engine.
+- Fidelity correction: the first analytic port passed outline/lifecycle tests but
+  visibly lost the reference effect. Replace it with the supplied Canvas Show
+  simulation: original shell counts/parameters, seeded random consumption,
+  discrete drag/gravity, flicker/crackle, radial flashes, fountain and persistent
+  destination-out/lighter trail canvas. Do not substitute dotted outlines,
+  synthetic glows or rewritten launch/formation parameters.
+- Advance the original simulation in canonical 16.667 ms steps from host time.
+  A no-paint prepass measures its natural completion, including every particle
+  and quiet grace; map the formed-whale tick to the 2500 ms midpoint and the
+  complete timeline to 5000 ms. Resize, changed seeds and backwards seeks reset
+  and replay the same simulation/RNG; the host still owns scheduling/cleanup.
+- Normal playback retains all original trail history at host DPR. A cold seek,
+  resize, large time gap, theme change or backtrack paints at most the latest 48
+  simulation ticks and caps the private trail surface at two million pixels to stay
+  within the existing frame watchdog, including targets within the first 48 ticks;
+  physics/RNG still advance through every tick. Such seeks may
+  lose faint quantized trail ghosts and lower raster detail on large windows;
+  do not claim pixel identity for that bounded reconstruction.
+- Regression coverage includes captured original draw/style/gradient stream
+  hashes plus actual Worker metadata/default, seeded full-whale, endpoint ack,
+  reduced-motion/resize, watchdog and cleanup cases. Standalone native Chrome
+  Canvas comparisons verify original appearance separately from the VM recorder;
+  they are not acceptance in the installed DSH GUI.
+
 ## Templates and rendering
 
 - Standalone `.js` files with a versioned JSON comment header (name, duration)
@@ -39,6 +73,41 @@ events while only the active toast remains, without starting them or a preview.
 - Limit scripts to 64 KiB, eight custom templates, 500–8000 ms duration. A script
   is never evaluated by the Host, import parser, or main DSH renderer.
 
+### Authorized theme passthrough follow-up
+
+The earlier visual-port scope excluded playback-engine changes. The current user
+authorization extends it only as needed to pass and update
+`frame.theme: 'light' | 'dark'` through the existing renderer and preflight protocol.
+Use the installed layout dependency's `ThemePresenter` DOM projection:
+`snapshot.active.colorScheme` → `html.style.colorScheme`, preference source →
+`html[data-ds-theme-source]` (`light`/`dark`/`system`), dark state →
+`body[data-ds-dark-theme]`. Do not add a theme dependency or hook.
+
+- Resolve in the parent: computed root `colorScheme`, explicit root theme source,
+  body dark attribute, opaque body/root background luminance, then OS `matchMedia`.
+  Pass the initial theme to `animationDocument`; observe DOM mutations and OS changes.
+- Accept `clutch_fireworks/theme` only from `parent` with the playback token and
+  a `light`/`dark` value. The opaque child must never query OS theme. Keep embedding
+  and srcDoc `color-scheme: normal`. Preview/live share `AnimationSurface`; import
+  preflight follows the same protocol.
+- Theme changes preserve the iframe/Worker, seed, time, captured animation, toast
+  and deadline. Reduced motion repaints its visible midpoint before resuming the
+  offscreen timeline, without reporting completion early.
+- Preserve `classic`, 5000 ms, original simulation/RNG/counts/physics/trails and
+  dark golden references; absent theme means dark. Light uses `source-over`,
+  the original PR light theme: base HSL lightness 46, fade alpha 0.22 and the
+  original per-effect lightness offsets, hues and saturation. Dark retains base
+  lightness 60 / fade 0.16 / lighter. No multiplier, hue remap or full-screen background. Repaint the private buffer at the same tick on theme changes; cold
+  reconstruction retains the existing lossy 48-tick/two-million-pixel bounds.
+- Update both READMEs, the bilingual authoring contract and AI prompt. This
+  follow-up currently has automated verification only; no new installed-GUI
+  acceptance is claimed. The parent agent owns source tests and an independent
+  native Chrome comparison, recorded separately when completed.
+
+本次授权将此前不含播放引擎的移植范围，扩展至必要的主题接口与渲染透传；不改变鲸鱼
+模拟、RNG、轨迹或播放生命周期。当前仅自动化验证，不宣称本次 GUI 验收；父 agent
+负责源码测试及独立原生 Chrome 对照。
+
 ## Configuration
 
 Use the public `plugins.bundle.config` keyed slot on the plugin details page.
@@ -54,7 +123,17 @@ Reserve the event slot during refresh, reject previews, and keep transport consu
 Cancel preparation on expiry, a five-second refresh deadline or plugin stop. Recheck
 expiry after the read (including suspended-tab wall-clock changes), ignore late results
 by preparation identity, and advance without retry. Start animation, toast and the fixed
-12-second playback deadline together after preparation. Failed reads use Emoji, not cache.
+12-second playback deadline together after preparation. Failed settings reads return
+`DEFAULT_ANIMATION_PREFERENCES` (`classic` / Whale Show), without cached custom source
+or a persisted selection change. An unavailable selected template (including missing or
+damaged files) still uses Emoji. Live script/render errors, startup/frame timeouts and
+unavailable Worker/OffscreenCanvas support retain the trusted emoji fallback; previews
+report errors instead. Expired/timed-out preparation skips the event without retry.
+
+设置读取失败使用默认 `classic` / 鲸鱼烟花，不复用缓存脚本或持久化改变选择；选中模板
+不可用（包括文件缺失、损坏）仍使用 Emoji。正式播放的脚本/渲染错误、启动或帧超时及
+Worker/OffscreenCanvas 不可用仍使用可信 emoji 兜底，预览显示错误；准备阶段过期或
+刷新超时则跳过该事件、不重试。
 
 Preview is a local request to the same global playback controller and root
 renderer used for tool launches. There is no preview box, synthetic tool event,

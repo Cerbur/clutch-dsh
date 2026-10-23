@@ -25,8 +25,9 @@ export const ANIMATION_GENERATION_PROMPT = `请为 DSH 的 clutch_fireworks 制�
 // clutch_fireworks: {"version":1,"name":"我的动画","durationMs":4000}
 时长 500–8000 ms，名称最多 60 字，文件最多 64 KiB。
 定义同步函数 function render(frame, fx) { ... }。渲染器逐帧调用它并自动清屏、适配 DPR 和窗口大小、停止与释放资源；不要自行建立循环、定时器或事件监听。
-frame = {ctx, width, height, time, delta, progress, durationMs, dpr, seed, message}。
+frame = {ctx, width, height, time, delta, progress, durationMs, dpr, seed, message, theme}。
 ctx 是标准 OffscreenCanvasRenderingContext2D，可画路径、曲线、渐变、文字、粒子、混合和阴影；width/height 是 CSS 像素；time/delta 是毫秒；progress 从 0 到 1。按绝对 time 计算运动，使不同帧率下结果一致。
+frame.theme 是宿主传入的 'light' 或 'dark'，表示 DSH 实际解析的主题，播放中可以变化；兼容缺失值时按 'dark' 处理。深色可用明亮粒子与加色闪光，浅色建议 source-over 混合与饱和深蓝、靛青、绿色，适配闪光和拖尾，始终保留透明背景，不铺整幕底色。只按 theme 改绘制配色，不改变随机数消费顺序、粒子数量、轨迹、物理或时间轴；切主题不重置 seed/time。不要自行查询操作系统主题。
 fx.random() 是每帧重置的确定性随机数，适合生成稳定的粒子初始位置；fx.clamp(p) 限制到 0..1；fx.easeOut(p) 为三次缓出。
 绘图助手：
 fx.circle(x,y,r,color,alpha=1,glow=0)

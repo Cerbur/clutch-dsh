@@ -101,6 +101,7 @@ Types are exported from `@cerbur/clutch-dsh-fireworks/animation` as
 | `progress`, `durationMs` | Normalized time from 0 to 1, and the template's configured duration.                                                                       |
 | `seed`                   | Deterministic integer seed for this celebration.                                                                                           |
 | `message`                | Optional celebration text, or an empty string. No Session identity or DSH handles are exposed.                                             |
+| `theme`                  | Resolved DSH appearance: `'light'` or `'dark'`, supplied by the parent and updated during playback.                                        |
 
 | Helper              | Arguments                                         |
 | ------------------- | ------------------------------------------------- |
@@ -119,9 +120,9 @@ out, and aim for fewer than about 1000 particles per frame. A reduced-motion
 preference keeps a static midpoint frame visible for the configured duration. The
 full timeline, including its end frame, still runs on a separate offscreen canvas
 inside the same isolated Worker. Only successful completion validates a custom
-preview; errors after the midpoint still fail validation. When the window size or
-DPR changes, the visible canvas redraws the midpoint at the new dimensions before
-continuing offscreen validation. This does not restart the playback clock or
+preview; errors after the midpoint still fail validation. When the window size,
+DPR or theme changes, the visible canvas redraws the midpoint with the current dimensions
+and palette before continuing offscreen validation. This does not restart the playback clock or
 complete validation; otherwise the displayed canvas stays static.
 
 CSS dimensions always match the actual window, including ultrawide and portrait
@@ -130,10 +131,89 @@ canvas budget, rounding backing dimensions down to stay within that limit.
 
 减少动态效果开启时，静态中点帧保留至配置时长结束；完整时间轴（包括终点帧）仍在同一个
 隔离 Worker 的独立离屏画布中验证，显示画布不播放动态。自定义预览必须完整成功才算通过，
-中点之后的错误仍会使验证失败。窗口尺寸或 DPR 改变时，可见画布按新尺寸重绘中点帧后继续
+中点之后的错误仍会使验证失败。窗口尺寸、DPR 或主题改变时，可见画布按当前尺寸与配色重绘中点帧后继续
 离屏验证，不重置播放期限，也不提前通过验证；其余时间保持静态。
 CSS 宽高始终使用实际窗口尺寸，包括超宽屏和竖屏；统一降低
 DPR，并向下取整画布像素尺寸，将总像素数限制在 800 万以内。
+
+## Theme contract / 主题合同
+
+`frame.theme: 'light' | 'dark'` is a rendering input from the parent DSH page.
+Use it to select colors and compositing while preserving random consumption,
+particle counts, trajectories, physics and timing. Scripts should treat a missing
+theme as `'dark'` for compatibility with older renderers. Keep the overlay transparent:
+bright particles and additive flashes suit dark pages; the same hues and saturation
+with lower lightness and `source-over` compositing suit light pages. Whale Show
+uses the original PR theme parameters: light has base lightness 46 and trail fade 0.22;
+dark has base lightness 60 and trail fade 0.16 with `lighter`. Per-effect lightness
+offsets are retained; colors are not scaled by a global multiplier or remapped.
+Do not paint a full-screen background or query the OS theme inside the opaque iframe
+or Worker.
+
+The existing `@deepseek-ai/dsh-client-ui-layout` dependency's `ThemePresenter`
+projects `snapshot.active.colorScheme` onto `html.style.colorScheme`, the preference
+source (`light`, `dark` or `system`) onto `html[data-ds-theme-source]`, and the dark
+state onto `body[data-ds-dark-theme]`. This DOM projection supplies the resolved
+DSH scheme; no new theme dependency or hook is required. Parent-side
+`readAnimationTheme()` checks, in order:
+
+1. A single resolved `light` or `dark` from the root's computed `colorScheme`.
+2. An explicit root `data-ds-theme-source` of `light` or `dark`.
+3. The body's `data-ds-dark-theme` attribute, if present, meaning dark.
+4. The luminance of an opaque body background, then an opaque root background.
+5. OS `matchMedia('(prefers-color-scheme: dark)')` as the final fallback.
+
+The parent passes the initial value to `animationDocument()` and watches root/body
+mutations with `MutationObserver` plus OS scheme changes. Updates use
+`{ type: 'clutch_fireworks/theme', token, theme }`; the child accepts only messages
+whose `source` is `parent`, whose token matches the playback token and whose theme
+is exactly `light` or `dark`. The opaque iframe never resolves the OS theme itself.
+Preview and live playback share `AnimationSurface`; bounded import preflight uses
+the same initial theme and update protocol. Embedding and srcDoc retain
+`color-scheme: normal` for transparency; the theme travels as data.
+
+A theme update keeps the same iframe and Worker, seed, time, captured animation,
+toast and deadline. In reduced motion it redraws the visible midpoint and resumes
+the offscreen timeline; that redraw is not a final-frame acknowledgement and cannot
+complete validation early.
+
+Whale Show retains `classic`, 5000 ms and the original simulation, RNG consumption,
+counts, physics and trails. Dark rendering retains the original golden references;
+missing `theme` selects dark. Theme switching reconstructs the private trail buffer
+with the new palette at the same simulation tick. Cold seeks, resize, large gaps,
+theme changes and backtracking reconstruct at most the latest 48 ticks within a
+two-million-pixel private buffer, even when the target is within the first 48 ticks.
+Uninterrupted playback retains the complete trail history at host DPR. Reconstruction
+may lose faint trail history and raster detail, so it is not pixel-identical to uninterrupted playback.
+
+`frame.theme` 是父 DSH 页面传入的绘制参数，值为 `'light' | 'dark'`，播放中可更新。
+只据此调整配色与混合方式，保留随机数消费顺序、粒子数量、轨迹、物理与时间轴；兼容旧渲染器
+时，缺失值按 `'dark'` 处理。深色适合明亮粒子与加色闪光；浅色保留相同色相与饱和度，降低
+明度并采用 `source-over` 混合。鲸鱼烟花使用原 PR 参数：浅色基础明度 46、拖尾擦除强度
+0.22；深色基础明度 60、擦除强度 0.16，并使用 `lighter`。保留各效果原本的明度增量，
+不做统一明度乘法或色相重映射。覆盖层始终透明，不绘制整幕背景。
+
+现有 `@deepseek-ai/dsh-client-ui-layout` 的 `ThemePresenter` 将
+`snapshot.active.colorScheme` 写入 `html.style.colorScheme`，将偏好来源
+`light`、`dark` 或 `system` 写入 `html[data-ds-theme-source]`，并用
+`body[data-ds-dark-theme]` 表示深色状态；无需新增主题依赖或 hook。
+父页面的 `readAnimationTheme()` 依次读取根元素 computed `colorScheme` 中明确的浅/深值、
+根元素明确的 `data-ds-theme-source` 浅/深值、body 深色属性、不透明 body 再 root 背景亮度，
+最后才使用操作系统 `matchMedia` 兜底。`system` 是偏好来源，不能覆盖 DSH 已解析的主题。
+
+父页面将初值传给 `animationDocument()`，通过 `MutationObserver` 和 OS 主题 change 观察更新。
+`clutch_fireworks/theme` 消息携带 token 和主题；子页面必须同时验证 `source === parent`、
+播放 token 和 `light`/`dark` 白名单。opaque iframe 与 Worker 不自行查询 OS 主题。
+预览和正式播放共用 `AnimationSurface`，导入预检也遵循同一初值与更新协议。
+iframe embedding 与 srcDoc 继续保持 `color-scheme: normal` 以维持透明，主题仅作为数据传递。
+
+切主题不重建 iframe 或 Worker，不重置 seed、time、当前动画、toast 或截止时间。
+减少动态模式先重绘可见中点帧，再继续离屏时间轴，不能把重绘当成终点确认或提前完成。
+鲸鱼保留 `classic`、5000 ms、原版模拟、RNG 消费、数量、物理与拖尾；深色保留原版 golden
+参考，缺失主题按深色处理。切主题在同一模拟 tick 以新配色重建私有拖尾画布；冷跳转、
+尺寸改变、大幅时间前进、切主题及时间回退重建时，最多绘制最近 48 tick，并限制在 200 万
+像素内，即使目标位于前 48 tick 也执行像素限制。正常连续播放保留完整拖尾历史与宿主 DPR。
+重建可能损失微弱历史拖尾与栅格细节，不保证与连续播放像素一致。
 
 ## Performance
 
@@ -268,15 +348,23 @@ does not share an older settings-panel request; it returns the newly read prefer
 directly to playback. Other pages' edits never mutate an active event's captured bytes.
 Preparation reserves the event slot and blocks preview while delivery continues. Expiry,
 a five-second refresh timeout or plugin stop aborts the read; identity checks discard late
-responses. A post-read expiry check also handles suspended tabs. Failed reads use Emoji;
-expired/timed-out preparation advances without retry. Animation, toast and their 12-second
+responses. A post-read expiry check also handles suspended tabs. Failed settings reads
+return `DEFAULT_ANIMATION_PREFERENCES` (`classic` / Whale Show), without cached custom
+source or a persisted selection change. This differs from an unavailable selected template
+(including missing/damaged files), which still uses Emoji. Live script/render errors,
+startup/frame timeouts and unavailable Worker/OffscreenCanvas support retain the trusted
+emoji fallback; previews report errors instead.
+Expired/timed-out preparation advances without retry. Animation, toast and their 12-second
 deadline start only after preparation completes.
 
 每个排队事件在捕获模板与时长前重新读取 Host 设置和文件可用性，即使事件同批到达也分别
 检查。刷新不复用较早的设置页请求，直接把本次读取结果交给播放；其他页面的编辑不会改变
 当前事件已捕获的脚本。刷新期间占用事件时间片、禁止插入预览，但继续接收事件。
 过期、5 秒刷新超时或卸载会中止读取，迟到结果按身份丢弃；读取后再检查过期时间以兼容
-标签页暂停。失败使用 Emoji，过期或超时则推进队列、不重试；动画、toast 及其 12 秒期限
+标签页暂停。设置读取失败返回 `DEFAULT_ANIMATION_PREFERENCES`（`classic` / 鲸鱼烟花），
+不复用缓存的自定义脚本，也不持久化改变选择；选中模板不可用（包括文件缺失或损坏）仍使用
+Emoji。正式播放的脚本/渲染错误、启动或帧超时及 Worker/OffscreenCanvas 不可用仍使用可信
+emoji 兜底，预览则显示错误。过期或刷新超时推进队列、不重试；动画、toast 及其 12 秒期限
 在准备完成后一起启动。
 
 No script or preference is written into Session history. Worker,
@@ -284,7 +372,14 @@ renderer, script header format, 64 KiB limit and eight-template limit are unchan
 
 ## Acceptance
 
-Validated in installed DSH 0.2.1-rc.2 with `DSH_HOME=~/.dsh-test`, using Codex's
+The records below describe earlier checks. This theme-passthrough follow-up has
+no new installed-GUI acceptance recorded here. Current verification is automated;
+the parent agent separately owns the independent native Chrome visual comparison.
+
+以下记录属于此前验收，本次主题透传修复尚无新增已安装 GUI 验收记录；当前验证限自动化，
+父 agent 另行负责独立原生 Chrome 视觉对照。
+
+Earlier validation in installed DSH 0.2.1-rc.2 with `DSH_HOME=~/.dsh-test`, using Codex's
 built-in browser: built-in preview, file import, custom preview and save,
 refresh persistence, real background `happy_fireworks` playback of the imported
 template, toast navigation to the source Session, and termination of a

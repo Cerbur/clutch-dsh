@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateAnimation } from '../lib/client/animation-validation.js';
+import { installAnimationThemeHost } from './helpers/animation-theme-host.mjs';
 
 const { AbortController } = globalThis;
 
@@ -12,44 +13,17 @@ const template = {
 };
 
 function harness(t) {
-  const listeners = new Set();
-  const frame = {
-    contentWindow: {},
-    style: {},
-    attributes: {},
-    removed: false,
-    setAttribute(key, value) {
-      this.attributes[key] = value;
-    },
-    remove() {
-      this.removed = true;
-    },
-  };
-  const previous = new Map(
-    ['document', 'window'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
-  );
-  globalThis.document = { createElement: () => frame, body: { append() {} } };
-  globalThis.window = {
-    addEventListener: (_type, fn) => listeners.add(fn),
-    removeEventListener: (_type, fn) => listeners.delete(fn),
-  };
-  t.after(() => {
-    for (const [key, value] of previous) {
-      if (value) Object.defineProperty(globalThis, key, value);
-      else delete globalThis[key];
-    }
-  });
+  const host = installAnimationThemeHost(t);
   return {
-    frame,
-    listeners,
+    get frame() {
+      return host.frames[0];
+    },
+    get listeners() {
+      return host.windowListeners.get('message');
+    },
+    host,
     report(type, overrides = {}) {
-      const token = JSON.parse(frame.srcdoc.match(/"token":("[^"]+")/)[1]);
-      for (const receive of [...listeners])
-        receive({
-          source: frame.contentWindow,
-          data: { token, type: 'clutch_fireworks/' + type, message: 'broken' },
-          ...overrides,
-        });
+      host.report(this.frame, type, overrides);
     },
   };
 }
@@ -57,7 +31,7 @@ function harness(t) {
 test('preflight ignores spoofed messages, uses an opaque sandbox, and cleans up after success', async (t) => {
   const h = harness(t);
   const result = validateAnimation(template, new AbortController().signal);
-  assert.equal(h.frame.attributes.sandbox, 'allow-scripts');
+  assert.equal(h.frame.getAttribute('sandbox'), 'allow-scripts');
   h.report('ready', { source: {} });
   h.report('ready', { data: { token: 'wrong', type: 'clutch_fireworks/ready' } });
   assert.equal(h.frame.removed, false);
@@ -65,6 +39,9 @@ test('preflight ignores spoofed messages, uses an opaque sandbox, and cleans up 
   await result;
   assert.equal(h.frame.removed, true);
   assert.equal(h.listeners.size, 0);
+  assert.equal(h.host.observers.size, 0);
+  assert.equal(h.host.mediaListeners.size, 0);
+  assert.equal(h.frame.listeners.size, 0);
 });
 
 for (const mode of ['error', 'abort', 'timeout'])
@@ -80,4 +57,7 @@ for (const mode of ['error', 'abort', 'timeout'])
     await rejected;
     assert.equal(h.frame.removed, true);
     assert.equal(h.listeners.size, 0);
+    assert.equal(h.host.observers.size, 0);
+    assert.equal(h.host.mediaListeners.size, 0);
+    assert.equal(h.frame.listeners.size, 0);
   });

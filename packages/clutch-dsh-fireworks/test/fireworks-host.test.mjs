@@ -46,6 +46,17 @@ test('registers the happy_fireworks tool with no required input', async () => {
   assert.deepEqual(inject, ['tools']);
   assert.equal(happyFireworksTool.name, FIREWORKS_TOOL_NAME);
   assert.equal(happyFireworksTool.description, FIREWORKS_TOOL_DESCRIPTION);
+  // The visual template must not reintroduce PR7's splash/mode/duration tool controls.
+  assert.deepEqual(happyFireworksTool.parameters, {
+    type: 'object',
+    properties: { message: { type: 'string', description: FIREWORKS_MESSAGE_DESCRIPTION } },
+  });
+  assert.deepEqual(happyFireworksTool.output.schema, {
+    type: 'object',
+    additionalProperties: false,
+    properties: { id: { type: 'string' }, message: { type: 'string' } },
+    required: ['id'],
+  });
   assert.equal(
     happyFireworksTool.parameters.properties.message.description,
     FIREWORKS_MESSAGE_DESCRIPTION,
