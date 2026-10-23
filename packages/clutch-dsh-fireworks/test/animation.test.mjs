@@ -6,6 +6,8 @@ import {
   parseAnimation,
   parseAnimationPreferences,
   DEFAULT_ANIMATION_PREFERENCES,
+  DEFAULT_STORED_ANIMATION_PREFERENCES,
+  parseStoredAnimationPreferences,
   MAX_SCRIPT_BYTES,
 } from '../lib/animation.js';
 import { animationDocument } from '../lib/client/animation-sandbox.js';
@@ -18,6 +20,28 @@ const source = (body = 'fx.circle(30, 40, 12, "red");', durationMs = 1200) =>
   '\nfunction render(frame, fx) {' +
   body +
   '}';
+
+test('new profiles default to classic without replacing explicit animation selections', () => {
+  const expected = { active: 'classic', scripts: {} };
+  const stored = { version: 2, active: 'classic', files: {} };
+  assert.deepEqual(DEFAULT_ANIMATION_PREFERENCES, expected);
+  assert.deepEqual(parseAnimationPreferences(undefined), expected);
+  assert.deepEqual(DEFAULT_STORED_ANIMATION_PREFERENCES, stored);
+  assert.deepEqual(parseStoredAnimationPreferences(undefined), stored);
+  for (const active of ['emoji', 'rings', 'classic', 'custom-saved']) {
+    const scripts = { 'custom-saved': source() };
+    const preferences = { active, scripts };
+    assert.deepEqual(parseAnimationPreferences(preferences), preferences);
+    assert.deepEqual(parseStoredAnimationPreferences(preferences), preferences);
+    const persisted = {
+      version: 2,
+      active,
+      files: { 'custom-saved': 'clutch-dsh-fireworks/animations/' + 'a'.repeat(64) + '.js' },
+    };
+    assert.deepEqual(parseStoredAnimationPreferences(persisted), persisted);
+  }
+  assert.deepEqual(DEFAULT_ANIMATION_PREFERENCES, expected);
+});
 
 test('validates imported files without executing code, bounds scripts and template selections', () => {
   assert.equal(
@@ -54,7 +78,14 @@ test('validates imported files without executing code, bounds scripts and templa
 
 function sandboxHarness(
   template,
-  { reducedMotion = false, width = 500, height = 300, dpr = 1, validationOnly = false } = {},
+  {
+    reducedMotion = false,
+    width = 500,
+    height = 300,
+    dpr = 1,
+    validationOnly = false,
+    seed = 42,
+  } = {},
 ) {
   let workerSource;
   let worker;
@@ -68,7 +99,7 @@ function sandboxHarness(
   const html = animationDocument(
     template,
     'playback-token',
-    42,
+    seed,
     '</script><script>bad()</script>',
     validationOnly,
   );
@@ -265,31 +296,402 @@ test('reduced-motion validation remains bounded by watchdog and page cleanup', (
   }
 });
 
-function connectSandboxWorker(harness) {
-  const draws = [];
-  const hidden = [];
-  const context = (target) =>
+function connectSandboxWorker(
+  harness,
+  context = (target) =>
     new Proxy(
       { fillRect: (...args) => target.push(args) },
       { get: (target, key) => target[key] ?? (() => {}) },
-    );
-  const canvas = { getContext: () => context(draws) };
+    ),
+) {
+  const draws = [];
+  const hidden = [];
+  const drawing = context(draws);
+  const canvas = { getContext: () => drawing };
   const runtime = vm.createContext({
     postMessage: (data) => harness.worker.onmessage({ data }),
     OffscreenCanvas: class {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.drawing = context(hidden);
+      }
       getContext() {
-        return context(hidden);
+        return this.drawing;
       }
     },
   });
   vm.runInContext(harness.workerSource, runtime);
   let delivered = harness.worker.sent.length;
-  runtime.onmessage({ data: { type: 'init', canvas } });
-  const step = () => runtime.onmessage({ data: harness.worker.sent[delivered++] });
+  const dispatch = (data) => {
+    runtime.pendingMessage = data;
+    vm.runInContext('onmessage({ data: pendingMessage })', runtime, { timeout: 1000 });
+  };
+  dispatch({ type: 'init', canvas });
+  const step = () => dispatch(harness.worker.sent[delivered++]);
   const flush = () => {
     while (delivered < harness.worker.sent.length) step();
   };
-  return { canvas, draws, hidden, step, flush };
+  return { canvas, draws, hidden, step, flush, render: dispatch };
+}
+
+// A small Canvas adapter, not a rasterizer: exercise the real worker's circle/line paths,
+// alpha isolation and sprite blits, and reject unsupported methods instead of silently no-oping.
+function pathDrawingContext(target) {
+  let path = [];
+  const stack = [];
+  const defaults = {
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    fillStyle: '#000',
+    strokeStyle: '#000',
+    lineWidth: 1,
+  };
+  const numeric = (values) =>
+    values.forEach((value) => assert.ok(Number.isFinite(value), 'finite drawing coordinates'));
+  const context = {
+    ...defaults,
+    reset() {
+      assert.equal(stack.length, 0, 'drawing state must be balanced between frames');
+      Object.assign(context, defaults);
+      path = [];
+    },
+    setTransform(...args) {
+      numeric(args);
+    },
+    save() {
+      stack.push(Object.fromEntries(Object.keys(defaults).map((key) => [key, context[key]])));
+    },
+    restore() {
+      assert.ok(stack.length, 'restore needs a matching save');
+      Object.assign(context, stack.pop());
+    },
+    beginPath() {
+      path = [];
+    },
+    arc(...args) {
+      numeric(args);
+      assert.ok(args[2] >= 0, 'circle radius cannot be negative');
+      path.push(['arc', ...args]);
+    },
+    moveTo(...args) {
+      numeric(args);
+      path.push(['moveTo', ...args]);
+    },
+    lineTo(...args) {
+      numeric(args);
+      path.push(['lineTo', ...args]);
+    },
+    fill() {
+      paint('fill', context.fillStyle);
+    },
+    stroke() {
+      paint('stroke', context.strokeStyle);
+    },
+    drawImage(image, ...args) {
+      numeric([image.width, image.height, ...args]);
+      if (context.globalAlpha > 0)
+        target.push(['drawImage', image.width, image.height, ...args, context.globalAlpha]);
+    },
+  };
+  function paint(type, color) {
+    assert.ok(
+      Number.isFinite(context.globalAlpha) && context.globalAlpha >= 0 && context.globalAlpha <= 1,
+    );
+    if (context.globalAlpha > 0) {
+      assert.ok(path.length > 0, 'a paint must have path geometry');
+      target.push([
+        type,
+        path.map((part) => [...part]),
+        color,
+        context.globalAlpha,
+        context.lineWidth,
+      ]);
+    }
+  }
+  return context;
+}
+
+async function whaleTemplate() {
+  const script = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  const template = parseAnimation(script, 'classic');
+  assert.equal(template.id, 'classic');
+  assert.equal(template.durationMs, 5000);
+  return template;
+}
+
+function assertSandboxReleased(harness) {
+  assert.equal(harness.terminated, 1);
+  assert.equal(harness.revoked, 1);
+  assert.equal(harness.timers.size, 0);
+}
+
+test('real whale outline remains reachable and frame-rate independent for every tested seed and viewport', async () => {
+  const template = await whaleTemplate();
+  const outline = JSON.parse(
+    JSON.stringify(vm.runInNewContext(template.source + '; WHALE_OUTLINE')),
+  );
+  assert.equal(
+    outline.length,
+    260,
+    'retain the complete sampled whale, not a generic particle burst',
+  );
+  const launchVariants = new Set();
+  for (const seed of [0, 1, 42, 0xffffffff]) {
+    for (const [width, height, dpr] of [
+      [800, 600, 1],
+      [300, 500, 2],
+      [500, 220, 2],
+    ]) {
+      const harness = sandboxHarness(template, { seed, width, height, dpr });
+      const { draws, hidden, render } = connectSandboxWorker(harness, pathDrawingContext);
+      const paintAt = (time, delta = 0) => {
+        draws.length = 0;
+        hidden.length = 0;
+        render({
+          type: 'frame',
+          frame: {
+            width,
+            height,
+            dpr,
+            seed,
+            time,
+            delta,
+            progress: time / template.durationMs,
+            durationMs: template.durationMs,
+            message: '',
+          },
+        });
+        assert.equal(
+          harness.reports.some(({ type }) => type === 'clutch_fireworks/error'),
+          false,
+          JSON.stringify(harness.reports),
+        );
+        return JSON.stringify(draws);
+      };
+      try {
+        // Sample either side of phase transitions rather than requiring an exact event tick.
+        for (const time of [300, 1799, 1801, 2399, 2401, 2500, 2801, 3200, 4500]) {
+          paintAt(time);
+          assert.ok(draws.length > 0, `seed ${seed} must paint at ${time}ms in ${width}x${height}`);
+        }
+        launchVariants.add(paintAt(1500));
+        const formed = paintAt(3200);
+        const radius = Math.min(width, height) * 0.25;
+        const circles = draws
+          .filter(([type]) => type === 'fill')
+          .flatMap(([, path]) => path.filter(([type]) => type === 'arc').map(([, x, y]) => [x, y]));
+        // At full hold all original samples must be painted at their normalized positions,
+        // regardless of the random shell families, launches or particle decoration.
+        for (const [x, y] of outline) {
+          const expectedX = width * 0.5 + x * radius;
+          const expectedY = height * 0.38 + y * radius * 0.92;
+          assert.ok(
+            expectedX >= 0 && expectedX <= width && expectedY >= 0 && expectedY <= height,
+            'the full whale fits the viewport',
+          );
+          assert.ok(
+            circles.some(
+              ([actualX, actualY]) =>
+                Math.abs(actualX - expectedX) < 1e-7 && Math.abs(actualY - expectedY) < 1e-7,
+            ),
+            `seed ${seed} must paint whale sample ${x},${y}`,
+          );
+        }
+        assert.equal(paintAt(3200, 1000), formed, 'absolute time, not delta, determines the pose');
+        for (const fps of [30, 60]) {
+          for (let frame = 0; (frame / fps) * 1000 < 5000; frame++)
+            paintAt((frame / fps) * 1000, 1000 / fps);
+          assert.equal(paintAt(3200, 1000 / fps), formed, `same pose after ${fps}fps history`);
+        }
+        // Deliberately skip 1800/2400/2680 and revisit earlier times after the finale.
+        for (const time of [137, 711, 1817, 2419, 2713, 3191, 4703, 4999, 0, 2500])
+          paintAt(time, 137);
+        assert.equal(
+          paintAt(3200),
+          formed,
+          'irregular and out-of-order frames cannot gate whale formation',
+        );
+        const paintedAlpha = () =>
+          draws.filter(([type]) => type === 'fill').reduce((sum, [, , , alpha]) => sum + alpha, 0);
+        paintAt(3200);
+        const holdAlpha = paintedAlpha();
+        paintAt(4500);
+        assert.ok(
+          paintedAlpha() > 0 && paintedAlpha() < holdAlpha,
+          'whale visibly fades before the endpoint',
+        );
+        paintAt(4999);
+        assert.equal(
+          draws.length,
+          0,
+          'particles finish naturally before the endpoint, not by truncation',
+        );
+        paintAt(5000);
+        assert.equal(draws.length, 0, 'all visible particles fade by the configured endpoint');
+      } finally {
+        harness.hide();
+      }
+      assertSandboxReleased(harness);
+    }
+  }
+  assert.ok(launchVariants.size > 2, 'seed changes launch presentation without gating the whale');
+});
+
+for (const reducedMotion of [false, true]) {
+  test(`real classic whale completes its full 5000ms playback and releases resources (reduced motion: ${reducedMotion})`, async () => {
+    const harness = sandboxHarness(await whaleTemplate(), { reducedMotion, seed: 1 });
+    const { draws, hidden, flush, step } = connectSandboxWorker(harness, pathDrawingContext);
+    try {
+      harness.frame(100);
+      flush();
+      assert.deepEqual(
+        harness.reports.map(({ type }) => type),
+        ['clutch_fireworks/ready'],
+      );
+      assert.equal(harness.worker.sent.at(-1).frame.time, reducedMotion ? 2500 : 0);
+      if (reducedMotion)
+        assert.ok(draws.length > 0, 'the static forming-whale midpoint must paint');
+      const midpoint = JSON.stringify(draws);
+      const start = reducedMotion ? 101 : 100;
+      if (reducedMotion) {
+        harness.frame(start);
+        flush();
+        assert.equal(harness.worker.sent.at(-1).type, 'validate');
+        assert.equal(harness.worker.sent.at(-1).frame.time, 0);
+      }
+      for (const time of [300, 1799, 1801, 2399, 2401, 2500, 2801, 3500, 4500, 4999]) {
+        harness.frame(start + time);
+        flush();
+        assert.equal(harness.worker.sent.at(-1).frame.time, time);
+        assert.equal(harness.worker.sent.at(-1).frame.progress, time / 5000);
+        assert.deepEqual(
+          harness.reports.map(({ type }) => type),
+          ['clutch_fireworks/ready'],
+        );
+        assert.equal(harness.terminated, 0, 'no successful intermediate frame ends playback');
+      }
+      if (reducedMotion) {
+        assert.equal(
+          JSON.stringify(draws),
+          midpoint,
+          'validation must not repaint the displayed midpoint',
+        );
+        assert.ok(hidden.length > 0, 'the real timeline paints to an offscreen validation canvas');
+      } else {
+        assert.ok(
+          draws.some(([type]) => type === 'stroke'),
+          'real line paths must paint',
+        );
+        assert.ok(
+          draws.some(([type]) => type === 'fill' || type === 'drawImage'),
+          'real circle paths or their sprites must paint',
+        );
+      }
+      harness.frame(start + 5000);
+      assert.equal(harness.worker.sent.at(-1).frame.time, 5000);
+      assert.equal(harness.worker.sent.at(-1).frame.progress, 1);
+      assert.equal(harness.terminated, 0, 'the endpoint must be acknowledged before cleanup');
+      assert.equal(harness.reports.length, 1);
+      step();
+      assert.deepEqual(
+        harness.reports.map(({ type }) => type),
+        ['clutch_fireworks/ready', 'clutch_fireworks/done'],
+      );
+      assertSandboxReleased(harness);
+      harness.worker.onmessage({ data: { type: 'painted' } });
+      harness.worker.onmessage({ data: { type: 'error', message: 'late callback' } });
+      harness.hide();
+      assert.equal(harness.reports.length, 2);
+      assertSandboxReleased(harness);
+    } finally {
+      harness.hide();
+    }
+  });
+}
+
+test('real whale midpoint redraws after resize without restarting its 5000ms deadline', async () => {
+  const harness = sandboxHarness(await whaleTemplate(), { reducedMotion: true });
+  const { canvas, draws, hidden, step, flush } = connectSandboxWorker(harness, pathDrawingContext);
+  try {
+    harness.frame(100);
+    flush();
+    assert.ok(draws.length > 0);
+    harness.frame(101);
+    flush();
+    for (const [now, width, height, dpr] of [
+      [2000, 300, 500, 2],
+      [5101, 7680, 4320, 3],
+    ]) {
+      const previousDraws = draws.length;
+      harness.resize(width, height, dpr);
+      harness.frame(now);
+      assert.equal(harness.worker.sent.at(-1).type, 'frame');
+      assert.equal(harness.worker.sent.at(-1).frame.time, 2500);
+      step();
+      assert.ok(draws.length > previousDraws, 'resized midpoint must contain visible geometry');
+      assert.equal(harness.terminated, 0, 'a midpoint redraw cannot complete validation');
+      assert.equal(harness.reports.length, 1);
+      assert.equal(harness.worker.sent.at(-1).type, 'validate');
+      assert.equal(harness.worker.sent.at(-1).frame.time, now - 101);
+      const appliedDpr = Math.min(dpr, 2, Math.sqrt(8_000_000 / (width * height)));
+      assert.equal(canvas.width, Math.floor(width * appliedDpr));
+      assert.equal(canvas.height, Math.floor(height * appliedDpr));
+      assert.ok(canvas.width * canvas.height <= 8_000_000);
+      step();
+    }
+    assert.ok(hidden.length > 0);
+    assert.deepEqual(
+      harness.reports.map(({ type }) => type),
+      ['clutch_fireworks/ready', 'clutch_fireworks/done'],
+    );
+    assertSandboxReleased(harness);
+  } finally {
+    harness.hide();
+  }
+});
+
+for (const reducedMotion of [false, true]) {
+  for (const cleanup of ['pagehide', 'watchdog']) {
+    test(`real whale releases a pending frame on ${cleanup} (reduced motion: ${reducedMotion})`, async () => {
+      const harness = sandboxHarness(await whaleTemplate(), { reducedMotion });
+      const { flush } = connectSandboxWorker(harness, pathDrawingContext);
+      try {
+        harness.frame(100);
+        flush();
+        harness.frame(101);
+        flush();
+        harness.resize(300, 500, 2);
+        harness.frame(2600);
+        const sent = harness.worker.sent.length;
+        assert.equal(harness.timers.size, 1);
+        const watchdog = [...harness.timers.values()][0];
+        assert.equal(watchdog.delay, 750);
+        if (cleanup === 'watchdog') watchdog.listener();
+        else harness.hide();
+        harness.worker.onmessage({ data: { type: 'painted' } });
+        harness.worker.onmessage({ data: { type: 'error', message: 'late callback' } });
+        harness.hide();
+        assert.equal(
+          harness.worker.sent.length,
+          sent,
+          'late acknowledgements cannot resume playback',
+        );
+        assert.deepEqual(
+          harness.reports.map(({ type }) => type),
+          cleanup === 'watchdog'
+            ? ['clutch_fireworks/ready', 'clutch_fireworks/error']
+            : ['clutch_fireworks/ready'],
+        );
+        assertSandboxReleased(harness);
+      } finally {
+        harness.hide();
+      }
+    });
+  }
 }
 
 test('reduced-motion resize redraws the visible midpoint while preserving timeline and deadline', () => {
@@ -504,7 +906,7 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
           dpr: 1,
           seed: 42,
           time: 700,
-          progress: 0.2,
+          progress: 700 / template.durationMs,
           durationMs: template.durationMs,
         },
       },

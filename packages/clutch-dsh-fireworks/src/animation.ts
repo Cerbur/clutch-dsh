@@ -73,7 +73,10 @@ export interface AnimationPreferences {
 export const customAnimationCount = (value: AnimationPreferences): number =>
   Object.keys(value.scripts).length + Object.keys(value.unavailable ?? {}).length;
 
-export const DEFAULT_ANIMATION_PREFERENCES: AnimationPreferences = { active: 'emoji', scripts: {} };
+export const DEFAULT_ANIMATION_PREFERENCES: AnimationPreferences = {
+  active: 'classic',
+  scripts: {},
+};
 
 export const ANIMATION_FILES_DIRECTORY = 'clutch-dsh-fireworks/animations';
 export interface StoredAnimationPreferences {
@@ -84,7 +87,7 @@ export interface StoredAnimationPreferences {
 }
 export const DEFAULT_STORED_ANIMATION_PREFERENCES: StoredAnimationPreferences = {
   version: 2,
-  active: 'emoji',
+  active: 'classic',
   files: {},
 };
 export interface AnimationSettingsValue {

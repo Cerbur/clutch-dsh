@@ -21,6 +21,27 @@ the existing trusted failure presentation remain bounded inside this deadline.
 Ignore old animation/toast callbacks by playback identity. Keep accepting new
 events while only the active toast remains, without starting them or a preview.
 
+## PR #7 whale template adaptation
+
+- Preserve all four PR commits through rebase, followed by an explicit cleanup
+  commit restoring the release integration before the scoped visual port.
+- Replace Starburst in `assets/animations/classic.js`, retaining `classic` for
+  existing selections. Unconfigured preferences now choose `classic`; explicit
+  Emoji, Aurora and custom choices are not migrated or overwritten.
+- Always launch the whale finale. Compress launches, bursts, sampled-outline
+  formation, anchored fountain and fade into 5000 ms, with no tool parameter,
+  probability gate, schema change or new playback engine.
+- Port the PR shell families and bounded exponential schedule to immutable seeded
+  descriptors; evaluate drag/gravity and short trails at absolute host time. This
+  replaces the old mutable simulation/pixel buffer so skipped frames, midpoint
+  revisits and resize cannot delay or restart the whale. Use saturated cores and
+  dark rims with source-over transparency for both page backgrounds; v1 does not
+  expose the page theme to scripts. The host retains all lifecycle ownership.
+- Regression coverage executes the actual template through the sandbox Worker:
+  metadata/defaults, explicit selections, seeds, frame schedules, endpoint ack,
+  reduced-motion midpoint/resize, watchdog and idempotent cleanup. No installed
+  GUI visual acceptance is implied by the VM canvas recorder.
+
 ## Templates and rendering
 
 - Standalone `.js` files with a versioned JSON comment header (name, duration)

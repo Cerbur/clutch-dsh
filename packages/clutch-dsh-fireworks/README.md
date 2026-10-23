@@ -4,7 +4,7 @@
 
 `@cerbur/clutch-dsh-fireworks` adds a short celebration overlay to the DSH Web UI. An agent can
 call `happy_fireworks` after a meaningful milestone, optionally with a brief message, and the
-DSH window shows a burst of emoji fireworks, even when the originating Session is in the background.
+DSH window shows a fireworks celebration, even when the originating Session is in the background.
 A clickable toast opens the Session that triggered the celebration.
 
 The plugin is an additive DSH extension. It registers its own tool and Web UI overlay without
@@ -84,8 +84,14 @@ to the originating Session, or use **×** to dismiss the toast.
 ### Choose, import, or generate animations
 
 Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Click a card to use **Emoji**,
-**Starburst**, **Aurora**, or an imported animation immediately. The selected card shows
+**Whale Show**, **Aurora**, or an imported animation immediately. The selected card shows
 **当前使用**. There is no separate Save step; existing animations finish with their captured template.
+Whale Show replaces Starburst under the existing `classic` ID and is the default when no animation
+is configured. Every five-second show includes rocket launches, shell bursts, the blue particle
+whale and its fountain, then a complete fade-out—never a random easter egg. Existing explicit
+Emoji, Aurora and imported selections are preserved; existing Starburst selections receive Whale Show.
+The same transparent effect works on light and dark backgrounds without changing tool parameters.
+
 Compact cards automatically fit more columns in wider panels and fewer in narrower panels.
 Card details stack the name, tag, and duration vertically. Long names use a single-line ellipsis;
 hover the title to read the full name. Cards and dialogs share typography and DSH theme colors,
@@ -135,7 +141,7 @@ After upgrading an already-running local checkout, restart DSH to load the new H
 
 ## Behavior and limitations
 
-- Built-ins include a 3.2-second emoji burst, 4.2-second starbursts and 3.6-second aurora rings.
+- Built-ins include a 3.2-second emoji burst, the default 5-second whale show and 3.6-second aurora rings.
   Custom effects last 0.5–8 seconds. The optional `message`
   is normalized to a maximum of 120 characters. Only the toast accepts clicks; particles remain
   click-through.
@@ -160,7 +166,7 @@ After upgrading an already-running local checkout, restart DSH to load the new H
   event is active, including any remaining toast time.
 - Settings refresh reserves the next event's slot for up to five seconds, without showing its
   animation or toast. Expiry, refresh timeout or plugin unload cancels the wait; late responses
-  cannot start that event. A failed refresh uses Emoji instead of cached custom source.
+  cannot start that event. A failed refresh uses the built-in default Whale Show instead of cached custom source.
 - Duplicate Session/tool-call identities are ignored. The
   transient feed and playback queue are bounded to 128 entries each, and events expire after
   30 seconds. Expired or overflowed pending events are dropped. Brief disconnects can catch up
