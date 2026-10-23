@@ -43,7 +43,7 @@ Create the new plugin under `/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/
 - `src/client/entry.ts` registers the additive root overlay and exports browser-side visual types.
 - `scripts/build-client.mjs` produces the DSH ModuleLoader-compatible browser closure and injects scoped CSS.
 - `test/` contains package metadata, Host/projection, and renderer tests.
-- `README.md`, `README.zh.md`, `assets/screenshots/fireworks-mvp.svg`, `docs/RELEASING.md`, and `RELEASE-LOG.md` document the public package.
+- `README.md`, `README.zh.md`, `assets/screenshots/screenshots-zh.png`, `docs/RELEASING.md`, and `RELEASE-LOG.md` document the public package.
 
 ---
 
@@ -1135,7 +1135,7 @@ Expected: `lib/client.js` contains the ModuleLoader registration and overlay id,
 
 - Create: `packages/clutch-dsh-fireworks/README.md`
 - Create: `packages/clutch-dsh-fireworks/README.zh.md`
-- Create: `packages/clutch-dsh-fireworks/assets/screenshots/fireworks-mvp.svg`
+- Create: `packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png`
 - Create: `packages/clutch-dsh-fireworks/docs/RELEASING.md`
 - Create: `packages/clutch-dsh-fireworks/RELEASE-LOG.md`
 
@@ -1144,37 +1144,19 @@ Expected: `lib/client.js` contains the ModuleLoader registration and overlay id,
 - Documents the public package and its exact npm/source installation commands.
 - Produces the screenshot path referenced by both README files.
 
-- [ ] **Step 1: Create the visual reference asset.**
+- [ ] **Step 1: Use the current installed-DSH screenshot.**
 
-Create `assets/screenshots/fireworks-mvp.svg` as a small self-contained illustration of a DSH-like white conversation surface with a purple celebration banner and scattered emoji particles. It must be a static documentation asset, not a runtime dependency:
-
-```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
-  <title id="title">Happy fireworks overlay preview</title>
-  <desc id="desc">A DSH conversation surface covered by emoji fireworks after a successful tool call.</desc>
-  <rect width="1200" height="680" rx="28" fill="#eef3f8"/>
-  <rect x="120" y="48" width="1032" height="584" rx="24" fill="#fff" stroke="#d8e0e8"/>
-  <rect x="120" y="48" width="1032" height="72" rx="24" fill="#f8fafc"/>
-  <text x="158" y="92" font-family="system-ui, sans-serif" font-size="24" font-weight="700" fill="#263241">DSH conversation</text>
-  <rect x="424" y="150" width="352" height="54" rx="27" fill="#7a50df"/>
-  <text x="600" y="184" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#fff">MVP shipped! 🎉</text>
-  <g font-family="system-ui, sans-serif" font-size="46" text-anchor="middle">
-    <text x="210" y="198">✨</text><text x="338" y="302">🎊</text><text x="492" y="252">🌟</text>
-    <text x="720" y="300">🎉</text><text x="910" y="218">💫</text><text x="1038" y="356">🎊</text>
-    <text x="244" y="462">🌟</text><text x="440" y="542">🎉</text><text x="680" y="484">✨</text>
-    <text x="882" y="548">🌟</text><text x="1060" y="500">🎉</text>
-  </g>
-  <g fill="#ef4d8d"><circle cx="286" cy="250" r="8"/><circle cx="815" cy="252" r="7"/><circle cx="610" cy="420" r="8"/></g>
-  <g fill="#f4b635"><circle cx="370" cy="420" r="7"/><circle cx="1002" cy="280" r="8"/></g>
-  <rect x="270" y="566" width="732" height="38" rx="19" fill="#f3f6f9"/>
-</svg>
-```
+The 2026-10-24 screenshot refresh supersedes the original MVP illustration.
+Use the user-supplied PNG at `assets/screenshots/screenshots-zh.png`, which shows
+whale fireworks and the celebration toast. Keep PNG format and aspect ratio;
+the current documentation image is 1600 × 970. The original SVG illustration
+has been removed. This is a documentation asset, not a runtime dependency.
 
 - [ ] **Step 2: Write the English README in the required section order.**
 
 `README.md` must contain, in order:
 
-1. `## Overview` with the screenshot `![Happy fireworks overlay](assets/screenshots/fireworks-mvp.svg)` and a statement that the plugin is plugin-only and leaves DSH source untouched.
+1. `## Overview` with a statement that the plugin is plugin-only and leaves DSH source untouched. Following the current repository convention, place `assets/screenshots/screenshots-zh.png` in the Features table after Installation.
 2. `## Capabilities` listing the `happy_fireworks` tool, optional `message`, successful-result trigger, emoji MVP, click-through overlay, and SVG extension point.
 3. `## Installation` with npm first:
 
@@ -1260,7 +1242,7 @@ Create `RELEASE-LOG.md` with Chinese entries first and English entries second, o
 Run:
 
 ```bash
-pnpm --filter @cerbur/clutch-dsh-fireworks exec prettier --check package.json tsconfig.json cordis.patch.yml src test scripts README.md README.zh.md docs/RELEASING.md RELEASE-LOG.md assets/screenshots/fireworks-mvp.svg
+pnpm --filter @cerbur/clutch-dsh-fireworks exec prettier --check package.json tsconfig.json cordis.patch.yml src test scripts README.md README.zh.md docs/RELEASING.md RELEASE-LOG.md screenshots.json
 pnpm --filter @cerbur/clutch-dsh-fireworks lint
 pnpm --filter @cerbur/clutch-dsh-fireworks typecheck
 pnpm --filter @cerbur/clutch-dsh-fireworks test

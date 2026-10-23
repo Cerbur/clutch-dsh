@@ -37,6 +37,7 @@
       "types": "./lib/client/entry.d.ts",
       "default": "./lib/client.js"
     },
+    "./icon": "./assets/icon.svg",
     "./package.json": "./package.json"
   },
   "files": [

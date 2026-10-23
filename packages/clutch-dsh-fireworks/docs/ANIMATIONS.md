@@ -204,7 +204,7 @@ may lose faint trail history and raster detail, so it is not pixel-identical to 
 `frame.theme` 是父 DSH 页面传入的绘制参数，值为 `'light' | 'dark'`，播放中可更新。
 只据此调整配色与混合方式，保留随机数消费顺序、粒子数量、轨迹、物理与时间轴；兼容旧渲染器
 时，缺失值按 `'dark'` 处理。深色适合明亮粒子与加色闪光；浅色保留相同色相与饱和度，降低
-明度并采用 `source-over` 混合。鲸鱼烟花使用原 PR 参数：浅色基础明度 46、拖尾擦除强度
+明度并采用 `source-over` 混合。鲸跃烟火使用原 PR 参数：浅色基础明度 46、拖尾擦除强度
 0.22；深色基础明度 60、擦除强度 0.16，并使用 `lighter`。保留各效果原本的明度增量，
 不做统一明度乘法或色相重映射。覆盖层始终透明，不绘制整幕背景。
 
@@ -376,7 +376,7 @@ deadline start only after preparation completes.
 检查。刷新不复用较早的设置页请求，直接把本次读取结果交给播放；其他页面的编辑不会改变
 当前事件已捕获的脚本。刷新期间占用事件时间片、禁止插入预览，但继续接收事件。
 过期、5 秒刷新超时或卸载会中止读取，迟到结果按身份丢弃；读取后再检查过期时间以兼容
-标签页暂停。设置读取失败返回 `DEFAULT_ANIMATION_PREFERENCES`（`classic` / 鲸鱼烟花），
+标签页暂停。设置读取失败返回 `DEFAULT_ANIMATION_PREFERENCES`（`classic` / 鲸跃烟火），
 不复用缓存的自定义脚本，也不持久化改变选择；选中模板不可用（包括文件缺失或损坏）仍使用
 Emoji。正式播放的脚本/渲染错误、启动或帧超时及 Worker/OffscreenCanvas 不可用仍使用可信
 emoji 兜底，预览则显示错误。过期或刷新超时推进队列、不重试；动画、toast 及其 12 秒期限

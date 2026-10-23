@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <title>Fireworks party popper</title>
+  <defs>
+    <linearGradient id="cone" x1="20" y1="36" x2="39" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE583"/>
+      <stop offset="0.5" stop-color="#FFBF47"/>
+      <stop offset="1" stop-color="#F28A32"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="15" y1="11" x2="30" y2="33" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C694FF"/>
+      <stop offset="1" stop-color="#8060EA"/>
+    </linearGradient>
+    <clipPath id="body">
+      <path d="M18 37Q32 32 46 37L34.5 58.5Q32 62 29.5 58.5Z"/>
+    </clipPath>
+  </defs>
+  <path d="M28 31C26 23 14 25 15 17C15.5 13 20 13 21 16" stroke="url(#ribbon)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M33 29C40 21 27 18 32 8" stroke="#FF739B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M38 31C40 23 51 27 50 20C49.5 17 46 17 45 19" stroke="#44CFE0" stroke-width="4" stroke-linecap="round"/>
+  <path d="M18 37Q32 32 46 37L34.5 58.5Q32 62 29.5 58.5Z" fill="url(#cone)"/>
+  <g clip-path="url(#body)" stroke="#9864DF" stroke-width="5">
+    <path d="M15 40L45 49M21 51L38 56"/>
+  </g>
+  <ellipse cx="32" cy="37" rx="14" ry="5" fill="#E88B30"/>
+  <ellipse cx="32" cy="36" rx="14" ry="5" fill="#FFE698"/>
+  <ellipse cx="32" cy="36" rx="10" ry="2.5" fill="#BA6239"/>
+  <path d="M45 5L46.9 9.1L51 11L46.9 12.9L45 17L43.1 12.9L39 11L43.1 9.1Z" fill="#FFC94F"/>
+  <path d="M9 24L10.6 27.4L14 29L10.6 30.6L9 34L7.4 30.6L4 29L7.4 27.4Z" fill="#FFC94F"/>
+  <rect x="7" y="9" width="4" height="7" rx="1.5" transform="rotate(-28 7 9)" fill="#44CFE0"/>
+  <rect x="55" y="29" width="4" height="7" rx="1.5" transform="rotate(28 55 29)" fill="#FF739B"/>
+  <circle cx="24" cy="5" r="2" fill="#FFC94F"/>
+  <circle cx="57" cy="15" r="2" fill="#AA80F4"/>
+</svg>

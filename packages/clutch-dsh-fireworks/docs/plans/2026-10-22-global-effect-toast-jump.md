@@ -73,4 +73,7 @@ Do not pack, publish, push, or commit without explicit authorization.
   plugins page. Verified 40 animated particles, captured at least 24 visible
   particles together with the toast, and clicked the toast back to the source
   Session while the animation continued. Refresh did not replay the burst.
-  `assets/screenshots/global-fireworks-toast.png` is that installed-host capture.
+  The original installed-host capture was replaced during the 2026-10-24
+  screenshot refresh. The current `assets/screenshots/screenshots-zh.png` shows
+  whale fireworks and the toast in the conversation view; the cross-page
+  acceptance described above remains a record of the earlier test.
