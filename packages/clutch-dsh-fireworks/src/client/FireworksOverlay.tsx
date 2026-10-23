@@ -1,95 +1,92 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client';
-import { FIREWORKS_DURATION_MS, type FireworksSignal } from '../contract/index.js';
-import { emojiFireworksRenderer, type FireworksVisual } from './fireworks-renderer.js';
-import { selectCurrentFireworksSession } from './fireworks-session.js';
+import { useState, useSyncExternalStore } from 'react';
+import type { FireworksController } from './fireworks-controller.js';
+import type { FireworksLaunchEvent } from '../contract/index.js';
 import styles from './fireworks.css';
+import { AnimationSurface, EmojiFallback } from './AnimationSurface.js';
 
 interface FireworksOverlayProps {
-  readonly useSessions: UseSessions;
+  readonly controller: FireworksController;
+  readonly openSession: (sessionId: string) => void;
 }
 
-interface Burst {
-  readonly key: string;
-  readonly signal: FireworksSignal;
-}
-
-function VisualNode({ visual }: { visual: FireworksVisual }) {
-  const style = {
-    left: `${visual.left}%`,
-    top: `${visual.top}%`,
-    '--fireworks-delay': `${visual.delayMs}ms`,
-    '--fireworks-duration': `${visual.durationMs}ms`,
-    '--fireworks-rotation': `${visual.rotationDeg}deg`,
-    '--fireworks-scale': String(visual.scale),
-  } as CSSProperties;
-
-  if (visual.kind === 'svg') {
-    return (
-      <img className={styles.particle} src={visual.src} alt={visual.alt ?? ''} style={style} />
-    );
-  }
+export function FireworksOverlay({ controller, openSession }: FireworksOverlayProps) {
+  const { burst, toast, animation, preview } = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+  );
+  if (burst === undefined && toast === undefined) return null;
   return (
-    <span className={styles.particle} aria-hidden="true" style={style}>
-      {visual.glyph}
-    </span>
+    <div className={styles.overlay}>
+      {toast !== undefined && (
+        <FireworksToast
+          key={`toast:${JSON.stringify([toast.sessionId, toast.id])}`}
+          toast={toast}
+          openSession={openSession}
+          dismiss={() => controller.dismissToast(toast)}
+        />
+      )}
+      {burst !== undefined && (
+        <div
+          className={styles.particles}
+          key={`burst:${JSON.stringify([burst.sessionId, burst.id])}`}
+          aria-hidden="true"
+        >
+          {animation ? (
+            <AnimationSurface
+              template={animation}
+              signal={burst}
+              preview={preview !== undefined}
+              onStatus={(status, message) => controller.reportPlayback(burst, status, message)}
+            />
+          ) : (
+            <EmojiFallback signal={burst} />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-export function FireworksOverlay({ useSessions }: FireworksOverlayProps) {
-  const current = useSessions(selectCurrentFireworksSession);
-  const seen = useRef(new Map<string, string | null>());
-  const activeSession = useRef<string | undefined>();
-  const [burst, setBurst] = useState<Burst | undefined>();
-
-  useEffect(() => {
-    if (current === undefined) {
-      activeSession.current = undefined;
-      setBurst(undefined);
-      return;
-    }
-
-    const marker = current.signal?.id ?? null;
-    const sessionChanged = activeSession.current !== current.sessionId;
-    activeSession.current = current.sessionId;
-
-    if (!seen.current.has(current.sessionId)) {
-      seen.current.set(current.sessionId, marker);
-      if (sessionChanged) setBurst(undefined);
-      return;
-    }
-
-    const previous = seen.current.get(current.sessionId) ?? null;
-    seen.current.set(current.sessionId, marker);
-    if (sessionChanged) {
-      setBurst(undefined);
-      return;
-    }
-    if (current.signal !== undefined && current.signal !== null && marker !== previous) {
-      setBurst({
-        key: `${current.sessionId}:${current.signal.id}`,
-        signal: current.signal,
-      });
-    }
-  }, [current?.sessionId, current?.signal?.id, current?.signal?.message]);
-
-  useEffect(() => {
-    if (burst === undefined) return undefined;
-    const timer = window.setTimeout(() => setBurst(undefined), FIREWORKS_DURATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [burst]);
-
-  if (burst === undefined) return null;
+function FireworksToast({
+  toast,
+  openSession,
+  dismiss,
+}: {
+  readonly toast: FireworksLaunchEvent;
+  readonly openSession: (sessionId: string) => void;
+  readonly dismiss: () => void;
+}) {
+  const [navigationError, setNavigationError] = useState<string>();
   return (
-    <div className={styles.overlay} key={burst.key} aria-live="polite">
-      <div className={styles.banner} role="status">
-        {burst.signal.message ?? 'A big milestone deserves fireworks!'} 🎉
-      </div>
-      <div className={styles.particles} aria-hidden="true">
-        {emojiFireworksRenderer.createVisuals(burst.signal).map((visual, index) => (
-          <VisualNode key={`${burst.key}:${index}`} visual={visual} />
-        ))}
-      </div>
+    <div className={styles.toast} role="status" aria-live="polite">
+      <button
+        className={styles.toastAction}
+        type="button"
+        onClick={() => {
+          try {
+            openSession(toast.sessionId);
+            setNavigationError(undefined);
+            dismiss();
+          } catch {
+            setNavigationError('Unable to open this session. Please try again.');
+          }
+        }}
+      >
+        <span>{toast.message ?? 'A big milestone deserves fireworks!'} 🎉</span>
+        <span className={styles.toastHint}>Open session →</span>
+      </button>
+      <button
+        className={styles.dismiss}
+        type="button"
+        aria-label="Dismiss celebration"
+        onClick={() => {
+          setNavigationError(undefined);
+          dismiss();
+        }}
+      >
+        ×
+      </button>
+      {navigationError !== undefined && <span role="alert">{navigationError}</span>}
     </div>
   );
 }

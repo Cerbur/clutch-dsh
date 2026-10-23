@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import semver from 'semver';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -8,9 +9,23 @@ import test from 'node:test';
 const packageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'package.json'), 'utf8'));
 
+test('resolves the same Cordis instance as every DSH development dependency', () => {
+  const require = createRequire(import.meta.url);
+  const cordis = require.resolve('@deepseek-ai/cordis');
+  for (const name of Object.keys(manifest.devDependencies)) {
+    if (!name.startsWith('@deepseek-ai/dsh-')) continue;
+    const dependencyRequire = createRequire(require.resolve(name));
+    assert.equal(
+      dependencyRequire.resolve('@deepseek-ai/cordis'),
+      cordis,
+      `${name} must share the plugin's Cordis instance for Context declaration merging`,
+    );
+  }
+});
+
 test('declares an installable DSH plugin package', () => {
   assert.equal(manifest.name, '@cerbur/clutch-dsh-fireworks');
-  assert.equal(manifest.version, '0.1.4');
+  assert.equal(manifest.version, '0.2.0');
   assert.deepEqual(manifest.clutchDsh, {
     plugin: '@cerbur/clutch-dsh-fireworks',
     role: 'plugin',
@@ -18,9 +33,11 @@ test('declares an installable DSH plugin package', () => {
   });
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.deepEqual(manifest.dsh.client.inject, [
+    '@deepseek-ai/dsh-api-gateway',
+    '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
-    '@deepseek-ai/dsh-client-ui-session',
+    '@deepseek-ai/dsh-client-ui-workspace',
   ]);
   assert.equal(manifest.scripts.prepare, undefined);
   assert.equal(manifest.scripts.prepublishOnly, 'pnpm run build');
@@ -29,29 +46,33 @@ test('declares an installable DSH plugin package', () => {
   }
 });
 
-test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
+test('accepts native Remote stream hosts from 0.2.1-rc.1', () => {
   const dshPeerNames = Object.keys(manifest.peerDependencies)
     .filter((name) => name.startsWith('@deepseek-ai/dsh-'))
     .sort();
   assert.deepEqual(dshPeerNames, [
+    '@deepseek-ai/dsh-api-gateway',
+    '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
-    '@deepseek-ai/dsh-client-ui-session',
     '@deepseek-ai/dsh-client-ui-slots',
+    '@deepseek-ai/dsh-client-ui-workspace',
     '@deepseek-ai/dsh-session',
     '@deepseek-ai/dsh-session-projection',
     '@deepseek-ai/dsh-tools',
+    '@deepseek-ai/dsh-typert-protocol',
+    '@deepseek-ai/dsh-typert-registry',
   ]);
 
   for (const name of dshPeerNames) {
     assert.equal(
       manifest.peerDependencies[name],
-      '>=0.1.7-rc.1',
-      `${name} peer dependency must be >=0.1.7-rc.1`,
+      '>=0.2.1-rc.1',
+      `${name} peer dependency must be >=0.2.1-rc.1`,
     );
   }
 
-  for (const version of ['0.1.7-rc.1', '0.1.7-rc.2', '0.1.7', '0.1.8']) {
+  for (const version of ['0.2.1-rc.1', '0.2.1-rc.2', '0.2.1']) {
     for (const name of dshPeerNames) {
       const range = manifest.peerDependencies[name];
       assert.equal(
@@ -62,18 +83,18 @@ test('accepts the minimum and DSH 0.1.7 prerelease host versions', () => {
     }
   }
 
-  for (const version of ['0.1.2-rc.1', '0.1.5-rc.1', '0.1.6']) {
+  for (const version of ['0.1.7', '0.2.0-rc.1', '0.2.0', '0.2.1-rc.0']) {
     for (const name of dshPeerNames) {
       const range = manifest.peerDependencies[name];
       assert.equal(
         semver.satisfies(version, range),
         false,
-        `${name} must reject DSH ${version} below 0.1.7-rc.1 (range: ${range})`,
+        `${name} must reject DSH ${version} below 0.2.1-rc.1 (range: ${range})`,
       );
     }
   }
 
-  for (const version of ['4.0.1', '4.0.4']) {
+  for (const version of ['4.0.5', '4.1.0']) {
     assert.equal(
       semver.satisfies(version, manifest.peerDependencies['@deepseek-ai/cordis']),
       true,

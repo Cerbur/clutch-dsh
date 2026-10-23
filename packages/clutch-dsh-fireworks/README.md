@@ -4,10 +4,11 @@
 
 `@cerbur/clutch-dsh-fireworks` adds a short celebration overlay to the DSH Web UI. An agent can
 call `happy_fireworks` after a meaningful milestone, optionally with a brief message, and the
-current conversation shows a burst of emoji fireworks.
+DSH window shows a fireworks celebration, even when the originating Session is in the background.
+A clickable toast opens the Session that triggered the celebration.
 
 The plugin is an additive DSH extension. It registers its own tool and Web UI overlay without
-modifying DSH source code or changing conversation history.
+modifying DSH source code or adding custom events to conversation history.
 
 ## Installation
 
@@ -45,11 +46,18 @@ changing `package.json` or `cordis.patch.yml`.
 
 ## Features
 
-| Feature                              | Preview                                                                                                 | What it does                                                                                                                                                                                                                                               |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Automatic milestone celebrations** | <img src="assets/screenshots/fireworks-mvp.svg" width="420" alt="Happy fireworks celebration preview">  | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
-| **Fireworks overlay**                | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Fireworks overlay in the DSH Web UI"> | A successful call displays a short, click-through overlay over the selected DSH conversation and can show the optional celebration message.                                                                                                                |
-| **Safe replay behavior**             | —                                                                                                       | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
+The plugin list and details page use a bundled SVG icon: a golden party popper opening upward
+with colorful ribbons and confetti. The **Emoji** animation card continues to use the system's
+`🎉` emoji, whose appearance varies by platform.
+
+| Feature                                    | Preview                                                                                                                                                                                                       | What it does                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Automatic milestone celebrations**       | —                                                                                                                                                                                                             | The bundled guidance encourages an agent to call `happy_fireworks` after finishing a design or plan, completing and verifying a feature, resolving a complex bug, or passing full verification. Routine file reads and isolated checks are not milestones. |
+| **Fireworks overlay**                      | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="Whale Show fireworks and a celebration toast with an Open session link in the light-theme DSH conversation view">                           | A successful call displays a short, click-through overlay across the DSH window, independently of the selected Session, and shows a clickable celebration toast.                                                                                           |
+| **Jump to the source Session**             | —                                                                                                                                                                                                             | Click **Open session →** on the toast to open its originating Session through DSH navigation. Dismiss it without interrupting the animation.                                                                                                               |
+| **Animation templates and script imports** | <img src="assets/screenshots/animation-settings.png" width="420" alt="Plugin details with the party-popper icon, three built-in animations, an active imported script and the expanded AI generation prompt"> | Choose three built-in effects or import JavaScript animations. Switch effects immediately; copy the AI generation prompt, preview and export scripts, and confirm before deleting custom animations.                                                       |
+| **Confirm before importing**               | <img src="assets/screenshots/animation-import-confirmation.png" width="420" alt="Light-theme import confirmation dialog with animation details, Preview, Cancel Add and Confirm Add controls">                | Validate the file first, preview before deciding, then confirm to save and activate it. Cancelling writes nothing.                                                                                                                                         |
+| **Safe replay behavior**                   | —                                                                                                                                                                                                             | Failed or cancelled calls stay quiet. Opening a Session, refreshing the page, or switching Sessions does not replay an old celebration.                                                                                                                    |
 
 ## Usage
 
@@ -72,30 +80,130 @@ After a meaningful milestone, call happy_fireworks with:
 ```
 
 A successful call appears in the conversation and plays the overlay for a few seconds. The
-optional message is trimmed and limited to a short banner. Programmatic tool-call dispatches are
-supported as well as direct top-level tool results.
+optional message is trimmed and limited to a short toast. Programmatic tool-call dispatches are
+supported as well as direct top-level tool results. You can switch to another Session or an app page
+while the work runs: the global effect still plays. Click **Open session →** on the toast to return
+to the originating Session, or use **×** to dismiss the toast.
+
+The celebration toast uses a restrained frosted surface with DSH theme colors, a fine edge
+and a soft shadow. Light and dark themes retain readable text; browsers without backdrop
+filtering use an opaque surface.
+
+### Choose, import, or generate animations
+
+Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Click a card to use **Emoji**,
+**Whale Show (鲸跃烟火)**, **Aurora**, or an imported animation immediately. The selected card shows
+**当前使用**. There is no separate Save step; existing animations finish with their captured template.
+Whale Show replaces Starburst under the existing `classic` ID and is the default when no animation
+is configured. Every five-second show includes rocket launches, shell bursts, the blue particle
+whale and its fountain, then a complete fade-out—never a random easter egg. Existing explicit
+Emoji, Aurora and imported selections are preserved; existing Starburst selections receive Whale Show.
+The effect retains the original Canvas Show particle simulation and persistent fading trails.
+The original launches, whale formation, fountain and burnout are accelerated together into five
+seconds. Both modes use the original PR palettes, adapting colors and trails to light and dark pages.
+The overlay stays transparent over the DSH page, without a full-screen background or changes to tool parameters.
+Preview and live playback follow DSH's resolved light/dark appearance, including changes during
+playback. Switching themes updates colors while the same animation continues, preserving its seed,
+timeline, template, toast and deadline. Imported scripts can use `frame.theme` to adapt their colors.
+
+Compact cards automatically fit more columns in wider panels and fewer in narrower panels.
+Card details stack the name, tag, and duration vertically. Long names use a single-line ellipsis;
+hover the title to read the full name. Cards and dialogs share typography and DSH theme colors,
+including the same outline and solid tag palette as Agent Presets in light and dark modes.
+
+Each card's **预览** sends that template through the same playback path as a tool launch, directly
+over the current DSH page with a transparent background in light and dark themes. It creates no
+toast or tool call and does not change the current selection. During playback, the Preview action becomes a circular progress/stop control; click it to stop;
+changing templates or leaving the page also cleans it up. Real task celebrations take priority.
+
+Use **导入 js 动画** at the top right to choose a standalone script. Invalid files show an error
+dialog. Valid files open a confirmation dialog showing the same icon, name, tag and duration as
+a card, with optional full-screen preview. Only **确认添加** writes the file and selects
+the new animation; cancelling leaves settings and disk unchanged. Use each card's **导出** to
+download its script. **删除** turns a custom card red and replaces its existing action bar with
+a confirmation prompt at the left and **删除 / 取消** at the right. The card height stays fixed,
+and Cancel occupies the former Delete position. Only the confirmation Delete removes it. Deleting the current template switches to Emoji; built-ins have no Delete action. You can also
+expand **Generate your own animation with AI** (Chinese: **用 AI 生成自己的动画**), copy the
+prompt, replace the creative brief at its end, and import the generated `.js` file. Technical
+requirements and art direction share one English core; the creative placeholder, guidance and
+copy feedback follow the DSH page language (English or Simplified Chinese, with English fallback).
+The prompt requests a complete standalone script with a distinctive composition, layered timing,
+detailed motion, a transparent background and a smooth fade-out. AI output still needs import
+validation; preview the whole effect before confirming it.
+It also explains `frame.theme` so generated scripts can adapt colors to DSH theme changes during playback.
+A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
+The file format, drawing interface, and tips for smooth custom effects are documented in
+[Animation scripts](docs/ANIMATIONS.md).
+
+Saved scripts live at `$DSH_HOME/clutch-dsh-fireworks/animations/<sha256>.js`; Host settings
+store the selection, paths relative to DSH Home (`~/.dsh` by default), and small name/duration metadata. Confirmed imports and card selection
+persist immediately; preview does not write configuration. Existing inline settings migrate on the next update.
+Back up this directory with your settings. Deleting a template removes its file after the
+configuration update succeeds, unless another template or DSH profile still references it. Missing or
+damaged files keep a card marked **本地文件损坏** with only a Delete action. If the affected
+animation was selected, the Host persists Emoji as the new default while retaining the broken
+list entry. Removing that card clears its configuration entry. Visible settings refresh availability
+every two seconds and on focus; existing cards are rechecked before preview and live launches
+refresh before playing. Old path-only settings acquire display metadata when loaded. Read-only
+settings fall back in memory and report that persistence is unavailable.
+Saved choices are shared by connected pages and survive refresh/restart. Before each queued
+celebration starts, the page reloads Host settings and checks file availability, then captures
+that event's template. Changes on another page affect the next event, even if both arrived in
+one batch; the current animation keeps its captured template.
+After upgrading an already-running local checkout, restart DSH to load the new Host endpoints.
 
 ## Requirements
 
-| Component | Requirement                                                                                                                                                                                                         |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH       | A Web profile providing the DSH Session, Session Projection, Tools, UI Renderer, UI Session, and UI Slots services. Peer ranges require `>=0.1.7-rc.1`; compatible stable releases are accepted by the same ranges. |
-| Cordis    | `@deepseek-ai/cordis` `4.0.1` or a compatible `4.x` version allowed by the package peer range; DSH 0.1.7-rc.2 uses `4.0.4`.                                                                                         |
-| Browser   | DSH Web UI with the plugin's Web client bundle loaded.                                                                                                                                                              |
+| Component | Requirement                                                                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH       | A Web UI providing DSH Connection RPC, Host settings, plugin detail configuration slots, Session, Session Projection, Tools, UI Renderer, UI Slots, and UI Workspace navigation. Requires DSH 0.2.1-rc.1 or later with the native Gateway and Typert registry. The peer ranges in `package.json` are the source of truth. |
+| Cordis    | Compatible Cordis `4.x`; development uses `4.0.5`.                                                                                                                                                                                                                                                                        |
+| Browser   | DSH Web UI with the plugin's Web client bundle loaded; Workers and OffscreenCanvas for script effects (emoji fallback otherwise).                                                                                                                                                                                         |
 
 ## Behavior and limitations
 
-- The overlay lasts for a short burst and renders deterministic emoji visuals for each successful
-  signal. The optional `message` is normalized to a maximum of 120 characters.
-- The plugin reacts only to successful fireworks results. Errors and cancellations do not show an
-  overlay, and the first historical signal observed when a Session opens is intentionally silent.
-- Switching Sessions clears the active overlay. A new signal must have a new tool-call identity
-  before it can play again.
-- When the host exposes DSH's `systemPrompt` service, the plugin adds the milestone guidance used
-  for autonomous calls. If that optional service is absent, the tool remains available but the
-  guidance section is not added.
-- The package contributes its own Cordis bundle and Web client metadata; it does not patch DSH
-  source code or persist a copy of the conversation.
+- Built-ins include a 3.2-second emoji burst, the default 5-second whale show and 3.6-second aurora rings.
+  Custom effects last 0.5–8 seconds. The optional `message`
+  is normalized to a maximum of 120 characters. Only the toast accepts clicks; particles remain
+  click-through.
+- Up to eight custom scripts are allowed, each at most 64 KiB. Scripts draw in an isolated Worker
+  with Canvas 2D, time, seeded randomness and drawing helpers. Network, application DOM, Session
+  navigation and toast controls are unavailable to scripts. The renderer owns cleanup and
+  terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
+  the error. Reduced-motion preferences keep a static midpoint frame visible for the configured
+  duration and redraw it when the window size, DPR or DSH theme changes, then continue checking
+  the full timeline offscreen without restarting or completing early. Import preflight checks
+  metadata, syntax, the render entry and one bounded frame;
+  optional preview checks the full timeline. A known preview failure blocks confirmation until a successful retry.
+- Animations use the window's actual CSS-pixel width and height. Large windows retain their aspect
+  ratio; the renderer lowers DPR as needed to stay within its 8-million-pixel canvas budget.
+- Only successful live fireworks results trigger playback. Errors, cancellations, historical
+  Session loads, and page refreshes do not replay old celebrations.
+- Switching Sessions or app pages does not clear the animation. The toast remains for up to
+  8 seconds; closing it or successfully clicking through to its Session ends the toast early.
+- Celebrations queue as whole events across Sessions. Each event starts its animation and toast
+  together; the next event waits until both finish. An ended animation does not replace a
+  remaining toast, and closing a toast does not cut off its animation. A fixed 12-second event
+  deadline clears stalled rendering and advances without retry. Preview waits while a real
+  event is active, including any remaining toast time.
+- Settings refresh reserves the next event's slot for up to five seconds, without showing its
+  animation or toast. Expiry, refresh timeout or plugin unload cancels the wait; late responses
+  cannot start that event. A failed refresh uses the built-in default Whale Show instead of cached custom source.
+- Duplicate Session/tool-call identities are ignored. The
+  transient feed and playback queue are bounded to 128 entries each, and events expire after
+  30 seconds. Expired or overflowed pending events are dropped. Brief disconnects can catch up
+  within those limits.
+- Each connected owner page consumes independently. The effect stays inside its DSH window;
+  it does not create an operating-system desktop overlay. A successful tool result records the
+  request, not confirmation that a browser displayed it.
+- Global celebrations are available only to owner pages and use DSH's authenticated connection.
+  Brief disconnects catch up within the limits above; fresh pages and restarted Hosts do not
+  replay old celebrations. Unloading the plugin stops delivery and removes its UI. Rebuilt Host
+  modules or changed package metadata can still require a DSH reload/restart. Transport and
+  lifecycle details are documented in [Animation scripts](docs/ANIMATIONS.md#responsibilities-and-failure-handling).
+- When the Host exposes DSH's `systemPrompt` service, the plugin adds milestone guidance.
+  Without that optional service, the tool remains available without the guidance section.
+- The package does not patch DSH source code or persist a copy of the conversation.
 
 ## Development
 
