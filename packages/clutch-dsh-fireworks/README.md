@@ -90,10 +90,14 @@ Whale Show replaces Starburst under the existing `classic` ID and is the default
 is configured. Every five-second show includes rocket launches, shell bursts, the blue particle
 whale and its fountain, then a complete fade-out—never a random easter egg. Existing explicit
 Emoji, Aurora and imported selections are preserved; existing Starburst selections receive Whale Show.
-The effect retains the original Canvas Show particle simulation, additive burst flashes and persistent
-fading trails—not a simplified dotted outline. The original launches, whale formation, fountain and
-burnout are accelerated together into five seconds. The transparent effect works on light and dark
-backgrounds without changing tool parameters.
+The effect retains the original Canvas Show particle simulation and persistent fading trails.
+The original launches, whale formation, fountain and burnout are accelerated together into five
+seconds. Dark mode preserves the original additive flashes and palette; light mode uses saturated
+deep blue, indigo and green particles with adapted flashes and trails for contrast. The overlay stays
+transparent over the DSH page, without a full-screen background or changes to tool parameters.
+Preview and live playback follow DSH's resolved light/dark appearance, including changes during
+playback. Switching themes updates colors while the same animation continues, preserving its seed,
+timeline, template, toast and deadline. Imported scripts can use `frame.theme` to adapt their colors.
 
 Compact cards automatically fit more columns in wider panels and fewer in narrower panels.
 Card details stack the name, tag, and duration vertically. Long names use a single-line ellipsis;
@@ -153,8 +157,9 @@ After upgrading an already-running local checkout, restart DSH to load the new H
   navigation and toast controls are unavailable to scripts. The renderer owns cleanup and
   terminates stalled frames. Failed or unsupported live effects fall back to emoji; preview shows
   the error. Reduced-motion preferences keep a static midpoint frame visible for the configured
-  duration and redraw it when the window size or DPR changes, while the full timeline is checked
-  offscreen. Import preflight checks metadata, syntax, the render entry and one bounded frame;
+  duration and redraw it when the window size, DPR or DSH theme changes, then continue checking
+  the full timeline offscreen without restarting or completing early. Import preflight checks
+  metadata, syntax, the render entry and one bounded frame;
   optional preview checks the full timeline. A known preview failure blocks confirmation until a successful retry.
 - Animations use the window's actual CSS-pixel width and height. Large windows retain their aspect
   ratio; the renderer lowers DPR as needed to stay within its 8-million-pixel canvas budget.

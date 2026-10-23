@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -107,7 +108,7 @@ test('whale retains the reference accumulated additive trails and radial burst f
   );
 });
 
-function recordingContext() {
+function recordingContext({ geometryOnly = false, observe } = {}) {
   let hash = 2166136261,
     count = 0,
     gradients = 0;
@@ -115,6 +116,18 @@ function recordingContext() {
   let enabled = true;
   const record = (...parts) => {
     if (!enabled) return;
+    observe?.(parts, values);
+    if (geometryOnly) {
+      // A cold canvas also initializes its DPR transform; paths are already
+      // recorded in CSS coordinates, so buffer setup is outside this hash.
+      if (parts[0] === 'globalCompositeOperation' || parts[0] === 'setTransform') return;
+      // Keep alpha, gradient stops and every path/size while ignoring only RGB.
+      parts = parts.map((part) =>
+        typeof part === 'string' && /^(hsla|rgba)\(/.test(part)
+          ? { alpha: Number(part.slice(part.lastIndexOf(',') + 1, -1)) }
+          : part,
+      );
+    }
     const text = JSON.stringify(parts, (_key, value) =>
       typeof value === 'number' ? Math.round(value * 1e6) / 1e6 : value,
     );
@@ -132,14 +145,19 @@ function recordingContext() {
     'stroke',
     'arc',
     'fill',
+    'save',
+    'restore',
+    'setTransform',
   ])
     ctx[name] = (...args) => record(name, ...args);
+  ctx.drawImage = (_canvas, ...args) => record('drawImage', ...args);
   for (const name of [
     'globalCompositeOperation',
     'fillStyle',
     'strokeStyle',
     'lineWidth',
     'lineCap',
+    'globalAlpha',
   ])
     Object.defineProperty(ctx, name, {
       get: () => values[name],
@@ -346,5 +364,194 @@ test('no-paint seeking preserves the original RNG, state and next painted frame'
       runs[0],
       'seeking must only skip raster work, never simulation/random draws',
     );
+  }
+});
+
+function paletteRecorder() {
+  const colors = new Set();
+  const composites = new Set();
+  const rectangles = [];
+  const drawing = recordingContext({
+    geometryOnly: true,
+    observe(parts, values) {
+      const [name, value] = parts;
+      if (name === 'globalCompositeOperation') composites.add(value);
+      if (name === 'fillStyle' || name === 'strokeStyle') {
+        if (typeof value === 'string' && value.startsWith('hsla(')) colors.add(value);
+      }
+      if (name === 'colorStop') colors.add(parts[3]);
+      if (name === 'fillRect')
+        rectangles.push({ args: parts.slice(1), composite: values.globalCompositeOperation });
+    },
+  });
+  return { ...drawing, colors, composites, rectangles };
+}
+
+function assertLightPalette(drawing) {
+  let visible = 0;
+  for (const color of drawing.colors) {
+    const match = /^hsla\(([^,]+),([^%]+)%,([^%]+)%,([^)]+)\)$/.exec(color);
+    assert.ok(match, color);
+    const [, hue, saturation, lightness, alpha] = match.map(Number);
+    if (alpha === 0) continue; // Transparent outer edge of the radial flash.
+    visible++;
+    assert.ok([174, 218, 242].includes(hue), 'use saturated teal, blue and indigo ink');
+    assert.ok(saturation >= 84 && saturation <= 100, color);
+    assert.ok(lightness >= 24 && lightness <= (hue === 174 ? 28 : 34), color);
+  }
+  assert.ok(visible > 0, 'actually paint colored sparks');
+  assert.deepEqual([...drawing.composites].sort(), ['destination-out', 'source-over']);
+  assert.ok(drawing.rectangles.length > 0, 'retain the fading trail buffer');
+  assert.ok(
+    drawing.rectangles.every(({ composite }) => composite === 'destination-out'),
+    'full-canvas rectangles must only erase trails, never paint a background',
+  );
+}
+
+test('light changes only raster colors/compositing across the complete original simulation', async () => {
+  const source = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  for (const { width, height, seed } of REFERENCE_TRACES) {
+    const runs = [];
+    for (const theme of ['dark', 'light']) {
+      const drawing = paletteRecorder();
+      const runtime = vm.createContext({ width, height, seed, theme, drawing });
+      vm.runInContext(
+        source +
+          `;
+        rasterTheme = theme;
+        showClock = 0; showRandomState = seed >>> 0;
+        var probe = createScene(drawing.ctx, width, height, () => {});
+        var actual = [];
+        for (var tick = 1; tick <= 1000; tick++) {
+          showClock = tick * FIXED_STEP_MS;
+          probe.step(showClock);
+          actual.push({ tick, time: showClock, random: showRandomState,
+            state: probe.stats(), ...drawing.snapshot() });
+          if (probe.stats().complete) break;
+        }
+      `,
+        runtime,
+        { timeout: 10000 },
+      );
+      runs.push({ actual: JSON.parse(JSON.stringify(runtime.actual)), drawing });
+    }
+    assert.ok(runs[0].actual.at(-1).state.complete);
+    assert.deepEqual(
+      runs[1].actual,
+      runs[0].actual,
+      `theme must preserve every tick's counts, timing, geometry, alpha and RNG (seed ${seed})`,
+    );
+    assert.notDeepEqual([...runs[0].drawing.colors], [...runs[1].drawing.colors]);
+    assert.ok(runs[0].drawing.composites.has('lighter'));
+    assertLightPalette(runs[1].drawing);
+  }
+});
+
+function renderHarness(source, { seed = 42, width = 800, height = 600 } = {}) {
+  const canvases = [];
+  const output = recordingContext();
+  const runtime = vm.createContext({
+    OffscreenCanvas: class {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.drawing = paletteRecorder();
+        canvases.push(this);
+      }
+      getContext() {
+        return this.drawing.ctx;
+      }
+    },
+    frame: { seed, width, height, dpr: 1, durationMs: 5000, ctx: output.ctx },
+  });
+  vm.runInContext(source, runtime);
+  return {
+    canvases,
+    paint(time, theme) {
+      runtime.frame.time = time;
+      runtime.frame.theme = theme;
+      for (const { drawing } of canvases) {
+        drawing.recordFrame(true);
+        drawing.colors.clear();
+        drawing.composites.clear();
+        drawing.rectangles.length = 0;
+      }
+      vm.runInContext('render(frame)', runtime, { timeout: 1000 });
+      return JSON.parse(
+        vm.runInContext(
+          `JSON.stringify({ tick: simulationTick, time: showClock, random: showRandomState,
+            state: scene?.stats(), timeline, surfaceKey, trailDpr })`,
+          runtime,
+        ),
+      );
+    },
+  };
+}
+
+test('same-tick theme changes replay the private trails without changing pose or timeline', async () => {
+  const source = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  for (const time of [800, 1600, 2500, 2800, 3500]) {
+    const harness = renderHarness(source);
+    // Exercise retained history before changing the current raster palette.
+    harness.paint(0, 'dark');
+    harness.paint(Math.max(0, time - 100), 'dark');
+    const dark = harness.paint(time, 'dark');
+    const canvas = harness.canvases[0];
+    const light = harness.paint(time, 'light');
+    assert.deepEqual(light, dark, `same-tick switch at ${time} ms`);
+    assert.equal(harness.canvases.length, 1, 'reuse the private buffer');
+    assert.ok(canvas.drawing.rectangles.length > 0, 'repaint even when the tick did not advance');
+    assertLightPalette(canvas.drawing);
+
+    const freshLight = renderHarness(source);
+    assert.deepEqual(freshLight.paint(time, 'light'), light);
+    assert.deepEqual(
+      canvas.drawing.snapshot(),
+      freshLight.canvases[0].drawing.snapshot(),
+      'same bounded reconstruction as a cold light seek',
+    );
+    const unchanged = harness.paint(time, 'light');
+    assert.deepEqual(unchanged, light);
+    assert.equal(
+      canvas.drawing.rectangles.length,
+      0,
+      'unchanged palette retains accumulated trails',
+    );
+
+    assert.deepEqual(harness.paint(time), dark, 'a missing theme falls back to dark');
+    assert.ok(canvas.drawing.composites.has('lighter'));
+    assert.deepEqual(harness.paint(time, 'light'), light);
+    assert.deepEqual(harness.paint(time, 'dark'), dark);
+    assert.ok(canvas.drawing.composites.has('lighter'));
+  }
+});
+
+test('light reduced-motion midpoint contains the full whale and remains within the script contract', async () => {
+  const source = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  const header = JSON.parse(source.split('\n')[0].slice('// clutch_fireworks: '.length));
+  assert.equal(header.durationMs, 5000);
+  assert.ok(Buffer.byteLength(source, 'utf8') <= 65_536, 'standalone export stays within 64 KiB');
+  for (const seed of [0, 1, 42, 0xffffffff]) {
+    const harness = renderHarness(source, { seed, width: 300, height: 500 });
+    const midpoint = harness.paint(2500, 'light');
+    assert.ok(midpoint.state.particles >= 260, 'retain every whale outline particle');
+    assert.equal(midpoint.tick, midpoint.timeline.whaleTick);
+    assert.ok(midpoint.time >= midpoint.state.whaleFormedAt, 'show the formed whale at midpoint');
+    assertLightPalette(harness.canvases[0].drawing);
+    assert.deepEqual(harness.paint(2500, 'dark'), midpoint);
+    assert.deepEqual(harness.paint(2500, 'light'), midpoint);
+    const end = harness.paint(5000, 'light');
+    assert.equal(end.tick, 0);
+    assert.equal(harness.canvases[0].width, 0);
+    assert.equal(harness.canvases[0].height, 0);
   }
 });

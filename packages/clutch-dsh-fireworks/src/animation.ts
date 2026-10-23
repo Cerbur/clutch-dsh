@@ -11,6 +11,8 @@ export interface AnimationTemplate {
   readonly source: string;
 }
 
+export type AnimationTheme = 'light' | 'dark';
+
 /** The complete drawing surface available to a v1 render(frame, fx) script. */
 export interface AnimationFrame {
   readonly ctx: OffscreenCanvasRenderingContext2D;
@@ -23,6 +25,7 @@ export interface AnimationFrame {
   readonly durationMs: number;
   readonly seed: number;
   readonly message: string;
+  readonly theme: AnimationTheme;
 }
 export interface AnimationHelpers {
   random(): number;

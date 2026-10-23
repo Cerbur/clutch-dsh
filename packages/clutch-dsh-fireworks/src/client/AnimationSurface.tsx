@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnimationTemplate } from '../animation.js';
 import type { FireworksSignal } from '../contract/index.js';
 import { animationDocument } from './animation-sandbox.js';
+import { connectAnimationTheme, readAnimationTheme } from './animation-theme.js';
 import { emojiFireworksRenderer } from './fireworks-renderer.js';
 import styles from './fireworks.css';
 
@@ -26,8 +27,14 @@ export function AnimationSurface({
     let seed = 0;
     for (const char of signal.id) seed = (Math.imul(seed, 31) + char.charCodeAt(0)) >>> 0;
     const token = crypto.randomUUID();
-    return { token, html: animationDocument(template, token, seed, signal.message) };
+    return {
+      token,
+      html: animationDocument(template, token, seed, signal.message, false, readAnimationTheme()),
+    };
   }, [template, signal.id, signal.message]);
+  useEffect(() => {
+    if (!error && frame.current) return connectAnimationTheme(frame.current, document.token);
+  }, [document, error]);
   useEffect(() => {
     let ready = false;
     const fail = (message: string) => {

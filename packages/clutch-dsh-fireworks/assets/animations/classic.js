@@ -2,8 +2,18 @@
 /* global OffscreenCanvas -- Standard Canvas API provided by the animation Worker. */
 // Faithful port of PR #7 and the supplied Canvas Show reference.
 // Preserve its scheduler, shell parameters, simulation and transparent trail buffer.
-// Only host-time seeking/compression and buffer lifetime are adapted to v1.
+// Host-time seeking/compression, buffer lifetime and raster palette adapt to v1.
 const TEMPLATE_THEME = 'dark'; // Preserve the reference palette and additive spark blending.
+// Simulation colors remain the reference values; only the raster palette changes.
+let rasterTheme = 'dark';
+function sparkColor(hue, saturation, lightness, alpha) {
+  if (rasterTheme === 'light') {
+    hue = hue < 120 ? 242 : hue < 210 ? 174 : 218;
+    saturation = Math.max(84, saturation);
+    lightness = Math.max(24, Math.min(hue === 174 ? 28 : 34, lightness * 0.42));
+  }
+  return `hsla(${hue},${saturation}%,${lightness}%,${alpha})`;
+}
 const FIREWORKS_LIMITS = {
   minDurationMs: 1500,
   maxDurationMs: 15000,
@@ -703,7 +713,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = `rgba(0,0,0,${theme.fadeAlpha})`;
       ctx.fillRect(0, 0, width, height);
-      ctx.globalCompositeOperation = theme.composite;
+      ctx.globalCompositeOperation = rasterTheme === 'light' ? 'source-over' : theme.composite;
     }
     for (let i = rockets.length - 1; i >= 0; i -= 1) {
       const r = rockets[i];
@@ -729,7 +739,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
         }),
       );
       if (paint) {
-        ctx.strokeStyle = `hsla(${r.hue},80%,${theme.lightness + 22}%,0.9)`;
+        ctx.strokeStyle = sparkColor(r.hue, 80, theme.lightness + 22, 0.9);
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(r.px, r.py);
@@ -769,7 +779,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
         }
         const fl = 1 - p.flicker * showRandom();
         if (paint) {
-          ctx.fillStyle = `hsla(${p.hue},${p.sat}%,${p.light}%,${Math.min(1, alpha * fl)})`;
+          ctx.fillStyle = sparkColor(p.hue, p.sat, p.light, Math.min(1, alpha * fl));
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, TAU);
           ctx.fill();
@@ -794,7 +804,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
         if (paint) {
           const rr = p.size * p.life;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
-          grad.addColorStop(0, `hsla(${p.hue},${p.sat}%,${light}%,${0.55 * p.life})`);
+          grad.addColorStop(0, sparkColor(p.hue, p.sat, light, 0.55 * p.life));
           grad.addColorStop(1, 'hsla(0,0%,0%,0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
@@ -805,7 +815,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
       }
       if (paint) {
         if (p.streak) {
-          ctx.strokeStyle = `hsla(${p.hue},${p.sat}%,${light}%,${alpha})`;
+          ctx.strokeStyle = sparkColor(p.hue, p.sat, light, alpha);
           ctx.lineWidth = p.size;
           ctx.lineCap = 'round';
           ctx.beginPath();
@@ -813,7 +823,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
           ctx.lineTo(p.x, p.y);
           ctx.stroke();
         } else {
-          ctx.fillStyle = `hsla(${p.hue},${p.sat}%,${light}%,${alpha})`;
+          ctx.fillStyle = sparkColor(p.hue, p.sat, light, alpha);
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, TAU);
           ctx.fill();
@@ -961,6 +971,9 @@ function render(frame) {
     releaseTrail();
     return;
   }
+  const nextTheme = frame.theme === 'light' ? 'light' : 'dark';
+  const themeChanged = nextTheme !== rasterTheme;
+  rasterTheme = nextTheme;
   const key = [frame.width, frame.height, frame.dpr, frame.seed >>> 0].join(':');
   if (key !== surfaceKey) {
     const sameScene =
@@ -975,6 +988,10 @@ function render(frame) {
     if (!trailContext) throw new Error('Trail Canvas 2D unavailable');
     sizeTrail(frame, frame.time > 0);
     timeline = previousTimeline ?? measureTimeline(frame);
+    resetSimulation(frame);
+  } else if (themeChanged) {
+    // Recolor accumulated trails even at the same tick (including the static
+    // reduced-motion midpoint). Replay the same seed/physics into this buffer.
     resetSimulation(frame);
   }
   const target = timeToTick(frame.time);

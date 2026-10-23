@@ -72,6 +72,40 @@ events while only the active toast remains, without starting them or a preview.
 - Limit scripts to 64 KiB, eight custom templates, 500–8000 ms duration. A script
   is never evaluated by the Host, import parser, or main DSH renderer.
 
+### Authorized theme passthrough follow-up
+
+The earlier visual-port scope excluded playback-engine changes. The current user
+authorization extends it only as needed to pass and update
+`frame.theme: 'light' | 'dark'` through the existing renderer and preflight protocol.
+Use the installed layout dependency's `ThemePresenter` DOM projection:
+`snapshot.active.colorScheme` → `html.style.colorScheme`, preference source →
+`html[data-ds-theme-source]` (`light`/`dark`/`system`), dark state →
+`body[data-ds-dark-theme]`. Do not add a theme dependency or hook.
+
+- Resolve in the parent: computed root `colorScheme`, explicit root theme source,
+  body dark attribute, opaque body/root background luminance, then OS `matchMedia`.
+  Pass the initial theme to `animationDocument`; observe DOM mutations and OS changes.
+- Accept `clutch_fireworks/theme` only from `parent` with the playback token and
+  a `light`/`dark` value. The opaque child must never query OS theme. Keep embedding
+  and srcDoc `color-scheme: normal`. Preview/live share `AnimationSurface`; import
+  preflight follows the same protocol.
+- Theme changes preserve the iframe/Worker, seed, time, captured animation, toast
+  and deadline. Reduced motion repaints its visible midpoint before resuming the
+  offscreen timeline, without reporting completion early.
+- Preserve `classic`, 5000 ms, original simulation/RNG/counts/physics/trails and
+  dark golden references; absent theme means dark. Light uses `source-over`,
+  saturated deep blue/indigo/green and adapted flashes/trails with no full-screen
+  background. Repaint the private buffer at the same tick on theme changes; cold
+  reconstruction retains the existing lossy 48-tick/two-million-pixel bounds.
+- Update both READMEs, the bilingual authoring contract and AI prompt. This
+  follow-up currently has automated verification only; no new installed-GUI
+  acceptance is claimed. The parent agent owns source tests and an independent
+  native Chrome comparison, recorded separately when completed.
+
+本次授权将此前不含播放引擎的移植范围，扩展至必要的主题接口与渲染透传；不改变鲸鱼
+模拟、RNG、轨迹或播放生命周期。当前仅自动化验证，不宣称本次 GUI 验收；父 agent
+负责源码测试及独立原生 Chrome 对照。
+
 ## Configuration
 
 Use the public `plugins.bundle.config` keyed slot on the plugin details page.

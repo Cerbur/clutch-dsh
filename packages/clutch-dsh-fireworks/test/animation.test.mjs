@@ -10,7 +10,7 @@ import {
   parseStoredAnimationPreferences,
   MAX_SCRIPT_BYTES,
 } from '../lib/animation.js';
-import { animationDocument } from '../lib/client/animation-sandbox.js';
+import { sandboxHarness, connectSandboxWorker } from './helpers/animation-harness.mjs';
 import { FireworksController } from '../lib/client/fireworks-controller.js';
 import { FIREWORKS_EVENT_TTL_MS, FIREWORKS_LAUNCH_EVENT } from '../lib/contract/index.js';
 
@@ -75,111 +75,6 @@ test('validates imported files without executing code, bounds scripts and templa
   ])
     assert.throws(() => parseAnimationPreferences(invalid));
 });
-
-function sandboxHarness(
-  template,
-  {
-    reducedMotion = false,
-    width = 500,
-    height = 300,
-    dpr = 1,
-    validationOnly = false,
-    seed = 42,
-  } = {},
-) {
-  let workerSource;
-  let worker;
-  let onHide;
-  let terminated = 0;
-  let revoked = 0;
-  let raf;
-  let now = 0;
-  const timers = new Map();
-  const reports = [];
-  const html = animationDocument(
-    template,
-    'playback-token',
-    seed,
-    '</script><script>bad()</script>',
-    validationOnly,
-  );
-  const runtime = html.split('<script>')[1].split('</script>')[0];
-  const environment = {
-    document: { querySelector: () => ({ transferControlToOffscreen: () => ({}) }) },
-    Blob: class {
-      constructor(parts) {
-        workerSource = parts.join('');
-      }
-    },
-    URL: {
-      createObjectURL: () => 'blob:opaque-origin',
-      revokeObjectURL: () => {
-        revoked++;
-      },
-    },
-    Worker: class {
-      constructor() {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias -- Expose the fake worker so the test can deliver its messages.
-        worker = this;
-        this.sent = [];
-      }
-      postMessage(value) {
-        this.sent.push(value);
-      }
-      terminate() {
-        terminated++;
-      }
-    },
-    parent: { postMessage: (value) => reports.push(value) },
-    addEventListener: (_name, listener) => {
-      onHide = listener;
-    },
-    setTimeout: (listener, delay) => {
-      const id = {};
-      timers.set(id, { listener, delay });
-      return id;
-    },
-    clearTimeout: (id) => timers.delete(id),
-    requestAnimationFrame: (listener) => {
-      raf = listener;
-      return 1;
-    },
-    cancelAnimationFrame: () => {
-      raf = undefined;
-    },
-    innerWidth: width,
-    matchMedia: () => ({ matches: reducedMotion }),
-    innerHeight: height,
-    devicePixelRatio: dpr,
-    performance: { now: () => now },
-  };
-  vm.runInNewContext(runtime, environment);
-  return {
-    html,
-    workerSource,
-    reports,
-    worker,
-    timers,
-    resize: (width, height, dpr) => {
-      environment.innerWidth = width;
-      environment.innerHeight = height;
-      environment.devicePixelRatio = dpr;
-    },
-    frame: (time) => {
-      now = time;
-      const callback = raf;
-      raf = undefined;
-      callback(time);
-    },
-    hide: () => onHide(),
-    get terminated() {
-      return terminated;
-    },
-    get revoked() {
-      return revoked;
-    },
-  };
-}
 
 test('reduced-motion midpoint stays visible for the duration and completes only after validation', () => {
   const harness = sandboxHarness(parseAnimation(source(), 'custom-static'), {
@@ -295,48 +190,6 @@ test('reduced-motion validation remains bounded by watchdog and page cleanup', (
     assert.equal(harness.terminated, 1, 'late callbacks cannot revive a completed playback');
   }
 });
-
-function connectSandboxWorker(
-  harness,
-  context = (target) =>
-    new Proxy(
-      { fillRect: (...args) => target.push(args) },
-      { get: (target, key) => target[key] ?? (() => {}) },
-    ),
-) {
-  const draws = [];
-  const hidden = [];
-  const drawing = context(draws);
-  const canvas = { getContext: () => drawing };
-  const privateCanvases = [];
-  const runtime = vm.createContext({
-    postMessage: (data) => harness.worker.onmessage({ data }),
-    OffscreenCanvas: class {
-      constructor(width, height) {
-        this.width = width;
-        this.height = height;
-        this.drawing = context(hidden);
-        privateCanvases.push(this);
-      }
-      getContext(type) {
-        assert.equal(type, '2d');
-        return this.drawing;
-      }
-    },
-  });
-  vm.runInContext(harness.workerSource, runtime);
-  let delivered = harness.worker.sent.length;
-  const dispatch = (data) => {
-    runtime.pendingMessage = data;
-    vm.runInContext('onmessage({ data: pendingMessage })', runtime, { timeout: 1000 });
-  };
-  dispatch({ type: 'init', canvas });
-  const step = () => dispatch(harness.worker.sent[delivered++]);
-  const flush = () => {
-    while (delivered < harness.worker.sent.length) step();
-  };
-  return { canvas, draws, hidden, privateCanvases, step, flush, render: dispatch };
-}
 
 // A strict Canvas adapter, not a rasterizer. Keep only the latest simulation tick's
 // paint records, plus counters, instead of retaining every particle in every tick.
