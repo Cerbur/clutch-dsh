@@ -81,6 +81,10 @@ supported as well as direct top-level tool results. You can switch to another Se
 while the work runs: the global effect still plays. Click **Open session →** on the toast to return
 to the originating Session, or use **×** to dismiss the toast.
 
+The celebration toast uses a restrained frosted surface with DSH theme colors, a fine edge
+and a soft shadow. Light and dark themes retain readable text; browsers without backdrop
+filtering use an opaque surface. Existing screenshots above show the earlier toast styling.
+
 ### Choose, import, or generate animations
 
 Open **Plugins → @cerbur/clutch-dsh-fireworks → 烟花动画**. Click a card to use **Emoji**,
@@ -115,8 +119,15 @@ the new animation; cancelling leaves settings and disk unchanged. Use each card'
 download its script. **删除** turns a custom card red and replaces its existing action bar with
 a confirmation prompt at the left and **删除 / 取消** at the right. The card height stays fixed,
 and Cancel occupies the former Delete position. Only the confirmation Delete removes it. Deleting the current template switches to Emoji; built-ins have no Delete action. You can also
-expand **用 AI 生成自己的动画**, copy the prompt, describe your effect, and import the generated
-`.js` file. A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
+expand **Generate your own animation with AI** (Chinese: **用 AI 生成自己的动画**), copy the
+prompt, replace the creative brief at its end, and import the generated `.js` file. Technical
+requirements and art direction share one English core; the creative placeholder, guidance and
+copy feedback follow the DSH page language (English or Simplified Chinese, with English fallback).
+The prompt requests a complete standalone script with a distinctive composition, layered timing,
+detailed motion, a transparent background and a smooth fade-out. AI output still needs import
+validation; preview the whole effect before confirming it.
+It also explains `frame.theme` so generated scripts can adapt colors to DSH theme changes during playback.
+A ready-to-import example is [example-custom.js](assets/animations/example-custom.js).
 The file format, drawing interface, and tips for smooth custom effects are documented in
 [Animation scripts](docs/ANIMATIONS.md).
 

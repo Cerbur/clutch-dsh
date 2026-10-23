@@ -77,6 +77,9 @@ pnpm dsh web
 Session 或应用页面，全局效果仍会播放。点击 toast 上的 **Open session →** 返回来源 Session，
 也可以点击 **×** 关闭通知。
 
+庆祝 toast 使用克制的磨砂材质、DSH 主题色、细边界和轻阴影。浅色与深色主题均保持文字
+可读；不支持背景滤镜的浏览器使用不透明底色。上方已有截图展示的是此前的 toast 样式。
+
 ### 选择、导入或生成动画
 
 打开 **插件 → @cerbur/clutch-dsh-fireworks → 烟花动画**，选择 **Emoji 礼花**、**鲸鱼烟花**
@@ -106,8 +109,13 @@ DSH 主题颜色，标签对齐 Agent 预设的描边与实心样式，适配浅
 并在原操作栏左侧显示确认提示、右侧显示 **删除 / 取消**，卡片高度不变，取消占据原删除位置，
 形成错位二次确认。第二次点击删除才实际移除。
 删除当前模板后恢复为 Emoji，内置模板不提供删除。
-也可以展开 **用 AI 生成自己的动画**，复制提示词并描述想要的效果，
-再导入生成的 `.js` 文件。可直接导入的示例见 [example-custom.js](assets/animations/example-custom.js)，
+也可以展开 **用 AI 生成自己的动画**（英文为 **Generate your own animation with AI**），复制
+提示词，替换末尾的创意描述，再导入生成的 `.js` 文件。技术规范和艺术指导共用唯一英文正文；
+创意占位、引导和复制反馈跟随 DSH 页面语言（英文或简体中文，其他语言回退英文）。
+提示词要求完整独立脚本，包含有辨识度的构图、分层节奏、运动细节、透明背景和平滑淡出。
+AI 输出仍需通过导入校验；建议预览完整效果后再确认添加。
+提示词也说明了 `frame.theme`，引导生成的脚本在播放中随 DSH 主题变化调整配色。
+可直接导入的示例见 [example-custom.js](assets/animations/example-custom.js)，
 文件格式、绘图接口与自定义动画的流畅度优化建议见 [动画脚本说明](docs/ANIMATIONS.md)。
 
 保存的脚本位于 `$DSH_HOME/clutch-dsh-fireworks/animations/<sha256>.js`；Host 设置只保存

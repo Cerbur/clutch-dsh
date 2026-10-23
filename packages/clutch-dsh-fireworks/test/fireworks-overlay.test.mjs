@@ -90,6 +90,47 @@ test('clickable toast opens its own Session and leaves the global animation runn
   controller.stop();
 });
 
+test('toast retains accessible controls and remains dismissible after failed Session navigation', async () => {
+  const plugin = await clientModule();
+  const controller = new FireworksController(async () => {});
+  const event = {
+    type: FIREWORKS_LAUNCH_EVENT,
+    id: 'failed-navigation',
+    sessionId: 'origin',
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + FIREWORKS_EVENT_TTL_MS,
+    message: 'Verified milestone',
+  };
+  controller.accept([event]);
+  try {
+    const tree = plugin.FireworksOverlay({
+      controller,
+      openSession: () => {
+        throw new Error('unavailable');
+      },
+    });
+    const nodes = elements(tree);
+    assert.ok(
+      nodes.some((node) => node.props.role === 'status' && node.props['aria-live'] === 'polite'),
+    );
+    assert.ok(
+      nodes.some(
+        (node) => node.type === 'span' && String(node.props.children).includes(event.message),
+      ),
+    );
+    const buttons = nodes.filter((node) => node.type === 'button');
+    assert.ok(buttons.every((node) => node.props.type === 'button'));
+    buttons[0].props.onClick();
+    assert.equal(controller.getSnapshot().toast.id, event.id);
+    const dismiss = buttons.find((node) => node.props['aria-label'] === 'Dismiss celebration');
+    dismiss.props.onClick();
+    assert.equal(controller.getSnapshot().toast, undefined);
+    assert.equal(controller.getSnapshot().burst.id, event.id);
+  } finally {
+    controller.stop();
+  }
+});
+
 test('preview and tool launches mount the same surface with the same completion callback', async () => {
   const plugin = await clientModule();
   const animation = { id: 'emoji', name: 'Emoji', durationMs: 3200, source: '' };

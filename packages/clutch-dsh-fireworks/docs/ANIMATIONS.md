@@ -12,6 +12,21 @@ page contains a complete AI generation prompt with this contract.
 确认添加后才写入并选中；取消不修改配置或磁盘。
 所有内置效果与自定义效果使用同一个接口。设置页提供可复制的完整 AI 生成提示词。
 
+The generation prompt's technical contract and art direction have one English source in
+`src/client/animation-generation-prompt.ts`. Settings append a creative brief from
+`src/client/animation-prompt-locales.ts`, with English/Simplified Chinese guidance and copy
+feedback following DSH's synchronized `document.lang` (English fallback). The displayed text
+and clipboard use the same complete composition. Replace the brief's placeholder before
+asking for a complete, directly importable standalone `.js` file. The prompt emphasizes
+visual identity, anticipation/reveal/climax/resolution, layered motion, transparent framing,
+theme contrast, adaptive dimensions and bounded drawing work. Generation does not bypass
+preflight or full-preview validation.
+
+生成提示词的技术规范与艺术指导只维护一份英文正文，末尾追加随 DSH 页面语言变化的中英文
+创意描述槽；引导与复制反馈同步本地化，其他语言回退英文。文本框和剪贴板使用同一份完整
+组合结果。将占位替换为自己的想法，要求 AI 输出可直接导入的完整独立 `.js` 文件；
+生成结果仍需预检，建议完整预览。此改动不改变脚本接口、隔离、预算或验证流程。
+
 Preview sends any card's template to the same global renderer as a real launch, without a
 separate preview canvas, toast, tool call or settings write. Stop it explicitly,
 change templates, or leave the settings page to release its resources. A real

@@ -1,12 +1,27 @@
 import assert from 'node:assert/strict';
 import semver from 'semver';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const packageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(path.join(packageDirectory, 'package.json'), 'utf8'));
+
+test('resolves the same Cordis instance as every DSH development dependency', () => {
+  const require = createRequire(import.meta.url);
+  const cordis = require.resolve('@deepseek-ai/cordis');
+  for (const name of Object.keys(manifest.devDependencies)) {
+    if (!name.startsWith('@deepseek-ai/dsh-')) continue;
+    const dependencyRequire = createRequire(require.resolve(name));
+    assert.equal(
+      dependencyRequire.resolve('@deepseek-ai/cordis'),
+      cordis,
+      `${name} must share the plugin's Cordis instance for Context declaration merging`,
+    );
+  }
+});
 
 test('declares an installable DSH plugin package', () => {
   assert.equal(manifest.name, '@cerbur/clutch-dsh-fireworks');

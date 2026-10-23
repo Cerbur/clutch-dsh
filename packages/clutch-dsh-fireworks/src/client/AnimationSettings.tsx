@@ -8,7 +8,13 @@ import {
   type AnimationPreferences,
   type AnimationTemplate,
 } from '../animation.js';
-import { ANIMATION_GENERATION_PROMPT, animationTemplates } from './animation-templates.js';
+import { animationTemplates } from './animation-templates.js';
+import { animationGenerationPrompt } from './animation-generation-prompt.js';
+import {
+  animationPromptLocales,
+  promptLanguage,
+  subscribePromptLanguage,
+} from './animation-prompt-locales.js';
 import type { FireworksController } from './fireworks-controller.js';
 import type { AnimationStore } from './animation-store.js';
 import styles from './animation-settings.css';
@@ -103,6 +109,9 @@ export function AnimationSettings({
   readonly playback: Pick<FireworksController, 'previewAnimation'>;
   readonly validate?: typeof validateAnimation;
 }) {
+  const language = useSyncExternalStore(subscribePromptLanguage, promptLanguage);
+  const promptText = animationPromptLocales[language];
+  const generationPrompt = animationGenerationPrompt(promptText.creativeBrief);
   const saved = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const templates = useMemo<AnimationCard[]>(
     () => [
@@ -534,28 +543,26 @@ export function AnimationSettings({
         </dialog>
       )}
       <details className={styles.prompt}>
-        <summary>用 AI 生成自己的动画</summary>
-        <p>复制提示词，描述想要的效果，让 AI 输出 .js 文件，然后导入。</p>
-        <textarea
-          aria-label="动画脚本生成提示词"
-          readOnly
-          value={ANIMATION_GENERATION_PROMPT}
-          rows={10}
-        />
+        <summary>{promptText.title}</summary>
+        <p>{promptText.guide}</p>
+        <textarea aria-label={promptText.label} readOnly value={generationPrompt} rows={10} />
         <button
           type="button"
           onClick={() => {
             if (!navigator.clipboard?.writeText) {
-              setError('复制不可用，请从文本框手动复制。');
+              setNotice('');
+              setError(promptText.unavailable);
               return;
             }
+            setError('');
+            setNotice('');
             void navigator.clipboard
-              .writeText(ANIMATION_GENERATION_PROMPT)
-              .then(() => setNotice('生成提示词已复制。'))
-              .catch(() => setError('复制失败，请从文本框手动复制。'));
+              .writeText(generationPrompt)
+              .then(() => setNotice(promptText.copied))
+              .catch(() => setError(promptText.failed));
           }}
         >
-          复制生成提示词
+          {promptText.copy}
         </button>
       </details>
     </section>

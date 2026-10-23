@@ -14,7 +14,7 @@ const a = source('Saved A'),
   b = source('Saved B');
 
 /** Render the actual shipped settings component with a small synchronous hook driver. */
-async function harness(t) {
+async function harness(t, { language = 'zh-CN', clipboard } = {}) {
   let plugin,
     Component,
     cursor = 0,
@@ -54,6 +54,7 @@ async function harness(t) {
     },
   };
   const jsx = (type, props) => ({ type, props });
+  const page = { querySelector: () => ({}), documentElement: { lang: language } };
   const react = {
     useState(initial) {
       const index = cursor++;
@@ -95,7 +96,8 @@ async function harness(t) {
         },
       },
     },
-    document: { querySelector: () => ({}), documentElement: { lang: 'zh-CN' } },
+    document: page,
+    navigator: { clipboard },
     crypto: { randomUUID },
     TextEncoder,
     TextDecoder,
@@ -208,6 +210,10 @@ async function harness(t) {
     },
     render,
     nodes: () => nodes(tree),
+    setLanguage(language) {
+      page.documentElement.lang = language;
+      render();
+    },
     validationFail(message) {
       validationError = message;
     },
@@ -219,6 +225,59 @@ async function harness(t) {
     },
     oldCallback: () => callback,
   };
+}
+
+for (const [language, copy, copied, slot] of [
+  ['en', 'Copy generation prompt', 'Generation prompt copied.', 'My creative brief: <'],
+  ['zh-CN', '复制生成提示词', '生成提示词已复制。', '我的创意描述：<'],
+]) {
+  test(`copies the complete displayed English contract and localized brief: ${language}`, async (t) => {
+    const writes = [];
+    const ui = await harness(t, {
+      language,
+      clipboard: { writeText: async (text) => writes.push(text) },
+    });
+    const displayed = ui.nodes().find((node) => node.type === 'textarea').props.value;
+    assert.ok(displayed.startsWith('Create a distinctive, polished celebration animation'));
+    assert.ok(displayed.includes(slot));
+    await ui.click(copy);
+    assert.deepEqual(writes, [displayed], 'clipboard must include the whole visible prompt');
+    assert.ok(ui.text().includes(copied));
+    assert.equal(ui.saves.length, 0);
+    ui.setLanguage(language === 'en' ? 'zh-CN' : 'en');
+    const changed = ui.nodes().find((node) => node.type === 'textarea').props.value;
+    assert.equal(
+      changed.split('\n\n').slice(0, -1).join('\n\n'),
+      displayed.split('\n\n').slice(0, -1).join('\n\n'),
+    );
+    assert.ok(!changed.includes(slot));
+    const nextCopy = language === 'en' ? '复制生成提示词' : 'Copy generation prompt';
+    await ui.click(nextCopy);
+    assert.equal(writes.at(-1), changed);
+  });
+}
+
+for (const [language, copy, unavailable, failed] of [
+  ['en', 'Copy generation prompt', 'Copy is unavailable.', 'Copy failed.'],
+  ['zh-CN', '复制生成提示词', '复制不可用', '复制失败'],
+]) {
+  test(`localized copy errors keep manual selection available: ${language}`, async (t) => {
+    const missing = await harness(t, { language });
+    await missing.click(copy);
+    assert.ok(missing.text().includes(unavailable));
+    assert.equal(missing.nodes().find((node) => node.type === 'textarea').props.readOnly, true);
+    const rejected = await harness(t, {
+      language,
+      clipboard: {
+        writeText: async () => {
+          throw new Error('denied');
+        },
+      },
+    });
+    await rejected.click(copy);
+    assert.ok(rejected.text().includes(failed));
+    assert.equal(rejected.saves.length, 0);
+  });
 }
 
 test('selecting a template updates immediately, with no Save or Discard operation', async (t) => {
