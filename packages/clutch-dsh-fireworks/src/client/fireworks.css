@@ -22,17 +22,60 @@
   align-items: center;
   padding: 8px;
   pointer-events: auto;
-  border: 1px solid rgba(255, 255, 255, 0.44);
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(135deg, rgba(111, 67, 220, 0.92), rgba(232, 74, 157, 0.92));
-  box-shadow: 0 12px 36px rgba(80, 35, 122, 0.28);
-  font-size: 16px;
-  font-weight: 700;
+  --fireworks-toast-surface: #f8f9fa;
+  --fireworks-toast-fill: rgba(248, 249, 250, 0.94);
+  --fireworks-toast-label: #17181a;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  isolation: isolate;
+  border: 0;
+  border-radius: var(--dsw-radius-lg, 12px);
+  color: var(--dsw-alias-label-primary, var(--fireworks-toast-label));
+  background: var(--dsw-alias-bg-layer-3, var(--fireworks-toast-surface));
+  box-shadow: var(
+    --dsw-elevation-prominent,
+    0 0 0 0.5px var(--dsw-elevation-stroke-color),
+    0 3px 8px rgba(0, 0, 0, 0.04),
+    0 0 20px rgba(0, 0, 0, 0.05)
+  );
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.25;
   text-align: center;
   transform: translateX(-50%);
   animation: fireworks-banner 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body[data-ds-dark-theme] .toast {
+  --fireworks-toast-surface: #303136;
+  --fireworks-toast-fill: rgba(48, 49, 54, 0.94);
+  --fireworks-toast-label: #f3f4f5;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.12));
+}
+
+/* The branch picker uses MenuSurface's neutral fill, blur and elevation.
+   Keep an opaque base unless filtering is supported; filter only the material. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .toast {
+    background: transparent;
+  }
+
+  .toast::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: var(--fireworks-toast-fill);
+    /* A denser menu fill keeps text legible over arbitrary celebration frames. */
+    background: color-mix(
+      in srgb,
+      var(--dsw-menu-surface-fill, var(--fireworks-toast-fill)) 25%,
+      var(--dsw-alias-bg-layer-3, var(--fireworks-toast-surface))
+    );
+    -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
+    backdrop-filter: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
+  }
 }
 
 .toastAction,
@@ -56,7 +99,6 @@
 .toastHint {
   font-size: 12px;
   font-weight: 500;
-  opacity: 0.9;
 }
 
 .dismiss {
@@ -67,7 +109,7 @@
 
 .toastAction:focus-visible,
 .dismiss:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid currentColor;
   outline-offset: 2px;
   border-radius: 8px;
 }
