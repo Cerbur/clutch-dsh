@@ -90,7 +90,10 @@ Whale Show replaces Starburst under the existing `classic` ID and is the default
 is configured. Every five-second show includes rocket launches, shell bursts, the blue particle
 whale and its fountain, then a complete fade-out—never a random easter egg. Existing explicit
 Emoji, Aurora and imported selections are preserved; existing Starburst selections receive Whale Show.
-The same transparent effect works on light and dark backgrounds without changing tool parameters.
+The effect retains the original Canvas Show particle simulation, additive burst flashes and persistent
+fading trails—not a simplified dotted outline. The original launches, whale formation, fountain and
+burnout are accelerated together into five seconds. The transparent effect works on light and dark
+backgrounds without changing tool parameters.
 
 Compact cards automatically fit more columns in wider panels and fewer in narrower panels.
 Card details stack the name, tag, and duration vertically. Long names use a single-line ellipsis;

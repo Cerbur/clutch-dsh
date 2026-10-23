@@ -31,16 +31,28 @@ events while only the active toast remains, without starting them or a preview.
 - Always launch the whale finale. Compress launches, bursts, sampled-outline
   formation, anchored fountain and fade into 5000 ms, with no tool parameter,
   probability gate, schema change or new playback engine.
-- Port the PR shell families and bounded exponential schedule to immutable seeded
-  descriptors; evaluate drag/gravity and short trails at absolute host time. This
-  replaces the old mutable simulation/pixel buffer so skipped frames, midpoint
-  revisits and resize cannot delay or restart the whale. Use saturated cores and
-  dark rims with source-over transparency for both page backgrounds; v1 does not
-  expose the page theme to scripts. The host retains all lifecycle ownership.
-- Regression coverage executes the actual template through the sandbox Worker:
-  metadata/defaults, explicit selections, seeds, frame schedules, endpoint ack,
-  reduced-motion midpoint/resize, watchdog and idempotent cleanup. No installed
-  GUI visual acceptance is implied by the VM canvas recorder.
+- Fidelity correction: the first analytic port passed outline/lifecycle tests but
+  visibly lost the reference effect. Replace it with the supplied Canvas Show
+  simulation: original shell counts/parameters, seeded random consumption,
+  discrete drag/gravity, flicker/crackle, radial flashes, fountain and persistent
+  destination-out/lighter trail canvas. Do not substitute dotted outlines,
+  synthetic glows or rewritten launch/formation parameters.
+- Advance the original simulation in canonical 16.667 ms steps from host time.
+  A no-paint prepass measures its natural completion, including every particle
+  and quiet grace; map the formed-whale tick to the 2500 ms midpoint and the
+  complete timeline to 5000 ms. Resize, changed seeds and backwards seeks reset
+  and replay the same simulation/RNG; the host still owns scheduling/cleanup.
+- Normal playback retains all original trail history at host DPR. A cold seek,
+  resize or large time gap paints only the latest 48 simulation ticks and caps
+  the private trail surface at two million pixels to stay within the existing
+  frame watchdog; physics/RNG still advance through every tick. Such seeks may
+  lose faint quantized trail ghosts and lower raster detail on large windows;
+  do not claim pixel identity for that bounded reconstruction.
+- Regression coverage includes captured original draw/style/gradient stream
+  hashes plus actual Worker metadata/default, seeded full-whale, endpoint ack,
+  reduced-motion/resize, watchdog and cleanup cases. Standalone native Chrome
+  Canvas comparisons verify original appearance separately from the VM recorder;
+  they are not acceptance in the installed DSH GUI.
 
 ## Templates and rendering
 

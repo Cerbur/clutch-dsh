@@ -308,6 +308,7 @@ function connectSandboxWorker(
   const hidden = [];
   const drawing = context(draws);
   const canvas = { getContext: () => drawing };
+  const privateCanvases = [];
   const runtime = vm.createContext({
     postMessage: (data) => harness.worker.onmessage({ data }),
     OffscreenCanvas: class {
@@ -315,8 +316,10 @@ function connectSandboxWorker(
         this.width = width;
         this.height = height;
         this.drawing = context(hidden);
+        privateCanvases.push(this);
       }
-      getContext() {
+      getContext(type) {
+        assert.equal(type, '2d');
         return this.drawing;
       }
     },
@@ -332,31 +335,41 @@ function connectSandboxWorker(
   const flush = () => {
     while (delivered < harness.worker.sent.length) step();
   };
-  return { canvas, draws, hidden, step, flush, render: dispatch };
+  return { canvas, draws, hidden, privateCanvases, step, flush, render: dispatch };
 }
 
-// A small Canvas adapter, not a rasterizer: exercise the real worker's circle/line paths,
-// alpha isolation and sprite blits, and reject unsupported methods instead of silently no-oping.
+// A strict Canvas adapter, not a rasterizer. Keep only the latest simulation tick's
+// paint records, plus counters, instead of retaining every particle in every tick.
 function pathDrawingContext(target) {
   let path = [];
   const stack = [];
+  const paintCounts = {};
   const defaults = {
     globalAlpha: 1,
     globalCompositeOperation: 'source-over',
     fillStyle: '#000',
     strokeStyle: '#000',
     lineWidth: 1,
+    lineCap: 'butt',
+    shadowColor: 'transparent',
+    shadowBlur: 0,
   };
   const numeric = (values) =>
     values.forEach((value) => assert.ok(Number.isFinite(value), 'finite drawing coordinates'));
+  const record = (type, ...args) => {
+    paintCounts[type] = (paintCounts[type] ?? 0) + 1;
+    target.push([type, ...args]);
+  };
   const context = {
     ...defaults,
+    paintCounts,
     reset() {
       assert.equal(stack.length, 0, 'drawing state must be balanced between frames');
       Object.assign(context, defaults);
       path = [];
     },
     setTransform(...args) {
+      assert.equal(args.length, 6);
       numeric(args);
     },
     save() {
@@ -365,6 +378,38 @@ function pathDrawingContext(target) {
     restore() {
       assert.ok(stack.length, 'restore needs a matching save');
       Object.assign(context, stack.pop());
+    },
+    clearRect(...args) {
+      numeric(args);
+      record('clearRect', ...args);
+    },
+    fillRect(...args) {
+      numeric(args);
+      // A reference trail tick starts by fading the previous pixels, not by
+      // clearing them. Dropping recorder history does not reset context state.
+      if (context.globalCompositeOperation === 'destination-out') target.length = 0;
+      record(
+        'fillRect',
+        args,
+        context.fillStyle,
+        context.globalAlpha,
+        context.globalCompositeOperation,
+      );
+    },
+    createRadialGradient(...args) {
+      numeric(args);
+      assert.equal(args.length, 6);
+      assert.ok(args[2] >= 0 && args[5] >= 0);
+      const gradient = {
+        stops: [],
+        addColorStop(offset, color) {
+          assert.ok(Number.isFinite(offset) && offset >= 0 && offset <= 1);
+          assert.equal(typeof color, 'string');
+          gradient.stops.push([offset, color]);
+        },
+      };
+      paintCounts.gradient = (paintCounts.gradient ?? 0) + 1;
+      return gradient;
     },
     beginPath() {
       path = [];
@@ -390,8 +435,16 @@ function pathDrawingContext(target) {
     },
     drawImage(image, ...args) {
       numeric([image.width, image.height, ...args]);
+      assert.ok(image.width > 0 && image.height > 0, 'blit only an active, nonempty buffer');
       if (context.globalAlpha > 0)
-        target.push(['drawImage', image.width, image.height, ...args, context.globalAlpha]);
+        record(
+          'drawImage',
+          image.width,
+          image.height,
+          ...args,
+          context.globalAlpha,
+          context.globalCompositeOperation,
+        );
     },
   };
   function paint(type, color) {
@@ -400,16 +453,27 @@ function pathDrawingContext(target) {
     );
     if (context.globalAlpha > 0) {
       assert.ok(path.length > 0, 'a paint must have path geometry');
-      target.push([
+      record(
         type,
         path.map((part) => [...part]),
         color,
         context.globalAlpha,
         context.lineWidth,
-      ]);
+        context.globalCompositeOperation,
+      );
     }
   }
-  return context;
+  return new Proxy(context, {
+    get(target, key) {
+      assert.ok(key in target, 'unsupported Canvas method/property: ' + String(key));
+      return target[key];
+    },
+    set(target, key, value) {
+      assert.ok(key in target, 'unsupported Canvas property: ' + String(key));
+      target[key] = value;
+      return true;
+    },
+  });
 }
 
 async function whaleTemplate() {
@@ -429,17 +493,13 @@ function assertSandboxReleased(harness) {
   assert.equal(harness.timers.size, 0);
 }
 
-test('real whale outline remains reachable and frame-rate independent for every tested seed and viewport', async () => {
+test('real whale paints all 260 blue outline points near midpoint on a persistent trail buffer', async () => {
   const template = await whaleTemplate();
   const outline = JSON.parse(
-    JSON.stringify(vm.runInNewContext(template.source + '; WHALE_OUTLINE')),
+    JSON.stringify(vm.runInNewContext(template.source + '; SHELL_OUTLINE')),
   );
-  assert.equal(
-    outline.length,
-    260,
-    'retain the complete sampled whale, not a generic particle burst',
-  );
-  const launchVariants = new Set();
+  assert.equal(outline.length, 260, 'retain the full whale rather than a generic burst');
+  const centers = new Set();
   for (const seed of [0, 1, 42, 0xffffffff]) {
     for (const [width, height, dpr] of [
       [800, 600, 1],
@@ -447,10 +507,12 @@ test('real whale outline remains reachable and frame-rate independent for every 
       [500, 220, 2],
     ]) {
       const harness = sandboxHarness(template, { seed, width, height, dpr });
-      const { draws, hidden, render } = connectSandboxWorker(harness, pathDrawingContext);
+      const { draws, hidden, privateCanvases, render } = connectSandboxWorker(
+        harness,
+        pathDrawingContext,
+      );
       const paintAt = (time, delta = 0) => {
         draws.length = 0;
-        hidden.length = 0;
         render({
           type: 'frame',
           frame: {
@@ -470,81 +532,129 @@ test('real whale outline remains reachable and frame-rate independent for every 
           false,
           JSON.stringify(harness.reports),
         );
-        return JSON.stringify(draws);
       };
       try {
-        // Sample either side of phase transitions rather than requiring an exact event tick.
-        for (const time of [300, 1799, 1801, 2399, 2401, 2500, 2801, 3200, 4500]) {
-          paintAt(time);
-          assert.ok(draws.length > 0, `seed ${seed} must paint at ${time}ms in ${width}x${height}`);
-        }
-        launchVariants.add(paintAt(1500));
-        const formed = paintAt(3200);
-        const radius = Math.min(width, height) * 0.25;
-        const circles = draws
-          .filter(([type]) => type === 'fill')
-          .flatMap(([, path]) => path.filter(([type]) => type === 'arc').map(([, x, y]) => [x, y]));
-        // At full hold all original samples must be painted at their normalized positions,
-        // regardless of the random shell families, launches or particle decoration.
-        for (const [x, y] of outline) {
-          const expectedX = width * 0.5 + x * radius;
-          const expectedY = height * 0.38 + y * radius * 0.92;
-          assert.ok(
-            expectedX >= 0 && expectedX <= width && expectedY >= 0 && expectedY <= height,
-            'the full whale fits the viewport',
-          );
-          assert.ok(
-            circles.some(
-              ([actualX, actualY]) =>
-                Math.abs(actualX - expectedX) < 1e-7 && Math.abs(actualY - expectedY) < 1e-7,
-            ),
-            `seed ${seed} must paint whale sample ${x},${y}`,
-          );
-        }
-        assert.equal(paintAt(3200, 1000), formed, 'absolute time, not delta, determines the pose');
-        for (const fps of [30, 60]) {
-          for (let frame = 0; (frame / fps) * 1000 < 5000; frame++)
-            paintAt((frame / fps) * 1000, 1000 / fps);
-          assert.equal(paintAt(3200, 1000 / fps), formed, `same pose after ${fps}fps history`);
-        }
-        // Deliberately skip 1800/2400/2680 and revisit earlier times after the finale.
-        for (const time of [137, 711, 1817, 2419, 2713, 3191, 4703, 4999, 0, 2500])
-          paintAt(time, 137);
-        assert.equal(
-          paintAt(3200),
-          formed,
-          'irregular and out-of-order frames cannot gate whale formation',
-        );
-        const paintedAlpha = () =>
-          draws.filter(([type]) => type === 'fill').reduce((sum, [, , , alpha]) => sum + alpha, 0);
-        paintAt(3200);
-        const holdAlpha = paintedAlpha();
-        paintAt(4500);
+        paintAt(300);
         assert.ok(
-          paintedAlpha() > 0 && paintedAlpha() < holdAlpha,
-          'whale visibly fades before the endpoint',
+          hidden.some(([type]) => type === 'stroke'),
+          'rockets really paint private paths',
         );
+        assert.equal(privateCanvases.length, 1);
+        const trail = privateCanvases[0];
+        assert.equal(trail.getContext('2d'), trail.getContext('2d'), 'private context persists');
+        assert.equal(trail.width, Math.floor(width * dpr));
+        assert.equal(trail.height, Math.floor(height * dpr));
+        paintAt(2500);
+        const midpoint = JSON.stringify(hidden);
+        assert.equal(privateCanvases.length, 1, 'forward seek reuses its trail canvas');
+        assert.deepEqual(
+          hidden[0],
+          ['fillRect', [0, 0, width, height], 'rgba(0,0,0,0.16)', 1, 'destination-out'],
+          'fade the trail toward transparency',
+        );
+        const paints = hidden.filter(([type]) => type === 'fill' || type === 'stroke');
+        assert.ok(paints.length >= 260);
+        assert.ok(
+          paints.every((paint) => paint[5] === 'lighter'),
+          'sparks blend additively in private buffer',
+        );
+        assert.equal(draws.length, 1, 'display only the private buffer, not individual particles');
+        assert.deepEqual(
+          draws[0],
+          ['drawImage', trail.width, trail.height, 0, 0, width, height, 1, 'source-over'],
+          'blit the transparent trail at CSS dimensions',
+        );
+
+        // Original shape points jitter and the launch center is random. Check the
+        // complete painted contour with a free center, not the obsolete fixed pose.
+        const radius = Math.min(width, height) * 0.19;
+        let whale;
+        for (let start = 0; start + outline.length <= paints.length; start++) {
+          const candidate = paints.slice(start, start + outline.length);
+          if (
+            !candidate.every(([type, path, color]) => {
+              const match =
+                typeof color === 'string' &&
+                /^hsla\(([^,]+),([^%]+)%,([^%]+)%,([^)]+)\)$/.exec(color);
+              return (
+                type === 'fill' &&
+                path.length === 1 &&
+                path[0][0] === 'arc' &&
+                path[0][3] >= 1.5 &&
+                path[0][3] <= 2.3 &&
+                match &&
+                +match[1] >= 183 &&
+                +match[1] <= 232 &&
+                +match[2] >= 88 &&
+                +match[2] <= 100 &&
+                +match[3] >= 62 &&
+                +match[3] <= 70 &&
+                +match[4] > 0.65
+              );
+            })
+          )
+            continue;
+          const offsets = candidate.map(([, path], index) => {
+            const [ox, oy] = outline[outline.length - 1 - index];
+            return [path[0][1] - ox * radius, path[0][2] - oy * radius * 0.92];
+          });
+          const cx = offsets.reduce((sum, [x]) => sum + x, 0) / outline.length;
+          const cy = offsets.reduce((sum, [, y]) => sum + y, 0) / outline.length;
+          if (offsets.every(([x, y]) => Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1)) {
+            whale = { candidate, cx, cy };
+            break;
+          }
+        }
+        assert.ok(whale, 'all 260 blue points must actually paint the whale contour at midpoint');
+        assert.ok(whale.cx > width * 0.3 && whale.cx < width * 0.7);
+        assert.ok(whale.cy > height * 0.1 && whale.cy < height * 0.45);
+        for (const [, path] of whale.candidate) {
+          assert.ok(path[0][1] >= 0 && path[0][1] <= width);
+          assert.ok(path[0][2] >= 0 && path[0][2] <= height);
+        }
+        centers.add([width, height, whale.cx.toFixed(2), whale.cy.toFixed(2)].join(':'));
+        paintAt(2500, 1000);
+        assert.equal(JSON.stringify(hidden), midpoint, 'delta cannot advance a repeated pose');
+        const clears = trail.drawing.paintCounts.clearRect;
+        paintAt(2713, 137);
+        paintAt(711, 137);
+        paintAt(2500, 137);
+        assert.ok(
+          trail.drawing.paintCounts.clearRect > clears,
+          'backtracking clears stale trail pixels',
+        );
+        assert.equal(
+          JSON.stringify(hidden),
+          midpoint,
+          'replay restores midpoint paints after a backtrack',
+        );
+        assert.equal(privateCanvases.length, 1, 'backtracking keeps the same private canvas');
         paintAt(4999);
         assert.equal(
-          draws.length,
-          0,
-          'particles finish naturally before the endpoint, not by truncation',
+          hidden.some(([type]) => type === 'fill' || type === 'stroke'),
+          false,
+          'particles burn out naturally before endpoint',
         );
         paintAt(5000);
-        assert.equal(draws.length, 0, 'all visible particles fade by the configured endpoint');
+        assert.equal(draws.length, 0, 'endpoint never blits a released buffer');
+        assert.equal(trail.width, 0, 'release private backing pixels at the endpoint');
+        assert.equal(trail.height, 0);
       } finally {
         harness.hide();
       }
       assertSandboxReleased(harness);
     }
   }
-  assert.ok(launchVariants.size > 2, 'seed changes launch presentation without gating the whale');
+  assert.ok(centers.size > 3, 'seed changes the original launch center across viewports');
 });
 
 for (const reducedMotion of [false, true]) {
   test(`real classic whale completes its full 5000ms playback and releases resources (reduced motion: ${reducedMotion})`, async () => {
     const harness = sandboxHarness(await whaleTemplate(), { reducedMotion, seed: 1 });
-    const { draws, hidden, flush, step } = connectSandboxWorker(harness, pathDrawingContext);
+    const { draws, hidden, privateCanvases, flush, step } = connectSandboxWorker(
+      harness,
+      pathDrawingContext,
+    );
     try {
       harness.frame(100);
       flush();
@@ -583,11 +693,12 @@ for (const reducedMotion of [false, true]) {
         assert.ok(hidden.length > 0, 'the real timeline paints to an offscreen validation canvas');
       } else {
         assert.ok(
-          draws.some(([type]) => type === 'stroke'),
+          privateCanvases.some(({ drawing }) => drawing.paintCounts.stroke > 0),
           'real line paths must paint',
         );
         assert.ok(
-          draws.some(([type]) => type === 'fill' || type === 'drawImage'),
+          privateCanvases.some(({ drawing }) => drawing.paintCounts.fill > 0) &&
+            draws.some(([type]) => type === 'drawImage'),
           'real circle paths or their sprites must paint',
         );
       }
@@ -882,19 +993,55 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
     const harness = sandboxHarness(template);
     const posted = [];
     const draws = [];
-    const drawing = new Proxy(
-      {},
-      {
-        get:
-          (_target, key) =>
-          (...args) => {
-            draws.push([key, args]);
-            if (key === 'measureText') return { width: 64 };
-          },
-        set: () => true,
+    const hidden = [];
+    const privateCanvases = [];
+    const painted = { fill: 0, stroke: 0, fillText: 0 };
+    const paintedGlyphs = new Map();
+    const context = (target, image) =>
+      new Proxy(
+        {
+          globalCompositeOperation: 'source-over',
+          measureText: () => ({ width: 64 }),
+          createRadialGradient: () => ({
+            addColorStop: (offset, color) => {
+              assert.ok(offset >= 0 && offset <= 1);
+              assert.equal(typeof color, 'string');
+            },
+          }),
+        },
+        {
+          get: (state, key) =>
+            state[key] ??
+            ((...args) => {
+              if (key === 'fillRect' && state.globalCompositeOperation === 'destination-out')
+                target.length = 0;
+              if (Object.hasOwn(painted, key)) painted[key]++;
+              if (key === 'fillText' && image) paintedGlyphs.set(image, args[0]);
+              if (key === 'drawImage') {
+                assert.ok(args[0].width > 0 && args[0].height > 0);
+                assert.ok(args.slice(1).every(Number.isFinite));
+              }
+              if (['fill', 'stroke', 'fillText', 'drawImage'].includes(key))
+                target.push([key, args]);
+            }),
+        },
+      );
+    const drawing = context(draws);
+    const worker = vm.createContext({
+      postMessage: (value) => posted.push(value),
+      OffscreenCanvas: class {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+          this.drawing = context(hidden, this);
+          privateCanvases.push(this);
+        }
+        getContext(type) {
+          assert.equal(type, '2d');
+          return this.drawing;
+        }
       },
-    );
-    const worker = vm.createContext({ postMessage: (value) => posted.push(value) });
+    });
     vm.runInContext(harness.workerSource, worker);
     worker.onmessage({ data: { type: 'init', canvas: { getContext: () => drawing } } });
     worker.onmessage({
@@ -914,15 +1061,23 @@ test('real built-in scripts execute through shared drawing helpers; runtime erro
     assert.equal(posted.at(-1).type, id === 'broken' ? 'error' : 'painted');
     if (id !== 'broken')
       assert.ok(
-        draws.some(([name]) => ['fillText', 'arc', 'lineTo'].includes(name)),
+        draws.some(([name]) => ['fill', 'stroke', 'fillText', 'drawImage'].includes(name)) &&
+          painted.fill + painted.stroke + painted.fillText > 0,
         id + ' must paint',
       );
     if (id === 'emoji') {
-      const glyphs = draws.filter(([name]) => name === 'fillText').map(([, args]) => args[0]);
+      const glyphs = draws
+        .filter(([name]) => name === 'drawImage')
+        .map(([, args]) => paintedGlyphs.get(args[0]));
       assert.equal(glyphs.length, 40);
       assert.ok(glyphs.filter((glyph) => glyph === '🎉').length >= 10);
       assert.ok(glyphs.filter((glyph) => glyph === '🌟').length >= 5);
       assert.ok(glyphs.filter((glyph) => glyph === '✨').length >= 5);
+      assert.equal(
+        privateCanvases.length,
+        new Set(glyphs).size,
+        'reuse one persistent raster per emoji',
+      );
     }
     harness.hide();
   }
