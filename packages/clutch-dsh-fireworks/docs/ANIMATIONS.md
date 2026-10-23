@@ -142,8 +142,9 @@ DPR，并向下取整画布像素尺寸，将总像素数限制在 800 万以内
 Use it to select colors and compositing while preserving random consumption,
 particle counts, trajectories, physics and timing. Scripts should treat a missing
 theme as `'dark'` for compatibility with older renderers. Keep the overlay transparent:
-bright particles and additive flashes suit dark pages; saturated deep blue, indigo
-and green with `source-over` compositing and adapted flashes/trails suit light pages.
+bright particles and additive flashes suit dark pages; the same hues and saturation
+with lower lightness and `source-over` compositing suit light pages. Whale Show
+scales only HSL lightness to 65% of its dark-palette value, retaining the original color spectrum.
 Do not paint a full-screen background or query the OS theme inside the opaque iframe
 or Worker.
 
@@ -183,8 +184,8 @@ trail history and raster detail, so it is not pixel-identical to uninterrupted p
 
 `frame.theme` 是父 DSH 页面传入的绘制参数，值为 `'light' | 'dark'`，播放中可更新。
 只据此调整配色与混合方式，保留随机数消费顺序、粒子数量、轨迹、物理与时间轴；兼容旧渲染器
-时，缺失值按 `'dark'` 处理。深色适合明亮粒子与加色闪光，浅色适合 `source-over` 混合及饱和
-深蓝、靛青、绿色，并适配闪光和拖尾。覆盖层始终透明，不绘制整幕背景。
+时，缺失值按 `'dark'` 处理。深色适合明亮粒子与加色闪光；浅色保留相同色相与饱和度，降低
+明度并采用 `source-over` 混合。鲸鱼烟花仅将 HSL 明度缩放至深色配色的 65%，保留原来的完整色谱。覆盖层始终透明，不绘制整幕背景。
 
 现有 `@deepseek-ai/dsh-client-ui-layout` 的 `ThemePresenter` 将
 `snapshot.active.colorScheme` 写入 `html.style.colorScheme`，将偏好来源

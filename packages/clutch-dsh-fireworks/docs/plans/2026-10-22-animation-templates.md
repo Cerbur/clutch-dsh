@@ -94,8 +94,8 @@ Use the installed layout dependency's `ThemePresenter` DOM projection:
   offscreen timeline, without reporting completion early.
 - Preserve `classic`, 5000 ms, original simulation/RNG/counts/physics/trails and
   dark golden references; absent theme means dark. Light uses `source-over`,
-  saturated deep blue/indigo/green and adapted flashes/trails with no full-screen
-  background. Repaint the private buffer at the same tick on theme changes; cold
+  the original hue/saturation spectrum with HSL lightness reduced to 65% (not a
+  three-color remap), and adapted flashes/trails with no full-screen background. Repaint the private buffer at the same tick on theme changes; cold
   reconstruction retains the existing lossy 48-tick/two-million-pixel bounds.
 - Update both READMEs, the bilingual authoring contract and AI prompt. This
   follow-up currently has automated verification only; no new installed-GUI

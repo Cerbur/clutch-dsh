@@ -8,9 +8,9 @@ const TEMPLATE_THEME = 'dark'; // Preserve the reference palette and additive sp
 let rasterTheme = 'dark';
 function sparkColor(hue, saturation, lightness, alpha) {
   if (rasterTheme === 'light') {
-    hue = hue < 120 ? 242 : hue < 210 ? 174 : 218;
-    saturation = Math.max(84, saturation);
-    lightness = Math.max(24, Math.min(hue === 174 ? 28 : 34, lightness * 0.42));
+    // Keep the reference's full color spectrum and saturation; only dim its
+    // lightness on white pages instead of collapsing every shell to three inks.
+    lightness *= 0.65;
   }
   return `hsla(${hue},${saturation}%,${lightness}%,${alpha})`;
 }

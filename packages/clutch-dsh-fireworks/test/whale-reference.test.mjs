@@ -395,9 +395,9 @@ function assertLightPalette(drawing) {
     const [, hue, saturation, lightness, alpha] = match.map(Number);
     if (alpha === 0) continue; // Transparent outer edge of the radial flash.
     visible++;
-    assert.ok([174, 218, 242].includes(hue), 'use saturated teal, blue and indigo ink');
-    assert.ok(saturation >= 84 && saturation <= 100, color);
-    assert.ok(lightness >= 24 && lightness <= (hue === 174 ? 28 : 34), color);
+    assert.ok(hue >= 0 && hue < 360, color);
+    assert.ok(saturation >= 0 && saturation <= 100, color);
+    assert.ok(lightness > 0 && lightness <= 65, 'dim the original lightness for light pages');
   }
   assert.ok(visible > 0, 'actually paint colored sparks');
   assert.deepEqual([...drawing.composites].sort(), ['destination-out', 'source-over']);
@@ -446,6 +446,15 @@ test('light changes only raster colors/compositing across the complete original 
     );
     assert.notDeepEqual([...runs[0].drawing.colors], [...runs[1].drawing.colors]);
     assert.ok(runs[0].drawing.composites.has('lighter'));
+    for (const color of runs[0].drawing.colors) {
+      const match = /^hsla\(([^,]+),([^%]+)%,([^%]+)%,([^)]+)\)$/.exec(color);
+      if (!match || Number(match[4]) === 0) continue;
+      const [, hue, saturation, lightness, alpha] = match.map(Number);
+      assert.ok(
+        runs[1].drawing.colors.has(`hsla(${hue},${saturation}%,${lightness * 0.65}%,${alpha})`),
+        `light must preserve the original hue/saturation/alpha and only reduce lightness: ${color}`,
+      );
+    }
     assertLightPalette(runs[1].drawing);
   }
 });
@@ -479,7 +488,10 @@ function renderHarness(source, { seed = 42, width = 800, height = 600 } = {}) {
         drawing.composites.clear();
         drawing.rectangles.length = 0;
       }
-      vm.runInContext('render(frame)', runtime, { timeout: 1000 });
+      // This oracle hashes every path/style and collects the full hue spectrum
+      // across replayed ticks; its instrumentation is not the native frame budget.
+      // The production 750ms watchdog remains independently covered by Worker tests.
+      vm.runInContext('render(frame)', runtime, { timeout: 5000 });
       return JSON.parse(
         vm.runInContext(
           `JSON.stringify({ tick: simulationTick, time: showClock, random: showRandomState,
