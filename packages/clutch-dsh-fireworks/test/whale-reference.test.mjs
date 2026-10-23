@@ -474,7 +474,7 @@ test('light changes only raster colors/compositing across the complete original 
   }
 });
 
-function renderHarness(source, { seed = 42, width = 800, height = 600 } = {}) {
+function renderHarness(source, { seed = 42, width = 800, height = 600, dpr = 1 } = {}) {
   const canvases = [];
   const output = recordingContext();
   const runtime = vm.createContext({
@@ -489,7 +489,7 @@ function renderHarness(source, { seed = 42, width = 800, height = 600 } = {}) {
         return this.drawing.ctx;
       }
     },
-    frame: { seed, width, height, dpr: 1, durationMs: 5000, ctx: output.ctx },
+    frame: { seed, width, height, dpr, durationMs: 5000, ctx: output.ctx },
   });
   vm.runInContext(source, runtime);
   return {
@@ -516,6 +516,54 @@ function renderHarness(source, { seed = 42, width = 800, height = 600 } = {}) {
       );
     },
   };
+}
+
+for (const trigger of ['theme change', 'backtrack']) {
+  test(`early ${trigger} caps private trails without changing pose or RNG`, async () => {
+    const source = await readFile(
+      new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+      'utf8',
+    );
+    for (const seed of [0, 42]) {
+      const options = { seed, width: 1600, height: 1000, dpr: 2 };
+      const theme = trigger === 'theme change' ? 'light' : 'dark';
+      const continuous = renderHarness(source, options);
+      continuous.paint(0, theme);
+      const { trailDpr: fullDpr, ...expected } = continuous.paint(100, theme);
+      assert.equal(fullDpr, 2, 'continuous playback keeps full host DPR');
+      assert.ok(expected.tick > 0 && expected.tick < 48, 'exercise early reconstruction');
+      const harness = renderHarness(source, options);
+      harness.paint(0, 'dark');
+      harness.paint(trigger === 'theme change' ? 100 : 200, 'dark');
+      const canvas = harness.canvases[0];
+      assert.equal(canvas.width * canvas.height, 6_400_000, 'no cap before reconstruction');
+      const { trailDpr, ...actual } = harness.paint(100, theme);
+      assert.deepEqual(actual, expected, 'preserve tick, timeline, simulation state and RNG');
+      assert.ok(trailDpr < 2);
+      assert.ok(canvas.width * canvas.height <= 2_000_000, 'cap even before tick 48');
+      assert.equal(harness.canvases.length, 1, 'reuse the private canvas');
+
+      const cold = renderHarness(source, options);
+      assert.deepEqual(cold.paint(100, theme), { trailDpr, ...actual });
+      assert.deepEqual(
+        canvas.drawing.snapshot(),
+        cold.canvases[0].drawing.snapshot(),
+        'reconstruction paints the same geometry as a cold seek',
+      );
+      const { trailDpr: nextFullDpr, ...nextExpected } = continuous.paint(116, theme);
+      const { trailDpr: nextSeekDpr, ...nextActual } = harness.paint(116, theme);
+      assert.equal(nextFullDpr, 2);
+      assert.equal(nextSeekDpr, trailDpr);
+      assert.deepEqual(nextActual, nextExpected);
+      assert.deepEqual(
+        canvas.drawing.snapshot(),
+        continuous.canvases[0].drawing.snapshot(),
+        'the next painted pose matches uninterrupted playback',
+      );
+      assert.ok(canvas.drawing.snapshot().count > 0, 'compare actual particle geometry');
+      assert.equal(continuous.canvases[0].width * continuous.canvases[0].height, 6_400_000);
+    }
+  });
 }
 
 test('same-tick theme changes replay the private trails without changing pose or timeline', async () => {

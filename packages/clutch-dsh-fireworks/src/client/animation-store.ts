@@ -94,6 +94,8 @@ export class AnimationStore {
       return preferences;
     } catch (error) {
       signal?.throwIfAborted();
+      // Settings read failures use default classic/Whale Show in memory; an
+      // unavailable selected template is recovered separately by the Host as Emoji.
       this.publish({
         preferences: DEFAULT_ANIMATION_PREFERENCES,
         writable: false,

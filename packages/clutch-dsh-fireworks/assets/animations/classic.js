@@ -891,7 +891,8 @@ const SILENT_CONTEXT = {
 };
 const FIXED_STEP_MS = 16.667;
 // Normal playback retains the complete original buffer at host DPR. Only a
-// cold seek / resize / large gap reconstructs its recent trail window. The
+// cold seek / resize / large gap / theme change / backtrack reconstructs its
+// recent trail window within the pixel budget, even before tick 48. The
 // discarded ideal contribution is < .024%; native 8-bit rounding can retain
 // additional faint ghosts, so seek output is intentionally not bit-identical.
 const TRAIL_REPLAY_TICKS = 48;
@@ -911,7 +912,9 @@ function sizeTrail(frame, seek) {
   trailContext.setTransform(trailDpr, 0, 0, trailDpr, 0, 0);
 }
 
-function resetSimulation(frame) {
+function resetSimulation(frame, reconstruct = false) {
+  // Reconstruction bounds raster work independently of the replay-window cutoff.
+  if (reconstruct) sizeTrail(frame, true);
   showClock = 0;
   showRandomState = frame.seed >>> 0;
   simulationTick = 0;
@@ -986,10 +989,10 @@ function render(frame) {
   } else if (themeChanged) {
     // Recolor accumulated trails even at the same tick (including the static
     // reduced-motion midpoint). Replay the same seed/physics into this buffer.
-    resetSimulation(frame);
+    resetSimulation(frame, true);
   }
   const target = timeToTick(frame.time);
-  if (target < simulationTick) resetSimulation(frame);
+  if (target < simulationTick) resetSimulation(frame, true);
   const paintFrom = target - TRAIL_REPLAY_TICKS;
   if (simulationTick < paintFrom) {
     if (trailCanvas.width * trailCanvas.height > SEEK_PIXEL_BUDGET) sizeTrail(frame, true);

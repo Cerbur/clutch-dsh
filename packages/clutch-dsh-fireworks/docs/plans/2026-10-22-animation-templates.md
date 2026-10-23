@@ -43,9 +43,10 @@ events while only the active toast remains, without starting them or a preview.
   complete timeline to 5000 ms. Resize, changed seeds and backwards seeks reset
   and replay the same simulation/RNG; the host still owns scheduling/cleanup.
 - Normal playback retains all original trail history at host DPR. A cold seek,
-  resize or large time gap paints only the latest 48 simulation ticks and caps
-  the private trail surface at two million pixels to stay within the existing
-  frame watchdog; physics/RNG still advance through every tick. Such seeks may
+  resize, large time gap, theme change or backtrack paints at most the latest 48
+  simulation ticks and caps the private trail surface at two million pixels to stay
+  within the existing frame watchdog, including targets within the first 48 ticks;
+  physics/RNG still advance through every tick. Such seeks may
   lose faint quantized trail ghosts and lower raster detail on large windows;
   do not claim pixel identity for that bounded reconstruction.
 - Regression coverage includes captured original draw/style/gradient stream
@@ -122,7 +123,17 @@ Reserve the event slot during refresh, reject previews, and keep transport consu
 Cancel preparation on expiry, a five-second refresh deadline or plugin stop. Recheck
 expiry after the read (including suspended-tab wall-clock changes), ignore late results
 by preparation identity, and advance without retry. Start animation, toast and the fixed
-12-second playback deadline together after preparation. Failed reads use Emoji, not cache.
+12-second playback deadline together after preparation. Failed settings reads return
+`DEFAULT_ANIMATION_PREFERENCES` (`classic` / Whale Show), without cached custom source
+or a persisted selection change. An unavailable selected template (including missing or
+damaged files) still uses Emoji. Live script/render errors, startup/frame timeouts and
+unavailable Worker/OffscreenCanvas support retain the trusted emoji fallback; previews
+report errors instead. Expired/timed-out preparation skips the event without retry.
+
+设置读取失败使用默认 `classic` / 鲸鱼烟花，不复用缓存脚本或持久化改变选择；选中模板
+不可用（包括文件缺失、损坏）仍使用 Emoji。正式播放的脚本/渲染错误、启动或帧超时及
+Worker/OffscreenCanvas 不可用仍使用可信 emoji 兜底，预览显示错误；准备阶段过期或
+刷新超时则跳过该事件、不重试。
 
 Preview is a local request to the same global playback controller and root
 renderer used for tool launches. There is no preview box, synthetic tool event,

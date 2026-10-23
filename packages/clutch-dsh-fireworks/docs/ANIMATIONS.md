@@ -180,9 +180,11 @@ complete validation early.
 Whale Show retains `classic`, 5000 ms and the original simulation, RNG consumption,
 counts, physics and trails. Dark rendering retains the original golden references;
 missing `theme` selects dark. Theme switching reconstructs the private trail buffer
-with the new palette at the same simulation tick. Cold reconstruction still paints
-only the latest 48 ticks within a two-million-pixel private buffer: it may lose faint
-trail history and raster detail, so it is not pixel-identical to uninterrupted playback.
+with the new palette at the same simulation tick. Cold seeks, resize, large gaps,
+theme changes and backtracking reconstruct at most the latest 48 ticks within a
+two-million-pixel private buffer, even when the target is within the first 48 ticks.
+Uninterrupted playback retains the complete trail history at host DPR. Reconstruction
+may lose faint trail history and raster detail, so it is not pixel-identical to uninterrupted playback.
 
 `frame.theme` 是父 DSH 页面传入的绘制参数，值为 `'light' | 'dark'`，播放中可更新。
 只据此调整配色与混合方式，保留随机数消费顺序、粒子数量、轨迹、物理与时间轴；兼容旧渲染器
@@ -208,8 +210,10 @@ iframe embedding 与 srcDoc 继续保持 `color-scheme: normal` 以维持透明�
 切主题不重建 iframe 或 Worker，不重置 seed、time、当前动画、toast 或截止时间。
 减少动态模式先重绘可见中点帧，再继续离屏时间轴，不能把重绘当成终点确认或提前完成。
 鲸鱼保留 `classic`、5000 ms、原版模拟、RNG 消费、数量、物理与拖尾；深色保留原版 golden
-参考，缺失主题按深色处理。切主题在同一模拟 tick 以新配色重建私有拖尾画布；冷重建仍受
-最近 48 tick、200 万像素限制，可能损失微弱历史拖尾与栅格细节，不保证与连续播放像素一致。
+参考，缺失主题按深色处理。切主题在同一模拟 tick 以新配色重建私有拖尾画布；冷跳转、
+尺寸改变、大幅时间前进、切主题及时间回退重建时，最多绘制最近 48 tick，并限制在 200 万
+像素内，即使目标位于前 48 tick 也执行像素限制。正常连续播放保留完整拖尾历史与宿主 DPR。
+重建可能损失微弱历史拖尾与栅格细节，不保证与连续播放像素一致。
 
 ## Performance
 
@@ -344,15 +348,23 @@ does not share an older settings-panel request; it returns the newly read prefer
 directly to playback. Other pages' edits never mutate an active event's captured bytes.
 Preparation reserves the event slot and blocks preview while delivery continues. Expiry,
 a five-second refresh timeout or plugin stop aborts the read; identity checks discard late
-responses. A post-read expiry check also handles suspended tabs. Failed reads use Emoji;
-expired/timed-out preparation advances without retry. Animation, toast and their 12-second
+responses. A post-read expiry check also handles suspended tabs. Failed settings reads
+return `DEFAULT_ANIMATION_PREFERENCES` (`classic` / Whale Show), without cached custom
+source or a persisted selection change. This differs from an unavailable selected template
+(including missing/damaged files), which still uses Emoji. Live script/render errors,
+startup/frame timeouts and unavailable Worker/OffscreenCanvas support retain the trusted
+emoji fallback; previews report errors instead.
+Expired/timed-out preparation advances without retry. Animation, toast and their 12-second
 deadline start only after preparation completes.
 
 每个排队事件在捕获模板与时长前重新读取 Host 设置和文件可用性，即使事件同批到达也分别
 检查。刷新不复用较早的设置页请求，直接把本次读取结果交给播放；其他页面的编辑不会改变
 当前事件已捕获的脚本。刷新期间占用事件时间片、禁止插入预览，但继续接收事件。
 过期、5 秒刷新超时或卸载会中止读取，迟到结果按身份丢弃；读取后再检查过期时间以兼容
-标签页暂停。失败使用 Emoji，过期或超时则推进队列、不重试；动画、toast 及其 12 秒期限
+标签页暂停。设置读取失败返回 `DEFAULT_ANIMATION_PREFERENCES`（`classic` / 鲸鱼烟花），
+不复用缓存的自定义脚本，也不持久化改变选择；选中模板不可用（包括文件缺失或损坏）仍使用
+Emoji。正式播放的脚本/渲染错误、启动或帧超时及 Worker/OffscreenCanvas 不可用仍使用可信
+emoji 兜底，预览则显示错误。过期或刷新超时推进队列、不重试；动画、toast 及其 12 秒期限
 在准备完成后一起启动。
 
 No script or preference is written into Session history. Worker,
