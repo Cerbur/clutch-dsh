@@ -1,4 +1,4 @@
-// clutch_fireworks: {"version":1,"name":"鲸鱼烟花 · Whale Show","durationMs":5000}
+// clutch_fireworks: {"version":1,"name":"鲸跃烟火 · Whale Show","durationMs":5000}
 /* global OffscreenCanvas -- Standard Canvas API provided by the animation Worker. */
 // Faithful port of PR #7 and the supplied Canvas Show reference.
 // Preserve its scheduler, shell parameters, simulation and transparent trail buffer.
