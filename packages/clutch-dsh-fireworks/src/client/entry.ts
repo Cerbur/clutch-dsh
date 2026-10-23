@@ -1,60 +1,98 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
-import type {} from '@deepseek-ai/dsh-client-ui-session/client';
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client';
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type {} from '@deepseek-ai/dsh-client-ui-slots';
-import { SETTINGS_NAMESPACE, type FireworksShowPreferences } from '../contract/index.js';
-import { createFireworksOverlay, type PreferencesScope } from './FireworksOverlay.js';
+import { FireworksOverlay } from './FireworksOverlay.js';
+import { FireworksController } from './fireworks-controller.js';
+import {
+  mountFireworksRemote,
+  openFireworksStream,
+  type FireworksRemote,
+} from './fireworks-stream.js';
+import { AnimationStore } from './animation-store.js';
+import { AnimationSettings } from './AnimationSettings.js';
+import { selectedAnimation } from './animation-templates.js';
 
 export * from '../contract/index.js';
-export { FireworksOverlay, createFireworksOverlay } from './FireworksOverlay.js';
+export { FireworksOverlay } from './FireworksOverlay.js';
 export type { FireworksRenderer } from './fireworks-renderer.js';
 export { emojiFireworksRenderer } from './fireworks-renderer.js';
-export { planShow } from './show-scheduler.js';
-export { mountFireworksShow, detectShowTheme } from './fireworks-show.js';
 
 export const name = 'clutch-dsh-fireworks-client';
-export const inject = ['slots', 'configForms'];
+export const inject = ['slots', 'connection', 'remote', 'uiWorkspace'];
 
-export function apply(ctx: Context): void {
-  let scope: PreferencesScope;
-  try {
-    const form = ctx.configForms.get<FireworksShowPreferences>(SETTINGS_NAMESPACE);
-    scope = {
-      subscribe: (listener: () => void) => form.subscribe(listener),
-      // DSH settings services differ by deployment: newer releases return
-      // the effective preferences directly, while older desktop builds
-      // return a per-namespace record whose merged preferences live under
-      // `value` and whose own `mode` field names the owning side ("host" or
-      // "user") — never the fireworks mode. Accept both shapes.
-      getSnapshot: () => {
-        const raw = form.getSnapshot() as unknown as {
-          readonly mode?: string;
-          readonly value?: FireworksShowPreferences;
-        };
-        if (raw === null || typeof raw !== 'object') return {};
-        if (raw.value !== undefined && raw.value !== null) {
-          return raw.value;
+export async function apply(ctx: Context): Promise<void> {
+  const remote = (ctx as unknown as { remote: FireworksRemote }).remote;
+  await ctx.effect(() => mountFireworksRemote(remote));
+  // $mount creates a new Cordis service. The caller must explicitly inject
+  // that namespace; injecting only `remote` cannot access its child service.
+  await ctx.inject(['remote.clutch_fireworks'], registerFireworksClient);
+}
+
+function registerFireworksClient(ctx: Context): void {
+  const remote = (ctx as unknown as { remote: FireworksRemote }).remote;
+  const animations = new AnimationStore(remote.clutch_fireworks);
+  ctx.effect(() => {
+    void animations.load();
+    return () => animations.dispose();
+  });
+  let streamFailure: string | undefined;
+  const controller = new FireworksController(
+    async function* (query, signal) {
+      try {
+        for await (const batch of openFireworksStream(remote, query, signal)) {
+          streamFailure = undefined;
+          yield batch;
         }
-        if (raw.mode === 'emoji' || raw.mode === 'realistic') {
-          return raw as unknown as FireworksShowPreferences;
-        }
-        return {};
-      },
-    };
-  } catch {
-    scope = { subscribe: () => () => {}, getSnapshot: () => ({}) };
-  }
-  const Overlay = createFireworksOverlay(scope);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!signal.aborted && streamFailure !== message)
+          console.warn('clutch_fireworks: Remote stream disconnected: ' + message);
+        streamFailure = message;
+        throw error;
+      }
+    },
+    Date.now,
+    async (signal) => selectedAnimation(await animations.refresh(signal)),
+  );
+  const navigation = ctx.uiWorkspace as unknown as { openSession(id: string): unknown };
+  ctx.effect(() => controller.start());
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
       {
         name: 'shell.overlay',
         id: 'clutch-dsh-fireworks-overlay',
         order: 10,
+        inject: () => ({
+          controller,
+          openSession: (sessionId: string) => navigation.openSession(sessionId),
+        }),
       },
-      Overlay,
+      FireworksOverlay,
+    ),
+  );
+  // The public Plugins slot is late-declared by DSH. Keep its compatibility
+  // face local instead of importing the plugin manager's runtime into this bundle.
+  const settingsSlots = ctx.slots as unknown as {
+    inject(name: 'plugins.bundle.config', register: () => void): void;
+    register(
+      options: {
+        name: 'plugins.bundle.config';
+        key: string;
+        inject: () => { store: AnimationStore; playback: FireworksController };
+      },
+      component: typeof AnimationSettings,
+    ): void;
+  };
+  settingsSlots.inject('plugins.bundle.config', () =>
+    settingsSlots.register(
+      {
+        name: 'plugins.bundle.config',
+        key: '@cerbur/clutch-dsh-fireworks',
+        inject: () => ({ store: animations, playback: controller }),
+      },
+      AnimationSettings,
     ),
   );
 }

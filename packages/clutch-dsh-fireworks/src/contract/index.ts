@@ -3,7 +3,6 @@ import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/t
 export const FIREWORKS_TOOL_NAME = 'happy_fireworks' as const;
 export const FIREWORKS_PROJECTION_KEY = 'fireworks' as const;
 export const FIREWORKS_META_KIND = 'clutch-dsh-fireworks' as const;
-export const SETTINGS_NAMESPACE = 'clutch-dsh-fireworks' as const;
 export const FIREWORKS_DURATION_MS = 3_200;
 export const MAX_FIREWORKS_MESSAGE_CHARS = 120;
 export const FIREWORKS_LAUNCH_EVENT = 'clutch_fireworks/launch' as const;
@@ -38,7 +37,6 @@ export const FIREWORKS_MESSAGE_DESCRIPTION =
 export interface FireworksSignal {
   readonly id: string;
   readonly message?: string;
-  readonly splash?: boolean;
 }
 
 export type FireworksProjection = FireworksSignal | null;
@@ -101,30 +99,6 @@ declare module '@deepseek-ai/cordis' {
   interface Events {
     'clutch_fireworks/launch'(event: FireworksLaunchEvent): void;
   }
-}
-
-export type FireworksMode = 'emoji' | 'realistic';
-
-export const FIREWORKS_DEFAULTS = {
-  mode: 'realistic',
-  showDurationMs: 3_200,
-  showRatePerSec: 1.5,
-  splashChance: 0.01,
-} as const;
-
-export const FIREWORKS_LIMITS = {
-  minDurationMs: 1_500,
-  maxDurationMs: 15_000,
-  minRatePerSec: 0.3,
-  maxRatePerSec: 4,
-  maxLaunches: 16,
-} as const;
-
-/** Client-side view of the settings that steer rendering. */
-export interface FireworksShowPreferences {
-  readonly mode?: FireworksMode;
-  readonly showDurationMs?: number;
-  readonly showRatePerSec?: number;
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
