@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
+
+const { AbortController, TextEncoder, TextDecoder, setTimeout, clearTimeout, URL } = globalThis;
 
 const source = (name) =>
   `// clutch_fireworks: {"version":1,"name":"${name}","durationMs":500}\nfunction render() {}`;

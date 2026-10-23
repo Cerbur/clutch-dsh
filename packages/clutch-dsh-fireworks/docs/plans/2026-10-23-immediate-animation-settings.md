@@ -150,6 +150,33 @@ Supersedes the expanded deletion panel, preview-status paragraphs, and previous 
   Other edits retain unavailable entries and limits include them. Settings refresh availability
   every two seconds while visible and on focus, plus before preview and live launch.
 
+## Queued-launch freshness follow-up
+
+- Reproduced with the shipped Client entry, native stream and real Host file library:
+  A and B arrive in one batch; while A plays, another page switches or deletes the
+  selected custom script, or the file disappears/is corrupted. B reused cached bytes.
+- Move the read out of the stream loop into the controller's per-event preparation.
+  Each playback makes a fresh cancellable Host/file read, independent of an older
+  settings-panel load, then captures the returned preferences. A retains its template.
+- Reserve the queue slot during preparation; reject preview but keep accepting events.
+  Expiry, a five-second refresh timeout and unload cancel the request, and preparation
+  identity rejects late completion after cancellation or replacement. Recheck wall-clock
+  expiry before rendering; the normal animation/toast deadline starts only afterward.
+  Failed refreshes use Emoji; timed-out or expired events advance without retry.
+- Regression coverage includes cross-page selection/deletion, real missing/corrupt files,
+  persisted Emoji recovery, slow reads, continued delivery, preview exclusion, expiry
+  during refresh/suspended tabs, cancellation, timeout and actual plugin unload/re-enable.
+- Release notes now describe file storage/migration, immediate selection, staged import
+  and inline deletion confirmation, broken-card recovery and per-event refresh in both
+  languages. Both READMEs describe per-event refresh and bounded preparation waits.
+- Verification from the worktree root: `pnpm --filter @cerbur/clutch-dsh-fireworks test`
+  passes build and all 117 tests; package `typecheck` and `lint` pass.
+  `pnpm exec eslint packages/clutch-dsh-fireworks --max-warnings 0` reports no errors or
+  warnings. `pnpm run check:workspace`, `pnpm run check:patches`, scoped Prettier and
+  `git diff --check` pass; patch validation retains the pre-existing unrelated YAML
+  `!!js dshHomePath()` warning. These are deterministic Client/Cordis/Host-file
+  regressions; installed-browser acceptance was not repeated for this queue-only fix.
+
 ### Full-flow acceptance
 
 - Final copy cleanup removes the redundant import-limits paragraph beneath the grid and the

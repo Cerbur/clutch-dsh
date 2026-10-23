@@ -43,7 +43,6 @@ function registerFireworksClient(ctx: Context): void {
       try {
         for await (const batch of openFireworksStream(remote, query, signal)) {
           streamFailure = undefined;
-          if (batch.events.length) await animations.load();
           yield batch;
         }
       } catch (error) {
@@ -55,7 +54,7 @@ function registerFireworksClient(ctx: Context): void {
       }
     },
     Date.now,
-    () => selectedAnimation(animations.getSnapshot().preferences),
+    async (signal) => selectedAnimation(await animations.refresh(signal)),
   );
   const navigation = ctx.uiWorkspace as unknown as { openSession(id: string): unknown };
   ctx.effect(() => controller.start());

@@ -2,6 +2,10 @@
 
 Storage format remains current; draft/Save and retain-on-delete behavior below
 is superseded by [immediate settings](2026-10-23-immediate-animation-settings.md).
+That plan also records confirmed imports/deletes and damaged-file recovery. The
+[animation playback plan](2026-10-22-animation-templates.md#configuration) requires
+a fresh Host settings/file read before every queued event starts, preserving only
+the active event's captured bytes rather than reusing batch-time caches.
 
 Replace inline source persistence with a version-2 index of immutable scripts
 under DSH Home. Keep the editor's runtime `{ active, scripts }` representation

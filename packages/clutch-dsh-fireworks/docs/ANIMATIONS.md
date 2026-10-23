@@ -1,14 +1,14 @@
 # Animation scripts / 动画脚本
 
 An animation is a standalone UTF-8 `.js` file. Import it on the plugin details
-page to validate it and open a confirmation dialog, with optional full-screen preview and export.
+page to validate it and open a confirmation dialog, with optional full-screen preview.
 Only Confirm Add writes it and makes it active; Cancel leaves settings and disk unchanged. The built-ins in
 [`assets/animations`](../assets/animations/) use exactly the same interface.
 Download a built-in or start with
 [`example-custom.js`](../assets/animations/example-custom.js). The configuration
 page contains a complete AI generation prompt with this contract.
 
-动画是独立 UTF-8 `.js` 文件，选择后先校验，再弹出确认窗口，支持全屏预览和导出。
+动画是独立 UTF-8 `.js` 文件，选择后先校验，再弹出确认窗口，支持全屏预览。
 确认添加后才写入并选中；取消不修改配置或磁盘。
 所有内置效果与自定义效果使用同一个接口。设置页提供可复制的完整 AI 生成提示词。
 
@@ -262,8 +262,24 @@ is missing or damaged, settings shows its relative path and recovery advice;
 restore the original file or re-import the script. An unavailable selected
 template falls back to Emoji rather than stale source.
 
-Each queued launch captures the currently saved template and duration when it
-begins. No script or preference is written into Session history. Worker,
+Each queued launch rereads Host settings and file availability before capturing its
+template and duration, even when multiple launches arrived in one batch. Preparation
+does not share an older settings-panel request; it returns the newly read preferences
+directly to playback. Other pages' edits never mutate an active event's captured bytes.
+Preparation reserves the event slot and blocks preview while delivery continues. Expiry,
+a five-second refresh timeout or plugin stop aborts the read; identity checks discard late
+responses. A post-read expiry check also handles suspended tabs. Failed reads use Emoji;
+expired/timed-out preparation advances without retry. Animation, toast and their 12-second
+deadline start only after preparation completes.
+
+每个排队事件在捕获模板与时长前重新读取 Host 设置和文件可用性，即使事件同批到达也分别
+检查。刷新不复用较早的设置页请求，直接把本次读取结果交给播放；其他页面的编辑不会改变
+当前事件已捕获的脚本。刷新期间占用事件时间片、禁止插入预览，但继续接收事件。
+过期、5 秒刷新超时或卸载会中止读取，迟到结果按身份丢弃；读取后再检查过期时间以兼容
+标签页暂停。失败使用 Emoji，过期或超时则推进队列、不重试；动画、toast 及其 12 秒期限
+在准备完成后一起启动。
+
+No script or preference is written into Session history. Worker,
 renderer, script header format, 64 KiB limit and eight-template limit are unchanged.
 
 ## Acceptance

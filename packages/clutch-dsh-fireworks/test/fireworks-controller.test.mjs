@@ -17,6 +17,111 @@ const launch = (id, sessionId = 'background', now = Date.now()) => ({
   expiresAt: now + FIREWORKS_EVENT_TTL_MS,
 });
 
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+};
+
+test('async refresh reserves one event, accepts delivery and blocks preview until template capture', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+  const reads = [];
+  const controller = new FireworksController(
+    async () => {},
+    Date.now,
+    () => {
+      const read = deferred();
+      reads.push(read);
+      return read.promise;
+    },
+  );
+  t.after(() => controller.stop());
+  controller.accept([launch('a'), launch('b')]);
+  controller.accept([launch('c')]);
+  assert.equal(reads.length, 1);
+  assert.deepEqual(controller.getSnapshot(), {});
+  const statuses = [];
+  controller.previewAnimation({ id: 'emoji', durationMs: 500 }, (s) => statuses.push(s));
+  assert.deepEqual(statuses, ['cancelled']);
+  t.mock.timers.tick(4000);
+  const template = { id: 'custom-a', durationMs: 500, source: 'captured' };
+  reads[0].resolve(template);
+  await setImmediate();
+  const a = controller.getSnapshot().burst;
+  assert.equal(a.id, 'a');
+  assert.equal(controller.getSnapshot().animation, template);
+  t.mock.timers.tick(7999);
+  assert.equal(reads.length, 1, 'toast/playback deadline starts after refresh');
+  t.mock.timers.tick(1);
+  assert.equal(reads.length, 2);
+  assert.deepEqual(controller.getSnapshot(), {});
+  reads[1].resolve({ id: 'rings', durationMs: 500 });
+  await setImmediate();
+  assert.equal(controller.getSnapshot().burst.id, 'b');
+  controller.reportPlayback(a, 'done');
+  controller.dismissToast(a);
+  assert.equal(controller.getSnapshot().burst.id, 'b');
+});
+
+for (const scenario of ['expiry', 'late-expiry', 'timeout', 'late-timeout', 'stop']) {
+  test(`refresh cannot revive a cancelled event: ${scenario}`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+    const reads = [];
+    const controller = new FireworksController(
+      async () => {},
+      Date.now,
+      (signal) => {
+        const read = { ...deferred(), signal };
+        reads.push(read);
+        return read.promise;
+      },
+    );
+    t.after(() => controller.stop());
+    controller.accept([
+      { ...launch('a'), expiresAt: scenario.includes('expiry') ? 2000 : 31000 },
+      launch('b'),
+    ]);
+    if (scenario === 'stop') {
+      controller.stop();
+      assert.equal(reads[0].signal.aborted, true);
+      controller.accept([launch('replacement')]);
+    } else if (scenario.startsWith('late-')) {
+      // Simulate a suspended tab: wall clock has advanced before timers can run.
+      t.mock.timers.setTime(scenario === 'late-expiry' ? 2000 : 6000);
+    } else {
+      t.mock.timers.tick(scenario === 'expiry' ? 1000 : 5000);
+      assert.equal(reads[0].signal.aborted, true);
+    }
+    reads[0].resolve({ id: 'deleted-custom', durationMs: 500 });
+    await setImmediate();
+    assert.deepEqual(controller.getSnapshot(), {}, 'late result must never mount A');
+    assert.equal(reads.length, 2);
+    reads[1].resolve({ id: 'emoji', durationMs: 500 });
+    await setImmediate();
+    assert.equal(controller.getSnapshot().burst.id, scenario === 'stop' ? 'replacement' : 'b');
+    assert.equal(controller.getSnapshot().animation.id, 'emoji');
+  });
+}
+
+test('a failed refresh uses trusted fallback without cached source or an unhandled rejection', async (t) => {
+  const controller = new FireworksController(
+    async () => {},
+    Date.now,
+    async () => {
+      throw new Error('Host unavailable');
+    },
+  );
+  t.after(() => controller.stop());
+  controller.accept([launch('a')]);
+  await setImmediate();
+  assert.equal(controller.getSnapshot().burst.id, 'a');
+  assert.equal(controller.getSnapshot().animation, undefined);
+  assert.equal(controller.getSnapshot().toast.id, 'a');
+});
+
 test('serializes complete events across Sessions and preserves A toast until it ends', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000 });
   const controller = new FireworksController(async () => {

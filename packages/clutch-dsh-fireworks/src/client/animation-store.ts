@@ -46,42 +46,61 @@ export class AnimationStore {
   }
   private async call(
     invoke: (signal: AbortSignal) => Promise<RemoteResult<AnimationSettingsValue>>,
+    signal?: AbortSignal,
   ) {
     if (this.disposed) throw new Error('Animation settings disposed');
+    signal?.throwIfAborted();
     const abort = new AbortController();
+    const cancel = () => abort.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
     this.requests.add(abort);
     const timeout = setTimeout(() => abort.abort(), 5000);
     try {
       const result = await invoke(abort.signal);
+      abort.signal.throwIfAborted();
       if (!result.ok) throw new Error(result.error.code + ': ' + result.error.message);
       return result.value;
     } finally {
       clearTimeout(timeout);
+      signal?.removeEventListener('abort', cancel);
       this.requests.delete(abort);
     }
   }
   load(): Promise<void> {
     if (this.loading) return this.loading;
-    this.loading = this.read().finally(() => {
-      this.loading = undefined;
-    });
+    this.loading = this.read()
+      .then(() => {})
+      .finally(() => {
+        this.loading = undefined;
+      });
     return this.loading;
   }
-  private async read() {
+  /** A playback needs a new Host/file read, even if a settings-page load is pending. */
+  refresh(signal: AbortSignal): Promise<AnimationPreferences> {
+    return this.read(signal);
+  }
+  private async read(signal?: AbortSignal): Promise<AnimationPreferences> {
     try {
-      const value = await this.call((signal) => this.remote.loadAnimations(signal));
+      const value = await this.call(
+        (requestSignal) => this.remote.loadAnimations(requestSignal),
+        signal,
+      );
+      const preferences = parseAnimationPreferences(value.preferences);
       this.publish({
         ...value,
-        preferences: parseAnimationPreferences(value.preferences),
+        preferences,
         loaded: true,
       });
+      return preferences;
     } catch (error) {
+      signal?.throwIfAborted();
       this.publish({
         preferences: DEFAULT_ANIMATION_PREFERENCES,
         writable: false,
         loaded: true,
         error: String(error),
       });
+      return DEFAULT_ANIMATION_PREFERENCES;
     }
   }
   async save(preferences: AnimationPreferences, revision: number | undefined): Promise<void> {

@@ -7,6 +7,8 @@ import { AnimationFiles } from '../lib/animation-files.js';
 import { AnimationLibrary } from '../lib/animation-library.js';
 import { parseStoredAnimationPreferences } from '../lib/animation.js';
 
+const { AbortController, structuredClone } = globalThis;
+
 const source =
   '// clutch_fireworks: {"version":1,"name":"File test","durationMs":500}\nfunction render() {}';
 const prefs = { active: 'custom-a', scripts: { 'custom-a': source } };

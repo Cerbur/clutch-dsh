@@ -3,6 +3,29 @@ import test from 'node:test';
 import { AnimationStore } from '../lib/client/animation-store.js';
 import { DEFAULT_ANIMATION_PREFERENCES } from '../lib/animation.js';
 
+const { AbortController } = globalThis;
+
+test('playback refresh always reads Host anew and ignores late aborted responses', async () => {
+  const reads = [];
+  const store = new AnimationStore({
+    loadAnimations(signal) {
+      return new Promise((resolve) => reads.push({ signal, resolve }));
+    },
+  });
+  const loading = store.load();
+  const abort = new AbortController();
+  const refreshing = store.refresh(abort.signal);
+  assert.equal(reads.length, 2, 'do not coalesce playback with an older settings read');
+  reads[0].resolve({ ok: true, value: { preferences: { active: 'rings', scripts: {} } } });
+  await loading;
+  abort.abort();
+  assert.equal(reads[1].signal.aborted, true);
+  reads[1].resolve({ ok: true, value: { preferences: { active: 'classic', scripts: {} } } });
+  await assert.rejects(refreshing, /abort/i);
+  assert.equal(store.getSnapshot().preferences.active, 'rings');
+  store.dispose();
+});
+
 test('a revision-only conflict retries once against unchanged source; concurrent content edits are never overwritten', async () => {
   let revision = 1,
     active = 'emoji';

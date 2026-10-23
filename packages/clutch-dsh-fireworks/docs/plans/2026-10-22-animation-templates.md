@@ -43,17 +43,25 @@ events while only the active toast remains, without starting them or a preview.
 
 Use the public `plugins.bundle.config` keyed slot on the plugin details page.
 Persist one volatile `animation` Config field through DSH settings with revision
-checks. Drafts do not affect live playback until saved. Import, preview, remove,
-download and copy a complete script-generation prompt. Custom selections require
-a successful sandbox preview before the page enables saving. Refresh preferences
-when a live launch batch arrives so connected pages use the Host's saved choice.
+checks. The original draft/Save and full-preview gate are superseded by
+[immediate settings and import/delete confirmation](2026-10-23-immediate-animation-settings.md).
+Selection persists immediately; Confirm Add alone saves staged imports, after bounded
+preflight and optional full preview. A known preview failure requires a successful retry.
+Refresh Host settings and file availability before **each queued event starts**, not just
+when its delivery batch arrives. Capture the returned template only after that refresh;
+preserve the current event's bytes when another page switches or deletes templates.
+Reserve the event slot during refresh, reject previews, and keep transport consuming.
+Cancel preparation on expiry, a five-second refresh deadline or plugin stop. Recheck
+expiry after the read (including suspended-tab wall-clock changes), ignore late results
+by preparation identity, and advance without retry. Start animation, toast and the fixed
+12-second playback deadline together after preparation. Failed reads use Emoji, not cache.
 
 Preview is a local request to the same global playback controller and root
 renderer used for tool launches. There is no preview box, synthetic tool event,
 toast or save. Real launches preempt previews; changing templates, stopping,
 replacement and page disposal cancel only their own preview. Per-request
-identities reject stale completion callbacks. Successful full playback still
-validates custom drafts before saving.
+identities reject stale completion callbacks. Full playback validates staged imports;
+known failures block Confirm Add until a successful retry.
 
 Both requests now enter the same burst channel through `play()` and use the
 same `AnimationSurface` and `reportPlayback()` callback. Preview only overrides

@@ -41,6 +41,8 @@ export class FireworksController {
   private toastTimer?: ReturnType<typeof setTimeout>;
   private eventTimer?: ReturnType<typeof setTimeout>;
   private active?: ActiveCelebration;
+  private preparation?: AbortController;
+  private preparationTimer?: ReturnType<typeof setTimeout>;
   private connection?: AbortController;
   private previewSequence = 0;
   private previewListener?: PreviewListener;
@@ -48,7 +50,9 @@ export class FireworksController {
   constructor(
     private readonly request: FireworksStream,
     private readonly now: () => number = Date.now,
-    private readonly animation?: () => AnimationTemplate,
+    private readonly animation?: (
+      signal: AbortSignal,
+    ) => AnimationTemplate | Promise<AnimationTemplate>,
   ) {}
 
   readonly getSnapshot = (): FireworksSnapshot => this.snapshot;
@@ -82,7 +86,7 @@ export class FireworksController {
   }
 
   private next(): void {
-    if (this.active) return;
+    if (this.active || this.preparation) return;
     let event: FireworksLaunchEvent | undefined;
     do {
       event = this.pending.shift();
@@ -91,9 +95,51 @@ export class FireworksController {
       this.publish({});
       return;
     }
+    // Reserve the event while Host settings and file bytes are refreshed. Delivery
+    // stays independent, and previews cannot take this event's playback slot.
+    const preparation = new AbortController();
+    this.preparation = preparation;
     this.cancelPreview('任务庆祝已开始，请稍后重新预览。');
-    clearTimeout(this.toastTimer);
-    const animation = this.animation?.();
+    this.publish({});
+    if (this.preparation !== preparation) return;
+    const deadline = Math.min(this.now() + 5000, event.expiresAt);
+    this.preparationTimer = setTimeout(() => {
+      if (this.preparation !== preparation) return;
+      this.preparation = undefined;
+      preparation.abort();
+      this.next();
+    }, deadline - this.now());
+    const start = (animation?: AnimationTemplate) =>
+      this.startEvent(event, preparation, deadline, animation);
+    try {
+      const animation = this.animation?.(preparation.signal);
+      if (animation && 'then' in animation) {
+        void animation.then(start, () => start());
+      } else {
+        start(animation);
+      }
+    } catch {
+      // Never reuse a cached script after a failed refresh; use trusted Emoji.
+      start();
+    }
+  }
+
+  private startEvent(
+    event: FireworksLaunchEvent,
+    preparation: AbortController,
+    deadline: number,
+    animation?: AnimationTemplate,
+  ): void {
+    if (this.preparation !== preparation || preparation.signal.aborted) return;
+    clearTimeout(this.preparationTimer);
+    this.preparation = undefined;
+    if (deadline <= this.now()) {
+      preparation.abort();
+      this.next();
+      return;
+    }
+    // Only now capture the template and start both rendering branches and their
+    // fixed playback deadline. Later settings changes cannot alter this event.
     const active: ActiveCelebration = { event, animation: 'starting', toastDone: false };
     this.active = active;
     this.eventTimer = setTimeout(() => this.finishEvent(active), FIREWORKS_EVENT_TIMEOUT_MS);
@@ -184,7 +230,7 @@ export class FireworksController {
     animation: AnimationTemplate,
     listener: PreviewListener,
   ): (() => void) => {
-    if (this.active) {
+    if (this.active || this.preparation) {
       listener('cancelled', '正在播放任务庆祝，请稍后预览。');
       return () => {};
     }
@@ -262,6 +308,10 @@ export class FireworksController {
     this.cancelPreview();
     this.connection?.abort();
     this.connection = undefined;
+    const preparation = this.preparation;
+    this.preparation = undefined;
+    clearTimeout(this.preparationTimer);
+    preparation?.abort();
     clearTimeout(this.burstTimer);
     clearTimeout(this.toastTimer);
     clearTimeout(this.eventTimer);

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateAnimation } from '../lib/client/animation-validation.js';
 
+const { AbortController } = globalThis;
+
 const template = {
   id: 'custom-test',
   name: 'Test',

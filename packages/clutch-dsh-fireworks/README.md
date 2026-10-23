@@ -119,7 +119,10 @@ list entry. Removing that card clears its configuration entry. Visible settings 
 every two seconds and on focus; existing cards are rechecked before preview and live launches
 refresh before playing. Old path-only settings acquire display metadata when loaded. Read-only
 settings fall back in memory and report that persistence is unavailable.
-Saved choices are shared by connected pages, survive refresh/restart, and refresh before a launch.
+Saved choices are shared by connected pages and survive refresh/restart. Before each queued
+celebration starts, the page reloads Host settings and checks file availability, then captures
+that event's template. Changes on another page affect the next event, even if both arrived in
+one batch; the current animation keeps its captured template.
 After upgrading an already-running local checkout, restart DSH to load the new Host endpoints.
 
 ## Requirements
@@ -155,6 +158,9 @@ After upgrading an already-running local checkout, restart DSH to load the new H
   remaining toast, and closing a toast does not cut off its animation. A fixed 12-second event
   deadline clears stalled rendering and advances without retry. Preview waits while a real
   event is active, including any remaining toast time.
+- Settings refresh reserves the next event's slot for up to five seconds, without showing its
+  animation or toast. Expiry, refresh timeout or plugin unload cancels the wait; late responses
+  cannot start that event. A failed refresh uses Emoji instead of cached custom source.
 - Duplicate Session/tool-call identities are ignored. The
   transient feed and playback queue are bounded to 128 entries each, and events expire after
   30 seconds. Expired or overflowed pending events are dropped. Brief disconnects can catch up
