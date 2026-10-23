@@ -121,6 +121,10 @@ function recordingContext({ geometryOnly = false, observe } = {}) {
       // A cold canvas also initializes its DPR transform; paths are already
       // recorded in CSS coordinates, so buffer setup is outside this hash.
       if (parts[0] === 'globalCompositeOperation' || parts[0] === 'setTransform') return;
+      // Original light mode deliberately erases trails faster (.22 vs .16).
+      // Ignore only this erase-style alpha, not any particle/flash alpha.
+      if (parts[0] === 'fillStyle' && typeof parts[1] === 'string' && parts[1].startsWith('rgba('))
+        return;
       // Keep alpha, gradient stops and every path/size while ignoring only RGB.
       parts = parts.map((part) =>
         typeof part === 'string' && /^(hsla|rgba)\(/.test(part)
@@ -397,7 +401,10 @@ function assertLightPalette(drawing) {
     visible++;
     assert.ok(hue >= 0 && hue < 360, color);
     assert.ok(saturation >= 0 && saturation <= 100, color);
-    assert.ok(lightness > 0 && lightness <= 65, 'dim the original lightness for light pages');
+    assert.ok(
+      lightness >= 46 && lightness <= 84,
+      'original L46 palette retains per-effect lightness offsets',
+    );
   }
   assert.ok(visible > 0, 'actually paint colored sparks');
   assert.deepEqual([...drawing.composites].sort(), ['destination-out', 'source-over']);
@@ -446,13 +453,21 @@ test('light changes only raster colors/compositing across the complete original 
     );
     assert.notDeepEqual([...runs[0].drawing.colors], [...runs[1].drawing.colors]);
     assert.ok(runs[0].drawing.composites.has('lighter'));
+    const normalizedLight = new Set(
+      [...runs[1].drawing.colors].map((color) =>
+        color.replace(
+          /,([\d.]+)%,([^,]+)\)$/,
+          (_match, lightness, alpha) => `,${Number(lightness).toFixed(8)}%,${alpha})`,
+        ),
+      ),
+    );
     for (const color of runs[0].drawing.colors) {
       const match = /^hsla\(([^,]+),([^%]+)%,([^%]+)%,([^)]+)\)$/.exec(color);
       if (!match || Number(match[4]) === 0) continue;
       const [, hue, saturation, lightness, alpha] = match.map(Number);
       assert.ok(
-        runs[1].drawing.colors.has(`hsla(${hue},${saturation}%,${lightness * 0.65}%,${alpha})`),
-        `light must preserve the original hue/saturation/alpha and only reduce lightness: ${color}`,
+        normalizedLight.has(`hsla(${hue},${saturation}%,${(lightness - 14).toFixed(8)}%,${alpha})`),
+        `original light palette preserves hue/saturation/alpha and lowers base lightness by 14: ${color}`,
       );
     }
     assertLightPalette(runs[1].drawing);
@@ -565,5 +580,78 @@ test('light reduced-motion midpoint contains the full whale and remains within t
     assert.equal(end.tick, 0);
     assert.equal(harness.canvases[0].width, 0);
     assert.equal(harness.canvases[0].height, 0);
+  }
+});
+
+// Captured from the original reference's light theme (base L46, fade .22, source-over).
+const ORIGINAL_LIGHT_TRACES = [
+  {
+    width: 800,
+    height: 600,
+    seed: 42,
+    snapshots: [
+      { tick: 60, hash: 4135927194, count: 8180 },
+      { tick: 180, hash: 297925543, count: 377277 },
+      { tick: 280, hash: 4039575178, count: 1010455 },
+      { tick: 340, hash: 1411411201, count: 1244093 },
+      { tick: 430, hash: 151772193, count: 1324997 },
+      { tick: 500, hash: 862104228, count: 1325278 },
+    ],
+  },
+  {
+    width: 1920,
+    height: 1080,
+    seed: 1,
+    snapshots: [
+      { tick: 60, hash: 1711722754, count: 7970 },
+      { tick: 180, hash: 903884755, count: 249754 },
+      { tick: 280, hash: 1388549716, count: 557329 },
+      { tick: 340, hash: 2969189843, count: 739982 },
+      { tick: 430, hash: 3959197909, count: 837568 },
+      { tick: 500, hash: 161478297, count: 838066 },
+    ],
+  },
+  {
+    width: 300,
+    height: 500,
+    seed: 0,
+    snapshots: [
+      { tick: 60, hash: 2732330250, count: 8180 },
+      { tick: 180, hash: 2619730327, count: 313710 },
+      { tick: 280, hash: 1200869842, count: 538424 },
+      { tick: 340, hash: 609965619, count: 695912 },
+      { tick: 430, hash: 2111923680, count: 735389 },
+      { tick: 500, hash: 3895864252, count: 735669 },
+    ],
+  },
+];
+
+test('light palette and trail fading match the original PR light-theme draw stream', async () => {
+  const source = await readFile(
+    new globalThis.URL('../assets/animations/classic.js', import.meta.url),
+    'utf8',
+  );
+  for (const expected of ORIGINAL_LIGHT_TRACES) {
+    const runtime = vm.createContext({ ...expected, recordingContext });
+    vm.runInContext(
+      source +
+        `;
+      rasterTheme = 'light'; showClock = 0; showRandomState = seed >>> 0;
+      var drawing = recordingContext();
+      var probe = createScene(drawing.ctx, width, height, () => {});
+      var actual = [];
+      for (var tick = 1; tick <= 500; tick++) {
+        showClock = tick * 16.667; probe.step(showClock);
+        if ([60,180,280,340,430,500].includes(tick)) actual.push({tick,...drawing.snapshot()});
+      }
+    `,
+      runtime,
+      { timeout: 10000 },
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(runtime.actual)),
+      expected.snapshots,
+      'retain the original light colors, per-effect offsets, flashes and .22 trail erase',
+    );
   }
 });

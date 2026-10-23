@@ -3,15 +3,9 @@
 // Faithful port of PR #7 and the supplied Canvas Show reference.
 // Preserve its scheduler, shell parameters, simulation and transparent trail buffer.
 // Host-time seeking/compression, buffer lifetime and raster palette adapt to v1.
-const TEMPLATE_THEME = 'dark'; // Preserve the reference palette and additive spark blending.
-// Simulation colors remain the reference values; only the raster palette changes.
+// Select the original PR palette; color parameters never change physics or RNG.
 let rasterTheme = 'dark';
 function sparkColor(hue, saturation, lightness, alpha) {
-  if (rasterTheme === 'light') {
-    // Keep the reference's full color spectrum and saturation; only dim its
-    // lightness on white pages instead of collapsing every shell to three inks.
-    lightness *= 0.65;
-  }
   return `hsla(${hue},${saturation}%,${lightness}%,${alpha})`;
 }
 const FIREWORKS_LIMITS = {
@@ -350,7 +344,7 @@ const pick = (list) => list[Math.floor(showRandom() * list.length)];
 function createScene(ctx, initialWidth, initialHeight, onDone) {
   const drawingContext = ctx;
   let whaleFormedAt;
-  const theme = SHOW_THEMES[TEMPLATE_THEME];
+  const theme = SHOW_THEMES[rasterTheme];
   const prefs = { showDurationMs: 3200, showRatePerSec: 1.5 };
   const plan = planShow({
     windowMs: prefs.showDurationMs ?? 3_200,
@@ -713,7 +707,7 @@ function createScene(ctx, initialWidth, initialHeight, onDone) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = `rgba(0,0,0,${theme.fadeAlpha})`;
       ctx.fillRect(0, 0, width, height);
-      ctx.globalCompositeOperation = rasterTheme === 'light' ? 'source-over' : theme.composite;
+      ctx.globalCompositeOperation = theme.composite;
     }
     for (let i = rockets.length - 1; i >= 0; i -= 1) {
       const r = rockets[i];

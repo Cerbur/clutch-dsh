@@ -92,8 +92,9 @@ whale and its fountain, then a complete fade-out—never a random easter egg. Ex
 Emoji, Aurora and imported selections are preserved; existing Starburst selections receive Whale Show.
 The effect retains the original Canvas Show particle simulation and persistent fading trails.
 The original launches, whale formation, fountain and burnout are accelerated together into five
-seconds. Dark mode preserves the original additive flashes and palette; light mode retains the same
-hues and saturation, reducing HSL lightness to 65% with source-over flashes and trails. The overlay stays
+seconds. Both modes use the original PR palettes: base HSL lightness is 60 in dark mode and 46 in
+light mode, preserving hues, saturation and per-effect lightness offsets. Light mode uses source-over
+blending and the original 0.22 trail fade (dark: lighter and 0.16). The overlay stays
 transparent over the DSH page, without a full-screen background or changes to tool parameters.
 Preview and live playback follow DSH's resolved light/dark appearance, including changes during
 playback. Switching themes updates colors while the same animation continues, preserving its seed,

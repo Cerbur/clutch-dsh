@@ -144,7 +144,9 @@ particle counts, trajectories, physics and timing. Scripts should treat a missin
 theme as `'dark'` for compatibility with older renderers. Keep the overlay transparent:
 bright particles and additive flashes suit dark pages; the same hues and saturation
 with lower lightness and `source-over` compositing suit light pages. Whale Show
-scales only HSL lightness to 65% of its dark-palette value, retaining the original color spectrum.
+uses the original PR theme parameters: light has base lightness 46 and trail fade 0.22;
+dark has base lightness 60 and trail fade 0.16 with `lighter`. Per-effect lightness
+offsets are retained; colors are not scaled by a global multiplier or remapped.
 Do not paint a full-screen background or query the OS theme inside the opaque iframe
 or Worker.
 
@@ -185,7 +187,9 @@ trail history and raster detail, so it is not pixel-identical to uninterrupted p
 `frame.theme` 是父 DSH 页面传入的绘制参数，值为 `'light' | 'dark'`，播放中可更新。
 只据此调整配色与混合方式，保留随机数消费顺序、粒子数量、轨迹、物理与时间轴；兼容旧渲染器
 时，缺失值按 `'dark'` 处理。深色适合明亮粒子与加色闪光；浅色保留相同色相与饱和度，降低
-明度并采用 `source-over` 混合。鲸鱼烟花仅将 HSL 明度缩放至深色配色的 65%，保留原来的完整色谱。覆盖层始终透明，不绘制整幕背景。
+明度并采用 `source-over` 混合。鲸鱼烟花使用原 PR 参数：浅色基础明度 46、拖尾擦除强度
+0.22；深色基础明度 60、擦除强度 0.16，并使用 `lighter`。保留各效果原本的明度增量，
+不做统一明度乘法或色相重映射。覆盖层始终透明，不绘制整幕背景。
 
 现有 `@deepseek-ai/dsh-client-ui-layout` 的 `ThemePresenter` 将
 `snapshot.active.colorScheme` 写入 `html.style.colorScheme`，将偏好来源
