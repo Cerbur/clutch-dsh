@@ -508,7 +508,7 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
   配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
   官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
 - **Host 可选权限能力生命周期**：
-  `permissionPresets` 与 `sandboxPolicy` 不加入 required inject；旧 profile 缺少服务时 Host
+  `permissionPresets`、`sandboxPolicy` 与 `approval` 不加入 required inject；旧 profile 缺少服务时 Host
   仍可加载。Host 通过 adapter options getter 在每次权限调用时读取所属 Cordis Context 的
   当前能力，而非在构造时捕获对象。权限 manager 完成 Workspace、binding 与物理 cwd 校验
   后才进入 adapter；迟挂载、撤销、替换及恢复后的重试均读取当下 provider，不调用已卸载实例。
@@ -518,7 +518,16 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 - **Worktree Full Access 预设**：
   为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
 - **权限降级与回退**：
-  当命名预设不可用时，系统自动回退至 `workspace-write + ask`；若权限能力无法确认，则进入可重试的降级状态，绝不向用户谎称已获得完全访问。
+  命名预设只是原生菜单贡献，不再是完全访问生效的必要条件。预设缺失且当前原生
+  `sandboxPolicy.resolve` 与 `approval.overrideOf` 可用时，经原有绑定/物理路径校验与
+  RiskConfirmation 确认，Host 按 DSH 原生 setter 的事件协议追加 `approval/policy: ask`
+  再追加 `sandbox/mode: danger-full-access`；前一写入失败绝不放宽文件隔离。不追加虚构的
+  `permission/preset`，原生 UI 自行派生 Custom。两项实际策略读取确认后才报告成功。
+  不重启或改写原生服务，不触碰 preset/default/Auto catalog、Session metadata 或 Sidecar。
+  该能力不可用时保留 workspace-write 回退/未验证语义。命名预设同名项必须确实解析为
+  `danger-full-access + ask` 才允许应用；归一化同样验证 workspace-write 的实际规格。
+  Client 合并同一 Workspace/Worktree/Session/cwd 的待确认请求，结束后不缓存同意；
+  不同身份继续串行确认。原生 sandbox 降权事件会保留为限制证据，adapter 重建也不重新升权。
 - **解耦设计**：
   磁盘清理提交与权限后续处理解耦，清理成功后无论权限重置是否遇到异常，均不会回滚已完成的物理清理。
 - **沙箱宿主上限**：

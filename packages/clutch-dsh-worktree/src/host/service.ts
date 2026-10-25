@@ -159,6 +159,9 @@ export class WorktreeRemoteService extends TypertRemoteService {
       get sandboxPolicy() {
         return ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'];
       },
+      get approval() {
+        return ctx.get('approval') as DshWorktreePermissionAdapterOptions['approval'];
+      },
     });
     this.remote = createWorktreeRemoteProjection(
       manager,

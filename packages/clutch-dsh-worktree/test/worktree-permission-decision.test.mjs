@@ -81,6 +81,13 @@ test('falls back to workspace-write when the custom preset is unavailable', () =
   );
 });
 
+test('native Session policy capability can request confirmation without a named preset', () => {
+  assert.deepEqual(decideWorktreePermission({
+    ...activeDefault,
+    capability: { ...activeDefault.capability, fullPreset: false, sessionPolicy: true },
+  }), { kind: 'apply-full', preset: WORKTREE_FULL_ACCESS_PRESET });
+});
+
 test('normalizes Full access after a Worktree binding becomes detached', () => {
   assert.deepEqual(
     decideWorktreePermission({

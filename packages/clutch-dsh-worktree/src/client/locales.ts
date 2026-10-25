@@ -366,7 +366,7 @@ export const zh = {
   'permission.unavailable': '暂时无法读取 Worktree Session 权限。请检查 DSH 连接和 Session 权限设置后重试。',
   'permission.fullAccessTitle': '确认启用 Worktree Full access？',
   'permission.fullAccessDescription':
-    '启用 Worktree Full access 后，此 Session 可能访问 Session 目录之外的关联 Git 元数据和 Worktree 文件。完全访问会关闭此 Session 的文件系统沙箱，但会保留审批提示；网络和进程策略不变。目标 Worktree：{cwd}',
+    '启用 Worktree Full access 后，此 Session 可能访问 Session 目录之外的关联 Git 元数据和 Worktree 文件。完全访问会关闭此 Session 的文件系统沙箱，但会保留审批提示；网络和进程策略不变。若命名预设尚未加载，原生权限菜单可能显示 Custom（自定义），实际仍使用完全文件访问与 ask 审批，无需仅为预设名称重启。目标 Worktree：{cwd}',
   'permission.fullAccessAcknowledge': '我已了解风险，并愿意继续',
   'permission.fullAccessEnable': '启用 Worktree Full access',
   'status.loading': '正在加载工作区…',
@@ -810,7 +810,7 @@ export const en = {
   'permission.unavailable': 'Worktree Session permissions could not be read. Check your DSH connection and the Session permission settings, then retry.',
   'permission.fullAccessTitle': 'Enable Worktree Full access?',
   'permission.fullAccessDescription':
-    'Worktree Full access lets this Session access linked Git metadata and Worktree files outside the Session directory. It disables filesystem confinement for this Session while keeping approval prompts enabled; network and process policy are unchanged. Target Worktree: {cwd}',
+    'Worktree Full access lets this Session access linked Git metadata and Worktree files outside the Session directory. It disables filesystem confinement for this Session while keeping approval prompts enabled; network and process policy are unchanged. If the named preset has not loaded, the native permission menu may show Custom; full file access and ask approval still apply without restarting just for the preset label. Target Worktree: {cwd}',
   'permission.fullAccessAcknowledge': 'I understand the risks and want to continue',
   'permission.fullAccessEnable': 'Enable Worktree Full access',
   'status.loading': 'Loading Workspaces…',
