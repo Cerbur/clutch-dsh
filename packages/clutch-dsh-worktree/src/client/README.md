@@ -346,6 +346,14 @@ before the targeted Workspace refresh arrives. All tabs share this header; no ne
 Header facts use plain text and a fixed action column so dates, baseline and source align, without
 panel or chip borders/backgrounds. The baseline has a subtle in-app chevron; editing stays secondary.
 
+Quick Actions keeps only Sync with Base and Archive. The sync modal selects Rebase or Merge baseline
+and sends the saved baseline witness plus a per-dialog request id through `syncWorktreeBaseline`.
+It coalesces submit, preserves its request id across transport retry, keeps a partial Session available
+without redispatch, and retires callbacks when the Dashboard identity, baseline, manager or lifetime
+changes. Successful admission refreshes only the owning Workspace and opens the returned native
+Session with the existing membership connector. Local/Main and unhealthy or archived targets cannot
+start sync. Native permissions remain unchanged; the UI never executes Git or infers task completion.
+
 Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main
 instructions card persists plugin-owned text through the existing Manager path; active Worktree bindings and

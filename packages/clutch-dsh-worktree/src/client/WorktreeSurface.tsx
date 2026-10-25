@@ -496,6 +496,17 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 ),
           )}
           actionPending={mutation.actionPending}
+          onSyncBaseline={props.manager?.syncWorktreeBaseline !== undefined && dashboardManagedRecord !== undefined &&
+            dashboardCanCreate && (dashboardRecord.health === undefined || dashboardRecord.health === 'ready')
+            ? async (strategy, baseBranch, requestId) => {
+              try {
+                return await props.manager!.syncWorktreeBaseline!({ workspaceId: dashboardRecord.workspaceId,
+                  worktreeId: dashboardRecord.worktreeId, strategy, baseBranch, requestId });
+              } finally {
+                void read.refresh({ preserveCurrent: true,
+                  scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId } });
+              }
+            } : undefined}
           onOpenFile={typeof props.openResource === 'function' ? onOpenFile : undefined}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)

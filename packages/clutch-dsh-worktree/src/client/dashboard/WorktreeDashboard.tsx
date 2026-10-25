@@ -34,6 +34,7 @@ import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import type { BranchRecord, WorktreeManager, WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
+import type { WorktreeSyncStrategy, WorktreeSessionDispatchResult } from '../../contract/baseline-sync.js';
 import { GitBranchPicker } from '../branch/GitBranchSelector.js';
 import { ToolSettings } from '../settings/ToolSettings.js';
 
@@ -65,6 +66,7 @@ export interface WorktreeDashboardProps {
   readonly onCreateSession?: () => void;
   readonly onCreateWorktree?: () => void;
   readonly onArchiveWorktree?: () => void;
+  readonly onSyncBaseline?: (strategy: WorktreeSyncStrategy, baseBranch: string, requestId: string) => Promise<WorktreeSessionDispatchResult>;
   readonly onOpenFile?: (path: string) => void;
 }
 
@@ -135,14 +137,6 @@ function DashboardFactRow({
       <dd data-dashboard-baseline={baseline ? true : undefined}>{children}</dd>
       <span className={styles.dashboardFactAction}>{action}</span>
     </div>
-  );
-}
-
-function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTranslate }) {
-  return (
-    <button type="button" className={styles.dashboardButton} disabled title={t('dashboard.soon')}>
-      {children}
-    </button>
   );
 }
 
@@ -390,6 +384,7 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onSyncBaseline,
   onOpenFile,
   onSaveInstructions,
   onSaveBaseline,
@@ -523,6 +518,53 @@ export function WorktreeDashboard({
           return result;
         };
   const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncStrategy, setSyncStrategy] = useState<WorktreeSyncStrategy>('rebase');
+  const [syncPending, setSyncPending] = useState(false);
+  const [syncError, setSyncError] = useState<WorktreeViewError>();
+  const [syncResult, setSyncResult] = useState<WorktreeSessionDispatchResult>();
+  const syncRequest = useRef<string>();
+  const syncBusy = useRef(false);
+  const syncGeneration = useRef(0);
+  useEffect(() => {
+    syncGeneration.current++;
+    syncBusy.current = false;
+    syncRequest.current = undefined;
+    setSyncOpen(false);
+    setSyncPending(false);
+    setSyncError(undefined);
+    setSyncResult(undefined);
+    return () => { syncGeneration.current++; };
+  }, [record.workspaceId, record.worktreeId, displayedBaseline, manager]);
+  const closeSync = () => {
+    if (syncBusy.current) return;
+    syncGeneration.current++;
+    setSyncOpen(false);
+  };
+  const startSync = async () => {
+    if (syncBusy.current || syncResult || !onSyncBaseline || !displayedBaseline) return;
+    const generation = syncGeneration.current;
+    syncBusy.current = true;
+    syncRequest.current ??= globalThis.crypto.randomUUID();
+    setSyncPending(true);
+    setSyncError(undefined);
+    try {
+      const result = await onSyncBaseline(syncStrategy, displayedBaseline, syncRequest.current);
+      if (generation !== syncGeneration.current) return;
+      setSyncResult(result);
+      if (result.status === 'dispatched') {
+        setSyncOpen(false);
+        onOpenSession(result.sessionId);
+      }
+    } catch (cause) {
+      if (generation === syncGeneration.current) setSyncError(toWorktreeViewError(cause));
+    } finally {
+      if (generation === syncGeneration.current) {
+        syncBusy.current = false;
+        setSyncPending(false);
+      }
+    }
+  };
   const renderBaseline = (value: string | undefined) => {
     const label = value === undefined ? (
       <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
@@ -960,13 +1002,14 @@ export function WorktreeDashboard({
                 </Card>
                 <Card title={t('dashboard.quickActions')} icon={<DashboardIcon kind="actions" />}>
                   <div className={styles.dashboardQuickActions}>
-                    {(['terminal', 'diff', 'pullRequest', 'tests', 'sync'] as const).map(
-                      (action) => (
-                        <PlaceholderButton key={action} t={t}>
-                          {t(`dashboard.action.${action}`)}
-                        </PlaceholderButton>
-                      ),
-                    )}
+                    <button type="button" className={styles.dashboardButton}
+                      data-dashboard-action="sync-baseline"
+                      disabled={actionPending || !onSyncBaseline || !displayedBaseline}
+                      onClick={() => {
+                        setSyncOpen(true);
+                      }}>
+                      {t('dashboard.action.sync')}
+                    </button>
                     <button
                       type="button"
                       className={styles.dashboardButton}
@@ -1033,6 +1076,36 @@ export function WorktreeDashboard({
         </div>
         <p className={styles.dashboardFooter}>{t('dashboard.mvpHint')}</p>
       </div>
+      <Modal open={syncOpen} onClose={closeSync} closeLabel={t('dialog.close')}
+        title={t('dashboard.action.sync')} description={t('dashboard.sync.description')}
+        className={styles.dashboardBaselineModal}
+        footer={<>
+          <Button variant="outline" disabled={syncPending} onClick={closeSync}>{t('dashboard.cancelBase')}</Button>
+          {syncResult ? <Button variant="primary" onClick={() => onOpenSession(syncResult.sessionId)}>
+            {t('dashboard.sync.openSession')}
+          </Button> : <Button variant="primary" disabled={syncPending} onClick={() => void startSync()}>
+            {t(syncPending ? 'dashboard.sync.creating' : 'dashboard.sync.create')}
+          </Button>}
+        </>}>
+        <div className={styles.dashboardSyncOptions}>
+          <p><code>{displayedBaseline}</code><span aria-hidden="true"> → </span><code>{record.currentBranch ?? record.branch}</code></p>
+          {(['rebase', 'merge'] as const).map((strategy) => <label key={strategy}>
+            <input type="radio" name={`${id}-sync-strategy`} value={strategy}
+              checked={syncStrategy === strategy} disabled={syncPending || syncResult !== undefined || syncError !== undefined}
+              onChange={() => { syncRequest.current = undefined; setSyncStrategy(strategy); }} />
+            <span><strong>{strategy === 'rebase' ? 'Rebase' : 'Merge baseline'}</strong>
+              <small>{t(`dashboard.sync.${strategy}`)}</small></span>
+          </label>)}
+          {syncResult && <p role="status">{t('dashboard.sync.partial')}<br />
+            <code>{syncResult.sessionId}</code><br /><code>{syncResult.status}: {syncResult.error}</code>
+          </p>}
+          <NotificationToasts notices={syncError === undefined ? [] : [{
+            key: 'sync:' + record.worktreeId, error: syncError,
+            text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
+            message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),
+          }]} />
+        </div>
+      </Modal>
     </section>
   );
 }

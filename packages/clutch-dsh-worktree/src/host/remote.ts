@@ -23,7 +23,7 @@ function isWorktreeError(error: unknown): error is WorktreeError {
   );
 }
 
-async function project<Value>(operation: () => Promise<Value>): Promise<WorktreeRemoteResult<Value>> {
+export async function project<Value>(operation: () => Promise<Value>): Promise<WorktreeRemoteResult<Value>> {
   try {
     return { ok: true, value: await operation() };
   } catch (error) {

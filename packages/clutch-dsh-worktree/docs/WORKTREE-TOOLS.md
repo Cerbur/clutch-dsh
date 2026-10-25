@@ -66,6 +66,12 @@ history replay, binding generations and plugin disposal use the same native life
    Full Access. Native command/tool/prompt lifecycle logging remains DSH-owned.
 
 The name `clutch_span_worktree` is retained exactly as requested.
+The Dashboard's Sync with Base action shares `dispatchWorktreeSession` with this tool:
+native creation, binding, initial model routing, optional title, and prompt admission.
+The tool retains its reporting prepare hook and calling-model inheritance. Dashboard tasks
+are user-originated ordinary Sessions using the configured default model, without inventing
+a delegating Agent or reporting destination. Only the Session executes the requested merge/rebase;
+the plugin still has no Git merge/rebase tool or working-tree mutation provider.
 Activation is runtime-only: run the command again after Agent resume/restart or plugin reload.
 Dispatched Sessions are enabled automatically before prompt admission. Nested Agents inheriting a parent tool catalog
 cannot execute these registrations because the body checks the exact caller.

@@ -634,6 +634,16 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 错误通知与恢复入口
 
+Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
+插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
+初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
+UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，
+默认模型解析前后重查目标；Session 保持原生权限。任务 prompt 要求干净目录、遇到冲突停止且不 push/publish。
+Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最多 128 项，达到上限明确拒绝），
+按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
+创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
+快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
+
 Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
 消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并
 附带错误码，原始错误对象继续保留诊断信息。列表顶部不渲染报错窗口或诊断抽屉。

@@ -32,7 +32,9 @@ import { createWorktreeManager } from '../manage/index.js';
 import type { WorktreeManagerService } from '../manage/index.js';
 import { DshHostReadAdapter, type DshHostReadContext } from './dsh-read-adapter.js';
 import type { WorktreeActivitySource } from './worktree-activity.js';
-import { createWorktreeRemoteProjection } from './remote.js';
+import { createWorktreeRemoteProjection, project } from './remote.js';
+import { createBaselineSync } from './baseline-sync.js';
+import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
 import {
   createDshWorktreePermissionAdapter,
   type DshWorktreePermissionAdapterOptions,
@@ -76,6 +78,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly remote: WorktreeRemoteManager;
   private readonly toolChanges = new WorktreeToolChanges();
   private readonly toolSettings: WorktreeToolSettings;
+  private baselineSync?: ReturnType<typeof createBaselineSync>;
 
   /**
    * 为当前 Cordis fiber 建立一次 Host 组合，并复用同一个 Remote projection 处理调用。
@@ -110,11 +113,19 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.inject(
       ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
       (toolCtx) => {
+        const sessions = createWorktreeToolSessionPort(toolCtx);
+        const sync = createBaselineSync({ manager, sessions,
+          changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId) });
+        this.baselineSync = sync;
+        toolCtx.effect(() => () => {
+          sync.dispose();
+          if (this.baselineSync === sync) this.baselineSync = undefined;
+        }, 'clutch-dsh-worktree: baseline task cleanup');
         return registerWorktreeTools(toolCtx, {
           manager,
           samePhysicalPath,
           dsh,
-          sessions: createWorktreeToolSessionPort(toolCtx),
+          sessions,
           changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
           isDisposed: () => disposed,
           settings: this.toolSettings,
@@ -164,6 +175,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  syncWorktreeBaseline(input: WorktreeBaselineSyncRequest, signal: AbortSignal): Promise<WorktreeRemoteResult<WorktreeSessionDispatchResult>> {
+    return project(() => {
+      if (!this.baselineSync) throw new Error('Native Session task capability is unavailable.');
+      return this.baselineSync.sync(input, signal);
+    });
+  }
+
   @Remote
   async getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
     await this.validateToolSettingsScope(input.scope);

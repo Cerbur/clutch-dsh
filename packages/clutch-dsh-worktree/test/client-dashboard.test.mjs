@@ -402,6 +402,76 @@ const copyBranchTitle = (node) =>
   findAll(node, (item) => item.props?.['data-dashboard-copy'] === 'branch')[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+test('sync dialog selects a strategy, coalesces activation and opens the admitted native Session', async () => {
+  for (const strategy of ['merge', 'rebase']) {
+    const harness = renderHarness(async () => true);
+    const calls = [];
+    let resolve;
+    const result = new Promise((done) => { resolve = done; });
+    let node = harness.render({ record: { ...record, baseBranch: 'main' },
+      onSyncBaseline: (...args) => { calls.push(args); return result; },
+      onOpenSession: (id) => calls.push(['open', id]) });
+    findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+    node = harness.render();
+    findAll(node, (item) => item.type === 'input' && item.props.value === strategy)[0].props.onChange();
+    node = harness.render();
+    const create = findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.sync.create'])[0];
+    create.props.onClick();
+    create.props.onClick();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], strategy);
+    assert.equal(calls[0][1], 'main');
+    assert.ok(calls[0][2]);
+    resolve({ sessionId: 'sync-session', status: 'dispatched' });
+    await tick();
+    assert.deepEqual(calls.at(-1), ['open', 'sync-session']);
+    harness.dispose();
+  }
+});
+
+test('sync retry retains request identity and partial failures preserve the created Session', async () => {
+  const harness = renderHarness(async () => true);
+  const requests = [];
+  let node = harness.render({ record: { ...record, baseBranch: 'main' },
+    onSyncBaseline: async (...args) => {
+      requests.push(args);
+      if (requests.length === 1) throw new Error('connection lost');
+      return { sessionId: 'partial', status: 'prompt-failed', error: 'unavailable' };
+    } });
+  findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.sync.create'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.sync.create'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  assert.equal(requests[0][2], requests[1][2]);
+  assert.ok(findAll(node, (item) => item.props?.children === en['dashboard.sync.openSession']).length);
+  assert.equal(findAll(node, (item) => item.props?.children === en['dashboard.sync.create']).length, 0);
+  harness.dispose();
+});
+
+test('late sync admission cannot open a Session after baseline replacement or unmount', async () => {
+  for (const change of ['baseline', 'unmount']) {
+    const harness = renderHarness(async () => true);
+    let resolve;
+    const pending = new Promise((done) => { resolve = done; });
+    const opened = [];
+    let node = harness.render({ record: { ...record, baseBranch: 'main' },
+      onSyncBaseline: () => pending, onOpenSession: (id) => opened.push(id) });
+    findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+    node = harness.render();
+    findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.sync.create'])[0].props.onClick();
+    if (change === 'baseline') harness.render({ record: { ...record, baseBranch: 'changed' } });
+    else harness.dispose();
+    resolve({ sessionId: 'late', status: 'dispatched' });
+    await tick();
+    assert.deepEqual(opened, []);
+    if (change !== 'unmount') harness.dispose();
+  }
+});
+
 test('header baseline links reach the base Dashboard on every tab while preserving the editor', () => {
   for (const locale of [en, zh]) {
     const harness = renderHarness(async () => true);
@@ -547,7 +617,10 @@ test('dashboard renders real identity and explicit placeholders in both language
       ),
     );
     assert.equal(byRole(node, 'tab').length, 5);
-    assert.ok(findAll(node, (item) => item.type === 'button' && item.props.disabled).length >= 8);
+    for (const action of ['terminal', 'diff', 'pullRequest', 'tests']) {
+      assert.equal(findAll(node, (item) => item.type === 'button' && item.props.children === locale[`dashboard.action.${action}`]).length, 0);
+    }
+    assert.equal(findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.disabled, true);
   }
   harness.dispose();
 });

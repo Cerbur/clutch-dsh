@@ -578,6 +578,30 @@ html[data-platform='darwin']
 .dashboardHistorical {
   color: var(--dsw-alias-label-secondary, #788191);
 }
+.dashboardSyncOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dashboardSyncOptions p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dashboardSyncOptions label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.dashboardSyncOptions input {
+  margin-top: 4px;
+  accent-color: var(--dsw-alias-text-link, #3e73ca);
+}
+.dashboardSyncOptions small {
+  display: block;
+  margin-top: 4px;
+  color: var(--dsw-alias-label-secondary, #788191);
+}
 .dashboardBaseLink {
   display: inline-flex;
   align-items: center;

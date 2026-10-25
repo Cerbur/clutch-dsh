@@ -3,6 +3,8 @@ import type {
   WorktreePermissionRequest,
   WorktreePermissionResult,
 } from './worktree-permission.js';
+import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from './baseline-sync.js';
+export type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult, WorktreeSyncStrategy, WorktreeBaselineSyncManager } from './baseline-sync.js';
 
 /**
  * 插件的稳定、浏览器安全契约层；这里只定义领域值与服务形状，不依赖 Git、sidecar 或 Node runtime。
@@ -355,6 +357,8 @@ export function createWorktreeError(
  * Stable Manage-layer domain contract; it coordinates read-only DSH data, Git worktrees, and the external sidecar without owning DSH data.
  */
 export interface WorktreeManager {
+  /** Optional Host task capability; Manage never executes the requested merge/rebase. */
+  syncWorktreeBaseline?(input: WorktreeBaselineSyncRequest): Promise<WorktreeSessionDispatchResult>;
   /** Read plugin-owned instructions for a managed Worktree or synthetic browser Main projection backed by sidecar guidance. */
   getWorktreeInstructions(input: {
     workspaceId: WorkspaceId;
@@ -484,6 +488,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'syncWorktreeBaseline',
   'getWorkspaceGitState',
   'getToolSettings',
   'updateToolSettings',

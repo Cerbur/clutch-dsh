@@ -10,6 +10,11 @@
 
 ## 1. 环境前置要求
 
+Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
+Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs
+test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。
+真实 merge/rebase 流程应在独立临时 Git 仓库和测试 Worktree 中执行，不能使用开发分支作为操作目标。
+
 - **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
