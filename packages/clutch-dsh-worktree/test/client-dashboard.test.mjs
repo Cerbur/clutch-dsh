@@ -32,6 +32,8 @@ import {
   sessionDisplayLabel,
 } from '../lib/client/session/session-view.js';
 import { sessionStatusLabel, sessionTimeLabel } from '../lib/client/session/session-labels.js';
+import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
+import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
 
 const record = {
   workspaceId: 'repo',
@@ -225,13 +227,20 @@ const branchPickerSource = await readFile(
 const singleSelectSource = await readFile(
   new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
 );
+const notificationSource = await readFile(
+  new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url), 'utf8',
+);
 
-function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
+function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics } = {}) {
   const state = [];
   const effects = [];
   let cursor = 0;
   let pending = [];
+  const publish = () => {};
   const react = {
+    createContext: () => ({}),
+    useContext: () => diagnostics === undefined ? undefined : publish,
+    useCallback: (fn) => fn,
     useState(initial) {
       const index = cursor++;
       if (!(index in state)) state[index] = initial;
@@ -245,7 +254,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
     useRef(initial) {
       return react.useState({ current: initial })[0];
     },
-    useId: () => 'dashboard',
+    useId: () => diagnostics === undefined ? 'dashboard' : react.useRef('notice-' + cursor).current,
     useMemo: (create) => create(),
     useLayoutEffect() {},
     useEffect(effect, deps) {
@@ -259,6 +268,19 @@ function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
     },
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
+  const notificationExports = {};
+  if (diagnostics !== undefined) {
+    const compiled = ts.transpileModule(notificationSource, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    }).outputText;
+    new Function('require', 'exports', compiled)((name) => ({
+      react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+      '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
+      '../notification-queue.js': { reconcileNotifications, failureToastKey },
+      '../../view/worktree-error-copy.js': { formatWorktreeViewError },
+      '../../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
+    })[name] ?? {}, notificationExports);
+  }
   const selectOutput = ts.transpileModule(singleSelectSource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
@@ -314,7 +336,9 @@ function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
           Tooltip: ({ children }) => children,
           writeClipboard,
         },
-        '../surface/components/NotificationToasts.js': { NotificationToasts: ({ notices }) => jsx('toasts', { notices }) },
+        '../surface/components/NotificationToasts.js': {
+          NotificationToasts: notificationExports.NotificationToasts ?? (({ notices }) => jsx('toasts', { notices })),
+        },
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
@@ -449,8 +473,69 @@ test('sync retry retains request identity and partial failures preserve the crea
   assert.equal(requests[0][2], requests[1][2]);
   assert.ok(findAll(node, (item) => item.props?.children === en['dashboard.sync.openSession']).length);
   assert.equal(findAll(node, (item) => item.props?.children === en['dashboard.sync.create']).length, 0);
+  const notice = findAll(node, (item) => item.type === 'toasts')
+    .flatMap((item) => item.props.notices).find((item) => item.error?.details?.sessionId === 'partial');
+  assert.ok(notice, 'partial dispatch must enter shared notifications and diagnostics');
   harness.dispose();
 });
+
+for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporting-failed', 'prompt-failed']) {
+  test(`partial sync ${status} publishes localized recovery and retains diagnostics after Dashboard closes`, async () => {
+    for (const locale of [en, zh]) {
+      const diagnostics = createWorktreeDiagnostics();
+      const harness = renderHarness(async () => true, { diagnostics });
+      const opened = [];
+      let dispatched = 0;
+      const t = (key) => locale[key];
+      let node = harness.render({ record: { ...record, baseBranch: 'main' }, t,
+        onSyncBaseline: async () => {
+          dispatched++;
+          return { sessionId: 'retained-session', status, error: 'RAW_NATIVE_FAILURE' };
+        },
+        onOpenSession: (id) => opened.push(id),
+      });
+      findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+      node = harness.render();
+      findAll(node, (item) => item.props?.children === locale['dashboard.sync.create'])[0].props.onClick();
+      await tick();
+      node = harness.render();
+      const entry = diagnostics.getSnapshot().find((item) => item.error?.details?.sessionId === 'retained-session');
+      assert.ok(entry, 'the real NotificationToasts component must publish this result');
+      assert.equal(entry.status, 'active');
+      assert.equal(entry.error.details.status, status);
+      assert.equal(entry.error.details.workspaceId, record.workspaceId);
+      assert.equal(entry.error.message, 'RAW_NATIVE_FAILURE');
+      assert.ok(entry.error.details.requestId);
+      for (const language of [en, zh]) {
+        assert.equal(entry.message((key) => language[key]),
+          language['dashboard.sync.' + status] + ' ' + language['dashboard.sync.partial']);
+        assert.ok(entry.describe((key) => language[key]).includes(record.absolutePath));
+      }
+      assert.ok(entry.text.includes(locale['dashboard.sync.' + status]));
+      assert.ok(!entry.text.includes('RAW_NATIVE_FAILURE'));
+      assert.equal(entry.actions.length, 1);
+      assert.equal(entry.actions[0].label, locale['dashboard.sync.openSession']);
+      assert.equal(entry.actions[0].leaveSettings, true);
+      entry.actions[0].onClick();
+      findAll(node, (item) => item.props?.children === locale['dashboard.sync.openSession'])[0].props.onClick();
+      assert.deepEqual(opened, ['retained-session', 'retained-session']);
+      assert.equal(dispatched, 1, 'recovery only opens the created Session');
+      assert.equal(findAll(node, (item) => item.props?.children === locale['dashboard.sync.create']).length, 0);
+      findAll(node, (item) => item.props?.role === 'dialog' && item.props.title === locale['dashboard.action.sync'])[0].props.onClose();
+      harness.render();
+      assert.equal(diagnostics.getSnapshot().find((item) => item.key === entry.key).status, 'active',
+        'closing the sync dialog must retain its recovery');
+      harness.dispose();
+      const historical = diagnostics.getSnapshot().find((item) => item.key === entry.key);
+      assert.equal(historical.status, 'inactive');
+      assert.equal(historical.error.details.sessionId, 'retained-session');
+      assert.deepEqual(historical.actions, []);
+      entry.actions[0].onClick();
+      assert.equal(opened.length, 2, 'unmount revokes stale recovery callbacks');
+      assert.equal(dispatched, 1);
+    }
+  });
+}
 
 test('late sync admission cannot open a Session after baseline replacement or unmount', async () => {
   for (const change of ['baseline', 'unmount']) {

@@ -273,8 +273,8 @@ export function apply(ctx: Context): void {
   });
   const toolChanges = createWorktreeToolChangeMonitor({
     read: (revision, signal) => manager.watchToolChanges(revision, signal),
-    changed: ({ workspaceId }) => {
-      viewReader.invalidate(workspaceId);
+    changed: ({ workspaceId, requestId }) => {
+      viewReader.invalidate(workspaceId, { changeId: requestId });
       if (contextProjection.store.getSnapshot().workspaceId === workspaceId) {
         void contextProjection.refresh();
       }
@@ -593,8 +593,8 @@ export function apply(ctx: Context): void {
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
           createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
-          invalidateWorktreeContext: (workspaceId?: string) =>
-            contextProjection.invalidate(workspaceId),
+          invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
+            contextProjection.invalidate(workspaceId, options),
           createMainSession: (workspaceId: string) => {
             ctx.uiWorkspace.startSession(workspaceId as WorkspaceId);
           },

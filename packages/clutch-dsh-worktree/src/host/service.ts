@@ -115,7 +115,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
       (toolCtx) => {
         const sessions = createWorktreeToolSessionPort(toolCtx);
         const sync = createBaselineSync({ manager, sessions,
-          changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId) });
+          changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
         this.baselineSync = sync;
         toolCtx.effect(() => () => {
           sync.dispose();

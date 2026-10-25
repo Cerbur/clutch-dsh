@@ -643,6 +643,19 @@ Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最�
 按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
 创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
 快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
+同步通知可选携带现有接收身份 `requestId`，与 Surface 成功返回后的刷新共用 reader 的
+`changeId`。同一 Workspace 当前代次重复收到同一身份时保留在途读取或已完成结果；
+新身份和无身份失效仍推进代次，绝不复用变更前的读取。调用失败执行无身份恢复刷新，
+避免把传输失败误当成 Host 接收完成并压制随后到达的通知；通知缺失时仍由调用完成路径刷新。
+Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context 保留当前身份校验，
+仅刷新匹配的投影，不再次推进 reader 代次或抹掉变更身份。
+这些身份仅存于运行时，不进入 Sidecar。
+
+绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationToasts，
+提供阶段对应的双语问题与恢复说明。原始错误及 Workspace、Worktree、requestId、Session、
+失败阶段保留在诊断详情；普通展示仅使用本地化说明。恢复仅打开返回的 Session，
+不重建或重派发。通知位于同步弹窗外，关闭弹窗仍可恢复；Dashboard 卸载后沿用共享诊断的
+inactive 历史与回调撤销语义。
 
 Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
 消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并

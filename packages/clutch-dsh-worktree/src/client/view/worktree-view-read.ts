@@ -32,7 +32,10 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
 
 export interface WorktreeViewReader {
   /** Mark one Workspace stale for the next generation. */
-  invalidate(workspaceId: string, options?: { readonly reuseInFlight?: boolean }): void;
+  invalidate(workspaceId: string, options?: {
+    readonly reuseInFlight?: boolean;
+    readonly changeId?: string;
+  }): void;
 
   /** Return one complete Workspace view, sharing its current generation. */
   read(workspaceId: string): Promise<WorktreeWorkspaceView>;
@@ -46,6 +49,7 @@ export interface WorktreeViewReader {
 
 interface WorktreeViewReaderEntry {
   generation: number;
+  changeId?: string;
   stale: boolean;
   view?: WorktreeWorkspaceView;
   inFlight?: {
@@ -247,8 +251,12 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
     invalidate(workspaceId, options): void {
       if (disposed) return;
       const entry = entryFor(workspaceId);
+      // Notification and caller completion describe one mutation. Neither may
+      // retire the other's post-change read; unrelated invalidations still do.
+      if (options?.changeId !== undefined && entry.changeId === options.changeId) return;
       // Read-only menu opens may share a current read. Mutations must retire it.
       if (options?.reuseInFlight && entry.inFlight?.generation === entry.generation) return;
+      entry.changeId = options?.changeId;
       entry.generation += 1;
       entry.stale = true;
       entry.view = undefined;

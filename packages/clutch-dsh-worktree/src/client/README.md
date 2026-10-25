@@ -101,6 +101,13 @@ One cancellable long-poll loop belongs to the Client fiber. Each notification in
 its Workspace reader generation; the current matching Context and visible Surface share the
 replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
 This runtime notification carries identities only and does not add another data store.
+Baseline-sync notifications optionally carry their existing admission `requestId`. The Host
+notification and successful Surface completion pass that identity to the same reader invalidation,
+so either arrival order shares the post-change in-flight read (or its completed result). Reads
+started before the change are retired. A failed call performs an unkeyed recovery invalidation:
+it cannot establish that Host admission finished, and must not suppress a later notification.
+When Surface has invalidated the reader, Context receives `alreadyInvalidated` too, refreshing
+its current projection without retiring that same generation again.
 
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
@@ -112,7 +119,7 @@ It keeps one entry per Workspace and provides:
 - de-duplicated `readMany()` reads for an explicit ordered Workspace set; and
 - disposal that clears entries and makes late callbacks unable to repopulate the cache.
 
-Every `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
+Every unkeyed `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
 the completed view, even when the entry is already stale. It does not cancel the existing Promise.
 The Promise may settle for cleanup, but its captured generation must still match before it can write
 the cache. This prevents an overlapping older read from replacing a newer invalidation with stale

@@ -58,6 +58,46 @@ test('Workspace reads inspect current HEAD without loading the branch catalog', 
   reader.dispose();
 });
 
+test('a notification and mutation completion share only the same change generation', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const reader = createWorktreeViewReader(createManager(calls));
+  const before = reader.read('ws1');
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  const after = reader.read('ws1');
+  assert.notEqual(after, before, 'retire reads started before the mutation');
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  assert.equal(reader.read('ws1'), after, 'share the post-change in-flight read');
+  const view = await after;
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  assert.equal(await reader.read('ws1'), view, 'late completion reuses the fresh result');
+  reader.invalidate('ws1', { changeId: 'sync-2' });
+  assert.notEqual(await reader.read('ws1'), view, 'another mutation must read again');
+  await before;
+  reader.dispose();
+});
+
+test('a failed change read can recover and an unkeyed mutation still retires its generation', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const manager = createManager(calls);
+  let fail = true;
+  manager.listWorktrees = async () => {
+    if (fail) throw new Error('read unavailable');
+    return [];
+  };
+  const reader = createWorktreeViewReader(manager);
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  await assert.rejects(reader.read('ws1'), /read unavailable/);
+  fail = false;
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  const recovered = await reader.read('ws1');
+  reader.invalidate('ws1');
+  const otherMutation = await reader.read('ws1');
+  assert.notEqual(otherMutation, recovered);
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  assert.notEqual(await reader.read('ws1'), otherMutation);
+  reader.dispose();
+});
+
 test('opening creation reads lightweight Workspace state without preloading branch candidates', async () => {
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const manager = createManager(calls);

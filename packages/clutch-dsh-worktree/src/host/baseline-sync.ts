@@ -25,7 +25,7 @@ export function baselineSyncPrompt(record: WorktreeRecord, baseRef: string, stra
 export function createBaselineSync(options: {
   manager: WorktreeManager;
   sessions: WorktreeToolSessionPort;
-  changed(workspaceId: string, worktreeId: string): void;
+  changed(workspaceId: string, worktreeId: string, requestId: string): void;
 }) {
   const lifetime = new AbortController();
   const admissions = new Map<string, { payload: string; promise: Promise<WorktreeSessionDispatchResult> }>();
@@ -78,7 +78,7 @@ export function createBaselineSync(options: {
           model, signal: combined, check, prompt: baselineSyncPrompt(record, baseRef, input.strategy),
           title: `${input.strategy === 'merge' ? 'Merge' : 'Rebase'} ${input.baseBranch.replace(/^refs\/(heads|remotes)\//u, '')}`.slice(0, 200) });
         created = true;
-        options.changed(input.workspaceId, input.worktreeId);
+        options.changed(input.workspaceId, input.worktreeId, input.requestId);
         return result;
       })().finally(() => {
         busy.delete(key);

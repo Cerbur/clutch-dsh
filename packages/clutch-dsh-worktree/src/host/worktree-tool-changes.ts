@@ -5,17 +5,18 @@ export class WorktreeToolChanges {
   private revision = 0;
   private readonly latest = new Map<
     string,
-    { revision: number; workspaceId: string; worktreeId: string }
+    { revision: number; workspaceId: string; worktreeId: string; requestId?: string }
   >();
   private readonly waiters = new Set<() => void>();
   private disposed = false;
 
-  changed(workspaceId: string, worktreeId: string): void {
+  changed(workspaceId: string, worktreeId: string, requestId?: string): void {
     if (this.disposed) return;
     this.latest.set(workspaceId, {
       revision: ++this.revision,
       workspaceId,
       worktreeId,
+      ...(requestId === undefined ? {} : { requestId }),
     });
     for (const wake of [...this.waiters]) wake();
   }
@@ -51,7 +52,9 @@ export class WorktreeToolChanges {
       revision: this.revision,
       changes: [...this.latest.values()]
         .filter((change) => change.revision > baseline)
-        .map(({ workspaceId, worktreeId }) => ({ workspaceId, worktreeId })),
+        .map(({ workspaceId, worktreeId, requestId }) => ({
+          workspaceId, worktreeId, ...(requestId === undefined ? {} : { requestId }),
+        })),
     };
   }
 

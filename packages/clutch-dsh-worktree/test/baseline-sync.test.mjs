@@ -31,6 +31,7 @@ for (const strategy of ['merge', 'rebase']) test(`${strategy} creates a bound na
   const result = await sync.sync({ ...input, strategy }, new AbortController().signal);
   assert.equal(result.status, 'dispatched');
   assert.deepEqual(calls.map(([kind]) => kind), ['create', 'bind', 'model', 'rename', 'prompt', 'changed']);
+  assert.deepEqual(calls.at(-1), ['changed', input.workspaceId, input.worktreeId, input.requestId]);
   assert.deepEqual(calls[0][1], { cwd: record.absolutePath });
   assert.deepEqual(calls[1][1], { workspaceId: 'ws', worktreeId: 'wt', sessionId: 'created' });
   const prompt = calls.find(([kind]) => kind === 'prompt')[1];

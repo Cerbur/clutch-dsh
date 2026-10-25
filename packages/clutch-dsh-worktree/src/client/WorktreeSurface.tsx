@@ -499,11 +499,16 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           onSyncBaseline={props.manager?.syncWorktreeBaseline !== undefined && dashboardManagedRecord !== undefined &&
             dashboardCanCreate && (dashboardRecord.health === undefined || dashboardRecord.health === 'ready')
             ? async (strategy, baseBranch, requestId) => {
+              let completed = false;
               try {
-                return await props.manager!.syncWorktreeBaseline!({ workspaceId: dashboardRecord.workspaceId,
+                const result = await props.manager!.syncWorktreeBaseline!({ workspaceId: dashboardRecord.workspaceId,
                   worktreeId: dashboardRecord.worktreeId, strategy, baseBranch, requestId });
+                completed = true;
+                return result;
               } finally {
-                void read.refresh({ preserveCurrent: true,
+                // A transport failure does not prove admission finished. Its
+                // recovery read must not suppress a later Host notification.
+                void read.refresh({ preserveCurrent: true, changeId: completed ? requestId : undefined,
                   scope: { kind: 'workspace', workspaceId: dashboardRecord.workspaceId } });
               }
             } : undefined}

@@ -565,6 +565,9 @@ export function WorktreeDashboard({
       }
     }
   };
+  const partialSync = syncResult !== undefined && syncResult.status !== 'dispatched'
+    ? { ...syncResult, status: syncResult.status } : undefined;
+  const syncContext = record.branch + ' · ' + record.absolutePath;
   const renderBaseline = (value: string | undefined) => {
     const label = value === undefined ? (
       <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
@@ -1096,16 +1099,29 @@ export function WorktreeDashboard({
             <span><strong>{strategy === 'rebase' ? 'Rebase' : 'Merge baseline'}</strong>
               <small>{t(`dashboard.sync.${strategy}`)}</small></span>
           </label>)}
-          {syncResult && <p role="status">{t('dashboard.sync.partial')}<br />
-            <code>{syncResult.sessionId}</code><br /><code>{syncResult.status}: {syncResult.error}</code>
+          {partialSync && <p role="status">{t(`dashboard.sync.${partialSync.status}`)}<br />
+            {t('dashboard.sync.partial')}<br /><code>{partialSync.sessionId}</code>
           </p>}
-          <NotificationToasts notices={syncError === undefined ? [] : [{
+        </div>
+      </Modal>
+      <NotificationToasts notices={partialSync !== undefined ? [{
+            key: JSON.stringify(['sync', record.workspaceId, record.worktreeId, syncRequest.current, partialSync.sessionId]),
+            context: syncContext,
+            error: {
+              code: 'WORKTREE_SYNC_PARTIAL', message: partialSync.error ?? '', retryable: false,
+              details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+                requestId: syncRequest.current, sessionId: partialSync.sessionId, status: partialSync.status },
+            },
+            text: t(`dashboard.sync.${partialSync.status}`) + ' ' + t('dashboard.sync.partial'),
+            message: (translate) => translate(`dashboard.sync.${partialSync.status}`) + ' ' + translate('dashboard.sync.partial'),
+            describe: (translate) => translate('dashboard.action.sync') + ' · ' + syncContext,
+            actions: [{ label: t('dashboard.sync.openSession'), leaveSettings: true,
+              onClick: () => onOpenSession(partialSync.sessionId) }],
+          }] : syncError === undefined ? [] : [{
             key: 'sync:' + record.worktreeId, error: syncError,
             text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
             message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),
           }]} />
-        </div>
-      </Modal>
     </section>
   );
 }

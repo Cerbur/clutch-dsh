@@ -122,3 +122,36 @@ The final unframed revision was inspected in the same live test environment. Com
 metadata and link borders are `0px` and both backgrounds are transparent; the branch
 decoration was removed, leaving the text, subtle chevron and separate edit control.
 Final capture: `/tmp/clutch-derived-live-qa/facts-ui-plain.png`.
+
+## Baseline synchronization recovery follow-up
+
+Coordinate Host notifications and successful caller completion with the existing admission
+`requestId` in the shared Workspace reader. Both arrival orders share the post-change read;
+Context also receives `alreadyInvalidated` after Surface invalidation, preserving this identity.
+Unrelated changes still invalidate normally, and failed calls retain unkeyed recovery so a later
+Host notification is not lost. Keep ready Workspace and Context content visible throughout.
+
+Route every partial Session dispatch failure through the shared Toast and Errors & recovery
+mechanism with bilingual stage-specific problem and recovery copy. Retain native Session
+identity and raw diagnostics; recovery only opens the existing Session. Closing the sync dialog
+keeps recovery active, and closing Dashboard retains inactive history while revoking callbacks.
+This extends the original Dashboard behavior without changing Session/Sidecar ownership.
+
+Verification passed in this feature worktree:
+
+- `pnpm run check:workspace`
+- `pnpm run check:patches`
+- `pnpm --filter @cerbur/clutch-dsh-worktree lint`
+- `pnpm --filter @cerbur/clutch-dsh-worktree typecheck`
+- `pnpm --filter @cerbur/clutch-dsh-worktree build`
+- `pnpm --filter @cerbur/clutch-dsh-worktree test` — 1,174 passed, none failed.
+- `node --test test/readme-parity.test.mjs` from the package directory.
+- `git diff --check`
+
+New regressions execute the production Surface and notification callbacks, real Context
+projection, shared reader and Host notification feed in both arrival orders. They also cover
+missing notifications, failed calls, late notifications after failure, old-generation retirement,
+failed-read recovery, and preservation of unrelated ready views. Real NotificationToasts and
+diagnostics exercise all five partial statuses in both languages, open-only recovery, dialog
+closure, Dashboard unmount history and callback revocation. No live DSH/browser acceptance was
+performed for this follow-up. No commit, merge, push, version bump or publishing was performed.

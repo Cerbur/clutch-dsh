@@ -389,7 +389,11 @@ has no synchronization task. The Agent checks for a clean working tree and stops
 Rebase rewrites the current branch's commits. Admission means the task started, not that Git finished.
 Inspect the Session's result before starting further work. Partial creation preserves the Session
 and offers **Open created Session**; retrying a failed transport request reuses its admission identity
-within the current Host lifetime. Plugin restart clears admission memory. No automatic push or publish
+within the current Host lifetime. Binding, model, title, reporting, and task-submission failures also
+show a toast and a localized problem and recovery entry in **Errors & recovery**, including the
+created Session identity. Recovery opens that Session without creating or dispatching another task.
+Closing the Dashboard preserves diagnostic history and revokes its recovery callbacks.
+Plugin restart clears admission memory. No automatic push or publish
 is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
 
 ### Open the recorded directory in an app
