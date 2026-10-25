@@ -49,7 +49,7 @@ export interface WorktreeViewReader {
 
 interface WorktreeViewReaderEntry {
   generation: number;
-  changeId?: string;
+  readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
   inFlight?: {
@@ -219,7 +219,7 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   const entryFor = (workspaceId: string): WorktreeViewReaderEntry => {
     const current = entries.get(workspaceId);
     if (current !== undefined) return current;
-    const created: WorktreeViewReaderEntry = { generation: 0, stale: false };
+    const created: WorktreeViewReaderEntry = { generation: 0, stale: false, changeIds: new Set() };
     entries.set(workspaceId, created);
     return created;
   };
@@ -251,12 +251,19 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
     invalidate(workspaceId, options): void {
       if (disposed) return;
       const entry = entryFor(workspaceId);
-      // Notification and caller completion describe one mutation. Neither may
-      // retire the other's post-change read; unrelated invalidations still do.
-      if (options?.changeId !== undefined && entry.changeId === options.changeId) return;
+      // Interleaved notifications/completions may reuse a newer mutation's read.
+      // Bound identities per Workspace to the Host's admission capacity.
+      const changeId = options?.changeId;
+      if (changeId !== undefined && entry.changeIds.has(changeId)) return;
       // Read-only menu opens may share a current read. Mutations must retire it.
       if (options?.reuseInFlight && entry.inFlight?.generation === entry.generation) return;
-      entry.changeId = options?.changeId;
+      if (changeId === undefined) {
+        // Unknown-scope/recovery reads cannot establish that admission finished.
+        entry.changeIds.clear();
+      } else {
+        entry.changeIds.add(changeId);
+        if (entry.changeIds.size > 128) entry.changeIds.delete(entry.changeIds.values().next().value!);
+      }
       entry.generation += 1;
       entry.stale = true;
       entry.view = undefined;

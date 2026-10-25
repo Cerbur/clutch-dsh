@@ -1,4 +1,6 @@
 import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import type { WorktreeNotification } from '../surface/notification-queue.js';
+import { worktreeDiagnostics } from '../settings/diagnostics.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +42,40 @@ import { ToolSettings } from '../settings/ToolSettings.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
+
+/** getRandomValues is also available on plain-HTTP LAN origins. */
+function createSyncRequestId(): string {
+  return 'sync:' + Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),
+    (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function baselineSyncFailureNotices(
+  record: DashboardRecord,
+  requestId: string | undefined,
+  result: WorktreeSessionDispatchResult,
+  t: WorktreeTranslate,
+  onOpenSession?: (sessionId: string) => void,
+): readonly WorktreeNotification[] {
+  if (result.status === 'dispatched') return [];
+  const status = result.status;
+  const context = record.branch + ' · ' + record.absolutePath;
+  return [{
+    key: JSON.stringify(['sync', record.workspaceId, record.worktreeId, requestId, result.sessionId]),
+    context,
+    error: {
+      code: 'WORKTREE_SYNC_PARTIAL', message: result.error ?? '', retryable: false,
+      details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+        requestId, sessionId: result.sessionId, status },
+    },
+    text: t(`dashboard.sync.${status}`) + ' ' + t('dashboard.sync.partial'),
+    message: (translate) => translate(`dashboard.sync.${status}`) + ' ' + translate('dashboard.sync.partial'),
+    describe: (translate) => translate('dashboard.action.sync') + ' · ' + context,
+    actions: onOpenSession === undefined ? [] : [{
+      label: t('dashboard.sync.openSession'), leaveSettings: true,
+      onClick: () => onOpenSession(result.sessionId),
+    }],
+  }];
+}
 
 export interface WorktreeDashboardProps {
   readonly manager?: WorktreeManager & Partial<WorktreeToolSettingsManager>;
@@ -545,12 +581,20 @@ export function WorktreeDashboard({
     if (syncBusy.current || syncResult || !onSyncBaseline || !displayedBaseline) return;
     const generation = syncGeneration.current;
     syncBusy.current = true;
-    syncRequest.current ??= globalThis.crypto.randomUUID();
     setSyncPending(true);
     setSyncError(undefined);
+    let requestId = syncRequest.current;
     try {
-      const result = await onSyncBaseline(syncStrategy, displayedBaseline, syncRequest.current);
-      if (generation !== syncGeneration.current) return;
+      requestId ??= createSyncRequestId();
+      syncRequest.current = requestId;
+      const result = await onSyncBaseline(syncStrategy, displayedBaseline, requestId);
+      if (generation !== syncGeneration.current) {
+        // Retiring navigation must not discard an already-created Session's failure.
+        // Capture the original identity without reviving UI sources or callbacks.
+        if (result.status !== 'dispatched') worktreeDiagnostics.recordInactive('sync:' + requestId,
+          baselineSyncFailureNotices(record, requestId, result, t));
+        return;
+      }
       setSyncResult(result);
       if (result.status === 'dispatched') {
         setSyncOpen(false);
@@ -567,7 +611,6 @@ export function WorktreeDashboard({
   };
   const partialSync = syncResult !== undefined && syncResult.status !== 'dispatched'
     ? { ...syncResult, status: syncResult.status } : undefined;
-  const syncContext = record.branch + ' · ' + record.absolutePath;
   const renderBaseline = (value: string | undefined) => {
     const label = value === undefined ? (
       <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
@@ -1104,20 +1147,9 @@ export function WorktreeDashboard({
           </p>}
         </div>
       </Modal>
-      <NotificationToasts notices={partialSync !== undefined ? [{
-            key: JSON.stringify(['sync', record.workspaceId, record.worktreeId, syncRequest.current, partialSync.sessionId]),
-            context: syncContext,
-            error: {
-              code: 'WORKTREE_SYNC_PARTIAL', message: partialSync.error ?? '', retryable: false,
-              details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
-                requestId: syncRequest.current, sessionId: partialSync.sessionId, status: partialSync.status },
-            },
-            text: t(`dashboard.sync.${partialSync.status}`) + ' ' + t('dashboard.sync.partial'),
-            message: (translate) => translate(`dashboard.sync.${partialSync.status}`) + ' ' + translate('dashboard.sync.partial'),
-            describe: (translate) => translate('dashboard.action.sync') + ' · ' + syncContext,
-            actions: [{ label: t('dashboard.sync.openSession'), leaveSettings: true,
-              onClick: () => onOpenSession(partialSync.sessionId) }],
-          }] : syncError === undefined ? [] : [{
+      <NotificationToasts notices={partialSync !== undefined
+        ? baselineSyncFailureNotices(record, syncRequest.current, partialSync, t, onOpenSession)
+        : syncError === undefined ? [] : [{
             key: 'sync:' + record.worktreeId, error: syncError,
             text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
             message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),

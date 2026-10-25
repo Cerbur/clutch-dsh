@@ -393,6 +393,9 @@ within the current Host lifetime. Binding, model, title, reporting, and task-sub
 show a toast and a localized problem and recovery entry in **Errors & recovery**, including the
 created Session identity. Recovery opens that Session without creating or dispatching another task.
 Closing the Dashboard preserves diagnostic history and revokes its recovery callbacks.
+Partial failures arriving after closing the Dashboard or changing its target or baseline also
+retain the created Session identity in inactive history, without navigating away from the current view.
+Task creation supports plain-HTTP LAN browser access as well as localhost and HTTPS.
 Plugin restart clears admission memory. No automatic push or publish
 is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
 

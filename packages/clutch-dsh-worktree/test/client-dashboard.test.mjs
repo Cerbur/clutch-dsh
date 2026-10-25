@@ -231,7 +231,7 @@ const notificationSource = await readFile(
   new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url), 'utf8',
 );
 
-function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics } = {}) {
+function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics, browserCrypto = globalThis.crypto } = {}) {
   const state = [];
   const effects = [];
   let cursor = 0;
@@ -310,7 +310,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics }
     '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ message: error.message, retryable: true }) },
   })[name] ?? {}, branchExports);
   const exports = {};
-  new Function('require', 'exports', output)(
+  new Function('require', 'exports', 'globalThis', output)(
     (name) =>
       ({
         react,
@@ -339,6 +339,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics }
         '../surface/components/NotificationToasts.js': {
           NotificationToasts: notificationExports.NotificationToasts ?? (({ notices }) => jsx('toasts', { notices })),
         },
+        '../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
@@ -385,6 +386,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics }
           ? { GitBranchPicker: (props) => jsx('baseline-picker', props) } : branchExports,
       })[name] ?? {},
     exports,
+    { crypto: browserCrypto },
   );
   let props = {
     record,
@@ -451,6 +453,42 @@ test('sync dialog selects a strategy, coalesces activation and opens the admitte
     assert.deepEqual(calls.at(-1), ['open', 'sync-session']);
     harness.dispose();
   }
+});
+
+test('sync works without secure-context randomUUID and handles random-source failures without locking', async () => {
+  let fail = false;
+  const harness = renderHarness(async () => true, { browserCrypto: {
+    getRandomValues(bytes) {
+      if (fail) throw new Error('random source unavailable');
+      return globalThis.crypto.getRandomValues(bytes);
+    },
+  } });
+  const requests = [];
+  let node = harness.render({ record: { ...record, baseBranch: 'main' },
+    onSyncBaseline: async (...args) => {
+      requests.push(args);
+      throw new Error('transport failed');
+    } });
+  const create = () => findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0];
+  findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  fail = true;
+  create().props.onClick();
+  await tick();
+  node = harness.render();
+  assert.equal(requests.length, 0);
+  assert.equal(create().props.disabled, false);
+  assert.ok(findAll(node, (item) => item.type === 'toasts').some((item) => item.props.notices.length > 0));
+  fail = false;
+  create().props.onClick();
+  await tick();
+  node = harness.render();
+  create().props.onClick();
+  await tick();
+  assert.equal(requests.length, 2);
+  assert.match(requests[0][2], /^[A-Za-z0-9:_-]{1,160}$/u);
+  assert.equal(requests[0][2], requests[1][2], 'transport retries retain the admission identity');
+  harness.dispose();
 });
 
 test('sync retry retains request identity and partial failures preserve the created Session', async () => {
@@ -535,6 +573,46 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       assert.equal(dispatched, 1);
     }
   });
+}
+
+for (const change of ['baseline', 'worktree', 'manager', 'unmount']) {
+  for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporting-failed', 'prompt-failed']) {
+    test(`late ${status} after ${change} retains inactive diagnostics without stale navigation`, async () => {
+      const diagnostics = createWorktreeDiagnostics();
+      const harness = renderHarness(async () => true, { diagnostics });
+      let resolve;
+      const pending = new Promise((done) => { resolve = done; });
+      const opened = [];
+      const original = { ...record, baseBranch: 'main' };
+      let node = harness.render({ record: original, onSyncBaseline: () => pending,
+        onOpenSession: (id) => opened.push(id) });
+      findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+      node = harness.render();
+      findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+      if (change === 'baseline') harness.render({ record: { ...original, baseBranch: 'changed' } });
+      else if (change === 'worktree') harness.render({ record: { ...original, worktreeId: 'another' } });
+      else if (change === 'manager') harness.render({ manager: {} });
+      else harness.dispose();
+      resolve({ workspaceId: original.workspaceId, worktreeId: original.worktreeId,
+        sessionId: 'late-partial', status, error: 'RAW_LATE_FAILURE' });
+      await tick();
+      if (change !== 'unmount') harness.render();
+      const history = diagnostics.getSnapshot();
+      assert.equal(history.length, 1);
+      assert.equal(history[0].status, 'inactive');
+      assert.equal(history[0].error.details.sessionId, 'late-partial');
+      assert.equal(history[0].error.details.worktreeId, original.worktreeId);
+      assert.ok(history[0].error.details.requestId);
+      assert.equal(history[0].error.details.status, status);
+      assert.equal(history[0].error.message, 'RAW_LATE_FAILURE');
+      assert.deepEqual(history[0].actions, []);
+      assert.deepEqual(opened, []);
+      for (const locale of [en, zh]) assert.equal(history[0].message((key) => locale[key]),
+        locale['dashboard.sync.' + status] + ' ' + locale['dashboard.sync.partial']);
+      if (change !== 'unmount') harness.dispose();
+      assert.equal(diagnostics.getSnapshot()[0].status, 'inactive');
+    });
+  }
 }
 
 test('late sync admission cannot open a Session after baseline replacement or unmount', async () => {

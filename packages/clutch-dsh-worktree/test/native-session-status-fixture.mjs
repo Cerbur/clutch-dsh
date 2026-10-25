@@ -13,6 +13,7 @@ import * as selection from '../lib/client/session/session-selection.js';
 import * as labels from '../lib/client/session/session-labels.js';
 import * as dashboardSelection from '../lib/client/dashboard/dashboard-selection.js';
 import * as acquisition from '../lib/client/dashboard/worktree-acquisition-facts.js';
+import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { effectiveViewMode } from '../lib/client/view/view-mode.js';
 
 async function handoff(specifier) {
@@ -255,6 +256,7 @@ export async function statusRenderers() {
     },
     '../dsh-icons.js': icons,
     '../surface/components/NotificationToasts.js': { NotificationToasts: 'Toasts' },
+    '../settings/diagnostics.js': diagnostics,
     '../view/worktree-view.js': {},
     '../view/worktree-error-copy.js': {},
     './dashboard-overlay.js': {},

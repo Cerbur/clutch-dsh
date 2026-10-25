@@ -106,6 +106,9 @@ notification and successful Surface completion pass that identity to the same re
 so either arrival order shares the post-change in-flight read (or its completed result). Reads
 started before the change are retired. A failed call performs an unkeyed recovery invalidation:
 it cannot establish that Host admission finished, and must not suppress a later notification.
+Each Workspace remembers at most 128 change identities, so interleaved A/B notifications and
+caller completions share the newest post-change read. An unkeyed invalidation clears these
+identities; a later notification can then retire a recovery read started before admission finished.
 When Surface has invalidated the reader, Context receives `alreadyInvalidated` too, refreshing
 its current projection without retiring that same generation again.
 
@@ -360,6 +363,10 @@ without redispatch, and retires callbacks when the Dashboard identity, baseline,
 changes. Successful admission refreshes only the owning Workspace and opens the returned native
 Session with the existing membership connector. Local/Main and unhealthy or archived targets cannot
 start sync. Native permissions remain unchanged; the UI never executes Git or infers task completion.
+Request IDs use `crypto.getRandomValues`, including on plain-HTTP LAN origins, and random-source
+errors follow the same notification and busy-state cleanup path as admission errors. Late partial
+results retain the original request/Workspace/Worktree/Session identity in inactive diagnostics via
+`recordInactive`, without reactivating a notification source or retaining navigation callbacks.
 
 Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main

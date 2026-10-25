@@ -644,8 +644,9 @@ Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最�
 创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
 快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
 同步通知可选携带现有接收身份 `requestId`，与 Surface 成功返回后的刷新共用 reader 的
-`changeId`。同一 Workspace 当前代次重复收到同一身份时保留在途读取或已完成结果；
-新身份和无身份失效仍推进代次，绝不复用变更前的读取。调用失败执行无身份恢复刷新，
+`changeId`。每个 Workspace 最多保留 128 个变更身份，A/B 交错通知与完成回调复用最新的
+变更后在途读取或已完成结果；超出上限淘汰最早身份。新身份和无身份失效仍推进代次，
+无身份失效同时清空身份集合，绝不复用变更前的读取。调用失败执行无身份恢复刷新，
 避免把传输失败误当成 Host 接收完成并压制随后到达的通知；通知缺失时仍由调用完成路径刷新。
 Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context 保留当前身份校验，
 仅刷新匹配的投影，不再次推进 reader 代次或抹掉变更身份。
@@ -656,6 +657,9 @@ Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context �
 失败阶段保留在诊断详情；普通展示仅使用本地化说明。恢复仅打开返回的 Session，
 不重建或重派发。通知位于同步弹窗外，关闭弹窗仍可恢复；Dashboard 卸载后沿用共享诊断的
 inactive 历史与回调撤销语义。
+Dashboard 身份、基线或 manager 更换、组件卸载后才返回的部分失败通过 `recordInactive`
+原子记录原始身份与诊断，不重建通知 source、不保留导航回调。同步请求身份使用普通 HTTP
+局域网环境也可用的 `crypto.getRandomValues` 生成；随机源异常同样进入错误通知和 busy 清理。
 
 Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
 消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并

@@ -76,6 +76,47 @@ test('a notification and mutation completion share only the same change generati
   reader.dispose();
 });
 
+test('interleaved change completions share the latest post-change read within one Workspace', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const reader = createWorktreeViewReader(createManager(calls));
+  reader.invalidate('ws1', { changeId: 'sync-A' });
+  const a = reader.read('ws1');
+  reader.invalidate('ws1', { changeId: 'sync-B' });
+  const b = reader.read('ws1');
+  assert.notEqual(a, b, 'the new mutation must retire the previous read');
+  reader.invalidate('ws1', { changeId: 'sync-A' });
+  assert.equal(reader.read('ws1'), b, 'A completion shares the newer post-B in-flight read');
+  const view = await b;
+  reader.invalidate('ws1', { changeId: 'sync-B' });
+  reader.invalidate('ws1', { changeId: 'sync-A' });
+  assert.equal(await reader.read('ws1'), view, 'both late completions share the completed view');
+  assert.equal(calls.listWorktrees.length, 2);
+  await a;
+  reader.dispose();
+});
+
+test('remembered change identities are bounded, Workspace-local and reset on unkeyed invalidation', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  const reader = createWorktreeViewReader(createManager(calls));
+  for (let index = 0; index <= 128; index++) reader.invalidate('ws1', { changeId: `sync-${index}` });
+  const current = await reader.read('ws1');
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  assert.equal(await reader.read('ws1'), current, 'recent identities remain deduplicated');
+  reader.invalidate('ws1', { changeId: 'sync-0' });
+  const evicted = await reader.read('ws1');
+  assert.notEqual(evicted, current, 'the oldest identity is evicted at the bound');
+  reader.invalidate('ws2', { changeId: 'sync-0' });
+  await reader.read('ws2');
+  assert.ok(calls.listWorktrees.includes('ws2'));
+  reader.invalidate('ws1');
+  const recovery = reader.read('ws1');
+  reader.invalidate('ws1', { changeId: 'sync-0' });
+  const notification = reader.read('ws1');
+  assert.notEqual(notification, recovery, 'a late notification must retire an unkeyed recovery read');
+  await Promise.all([recovery, notification]);
+  reader.dispose();
+});
+
 test('a failed change read can recover and an unkeyed mutation still retires its generation', async () => {
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const manager = createManager(calls);
