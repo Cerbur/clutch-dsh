@@ -421,6 +421,9 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
           manager={props.manager}
           record={dashboardRecord}
+          worktrees={dashboardView?.worktrees ?? []}
+          mainRecord={dashboardMainRecord}
+          onOpenWorktree={openDashboard}
           onSaveInstructions={
             props.manager
               ? async (instructions, expectedInstructions) => {

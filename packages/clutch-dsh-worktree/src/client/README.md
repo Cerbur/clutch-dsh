@@ -329,7 +329,24 @@ branch identities are accepted; tags and arbitrary revision expressions are reje
 usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
-Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
+Derived Worktrees consumes only the ready owning Workspace's Worktree records. It matches each saved
+`baseBranch` against the selected checkout's observed local branch (falling back to the recorded branch
+only when unavailable), accepts the short name or exact `refs/heads/` ref, and excludes explicit remote
+refs, self, other Workspaces and indirect descendants. Detached HEAD and unknown Main have no matches.
+Archived entries remain visible with lifecycle/health labels. Overview previews five entries with a total;
+the children tab shows all entries in existing order. Clicks reuse `openDashboard` and its native Session
+navigation gate. Baseline edits and targeted refreshes recompute the list from ready data without new RPCs,
+sidecar relationships, delegated Session catalogs, or global refreshes. This supersedes the historical
+Dashboard MVP plan's children placeholder; it is a current baseline relationship, not immutable ancestry.
+The header Base fact also navigates back to the unique matching Worktree or browser Main projection.
+It shares the same local baseline matching and existing `openDashboard` callback; the independent edit
+button remains in its action rail. Missing, remote, detached, self, cross-Workspace and ambiguous targets
+remain plain text. The editor's saved value drives link selection, so a successful edit updates the target
+before the targeted Workspace refresh arrives. All tabs share this header; no new storage or RPC is added.
+Header facts use plain text and a fixed action column so dates, baseline and source align, without
+panel or chip borders/backgrounds. The baseline has a subtle in-app chevron; editing stays secondary.
+
+Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main
 instructions card persists plugin-owned text through the existing Manager path; active Worktree bindings and
 unbound Main Sessions receive that text through the Host's DSH `agent/pre-step` hook.

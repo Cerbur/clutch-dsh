@@ -12,7 +12,7 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 不会复制 transcript 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期操作、
-> Session 操作、Worktree/Main 指令以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。派生 Worktree 和
+> Session 操作、Worktree/Main 指令、派生 Worktree 以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。
 > 其他未完成操作仍标记为**即将推出**。
 
 ## 安装
@@ -83,7 +83,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
-| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 和其他未完成卡片仍标记为**即将推出**。                                                                                         |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；其他未完成卡片仍标记为**即将推出**。                                                                                         |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
@@ -325,8 +325,17 @@ macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
-中打开记录的目录以及查看 Git 与变更。派生 Worktree 和其他标记的快捷操作仍是占位内容。VS Code
+中打开记录的目录以及查看 Git 与变更。其他标记的快捷操作仍是占位内容。VS Code
 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
+
+**派生 Worktree** 显示同一 Workspace 中，已保存基线匹配当前 checkout 本地分支的受管理 Worktree。
+概览预览前五项，页签显示全部匹配项，包括带有可用状态和路径的已归档条目；点击条目可打开其 Dashboard。
+修改已保存基线会更新关系；此视图表示直接基线匹配，不代表 Git 祖先关系或委派 Session 历史。
+本地分支名和 `refs/heads/` ref 可匹配，显式远端 ref 不匹配。Detached HEAD 或 Main 分支未知时
+没有匹配项；受管理 checkout 无法获取当前分支时，使用其记录分支。
+派生 Worktree 的 Dashboard 顶部可点击**基线**分支，打开对应 Worktree 或 Local/Main 的 Dashboard，
+编辑按钮独立保留。仅当同一 Workspace 中恰好一个 checkout 匹配时显示跳转入口；远端基线、
+未匹配或有歧义的基线保持普通文本。修改已保存基线后，入口随之更新。
 
 ### 在应用中打开记录的目录
 

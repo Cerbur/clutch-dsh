@@ -11,6 +11,8 @@ import {
   createMainWorktreeRecord,
   isMainWorktreeId,
   resolveDashboardRecord,
+  selectDerivedWorktrees,
+  selectBaseWorktree,
 } from '../lib/client/dashboard/dashboard-selection.js';
 import {
   concealDashboardBackground,
@@ -42,6 +44,47 @@ const record = {
   health: 'ready',
 };
 const selection = { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' };
+
+test('derived Worktrees use direct saved local baselines within the same Workspace', () => {
+  const child = { ...record, worktreeId: 'child', branch: 'child', baseBranch: record.branch };
+  const archived = { ...child, worktreeId: 'archived', status: 'removed', health: 'cleaned',
+    baseBranch: `refs/heads/${record.branch}` };
+  const candidates = [
+    { ...record, baseBranch: record.branch }, child, archived,
+    { ...child, worktreeId: 'grandchild', baseBranch: 'child' },
+    { ...child, worktreeId: 'other-workspace', workspaceId: 'other' },
+    { ...child, worktreeId: 'remote', baseBranch: `refs/remotes/${record.branch}` },
+    { ...child, worktreeId: 'unknown', baseBranch: undefined, baseCommit: 'abc123' },
+  ];
+  assert.deepEqual(selectDerivedWorktrees(record, candidates), [child, archived]);
+  assert.deepEqual(selectDerivedWorktrees({ ...record, currentBranch: 'renamed' }, candidates), []);
+  assert.deepEqual(selectDerivedWorktrees({ ...record, currentBranch: undefined }, candidates), [child, archived]);
+  assert.deepEqual(selectDerivedWorktrees({ ...record, currentBranch: null }, candidates), []);
+  assert.deepEqual(selectDerivedWorktrees({ ...record, currentHead: { kind: 'tag', name: record.branch } }, candidates), []);
+  assert.deepEqual(selectDerivedWorktrees({ ...record, currentHead: { kind: 'branch', name: 'renamed' } }, candidates), []);
+  assert.deepEqual(selectDerivedWorktrees(record, [{ ...child, baseBranch: 'updated' }]), []);
+  assert.deepEqual(selectDerivedWorktrees(createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }, record.branch), candidates), [candidates[0], child, archived]);
+  assert.deepEqual(selectDerivedWorktrees(createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }), candidates), []);
+});
+
+test('base navigation resolves one same-Workspace checkout or Main without guessing', () => {
+  const child = { ...record, worktreeId: 'child', branch: 'child', baseBranch: record.branch };
+  const main = createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }, 'main');
+  assert.equal(selectBaseWorktree(child, [child, record], main), record);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: `refs/heads/${record.branch}` }, [record]), record);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: 'refs/heads/main' }, [record], main), main);
+  assert.equal(selectBaseWorktree(child, [record], main, 'main'), main);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: undefined }, [record], main), undefined);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: `refs/remotes/${record.branch}` }, [record], main), undefined);
+  assert.equal(selectBaseWorktree(child, [child]), undefined);
+  assert.equal(selectBaseWorktree(child, [{ ...record, workspaceId: 'other' }]), undefined);
+  assert.equal(selectBaseWorktree(child, [{ ...record, currentBranch: 'moved' }]), undefined);
+  assert.equal(selectBaseWorktree(child, [{ ...record, currentBranch: null }]), undefined);
+  assert.equal(selectBaseWorktree(child, [{ ...record, currentBranch: undefined }]).worktreeId, record.worktreeId);
+  assert.equal(selectBaseWorktree(child, [record, { ...record, worktreeId: 'duplicate', status: 'removed' }]), undefined);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: 'main' }, [], { ...main, currentBranch: null }), undefined);
+  assert.equal(selectBaseWorktree({ ...child, baseBranch: 'main' }, [{ ...record, currentBranch: 'main' }], main), undefined);
+});
 
 test('dashboard acquisition facts preserve management provenance and unknowns', () => {
   assert.deepEqual(
@@ -275,7 +318,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
-        './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord },
+        './dashboard-selection.js': { isMainWorktreeId, createMainWorktreeRecord, resolveDashboardRecord, selectDerivedWorktrees, selectBaseWorktree },
         './worktree-acquisition-facts.js': { selectWorktreeAcquisitionFacts },
         './vscode-url.js': { vscodeFolderUrl },
         './OpenInAppButton.js': {
@@ -297,6 +340,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false } = {}) {
         },
         '../dsh-icons.js': {
           IconBranchOutline16: () => jsx('svg', { 'data-icon': 'branch' }),
+          IconChevronRightOutline14: () => jsx('svg', { 'data-icon': 'chevron-right' }),
           IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
           IconCopyOutline16: () => jsx('svg', { 'data-icon': 'copy' }),
           IconEditOutline16: () => jsx('svg', { 'data-icon': 'edit' }),
@@ -357,6 +401,93 @@ const copyButton = (node) =>
 const copyBranchTitle = (node) =>
   findAll(node, (item) => item.props?.['data-dashboard-copy'] === 'branch')[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('header baseline links reach the base Dashboard on every tab while preserving the editor', () => {
+  for (const locale of [en, zh]) {
+    const harness = renderHarness(async () => true);
+    const child = { ...record, worktreeId: 'child', branch: 'child', currentBranch: 'child', baseBranch: record.branch };
+    const main = createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }, 'main');
+    const opened = [];
+    const baseLinks = (node) => findAll(node, (item) => item.props?.['data-dashboard-base-worktree']);
+    let node = harness.render({ record: child, worktrees: [record, child], mainRecord: main,
+      onOpenWorktree: (base) => opened.push(base), t: (key) => locale[key],
+      onSaveBaseline: async (value) => value, branches: [{ name: 'main' }, { name: record.branch }] });
+    for (let index = 0; index < 5; index++) {
+      byRole(node, 'tab')[index].props.onClick();
+      node = harness.render();
+      assert.equal(baseLinks(node).length, 1);
+      assert.equal(baseLinks(node)[0].props['aria-label'], locale['dashboard.openBaseWorktree']);
+      baseLinks(node)[0].props.onClick();
+      assert.equal(opened.at(-1), record);
+      assert.equal(findAll(node, (item) => item.props?.['data-dashboard-baseline-edit']).length, 1);
+    }
+    harness.render({ record: { ...child, baseBranch: 'refs/heads/main' } });
+    harness.render();
+    node = harness.render();
+    baseLinks(node)[0].props.onClick();
+    assert.equal(opened.at(-1), main);
+    harness.render({ record: { ...child, baseBranch: 'refs/remotes/origin/main' } });
+    harness.render();
+    node = harness.render();
+    assert.equal(baseLinks(node).length, 0);
+    node = harness.render({ record: { ...child, baseBranch: record.branch }, onSaveBaseline: undefined });
+    assert.equal(baseLinks(node).length, 1);
+    node = harness.render({ onOpenWorktree: undefined });
+    assert.equal(baseLinks(node).length, 0);
+    harness.dispose();
+  }
+});
+
+test('saving a baseline updates its navigation before the Workspace projection refreshes', async () => {
+  const harness = renderHarness(async () => true, { stubBranchPicker: true });
+  const child = { ...record, worktreeId: 'child', branch: 'child', currentBranch: 'child', baseBranch: record.branch };
+  const main = createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }, 'main');
+  const opened = [];
+  let node = harness.render({ record: child, worktrees: [record, child], mainRecord: main,
+    branches: [{ name: 'main' }, { name: record.branch }],
+    onOpenWorktree: (base) => opened.push(base), onSaveBaseline: async (value) => value });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'baseline-picker')[0].props.onChange('main');
+  node = harness.render();
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  node = harness.render();
+  const link = findAll(node, (item) => item.props?.['data-dashboard-base-worktree'])[0];
+  link.props.onClick();
+  assert.equal(opened[0], main);
+  assert.equal(child.baseBranch, record.branch);
+  harness.dispose();
+});
+
+test('derived Worktree preview, full tab, navigation, and refreshed baselines share ready records', () => {
+  for (const locale of [en, zh]) {
+    const harness = renderHarness(async () => true);
+    const children = Array.from({ length: 7 }, (_, index) => ({
+      ...record, worktreeId: `child-${index}`, branch: `child-${index}`,
+      absolutePath: `/repo/child-${index}`, baseBranch: record.branch,
+      ...(index === 0 ? { status: 'removed', health: 'cleaned' } : {}),
+    }));
+    const opened = [];
+    let node = harness.render({ worktrees: children, t: (key) => locale[key],
+      onOpenWorktree: (child) => opened.push(child) });
+    const rows = (tree) => findAll(tree, (item) => item.props?.['data-dashboard-worktree']);
+    assert.equal(rows(node).length, 5);
+    rows(node)[0].props.onClick();
+    assert.equal(opened[0], children[0]);
+    assert.ok(findAll(node, (item) => item.props?.children === locale['dashboard.archived']).length);
+    byRole(node, 'tab')[3].props.onClick();
+    node = harness.render();
+    assert.equal(rows(node).length, 7);
+    assert.equal(findAll(byRole(node, 'tabpanel')[0], (item) => item.props?.children === locale['dashboard.soon']).length, 0);
+    node = harness.render({ worktrees: children.map((child) => ({ ...child, baseBranch: 'elsewhere' })) });
+    assert.equal(rows(node).length, 0);
+    assert.ok(findAll(node, (item) => item.props?.children === locale['dashboard.noChildren']).length);
+    node = harness.render({ worktrees: children });
+    assert.equal(rows(node).length, 7);
+    harness.dispose();
+  }
+});
 const historicalHints = (node, t) =>
   findAll(
     node,
@@ -1333,6 +1464,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   const render = () =>
     findAll(renderTree(), (item) => item.type === 'Dashboard')[0].props;
   let props = render();
+  assert.deepEqual(props.worktrees, [record]);
   assert.equal(await props.onSaveInstructions('Use tests', ''), 'Use tests');
   assert.deepEqual(calls.splice(0), [
     ['saveInstructions', { workspaceId: 'repo', worktreeId: 'wt', instructions: 'Use tests', expectedInstructions: '' }],
@@ -1423,7 +1555,9 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   bindings = [{ workspaceId: 'repo', worktreeId: 'wt-switch', sessionId: 'head-switch' }];
   sourceState.sessions.ids = ['head-switch'];
   calls.splice(0);
-  surfaceContentProps(renderTree(false)).openDashboard(switchingTarget);
+  const currentDashboard = findAll(renderTree(false), (item) => item.type === 'Dashboard')[0].props;
+  assert.deepEqual(currentDashboard.worktrees, [switchingTarget, record]);
+  currentDashboard.onOpenWorktree(switchingTarget);
   assert.deepEqual(calls, [['nativeOpen', 'head-switch']]);
   sourceState.currentSessionId = 'head-switch';
   sourceState.sessions.current = 'head-switch';

@@ -12,8 +12,8 @@ Main instructions in its own sidecar. Managed Worktrees expose a read-only basel
 its Workspace-root HEAD history with an optional comparison branch; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
-> Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
-> Derived Worktrees and other unfinished actions remain marked
+> Session actions, Worktree/Main instructions, Derived Worktrees, and the managed Worktree or Main Git & Changes view are connected.
+> Other unfinished actions remain marked
 > **Coming soon**.
 
 ## Installation
@@ -88,7 +88,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
-| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
@@ -365,9 +365,21 @@ Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to clo
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
 path, open the recorded directory in VS Code, and inspect Git & Changes.
-Derived Worktrees and other marked quick actions remain placeholders. VS Code must be
+Other marked quick actions remain placeholders. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
+
+**Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
+this checkout's current local branch. Overview previews five entries; the tab shows all matches,
+including archived entries with their availability and paths. Click an entry to open its Dashboard.
+Changing a saved baseline updates the relationship; this view represents direct baseline matches,
+not Git ancestry or delegated Session history. Local branch names and `refs/heads/` refs match;
+explicit remote refs do not. Detached HEAD or an unknown Main branch has no matches. When a
+managed checkout's current branch is unavailable, its recorded branch is used.
+In a derived Worktree's Dashboard header, click the **Base** branch to open the matching
+Worktree or Local/Main Dashboard. The edit button remains separate. A link appears only
+when exactly one checkout in this Workspace matches; remote, missing, and ambiguous bases
+remain plain text. The link follows the saved baseline when you edit it.
 
 ### Open the recorded directory in an app
 

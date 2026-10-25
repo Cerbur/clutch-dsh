@@ -12,11 +12,12 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   IconBranchOutline16,
+  IconChevronRightOutline14,
   IconCopyOutline16,
   IconEditOutline16,
   IconPanelLeftOutline16,
 } from '../dsh-icons.js';
-import type { DashboardRecord } from './dashboard-selection.js';
+import type { DashboardRecord, MainDashboardRecord } from './dashboard-selection.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { isBlankSession, relativeTime, sessionDisplayLabel } from '../session/session-view.js';
 import { currentSessionIdFromList } from '../session/session-selection.js';
@@ -24,14 +25,14 @@ import type { SessionListLike, SessionPresentation } from '../session/session-vi
 import { sessionStatusLabel, sessionTimeLabel } from '../session/session-labels.js';
 import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
-import { isMainWorktreeId } from './dashboard-selection.js';
+import { isMainWorktreeId, selectDerivedWorktrees, selectBaseWorktree } from './dashboard-selection.js';
 import { selectWorktreeAcquisitionFacts } from './worktree-acquisition-facts.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
-import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
+import type { BranchRecord, WorktreeManager, WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
 import { GitBranchPicker } from '../branch/GitBranchSelector.js';
 import { ToolSettings } from '../settings/ToolSettings.js';
@@ -48,6 +49,9 @@ export interface WorktreeDashboardProps {
   readonly branches?: readonly BranchRecord[];
   readonly branchesLoading?: boolean;
   readonly record: DashboardRecord;
+  readonly worktrees?: readonly WorktreeRecord[];
+  readonly mainRecord?: MainDashboardRecord;
+  readonly onOpenWorktree?: (record: DashboardRecord) => void;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
@@ -144,6 +148,7 @@ function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTr
 
 function WorktreeBaselineEditor({
   value,
+  renderValue,
   branches,
   loading,
   currentBranch,
@@ -155,6 +160,7 @@ function WorktreeBaselineEditor({
   context,
 }: {
   readonly value?: string;
+  readonly renderValue?: (value: string | undefined) => ReactNode;
   readonly branches: readonly BranchRecord[];
   readonly loading: boolean;
   readonly currentBranch?: string;
@@ -298,7 +304,7 @@ function WorktreeBaselineEditor({
           ) : undefined
         }
       >
-        {saved === undefined ? (
+        {renderValue !== undefined ? renderValue(saved) : saved === undefined ? (
           <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
         ) : (
           <span data-dashboard-baseline-value title={saved}>{saved.replace(/^refs\/(heads|remotes)\//u, '')}</span>
@@ -368,6 +374,9 @@ function WorktreeBaselineEditor({
 export function WorktreeDashboard({
   manager,
   record,
+  worktrees = [],
+  mainRecord,
+  onOpenWorktree,
   workspaceTitle,
   t,
   onClose,
@@ -514,6 +523,23 @@ export function WorktreeDashboard({
           return result;
         };
   const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
+  const renderBaseline = (value: string | undefined) => {
+    const label = value === undefined ? (
+      <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+    ) : (
+      <span data-dashboard-baseline-value title={value}>{value.replace(/^refs\/(heads|remotes)\//u, '')}</span>
+    );
+    const base = selectBaseWorktree(record, worktrees, mainRecord, value);
+    return base === undefined || onOpenWorktree === undefined ? label : (
+      <button type="button" className={styles.dashboardBaseLink}
+        data-dashboard-base-worktree={base.worktreeId}
+        aria-label={t('dashboard.openBaseWorktree')} title={t('dashboard.openBaseWorktree')}
+        onClick={() => onOpenWorktree(base)}>
+        {label}
+        <IconChevronRightOutline14 />
+      </button>
+    );
+  };
   const gitOverview = useWorktreeGitOverview({
     manager,
     workspaceId: record.workspaceId,
@@ -526,7 +552,36 @@ export function WorktreeDashboard({
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
   const tabLabel = (value: DashboardTab) => t(`dashboard.tab.${value}`);
-  const placeholder = <span className={styles.dashboardSoon}>{t('dashboard.soon')}</span>;
+  const derivedWorktrees = selectDerivedWorktrees(record, worktrees);
+  const worktreeList = (records: readonly WorktreeRecord[]) => records.length === 0 ? (
+    <div className={styles.dashboardEmpty}><p>{t('dashboard.noChildren')}</p></div>
+  ) : (
+    <ul className={styles.dashboardSessions}>
+      {records.map((child) => (
+        <li key={child.worktreeId}>
+          <button type="button" data-dashboard-worktree={child.worktreeId}
+            disabled={onOpenWorktree === undefined} onClick={() => onOpenWorktree?.(child)}>
+            <IconBranchOutline16 />
+            <span className={styles.dashboardSessionLabel}>
+              <strong>{child.currentHead?.name ?? child.currentBranch ?? child.branch}</strong>
+              <code className={styles.dashboardChildPath}>{child.absolutePath}</code>
+            </span>
+            <span className={styles.dashboardChildState}>
+              {child.status === 'removed' && <span className={styles.dashboardSoon}>{t('dashboard.archived')}</span>}
+              <span className={styles.dashboardHealth} data-health={child.health ?? 'unknown'}>
+                {t(child.health === 'ready' ? 'worktree.ready'
+                  : child.health === 'repair' ? 'worktree.repair'
+                    : child.health === 'recovery-needed' ? 'worktree.recovery'
+                      : child.health === 'branch-drift' ? 'worktree.branchDrift'
+                        : child.health === 'cleaned' ? 'dashboard.cleaned' : 'dashboard.unknown')}
+              </span>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
   const selectTab = (next: DashboardTab, focus = false) => {
     setTab(next);
     if (focus) document.getElementById(`${id}-${next}`)?.focus();
@@ -729,7 +784,7 @@ export function WorktreeDashboard({
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
-            <dl className={styles.dashboardFacts}>
+            <dl className={`${styles.dashboardFacts} ${styles.dashboardHeaderFacts}`}>
               {!isMain && <DashboardFactRow label={t(acquisitionLabel)}>
                 {acquisitionFacts.timestamp ? (
                   <time dateTime={acquisitionFacts.timestamp}>
@@ -745,6 +800,7 @@ export function WorktreeDashboard({
                 <WorktreeBaselineEditor
                   context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
+                  renderValue={renderBaseline}
                   branches={branches}
                   loading={branchesLoading}
                   currentBranch={baselineCurrentBranch}
@@ -756,11 +812,7 @@ export function WorktreeDashboard({
                 />
               ) : (
                 <DashboardFactRow label={t('dashboard.base')} baseline>
-                  {displayedBaseline?.replace(/^refs\/(heads|remotes)\//u, '') ?? (
-                    <span className={styles.dashboardHistorical}>
-                      {t('dashboard.historicalUnavailable')}
-                    </span>
-                  )}
+                  {renderBaseline(displayedBaseline)}
                 </DashboardFactRow>
               ))}
               <DashboardFactRow label={t('dashboard.source')}>
@@ -900,11 +952,10 @@ export function WorktreeDashboard({
                 <Card
                   title={t('dashboard.derived')}
                   icon={<DashboardIcon kind="children" />}
-                  action={placeholder}
+                  action={<span>{derivedWorktrees.length}</span>}
                 >
-                  <div className={styles.dashboardEmpty}>
-                    <p>{t('dashboard.childrenHint')}</p>
-                  </div>
+                  <p>{t('dashboard.childrenHint')}</p>
+                  {worktreeList(derivedWorktrees.slice(0, 5))}
                   {tabLink('children', t('dashboard.viewChildren'))}
                 </Card>
                 <Card title={t('dashboard.quickActions')} icon={<DashboardIcon kind="actions" />}>
@@ -973,12 +1024,11 @@ export function WorktreeDashboard({
               />
             </Card>
           ) : (
-            <section className={styles.dashboardTabPlaceholder}>
-              <DashboardIcon kind={tab} />
-              <h2>{tabLabel(tab)}</h2>
-              <p>{t(`dashboard.hint.${tab}`)}</p>
-              {placeholder}
-            </section>
+            <Card title={tabLabel('children')} icon={<DashboardIcon kind="children" />}
+              action={<span>{derivedWorktrees.length}</span>}>
+              <p>{t('dashboard.childrenHint')}</p>
+              {worktreeList(derivedWorktrees)}
+            </Card>
           )}
         </div>
         <p className={styles.dashboardFooter}>{t('dashboard.mvpHint')}</p>
