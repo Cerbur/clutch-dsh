@@ -155,3 +155,32 @@ failed-read recovery, and preservation of unrelated ready views. Real Notificati
 diagnostics exercise all five partial statuses in both languages, open-only recovery, dialog
 closure, Dashboard unmount history and callback revocation. No live DSH/browser acceptance was
 performed for this follow-up. No commit, merge, push, version bump or publishing was performed.
+
+## Reconnect notification replay recovery
+
+Admission `requestId` deduplication now has a connection boundary. Before resetting the notification
+poll, `connection/reset` clears the shared reader's remembered change identities. A replayed request
+then invalidates its owning Workspace and retires any pre-reconnect read, while notification and
+caller completion still deduplicate within the recovered connection. Reset itself preserves caches;
+Context and Surface share the replacement read and retain ready content, including unrelated Workspaces.
+
+The production reset/notification callbacks, real monitor/feed, Context projection and Surface refresh
+hook regression first completed a synchronization read, changed checkout facts without replacing the
+Client, Workspace, Session or active Worktree, then reset the poll and replayed the same requestId.
+Before the fix it failed with zero new reads; after the fix it read the changed state once across all
+consumers. A reader regression also verifies that late pre-reset results cannot overwrite recovery.
+
+Verification passed in this feature worktree:
+
+- `pnpm run check:workspace`
+- `pnpm run check:patches`
+- `pnpm --filter @cerbur/clutch-dsh-worktree lint`
+- `pnpm --filter @cerbur/clutch-dsh-worktree typecheck`
+- `pnpm --filter @cerbur/clutch-dsh-worktree build`
+- `pnpm --filter @cerbur/clutch-dsh-worktree test` — 1,200 passed, none failed.
+- `node --test test/readme-parity.test.mjs` from this package.
+- `node --test test/client-baseline-refresh.test.mjs test/worktree-view-read.test.mjs test/worktree-tool-changes.test.mjs`
+  from this package — 25 passed, including the existing deduplication cases.
+- `git diff --check`
+
+No live DSH/browser acceptance, commit, merge, publish or push was performed for this fix.

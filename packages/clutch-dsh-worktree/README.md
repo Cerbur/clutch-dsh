@@ -398,6 +398,8 @@ retain the created Session identity in inactive history, without navigating away
 Task creation supports plain-HTTP LAN browser access as well as localhost and HTTPS.
 Plugin restart clears admission memory. No automatic push or publish
 is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
+After reconnecting, replayed synchronization notifications refresh the affected Workspace and
+current context while keeping ready content visible; unrelated Workspaces retain their views.
 
 ### Open the recorded directory in an app
 

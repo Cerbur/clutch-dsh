@@ -111,6 +111,12 @@ caller completions share the newest post-change read. An unkeyed invalidation cl
 identities; a later notification can then retire a recovery read started before admission finished.
 When Surface has invalidated the reader, Context receives `alreadyInvalidated` too, refreshing
 its current projection without retiring that same generation again.
+On `connection/reset`, `entry.ts` calls `resetChangeIds()` before resetting the notification
+poll. Admission identities belong to one connection: replaying an old `requestId` must invalidate
+its Workspace again and retire any pre-reconnect read. This boundary clears identity memory only;
+replayed notifications still target their owning Workspace, and Context and Surface share the
+replacement read while retaining ready content. Unrelated Workspace caches remain intact, and
+notification/completion deduplication resumes within the recovered connection.
 
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.

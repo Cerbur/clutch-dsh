@@ -650,6 +650,10 @@ Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最�
 避免把传输失败误当成 Host 接收完成并压制随后到达的通知；通知缺失时仍由调用完成路径刷新。
 Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context 保留当前身份校验，
 仅刷新匹配的投影，不再次推进 reader 代次或抹掉变更身份。
+`connection/reset` 在重置通知轮询前调用 reader 的 `resetChangeIds()`，建立新的通知重放边界：
+仅清空上一连接的变更身份记忆，不清空 Workspace 缓存或当前 ready 投影。随后即使重放相同
+`requestId`，也必须推进所属 Workspace 的代次，淘汰重连前在途或已完成的读取。Context 与
+Surface 共享该恢复读取，未受影响的 Workspace 缓存保持不变；新连接内通知与调用完成仍正常去重。
 这些身份仅存于运行时，不进入 Sidecar。
 
 绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationToasts，

@@ -31,6 +31,9 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
 }
 
 export interface WorktreeViewReader {
+  /** Begin a new notification replay boundary without clearing ready Workspace caches. */
+  resetChangeIds(): void;
+
   /** Mark one Workspace stale for the next generation. */
   invalidate(workspaceId: string, options?: {
     readonly reuseInFlight?: boolean;
@@ -248,6 +251,12 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 
   return {
+    resetChangeIds(): void {
+      if (disposed) return;
+      // Admission identities deduplicate only within one connection. Replayed
+      // changes must retire even completed reads from before the reconnect.
+      for (const entry of entries.values()) entry.changeIds.clear();
+    },
     invalidate(workspaceId, options): void {
       if (disposed) return;
       const entry = entryFor(workspaceId);

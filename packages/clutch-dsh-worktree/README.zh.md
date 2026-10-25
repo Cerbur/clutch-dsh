@@ -350,6 +350,8 @@ Agent 检查工作区是否干净，遇到冲突时停止；Rebase 会改写当�
 不会跳转离开当前视图。任务创建同时支持局域网普通 HTTP、localhost 与 HTTPS 浏览器访问。
 插件重启会清除接收记录。
 不会自动 push 或 publish。终端、Git Diff、Pull Request 和运行测试四个占位按钮已移除。
+重连后，重放的同步通知会刷新受影响的 Workspace 与当前上下文；读取期间保留 ready 内容，
+其他 Workspace 保持原有视图。
 
 ### 在应用中打开记录的目录
 

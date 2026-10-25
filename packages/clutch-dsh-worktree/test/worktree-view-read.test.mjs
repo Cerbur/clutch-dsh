@@ -76,6 +76,38 @@ test('a notification and mutation completion share only the same change generati
   reader.dispose();
 });
 
+test('recovery replay retires a pre-reset in-flight read without touching unrelated caches', async () => {
+  const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
+  let version = 1;
+  const manager = createManager(calls, () => version);
+  const reader = createWorktreeViewReader(manager);
+  const unrelated = await reader.read('ws2');
+  const oldRead = deferred();
+  const listWorktrees = manager.listWorktrees;
+  manager.listWorktrees = async (input) => {
+    const records = await listWorktrees(input);
+    if (records[0].branch === 'feature/1') await oldRead.promise;
+    return records;
+  };
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  const stale = reader.read('ws1');
+  reader.resetChangeIds();
+  assert.equal(await reader.read('ws2'), unrelated, 'reset preserves unaffected ready caches');
+  version = 2;
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  const fresh = reader.read('ws1');
+  assert.notEqual(fresh, stale);
+  reader.invalidate('ws1', { changeId: 'sync-1' });
+  assert.equal(reader.read('ws1'), fresh, 'completion shares the recovery generation');
+  const recovered = await fresh;
+  oldRead.resolve();
+  await stale;
+  assert.equal(recovered.worktrees[0].branch, 'feature/2');
+  assert.equal(await reader.read('ws1'), recovered, 'late pre-reset results cannot repopulate the cache');
+  assert.deepEqual(calls.listWorktrees, ['ws2', 'ws1', 'ws1']);
+  reader.dispose();
+});
+
 test('interleaved change completions share the latest post-change read within one Workspace', async () => {
   const calls = { listWorktrees: [], listBranches: [], listBindings: [] };
   const reader = createWorktreeViewReader(createManager(calls));

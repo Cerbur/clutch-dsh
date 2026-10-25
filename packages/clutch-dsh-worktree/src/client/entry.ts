@@ -281,7 +281,10 @@ export function apply(ctx: Context): void {
     },
   });
   ctx.effect(() => () => toolChanges.dispose(), 'clutch-dsh-worktree: tool notification cleanup');
-  ctx.on('connection/reset', () => toolChanges.reset());
+  ctx.on('connection/reset', () => {
+    viewReader.resetChangeIds();
+    toolChanges.reset();
+  });
   if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');

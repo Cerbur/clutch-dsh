@@ -32,6 +32,12 @@ const invalidateCallback = find(entryAst, (node) => ts.isPropertyAssignment(node
   node.name?.getText(entryAst) === 'invalidateWorktreeContext').initializer.getText(entryAst);
 const makeSync = new Function('props', 'dashboardRecord', 'read', compile('return (' + syncCallback + ');'));
 const makeChanged = new Function('viewReader', 'contextProjection', compile('return (' + changedCallback + ');'));
+const resetCall = find(entryAst, (node) => ts.isCallExpression(node) &&
+  node.expression.getText(entryAst) === 'ctx.on' &&
+  node.arguments[0]?.getText(entryAst) === "'connection/reset'" &&
+  node.arguments[1]?.getText(entryAst).includes('toolChanges.reset()'));
+const makeReset = new Function('viewReader', 'toolChanges',
+  compile('return (' + resetCall.arguments[1].getText(entryAst) + ');'));
 const makeInvalidate = new Function('contextProjection', compile('return (' + invalidateCallback + ');'));
 const refreshCode = compile(await source('surface/state/useSurfaceRefresh.tsx'));
 const deferred = () => {
@@ -94,6 +100,116 @@ function refreshHarness(input) {
     dispose() { effects.forEach((effect) => effect?.cleanup?.()); },
   };
 }
+
+test('connection reset replays a completed request in the same Client and active Worktree', async () => {
+  const calls = [];
+  let branch = 'before-sync';
+  let pending;
+  const manager = {
+    async listWorktrees({ workspaceId }) {
+      calls.push(['worktrees', workspaceId]);
+      const records = workspaceId === 'target' ? [{
+        workspaceId, worktreeId: 'wt', status: 'active', health: 'ready',
+        absolutePath: '/tmp/target-wt', branch,
+        currentHead: { kind: 'branch', name: branch, commit: branch },
+      }] : [];
+      if (workspaceId === 'target' && pending) await pending.promise;
+      return records;
+    },
+    async listBindings({ workspaceId }) {
+      calls.push(['bindings', workspaceId]);
+      return workspaceId === 'target' ? [{
+        workspaceId, worktreeId: 'wt', sessionId: 'current', status: 'active',
+      }] : [];
+    },
+    async getWorkspaceGitState({ workspaceId }) {
+      calls.push(['git', workspaceId]);
+      return { currentBranch: branch };
+    },
+    async getWorkspaceCheckout({ workspaceId }) {
+      calls.push(['checkout', workspaceId]);
+      return { currentHead: { kind: 'branch', name: branch, commit: branch } };
+    },
+  };
+  const reader = view.createWorktreeViewReader(manager);
+  const feed = new WorktreeToolChanges();
+  const context = createWorktreeContextProjection({
+    sessions: snapshot({ ids: ['current'], current: 'current', byId: {} }),
+    workspaces: snapshot({ items: [
+      { workspaceId: 'target', sessionIds: ['current'] },
+      { workspaceId: 'unrelated', sessionIds: [] },
+    ] }),
+    viewReader: reader, storeFactory: snapshot,
+  });
+  const monitor = createWorktreeToolChangeMonitor({
+    read: (revision, signal) => feed.watch(revision, signal),
+    changed: makeChanged(reader, context),
+  });
+  const reset = makeReset(reader, monitor);
+  const workspaceIds = ['target', 'unrelated'];
+  const h = refreshHarness({
+    source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+      sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
+    props: { manager, viewReader: reader, subscribeToolChanges: monitor.subscribe,
+      invalidateWorktreeContext: makeInvalidate(context) },
+    registrationState: {
+      modalReadViewRef: { current: undefined },
+      setModalReadError() {}, setModalReadLoading() {}, setWorktreeModalWorkspaceId() {},
+      modalReadLoader: { current: view.createWorktreeModalViewLoader(reader) },
+    },
+  });
+  try {
+    h.render();
+    await setImmediate();
+    monitor.start();
+    branch = 'synced';
+    feed.changed('target', 'wt', 'same-request');
+    await setImmediate();
+    const ready = h.render().readState;
+    const readyContext = context.store.getSnapshot();
+    assert.equal(ready.views[0].worktrees[0].branch, 'synced');
+    assert.equal(readyContext.value.label, 'synced');
+    assert.equal(readyContext.value.worktreeId, 'wt');
+    calls.length = 0;
+
+    // No identity, fiber, reader or Surface replacement; only underlying checkout facts change.
+    branch = 'after-reconnect';
+    pending = deferred();
+    reset(); // Revision zero replays the retained Host notification with the same requestId.
+    await setImmediate();
+    const workspaceRead = reader.read('target');
+    assert.deepEqual(calls, [
+      ['worktrees', 'target'], ['git', 'target'], ['bindings', 'target'], ['checkout', 'target'],
+    ], 'replay starts one new target read shared by Workspace, Context and Surface');
+    assert.equal(h.render().readState.status, 'ready');
+    assert.equal(h.render().readState.views, ready.views);
+    assert.equal(context.store.getSnapshot().status, 'ready');
+    assert.equal(context.store.getSnapshot().value, readyContext.value);
+    assert.equal(await reader.read('unrelated'), ready.views[1]);
+
+    // Completion and notification still deduplicate inside the recovered connection.
+    reader.invalidate('target', { changeId: 'same-request' });
+    assert.equal(reader.read('target'), workspaceRead);
+    pending.resolve();
+    const recovered = await workspaceRead;
+    await setImmediate();
+    const refreshed = h.render().readState;
+    assert.equal(recovered.checkout.currentHead.name, branch);
+    assert.equal(refreshed.views[0], recovered);
+    assert.equal(refreshed.views[0].worktrees[0].currentHead.name, branch);
+    assert.equal(refreshed.views[1], ready.views[1]);
+    assert.equal(context.store.getSnapshot().value.label, branch);
+    assert.equal(context.store.getSnapshot().value.worktreeId, 'wt');
+    assert.equal(context.store.getSnapshot().sessionId, 'current');
+    feed.changed('target', 'wt', 'same-request');
+    await setImmediate();
+    assert.equal(await reader.read('target'), recovered);
+    assert.equal(calls.length, 4, 'duplicate replay within this connection reuses the completed view');
+  } finally {
+    pending?.resolve();
+    h.dispose(); monitor.dispose(); feed.dispose(); context.dispose(); reader.dispose();
+  }
+});
 
 for (const order of ['notification-first', 'completion-first', 'no-notification', 'call-failed', 'call-failed-late-notification']) {
   test(`baseline refresh ${order} shares post-change reads and preserves ready Workspaces`, async () => {
