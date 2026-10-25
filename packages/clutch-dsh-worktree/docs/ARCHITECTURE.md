@@ -638,7 +638,13 @@ Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Ag
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
 初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
 UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，
-默认模型解析前后重查目标；Session 保持原生权限。任务 prompt 要求干净目录、遇到冲突停止且不 push/publish。
+默认模型解析前后重查目标。最终 branch 枚举完成后才读取并校验目标状态与 `baseBranch` witness，
+过期请求返回 `WORKTREE_STATE_CONFLICT`，不得创建或派发 Session。Manager 的 Host-only
+`withWorktreeBaseline` 按 Workspace/Worktree 串行化最终校验到原生 prompt admission，以及
+`updateWorktreeBaseBranch` 的完整保存流程；先完成的保存淘汰旧同步请求，接收中到达的保存等待接收结束。
+此门禁属于同一 Host Manager 的运行时协调，不持有 Sidecar 文件锁，不阻塞绑定写入或其他 Worktree，
+失败后释放且不污染后续操作，不覆盖 Agent 的 Git 执行阶段。持久化 CAS 与跨进程 Sidecar 锁保持原有职责。
+Session 保持原生权限。任务 prompt 要求干净目录、遇到冲突停止且不 push/publish。
 Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最多 128 项，达到上限明确拒绝），
 按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
 创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。

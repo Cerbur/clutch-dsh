@@ -14,7 +14,10 @@ Branch: `wt-worktree-0.1.19/feat-delegation-dashboard`.
   delegator or reporting destination.
 - Add `syncWorktreeBaseline` to the existing `/api` Host/Connection and generated Typert contract.
   Recheck active/healthy checkout, saved baseline witness and an exact enumerated branch ref before
-  creation, including after default-model resolution. Main and unavailable targets cannot sync.
+  creation, including after default-model resolution. The final target read follows the final branch
+  enumeration; a per-Worktree Manager gate serializes that read and native admission with baseline
+  saves. Saves completed during enumeration invalidate stale requests with `WORKTREE_STATE_CONFLICT`;
+  saves arriving during final admission wait for it to settle. Main and unavailable targets cannot sync.
 - Admission deduplicates one request identity in Host memory, bounds retained admissions at 128,
   and prevents overlapping admission on one Worktree. Cancellation after creation and partial failures
   retain the Session id/stage. Transport retry reuses the request; restart clears admission memory.
@@ -45,6 +48,20 @@ Coverage includes exact local/remote baseline identity, stale/ambiguous/unhealth
 model-resolution rechecks, duplicate request coalescing, concurrent different requests, cancellation
 before/after native creation, binding/model/title/prompt partial failures, modal strategy selection,
 retry identity, and late callback retirement.
+
+### Final-enumeration race regression
+
+The follow-up fix moves final target/witness validation after branch enumeration and coordinates
+baseline saves with native admission through the Host Manager's per-Worktree gate. A deterministic
+test first reproduced the old behavior as `Missing expected rejection`. Regression coverage now
+includes a real Git/Sidecar `main` to `release` save during the paused second enumeration, stale
+lifecycle/checkout observations, saves during native creation, unrelated Worktree progress, gate
+release after rejection, and safe retry after a pre-creation conflict.
+
+The complete package test command passed **1,209 tests** with pinned `pnpm@10.32.1` (invoked with
+`npm exec --offline --package pnpm@10.32.1 -- pnpm`). Workspace, patches, lint, typecheck, build,
+README parity and `git diff --check` also passed. Patch validation retains its existing unresolved
+`!!js` YAML-tag warning. This follow-up used automated tests; it did not repeat the live Agent runs below.
 
 ## Real workflow verification in `~/.dsh-test`
 

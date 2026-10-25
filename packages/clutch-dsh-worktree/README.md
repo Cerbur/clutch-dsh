@@ -384,7 +384,10 @@ remain plain text. The link follows the saved baseline when you edit it.
 **Sync with Base** opens a dialog with **Rebase** and **Merge baseline**. Confirming creates and
 opens a fresh native task Session in the current managed Worktree; it uses the configured default
 model and normal native permissions. The saved local or fetched remote baseline is used, and the
-Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. Local/Main
+Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. A baseline saved
+while branch enumeration is pending invalidates the old request with `WORKTREE_STATE_CONFLICT`;
+reopen the dialog to use the new baseline. Baseline saves wait for any final task admission already
+in progress for that Worktree. Local/Main
 has no synchronization task. The Agent checks for a clean working tree and stops on conflicts;
 Rebase rewrites the current branch's commits. Admission means the task started, not that Git finished.
 Inspect the Session's result before starting further work. Partial creation preserves the Session

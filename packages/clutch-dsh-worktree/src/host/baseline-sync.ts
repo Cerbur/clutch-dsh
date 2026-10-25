@@ -1,4 +1,5 @@
-import { createWorktreeError, type WorktreeManager, type WorktreeRecord } from '../contract/index.js';
+import { createWorktreeError, type BranchRecord, type WorktreeRecord } from '../contract/index.js';
+import type { WorktreeManagerService } from '../manage/types.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
 import type { WorktreeToolSessionPort } from '../tool/native-session.js';
 import { dispatchWorktreeSession } from '../tool/dispatch-session.js';
@@ -23,7 +24,7 @@ export function baselineSyncPrompt(record: WorktreeRecord, baseRef: string, stra
 
 /** Admission only: Git work is performed by the new native Session under its normal policy. */
 export function createBaselineSync(options: {
-  manager: WorktreeManager;
+  manager: Pick<WorktreeManagerService, 'listWorktrees' | 'listBranches' | 'bindSession' | 'withWorktreeBaseline'>;
   sessions: WorktreeToolSessionPort;
   changed(workspaceId: string, worktreeId: string, requestId: string): void;
 }) {
@@ -31,7 +32,7 @@ export function createBaselineSync(options: {
   const admissions = new Map<string, { payload: string; promise: Promise<WorktreeSessionDispatchResult> }>();
   const busy = new Set<string>();
   const conflict = (message: string) => createWorktreeError('WORKTREE_STATE_CONFLICT', message);
-  const resolve = async (input: WorktreeBaselineSyncRequest) => {
+  const resolve = async (input: WorktreeBaselineSyncRequest, branches: readonly BranchRecord[]) => {
     const record = (await options.manager.listWorktrees(input)).find((item) =>
       item.workspaceId === input.workspaceId && item.worktreeId === input.worktreeId);
     if (!record || !available(record) || record.currentBranch === null ||
@@ -40,7 +41,6 @@ export function createBaselineSync(options: {
       throw conflict('Worktree must be active, healthy and on its recorded branch.');
     if (!input.baseBranch || record.baseBranch !== input.baseBranch)
       throw conflict('Saved baseline changed. Reopen the synchronization dialog.');
-    const branches = await options.manager.listBranches({ workspaceId: input.workspaceId });
     const matches = branches.filter((branch) => input.baseBranch.startsWith('refs/')
       ? branch.ref === input.baseBranch : branch.name === input.baseBranch ||
         (branch.kind === 'remote' && 'remotes/' + branch.name === input.baseBranch));
@@ -70,16 +70,22 @@ export function createBaselineSync(options: {
       let created = false;
       const promise = (async () => {
         check();
-        await resolve(input);
+        await resolve(input, await options.manager.listBranches({ workspaceId: input.workspaceId }));
         const model = await options.sessions.validateModel((await options.sessions.modelCatalog()).default, combined);
-        const { record, baseRef } = await resolve(input);
-        check();
-        const result = await dispatchWorktreeSession({ record, manager: options.manager, sessions: options.sessions,
-          model, signal: combined, check, prompt: baselineSyncPrompt(record, baseRef, input.strategy),
-          title: `${input.strategy === 'merge' ? 'Merge' : 'Rebase'} ${input.baseBranch.replace(/^refs\/(heads|remotes)\//u, '')}`.slice(0, 200) });
-        created = true;
-        options.changed(input.workspaceId, input.worktreeId, input.requestId);
-        return result;
+        const branches = await options.manager.listBranches({ workspaceId: input.workspaceId });
+        return options.manager.withWorktreeBaseline(input, async () => {
+          check();
+          // Enumeration can yield to a baseline save or lifecycle change. Read the
+          // target afterwards, and exclude saves until native admission has settled.
+          const { record, baseRef } = await resolve(input, branches);
+          check();
+          const result = await dispatchWorktreeSession({ record, manager: options.manager, sessions: options.sessions,
+            model, signal: combined, check, prompt: baselineSyncPrompt(record, baseRef, input.strategy),
+            title: `${input.strategy === 'merge' ? 'Merge' : 'Rebase'} ${input.baseBranch.replace(/^refs\/(heads|remotes)\//u, '')}`.slice(0, 200) });
+          created = true;
+          options.changed(input.workspaceId, input.worktreeId, input.requestId);
+          return result;
+        });
       })().finally(() => {
         busy.delete(key);
         if (!created) admissions.delete(input.requestId);

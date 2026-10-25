@@ -71,6 +71,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
   private readonly recoveryReady: Promise<void>;
   private readonly lifecycleController = new AbortController();
   private readonly activeOperations = new Set<Promise<void>>();
+  private readonly baselineOperations = new Map<string, Promise<void>>();
   private closeTask: Promise<void> | undefined;
   private closed = false;
 
@@ -182,7 +183,25 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     baseBranch: string;
     expectedBaseBranch?: string;
   }): Promise<string> {
-    return this.afterRecovery(() => updateWorktreeBaseBranch(this.context, input));
+    return this.withWorktreeBaseline(input, () => updateWorktreeBaseBranch(this.context, input));
+  }
+
+  withWorktreeBaseline<T>(
+    input: { readonly workspaceId: string; readonly worktreeId: string },
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.afterRecovery(async () => {
+      const key = JSON.stringify([input.workspaceId, input.worktreeId]);
+      const previous = this.baselineOperations.get(key) ?? Promise.resolve();
+      const task = previous.then(operation);
+      // A rejected operation must release the gate without poisoning queued saves/admissions.
+      const settled = task.then(() => undefined, () => undefined);
+      this.baselineOperations.set(key, settled);
+      void settled.then(() => {
+        if (this.baselineOperations.get(key) === settled) this.baselineOperations.delete(key);
+      });
+      return task;
+    });
   }
 
   resolveSessionInstructions(sessionId: string): Promise<string> {

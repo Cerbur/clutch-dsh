@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 const { AbortController, AbortSignal } = globalThis;
 import { createBaselineSync } from '../lib/host/baseline-sync.js';
+import { createWorktreeManager } from '../lib/manage/index.js';
 
 const record = { workspaceId: 'ws', worktreeId: 'wt', branch: 'feature', currentBranch: 'feature',
   baseBranch: 'main', absolutePath: '/test/worktree', source: 'plugin', status: 'active', health: 'ready' };
 const input = { workspaceId: 'ws', worktreeId: 'wt', baseBranch: 'main', strategy: 'merge', requestId: 'request-1' };
 function fixture(overrides = {}) {
   const calls = [];
+  const coordinator = createWorktreeManager({ dshHome: '/test/dsh', dsh: {}, git: {}, sidecar: {} });
   const manager = {
+    withWorktreeBaseline: coordinator.withWorktreeBaseline.bind(coordinator),
     listWorktrees: async () => [record],
     listBranches: async () => [{ name: 'main', ref: 'refs/heads/main' }],
     bindSession: async (value) => { calls.push(['bind', value]); return value; },
@@ -23,7 +26,7 @@ function fixture(overrides = {}) {
     prompt: async (value) => { calls.push(['prompt', value]); return { accepted: true }; },
     ...overrides.sessions,
   };
-  return { calls, sync: createBaselineSync({ manager, sessions, changed: (...args) => calls.push(['changed', ...args]) }) };
+  return { calls, manager, sync: createBaselineSync({ manager, sessions, changed: (...args) => calls.push(['changed', ...args]) }) };
 }
 
 for (const strategy of ['merge', 'rebase']) test(`${strategy} creates a bound native task with exact baseline and normal policy`, async () => {
@@ -78,6 +81,95 @@ test('rechecks after model resolution and rejects missing or ambiguous branch id
   await assert.rejects(sync.sync(input, new AbortController().signal));
   assert.equal(calls.length, 0);
   sync.dispose();
+});
+
+for (const change of [{ baseBranch: 'release' }, { status: 'removed' }, { health: 'branch-drift' },
+  { currentBranch: 'other' }, { currentHead: { kind: 'tag', name: 'v1' } }]) test(`rejects a target changed while the final branch enumeration is pending: ${JSON.stringify(change)}`, async () => {
+  let current = { ...record };
+  let reads = 0;
+  let resume;
+  let paused;
+  const gate = new Promise((resolve) => { resume = resolve; });
+  const enumerating = new Promise((resolve) => { paused = resolve; });
+  const { calls, manager, sync } = fixture({ manager: {
+    listWorktrees: async () => [{ ...current }],
+    listBranches: async () => {
+      if (++reads === 2) {
+        paused();
+        await gate;
+      }
+      return [{ name: 'main', ref: 'refs/heads/main' }, { name: 'release', ref: 'refs/heads/release' }];
+    },
+  } });
+  try {
+    const pending = sync.sync(input, new AbortController().signal);
+    await enumerating;
+    await manager.withWorktreeBaseline(input, async () => { current = { ...current, ...change }; });
+    resume();
+    await assert.rejects(pending, (error) => error.code === 'WORKTREE_STATE_CONFLICT');
+    assert.equal(calls.length, 0, 'stale baseline must not create, bind or prompt a Session');
+  } finally {
+    resume();
+    sync.dispose();
+  }
+});
+
+test('baseline saves wait through native admission and do not block other Worktrees', async () => {
+  let resume;
+  let paused;
+  const gate = new Promise((resolve) => { resume = resolve; });
+  const creating = new Promise((resolve) => { paused = resolve; });
+  const { calls, manager, sync } = fixture({ sessions: { create: async (value) => {
+    calls.push(['create', value]);
+    paused();
+    await gate;
+    return { sessionId: 'created' };
+  } } });
+  try {
+    const pending = sync.sync(input, new AbortController().signal);
+    await creating;
+    const save = manager.withWorktreeBaseline(input, async () => { calls.push(['save']); });
+    await manager.withWorktreeBaseline({ ...input, worktreeId: 'another' }, async () => {});
+    assert.equal(calls.some(([kind]) => kind === 'save'), false);
+    resume();
+    assert.equal((await pending).status, 'dispatched');
+    await save;
+    assert.deepEqual(calls.map(([kind]) => kind), ['create', 'bind', 'model', 'rename', 'prompt', 'changed', 'save']);
+  } finally {
+    resume();
+    sync.dispose();
+  }
+});
+
+test('a queued baseline save wins before final validation; rejected admission can retry', async () => {
+  let resume;
+  let paused;
+  let current = { ...record };
+  const gate = new Promise((resolve) => { resume = resolve; });
+  const saving = new Promise((resolve) => { paused = resolve; });
+  const { calls, manager, sync } = fixture({ manager: {
+    listWorktrees: async () => [{ ...current }],
+    listBranches: async () => [{ name: 'main', ref: 'refs/heads/main' }, { name: 'release', ref: 'refs/heads/release' }],
+  } });
+  try {
+    const save = manager.withWorktreeBaseline(input, async () => {
+      paused();
+      await gate;
+      current = { ...current, baseBranch: 'release' };
+    });
+    await saving;
+    const pending = sync.sync(input, new AbortController().signal);
+    resume();
+    await save;
+    await assert.rejects(pending, { code: 'WORKTREE_STATE_CONFLICT' });
+    assert.equal(calls.length, 0);
+    const retry = await sync.sync({ ...input, baseBranch: 'release' }, new AbortController().signal);
+    assert.equal(retry.status, 'dispatched');
+    assert.match(calls.find(([kind]) => kind === 'prompt')[1].content[0].text, /refs\/heads\/release/);
+  } finally {
+    resume();
+    sync.dispose();
+  }
 });
 
 for (const [method, status] of [['bindSession', 'binding-failed'], ['configureModel', 'model-failed'], ['rename', 'title-failed'], ['prompt', 'prompt-failed']]) {
