@@ -8,7 +8,7 @@ const listModelsArgs = z
     provider: text
       .optional()
       .describe(
-        'Optional exact provider group id. Omit to discover available providers; not a model id or display name.',
+        'Exact provider id; omitted/null lists all. Unknown ids fail; unavailable providers retain diagnostics.',
       ),
   })
   .strict();
@@ -17,7 +17,7 @@ export function registerListModels(context: ToolContext): void {
   const { add, agent, options, check, scope } = context;
   add(
     'clutch_list_models',
-    'Discover native models grouped by provider, with reasoning efforts and provider failures. Optional provider filters the catalog. Returns the current Session model separately from the deployment default.',
+    'Discover models for explicit requirements or task-based selection, not to confirm inheritance. Returns provider groups, reasoning efforts and failures, plus current/default models separately. Read-only; changes no model or defaults.',
     listModelsArgs,
     output.object(
       {

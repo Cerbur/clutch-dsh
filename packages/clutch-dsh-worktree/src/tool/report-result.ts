@@ -4,30 +4,31 @@ import type { ToolContext } from './types.js';
 import { text } from './inputs.js';
 import { authorize, errorText } from './context.js';
 import * as output from './outputs.js';
+import { ToolRecoveryError } from './errors.js';
 
 const reportArgs = z
   .object({
     status: z
       .enum(['completed', 'blocked', 'failed'])
       .describe(
-        'Your task outcome. completed requires finished work and verification; blocked requires help; failed means the task could not be fulfilled.',
+        'completed: requested work and checks finished; blocked: needs help; failed: task could not be fulfilled.',
       ),
     summary: text
       .max(2000)
       .describe(
-        'Concise outcome, changed files or the specific blocker. Do not include conversation history or intermediate steps.',
+        'Concise outcome or blocker; no history or intermediate steps.',
       ),
     evidence: text
       .max(2000)
       .optional()
       .describe(
-        'Verification commands and results, artifact paths, remaining risks, or what help is required.',
+        'Checks/results, artifacts, risks or required help; omitted/null adds none.',
       ),
     requestId: text
       .max(200)
       .optional()
       .describe(
-        'Omit for a new report. Reuse the returned id only to retry the identical report after uncertain admission.',
+        'Host-returned retry id only; never invent one or use the task/message id. Omit for a first report (JSON null also accepted); for uncertain admission reuse the returned report id with identical content.',
       ),
   })
   .strict();
@@ -36,7 +37,7 @@ export function registerReportResult(context: ToolContext): () => void {
   const { add, agent, options, check, scope, delegation } = context;
   return add(
     'clutch_report_result',
-    'Push one concise result or blocker only when the Host holds an active in-memory report token for this delegated task. Successful completed, blocked or failed admission consumes the token. The tool stays available but calls without a token are rejected; later user work must not report to the former parent. Only an explicit new parent dispatch grants another token. Required fields: status and summary; optional evidence and retry requestId. On uncertain admission retry only the identical report with its returned requestId. The Host fixes the destination. Include verification evidence. This is your claim, not automatic proof of success. Returns message admission, not a reply.',
+    'Push one delegated-task result as an Agent relay with Host-fixed recipient and sender. Returns admission, not a reply or proof of success; include verification evidence. Successful admission consumes the in-memory task token; tokenless calls fail even while visible. Later human work cannot report to the former parent; only explicit new parent dispatch grants another token.',
     reportArgs,
     output.object(
       {
@@ -59,7 +60,11 @@ export function registerReportResult(context: ToolContext): () => void {
       check(exec);
       const requestId = args.requestId ?? `clutch-worktree-report:${randomUUID()}`;
       if (args.requestId !== undefined && !reportTask.attempt)
-        throw Object.assign(new Error('A report requestId must come from this token’s previous uncertain admission.'), { code: 'REPORT_RETRY_REQUIRED' });
+        throw new ToolRecoveryError(
+          'A report requestId must come from this token’s previous uncertain admission.',
+          'REPORT_RETRY_REQUIRED',
+          'This call was rejected before report admission. Omit requestId (or use JSON null) and submit the same status, summary and evidence. The Host generates the report id; do not invent one or copy the task/message id.',
+        );
       const identity = { workspaceId, sessionId: agent.session.id, parentSessionId, requestId };
       const message = JSON.stringify({
         kind: 'worktree-task-report',
@@ -71,8 +76,9 @@ export function registerReportResult(context: ToolContext): () => void {
       delegation.claimReport(agent, reportTask, requestId, message);
       const attempt = reportTask.attempt!;
       try {
-        await options.sessions.prompt(
+        await options.sessions.sendAgentMessage(
           {
+            sender: agent,
             sessionId: parentSessionId,
             requestId,
             mode: 'queue',

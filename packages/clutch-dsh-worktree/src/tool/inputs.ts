@@ -3,29 +3,27 @@ export const text = z.string().trim().min(1);
 export const prompt = z
   .string()
   .refine((value) => value.trim().length > 0, 'prompt must not be empty')
-  .describe(
-    'Required nonempty task/message text, preserved exactly. For delegation include goal, scope, acceptance criteria and checks.',
-  );
+  .describe('Nonblank message text, delivered verbatim.');
 export const model = z
   .object({
     provider: text.describe(
-      'Exact provider group id returned by clutch_list_models, not its display name.',
+      'Exact provider id from clutch_list_models, not a display name.',
     ),
-    model: text.describe('Exact model id within that provider, returned by clutch_list_models.'),
+    model: text.describe('Exact model id within that provider.'),
     reasoningEffort: text
       .optional()
-      .describe('Exact supported reasoning effort id for that model; omit to use its default.'),
+      .describe('Supported effort id; omitted/null uses this model’s default.'),
   })
   .strict()
   .describe(
-    'Optional model override as an object {provider, model, reasoningEffort?}, never a string. Omit to inherit the calling Session model and effort.',
+    'Provider/model override object, never a string; omitted/null inherits the caller’s selection. For inheritance omit the entire object; do not supply empty provider/model fields.',
   );
 export const workspace = z
   .object({
     workspaceId: text
       .optional()
       .describe(
-        'Omit to use the calling Session Workspace. If supplied it must be that same Workspace id, not a directory path.',
+        'Calling Workspace id; omitted/null uses it. Other Workspaces and paths are rejected.',
       ),
   })
   .strict();

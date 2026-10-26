@@ -96,6 +96,7 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-commands": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-tools": ">=0.2.0-rc.1",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-api-session-controller": ">=0.2.0-rc.1",
     "@deepseek-ai/dsh-api-workspace-controller": ">=0.2.0-rc.1",
@@ -120,6 +121,7 @@
   "devDependencies": {
     "@deepseek-ai/dsh-commands": "0.2.0-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.1",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-loader": "1.0.2",
     "@deepseek-ai/dsh-api-gateway": "0.2.0-rc.1",

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const optionalInputGuidance =
+  'Omit optional fields for defaults. At execution, JSON null also means omission; empty strings and the string "null" do not. Empty instructions are allowed.';
+
 const supported = new Set([
   'type',
   'oneOf',
@@ -58,7 +61,9 @@ function project(value: unknown): Record<string, unknown> {
       if (source.type !== 'string' || !Number.isInteger(field) || (field as number) < 0)
         throw new Error(`Unsupported Worktree tool string constraint: ${key}`);
       limits.push(
-        `${key === 'minLength' ? 'Minimum' : 'Maximum'} length: ${field} characters (checked by the tool).`,
+        key === 'minLength' && field === 1
+          ? 'Nonempty.'
+          : `${key === 'minLength' ? 'Minimum' : 'Maximum'} length: ${field} UTF-16 units.`,
       );
       continue;
     }
@@ -90,10 +95,39 @@ function project(value: unknown): Record<string, unknown> {
   return result;
 }
 
+/** Provider strict adapters represent omitted optional keys as null.
+ * Only declared optional properties normalize to omission. Required values and
+ * wrong container types survive for Zod. Closed-object unknown keys reject here,
+ * including __proto__, which Zod's object parser otherwise silently ignores.
+ * This is transport normalization/closure, not provider schema conversion.
+ */
+export function normalizeOptionalNulls(
+  value: unknown,
+  parameters: Record<string, unknown>,
+  path: (string | number)[] = [],
+): unknown {
+  if (parameters.type === 'array' && Array.isArray(value) && parameters.items)
+    return value.map((item, index) => normalizeOptionalNulls(item, node(parameters.items), [...path, index]));
+  if (parameters.type !== 'object' || value === null || typeof value !== 'object' || Array.isArray(value))
+    return value;
+  const properties = node(parameters.properties ?? {});
+  const unknown = Object.keys(value).filter((key) => !Object.hasOwn(properties, key));
+  if (parameters.additionalProperties === false && unknown.length)
+    throw new z.ZodError([{ code: 'unrecognized_keys', keys: unknown, path, message: `Unknown fields: ${unknown.join(', ')}` }]);
+  const required = new Set(Array.isArray(parameters.required) ? parameters.required : []);
+  return Object.fromEntries(Object.entries(value).flatMap(([key, field]) => {
+    if (!Object.hasOwn(properties, key)) return [[key, field]];
+    if (field === null && !required.has(key)) return [];
+    return [[key, normalizeOptionalNulls(field, node(properties[key]), [...path, key])]];
+  }));
+}
+
 /** DSH's native/PTC catalog uses a smaller schema vocabulary than Zod emits.
  * Length constraints remain enforced by the original Zod parser at execution.
  * Unsupported future constructs fail registration instead of hiding fields as unknown.
  */
 export function toolParameters(schema: z.ZodType): Record<string, unknown> {
-  return project(z.toJSONSchema(schema, { io: 'input' }));
+  const parameters = project(z.toJSONSchema(schema, { io: 'input' }));
+  parameters.description = [parameters.description, optionalInputGuidance].filter(Boolean).join(' ');
+  return parameters;
 }

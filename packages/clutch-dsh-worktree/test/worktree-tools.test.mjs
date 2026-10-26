@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import process from 'node:process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -22,6 +23,8 @@ import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repos
 import { readToolSession } from '../lib/tool/index.js';
 import { WorktreeToolSettings } from '../lib/host/tool-settings.js';
 import { WORKTREE_TOOL_IDS } from '../lib/contract/tool-settings.js';
+import { agentRelayMessage, relayMessageId } from '../lib/tool/agent-relay.js';
+import { assertPortableTool, discoverToolDeclarations } from './helpers/tool-contract.mjs';
 
 const requireTools = createRequire(import.meta.resolve('@deepseek-ai/dsh-tools'));
 const { default: SystemPrompt } = await import(
@@ -42,6 +45,129 @@ test('delegation catalog avoids transcript polling and schema dialect noise', as
   assert.equal(JSON.stringify(schemas).includes('$schema'), false);
 });
 
+test('issue #8: registered dispatch has an object root and rejects invalid targets before effects', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const tool = f.ctx.tools.get('clutch_span_worktree', f.agent);
+  assert.equal(tool.parameters.type, 'object');
+  assert.equal(tool.parameters.additionalProperties, false);
+  assert.deepEqual(tool.parameters.required, ['prompt']);
+  assert.equal(tool.parameters.oneOf, undefined);
+  assert.equal(tool.parameters.anyOf, undefined);
+  for (const args of [
+    {}, { prompt: 'Task' },
+    { worktreeId: 'wt', name: 'branch', prompt: 'Task' },
+    { worktreeId: '', prompt: 'Task' },
+    { name: '   ', prompt: 'Task' },
+    { worktreeId: null, prompt: 'Task' },
+    { name: null, prompt: 'Task' },
+    { worktreeId: undefined, name: undefined, prompt: 'Task' },
+    { worktreeId: 'wt', prompt: '' },
+    { name: 'branch', prompt: '   ' },
+    { worktreeId: 'wt', prompt: 'Task', extra: true },
+  ]) {
+    await assert.rejects(tool.execute(args, { agent: f.agent, signal: f.signal }), /INVALID_ARGUMENTS/);
+    assert.deepEqual(f.calls, [], JSON.stringify(args));
+  }
+});
+
+test('dispatch optional undefined keys do not change target selection or exact prompt', async (t) => {
+  for (const target of [{ worktreeId: 'wt', name: undefined }, { worktreeId: undefined, name: 'feature/target' }]) {
+    const f = await fixture(t);
+    await f.enable();
+    await f.run('clutch_new_worktree', { name: 'feature/target' });
+    const result = await f.ctx.tools.get('clutch_span_worktree', f.agent).execute(
+      { ...target, prompt: '  Exact task\n', model: undefined, title: undefined },
+      { agent: f.agent, signal: f.signal },
+    );
+    assert.equal(result.status, 'dispatched');
+    assert.equal(f.calls.find(([kind]) => kind === 'prompt')[1].content[0].text, '  Exact task\n');
+  }
+});
+
+test('native transport rejects explicit undefined before calling the plugin', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const result = await f.ctx.tools.execute({ name: 'clutch_span_worktree', arguments: { worktreeId: 'wt', name: undefined, prompt: 'Task' }, agent: f.agent, callId: 'undefined-input', signal: f.signal });
+  assert.equal(result.isError, true);
+  assert.match(JSON.stringify(result.content), /losslessly JSON-serializable/);
+  assert.deepEqual(f.calls, []);
+});
+
+test('approved strict optional nulls mean omission, not null business values', async (t) => {
+  const f = await fixture(t);
+  await f.enable();
+  const created = await f.run('clutch_new_worktree', { name: 'feature/nulls', baseBranch: null, instructions: null });
+  const dispatched = await f.run('clutch_span_worktree', {
+    worktreeId: created.worktreeId, name: null, prompt: 'Task', title: null,
+    model: { provider: 'provider', model: 'model', reasoningEffort: null },
+  });
+  assert.equal(dispatched.status, 'dispatched');
+  assert.deepEqual(dispatched.model, { provider: 'provider', model: 'model' });
+  assert.equal(f.calls.some(([kind]) => kind === 'rename'), false);
+  const sent = await f.run('clutch_send_message', { sessionId: dispatched.sessionId, prompt: 'Next', mode: null, requestId: null });
+  assert.equal(sent.mode, 'queue');
+  const child = f.childAgents.get(dispatched.sessionId);
+  const report = await f.run('clutch_report_result', { status: 'completed', summary: 'Done', evidence: null, requestId: null }, child);
+  assert.equal(report.status, 'admitted');
+});
+
+test('multi-model placeholder failures remain rejected and expose omission recovery', async (t) => {
+  const f = await delegatedFixture(t);
+  const cases = [
+    ['clutch_list_worktrees', { workspaceId: '' }],
+    ['clutch_list_worktrees', { workspaceId: 'null' }],
+    ['clutch_list_models', { provider: '' }],
+    ['clutch_list_models', { provider: 'null' }],
+    ['clutch_list_sessions', { workspaceId: '', worktreeId: '' }],
+    ['clutch_span_worktree', { worktreeId: 'wt', prompt: 'Task', name: '', model: { provider: '', model: '', reasoningEffort: '' } }],
+    ['clutch_send_message', { sessionId: 'child', prompt: 'QUEUE', mode: 'queue', requestId: '' }],
+    ['clutch_send_message', { sessionId: 'child', prompt: 'STEER', mode: 'steer', requestId: '' }],
+  ];
+  for (const [name, args] of cases) {
+    const before = f.calls.length;
+    const result = await f.ctx.tools.execute({ name, arguments: args, agent: f.agent, callId: name, signal: f.signal });
+    assert.equal(result.isError, true, JSON.stringify(args));
+    const message = JSON.stringify(result.content);
+    assert.match(message, /[Oo]mit optional fields/);
+    assert.match(message, /JSON null/);
+    assert.equal(f.calls.length, before, 'rejected input must not create or deliver');
+  }
+  for (const tool of f.ctx.tools.schemas(f.agent)) {
+    assert.match(tool.parameters.description, /[Oo]mit optional fields/);
+    assert.match(tool.parameters.description, /JSON null/);
+  }
+  assert.equal((await f.run('clutch_list_worktrees', {})).worktrees.length, 1);
+  await f.run('clutch_list_models', {});
+  await f.run('clutch_list_sessions', {});
+  const span = await f.run('clutch_span_worktree', { worktreeId: 'wt', prompt: 'Task', model: null, name: null });
+  assert.equal(span.status, 'dispatched');
+  for (const mode of ['queue', 'steer']) {
+    const sent = await f.run('clutch_send_message', { sessionId: 'child', prompt: mode, mode, requestId: null });
+    assert.equal(sent.status, 'admitted');
+    assert.equal(sent.mode, mode);
+  }
+});
+
+test('first report with invented retry id explains omission and preserves its report budget', async (t) => {
+  const f = await delegatedFixture(t);
+  const args = { status: 'completed', summary: 'QA019-LUNA6-CROSS-OK', evidence: 'Completed as requested.' };
+  const before = f.calls.length;
+  await assert.rejects(f.reportTool.execute(
+    { ...args, requestId: 'QA019-LUNA6-CROSS' },
+    { agent: f.child, signal: f.signal },
+  ), (error) => {
+    assert.match(error.message, /REPORT_RETRY_REQUIRED/);
+    assert.match(error.message, /Correction:.*[Oo]mit requestId/);
+    assert.match(error.message, /before.*admission/);
+    return true;
+  });
+  assert.equal(f.calls.length, before, 'invalid first report must not deliver');
+  assert.equal((await f.run('clutch_report_result', args, f.child)).status, 'admitted');
+  assert.equal(f.calls.length, before + 1, 'corrected first report delivers exactly once');
+  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
+});
+
 test('native PTC SDK exposes concrete arguments for all seven Worktree tools', async (t) => {
   const f = await fixture(t);
   await f.enable();
@@ -57,8 +183,11 @@ test('native PTC SDK exposes concrete arguments for all seven Worktree tools', a
     ...schema,
     output: f.ctx.tools.get(schema.name, child).output.schema,
   }));
-  assert.equal(schemas.length, 7);
+  const declarations = await discoverToolDeclarations();
+  assert.deepEqual(schemas.map((tool) => tool.name).sort(), declarations.map((tool) => tool.name).sort(), 'every discovered tool, including conditional reporting, must be registered and checked');
   for (const schema of schemas) {
+    assertPortableTool(schema);
+    assert.deepEqual(schema.parameters, declarations.find((tool) => tool.name === schema.name).parameters);
     assertSupportedJsonSchema(schema.parameters);
     assertSupportedJsonSchema(schema.output);
     assert.doesNotMatch(jsonSchemaToTs(schema.parameters), /\bunknown\b/);
@@ -80,8 +209,8 @@ test('native PTC SDK exposes concrete arguments for all seven Worktree tools', a
   const span = jsonSchemaToTs(
     schemas.find((schema) => schema.name === 'clutch_span_worktree').parameters,
   );
-  assert.match(span, /worktreeId: string;/);
-  assert.match(span, /name: string;/);
+  assert.match(span, /worktreeId\?: string;/);
+  assert.match(span, /name\?: string;/);
   assert.match(span, /prompt: string;/);
   assert.match(span, /model\?: \{/);
   assert.match(args, /2,?000/);
@@ -95,6 +224,159 @@ test('native PTC SDK exposes concrete arguments for all seven Worktree tools', a
     /INVALID_ARGUMENTS.*status/,
   );
   assert.equal(f.calls.length, before);
+});
+
+test('dispatch, continuation and reports derive relay sender from the actual calling Agent', async (t) => {
+  const f = await delegatedFixture(t);
+  const dispatched = f.relayInputs.get(f.span.requestId);
+  assert.equal(dispatched.sender, f.agent);
+  const continued = await f.run('clutch_send_message', { sessionId: 'child', prompt: 'Follow-up', mode: 'steer' });
+  assert.equal(f.relayInputs.get(continued.requestId).sender, f.agent);
+  assert.equal(f.relayInputs.get(continued.requestId).mode, 'steer');
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Follow-up', senderSessionId: 'forged' }, { agent: f.agent, signal: f.signal }), /INVALID_ARGUMENTS/);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Follow-up', requestId: continued.requestId, mode: 'queue' }, { agent: f.agent, signal: f.signal }), /DELEGATION_RETRY_MISMATCH/);
+  const report = await f.run('clutch_report_result', { status: 'completed', summary: 'Verified' }, f.child);
+  assert.equal(f.relayInputs.get(report.requestId).sender, f.child);
+  assert.equal(f.relayInputs.get(report.requestId).sessionId, f.agent.session.id);
+  assert.equal(f.relayInputs.get(report.requestId).mode, 'queue');
+});
+
+test('all registered validators reject unknown, mistyped and missing required inputs without effects', async (t) => {
+  const f = await delegatedFixture(t);
+  await f.enable('', f.child);
+  const examples = {
+    clutch_new_worktree: { name: 'feature/valid' },
+    clutch_list_worktrees: {},
+    clutch_span_worktree: { worktreeId: 'wt', prompt: 'Task' },
+    clutch_list_models: {},
+    clutch_list_sessions: {},
+    clutch_send_message: { sessionId: 'caller', prompt: 'Follow-up' },
+    clutch_report_result: { status: 'completed', summary: 'Verified outcome' },
+  };
+  for (const schema of f.ctx.tools.schemas(f.child)) {
+    assert.ok(Object.hasOwn(examples, schema.name), schema.name + ': add validator examples for a new tool');
+    const definition = f.ctx.tools.get(schema.name, f.child);
+    const valid = examples[schema.name];
+    const invalid = [null, [], { ...valid, unknownField: null }, { ...valid, ...JSON.parse('{"__proto__":null}') }];
+    for (const key of schema.parameters.required ?? []) {
+      const missing = { ...valid };
+      delete missing[key];
+      invalid.push(missing, { ...valid, [key]: null });
+    }
+    for (const [key, field] of Object.entries(schema.parameters.properties))
+      invalid.push({ ...valid, [key]: field.type === 'array' ? {} : [] });
+    for (const args of invalid) {
+      const before = f.calls.length;
+      await assert.rejects(definition.execute(args, { agent: f.child, signal: f.signal }), /INVALID_ARGUMENTS/, schema.name + ': ' + JSON.stringify(args));
+      assert.equal(f.calls.length, before, schema.name + ': invalid input must not have effects');
+    }
+  }
+});
+
+test('every discovered tool accepts a valid call with omitted and null optional fields', async (t) => {
+  const examples = {
+    clutch_new_worktree: { name: 'feature/positive' },
+    clutch_list_worktrees: {},
+    clutch_span_worktree: { worktreeId: 'wt', prompt: 'Task' },
+    clutch_list_models: {},
+    clutch_list_sessions: {},
+    clutch_send_message: { sessionId: 'child', prompt: 'Next task' },
+    clutch_report_result: { status: 'completed', summary: 'Verified outcome' },
+  };
+  for (const declared of await discoverToolDeclarations()) {
+    assert.ok(Object.hasOwn(examples, declared.name), declared.name + ': add positive cases');
+    for (const nulls of [false, true]) {
+      const f = await delegatedFixture(t);
+      const owner = declared.name === 'clutch_report_result' ? f.child : f.agent;
+      const args = { ...examples[declared.name] };
+      if (nulls) for (const key of Object.keys(declared.parameters.properties)) {
+        if (!Object.hasOwn(args, key) && !(declared.parameters.required ?? []).includes(key)) args[key] = null;
+      }
+      await f.run(declared.name, args, owner);
+    }
+  }
+});
+
+test('registered input boundaries preserve lengths, defaults, nested closure and target errors', async (t) => {
+  const f = await delegatedFixture(t);
+  const span = f.ctx.tools.get('clutch_span_worktree', f.agent);
+  const before = f.calls.length;
+  for (const args of [
+    { worktreeId: 'wt', prompt: 'Task', title: 'x'.repeat(201) },
+    { worktreeId: 'wt', prompt: 'Task', model: { provider: 'provider', model: 'model', extra: null } },
+    { worktreeId: 'wt', prompt: 'Task', model: { provider: null, model: 'model' } },
+    { worktreeId: 'wt', prompt: 'Task', model: { provider: 'provider', model: 'model', reasoningEffort: '' } },
+    { worktreeId: null, name: null, prompt: 'Task' },
+    { worktreeId: ' ', name: 'feature/valid', prompt: 'Task' },
+  ]) await assert.rejects(span.execute(args, { agent: f.agent, signal: f.signal }), /INVALID_ARGUMENTS/);
+  for (const [name, args] of [
+    ['clutch_new_worktree', { name: 'feature/valid', instructions: 'x'.repeat(32001) }],
+    ['clutch_send_message', { sessionId: 'child', prompt: 'Task', mode: 'interrupt' }],
+    ['clutch_send_message', { sessionId: 'child', prompt: 'Task', requestId: 'x'.repeat(201) }],
+    ['clutch_report_result', { status: 'done', summary: 'Outcome' }],
+    ['clutch_report_result', { status: 'completed', summary: ' ' }],
+    ['clutch_report_result', { status: 'completed', summary: 'x'.repeat(2001) }],
+    ['clutch_report_result', { status: 'completed', summary: 'Outcome', evidence: '' }],
+    ['clutch_report_result', { status: 'completed', summary: 'Outcome', evidence: 'x'.repeat(2001) }],
+    ['clutch_report_result', { status: 'completed', summary: 'Outcome', requestId: 'x'.repeat(201) }],
+  ]) {
+    const owner = name === 'clutch_report_result' ? f.child : f.agent;
+    await assert.rejects(f.ctx.tools.get(name, owner).execute(args, { agent: owner, signal: f.signal }), /INVALID_ARGUMENTS/);
+  }
+  assert.equal(f.calls.length, before);
+  const created = await f.run('clutch_new_worktree', { name: 'feature/boundary', instructions: 'x'.repeat(32000) });
+  assert.equal(created.instructionsSaved, true);
+  const dispatched = await f.run('clutch_span_worktree', { name: 'feature/boundary', worktreeId: null, prompt: 'Task', title: 'x'.repeat(200), model: null });
+  assert.equal(dispatched.status, 'dispatched');
+  const child = f.childAgents.get(dispatched.sessionId);
+  assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'x'.repeat(2000), evidence: 'x'.repeat(2000) }, child)).status, 'admitted');
+});
+
+test('actual DSH pi-ai strict adaptation preserves every registered tool and executes nullable omission', async (t) => {
+  const anchor = process.env.DSH_SCHEMA_ADAPTER_ANCHOR;
+  if (!anchor) return t.skip('External DSH pi-ai is not a package dependency; set DSH_SCHEMA_ADAPTER_ANCHOR to its package.json to exercise the real adapter.');
+  // pi-ai exports only an import condition; createRequire.resolve cannot select it.
+  // Resolve the actual dependency from the supplied DSH package, not a copied converter.
+  const api = path.join(path.dirname(path.resolve(anchor)), 'node_modules/@earendil-works/pi-ai/dist/api');
+  const { makeStrictJsonSchema } = await import(pathToFileURL(path.join(api, 'constrained-sampling.js')).href);
+  const { convertResponsesTools } = await import(pathToFileURL(path.join(api, 'openai-responses-shared.js')).href);
+  const f = await delegatedFixture(t);
+  await f.enable('', f.child);
+  const schemas = f.ctx.tools.schemas(f.child);
+  const original = globalThis.structuredClone(schemas);
+  const wire = convertResponsesTools(schemas, { strict: true, supportsStrictMode: true });
+  assert.equal(wire.length, schemas.length);
+  function checkStrict(source, adapted) {
+    if (source.type === 'object') {
+      assert.equal(adapted.additionalProperties, false);
+      assert.deepEqual(adapted.required, Object.keys(source.properties));
+      for (const [key, child] of Object.entries(source.properties)) {
+        const field = adapted.properties[key];
+        if (!(source.required ?? []).includes(key)) {
+          assert.equal(field.anyOf.length, 2);
+          assert.deepEqual(field.anyOf[1], { type: 'null' });
+          checkStrict(child, field.anyOf[0]);
+        } else checkStrict(child, field);
+      }
+    } else if (source.type === 'array') checkStrict(source.items, adapted.items);
+    else assert.equal(adapted.type, source.type);
+  }
+  for (const schema of schemas) {
+    const projected = wire.find((tool) => tool.name === schema.name);
+    assert.equal(projected.strict, true);
+    assert.deepEqual(projected.parameters, makeStrictJsonSchema(schema.parameters));
+    checkStrict(schema.parameters, projected.parameters);
+  }
+  assert.deepEqual(schemas, original, 'strict conversion must not mutate native schemas or SDK semantics');
+  const span = schemas.find((tool) => tool.name === 'clutch_span_worktree');
+  assert.throws(() => makeStrictJsonSchema({ oneOf: [span.parameters, span.parameters] }), /oneOf/);
+  assert.throws(() => makeStrictJsonSchema({ type: 'object', properties: { nested: { oneOf: [span.parameters] } } }), /oneOf/);
+  const args = { prompt: 'Strict task', worktreeId: 'wt' };
+  for (const key of Object.keys(span.parameters.properties)) if (!(key in args)) args[key] = null;
+  assert.equal((await f.run(span.name, args)).status, 'dispatched');
+  assert.deepEqual(convertResponsesTools(schemas, { strict: false }).map((tool) => tool.parameters), schemas.map((tool) => tool.parameters));
 });
 
 test('a legacy history observation failure does not hide healthy Sessions', async (t) => {
@@ -259,16 +541,22 @@ async function fixture(t, overrides = {}) {
     ...overrides.sessions,
   };
   const nativePrompt = sessions.prompt.bind(sessions);
-  sessions.prompt = async (input, signal) => {
+  const relayInputs = new Map();
+  const admit = async (input, signal, sender) => {
     const result = await nativePrompt(input, signal);
     if (!overrides.deferConsumption) {
       ctx.emit('session/event', { id: input.sessionId }, { type: 'turn/start', data: { turn: 1 } });
       ctx.emit('session/event', { id: input.sessionId }, {
         type: 'user/message', surfaceOp: 'append',
-        data: { source: { kind: 'user', rpcId: input.requestId }, content: input.content },
+        data: sender ? agentRelayMessage({ ...input, sender }) : { source: { kind: 'user', rpcId: input.requestId }, content: input.content },
       });
     }
     return result;
+  };
+  sessions.prompt = (input, signal) => admit(input, signal);
+  sessions.sendAgentMessage = ({ sender, ...input }, signal) => {
+    relayInputs.set(input.requestId, { ...input, sender });
+    return admit(input, signal, sender);
   };
   const fiber = await ctx.inject(['commands', 'tools'], (inner) => {
     return registerWorktreeTools(inner, {
@@ -318,6 +606,7 @@ async function fixture(t, overrides = {}) {
     subscriptions,
     selectedModel,
     childAgents,
+    relayInputs,
     headers,
     enable,
     run,
@@ -1679,7 +1968,9 @@ function consume(f, owner, requestId) {
   f.ctx.emit('session/event', { id: owner.session.id }, { type: 'turn/start', data: { turn: 2 } });
   f.ctx.emit('session/event', { id: owner.session.id }, {
     type: 'user/message', surfaceOp: 'append',
-    data: { source: { kind: 'user', rpcId: requestId } },
+    data: requestId.startsWith('clutch-worktree:') || requestId.startsWith('clutch-worktree-report:')
+      ? { id: relayMessageId(requestId), source: { kind: 'agent-message', form: 'relay', senderSessionId: f.relayInputs.get(requestId)?.sender.session.id ?? f.agent.session.id } }
+      : { source: { kind: 'user', rpcId: requestId } },
   });
 }
 
@@ -1751,7 +2042,12 @@ test('uncertain report admission locks content and rejects duplicate concurrent 
   const args = { status: 'blocked', summary: 'Need help' };
   const first = f.run('clutch_report_result', args, f.child);
   await entered;
-  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), /REPORT_RETRY_REQUIRED/);
+  await assert.rejects(f.reportTool.execute(args, { agent: f.child, signal: f.signal }), (error) => {
+    assert.match(error.message, /REPORT_RETRY_REQUIRED/);
+    assert.match(error.message, /Correction: Retry the identical report with its original requestId/);
+    assert.doesNotMatch(error.message, /[Oo]mit requestId/);
+    return true;
+  });
   await assert.rejects(f.reportTool.execute({ ...args, requestId: reportRequestId },
     { agent: f.child, signal: f.signal }), /REPORT_IN_PROGRESS/);
   release();
@@ -1915,14 +2211,18 @@ test('report authorization awaits cannot switch an old invocation onto a new tok
   assert.equal((await f.run('clutch_report_result', { status: 'completed', summary: 'New task' }, f.child)).status, 'admitted');
 });
 
-test('schema exposes target alternatives and fields without a JSON Schema dialect', async (t) => {
+test('schema exposes flat targets and fields without a JSON Schema dialect', async (t) => {
   const f = await fixture(t);
   await f.enable();
   const span = f.ctx.tools.get('clutch_span_worktree', f.agent);
-  assert.equal(span.parameters.oneOf.length, 2);
-  assert.ok(span.parameters.oneOf.every((shape) => shape.required.includes('prompt')));
-  assert.ok(span.parameters.oneOf.some((shape) => shape.required.includes('worktreeId')));
-  assert.ok(span.parameters.oneOf.some((shape) => shape.required.includes('name')));
+  assert.equal(span.parameters.type, 'object');
+  assert.equal(span.parameters.oneOf, undefined);
+  assert.deepEqual(span.parameters.required, ['prompt']);
+  assert.ok(span.parameters.properties.worktreeId);
+  assert.ok(span.parameters.properties.name);
+  // Deliberately permissive wire shape; exact-one is enforced before business effects.
+  assert.deepEqual(validateJsonSchemaValue(span.parameters, { prompt: 'Task' }), []);
+  assert.deepEqual(validateJsonSchemaValue(span.parameters, { prompt: 'Task', worktreeId: 'wt', name: 'demo' }), []);
   assert.match(JSON.stringify(span.parameters), /never a string/);
   await assert.rejects(
     span.execute(

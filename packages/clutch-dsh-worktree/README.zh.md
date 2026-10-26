@@ -208,7 +208,7 @@ Git-root Session 保留原有预览范围。
 
 | 工具                    | 参数                                                          | 行为                                                                                                                                                                      |
 | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 所在的健康 Worktree 分支创建新分支；Local/Main 使用根 checkout 当前分支。显式本地或已获取的远端 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
+| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 的 Worktree 已提交 HEAD 创建新分支；Local/Main 捕获根 HEAD，包括 detached HEAD。显式本地或已获取的远端 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
 | `clutch_list_worktrees` | 可选 `workspaceId`                                            | 列出受管 Worktree 的 id、分支、路径、生命周期和健康状态，以及可用的本地和已获取的远端基线分支。默认查询调用方 Workspace。                                                               |
 | `clutch_span_worktree`  | `worktreeId` 或旧参数 `name`、`prompt`、可选 `model`、`title` | 创建新的原生 Session、建立绑定、配置初始模型并提交 prompt。返回 `sessionId` 和投递阶段状态。                                                                              |
 | `clutch_list_models`    | 可选 `provider`                                               | 列出原生 provider/model、推理强度和 provider 错误，同时返回当前 Session 模型及部署默认模型。                                                                              |
@@ -228,8 +228,14 @@ detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
 `clutch_report_result({ status, summary, evidence?, requestId? })`。Host 将回报目标固定为
 发起委派的 Session。`status` 为 `completed`、`blocked` 或 `failed`；`summary` 与
 `evidence` 各限 2,000 字符。其余六项能力需通过 `/cluworktree` 或此 Worktree 显式配置的自动注入开启。
-报告作为普通原生消息排队投递，应核验其声明和证据再接受完成。
+报告作为原生 Agent relay 排队投递，而不是人类消息；应核验其声明和证据再接受完成。
 回报由模型主动调用；进程崩溃、Agent 停止或等待用户审批时可能无法回报。`idle` 不代表成功。
+
+Agent 发出的任务派发、继续消息和回报会记录原生 `agent-message` / `relay` 来源及实际发送方 Session。
+身份由 Host 从调用 Agent 取得，工具参数不能冒充发送者。模型可见内容带 Agent 来源外壳，保留所传 prompt 正文。
+支持该能力的原生 Chat 使用带发送 Session 的 relay/context 展示；唤醒接收方时显示 Agent 触发项，而非人类气泡。
+协议层的 `user` role 不等于人类输入，也不会提升指令权限。
+人类输入和用户发起的 Dashboard 同步任务仍走原有原生用户通道；不改写旧历史，也不根据正文猜测来源。
 
 回报权限仅属于当前委派任务。`completed`、`blocked` 或 `failed` 报告成功接收一次后，
 即消耗并清空内存令牌。回报工具、SDK 与指导保持稳定，无令牌时调用会被拒绝。
@@ -252,7 +258,31 @@ Schema 说明准确身份、默认值和目标互斥约束，不携带 `$schema`
 单个 Session 历史损坏时仅返回该项 `unavailable` 诊断，其余列表结果仍可用。
 
 PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status` 与 `summary`。
-长度限制保留在字段描述中，并在执行时严格校验；互斥的指派目标使用兼容 DSH schema 子集的 `oneOf`。
+长度限制保留在字段描述中，并在执行时严格校验；所有工具输入均采用无 union 的封闭对象根节点，嵌套 model 对象也封闭。
+派发保留旧参数的准确分支名称，但运行时要求恰好一个非空目标；非法目标或未知字段在创建 Session 前失败。
+可选字段省略或传 `null` 均表示省略，包括 model.reasoningEffort 和 mode（默认 queue）；必填字段仍拒绝 null。
+身份、title、evidence 的空白值不是默认值；instructions 空串表示不保存指令。
+使用默认值时省略可选字段或传 JSON `null`；`""`、`"null"` 和 provider/model 为空的 model 对象均不表示继承。
+新消息与首次回报必须省略 `requestId` 或传 JSON `null`，由 Host 生成身份。
+首次回报若自造 id 而被拒绝，错误会说明如何纠正，且不消耗回报 token。
+投递结果不确定时，重试必须保留返回的 id 和完全相同的内容。
+
+原生 schema 保留真正可选字段。若路由会生成可选字段空值，可在 Host 配置中按准确 provider id 启用：
+
+```yaml
+- id: clutch-dsh-worktree-host
+  config:
+    dshHome: !!js dshHomePath()
+    nullableToolProviders: [ocx]
+```
+
+默认列表为空。对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
+用可空值表达原本可选的字段，封闭嵌套对象并保留长度限制。
+首次回报的 wire requestId 只允许 null；存在不确定投递时恢复重试 id 字段。
+原生目录、PTC SDK、其他插件和执行校验保留既有契约。
+这不会启用 provider 的 strict 模式，也不承诺各网关通用支持。已检查本地 DSH pi-ai
+适配和真实 ocx/Luna 路由；其他路由需单独验证。
+官方来源、验证分层与限制见[工具 Schema 规范](docs/TOOL-SCHEMA-STANDARD.md)。
 
 `model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
 有效模型与推理强度，该默认路径无需查询模型列表。

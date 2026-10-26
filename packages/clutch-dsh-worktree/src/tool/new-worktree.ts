@@ -7,18 +7,18 @@ import { defaultBase, errorText } from './context.js';
 const newArgs = z
   .object({
     name: text.describe(
-      'Required NEW Git branch name, for example feature/demo; not a path or existing Worktree id.',
+      'New Git branch name, e.g. feature/demo; not a path or Worktree id.',
     ),
     baseBranch: text
       .optional()
       .describe(
-        'Existing local or fetched remote branch override. Omit to inherit the caller checkout’s committed HEAD; do not assume main.',
+        'Local/fetched remote base branch. Omitted/null captures the caller’s healthy Worktree HEAD or Workspace root HEAD, including detached HEAD; never assumes main.',
       ),
     instructions: z
       .string()
       .max(32000)
       .optional()
-      .describe('Optional shared instructions saved for this Worktree; max 32000 characters.'),
+      .describe('Shared Worktree instructions; omitted/null/empty saves none.'),
   })
   .strict();
 
@@ -26,7 +26,7 @@ export function registerNewWorktree(context: ToolContext): void {
   const { add, agent, options, check, scope } = context;
   add(
     'clutch_new_worktree',
-    'Create a managed Worktree with a new branch. By default captures the calling Session’s healthy Worktree HEAD, or its Workspace root HEAD (including detached HEAD). An explicit local or fetched remote baseBranch overrides this. Uncommitted files are not copied. Returns acquisition baseCommit and baseBranch when branch-attached. Does not create a Session or start the requested work. When the user asks to create a Worktree and implement/fix something, follow with clutch_span_worktree using the returned worktreeId if delegation is enabled; let that Session implement and verify the task.',
+    'Create a managed Worktree and branch; uncommitted files stay behind. Returns worktreeId, path, baseCommit and branch-attached baseBranch. Creates no Session: for create-and-implement requests, follow with clutch_span_worktree when enabled. instructionsSaved:false retains the Worktree; repair its instructions, never recreate it. Never automatically retry uncertain creation.',
     newArgs,
     output.object(
       {

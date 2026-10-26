@@ -1,5 +1,6 @@
 import type { CallingAgent } from './types.js';
 import type { Context } from '@deepseek-ai/cordis';
+import { createAgentRelaySender, type AgentRelayInput, type RelayAgent } from './agent-relay.js';
 
 export interface ToolModel {
   readonly provider: string;
@@ -41,6 +42,7 @@ export interface ToolSessionSnapshot {
 /** Host-only native capabilities; never added to the Provider's read adapter. */
 export interface WorktreeToolSessionPort {
   resolveAgent(sessionId: string, signal: AbortSignal): Promise<CallingAgent>;
+  sendAgentMessage(input: AgentRelayInput, signal: AbortSignal): Promise<{ accepted: true }>;
   create(input: { cwd: string }): Promise<{ sessionId: string }>;
   prompt(
     input: {
@@ -60,7 +62,7 @@ export interface WorktreeToolSessionPort {
   subscribe(sessionIds: readonly string[], changed: () => void): () => void;
 }
 
-interface NativeAgent {
+interface NativeAgent extends RelayAgent {
   readonly session: {
     readonly id: string;
     requestHeader():
@@ -96,6 +98,18 @@ interface NativeContext {
 export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSessionPort {
   const native = ctx as unknown as NativeContext;
   const controller = ctx.get('sessionController') as NativeSessionController;
+  const relay = createAgentRelaySender({
+    getAgent: (id) => native.agents.get(id),
+    resolveAgent: async (id) => {
+      const result = await controller.resolveAgent(id);
+      if ('error' in result) throw result.error;
+      return result.agent;
+    },
+    observeSession: (id, options) => native.sessionQuery.observeSession(id, options),
+  });
+  const disposeRelayAgent = native.on('agent/disposed', ((event: { agent: CallingAgent }) => {
+    relay.revoke(event.agent);
+  }) as (...args: never[]) => void, { global: true });
   const errors = new Map<string, string>();
   const hooks = new Map<string, () => void>();
   const questions = new Map<string, number>();
@@ -138,6 +152,8 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
   );
   ctx.effect(
     () => () => {
+      relay.dispose();
+      disposeRelayAgent();
       disposeError();
       disposeStart();
       disposeQuestions();
@@ -175,6 +191,7 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
     },
     create: (input) => controller.create(input),
     prompt: (input, signal) => controller.prompt(input, signal),
+    sendAgentMessage: (input, signal) => relay.send(input, signal),
     rename: (input) => controller.rename(input),
     modelCatalog: () => controller.modelCatalog(),
     snapshot,

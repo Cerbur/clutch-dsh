@@ -87,7 +87,9 @@ async function fixture(t) {
     },
   );
   const makeAgent = async (id) => {
-    const agent = { session: { id, requestHeader: () => cuts.get(id)?.header }, status: 'running' };
+    const inbox = { nextTurn: [], nextStep: [] };
+    const agent = { session: { id, requestHeader: () => cuts.get(id)?.header }, status: 'running', inbox,
+      followup: (message) => inbox.nextTurn.push(message), steer: (message) => inbox.nextStep.push(message) };
     await ctx.plugin((scoped) => {
       agent.ctx = scoped;
     });
@@ -107,6 +109,154 @@ async function fixture(t) {
     signal: new globalThis.AbortController().signal,
   };
 }
+
+test('Agent relay uses native inbox delivery with real sender provenance, never user prompt', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  const pending = { nextTurn: [], nextStep: [] };
+  target.inbox = pending;
+  target.followup = (message) => pending.nextTurn.push(message);
+  target.steer = (message) => pending.nextStep.push(message);
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:relay', mode: 'queue', content: [{ type: 'text', text: '  Exact message\n' }] };
+  assert.deepEqual(await f.port.sendAgentMessage(input, f.signal), { accepted: true });
+  assert.equal(f.calls.some(([kind]) => kind === 'prompt'), false);
+  assert.equal(pending.nextTurn.length, 1);
+  assert.equal(pending.nextStep.length, 0);
+  const message = pending.nextTurn[0];
+  assert.equal(message.role, 'user', 'provider role does not impersonate this Session assistant or system');
+  assert.deepEqual(message.source, { kind: 'agent-message', form: 'relay', senderSessionId: 'sender' });
+  assert.match(message.content[0].text, /Agent sender sent a message/);
+  assert.equal(message.content[1].text, input.content[0].text);
+  assert.ok(Object.isFrozen(message));
+  await f.port.sendAgentMessage({ ...input, requestId: 'clutch-worktree:steer', mode: 'steer' }, f.signal);
+  assert.equal(pending.nextStep.length, 1);
+  const before = f.calls.length;
+  await f.port.prompt({ sessionId: 'target', requestId: 'human-rpc', mode: 'queue', content: input.content }, f.signal);
+  assert.equal(f.calls[before][0], 'prompt', 'human-originated Dashboard tasks keep native user admission');
+});
+
+test('relay retries coalesce pending and consumed native identities, including after adapter recreation', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:retry', mode: 'queue', content: [{ type: 'text', text: 'Task' }] };
+  await Promise.all([f.port.sendAgentMessage(input, f.signal), f.port.sendAgentMessage(input, f.signal)]);
+  assert.equal(target.inbox.nextTurn.length, 1, 'same pending input must not be delivered twice');
+  const message = target.inbox.nextTurn.shift();
+  f.cuts.set('target', { events: [{ type: 'user/message', data: message }] });
+  const reloaded = createWorktreeToolSessionPort(f.ctx);
+  await reloaded.sendAgentMessage(input, f.signal);
+  assert.equal(target.inbox.nextTurn.length, 0, 'a consumed native receipt survives plugin adapter recreation');
+  await assert.rejects(reloaded.sendAgentMessage({ ...input, content: [{ type: 'text', text: 'Changed task' }] }, f.signal), /identity|identical|mismatch/i);
+  const other = await f.makeAgent('other');
+  await assert.rejects(reloaded.sendAgentMessage({ ...input, sender: other }, f.signal), /identity|identical|mismatch/i);
+});
+
+test('uncertain relay acceptance retries the same inbox identity instead of adding another message', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  let fail = true;
+  target.followup = (message) => {
+    target.inbox.nextTurn.push(message);
+    if (fail) { fail = false; throw new Error('observer failed after native acceptance'); }
+  };
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:uncertain', mode: 'queue', content: [{ type: 'text', text: 'Task' }] };
+  await assert.rejects(f.port.sendAgentMessage(input, f.signal), /after native acceptance/);
+  await f.port.sendAgentMessage(input, f.signal);
+  assert.equal(target.inbox.nextTurn.length, 1);
+});
+
+test('relay retries cannot adopt a replacement body for an already admitted native identity', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:replaced', mode: 'queue', content: [{ type: 'text', text: 'Original task' }] };
+  await f.port.sendAgentMessage(input, f.signal);
+  const original = target.inbox.nextTurn[0];
+  const replacement = { ...original, content: [original.content[0], { type: 'text', text: 'Replacement task' }] };
+  target.inbox.nextTurn[0] = replacement;
+  f.cuts.set('target', { events: [
+    { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, inserted: [original] } },
+    { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [replacement], outcome: 'canceled' } },
+  ] });
+  const reloaded = createWorktreeToolSessionPort(f.ctx);
+  await assert.rejects(reloaded.sendAgentMessage({ ...input, content: [{ type: 'text', text: 'Replacement task' }] }, f.signal), /identity|identical|mismatch/i);
+  assert.equal(target.inbox.nextTurn.length, 1);
+});
+
+test('relay rejects cancelled, stale and disposed senders before native admission', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:cancel', mode: 'queue', content: [{ type: 'text', text: 'Task' }] };
+  await assert.rejects(f.port.sendAgentMessage(input, globalThis.AbortSignal.abort(new Error('cancelled'))), /cancelled/);
+  await f.makeAgent('sender');
+  await assert.rejects(f.port.sendAgentMessage(input, f.signal), /live sender/);
+  assert.equal(target.inbox.nextTurn.length, 0);
+});
+
+test('relay cancellation and disposal during recipient resolution cannot admit input', async (t) => {
+  for (const stop of ['cancel', 'sender-disposed', 'target-replaced', 'adapter-disposed']) {
+    const f = await fixture(t);
+    const sender = await f.makeAgent('sender');
+    const target = await f.makeAgent('target');
+    const controller = new globalThis.AbortController();
+    let release;
+    let entered;
+    const started = new Promise((resolve) => { entered = resolve; });
+    f.ctx.get('sessionController').resolveAgent = async () => {
+      entered();
+      await new Promise((resolve) => { release = resolve; });
+      return { agent: target };
+    };
+    const sending = f.port.sendAgentMessage({ sender, sessionId: 'target', requestId: 'clutch-worktree:race', mode: 'queue', content: [{ type: 'text', text: 'Task' }] }, controller.signal);
+    await started;
+    if (stop === 'cancel') controller.abort(new Error('cancelled before acceptance'));
+    if (stop === 'sender-disposed') f.ctx.emit('agent/disposed', { agent: sender });
+    if (stop === 'target-replaced') await f.makeAgent('target');
+    if (stop === 'adapter-disposed') await f.owner.dispose();
+    const rejected = assert.rejects(sending, /cancelled|live|disposed/);
+    release();
+    await rejected;
+    assert.equal(target.inbox.nextTurn.length, 0, stop);
+  }
+});
+
+test('native receipt lookup failure is not treated as an empty history', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  f.ctx.get('sessionQuery').observeSession = async () => { throw new Error('history unavailable'); };
+  await assert.rejects(f.port.sendAgentMessage({ sender, sessionId: 'target', requestId: 'clutch-worktree:fail-closed', mode: 'queue', content: [{ type: 'text', text: 'Task' }] }, f.signal), /history unavailable/);
+  assert.equal(target.inbox.nextTurn.length, 0);
+});
+
+test('unknown native insertion receipts fail closed and release the observation', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const target = await f.makeAgent('target');
+  const input = { sender, sessionId: 'target', requestId: 'clutch-worktree:unknown-receipt', mode: 'queue', content: [{ type: 'text', text: 'Task' }] };
+  for (const inserted of ['unknown-receipt-format', {}, null, [null], [{ content: [] }]]) {
+    f.cuts.set('target', { events: [{ type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, inserted } }] });
+    const before = f.calls.filter(([kind]) => kind === 'dispose-cut').length;
+    await assert.rejects(f.port.sendAgentMessage(input, f.signal), /receipt/i);
+    assert.equal(target.inbox.nextTurn.length, 0, 'an unreadable receipt must not authorize another insertion');
+    assert.equal(f.calls.filter(([kind]) => kind === 'dispose-cut').length, before + 1);
+  }
+});
+
+test('a resolver returning a different live Session cannot redirect an authorized relay', async (t) => {
+  const f = await fixture(t);
+  const sender = await f.makeAgent('sender');
+  const expected = await f.makeAgent('target');
+  const wrong = await f.makeAgent('wrong-target');
+  f.ctx.get('sessionController').resolveAgent = async () => ({ agent: wrong });
+  await assert.rejects(f.port.sendAgentMessage({ sender, sessionId: 'target', requestId: 'clutch-worktree:wrong-target', mode: 'queue', content: [{ type: 'text', text: 'Task' }] }, f.signal), /recipient|identity|live/i);
+  assert.equal(expected.inbox.nextTurn.length, 0);
+  assert.equal(wrong.inbox.nextTurn.length, 0);
+});
 
 test('cold reads retain and dispose the native cut without resolving an Agent', async (t) => {
   const f = await fixture(t);
