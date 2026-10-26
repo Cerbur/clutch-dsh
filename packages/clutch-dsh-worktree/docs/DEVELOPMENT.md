@@ -15,6 +15,11 @@ Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/ba
 test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。
 真实 merge/rebase 流程应在独立临时 Git 仓库和测试 Worktree 中执行，不能使用开发分支作为操作目标。
 
+`node --test test/dashboard-modal-portal.test.mjs` 使用仅供测试的 `jsdom@26.1.0`、真实 React/ReactDOM
+portal，以及已安装 DSH primitives 的原始 Modal/键盘/焦点 helper 声明，覆盖 Escape 冒泡、菜单优先级、
+弹窗重开与 pending 接收后的 Session 导航。CSS、图标与无关子视图被隔离，不替换原生 Modal 的事件逻辑；
+该依赖不进入插件运行包。
+
 - **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）

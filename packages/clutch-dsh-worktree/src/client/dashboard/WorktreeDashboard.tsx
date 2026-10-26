@@ -754,6 +754,9 @@ export function WorktreeDashboard({
         // event. Their DOM may already be gone; defaultPrevented retains ownership.
         if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
+          // Portal keys bubble through this React ancestor before the native
+          // Modal's document listener. Let it closeSync (including its busy guard).
+          if (syncOpen) return;
           if ((event.target as Element | undefined)?.closest?.('[data-single-select-picker]')) return;
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;

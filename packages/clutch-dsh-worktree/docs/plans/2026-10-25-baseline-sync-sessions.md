@@ -28,6 +28,9 @@ Branch: `wt-worktree-0.1.19/feat-delegation-dashboard`.
 - The Client preserves ready content, refreshes at most the owning Workspace and opens the returned
   Session through the existing membership/navigation path. Late results cannot navigate after the
   Dashboard identity, baseline, manager or component lifetime changes.
+- While the sync native Modal is open, Dashboard yields Escape to its document listener, preserving
+  native menu capture priority. Escape closes only a non-pending sync dialog; pending admission
+  keeps both surfaces mounted so successful completion still opens the created Session.
 
 ## Automated verification
 
@@ -62,6 +65,21 @@ The complete package test command passed **1,209 tests** with pinned `pnpm@10.32
 `npm exec --offline --package pnpm@10.32.1 -- pnpm`). Workspace, patches, lint, typecheck, build,
 README parity and `git diff --check` also passed. Patch validation retains its existing unresolved
 `!!js` YAML-tag warning. This follow-up used automated tests; it did not repeat the live Agent runs below.
+
+### Native sync Modal Escape regression (2026-10-26)
+
+Release-based review found that portal key events reached Dashboard before native Modal's document
+bubble listener. Dashboard now yields Escape while the sync Modal is open, leaving native close and
+the pending busy guard in control. The real React/ReactDOM portal regression uses test-only jsdom
+and the installed native Modal/keyboard/focus helper declarations unchanged. All three cases failed
+before the fix and pass after it: modal-only Escape and reopen, pending Escape with retained Session
+navigation, and capture-dismissed menu priority. Dashboard Escape resumes after the modal closes.
+
+Workspace, patches, lint, typecheck, independent build, README parity and `git diff --check` passed
+with pinned pnpm. The complete package test passed **1,212 tests**; Dashboard/portal/README focused
+tests passed **80 tests**. Existing lock entries were preserved unchanged; only the jsdom dependency
+closure was added. Build output confirms jsdom is absent from the Client bundle. No live Agent
+merge/rebase run was repeated for this keyboard fix.
 
 ## Real workflow verification in `~/.dsh-test`
 

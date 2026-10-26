@@ -649,6 +649,10 @@ Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最�
 按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
 创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
 快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
+同步 Modal 打开时 Dashboard 不消费 Escape：React portal 先经过 React 祖先，再由原生 Modal 的
+document bubble listener 处理。非 pending 时仅关闭弹窗，pending 时 `closeSync` busy guard 保留
+弹窗和 Dashboard，成功接收后仍打开新 Session。菜单 capture/defaultPrevented 优先级不变，
+弹窗关闭后恢复 Dashboard Escape；不修改 upstream DSH。
 同步通知可选携带现有接收身份 `requestId`，与 Surface 成功返回后的刷新共用 reader 的
 `changeId`。每个 Workspace 最多保留 128 个变更身份，A/B 交错通知与完成回调复用最新的
 变更后在途读取或已完成结果；超出上限淘汰最早身份。新身份和无身份失效仍推进代次，

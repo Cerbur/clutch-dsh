@@ -244,6 +244,11 @@ No duplicate left-sidebar action or slot registration is introduced. Placement s
 at the native center's top edge, leaving the Windows caption strip uncovered.
 Dashboard Escape handling respects native capture listeners' `defaultPrevented`
 even after a dismissed menu unmounts, so one Escape closes only the application menu.
+While the sync Modal is open, Dashboard yields Escape without stopping propagation: React portal
+events pass through its React ancestor before the native Modal's document bubble listener. The
+native layer closes only the sync dialog; its `closeSync` busy guard retains both surfaces during
+admission. Closing the modal restores ordinary Dashboard Escape handling, and native menu capture
+still takes priority.
 
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an

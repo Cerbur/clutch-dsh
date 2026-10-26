@@ -382,8 +382,9 @@ when exactly one checkout in this Workspace matches; remote, missing, and ambigu
 remain plain text. The link follows the saved baseline when you edit it.
 
 **Sync with Base** opens a dialog with **Rebase** and **Merge baseline**. Confirming creates and
-opens a fresh native task Session in the current managed Worktree; it uses the configured default
-model and normal native permissions. The saved local or fetched remote baseline is used, and the
+opens a fresh native task Session in the current managed Worktree. Escape closes only this dialog;
+while task admission is pending, Escape closes neither the dialog nor the Dashboard. The Session uses
+the configured default model and normal native permissions. The saved local or fetched remote baseline is used, and the
 Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. A baseline saved
 while branch enumeration is pending invalidates the old request with `WORKTREE_STATE_CONFLICT`;
 reopen the dialog to use the new baseline. Baseline saves wait for any final task admission already
