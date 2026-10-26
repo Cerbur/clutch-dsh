@@ -5,7 +5,7 @@
 `clutch-dsh` is a pnpm workspace and collection of plugins for DeepSeek Harness (DSH).
 Install only the plugins you need in your DSH Web profile.
 
-The repository currently contains Worktree, Fireworks, Discuss, and Title plugins. Each
+The repository currently contains Worktree, Fireworks, Discuss, Title, and Office plugins. Each
 package has its own user documentation and can be built or installed independently.
 
 ## Installation
@@ -24,6 +24,8 @@ dsh web
 
 You do not need to install every plugin. See the package README for each plugin's behavior,
 requirements, and usage.
+
+Office is an unreleased whitebox MVP; use its local checkout instructions until its first npm release.
 
 ### Install from a local checkout
 
@@ -47,12 +49,13 @@ the exact local build command and any package-specific development notes.
 
 ## Plugins
 
-| Plugin                                                                    | Preview                                                                                                                            | What it does                                                                                                                   |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="240" alt="Worktree Dashboard preview"> | Adds a Git Worktree view that groups DSH Sessions by Workspace, Worktree, and Session. The Dashboard is a plugin-only preview. |
-| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="Fireworks overlay in DSH Web UI">  | Adds the `happy_fireworks` tool and a short celebration overlay for meaningful milestones.                                     |
-| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming workflow">        | Adds `/discuss [topic]`, an entry point for the bundled brainstorming workflow and reviewed design documents.                  |
-| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="Session title list in DSH">        | Adds configurable session title templates and a settings manager for new DSH Sessions.                                         |
+| Plugin                                                                    | Preview                                                                                                                                           | What it does                                                                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`@cerbur/clutch-dsh-worktree`](packages/clutch-dsh-worktree/README.md)   | <img src="packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="240" alt="Worktree Dashboard preview">                | Adds a Git Worktree view that groups DSH Sessions by Workspace, Worktree, and Session. The Dashboard is a plugin-only preview. |
+| [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="Fireworks overlay in DSH Web UI">                 | Adds the `happy_fireworks` tool and a short celebration overlay for meaningful milestones.                                     |
+| [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming workflow">                       | Adds `/discuss [topic]`, an entry point for the bundled brainstorming workflow and reviewed design documents.                  |
+| [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="Session title list in DSH">                       | Adds configurable session title templates and a settings manager for new DSH Sessions.                                         |
+| [`@cerbur/clutch-dsh-office`](packages/clutch-dsh-office/README.md)       | <img src="packages/clutch-dsh-office/assets/screenshots/office-overview.png" width="240" alt="Office whitebox preview with simulated workspaces"> | Lists all native workspaces vertically as 3D kitchens with up to two whale-girl Session characters. Unreleased MVP.            |
 
 ## Development
 
@@ -89,6 +92,7 @@ formatting, linting, types, and tests; publishable plugins live under `packages/
 - [Fireworks README](packages/clutch-dsh-fireworks/README.md) — milestone celebrations.
 - [Discuss README](packages/clutch-dsh-discuss/README.md) — the `/discuss` brainstorming entry point.
 - [Title README](packages/clutch-dsh-title/README.md) — session title templates.
+- [Office README](packages/clutch-dsh-office/README.md) — workspace kitchen visualization.
 
 ## Friendly Links
 
