@@ -50,6 +50,11 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   resolves optional permission capabilities on each invocation, including the confirmed second call:
   provider revocation reports unverified/retryable without using an old setter, and recovery/retry
   retains explicit user restrictions. This controller coverage does not validate DOM/portal rendering.
+  Equivalent pending Workspace/Worktree/Session/cwd confirmations share one Promise/dialog;
+  settled consent is never cached. A missing named preset can now use native Session policy
+  events after the same acknowledgement, with actual policy readback. The native menu may
+  display Custom; the dialog explains this. Successful policy application does not trigger
+  the missing-preset restart reminder. Unsupported profiles keep existing recovery behavior.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 - `command-activity.ts` registers a private native Conversation activity target for

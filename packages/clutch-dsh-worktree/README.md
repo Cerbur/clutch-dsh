@@ -18,7 +18,7 @@ its Workspace-root HEAD history with an optional comparison branch; the plugin d
 ## Installation
 
 After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
-server and refresh the page, to load the plugin Host and permission configuration. Finish
+server and refresh the page, if the plugin Host has not loaded. Finish
 active tasks before restarting. If the Client loads while the Host is still unavailable, a
 native toast reminds you once per Client load. If a Worktree Session permission check reports
 that **Worktree Full Access** is unavailable and falls back to `workspace-write`, a separate
@@ -27,6 +27,13 @@ permission recovery message retains this guidance after the toast closes. Networ
 Workspace errors, unverified permissions, and explicit user restrictions do not trigger the
 missing-preset reminder. The reminder does not reload services or grant Full Access; if the
 preset remains unavailable after restarting, check the DSH plugin and permission configuration.
+
+Once the Host is available, a missing named preset alone no longer requires a restart on
+supported DSH profiles. The existing Full Access confirmation still requires acknowledgement;
+after confirmation, Worktree applies and verifies native per-Session file access and `ask`
+approval. The native menu may display **Custom** until the named preset loads. This changes
+neither the native preset catalog nor its defaults or Auto review integration. Unsupported
+profiles retain the fallback/recovery guidance above.
 
 ### Install from npm
 
@@ -631,11 +638,16 @@ text, actions and diagnostic details follow the font size selected in **Settings
 - Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
   confirmation. The plugin appends this preset while preserving DSH's existing presets, default
   selection, and official Auto review integration. It combines DSH `danger-full-access` with `ask`,
-  keeps approval prompts enabled, and does not change network or process policy. If unavailable, the plugin falls back to
+  keeps approval prompts enabled, and does not change network or process policy. If neither the preset nor native Session policy writes are available, the plugin falls back to
   `workspace-write + ask` when possible or reports an unverified, retryable state. Permission
   services may mount late or be replaced: retry uses the currently available capabilities without
   restarting the Worktree Host. A temporarily missing service never grants Full Access, and an
   explicit user restriction is preserved. It cannot exceed the sandbox imposed by the host running DSH.
+- If the named preset is missing but native Session policy services are available, the same
+  confirmation applies `danger-full-access + ask` through native permission events instead.
+  Both effective values are verified before success is reported; the native menu may show
+  **Custom**. No synthetic preset identity is stored. Duplicate pending confirmations for the
+  same Workspace, Worktree, Session and path share one dialog; different targets remain separate.
 - Session-to-Worktree bindings and permission checks compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
 - Git must be installed and available on `PATH`. A missing Git executable shows install guidance
   and no command block; the plugin does not run setup or installation commands.

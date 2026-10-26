@@ -24,6 +24,8 @@ export interface WorktreePermissionCapability {
   readonly permissionService: boolean;
   readonly fullPreset: boolean;
   readonly workspaceWrite: boolean;
+  /** Native per-Session sandbox/approval write and readback, independent of the catalog. */
+  readonly sessionPolicy?: boolean;
 }
 
 export interface WorktreePermissionDecisionInput {
@@ -111,7 +113,7 @@ export function decideWorktreePermission(
   if (input.current.explicitUserOverride) return { kind: 'preserve-user-restriction' };
   if (isFullAccess(input.current)) return { kind: 'no-op' };
   if (!input.capability.permissionService) return { kind: 'unverified' };
-  if (input.capability.fullPreset) {
+  if (input.capability.fullPreset || input.capability.sessionPolicy) {
     return { kind: 'apply-full', preset: WORKTREE_FULL_ACCESS_PRESET };
   }
   if (input.capability.workspaceWrite) return { kind: 'fallback-workspace-write' };

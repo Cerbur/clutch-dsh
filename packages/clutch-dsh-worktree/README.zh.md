@@ -17,13 +17,18 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 
 ## 安装
 
-向运行中的 DSH 安装插件后，请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以加载
-插件 Host 与权限配置。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
+向运行中的 DSH 安装插件后，若插件 Host 尚未加载，请重启 DSH Desktop，或重启 DSH Web
+服务后刷新页面。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
 原生 toast 会在每次 Client 加载期间提醒一次。如果 Worktree Session 权限检查确认
 **Worktree Full Access** 预设不可用并降级为 `workspace-write`，另一条每次加载至多一次的
 toast 会提示在刚安装或更新插件后重启。toast 关闭后，权限修复说明仍保留重启指引。网络故障、
 Workspace 错误、无法确认的权限与用户的显式权限限制不会触发预设缺失提醒。提醒不会重载服务
 或授予完全访问；若重启后预设仍不可用，请检查 DSH 的插件与权限配置。
+
+Host 可用后，在支持的 DSH profile 中，仅缺失命名预设不再需要重启。原有完全访问确认框仍
+要求勾选风险确认；确认后，Worktree 会设置并验证原生 Session 文件访问权限与 `ask` 审批。
+命名预设加载前，原生菜单可能显示 **Custom（自定义）**。此过程不修改原生预设目录、默认值
+或 Auto review 集成。不支持该能力的 profile 仍沿用上述降级与修复指引。
 
 ### 从 npm 安装
 
@@ -534,9 +539,13 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
   追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
-  不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
+  预设与原生 Session 权限写入均不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
   可以迟挂载或被替换：重试使用当前可用能力，不需要重启 Worktree Host。服务暂时缺失时
   绝不授予 Full Access，并保留用户的显式限制；它不能突破 DSH 宿主设置的 sandbox 上限。
+- 若命名预设缺失但原生 Session 权限服务可用，同一确认框会通过原生权限事件设置
+  `danger-full-access + ask`。仅在两个实际值均验证成功后报告生效；原生菜单可能显示
+  **Custom（自定义）**，不会存储虚构的预设身份。同一 Workspace、Worktree、Session 和路径
+  的重复待确认请求共用一个对话框，不同目标仍分别确认。
 - Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。

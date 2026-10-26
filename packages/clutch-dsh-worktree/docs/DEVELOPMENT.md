@@ -84,6 +84,17 @@ node --test test/client-build.test.mjs
 
 ### 3.2 将本地插件添加到 DSH Profile
 
+验证“预设缺失但会话权限仍可生效”的原生接缝，可在本包目录执行：
+
+```bash
+node test/manual/session-permission-native.mjs "$HOME/.dsh-test/profiles/node_modules"
+```
+
+脚本复用指定环境的真实 Session、projection、sandbox、approval 与 permission 模块，
+仅创建内存 fixture Session，不启动服务、不读取历史 Session 或凭据、不切换安装链接。
+它验证确认前无写入、确认后 Custom 完全访问与 ask、幂等、Auto 共存、清理归一化和降权恢复。
+这不是浏览器 DOM/端到端验证。详细机制见 `docs/plans/2026-10-17-session-permission-injection.md`。
+
 bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
 `internal/config` hook 在原生权限 entry 激活前追加 Worktree preset，不替换
 `permission.config`、不复制内置表、不修改官方 Auto review 注册。`--dump-config`
