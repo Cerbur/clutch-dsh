@@ -12,8 +12,8 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 不会复制 transcript 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期操作、
-> Session 操作、Worktree/Main 指令以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。派生 Worktree 和
-> 其他未完成操作仍标记为**即将推出**。
+> Session 操作、Worktree/Main 指令、派生 Worktree 以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。
+> 同步基线会按所选 Rebase 或 Merge 方式创建 Agent 任务会话。
 
 ## 安装
 
@@ -83,7 +83,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
-| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 和其他未完成卡片仍标记为**即将推出**。                                                                                         |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
+| **同步基线** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="提供 Rebase 与 Merge baseline 选项的同步基线弹窗"> | 选择 Rebase 或 Merge baseline，在当前 Worktree 创建原生 Agent 任务会话。 |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
@@ -325,8 +326,35 @@ macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
-中打开记录的目录以及查看 Git 与变更。派生 Worktree 和其他标记的快捷操作仍是占位内容。VS Code
+中打开记录的目录以及查看 Git 与变更。快捷操作提供同步基线与归档。VS Code
 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
+
+**派生 Worktree** 显示同一 Workspace 中，已保存基线匹配当前 checkout 本地分支的受管理 Worktree。
+概览预览前五项，页签显示全部匹配项，包括带有可用状态和路径的已归档条目；点击条目可打开其 Dashboard。
+修改已保存基线会更新关系；此视图表示直接基线匹配，不代表 Git 祖先关系或委派 Session 历史。
+本地分支名和 `refs/heads/` ref 可匹配，显式远端 ref 不匹配。Detached HEAD 或 Main 分支未知时
+没有匹配项；受管理 checkout 无法获取当前分支时，使用其记录分支。
+派生 Worktree 的 Dashboard 顶部可点击**基线**分支，打开对应 Worktree 或 Local/Main 的 Dashboard，
+编辑按钮独立保留。仅当同一 Workspace 中恰好一个 checkout 匹配时显示跳转入口；远端基线、
+未匹配或有歧义的基线保持普通文本。修改已保存基线后，入口随之更新。
+
+**同步基线**打开 **Rebase** / **Merge baseline** 选择弹窗。确认后在当前受管理 Worktree 中创建并打开
+新的原生任务会话。Escape 仅关闭该弹窗；任务接收等待期间，Escape 不会关闭弹窗或 Dashboard。
+会话使用配置的默认模型和原生权限策略。任务使用已保存的本地或已获取的远端基线；
+Host 在创建会话前拒绝过期、缺失、歧义或不健康的目标。分支枚举等待期间保存新基线会使旧请求
+返回 `WORKTREE_STATE_CONFLICT`；重新打开弹窗后可使用新基线。若该 Worktree 已进入最终任务接收阶段，
+基线保存会等待接收结束。Local/Main 不提供同步任务。
+Agent 检查工作区是否干净，遇到冲突时停止；Rebase 会改写当前分支的提交。任务接收仅代表开始，
+不代表 Git 已完成，请查看会话结果后再继续工作。部分创建失败会保留会话并提供**打开已创建会话**；
+传输失败后重试在当前 Host 生命周期内复用同一请求身份。绑定、模型、标题、报告准备及任务提交失败
+也会显示 Toast，并在**报错与修复**中记录本地化问题、恢复说明与已创建会话身份。
+恢复操作仅打开该会话，不重复创建会话或派发任务。关闭 Dashboard 后保留诊断历史并撤销其恢复回调。
+关闭 Dashboard 或更换目标、基线后才到达的部分失败，也会在非活动历史记录中保留已创建会话身份，
+不会跳转离开当前视图。任务创建同时支持局域网普通 HTTP、localhost 与 HTTPS 浏览器访问。
+插件重启会清除接收记录。
+不会自动 push 或 publish。终端、Git Diff、Pull Request 和运行测试四个占位按钮已移除。
+重连后，重放的同步通知会刷新受影响的 Workspace 与当前上下文；读取期间保留 ready 内容，
+其他 Workspace 保持原有视图。
 
 ### 在应用中打开记录的目录
 

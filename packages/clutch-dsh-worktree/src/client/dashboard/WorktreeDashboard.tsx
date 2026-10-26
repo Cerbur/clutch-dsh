@@ -1,4 +1,6 @@
 import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import type { WorktreeNotification } from '../surface/notification-queue.js';
+import { worktreeDiagnostics } from '../settings/diagnostics.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -12,11 +14,12 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
   IconBranchOutline16,
+  IconChevronRightOutline14,
   IconCopyOutline16,
   IconEditOutline16,
   IconPanelLeftOutline16,
 } from '../dsh-icons.js';
-import type { DashboardRecord } from './dashboard-selection.js';
+import type { DashboardRecord, MainDashboardRecord } from './dashboard-selection.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { isBlankSession, relativeTime, sessionDisplayLabel } from '../session/session-view.js';
 import { currentSessionIdFromList } from '../session/session-selection.js';
@@ -24,20 +27,55 @@ import type { SessionListLike, SessionPresentation } from '../session/session-vi
 import { sessionStatusLabel, sessionTimeLabel } from '../session/session-labels.js';
 import { OpenInAppButton } from './OpenInAppButton.js';
 import { mountDashboardOverlay } from './dashboard-overlay.js';
-import { isMainWorktreeId } from './dashboard-selection.js';
+import { isMainWorktreeId, selectDerivedWorktrees, selectBaseWorktree } from './dashboard-selection.js';
 import { selectWorktreeAcquisitionFacts } from './worktree-acquisition-facts.js';
 import type { DashboardPlacement } from './dashboard-overlay.js';
 import styles from './dashboard.css';
 import { WorktreeInstructions } from './WorktreeInstructions.js';
 import { WorktreeGitPanel } from './git/WorktreeGitPanel.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
-import type { BranchRecord, WorktreeManager } from '../../contract/index.js';
+import type { BranchRecord, WorktreeManager, WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
+import type { WorktreeSyncStrategy, WorktreeSessionDispatchResult } from '../../contract/baseline-sync.js';
 import { GitBranchPicker } from '../branch/GitBranchSelector.js';
 import { ToolSettings } from '../settings/ToolSettings.js';
 
 const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
 type DashboardTab = (typeof TABS)[number];
+
+/** getRandomValues is also available on plain-HTTP LAN origins. */
+function createSyncRequestId(): string {
+  return 'sync:' + Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),
+    (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function baselineSyncFailureNotices(
+  record: DashboardRecord,
+  requestId: string | undefined,
+  result: WorktreeSessionDispatchResult,
+  t: WorktreeTranslate,
+  onOpenSession?: (sessionId: string) => void,
+): readonly WorktreeNotification[] {
+  if (result.status === 'dispatched') return [];
+  const status = result.status;
+  const context = record.branch + ' · ' + record.absolutePath;
+  return [{
+    key: JSON.stringify(['sync', record.workspaceId, record.worktreeId, requestId, result.sessionId]),
+    context,
+    error: {
+      code: 'WORKTREE_SYNC_PARTIAL', message: result.error ?? '', retryable: false,
+      details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+        requestId, sessionId: result.sessionId, status },
+    },
+    text: t(`dashboard.sync.${status}`) + ' ' + t('dashboard.sync.partial'),
+    message: (translate) => translate(`dashboard.sync.${status}`) + ' ' + translate('dashboard.sync.partial'),
+    describe: (translate) => translate('dashboard.action.sync') + ' · ' + context,
+    actions: onOpenSession === undefined ? [] : [{
+      label: t('dashboard.sync.openSession'), leaveSettings: true,
+      onClick: () => onOpenSession(result.sessionId),
+    }],
+  }];
+}
 
 export interface WorktreeDashboardProps {
   readonly manager?: WorktreeManager & Partial<WorktreeToolSettingsManager>;
@@ -48,6 +86,9 @@ export interface WorktreeDashboardProps {
   readonly branches?: readonly BranchRecord[];
   readonly branchesLoading?: boolean;
   readonly record: DashboardRecord;
+  readonly worktrees?: readonly WorktreeRecord[];
+  readonly mainRecord?: MainDashboardRecord;
+  readonly onOpenWorktree?: (record: DashboardRecord) => void;
   readonly workspaceTitle: string;
   readonly t: WorktreeTranslate;
   readonly onClose: () => void;
@@ -61,6 +102,7 @@ export interface WorktreeDashboardProps {
   readonly onCreateSession?: () => void;
   readonly onCreateWorktree?: () => void;
   readonly onArchiveWorktree?: () => void;
+  readonly onSyncBaseline?: (strategy: WorktreeSyncStrategy, baseBranch: string, requestId: string) => Promise<WorktreeSessionDispatchResult>;
   readonly onOpenFile?: (path: string) => void;
 }
 
@@ -134,16 +176,9 @@ function DashboardFactRow({
   );
 }
 
-function PlaceholderButton({ children, t }: { children: ReactNode; t: WorktreeTranslate }) {
-  return (
-    <button type="button" className={styles.dashboardButton} disabled title={t('dashboard.soon')}>
-      {children}
-    </button>
-  );
-}
-
 function WorktreeBaselineEditor({
   value,
+  renderValue,
   branches,
   loading,
   currentBranch,
@@ -155,6 +190,7 @@ function WorktreeBaselineEditor({
   context,
 }: {
   readonly value?: string;
+  readonly renderValue?: (value: string | undefined) => ReactNode;
   readonly branches: readonly BranchRecord[];
   readonly loading: boolean;
   readonly currentBranch?: string;
@@ -298,7 +334,7 @@ function WorktreeBaselineEditor({
           ) : undefined
         }
       >
-        {saved === undefined ? (
+        {renderValue !== undefined ? renderValue(saved) : saved === undefined ? (
           <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
         ) : (
           <span data-dashboard-baseline-value title={saved}>{saved.replace(/^refs\/(heads|remotes)\//u, '')}</span>
@@ -368,6 +404,9 @@ function WorktreeBaselineEditor({
 export function WorktreeDashboard({
   manager,
   record,
+  worktrees = [],
+  mainRecord,
+  onOpenWorktree,
   workspaceTitle,
   t,
   onClose,
@@ -381,6 +420,7 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onSyncBaseline,
   onOpenFile,
   onSaveInstructions,
   onSaveBaseline,
@@ -514,6 +554,80 @@ export function WorktreeDashboard({
           return result;
         };
   const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncStrategy, setSyncStrategy] = useState<WorktreeSyncStrategy>('rebase');
+  const [syncPending, setSyncPending] = useState(false);
+  const [syncError, setSyncError] = useState<WorktreeViewError>();
+  const [syncResult, setSyncResult] = useState<WorktreeSessionDispatchResult>();
+  const syncRequest = useRef<string>();
+  const syncBusy = useRef(false);
+  const syncGeneration = useRef(0);
+  useEffect(() => {
+    syncGeneration.current++;
+    syncBusy.current = false;
+    syncRequest.current = undefined;
+    setSyncOpen(false);
+    setSyncPending(false);
+    setSyncError(undefined);
+    setSyncResult(undefined);
+    return () => { syncGeneration.current++; };
+  }, [record.workspaceId, record.worktreeId, displayedBaseline, manager]);
+  const closeSync = () => {
+    if (syncBusy.current) return;
+    syncGeneration.current++;
+    setSyncOpen(false);
+  };
+  const startSync = async () => {
+    if (syncBusy.current || syncResult || !onSyncBaseline || !displayedBaseline) return;
+    const generation = syncGeneration.current;
+    syncBusy.current = true;
+    setSyncPending(true);
+    setSyncError(undefined);
+    let requestId = syncRequest.current;
+    try {
+      requestId ??= createSyncRequestId();
+      syncRequest.current = requestId;
+      const result = await onSyncBaseline(syncStrategy, displayedBaseline, requestId);
+      if (generation !== syncGeneration.current) {
+        // Retiring navigation must not discard an already-created Session's failure.
+        // Capture the original identity without reviving UI sources or callbacks.
+        if (result.status !== 'dispatched') worktreeDiagnostics.recordInactive('sync:' + requestId,
+          baselineSyncFailureNotices(record, requestId, result, t));
+        return;
+      }
+      setSyncResult(result);
+      if (result.status === 'dispatched') {
+        setSyncOpen(false);
+        onOpenSession(result.sessionId);
+      }
+    } catch (cause) {
+      if (generation === syncGeneration.current) setSyncError(toWorktreeViewError(cause));
+    } finally {
+      if (generation === syncGeneration.current) {
+        syncBusy.current = false;
+        setSyncPending(false);
+      }
+    }
+  };
+  const partialSync = syncResult !== undefined && syncResult.status !== 'dispatched'
+    ? { ...syncResult, status: syncResult.status } : undefined;
+  const renderBaseline = (value: string | undefined) => {
+    const label = value === undefined ? (
+      <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
+    ) : (
+      <span data-dashboard-baseline-value title={value}>{value.replace(/^refs\/(heads|remotes)\//u, '')}</span>
+    );
+    const base = selectBaseWorktree(record, worktrees, mainRecord, value);
+    return base === undefined || onOpenWorktree === undefined ? label : (
+      <button type="button" className={styles.dashboardBaseLink}
+        data-dashboard-base-worktree={base.worktreeId}
+        aria-label={t('dashboard.openBaseWorktree')} title={t('dashboard.openBaseWorktree')}
+        onClick={() => onOpenWorktree(base)}>
+        {label}
+        <IconChevronRightOutline14 />
+      </button>
+    );
+  };
   const gitOverview = useWorktreeGitOverview({
     manager,
     workspaceId: record.workspaceId,
@@ -526,7 +640,36 @@ export function WorktreeDashboard({
   const acquisitionLabel =
     acquisitionFacts.timestampKind === 'imported' ? 'dashboard.imported' : 'dashboard.created';
   const tabLabel = (value: DashboardTab) => t(`dashboard.tab.${value}`);
-  const placeholder = <span className={styles.dashboardSoon}>{t('dashboard.soon')}</span>;
+  const derivedWorktrees = selectDerivedWorktrees(record, worktrees);
+  const worktreeList = (records: readonly WorktreeRecord[]) => records.length === 0 ? (
+    <div className={styles.dashboardEmpty}><p>{t('dashboard.noChildren')}</p></div>
+  ) : (
+    <ul className={styles.dashboardSessions}>
+      {records.map((child) => (
+        <li key={child.worktreeId}>
+          <button type="button" data-dashboard-worktree={child.worktreeId}
+            disabled={onOpenWorktree === undefined} onClick={() => onOpenWorktree?.(child)}>
+            <IconBranchOutline16 />
+            <span className={styles.dashboardSessionLabel}>
+              <strong>{child.currentHead?.name ?? child.currentBranch ?? child.branch}</strong>
+              <code className={styles.dashboardChildPath}>{child.absolutePath}</code>
+            </span>
+            <span className={styles.dashboardChildState}>
+              {child.status === 'removed' && <span className={styles.dashboardSoon}>{t('dashboard.archived')}</span>}
+              <span className={styles.dashboardHealth} data-health={child.health ?? 'unknown'}>
+                {t(child.health === 'ready' ? 'worktree.ready'
+                  : child.health === 'repair' ? 'worktree.repair'
+                    : child.health === 'recovery-needed' ? 'worktree.recovery'
+                      : child.health === 'branch-drift' ? 'worktree.branchDrift'
+                        : child.health === 'cleaned' ? 'dashboard.cleaned' : 'dashboard.unknown')}
+              </span>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
   const selectTab = (next: DashboardTab, focus = false) => {
     setTab(next);
     if (focus) document.getElementById(`${id}-${next}`)?.focus();
@@ -611,6 +754,9 @@ export function WorktreeDashboard({
         // event. Their DOM may already be gone; defaultPrevented retains ownership.
         if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
+          // Portal keys bubble through this React ancestor before the native
+          // Modal's document listener. Let it closeSync (including its busy guard).
+          if (syncOpen) return;
           if ((event.target as Element | undefined)?.closest?.('[data-single-select-picker]')) return;
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
@@ -729,7 +875,7 @@ export function WorktreeDashboard({
             </p>
           </div>
           <div className={styles.dashboardHeaderAside}>
-            <dl className={styles.dashboardFacts}>
+            <dl className={`${styles.dashboardFacts} ${styles.dashboardHeaderFacts}`}>
               {!isMain && <DashboardFactRow label={t(acquisitionLabel)}>
                 {acquisitionFacts.timestamp ? (
                   <time dateTime={acquisitionFacts.timestamp}>
@@ -745,6 +891,7 @@ export function WorktreeDashboard({
                 <WorktreeBaselineEditor
                   context={workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath}
                   value={baselineBranch}
+                  renderValue={renderBaseline}
                   branches={branches}
                   loading={branchesLoading}
                   currentBranch={baselineCurrentBranch}
@@ -756,11 +903,7 @@ export function WorktreeDashboard({
                 />
               ) : (
                 <DashboardFactRow label={t('dashboard.base')} baseline>
-                  {displayedBaseline?.replace(/^refs\/(heads|remotes)\//u, '') ?? (
-                    <span className={styles.dashboardHistorical}>
-                      {t('dashboard.historicalUnavailable')}
-                    </span>
-                  )}
+                  {renderBaseline(displayedBaseline)}
                 </DashboardFactRow>
               ))}
               <DashboardFactRow label={t('dashboard.source')}>
@@ -900,22 +1043,22 @@ export function WorktreeDashboard({
                 <Card
                   title={t('dashboard.derived')}
                   icon={<DashboardIcon kind="children" />}
-                  action={placeholder}
+                  action={<span>{derivedWorktrees.length}</span>}
                 >
-                  <div className={styles.dashboardEmpty}>
-                    <p>{t('dashboard.childrenHint')}</p>
-                  </div>
+                  <p>{t('dashboard.childrenHint')}</p>
+                  {worktreeList(derivedWorktrees.slice(0, 5))}
                   {tabLink('children', t('dashboard.viewChildren'))}
                 </Card>
                 <Card title={t('dashboard.quickActions')} icon={<DashboardIcon kind="actions" />}>
                   <div className={styles.dashboardQuickActions}>
-                    {(['terminal', 'diff', 'pullRequest', 'tests', 'sync'] as const).map(
-                      (action) => (
-                        <PlaceholderButton key={action} t={t}>
-                          {t(`dashboard.action.${action}`)}
-                        </PlaceholderButton>
-                      ),
-                    )}
+                    <button type="button" className={styles.dashboardButton}
+                      data-dashboard-action="sync-baseline"
+                      disabled={actionPending || !onSyncBaseline || !displayedBaseline}
+                      onClick={() => {
+                        setSyncOpen(true);
+                      }}>
+                      {t('dashboard.action.sync')}
+                    </button>
                     <button
                       type="button"
                       className={styles.dashboardButton}
@@ -973,16 +1116,47 @@ export function WorktreeDashboard({
               />
             </Card>
           ) : (
-            <section className={styles.dashboardTabPlaceholder}>
-              <DashboardIcon kind={tab} />
-              <h2>{tabLabel(tab)}</h2>
-              <p>{t(`dashboard.hint.${tab}`)}</p>
-              {placeholder}
-            </section>
+            <Card title={tabLabel('children')} icon={<DashboardIcon kind="children" />}
+              action={<span>{derivedWorktrees.length}</span>}>
+              <p>{t('dashboard.childrenHint')}</p>
+              {worktreeList(derivedWorktrees)}
+            </Card>
           )}
         </div>
         <p className={styles.dashboardFooter}>{t('dashboard.mvpHint')}</p>
       </div>
+      <Modal open={syncOpen} onClose={closeSync} closeLabel={t('dialog.close')}
+        title={t('dashboard.action.sync')} description={t('dashboard.sync.description')}
+        className={styles.dashboardBaselineModal}
+        footer={<>
+          <Button variant="outline" disabled={syncPending} onClick={closeSync}>{t('dashboard.cancelBase')}</Button>
+          {syncResult ? <Button variant="primary" onClick={() => onOpenSession(syncResult.sessionId)}>
+            {t('dashboard.sync.openSession')}
+          </Button> : <Button variant="primary" disabled={syncPending} onClick={() => void startSync()}>
+            {t(syncPending ? 'dashboard.sync.creating' : 'dashboard.sync.create')}
+          </Button>}
+        </>}>
+        <div className={styles.dashboardSyncOptions}>
+          <p><code>{displayedBaseline}</code><span aria-hidden="true"> → </span><code>{record.currentBranch ?? record.branch}</code></p>
+          {(['rebase', 'merge'] as const).map((strategy) => <label key={strategy}>
+            <input type="radio" name={`${id}-sync-strategy`} value={strategy}
+              checked={syncStrategy === strategy} disabled={syncPending || syncResult !== undefined || syncError !== undefined}
+              onChange={() => { syncRequest.current = undefined; setSyncStrategy(strategy); }} />
+            <span><strong>{strategy === 'rebase' ? 'Rebase' : 'Merge baseline'}</strong>
+              <small>{t(`dashboard.sync.${strategy}`)}</small></span>
+          </label>)}
+          {partialSync && <p role="status">{t(`dashboard.sync.${partialSync.status}`)}<br />
+            {t('dashboard.sync.partial')}<br /><code>{partialSync.sessionId}</code>
+          </p>}
+        </div>
+      </Modal>
+      <NotificationToasts notices={partialSync !== undefined
+        ? baselineSyncFailureNotices(record, syncRequest.current, partialSync, t, onOpenSession)
+        : syncError === undefined ? [] : [{
+            key: 'sync:' + record.worktreeId, error: syncError,
+            text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
+            message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),
+          }]} />
     </section>
   );
 }

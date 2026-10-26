@@ -101,6 +101,22 @@ One cancellable long-poll loop belongs to the Client fiber. Each notification in
 its Workspace reader generation; the current matching Context and visible Surface share the
 replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
 This runtime notification carries identities only and does not add another data store.
+Baseline-sync notifications optionally carry their existing admission `requestId`. The Host
+notification and successful Surface completion pass that identity to the same reader invalidation,
+so either arrival order shares the post-change in-flight read (or its completed result). Reads
+started before the change are retired. A failed call performs an unkeyed recovery invalidation:
+it cannot establish that Host admission finished, and must not suppress a later notification.
+Each Workspace remembers at most 128 change identities, so interleaved A/B notifications and
+caller completions share the newest post-change read. An unkeyed invalidation clears these
+identities; a later notification can then retire a recovery read started before admission finished.
+When Surface has invalidated the reader, Context receives `alreadyInvalidated` too, refreshing
+its current projection without retiring that same generation again.
+On `connection/reset`, `entry.ts` calls `resetChangeIds()` before resetting the notification
+poll. Admission identities belong to one connection: replaying an old `requestId` must invalidate
+its Workspace again and retire any pre-reconnect read. This boundary clears identity memory only;
+replayed notifications still target their owning Workspace, and Context and Surface share the
+replacement read while retaining ready content. Unrelated Workspace caches remain intact, and
+notification/completion deduplication resumes within the recovered connection.
 
 `worktree-view-read.ts` owns `WorktreeViewReader`, a browser-local read coordinator created once
 per Client fiber by `entry.ts` and shared by the Worktree Surface and Session context projection.
@@ -112,7 +128,7 @@ It keeps one entry per Workspace and provides:
 - de-duplicated `readMany()` reads for an explicit ordered Workspace set; and
 - disposal that clears entries and makes late callbacks unable to repopulate the cache.
 
-Every `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
+Every unkeyed `invalidate(workspaceId)` advances that Workspace's generation, marks it stale, and clears
 the completed view, even when the entry is already stale. It does not cancel the existing Promise.
 The Promise may settle for cleanup, but its captured generation must still match before it can write
 the cache. This prevents an overlapping older read from replacing a newer invalidation with stale
@@ -228,6 +244,11 @@ No duplicate left-sidebar action or slot registration is introduced. Placement s
 at the native center's top edge, leaving the Windows caption strip uncovered.
 Dashboard Escape handling respects native capture listeners' `defaultPrevented`
 even after a dismissed menu unmounts, so one Escape closes only the application menu.
+While the sync Modal is open, Dashboard yields Escape without stopping propagation: React portal
+events pass through its React ancestor before the native Modal's document bubble listener. The
+native layer closes only the sync dialog; its `closeSync` busy guard retains both surfaces during
+admission. Closing the modal restores ordinary Dashboard Escape handling, and native menu capture
+still takes priority.
 
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
@@ -329,7 +350,36 @@ branch identities are accepted; tags and arbitrary revision expressions are reje
 usable saved baseline nor a captured acquisition commit stays unselected and prompts. The Git tab never reads
 sidecar files or `.git`, and it exposes no working-tree mutation controls.
 
-Git details beyond this read-only history projection, derived Worktrees, Settings, and other unconnected
+Derived Worktrees consumes only the ready owning Workspace's Worktree records. It matches each saved
+`baseBranch` against the selected checkout's observed local branch (falling back to the recorded branch
+only when unavailable), accepts the short name or exact `refs/heads/` ref, and excludes explicit remote
+refs, self, other Workspaces and indirect descendants. Detached HEAD and unknown Main have no matches.
+Archived entries remain visible with lifecycle/health labels. Overview previews five entries with a total;
+the children tab shows all entries in existing order. Clicks reuse `openDashboard` and its native Session
+navigation gate. Baseline edits and targeted refreshes recompute the list from ready data without new RPCs,
+sidecar relationships, delegated Session catalogs, or global refreshes. This supersedes the historical
+Dashboard MVP plan's children placeholder; it is a current baseline relationship, not immutable ancestry.
+The header Base fact also navigates back to the unique matching Worktree or browser Main projection.
+It shares the same local baseline matching and existing `openDashboard` callback; the independent edit
+button remains in its action rail. Missing, remote, detached, self, cross-Workspace and ambiguous targets
+remain plain text. The editor's saved value drives link selection, so a successful edit updates the target
+before the targeted Workspace refresh arrives. All tabs share this header; no new storage or RPC is added.
+Header facts use plain text and a fixed action column so dates, baseline and source align, without
+panel or chip borders/backgrounds. The baseline has a subtle in-app chevron; editing stays secondary.
+
+Quick Actions keeps only Sync with Base and Archive. The sync modal selects Rebase or Merge baseline
+and sends the saved baseline witness plus a per-dialog request id through `syncWorktreeBaseline`.
+It coalesces submit, preserves its request id across transport retry, keeps a partial Session available
+without redispatch, and retires callbacks when the Dashboard identity, baseline, manager or lifetime
+changes. Successful admission refreshes only the owning Workspace and opens the returned native
+Session with the existing membership connector. Local/Main and unhealthy or archived targets cannot
+start sync. Native permissions remain unchanged; the UI never executes Git or infers task completion.
+Request IDs use `crypto.getRandomValues`, including on plain-HTTP LAN origins, and random-source
+errors follow the same notification and busy-state cleanup path as admission errors. Late partial
+results retain the original request/Workspace/Worktree/Session identity in inactive diagnostics via
+`recordInactive`, without reactivating a notification source or retaining navigation callbacks.
+
+Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main
 instructions card persists plugin-owned text through the existing Manager path; active Worktree bindings and
 unbound Main Sessions receive that text through the Host's DSH `agent/pre-step` hook.

@@ -51,6 +51,17 @@ export function createWorktreeDiagnostics() {
       limitHistory();
       emit();
     },
+    /** Late results retain evidence without reactivating an unmounted UI source. */
+    recordInactive(source: string, notices: readonly WorktreeNotification[]) {
+      if (notices.length === 0) return;
+      for (const notice of notices) {
+        snapshot = [...snapshot.filter((entry) => entry.key !== notice.key), {
+          ...notice, source, status: 'inactive', actions: [],
+        }];
+      }
+      limitHistory();
+      emit();
+    },
     deactivate(source: string) {
       sources.delete(source);
       retire(source, 'inactive');

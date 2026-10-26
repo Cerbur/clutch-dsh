@@ -12,9 +12,8 @@ Main instructions in its own sidecar. Managed Worktrees expose a read-only basel
 its Workspace-root HEAD history with an optional comparison branch; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
-> Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
-> Derived Worktrees and other unfinished actions remain marked
-> **Coming soon**.
+> Session actions, Worktree/Main instructions, Derived Worktrees, and the managed Worktree or Main Git & Changes view are connected.
+> Baseline synchronization creates an Agent task Session with your selected Rebase or Merge strategy.
 
 ## Installation
 
@@ -88,7 +87,8 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
-| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
+| **Baseline synchronization** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="Sync with Base dialog with Rebase and Merge baseline choices"> | Choose Rebase or Merge baseline and create a native Agent task Session in the current Worktree. |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
@@ -365,9 +365,45 @@ Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to clo
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
 path, open the recorded directory in VS Code, and inspect Git & Changes.
-Derived Worktrees and other marked quick actions remain placeholders. VS Code must be
+Quick Actions offers baseline synchronization and archive. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
+
+**Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
+this checkout's current local branch. Overview previews five entries; the tab shows all matches,
+including archived entries with their availability and paths. Click an entry to open its Dashboard.
+Changing a saved baseline updates the relationship; this view represents direct baseline matches,
+not Git ancestry or delegated Session history. Local branch names and `refs/heads/` refs match;
+explicit remote refs do not. Detached HEAD or an unknown Main branch has no matches. When a
+managed checkout's current branch is unavailable, its recorded branch is used.
+In a derived Worktree's Dashboard header, click the **Base** branch to open the matching
+Worktree or Local/Main Dashboard. The edit button remains separate. A link appears only
+when exactly one checkout in this Workspace matches; remote, missing, and ambiguous bases
+remain plain text. The link follows the saved baseline when you edit it.
+
+**Sync with Base** opens a dialog with **Rebase** and **Merge baseline**. Confirming creates and
+opens a fresh native task Session in the current managed Worktree. Escape closes only this dialog;
+while task admission is pending, Escape closes neither the dialog nor the Dashboard. The Session uses
+the configured default model and normal native permissions. The saved local or fetched remote baseline is used, and the
+Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. A baseline saved
+while branch enumeration is pending invalidates the old request with `WORKTREE_STATE_CONFLICT`;
+reopen the dialog to use the new baseline. Baseline saves wait for any final task admission already
+in progress for that Worktree. Local/Main
+has no synchronization task. The Agent checks for a clean working tree and stops on conflicts;
+Rebase rewrites the current branch's commits. Admission means the task started, not that Git finished.
+Inspect the Session's result before starting further work. Partial creation preserves the Session
+and offers **Open created Session**; retrying a failed transport request reuses its admission identity
+within the current Host lifetime. Binding, model, title, reporting, and task-submission failures also
+show a toast and a localized problem and recovery entry in **Errors & recovery**, including the
+created Session identity. Recovery opens that Session without creating or dispatching another task.
+Closing the Dashboard preserves diagnostic history and revokes its recovery callbacks.
+Partial failures arriving after closing the Dashboard or changing its target or baseline also
+retain the created Session identity in inactive history, without navigating away from the current view.
+Task creation supports plain-HTTP LAN browser access as well as localhost and HTTPS.
+Plugin restart clears admission memory. No automatic push or publish
+is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
+After reconnecting, replayed synchronization notifications refresh the affected Workspace and
+current context while keeping ready content visible; unrelated Workspaces retain their views.
 
 ### Open the recorded directory in an app
 

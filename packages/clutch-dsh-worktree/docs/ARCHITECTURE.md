@@ -622,7 +622,9 @@ Refresh scope is determined by the smallest affected identity.
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
+- 派生 Worktree（2026-10-25）仅从所属 Workspace 的 ready records 投影：候选 `baseBranch` 匹配当前 checkout 的实际本地分支，无法获取时回退受管理记录分支；短名与 `refs/heads/` 等价，显式远端 ref 不匹配。排除自身、跨 Workspace 和间接后代，Detached HEAD 或未知 Main 分支返回空列表。归档项保留并展示生命周期与健康状态，概览预览五项并显示总数，children 页签显示全部，点击复用 `openDashboard` 的 Session 导航门禁。修改已保存基线会改变关系；不新增持久化血缘、委派目录、RPC 或全局刷新。此实现取代历史 Dashboard MVP 计划的 children 占位，不推断 Git 祖先关系，历史计划保持只读。
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
+- Dashboard 顶部基线 fact 复用同一分支匹配与 `openDashboard`，可前往所属 Workspace 中唯一匹配的受管理 Worktree 或 Main；编辑按钮独立保留，所有页签共享。基线保存后立即按已保存值重算目标；远端、未知、detached、自身、跨 Workspace 或多目标歧义时仅显示文本，不新增 RPC 或持久化字段。
 - Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
@@ -631,6 +633,47 @@ Refresh scope is determined by the smallest affected identity.
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
 
 ### 错误通知与恢复入口
+
+Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
+插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
+初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
+UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，
+默认模型解析前后重查目标。最终 branch 枚举完成后才读取并校验目标状态与 `baseBranch` witness，
+过期请求返回 `WORKTREE_STATE_CONFLICT`，不得创建或派发 Session。Manager 的 Host-only
+`withWorktreeBaseline` 按 Workspace/Worktree 串行化最终校验到原生 prompt admission，以及
+`updateWorktreeBaseBranch` 的完整保存流程；先完成的保存淘汰旧同步请求，接收中到达的保存等待接收结束。
+此门禁属于同一 Host Manager 的运行时协调，不持有 Sidecar 文件锁，不阻塞绑定写入或其他 Worktree，
+失败后释放且不污染后续操作，不覆盖 Agent 的 Git 执行阶段。持久化 CAS 与跨进程 Sidecar 锁保持原有职责。
+Session 保持原生权限。任务 prompt 要求干净目录、遇到冲突停止且不 push/publish。
+Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最多 128 项，达到上限明确拒绝），
+按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
+创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
+快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
+同步 Modal 打开时 Dashboard 不消费 Escape：React portal 先经过 React 祖先，再由原生 Modal 的
+document bubble listener 处理。非 pending 时仅关闭弹窗，pending 时 `closeSync` busy guard 保留
+弹窗和 Dashboard，成功接收后仍打开新 Session。菜单 capture/defaultPrevented 优先级不变，
+弹窗关闭后恢复 Dashboard Escape；不修改 upstream DSH。
+同步通知可选携带现有接收身份 `requestId`，与 Surface 成功返回后的刷新共用 reader 的
+`changeId`。每个 Workspace 最多保留 128 个变更身份，A/B 交错通知与完成回调复用最新的
+变更后在途读取或已完成结果；超出上限淘汰最早身份。新身份和无身份失效仍推进代次，
+无身份失效同时清空身份集合，绝不复用变更前的读取。调用失败执行无身份恢复刷新，
+避免把传输失败误当成 Host 接收完成并压制随后到达的通知；通知缺失时仍由调用完成路径刷新。
+Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context 保留当前身份校验，
+仅刷新匹配的投影，不再次推进 reader 代次或抹掉变更身份。
+`connection/reset` 在重置通知轮询前调用 reader 的 `resetChangeIds()`，建立新的通知重放边界：
+仅清空上一连接的变更身份记忆，不清空 Workspace 缓存或当前 ready 投影。随后即使重放相同
+`requestId`，也必须推进所属 Workspace 的代次，淘汰重连前在途或已完成的读取。Context 与
+Surface 共享该恢复读取，未受影响的 Workspace 缓存保持不变；新连接内通知与调用完成仍正常去重。
+这些身份仅存于运行时，不进入 Sidecar。
+
+绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationToasts，
+提供阶段对应的双语问题与恢复说明。原始错误及 Workspace、Worktree、requestId、Session、
+失败阶段保留在诊断详情；普通展示仅使用本地化说明。恢复仅打开返回的 Session，
+不重建或重派发。通知位于同步弹窗外，关闭弹窗仍可恢复；Dashboard 卸载后沿用共享诊断的
+inactive 历史与回调撤销语义。
+Dashboard 身份、基线或 manager 更换、组件卸载后才返回的部分失败通过 `recordInactive`
+原子记录原始身份与诊断，不重建通知 source、不保留导航回调。同步请求身份使用普通 HTTP
+局域网环境也可用的 `crypto.getRandomValues` 生成；随机源异常同样进入错误通知和 busy 清理。
 
 Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
 消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并

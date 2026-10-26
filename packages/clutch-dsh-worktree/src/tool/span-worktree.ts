@@ -2,10 +2,10 @@ import { z } from 'zod';
 import type { ToolContext } from './context.js';
 import { text, prompt, model } from './inputs.js';
 import * as output from './outputs.js';
-import { available, errorText } from './context.js';
+import { available } from './context.js';
 import { delegationHandoff, delegationModel } from './guidance.js';
 
-import { randomUUID } from 'node:crypto';
+import { dispatchWorktreeSession } from './dispatch-session.js';
 const common = {
   prompt,
   model: model.optional(),
@@ -78,45 +78,16 @@ export function registerSpanWorktree(context: ToolContext): void {
       );
       check(exec);
       context.delegation.assertDispatch(agent);
-      const { sessionId } = await options.sessions.create({ cwd: record.absolutePath });
-      let status = 'binding-failed';
-      let error: string | undefined;
-      const requestId = `clutch-worktree:${sessionId}:${randomUUID()}`;
-      try {
-        check(exec);
-        await options.manager.bindSession({
-          workspaceId,
-          worktreeId: record.worktreeId,
-          sessionId,
-        });
-        status = 'model-failed';
-        check(exec);
-        await options.sessions.configureModel(sessionId, selected, exec.signal);
-        if (args.title) {
-          status = 'title-failed';
-          check(exec);
-          await options.sessions.rename({ sessionId, title: args.title });
-        }
-        status = 'reporting-failed';
-        if (!context.enableChild)
-          throw new Error('Delegated Session reporting setup is unavailable');
-        await context.enableChild(sessionId, requestId, args.prompt, 'queue', exec);
-        status = 'prompt-failed';
-        check(exec);
-        await options.sessions.prompt(
-          {
-            sessionId,
-            requestId,
-            mode: 'queue',
-            content: [{ type: 'text', text: args.prompt }],
-          },
-          exec.signal,
-        );
-        status = 'dispatched';
-      } catch (cause) {
-        exec.signal.throwIfAborted();
-        error = errorText(cause).slice(0, 700);
-      }
+      const result = await dispatchWorktreeSession({
+        record, manager: options.manager, sessions: options.sessions, model: selected,
+        prompt: args.prompt, title: args.title, signal: exec.signal,
+        check: () => check(exec),
+        prepare: async (sessionId, requestId) => {
+          if (!context.enableChild) throw new Error('Delegated Session reporting setup is unavailable');
+          await context.enableChild(sessionId, requestId, args.prompt, 'queue', exec);
+        },
+      });
+      const { sessionId, requestId, status, error } = result;
       options.changed(workspaceId, record.worktreeId);
       return {
         workspaceId,

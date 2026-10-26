@@ -31,8 +31,14 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
 }
 
 export interface WorktreeViewReader {
+  /** Begin a new notification replay boundary without clearing ready Workspace caches. */
+  resetChangeIds(): void;
+
   /** Mark one Workspace stale for the next generation. */
-  invalidate(workspaceId: string, options?: { readonly reuseInFlight?: boolean }): void;
+  invalidate(workspaceId: string, options?: {
+    readonly reuseInFlight?: boolean;
+    readonly changeId?: string;
+  }): void;
 
   /** Return one complete Workspace view, sharing its current generation. */
   read(workspaceId: string): Promise<WorktreeWorkspaceView>;
@@ -46,6 +52,7 @@ export interface WorktreeViewReader {
 
 interface WorktreeViewReaderEntry {
   generation: number;
+  readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
   inFlight?: {
@@ -215,7 +222,7 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   const entryFor = (workspaceId: string): WorktreeViewReaderEntry => {
     const current = entries.get(workspaceId);
     if (current !== undefined) return current;
-    const created: WorktreeViewReaderEntry = { generation: 0, stale: false };
+    const created: WorktreeViewReaderEntry = { generation: 0, stale: false, changeIds: new Set() };
     entries.set(workspaceId, created);
     return created;
   };
@@ -244,11 +251,28 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 
   return {
+    resetChangeIds(): void {
+      if (disposed) return;
+      // Admission identities deduplicate only within one connection. Replayed
+      // changes must retire even completed reads from before the reconnect.
+      for (const entry of entries.values()) entry.changeIds.clear();
+    },
     invalidate(workspaceId, options): void {
       if (disposed) return;
       const entry = entryFor(workspaceId);
+      // Interleaved notifications/completions may reuse a newer mutation's read.
+      // Bound identities per Workspace to the Host's admission capacity.
+      const changeId = options?.changeId;
+      if (changeId !== undefined && entry.changeIds.has(changeId)) return;
       // Read-only menu opens may share a current read. Mutations must retire it.
       if (options?.reuseInFlight && entry.inFlight?.generation === entry.generation) return;
+      if (changeId === undefined) {
+        // Unknown-scope/recovery reads cannot establish that admission finished.
+        entry.changeIds.clear();
+      } else {
+        entry.changeIds.add(changeId);
+        if (entry.changeIds.size > 128) entry.changeIds.delete(entry.changeIds.values().next().value!);
+      }
       entry.generation += 1;
       entry.stale = true;
       entry.view = undefined;

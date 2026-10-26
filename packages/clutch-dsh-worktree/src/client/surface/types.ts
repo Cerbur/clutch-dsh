@@ -116,7 +116,9 @@ export interface WorktreeSurfaceInjected {
   readonly permissionNotice?: ObservableSnapshot<WorktreePermissionNotice | undefined>;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
-  readonly invalidateWorktreeContext?: (workspaceId?: string) => Promise<void>;
+  readonly invalidateWorktreeContext?: (
+    workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean },
+  ) => Promise<void>;
   readonly createMainSession?: (workspaceId: string) => void;
   readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
   readonly deleteWorkspace?: (workspaceId: string) => Promise<void>;
@@ -189,6 +191,8 @@ export interface TargetedWorktreeReadError {
 export interface RefreshOptions {
   /** A Host tool notification already retired the shared reader generation. */
   readonly alreadyInvalidated?: boolean;
+  /** Same mutation identity as its Host notification; never reuse a pre-change read. */
+  readonly changeId?: string;
   readonly preserveCurrent?: boolean;
   /** Only read-only triggers may reuse reads started before this refresh. */
   readonly reuseInFlight?: boolean;

@@ -99,6 +99,33 @@ test('closing a source with many active failures applies the history limit immed
   assert.ok(store.getSnapshot().every(entry => entry.status === 'inactive'));
 });
 
+test('late failures are recorded atomically as bounded inactive history without reviving sources', () => {
+  const store = createWorktreeDiagnostics();
+  store.publish('active', [{ key: 'repair', text: 'Needs recovery' }]);
+  store.deactivate('retired');
+  let updates = 0;
+  store.subscribe(() => {
+    updates++;
+    assert.ok(store.getSnapshot().filter((entry) => entry.source === 'retired')
+      .every((entry) => entry.status === 'inactive' && entry.actions.length === 0));
+  });
+  store.recordInactive('retired', []);
+  assert.equal(updates, 0, 'successful late admission produces no diagnostic update');
+  const late = Array.from({ length: 110 }, (_, index) => ({
+    key: 'late-' + index, text: 'Late partial failure',
+    error: { code: 'WORKTREE_SYNC_PARTIAL', message: 'raw', details: { sessionId: 'session-' + index } },
+    actions: [{ label: 'Must not survive', onClick() { assert.fail('inactive action ran'); } }],
+  }));
+  store.recordInactive('retired', late);
+  assert.equal(updates, 1);
+  assert.equal(store.getSnapshot().length, 101, 'keep 100 historical failures and all active recoveries');
+  store.deactivate('retired');
+  assert.equal(store.getSnapshot().find((entry) => entry.key === 'late-109').error.details.sessionId, 'session-109');
+  assert.equal(store.getSnapshot().find((entry) => entry.key === 'repair').status, 'active');
+  store.clearHistory();
+  assert.deepEqual(store.getSnapshot().map((entry) => entry.key), ['repair']);
+});
+
 test('retained binding failure has one consistent recovery instruction in both languages', () => {
   const error = toWorktreeViewError(new WorktreeSessionBindingError('kept', {
     code: 'SESSION_CWD_MISMATCH', message: 'raw',

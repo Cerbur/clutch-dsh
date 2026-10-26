@@ -273,15 +273,18 @@ export function apply(ctx: Context): void {
   });
   const toolChanges = createWorktreeToolChangeMonitor({
     read: (revision, signal) => manager.watchToolChanges(revision, signal),
-    changed: ({ workspaceId }) => {
-      viewReader.invalidate(workspaceId);
+    changed: ({ workspaceId, requestId }) => {
+      viewReader.invalidate(workspaceId, { changeId: requestId });
       if (contextProjection.store.getSnapshot().workspaceId === workspaceId) {
         void contextProjection.refresh();
       }
     },
   });
   ctx.effect(() => () => toolChanges.dispose(), 'clutch-dsh-worktree: tool notification cleanup');
-  ctx.on('connection/reset', () => toolChanges.reset());
+  ctx.on('connection/reset', () => {
+    viewReader.resetChangeIds();
+    toolChanges.reset();
+  });
   if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
@@ -593,8 +596,8 @@ export function apply(ctx: Context): void {
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
           createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
-          invalidateWorktreeContext: (workspaceId?: string) =>
-            contextProjection.invalidate(workspaceId),
+          invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
+            contextProjection.invalidate(workspaceId, options),
           createMainSession: (workspaceId: string) => {
             ctx.uiWorkspace.startSession(workspaceId as WorkspaceId);
           },
