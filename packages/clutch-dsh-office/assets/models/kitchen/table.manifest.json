@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/table",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "table.glb",
+  "sha256": "27f4c21585f3114ac6211be996f149a06c72ecae936637753b42a11591fee290",
+  "bytes": 2676708,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 49964,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.9605590105056763,
+      0,
+      -0.598357081413269
+    ],
+    "max": [
+      0.9605590105056763,
+      1.469650149345398,
+      0.598357081413269
+    ]
+  },
+  "dimensions": {
+    "width": 1.9211180210113525,
+    "depth": 1.196714162826538,
+    "height": 1.469650149345398,
+    "tabletopHeight": 0.9658000469207764
+  },
+  "requiredNodes": [
+    "table",
+    "table_mesh",
+    "work_surface",
+    "prep_anchor"
+  ],
+  "anchors": {
+    "work_surface": [
+      0,
+      0.9658000469207764,
+      0
+    ],
+    "prep_anchor": [
+      -0.33000001311302185,
+      1.026400089263916,
+      0.1899999976158142
+    ]
+  },
+  "budget": {
+    "scope": "this-table-revision",
+    "triangles": 60000,
+    "bytes": 8388608,
+    "materials": 1
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/table/lookdev/2026-10-28-candy-r1/糖果感_分材质响应.blend",
+    "input": "kitchen/table/lookdev/2026-10-28-candy-r1/inputs/table.glb",
+    "inputSha256": "8430329a3cc3e56064e5fa8642931992d5336d04c0f51b36f0fd7f2c71b00b05",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/table/work/2026-10-28-candy-r1/build_candy_material.py"
+    ]
+  },
+  "validation": {
+    "independentFinalGlbImport": true,
+    "fixedComparisonCyclesCpuRender": true,
+    "allAccessorBytesIncludingColorUnchanged": true,
+    "nodesAndHierarchyUnchanged": true,
+    "baseColorBytesUnchanged": true,
+    "materialPrimitiveImageCountsUnchanged": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../lookdev/2026-10-28-candy-r1/render-validation.json",
+    "independentBlenderExportImport": "../../work/2026-10-28-candy-r1/blender-roundtrip-import.json"
+  },
+  "contractChanges": [],
+  "notes": [
+    "Source basecolor embedded lighting/imperfections retained; no delighting claim.",
+    "Component fixed-rig review only; no plugin import, room lighting or bake change.",
+    "Roughness/normal mask boundaries are conservative semantic approximations.",
+    "Any new GLB/material adoption requires dependent scene bake verification by integrator."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-style-r1",
+    "parentSha256": "8430329a3cc3e56064e5fa8642931992d5336d04c0f51b36f0fd7f2c71b00b05",
+    "changes": [
+      "Accepted UV semantic blue frame only: roughness .46 -> approximately .30, tangent normal XY x.55, masked clearcoat .10.",
+      "Wood, textile/stripes, pottery, food, leaf and graphics are outside the accepted enamel mask and retain authored response."
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "protection": "../../lookdev/2026-10-28-candy-r1/protected-regions.json"
+  }
+}

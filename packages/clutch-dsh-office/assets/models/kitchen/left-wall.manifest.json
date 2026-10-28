@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/left-wall",
+  "revision": "2026-10-27-r4",
+  "status": "ready",
+  "file": "left-wall.glb",
+  "sha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b",
+  "bytes": 9104,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 428,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 0
+  },
+  "bounds": {
+    "min": [
+      -2.5,
+      0,
+      -0.2250867784023285
+    ],
+    "max": [
+      2.591445207595825,
+      3.5,
+      0.060086775571107864
+    ]
+  },
+  "dimensions": {
+    "width": 5.091445207595825,
+    "height": 3.5,
+    "depth": 0.28517355397343636
+  },
+  "requiredNodes": [
+    "left-wall",
+    "wall_panel",
+    "front_anchor"
+  ],
+  "anchors": {
+    "front_anchor": [
+      0,
+      1.75,
+      0.05999999865889549
+    ]
+  },
+  "budgets": {
+    "triangles": 10000,
+    "bytes": 1048576,
+    "materials": 1,
+    "primitives": 1,
+    "scope": "Independent wall only; other budgets unchanged"
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/left-wall/lookdev/2026-10-27-flush-wall/厨房左墙_齐边哑光.blend",
+    "script": "kitchen/left-wall/lookdev/2026-10-27-flush-wall/build.py",
+    "blender": "5.2.3 LTS",
+    "method": "Uniform matte wall slab with shortened45-degree miter for inward75mm move, preserving thickness/height/color."
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-27-v1",
+    "baseColorSRGB": "#F0E3D2",
+    "roughness": 0.68,
+    "metallic": 0,
+    "textures": false,
+    "normal": false,
+    "bump": false,
+    "notes": "User explicitly removed all wall surface detail and requested matte reflections."
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "wall": {
+    "thickness": 0.285,
+    "floorThickness": 0.285,
+    "insidePlaneLocalZ": 0.06,
+    "outsidePlaneLocalZ": -0.225,
+    "join": "Shortened45-degree miter for aligned outer room corner",
+    "interiorSideMeters": 5,
+    "outerEnvelopeWidth": 5.1
+  },
+  "placementHint": {
+    "position": [
+      -2.375,
+      0,
+      0.5
+    ],
+    "rotationYRadians": 1.5707963267948966,
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "capabilities": {
+    "static": true,
+    "window": false,
+    "animations": false,
+    "rigged": false
+  },
+  "validation": {
+    "independentGlbImport": true,
+    "triangles": 428,
+    "zeroAreaTriangles": 0,
+    "badNormals": 0,
+    "badUVs": 0,
+    "images": [],
+    "actualBlenderRender": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "validation.json"
+  },
+  "compatibilityChanges": [
+    "Shorten matching corner ends75mm, move wall root inward75mm. Outer left/rear planes align5.2m floor exterior.",
+    "Interior planes now x=-2.315 and z=-1.815; scene must move wall-mounted furniture inward to retain clearance.",
+    "Nominal wall thickness.285m, matte cream PBR and zero textures unchanged."
+  ],
+  "notes": [
+    "Previous source/frozen revisions retained.",
+    "Outer straight planes flush to floor envelope within submillimeter bevel tolerance.",
+    "No furniture, window, studio, characters or surface textures."
+  ],
+  "parent": {
+    "revision": "2026-10-27-r3",
+    "sha256": "29011850a3197a1598becf0f484a5b0aa9c7aec163bcfec084e79294dd21558f"
+  }
+}

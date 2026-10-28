@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/refrigerator",
+  "revision": "2026-10-28-candy-r2",
+  "status": "ready",
+  "file": "refrigerator.glb",
+  "sha256": "250242b0f81f83e1efbf1ac82f686eb464dfcba89b0ed2ff13138bda49e6b6c4",
+  "bytes": 2820460,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 29499,
+    "meshes": 5,
+    "primitives": 5,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.5594432353973389,
+      5.751624243544029e-8,
+      -0.4570474624633789
+    ],
+    "max": [
+      0.5464590191841125,
+      2.5163681507110596,
+      0.5249260146804067
+    ]
+  },
+  "dimensions": {
+    "width": 1.1059022545814514,
+    "height": 2.516368093194817,
+    "depth": 0.9819734771437856
+  },
+  "requiredNodes": [
+    "中文冰箱",
+    "箱体",
+    "上门",
+    "下门",
+    "顶部鲸鱼与绿植",
+    "参考图鲸鱼摆件",
+    "参考图陶土盆栽"
+  ],
+  "budgets": {
+    "triangles": 30000,
+    "bytes": 8388608
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/refrigerator/lookdev/2026-10-28-candy-r2/冰箱_糖果材质样板.blend",
+    "input": "kitchen/refrigerator/deliveries/2026-10-27-style-r1/refrigerator.glb",
+    "inputSha256": "e572552d50700160eb0e155654e39edb640e71e560cb1b5373dd353160e3a4fb",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/refrigerator/lookdev/2026-10-28-candy-r2/scripts/build_candy_refrigerator.py"
+    ]
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesAndTransformsUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "../../lookdev/2026-10-28-candy-r2/validation.json"
+  },
+  "notes": [
+    "Material sample only: no geometry/layout/camera/light edits.",
+    "Three embedded images/one material; optional KHR_materials_clearcoat, no required extensions.",
+    "Plant/metal/sticker regions protected; existing source color shadows and reconstruction imperfections retained.",
+    "New shell bake required before engine adoption; final visual approval pending."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r2",
+    "parentRevision": "2026-10-27-style-r1",
+    "parentSha256": "e572552d50700160eb0e155654e39edb640e71e560cb1b5373dd353160e3a4fb",
+    "changes": [
+      "Masked enamel/whale roughness .27/.30",
+      "Masked tangent normal XY reduction; source basecolor unchanged",
+      "Optional masked clearcoat .15 packed in unused MR.R; no AO consumer; metallic texels explicitly excluded",
+      "All geometry/accessors/UVs/nodes/transforms byte-identical"
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r2/change-record.json"
+  }
+}

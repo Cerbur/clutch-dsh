@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-cabinet",
+  "revision": "2026-10-28-r3",
+  "status": "ready",
+  "file": "wall-cabinet.glb",
+  "sha256": "480782fd3883df8e248d6277964450bb8bed78f45064b8b90697fc1a8888309c",
+  "bytes": 894272,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "cabinet-bottom-center"
+  },
+  "geometry": {
+    "triangles": 3330,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.5249999761581421,
+      0,
+      -0.20000000298023224
+    ],
+    "max": [
+      0.5249999761581421,
+      0.7636366486549377,
+      0.3009865880012512
+    ]
+  },
+  "dimensions": {
+    "width": 1.0499999523162842,
+    "height": 0.7636366486549377,
+    "depth": 0.5009865909814835
+  },
+  "requiredNodes": [
+    "蓝色壁柜",
+    "壁柜静态总成",
+    "front_anchor",
+    "mount_rear",
+    "cabinet_bottom"
+  ],
+  "anchors": {
+    "front_anchor": [
+      0,
+      0.38181832432746887,
+      0.3009865880012512
+    ],
+    "mount_rear": [
+      0,
+      0,
+      -0.20000000298023224
+    ],
+    "cabinet_bottom": [
+      0,
+      0,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 30000,
+    "bytes": 8388608,
+    "images": 3,
+    "materials": 1,
+    "primitives": 1
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/wall-cabinet/work/2026-10-28-r3/蓝色壁柜_用户新原件.blend",
+    "input": "kitchen/wall-cabinet/source/壁柜_用户原件_20261028_877fc508.glb",
+    "inputSha256": "dbd01f5b9b0f1e03e8857f25464411488244bacbc99694a5a285102a23be6257",
+    "inputBytes": 24101060,
+    "uniformScale": 1.1222061140791821,
+    "sourceDimensions": [
+      0.9356569945812225,
+      0.6804780515376478,
+      0.4464300870895386
+    ],
+    "blender": "5.2.3 LTS",
+    "script": "kitchen/wall-cabinet/work/2026-10-28-r3/scripts/build.py"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "blueEnamelRoughness": 0.32,
+    "normalScale": 0.35,
+    "metalProtected": true,
+    "clearcoat": 0,
+    "baseColor": "resized to1024; source colors and atlas details retained"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-28-r3/validation.json"
+  },
+  "notes": [
+    "User replacement; old hinged nodes absent, no fabricated moving pivots.",
+    "Single static material batch; source UVs and colors retained, 1024 embedded images.",
+    "Blue enamel roughness selectively softened; original metal G/B and other roughness protected.",
+    "Standard PBR, normal scale .35; invalid specular factor removed, no new coat.",
+    "Hood width is not fitted to stove; scene owner sets final installation/width.",
+    "New source hash/geometry requires plugin revision support and fresh scene bake before adoption."
+  ]
+}

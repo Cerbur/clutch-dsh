@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "referenceId": "kitchen/main",
+  "revision": "2026-10-27-r1",
+  "scene": "kitchen",
+  "role": "mandatory-primary-scene-reference",
+  "file": "kitchen-reference.png",
+  "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+  "bytes": 2064993,
+  "width": 1254,
+  "height": 1254,
+  "origin": "User-provided original image, designated 2026-10-27",
+  "scope": [
+    "scene composition",
+    "all kitchen components",
+    "whale-girl character art",
+    "materials and lighting"
+  ],
+  "libraryPath": "kitchen/references/kitchen-reference.png",
+  "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+  "rules": [
+    "Read the actual image before kitchen modeling or visual scene changes.",
+    "Component closeups supplement this image; they do not replace it.",
+    "Current engine whitebox and previous model previews are not the visual target.",
+    "Keep the original bytes; crops/annotations are separate derived references.",
+    "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+  ]
+}

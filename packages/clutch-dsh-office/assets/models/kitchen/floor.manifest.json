@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/floor",
+  "revision": "2026-10-27-r2",
+  "status": "ready",
+  "file": "floor.glb",
+  "sha256": "4c4044eead24f761e41ea65c4112c49459b884737e6b367619931d9a87aac006",
+  "bytes": 3687020,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-surface-center",
+    "originDescription": "Room surface center at y=0; actual ceramic top retained at +0.025m, timber bottom -0.26m; not a ground-bottom origin."
+  },
+  "geometry": {
+    "triangles": 880,
+    "meshes": 2,
+    "primitives": 2,
+    "materials": 2,
+    "images": 5
+  },
+  "bounds": {
+    "min": [
+      -2.5999999046325684,
+      -0.25999999046325684,
+      -2.5999999046325684
+    ],
+    "max": [
+      2.5999999046325684,
+      0.02500000037252903,
+      2.5999999046325684
+    ]
+  },
+  "dimensions": {
+    "width": 5.199999809265137,
+    "height": 0.28499999083578587,
+    "depth": 5.199999809265137
+  },
+  "budget": {
+    "scope": "Only kitchen/floor; original refrigerator and all other ceilings unchanged",
+    "triangles": 5000,
+    "bytes": 6291456,
+    "materials": 2,
+    "primitives": 2
+  },
+  "requiredNodes": [
+    "厨房底板",
+    "圆角木框",
+    "瓷砖地面",
+    "floor_surface",
+    "front_anchor"
+  ],
+  "anchors": {
+    "floor_surface": [
+      0,
+      0.02500000037252903,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.02500000037252903,
+      2.5
+    ]
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/floor/lookdev/2026-10-27-rounded-floor/厨房底板_圆角表面.blend",
+    "script": "kitchen/floor/lookdev/2026-10-27-rounded-floor/build.py",
+    "blender": "5.2.3 LTS",
+    "method": "Native existing packed project edited: ceramic insert silhouette radius.12m, affine planar UV and original genuine r1 Cycles baked PBR maps preserved. No new bake claimed."
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    },
+    {
+      "referenceId": "kitchen/floor/tile",
+      "role": "user-provided-material-reference",
+      "libraryPath": "kitchen/floor/references/用户瓷砖纹理参考.png",
+      "sha256": "29c5e419ea006f4024d390a6b0e99f783eb8bbe89f6c069e763665abbc266a85",
+      "note": "User texture is visual reference; albedo procedurally authored, no photographed highlights/shadows copied"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-27-v1",
+    "notes": "Honey timber with subtle directional grain, cream ceramic, matte grout. Engine lighting owned separately."
+  },
+  "baking": {
+    "engine": "Cycles CPU",
+    "tileNormal": {
+      "resolution": 2048,
+      "space": "tangent +Y OpenGL/glTF",
+      "selectedToActive": true,
+      "highTiles": 64,
+      "pitchMeters": 0.625,
+      "groutWidthMeters": 0.01,
+      "edgeBevelMeters": 0.004,
+      "lowTileTriangles": 2
+    },
+    "woodNormal": {
+      "resolution": 1024,
+      "method": "Blender NORMAL bake from procedural bump"
+    },
+    "baseColor": "EMIT bake only; no lighting/AO/shadow baked",
+    "roughness": "Portable embedded metallicRoughness texture; dielectric materials",
+    "retainedFromRevision": "2026-10-27-r1",
+    "rebakedThisRevision": false
+  },
+  "capabilities": {
+    "static": true,
+    "animations": false,
+    "rigged": false,
+    "collisionDisplacement": false
+  },
+  "placementHint": {
+    "position": [
+      0,
+      0,
+      0.5
+    ],
+    "rotationYRadians": 0,
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "topY": 0.025
+  },
+  "validation": {
+    "independentGlbImport": true,
+    "triangles": 880,
+    "zeroAreaTriangles": 0,
+    "badNormals": 0,
+    "badUVs": 0,
+    "images": [
+      {
+        "name": "木框_底色",
+        "size": [
+          1024,
+          1024
+        ],
+        "packed": true,
+        "hasData": true
+      },
+      {
+        "name": "木框_法线",
+        "size": [
+          1024,
+          1024
+        ],
+        "packed": true,
+        "hasData": true
+      },
+      {
+        "name": "瓷砖_底色",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true,
+        "hasData": true
+      },
+      {
+        "name": "瓷砖_法线",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true,
+        "hasData": true
+      },
+      {
+        "name": "瓷砖_粗糙度",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true,
+        "hasData": true
+      }
+    ],
+    "actualBlenderRender": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "validation.json"
+  },
+  "notes": [
+    "Actual rounded inset geometry replaces square plane; every corner is rounded including the visible front/right corner.",
+    "Original wood geometry, world envelope, support height and packed PBR images retained.",
+    "Original64 high tiles and editable shaders remain in native source; no new bake claimed this revision."
+  ],
+  "parent": {
+    "revision": "2026-10-27-r1",
+    "sha256": "afa575fe5a13fa26f663fe15003c40b530b74d5b534ddc3929268ea88df07364"
+  },
+  "surface": {
+    "cornerRadiusMeters": 0.12,
+    "tileTriangles": 52,
+    "texturePolicy": "Original r1 baked maps retained; affine XY UV field unchanged",
+    "allCornersRounded": true
+  }
+}

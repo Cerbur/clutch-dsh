@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/trash-can",
+  "displayName": "厨房脚踏垃圾桶",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "trash-can.glb",
+  "sha256": "9a24be020e981a3df752a7ab72c8202d10c5dd1d3edc193c7d58464e49cf2401",
+  "bytes": 466832,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 19197,
+    "meshes": 3,
+    "primitives": 6,
+    "materials": 3,
+    "images": 0
+  },
+  "bounds": {
+    "min": [
+      -0.26722100377082825,
+      0.00003897653368767351,
+      -0.32642749560230766
+    ],
+    "max": [
+      0.26720699667930603,
+      0.9633151650428772,
+      0.326427493516922
+    ]
+  },
+  "dimensions": {
+    "width": 0.5344280004501343,
+    "height": 0.9632761885091895,
+    "depth": 0.6528549891192297
+  },
+  "requiredNodes": [
+    "垃圾桶",
+    "桶身",
+    "桶盖",
+    "踏板"
+  ],
+  "anchors": {
+    "桶盖": [
+      0,
+      0.85,
+      -0.326427
+    ],
+    "踏板": [
+      0,
+      0.128472,
+      0.242167
+    ]
+  },
+  "pivots": {
+    "桶盖": {
+      "position": [
+        0,
+        0.85,
+        -0.326427
+      ],
+      "axis": "local-X",
+      "side": "rear",
+      "openRotationDirection": "negative-X",
+      "maxRecommendedOpenAngleDegrees": 70
+    },
+    "踏板": {
+      "position": [
+        0,
+        0.128472,
+        0.242167
+      ],
+      "axis": "local-X",
+      "side": "rear",
+      "pressRotationDirection": "positive-X",
+      "maxRecommendedPressAngleDegrees": 8,
+      "note": "Only the moving step plate is this node; the fixed bracket is part of 桶身."
+    }
+  },
+  "budgets": {
+    "triangles": 20000,
+    "bytes": 2097152
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/trash-can/lookdev/2026-10-28-candy-r1/糖果感_分材质响应.blend",
+    "input": "kitchen/trash-can/lookdev/2026-10-28-candy-r1/inputs/trash-can.glb",
+    "inputSha256": "5e564460e4fab56449e2b2a1daf3c83872d9574baddae71393081d351150f83d",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/trash-can/work/2026-10-28-candy-r1/build_candy_material.py"
+    ]
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "referenceId": "kitchen/trash-can/context-crop",
+      "revision": "2026-10-27-r1",
+      "file": "references/主参考_冰箱与垃圾桶局部.png",
+      "sha256": "2b21658b0fd12407ce0ace24f98d005b97a72dc6b0260936cc8150ebb99ab4ce",
+      "role": "derived-context-crop",
+      "note": "Crop of the mandatory kitchen main reference around the old refrigerator and its neighboring bin; not an independent art target."
+    }
+  ],
+  "validation": {
+    "independentFinalGlbImport": true,
+    "fixedComparisonCyclesCpuRender": true,
+    "allAccessorBytesIncludingColorUnchanged": true,
+    "nodesAndHierarchyUnchanged": true,
+    "baseColorBytesUnchanged": true,
+    "materialPrimitiveImageCountsUnchanged": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../lookdev/2026-10-28-candy-r1/render-validation.json",
+    "independentBlenderExportImport": "../../work/2026-10-28-candy-r1/blender-roundtrip-import.json"
+  },
+  "notes": [
+    "Source basecolor embedded lighting/imperfections retained; no delighting claim.",
+    "Component fixed-rig review only; no plugin import, room lighting or bake change.",
+    "Roughness/normal mask boundaries are conservative semantic approximations.",
+    "Any new GLB/material adoption requires dependent scene bake verification by integrator."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r2",
+    "parentSha256": "5e564460e4fab56449e2b2a1daf3c83872d9574baddae71393081d351150f83d",
+    "changes": [
+      "Cream enamel roughness .38 -> .30; blue lid .32 -> .29; local material-level clearcoat .08/.32.",
+      "Entire charcoal metal material .55 metallic/.42 roughness is byte-semantically unchanged; no image/normal texture added."
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "protection": "../../lookdev/2026-10-28-candy-r1/protected-regions.json"
+  }
+}

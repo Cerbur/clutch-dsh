@@ -1,0 +1,630 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/lighting",
+  "revision": "2026-10-28-window-top-shell-r30",
+  "status": "ready",
+  "receiverIds": [
+    "floor",
+    "left-wall",
+    "right-wall"
+  ],
+  "geometrySignatureVersion": "three-attributes-sha256-v1",
+  "atlas": {
+    "file": "diffuse.png",
+    "encoding": "RGBM",
+    "range": 8,
+    "width": 2048,
+    "height": 2048,
+    "sha256": "a0a5496ea6f5366a60e2a26b5ca092182eb9b730e847fe6989a0f550bb557098"
+  },
+  "uv": {
+    "file": "uv.bin",
+    "encoding": "uint16-le-normalized",
+    "scope": "receivers",
+    "sha256": "c35862b2e99e0e20a51104d869503c56e2871b82014dfc05eb338238bd332786",
+    "bytes": 20832
+  },
+  "layout": {
+    "positions": {
+      "floor": [
+        0,
+        0,
+        0.5
+      ],
+      "left-wall": [
+        -2.375,
+        0,
+        0.5
+      ],
+      "right-wall": [
+        0,
+        0,
+        -1.875
+      ],
+      "stove": [
+        -1.7901838578129736,
+        0.0252,
+        0.6407950014610851
+      ],
+      "table": [
+        1.45,
+        0,
+        1.15
+      ],
+      "refrigerator": [
+        1.4,
+        0,
+        -1.355
+      ],
+      "storage-cabinet": [
+        -1.715,
+        0.024499213707168,
+        2.6368660533428194
+      ],
+      "sink-cabinet": [
+        -0.75,
+        0.024960769226163,
+        -1.4
+      ],
+      "pendant-light": [
+        1.95,
+        0.6000000000000001,
+        -1.48
+      ],
+      "utensil-rail": [
+        -2.313,
+        2.03,
+        2.45
+      ],
+      "wall-cabinet": [
+        -2.113,
+        1.86,
+        -0.7
+      ],
+      "range-hood": [
+        -2.013,
+        0,
+        0.6362635881443585
+      ],
+      "wall-shelf": [
+        -0.1,
+        0.15,
+        -1.813
+      ],
+      "wall-art": [
+        0.9,
+        2.79,
+        -1.813
+      ],
+      "window": [
+        -1.78,
+        1.8800518369674686,
+        -1.808
+      ],
+      "chair-left": [
+        0.95,
+        0.025,
+        2.03
+      ],
+      "chair-right": [
+        1.98,
+        0.025,
+        2.03
+      ],
+      "rug": [
+        -0.3798896241188049,
+        0.0255,
+        2.42
+      ],
+      "trash-can": [
+        2.23,
+        0.025,
+        -1.18
+      ],
+      "whale-mitt": [
+        -2.307,
+        2.14,
+        2.83
+      ],
+      "wall-clock": [
+        -2.307,
+        2.94,
+        2.62
+      ],
+      "board-cloth": [
+        2.26,
+        2.13,
+        -1.807
+      ],
+      "wall-calendar": [
+        -1.35,
+        2.72,
+        -1.807
+      ],
+      "wall-plant-left": [
+        -2.302,
+        2.18,
+        2.49
+      ],
+      "wall-plant-right": [
+        2.26,
+        1.65,
+        -1.802
+      ]
+    },
+    "rotations": {
+      "left-wall": 1.5707963267948966,
+      "utensil-rail": 1.5707963267948966,
+      "stove": 1.5707963267948966,
+      "wall-cabinet": 1.5707963267948966,
+      "range-hood": 1.5707963267948966,
+      "whale-mitt": 1.5707963267948966,
+      "wall-clock": 1.5707963267948966,
+      "wall-plant-left": 1.5707963267948966
+    },
+    "scales": {
+      "sink-cabinet": [
+        1.8667534820395086,
+        1,
+        1.2303512683915283
+      ],
+      "range-hood": [
+        1.508635348167209,
+        1,
+        1
+      ]
+    }
+  },
+  "instances": {
+    "floor": [
+      {
+        "meshIndex": 0,
+        "name": "圆角木框",
+        "vertexCount": 2484,
+        "geometrySignature": "4ddd88034fb8f758513c63df3886aaaa51ed31974b231ab8914f200a4d7f4dc1",
+        "offset": 0
+      },
+      {
+        "meshIndex": 1,
+        "name": "瓷砖地面",
+        "vertexCount": 156,
+        "geometrySignature": "0cda77d8cdff13f2c9fe43462ee9686f2540d8a11474241746555f3822872560",
+        "offset": 9936
+      }
+    ],
+    "left-wall": [
+      {
+        "meshIndex": 0,
+        "name": "wall_panel",
+        "vertexCount": 1284,
+        "geometrySignature": "c4efb6fb024a391163f9cc960cfc1ca7687abb3436c5ecff169938deb7d13906",
+        "offset": 10560
+      }
+    ],
+    "right-wall": [
+      {
+        "meshIndex": 0,
+        "name": "wall_panel",
+        "vertexCount": 1284,
+        "geometrySignature": "d380ea731cad9ebfe29e19b7ecca030decbb651882ab7cb768a78ebe4abd2f23",
+        "offset": 15696
+      }
+    ],
+    "stove": [
+      {
+        "meshIndex": 0,
+        "name": "灶台静态总成",
+        "vertexCount": 37929,
+        "geometrySignature": "bec9c0295a70dfbf3561663cf356b561355cfeba6d1c58ae9395b39956753542"
+      },
+      {
+        "meshIndex": 1,
+        "name": "转角接缝台面",
+        "vertexCount": 36,
+        "geometrySignature": "6e600321af2282211cd0325a371a2382be7b9396fe7d12a0cd0b9bd72698d7e0"
+      }
+    ],
+    "table": [
+      {
+        "meshIndex": 0,
+        "name": "table_mesh",
+        "vertexCount": 149892,
+        "geometrySignature": "2fcba107ab93def14481c36d7f7befa2486d1545c3fcfdcfdc59c1c1a7e22628"
+      }
+    ],
+    "refrigerator": [
+      {
+        "meshIndex": 0,
+        "name": "箱体",
+        "vertexCount": 28500,
+        "geometrySignature": "c1f5457f244b878a1294c5e73d71c1bc9a1ab2862dcd9e8d8996f3df11802a46"
+      },
+      {
+        "meshIndex": 1,
+        "name": "上门",
+        "vertexCount": 14997,
+        "geometrySignature": "916239be8413b7a24a8e4175caf5905d150806f8f786a6f01ac7084a9f1ef13a"
+      },
+      {
+        "meshIndex": 2,
+        "name": "下门",
+        "vertexCount": 7500,
+        "geometrySignature": "ec1824d7a8603bf37b0af0547c3ef59bad25e5508bd5949cee3dd7ac92b0a0fa"
+      },
+      {
+        "meshIndex": 3,
+        "name": "参考图鲸鱼摆件",
+        "vertexCount": 9600,
+        "geometrySignature": "32dfc12935a0d8b7b3440a4f47b4d55208f37a2e6be956ef93b7528a22caec7f"
+      },
+      {
+        "meshIndex": 4,
+        "name": "参考图陶土盆栽",
+        "vertexCount": 27900,
+        "geometrySignature": "7556d704b72b7240dd785e23658e74a784cc1365e62652ee6ddfc194ab418782"
+      }
+    ],
+    "storage-cabinet": [
+      {
+        "meshIndex": 0,
+        "name": "置物柜_用户原件静态总成",
+        "vertexCount": 88026,
+        "geometrySignature": "716875ac244be877890d85c3afb02c1ff8fbb91f0e939bf64f70121cff699bdc"
+      }
+    ],
+    "sink-cabinet": [
+      {
+        "meshIndex": 0,
+        "name": "水槽柜静态总成",
+        "vertexCount": 113913,
+        "geometrySignature": "2afc4e54a25abb0f3c9e074d441e89c920161dd41da87a4c790d0a63d5ad6b22"
+      }
+    ],
+    "pendant-light": [
+      {
+        "meshIndex": 0,
+        "name": "suspension",
+        "vertexCount": 1767,
+        "geometrySignature": "acc84eae2e90d6c02c13afd7a305963b1a24e88197f3ad9e6caf2ea374f5ecbd"
+      },
+      {
+        "meshIndex": 1,
+        "name": "whale_shade",
+        "vertexCount": 49233,
+        "geometrySignature": "041b7dbdbffd9dc910ded2253c3d5c5805edcf22a1fad5d26ba1584bb3ecf676"
+      }
+    ],
+    "utensil-rail": [
+      {
+        "meshIndex": 0,
+        "name": "挂钩杆",
+        "vertexCount": 20400,
+        "geometrySignature": "5690b15f50c170ccaeff88de1a3f617090920921e66dd42a1bbb68bf279bdbea"
+      },
+      {
+        "meshIndex": 1,
+        "name": "锅铲",
+        "vertexCount": 9900,
+        "geometrySignature": "eb2375981dd4aab1d5c546286b245415582510db05b4f3a5c608be9066b12e57"
+      },
+      {
+        "meshIndex": 2,
+        "name": "汤勺",
+        "vertexCount": 13497,
+        "geometrySignature": "6238cd5e1c84a63deabcf85021ed94cd30e2052ce8a6f2f6ca17096705db0977"
+      },
+      {
+        "meshIndex": 3,
+        "name": "漏勺",
+        "vertexCount": 10200,
+        "geometrySignature": "ff7172b2a31737dabcc42fa44df5c8984f9362bdbd3dd5e06be1119f1f693970"
+      }
+    ],
+    "wall-cabinet": [
+      {
+        "meshIndex": 0,
+        "name": "壁柜静态总成",
+        "vertexCount": 9990,
+        "geometrySignature": "56fcab912bcab3ef530e40b286f9e1439efe641c11baf3199b6c22068cfc01fd"
+      }
+    ],
+    "range-hood": [
+      {
+        "meshIndex": 0,
+        "name": "烟机静态总成",
+        "vertexCount": 85497,
+        "geometrySignature": "fbac70b9ba0cb95454f6deb33488ea16e48087f24298b1206ef182bdd56631f2"
+      }
+    ],
+    "wall-shelf": [
+      {
+        "meshIndex": 0,
+        "name": "置物架_用户新原件完整网格",
+        "vertexCount": 157620,
+        "geometrySignature": "ce16cca457f281dea9294655c577f56591c49c9c26b3f196185e92c4c85c3a1e"
+      }
+    ],
+    "wall-art": [
+      {
+        "meshIndex": 0,
+        "name": "画框与鲸鱼浮雕",
+        "vertexCount": 36000,
+        "geometrySignature": "cddcca80e6fe20efcdcee01858c05f9fc2eaa389ac15a2ae00b90c1dfdfa6604"
+      }
+    ],
+    "window": [
+      {
+        "meshIndex": 0,
+        "name": "窗户_用户原件静态总成",
+        "vertexCount": 86994,
+        "geometrySignature": "29a3152246492780bf079ac098c935903efad0871b217d26e85b50f524279d41"
+      }
+    ],
+    "chair-left": [
+      {
+        "meshIndex": 0,
+        "name": "chair_mesh",
+        "vertexCount": 56982,
+        "geometrySignature": "33e8778f339b16069b1eb7e843819560f16688f0e87e65d386f8bb2617d89d3f"
+      }
+    ],
+    "chair-right": [
+      {
+        "meshIndex": 0,
+        "name": "chair_mesh",
+        "vertexCount": 56982,
+        "geometrySignature": "33e8778f339b16069b1eb7e843819560f16688f0e87e65d386f8bb2617d89d3f"
+      }
+    ],
+    "rug": [
+      {
+        "meshIndex": 0,
+        "name": "地毯本体",
+        "vertexCount": 13812,
+        "geometrySignature": "05926d6a62add7657647172492d81b31b24093f67fab90fb0a1541b485a025a4"
+      }
+    ],
+    "trash-can": [
+      {
+        "meshIndex": 0,
+        "name": "桶身_几何",
+        "vertexCount": 27342,
+        "geometrySignature": "f681aa6a60dc60eedf0e565414bf18d696a712b68536f274e6b4139e1f693bb1"
+      },
+      {
+        "meshIndex": 1,
+        "name": "桶身_几何_1",
+        "vertexCount": 10155,
+        "geometrySignature": "7e9a6e17bd55a2ff4819a4a75cc4ddd81706d83f389218cd4c01f136e97e4453"
+      },
+      {
+        "meshIndex": 2,
+        "name": "桶盖_几何",
+        "vertexCount": 14913,
+        "geometrySignature": "19cb334090ae8939db8a474828ce1655f0f7ad502749365d88bdec7c7209e6a1"
+      },
+      {
+        "meshIndex": 3,
+        "name": "桶盖_几何_1",
+        "vertexCount": 1584,
+        "geometrySignature": "e044314f71adf063dd4942e38cfddcdc03a59b045f0f6b2c9eb4cff77d967b01"
+      },
+      {
+        "meshIndex": 4,
+        "name": "踏板_几何",
+        "vertexCount": 1827,
+        "geometrySignature": "9f421e1ac3e0415a1f6d4faac766d976822900245903ea62a26970afd33a8996"
+      },
+      {
+        "meshIndex": 5,
+        "name": "踏板_几何_1",
+        "vertexCount": 1770,
+        "geometrySignature": "4c66b1a3487d96620fa6e4ba2e49fdf12fdeb6e3102946d31fa6f40121997fa6"
+      }
+    ],
+    "whale-mitt": [
+      {
+        "meshIndex": 0,
+        "name": "鲸鱼隔热垫静态总成",
+        "vertexCount": 20997,
+        "geometrySignature": "c03f18641b0e902354ad67d8e54362cb14c54bf95acc2d1c834bc09b50955350"
+      }
+    ],
+    "wall-clock": [
+      {
+        "meshIndex": 0,
+        "name": "鲸鱼壁钟静态总成",
+        "vertexCount": 12582,
+        "geometrySignature": "3df60853768f21233d804ef33a022141b5f671bdce723e47fc627db245df8c2c"
+      }
+    ],
+    "board-cloth": [
+      {
+        "meshIndex": 0,
+        "name": "board_cloth_mesh",
+        "vertexCount": 44400,
+        "geometrySignature": "a3dbb7d21d304f1f33a2606ff0f32466f363124e8ead144d723d3d45475555e7"
+      }
+    ],
+    "wall-calendar": [
+      {
+        "meshIndex": 0,
+        "name": "wall_calendar_mesh",
+        "vertexCount": 17736,
+        "geometrySignature": "396ec0583e26a892b4a2bacd52c8f60d1499f4e8daa1d84d73d5041db750ff1b"
+      }
+    ],
+    "wall-plant-left": [
+      {
+        "meshIndex": 0,
+        "name": "wall_plant_mesh",
+        "vertexCount": 35697,
+        "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
+      }
+    ],
+    "wall-plant-right": [
+      {
+        "meshIndex": 0,
+        "name": "wall_plant_mesh",
+        "vertexCount": 35697,
+        "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "id": "floor",
+      "assetId": "kitchen/floor",
+      "sha256": "4c4044eead24f761e41ea65c4112c49459b884737e6b367619931d9a87aac006"
+    },
+    {
+      "id": "left-wall",
+      "assetId": "kitchen/left-wall",
+      "sha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b"
+    },
+    {
+      "id": "right-wall",
+      "assetId": "kitchen/right-wall",
+      "sha256": "7a4cd1f93ee2ddef33328f2805614d08166d28924807a4acf4459682ea28b1f5"
+    },
+    {
+      "id": "stove",
+      "assetId": "kitchen/stove",
+      "sha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de"
+    },
+    {
+      "id": "table",
+      "assetId": "kitchen/table",
+      "sha256": "27f4c21585f3114ac6211be996f149a06c72ecae936637753b42a11591fee290"
+    },
+    {
+      "id": "refrigerator",
+      "assetId": "kitchen/refrigerator",
+      "sha256": "250242b0f81f83e1efbf1ac82f686eb464dfcba89b0ed2ff13138bda49e6b6c4"
+    },
+    {
+      "id": "storage-cabinet",
+      "assetId": "kitchen/storage-cabinet",
+      "sha256": "d6ee04d7c0b7676b7bf38ba51123771af04711c2663c104d2d40d3a1db4a6e64"
+    },
+    {
+      "id": "sink-cabinet",
+      "assetId": "kitchen/sink-cabinet",
+      "sha256": "4a481ac8d4659c601b829475558e3178a1d3f2ee5ca7f2a073a73129138ae2f0"
+    },
+    {
+      "id": "pendant-light",
+      "assetId": "kitchen/pendant-light",
+      "sha256": "ad416bd4fbcc532c42769524c13491192d2a64600b32ece6d8f419af0c59b353"
+    },
+    {
+      "id": "utensil-rail",
+      "assetId": "kitchen/utensil-rail",
+      "sha256": "585846f480de89c41a5e44d00e2553559ba387b92d267eb2def843e9a00802ed"
+    },
+    {
+      "id": "wall-cabinet",
+      "assetId": "kitchen/wall-cabinet",
+      "sha256": "480782fd3883df8e248d6277964450bb8bed78f45064b8b90697fc1a8888309c"
+    },
+    {
+      "id": "range-hood",
+      "assetId": "kitchen/range-hood",
+      "sha256": "edf10b059844b8fd0d6f973ea442d3994c4757baf68f8ab3919c5e3c5e47eb7c"
+    },
+    {
+      "id": "wall-shelf",
+      "assetId": "kitchen/wall-shelf",
+      "sha256": "4be2626ad122877997e60576552e0bcda2538744528f9184fc2607dae026cee5"
+    },
+    {
+      "id": "wall-art",
+      "assetId": "kitchen/wall-art",
+      "sha256": "1ae5f88bd832a03829685ee05d9a028c50230bc455a4dd78e9a8a4b30149145d"
+    },
+    {
+      "id": "window",
+      "assetId": "kitchen/window",
+      "sha256": "c9b8eef09df5d96654ba0fa9a53096cc4371bd521052041ed1fca52b0c39e035"
+    },
+    {
+      "id": "chair-left",
+      "assetId": "kitchen/chair",
+      "sha256": "0de38d12fb92007c962a972ec7a5be2caa09118e0023e1ab0f8fdc7419aee1ba"
+    },
+    {
+      "id": "chair-right",
+      "assetId": "kitchen/chair",
+      "sha256": "0de38d12fb92007c962a972ec7a5be2caa09118e0023e1ab0f8fdc7419aee1ba"
+    },
+    {
+      "id": "rug",
+      "assetId": "kitchen/rug",
+      "sha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235"
+    },
+    {
+      "id": "trash-can",
+      "assetId": "kitchen/trash-can",
+      "sha256": "9a24be020e981a3df752a7ab72c8202d10c5dd1d3edc193c7d58464e49cf2401"
+    },
+    {
+      "id": "whale-mitt",
+      "assetId": "kitchen/whale-mitt",
+      "sha256": "44a4d80cbdece4ea5a38f455b317be2d7877e19c63a18cc22c78c9b4f7dc3eec"
+    },
+    {
+      "id": "wall-clock",
+      "assetId": "kitchen/wall-clock",
+      "sha256": "8cd8ffae57c0b0addb8f1bfd4d04fed6ba24f96ee45fe7aa603ca291fb44909e"
+    },
+    {
+      "id": "board-cloth",
+      "assetId": "kitchen/board-cloth",
+      "sha256": "6f486c54e20e20e470d214782aad523eead4baa6d1e72f156945bdbc838258a8"
+    },
+    {
+      "id": "wall-calendar",
+      "assetId": "kitchen/wall-calendar",
+      "sha256": "59105a9207c615f6c1f0e4cf315af848e60b8f3796ba5a07e4130c4cae97ace6"
+    },
+    {
+      "id": "wall-plant-left",
+      "assetId": "kitchen/wall-plant",
+      "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    },
+    {
+      "id": "wall-plant-right",
+      "assetId": "kitchen/wall-plant",
+      "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    }
+  ],
+  "bake": {
+    "engine": "CYCLES",
+    "samples": 64,
+    "device": "METAL",
+    "islandMargin": 0.003,
+    "scope": "shell-only; all furniture participates as occluder and bounce",
+    "materialRevision": "left wall edge window aligned with cabinet top/right shelf left20cm/calendar raised; frozen normal-r1 and other sources; see all25 source hashes",
+    "runtimeEnvironment": "kitchen-candy-indirect-s1-v1 remains runtime-only; Cycles World .05 unchanged",
+    "passes": [
+      "DIFFUSE",
+      "DIRECT",
+      "INDIRECT"
+    ],
+    "colorPass": false,
+    "storedQuantity": "white-Lambert outgoing diffuse radiance E/pi",
+    "viewTransformAppliedToAtlas": false,
+    "margin": 8,
+    "rgbMax": 2.0387065410614014,
+    "uvFallbackMatches": 0,
+    "seconds": 36.03598999977112,
+    "reviewScriptSha256": "e8ecfb6f025582ad2394320334a3c50988488b364ca682aaae617646ac284b53",
+    "denoise": {
+      "method": "OpenImageDenoise via Blender compositor",
+      "input": "linear diffuse E/pi with opaque alpha to avoid associated-alpha color conversion",
+      "albedoNormalAuxiliary": false,
+      "notes": "Color-only denoise of packed atlas; inspect chart borders, finite padding and small props."
+    },
+    "upstreamRevision": "2026-10-28-window-top-shell-r29"
+  }
+}

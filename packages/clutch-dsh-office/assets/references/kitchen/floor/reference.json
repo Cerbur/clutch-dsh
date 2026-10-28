@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "referenceId": "kitchen/floor/tile",
+  "revision": "2026-10-27-r1",
+  "role": "user-provided-component-material-reference",
+  "sha256": "29c5e419ea006f4024d390a6b0e99f783eb8bbe89f6c069e763665abbc266a85",
+  "bytes": 2372370,
+  "libraryPath": "kitchen/floor/references/用户瓷砖纹理参考.png",
+  "pluginPath": "assets/references/kitchen/floor/tile-reference.png",
+  "primarySceneReference": "kitchen/main",
+  "notes": [
+    "The tile image supplements the mandatory original kitchen diorama.",
+    "Keep original image bytes, record derivatives separately.",
+    "Actual asset colors/normals are authored and baked in Blender; do not copy photographed lighting into albedo."
+  ]
+}
