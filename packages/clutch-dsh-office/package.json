@@ -37,6 +37,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.client.json",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "preview": "node scripts/preview.mjs",
+    "assets:import": "node scripts/sync-asset.mjs",
+    "lighting:import": "node scripts/sync-lighting.mjs",
+    "lighting:geometry": "node scripts/export-lighting-geometry.mjs",
     "prepublishOnly": "pnpm run build"
   },
   "dsh": {

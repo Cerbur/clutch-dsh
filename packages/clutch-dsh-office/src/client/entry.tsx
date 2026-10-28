@@ -5,6 +5,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
+import type {
+  SessionStatusSnapshot,
+  UseSessionStatus,
+  UseSessions,
+} from '@deepseek-ai/dsh-client-ui-session/client';
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client';
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
@@ -65,8 +71,10 @@ function NativeOffice({ source, connection, useSessions, useSessionStatus, t }: 
     source.subscribe.bind(source),
     source.getSnapshot.bind(source),
   );
-  const list = useSessions((value) => value);
-  const status = useSessionStatus((value) => value);
+  const list: SessionListState = (useSessions as UseSessions)((value: SessionListState) => value);
+  const status: SessionStatusSnapshot = (useSessionStatus as UseSessionStatus)(
+    (value: SessionStatusSnapshot) => value,
+  );
   const previous = useRef<readonly Office[]>([]);
   const offices = useMemo(() => {
     const projections = new Map(Object.entries(list.projectionsBySession));

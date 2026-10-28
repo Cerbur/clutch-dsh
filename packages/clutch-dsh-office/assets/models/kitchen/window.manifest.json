@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/window",
+  "revision": "2026-10-28-candy-r2",
+  "status": "ready",
+  "file": "window.glb",
+  "sha256": "c9b8eef09df5d96654ba0fa9a53096cc4371bd521052041ed1fca52b0c39e035",
+  "bytes": 2352720,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 28998,
+    "meshes": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "drawCalls": 1,
+  "bounds": {
+    "min": [
+      -0.5249939560890198,
+      0,
+      0.000001101467546504864
+    ],
+    "max": [
+      0.5249781012535095,
+      0.7435848116874695,
+      0.2605603039264679
+    ]
+  },
+  "dimensions": {
+    "width": 1.0499720573425293,
+    "height": 0.7435848116874695,
+    "depth": 0.2605592024589214
+  },
+  "budgets": {
+    "triangles": 30000,
+    "bytes": 4194304,
+    "scope": "window"
+  },
+  "requiredNodes": [
+    "窗户",
+    "窗户_用户原件静态总成"
+  ],
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "manifest": "kitchen/references/reference.json"
+    }
+  ],
+  "source": {
+    "project": "kitchen/window/lookdev/2026-10-28-candy-r2/厨房窗户_柔和材质.blend",
+    "reference": "kitchen/window/source/窗户_用户原件_20261028.glb",
+    "sourceSha256": "0042aade6fc06858f6950237d9c874b1d6118e00d4fe86e2043c87ab30e34c7e",
+    "scripts": [
+      "kitchen/window/work/2026-10-28-r1/build.py",
+      "kitchen/window/work/2026-10-28-r1/strip_specular.py",
+      "kitchen/window/work/2026-10-28-r1/validate.py"
+    ],
+    "uniformScale": 1.0680272232986552
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r2",
+    "parentRevision": "2026-10-28-r1",
+    "parentSha256": "8ee52bb8b5f6cccab0b0dd3d4bb7d41748bddc1dc5355081cba400408e01cdc3",
+    "record": "kitchen/window/lookdev/2026-10-28-candy-r2/validation.json"
+  },
+  "validation": {
+    "independentGlbImport": true,
+    "embeddedTextures": true,
+    "engineAcceptance": "pending",
+    "fixedBeforeAfterLightsCamera": true
+  },
+  "compatibilityChanges": [
+    "Static single mesh; panes opaque; no opening, transparency, exterior view or animation.",
+    "Origin is the center of the rear bounding plane at the lowest point; +Z protrudes into room, not ground center.",
+    "Atlas retains source shading. Mesh is UV-preserving decimated; pane edges and small surface blemishes remain.",
+    "GLB output removes original out-of-range KHR_materials_specular tint; original blend retains source parameter; run strip_specular.py after export.",
+    "Mount on interior face of solid wall; no wall opening required for opaque decorative panes. Check physical overlaps and visibility with shelf, faucet and cabinets in actual Office."
+  ],
+  "notes": [
+    "Opaque decorative panes; no transmission or wall hole",
+    "Original atlas shading and reconstruction imperfections retained"
+  ]
+}

@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/stove",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "stove.glb",
+  "sha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de",
+  "bytes": 2581324,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 12655,
+    "meshes": 2,
+    "primitives": 2,
+    "materials": 2,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -1.63319993019104,
+      0,
+      -0.497812956571579
+    ],
+    "max": [
+      1.704795002937317,
+      1.2154955863952637,
+      0.5537775158882141
+    ]
+  },
+  "dimensions": {
+    "width": 3.337994933128357,
+    "height": 1.2154955863952637,
+    "depth": 1.051590472459793
+  },
+  "requiredNodes": [
+    "灶台总成",
+    "灶台静态总成",
+    "work_surface",
+    "cook_anchor",
+    "burner_left",
+    "burner_right",
+    "front_anchor",
+    "join_right",
+    "counter_back_left",
+    "counter_front_left",
+    "转角接缝台面"
+  ],
+  "anchors": {
+    "work_surface": [
+      0,
+      0.8915539979934692,
+      0
+    ],
+    "cook_anchor": [
+      -0.3206600844860077,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "burner_left": [
+      -0.3206600844860077,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "burner_right": [
+      0.40964606404304504,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "front_anchor": [
+      0,
+      0,
+      0.4998129606246948
+    ],
+    "join_right": [
+      1.704795002937317,
+      0.8911539912223816,
+      0
+    ],
+    "counter_back_left": [
+      -1.6235548257827759,
+      0.8915539979934692,
+      -0.4998129606246948
+    ],
+    "counter_front_left": [
+      -1.6235548257827759,
+      0.8915539979934692,
+      0.4998129606246948
+    ]
+  },
+  "budgets": {
+    "triangles": 40000,
+    "bytes": 4194304,
+    "materials": 2,
+    "primitives": 2
+  },
+  "countertop": {
+    "height": 0.8915539979934692,
+    "width": 3.2471096636952224,
+    "depth": 0.9996259421448968,
+    "localBounds": {
+      "min": [
+        -1.6235548318476112,
+        0,
+        -0.4998129710724484
+      ],
+      "max": [
+        1.6235548318476112,
+        0.8915539979934692,
+        0.4998129710724484
+      ]
+    },
+    "fit": {
+      "depth": 0.9996259421448968,
+      "countertopLocalHeight": 0.8915539979934692,
+      "sinkLocalModuleBoundsX": [
+        -0.824959933757782,
+        -0.28947094082832336
+      ],
+      "sinkScale": [
+        1.8667534820395086,
+        1,
+        1.2303512683915283
+      ],
+      "sinkRoot": [
+        -0.75,
+        0.024960769226163,
+        -1.4
+      ],
+      "backX": -2.289996828885422,
+      "seamZ": -1.0653605337662522,
+      "countertopWorldY": 0.9165147672196322,
+      "measurement": "Actual left module frame X range; left countertop connected-component front min BlenderY=-.27198693 and topZ=.891554. Source total faucet/handles not used."
+    },
+    "join": {
+      "bodyMinWorldZ": -0.997,
+      "thinCap": true,
+      "sinkProfileSamples": [
+        2,
+        2
+      ],
+      "clearanceMeters": 0.001,
+      "frontToBackExtensionMeters": 0.07494650936126712,
+      "topHeightOffsetMeters": -0.0001,
+      "sourceBodyRearCompression": "last120mm compressed to stay behind countertop rear envelope; no new faces",
+      "fitScene": [
+        -1.7901838578129736,
+        0.0252,
+        0.6407950014610851
+      ],
+      "lengthCorrection": {
+        "userRequestedNoCompression": true,
+        "sourceHeightProportionalCounterWidth": 2.2774162951378374,
+        "finalCounterWidth": 3.2471096636952224,
+        "bodyRun": 3.270994963169098,
+        "cartRootZ": 2.6368660533428194,
+        "cartFrontZ": 2.99,
+        "gapToCart": 0.01,
+        "lengthFactorFromCandidate": 1.792003125659615,
+        "capWorldSeamUnchanged": true
+      }
+    }
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/stove/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/stove.glb",
+    "inputSha256": "d42eb667911d1e850ca547c497ea6de9b93511418006ac03366277e88305f769",
+    "parentRevision": "2026-10-28-r6",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/stove/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/stove build|review|finalize 2026-10-28-candy-r1"
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false,
+    "emissiveFlames": false,
+    "cookware": false
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "file": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-28-r6",
+    "parentSha256": "d42eb667911d1e850ca547c497ea6de9b93511418006ac03366277e88305f769",
+    "changes": {
+      "painted-blue-cabinet": {
+        "pixelsBaseResolution": 73671,
+        "pixelsMR": 73671,
+        "roughnessTarget": 0.32,
+        "roughnessRangeAfter": 0.28627450980392155,
+        "normalTangentXYMultiplier": 0.55,
+        "clearcoatFactor": 0.12
+      },
+      "thin-enamel-cap": {
+        "roughnessBefore": 0.46000000834465027,
+        "roughnessAfter": 0.32,
+        "coat": 0.12,
+        "allCapGeometryByteIdentical": true
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  }
+}

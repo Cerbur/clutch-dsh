@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/chair",
+  "assetType": "component",
+  "displayName": "厨房蓝垫圆凳",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "chair.glb",
+  "sha256": "0de38d12fb92007c962a972ec7a5be2caa09118e0023e1ab0f8fdc7419aee1ba",
+  "bytes": 912372,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 18994,
+    "vertices": 11546,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.27642714977264404,
+      0,
+      -0.2783290445804596
+    ],
+    "max": [
+      0.2764319181442261,
+      0.6200493574142456,
+      0.27836382389068604
+    ]
+  },
+  "dimensions": {
+    "width": 0.5528590679168701,
+    "height": 0.6200493574142456,
+    "depth": 0.5566928684711456,
+    "seatHeight": 0.6200493574142456
+  },
+  "requiredNodes": [
+    "chair",
+    "chair_mesh",
+    "seat_surface"
+  ],
+  "anchors": {
+    "seat_surface": [
+      0,
+      0.6200493574142456,
+      0
+    ]
+  },
+  "budget": {
+    "scope": "this-chair-revision",
+    "triangles": 20000,
+    "bytes": 4194304,
+    "materials": 1,
+    "primitives": 1
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/chair/lookdev/2026-10-28-candy-r1/糖果感_分材质响应.blend",
+    "input": "kitchen/chair/lookdev/2026-10-28-candy-r1/inputs/chair.glb",
+    "inputSha256": "83d888fd628ecd16cb6268bc2b33ce335002b59dfb1cd1bf5ad45e346ebfac46",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/chair/work/2026-10-28-candy-r1/build_candy_material.py"
+    ]
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "file": "kitchen/references/kitchen-reference.png"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r1",
+    "parentSha256": "83d888fd628ecd16cb6268bc2b33ce335002b59dfb1cd1bf5ad45e346ebfac46",
+    "changes": [
+      "UV/height/color semantic blue seat only: roughness .64 -> .34, tangent normal XY x.65, clearcoat .08.",
+      "Wood legs/ring keep exact authored roughness, normal and metallic; never converted to glossy plastic."
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "protection": "../../lookdev/2026-10-28-candy-r1/protected-regions.json"
+  },
+  "validation": {
+    "independentFinalGlbImport": true,
+    "fixedComparisonCyclesCpuRender": true,
+    "allAccessorBytesIncludingColorUnchanged": true,
+    "nodesAndHierarchyUnchanged": true,
+    "baseColorBytesUnchanged": true,
+    "materialPrimitiveImageCountsUnchanged": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../lookdev/2026-10-28-candy-r1/render-validation.json",
+    "independentBlenderExportImport": "../../work/2026-10-28-candy-r1/blender-roundtrip-import.json"
+  },
+  "contractChanges": [
+    "New independent kitchen/chair component, not part of table.",
+    "Source normalized once by uniform scale to about .62 m seat height and centered on the floor; engine loads at scale 1.",
+    "chair and chair_mesh are static; seat_surface is a reference only, not a character pose or station."
+  ],
+  "notes": [
+    "Source basecolor embedded lighting/imperfections retained; no delighting claim.",
+    "Component fixed-rig review only; no plugin import, room lighting or bake change.",
+    "Roughness/normal mask boundaries are conservative semantic approximations.",
+    "Any new GLB/material adoption requires dependent scene bake verification by integrator."
+  ]
+}

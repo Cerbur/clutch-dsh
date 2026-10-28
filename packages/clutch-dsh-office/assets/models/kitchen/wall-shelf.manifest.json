@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-shelf",
+  "assetType": "component",
+  "displayName": "厨房双层鲸鱼置物架（用户新原件）",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "wall-shelf.glb",
+  "sha256": "4be2626ad122877997e60576552e0bcda2538744528f9184fc2607dae026cee5",
+  "bytes": 5812040,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-rear-envelope-ground-projection",
+    "originDescription": "Shelf-board X center projected to ground at rear geometry envelope; installation height is already authored."
+  },
+  "geometry": {
+    "triangles": 52540,
+    "vertices": 38281,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.881907045841217,
+      1.2739999294281006,
+      0
+    ],
+    "max": [
+      0.7277258038520813,
+      2.6839187145233154,
+      0.5557773113250732
+    ]
+  },
+  "dimensions": {
+    "width": 1.6096328496932983,
+    "height": 1.4099187850952148,
+    "depth": 0.5557773113250732
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "scope": "this wall-shelf component only; existing 55k/8MiB budget retained",
+    "triangles": 55000,
+    "bytes": 8388608,
+    "materials": 1,
+    "primitives": 1
+  },
+  "requiredNodes": [
+    "厨房置物架",
+    "置物架_用户新原件完整网格",
+    "wall_anchor",
+    "top_shelf_surface",
+    "lower_shelf_surface"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      2.299999952316284,
+      0
+    ],
+    "top_shelf_surface": [
+      0,
+      2.299999952316284,
+      0.25
+    ],
+    "lower_shelf_surface": [
+      0,
+      1.8592000007629395,
+      0.25
+    ]
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/wall-shelf/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/wall-shelf.glb",
+    "inputSha256": "e4b88d8392922a577ff9ec2832889faf54aa172f68232aa8f66afc90aa55ea86",
+    "parentRevision": "2026-10-27-r3",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/wall-shelf/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/wall-shelf build|review|finalize 2026-10-28-candy-r1"
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "file": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r3",
+    "parentSha256": "e4b88d8392922a577ff9ec2832889faf54aa172f68232aa8f66afc90aa55ea86",
+    "changes": {
+      "blue-glazed-ceramic": {
+        "pixelsBaseResolution": 90834,
+        "pixelsMR": 90834,
+        "roughnessTarget": 0.32,
+        "roughnessRangeAfter": 0.3215686274509804,
+        "normalTangentXYMultiplier": 0.6,
+        "clearcoatFactor": 0.1
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  },
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "detachableProps": false,
+    "trueGlassInterior": false
+  },
+  "placementHint": {
+    "scale": 1,
+    "initialPosition": [
+      0.3,
+      0,
+      -1.888
+    ],
+    "rotationYRadians": 0,
+    "upperSurfaceHeightMeters": 2.3,
+    "lowerSurfaceHeightMeters": 1.8592,
+    "lowestPointMeters": 1.2739999294281006,
+    "highestPointMeters": 2.6839187145233154,
+    "woodBackPlaneLocalZApprox": 0.063,
+    "sceneOwnsFinalPlacement": true,
+    "note": "Suggestion for current 5x5x3.5m room only. Root y=0; do not add 2.30m again or normalize by total height. Use current kitchen-layout.ts, not obsolete 2.9m/4.4m layout. Check rear wall/window, faucet, trailing vine, cabinet, fridge, pendant and actors."
+  },
+  "contractChanges": [
+    "New user-supplied textured source replaces rejected old whitebox repaint. Old r1/r2 must not be loaded.",
+    "Same root origin, uniform scale, front/up axes and authored installation height as r2 within 2 micrometres.",
+    "Source mesh is now 52540 triangles, not old 49990. Existing wall-shelf-specific budget 55000 triangles / 8MiB unchanged.",
+    "Mesh node changed from 置物架原白模_完整网格 to 置物架_用户新原件完整网格; root and three anchor names retained.",
+    "Images now JPEG + PNG + PNG, all 2048 square and embedded; source double-sided opaque behavior retained."
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ]
+}

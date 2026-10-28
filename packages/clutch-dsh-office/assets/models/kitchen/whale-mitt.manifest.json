@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/whale-mitt",
+  "revision": "2026-10-28-r1",
+  "status": "ready",
+  "file": "whale-mitt.glb",
+  "sha256": "44a4d80cbdece4ea5a38f455b317be2d7877e19c63a18cc22c78c9b4f7dc3eec",
+  "bytes": 1413644,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 6999,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.16264458000659943,
+      0,
+      0
+    ],
+    "max": [
+      0.16264458000659943,
+      0.3808263838291168,
+      0.09024769812822342
+    ]
+  },
+  "dimensions": {
+    "width": 0.32528916001319885,
+    "height": 0.3808263838291168,
+    "depth": 0.09024769812822342
+  },
+  "requiredNodes": [
+    "鲸鱼隔热垫挂件",
+    "鲸鱼隔热垫静态总成",
+    "wall_anchor",
+    "front_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.1904131919145584,
+      0.09024769812822342
+    ]
+  },
+  "budgets": {
+    "triangles": 10000,
+    "bytes": 3145728,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false,
+    "liveClock": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/whale-mitt/work/2026-10-28-r1/鲸鱼隔热垫_可编辑工程.blend",
+    "input": "kitchen/whale-mitt/source/鲸鱼隔热垫挂件_用户原件_20261028_0f8fd1f5.glb",
+    "inputSha256": "6ba2673d12830a74c9644577ad7d79ec803c8b0b8a4add502fad1a67174d8bd3",
+    "inputBytes": 25180776,
+    "uniformScale": 0.25388422281608647,
+    "sourceDimensions": [
+      1.28125,
+      1.500000238418579,
+      0.35546793043613434
+    ],
+    "script": "kitchen/whale-mitt/work/2026-10-28-r1/scripts/build.py",
+    "blender": "5.2.3 LTS"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood": {
+        "pixels": 131486,
+        "roughnessRange": [
+          0.5456470847129822,
+          0.5962353348731995
+        ],
+        "metallic": 0
+      },
+      "textile": {
+        "pixels": 897940,
+        "roughnessRange": [
+          0.6529411673545837,
+          0.6992156505584717
+        ],
+        "metallic": 0
+      }
+    },
+    "baseColor": "original colors/pattern;1024 resize only",
+    "specular": "invalid optional specularColorFactor[2,2,2] removed; no required decoder"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-28-r1/validation.json"
+  },
+  "notes": [
+    "Static complete source, no fabricated articulation or real-time clock.",
+    "Source topology/UV and all source parts retained; uniform metric normalization only.",
+    "Original image contains baked illumination; not de-lit.",
+    "Complete rear envelopeZ0 and bottomY0; scene mounting translation owned by integrator.",
+    "New component must join lighting source dependency list and scene rebake."
+  ],
+  "sizing": {
+    "loopTopToPadBottom": 0.36,
+    "totalHeightIncludingWoodenMount": 0.3808263838291168,
+    "includes": "source wooden mounting peg retained; extends above hanging-loop top",
+    "loopMeasurement": "highest vertex of source strap triangles with all corners and UV centroid strictly blue, down to complete pad bottom",
+    "loopTopSourceY": 0.6679690480232239
+  }
+}

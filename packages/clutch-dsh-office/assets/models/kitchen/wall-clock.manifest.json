@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-clock",
+  "revision": "2026-10-28-r1",
+  "status": "ready",
+  "file": "wall-clock.glb",
+  "sha256": "8cd8ffae57c0b0addb8f1bfd4d04fed6ba24f96ee45fe7aa603ca291fb44909e",
+  "bytes": 973676,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 4194,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.2199999988079071,
+      0,
+      0
+    ],
+    "max": [
+      0.2199999988079071,
+      0.42625004053115845,
+      0.08793535828590393
+    ]
+  },
+  "dimensions": {
+    "width": 0.4399999976158142,
+    "height": 0.42625004053115845,
+    "depth": 0.08793535828590393
+  },
+  "requiredNodes": [
+    "鲸鱼木质壁钟",
+    "鲸鱼壁钟静态总成",
+    "wall_anchor",
+    "front_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.21312502026557922,
+      0.08793535828590393
+    ]
+  },
+  "budgets": {
+    "triangles": 10000,
+    "bytes": 3145728,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false,
+    "liveClock": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/wall-clock/work/2026-10-28-r1/鲸鱼木质壁钟_可编辑工程.blend",
+    "input": "kitchen/wall-clock/source/鲸鱼木质壁钟_用户原件_20261028_3794a8a9.glb",
+    "inputSha256": "fa612074667269fcd58e02f94089f00bcb97e81475614643421c2580acc8425f",
+    "inputBytes": 21297836,
+    "uniformScale": 0.44,
+    "sourceDimensions": [
+      1,
+      0.9687501192092896,
+      0.1998530924320221
+    ],
+    "script": "kitchen/wall-clock/work/2026-10-28-r1/scripts/build.py",
+    "blender": "5.2.3 LTS"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood": {
+        "pixels": 757474,
+        "roughnessRange": [
+          0.5428235530853271,
+          0.5703529715538025
+        ],
+        "metallic": 0
+      },
+      "whale-paint": {
+        "pixels": 80881,
+        "roughnessRange": [
+          0.3231372535228729,
+          0.34431371092796326
+        ],
+        "metallic": 0
+      },
+      "cream-face": {
+        "pixels": 197380,
+        "roughnessRange": [
+          0.5617254972457886,
+          0.5888627767562866
+        ],
+        "metallic": 0
+      }
+    },
+    "baseColor": "original colors/pattern;1024 resize only",
+    "specular": "invalid optional specularColorFactor[2,2,2] removed; no required decoder"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-28-r1/validation.json"
+  },
+  "notes": [
+    "Static complete source, no fabricated articulation or real-time clock.",
+    "Source topology/UV and all source parts retained; uniform metric normalization only.",
+    "Original image contains baked illumination; not de-lit.",
+    "Complete rear envelopeZ0 and bottomY0; scene mounting translation owned by integrator.",
+    "New component must join lighting source dependency list and scene rebake."
+  ],
+  "clock": {
+    "diameter": 0.44,
+    "diameterDefinition": "max in-plane extent, horizontal rim width",
+    "verticalRimSpan": 0.42625004053115845,
+    "totalHeight": 0.42625004053115845,
+    "hangingRope": false,
+    "hands": "source static geometry"
+  }
+}

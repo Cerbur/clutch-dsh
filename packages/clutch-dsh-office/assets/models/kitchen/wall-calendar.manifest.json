@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-calendar",
+  "assetType": "component",
+  "displayName": "鲸鱼造型厨房挂历",
+  "revision": "2026-10-28-r1",
+  "status": "ready",
+  "file": "wall-calendar.glb",
+  "sha256": "59105a9207c615f6c1f0e4cf315af848e60b8f3796ba5a07e4130c4cae97ace6",
+  "bytes": 1183036,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center",
+    "description": "Back bounding plane Z=0, bottom Y=0, horizontal bounds centered X=0; all geometry extends +Z into room. Installation height/position owned by scene."
+  },
+  "geometry": {
+    "triangles": 5912,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.14385154843330383,
+      0,
+      0
+    ],
+    "max": [
+      0.14385154843330383,
+      0.47999998927116394,
+      0.08650869876146317
+    ]
+  },
+  "dimensions": {
+    "width": 0.28770309686660767,
+    "height": 0.47999998927116394,
+    "depth": 0.08650869876146317
+  },
+  "requiredNodes": [
+    "wall-calendar",
+    "wall_calendar_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.23999999463558197,
+      0.08750870078802109
+    ],
+    "hang_anchor": [
+      0,
+      0.47999998927116394,
+      0
+    ]
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "triangles": 15000,
+    "bytes": 3145728,
+    "meshes": 1,
+    "materials": 1,
+    "primitives": 1,
+    "images": 3,
+    "textureMaxSize": 1024,
+    "scope": "Independent wall-calendar budget only"
+  },
+  "source": {
+    "original": "kitchen/wall-calendar/source/20261028181846_1dfba5ac.glb",
+    "originalUserPath": "/Users/yuancheng/Downloads/20261028181846_1dfba5ac.glb",
+    "originalSha256": "e8bd6c1d4262097cff50b1cd3f0d8891999d67754ec5541094a34972abae4e79",
+    "originalBytes": 23792268,
+    "originalTriangles": 5912,
+    "project": "kitchen/wall-calendar/work/2026-10-28-r1/鲸鱼造型厨房挂历.blend",
+    "pipeline": [
+      "kitchen/wall-calendar/work/2026-10-28-r1/prepare_accessory.py"
+    ],
+    "uniformScale": 0.25309978564789415,
+    "method": "Uniform normalization including the entire hanger, UV-preserving small decimation only if above 15000 triangles; original color atlas downsampled, no repaint."
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "file": "kitchen/references/kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "roughness": {
+      "wood": 0.57,
+      "cloth": 0.66,
+      "paper": 0.65,
+      "rope": 0.68,
+      "paintedPin": 0.34,
+      "whaleInk": 0.34
+    },
+    "notes": [
+      "Blue-white towel and whale/grid calendar remain actual source patterns.",
+      "Whale graphic is printed on paper, not a separate glossy toy.",
+      "No global plastic coat, basecolor tint, specularColorFactor2, canvas or live calendar."
+    ]
+  },
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "wallHanging": true,
+    "liveCalendar": false,
+    "separateMovingCloth": false
+  },
+  "validation": {
+    "blender": "5.2.3 LTS",
+    "independentFinalGlbImport": true,
+    "independentExportReimport": true,
+    "roundtripTriangles": 5912,
+    "images": [
+      {
+        "name": "basecolor-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "sRGB",
+        "decodedFinite": true
+      },
+      {
+        "name": "normal-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "Non-Color",
+        "decodedFinite": true
+      },
+      {
+        "name": "surface-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "Non-Color",
+        "decodedFinite": true
+      }
+    ],
+    "bounds": {
+      "min": [
+        -0.14385154843330383,
+        0,
+        0
+      ],
+      "max": [
+        0.14385154843330383,
+        0.47999998927116394,
+        0.08650869876146317
+      ]
+    },
+    "nodes": [
+      "front_anchor",
+      "hang_anchor",
+      "wall_anchor",
+      "wall_calendar_mesh",
+      "wall-calendar"
+    ],
+    "finiteGeometry": true,
+    "patternAndFrontBackReviewed": true,
+    "noExternalTextures": true,
+    "noRequiredExtensions": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-28-r1/validation.json",
+    "renders": "../../work/2026-10-28-r1/renders"
+  },
+  "notes": [
+    "Ready only; not engine accepted. Placement, collision review and dependent lighting bake belong to integrator.",
+    "Original atlas contains source shading/reconstruction imperfections; no full delighting claim.",
+    "Coordinate origin is wall-plane-bottom-center, not floor-center or object center."
+  ]
+}

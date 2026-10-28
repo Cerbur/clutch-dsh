@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/rug",
+  "assetType": "component",
+  "displayName": "厨房鲸鱼地毯",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "rug.glb",
+  "sha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+  "bytes": 2916784,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center",
+    "description": "Complete footprint bounding-box center projected to the underside plane. Head is local -X, tail +X, cream belly toward +Z; top normal +Y."
+  },
+  "geometry": {
+    "triangles": 4604,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 2
+  },
+  "bounds": {
+    "min": [
+      -0.800000011920929,
+      0,
+      -0.47026658058166504
+    ],
+    "max": [
+      0.800000011920929,
+      0.026000000536441803,
+      0.47026658058166504
+    ]
+  },
+  "dimensions": {
+    "width": 1.600000023841858,
+    "height": 0.026000000536441803,
+    "depth": 0.9405331611633301
+  },
+  "requiredNodes": [
+    "鲸鱼地毯",
+    "地毯本体",
+    "rug_surface"
+  ],
+  "anchors": {
+    "rug_surface": [
+      0,
+      0.026000000536441803,
+      0
+    ]
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "triangles": 6000,
+    "bytes": 4194304,
+    "materials": 1,
+    "primitives": 1,
+    "images": 2,
+    "scope": "Independent budget for kitchen/rug only; does not alter other assets."
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/rug/lookdev/2026-10-28-candy-r1/糖果感_分材质响应.blend",
+    "input": "kitchen/rug/lookdev/2026-10-28-candy-r1/inputs/rug.glb",
+    "inputSha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/rug/work/2026-10-28-candy-r1/build_candy_material.py"
+    ]
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "file": "kitchen/references/kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "file": "kitchen/rug/references/P-19_front.png",
+      "sha256": "1f0e58c9112235cdaeed96bc3f896c3bdd4872731b1caa2afe3bac58318fd173",
+      "role": "user-provided-component-multiview"
+    },
+    {
+      "file": "kitchen/rug/references/P-19_orig.png",
+      "sha256": "84d0d737f8c6503e05f2988e8e67ed1566edaf3e5835a97422ff49dcd884319d",
+      "role": "user-provided-component-multiview"
+    },
+    {
+      "file": "kitchen/rug/references/P-19_side.png",
+      "sha256": "9ed0e9a3de7a3759451207416791826986dc82729ea3bb4045f69c7686177834",
+      "role": "user-provided-component-multiview"
+    },
+    {
+      "file": "kitchen/rug/references/P-19_top.png",
+      "sha256": "5ac6ad464da8403deb1e69fc480d8a9fcf27a256b826e35737dc274b4d9d2f87",
+      "role": "user-provided-component-multiview"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r1",
+    "parentSha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+    "changes": [
+      "Retain existing .70 roughness/.38 pile normal/.5 specular: source already has material-appropriate soft textile response.",
+      "No demonstrated improvement warrants smoothing the loop pile or adding plastic coat. Deliberately retained GLB bytes and documented no-op review revision."
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "protection": "../../lookdev/2026-10-28-candy-r1/protected-regions.json"
+  },
+  "textures": [
+    {
+      "name": "鲸鱼地毯_normal",
+      "sha256": "400cad68c9c71cb8caa91489f83075d4925781478be963b8dd00050674e97055",
+      "bytes": 2408727,
+      "mimeType": "image/png"
+    },
+    {
+      "name": "鲸鱼地毯_basecolor",
+      "sha256": "9d808e8d57405e25320bb811ab74fe708563f4f2107a4ce631b5215e9678b636",
+      "bytes": 380173,
+      "mimeType": "image/png"
+    }
+  ],
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "floorDecoration": true,
+    "physicalPileGeometry": false
+  },
+  "placement": {
+    "scale": 1,
+    "initialPosition": [
+      -0.55,
+      0.033,
+      0.64
+    ],
+    "rotationYRadians": 0,
+    "sceneOwnsFinalPlacement": true,
+    "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",
+    "surfaceAnchorRole": "Top surface reference only; not a character stand point.",
+    "notes": [
+      "Initial position is a provisional aisle placement from read-only inspection of current layout, not a runtime-accepted coordinate.",
+      "Current procedural floor top is y=.025; grout high points reach y=.0315. Start underside near y=.033, then verify actual floor. Root y=0 would put the rug inside the floor.",
+      "Remove only the old three-ball whale mat from buildFloor; retain base, tiles and joints.",
+      "Head -X and tail +X at zero rotation. Check stove, storage-cabinet, table and stools, room edge, role feet and travel.",
+      "Prefer repositioning this new decorative instance over changing existing layout, camera, lighting or role stations. Treat rug as walkable floor decoration."
+    ]
+  },
+  "validation": {
+    "independentFinalGlbImport": true,
+    "fixedComparisonCyclesCpuRender": true,
+    "allAccessorBytesIncludingColorUnchanged": true,
+    "nodesAndHierarchyUnchanged": true,
+    "baseColorBytesUnchanged": true,
+    "materialPrimitiveImageCountsUnchanged": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../lookdev/2026-10-28-candy-r1/render-validation.json",
+    "independentBlenderExportImport": "../../work/2026-10-28-candy-r1/blender-roundtrip-import.json"
+  },
+  "notes": [
+    "Source basecolor embedded lighting/imperfections retained; no delighting claim.",
+    "Component fixed-rig review only; no plugin import, room lighting or bake change.",
+    "Roughness/normal mask boundaries are conservative semantic approximations.",
+    "Any new GLB/material adoption requires dependent scene bake verification by integrator.",
+    "No-change textile review revision; original runtime GLB intentionally byte-identical."
+  ]
+}

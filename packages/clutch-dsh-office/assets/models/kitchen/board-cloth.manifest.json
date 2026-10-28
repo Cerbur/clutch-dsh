@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/board-cloth",
+  "assetType": "component",
+  "displayName": "木质小砧板与抹布挂件",
+  "revision": "2026-10-28-r1",
+  "status": "ready",
+  "file": "board-cloth.glb",
+  "sha256": "6f486c54e20e20e470d214782aad523eead4baa6d1e72f156945bdbc838258a8",
+  "bytes": 2383096,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center",
+    "description": "Back bounding plane Z=0, bottom Y=0, horizontal bounds centered X=0; all geometry extends +Z into room. Installation height/position owned by scene."
+  },
+  "geometry": {
+    "triangles": 14800,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.21451812982559204,
+      0,
+      0
+    ],
+    "max": [
+      0.21451812982559204,
+      0.5,
+      0.19986964762210846
+    ]
+  },
+  "dimensions": {
+    "width": 0.4290362596511841,
+    "height": 0.5,
+    "depth": 0.19986964762210846
+  },
+  "requiredNodes": [
+    "board-cloth",
+    "board_cloth_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.25,
+      0.20086964964866638
+    ],
+    "hang_anchor": [
+      0,
+      0.5,
+      0
+    ]
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "triangles": 15000,
+    "bytes": 3145728,
+    "meshes": 1,
+    "materials": 1,
+    "primitives": 1,
+    "images": 3,
+    "textureMaxSize": 1024,
+    "scope": "Independent board-cloth budget only"
+  },
+  "source": {
+    "original": "kitchen/board-cloth/source/20261028175858_ccd9c5cc.glb",
+    "originalUserPath": "/Users/yuancheng/Downloads/20261028175858_ccd9c5cc.glb",
+    "originalSha256": "649d28c2c6852f1011baddcc6264de0ca0735f779a097b8a8dc15157e878b38a",
+    "originalBytes": 31209296,
+    "originalTriangles": 16632,
+    "project": "kitchen/board-cloth/work/2026-10-28-r1/木质小砧板与抹布挂件.blend",
+    "pipeline": [
+      "kitchen/board-cloth/work/2026-10-28-r1/prepare_accessory.py"
+    ],
+    "uniformScale": 0.3333332803514353,
+    "method": "Uniform normalization including the entire hanger, UV-preserving small decimation only if above 15000 triangles; original color atlas downsampled, no repaint."
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "file": "kitchen/references/kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "roughness": {
+      "wood": 0.57,
+      "cloth": 0.66,
+      "paper": 0.65,
+      "rope": 0.68,
+      "paintedPin": 0.34
+    },
+    "notes": [
+      "Blue-white towel and whale/grid calendar remain actual source patterns.",
+      "Whale graphic is printed on paper, not a separate glossy toy.",
+      "No global plastic coat, basecolor tint, specularColorFactor2, canvas or live calendar."
+    ]
+  },
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "wallHanging": true,
+    "liveCalendar": false,
+    "separateMovingCloth": false
+  },
+  "validation": {
+    "blender": "5.2.3 LTS",
+    "independentFinalGlbImport": true,
+    "independentExportReimport": true,
+    "roundtripTriangles": 14800,
+    "images": [
+      {
+        "name": "basecolor-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "sRGB",
+        "decodedFinite": true
+      },
+      {
+        "name": "normal-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "Non-Color",
+        "decodedFinite": true
+      },
+      {
+        "name": "surface-1024",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorSpace": "Non-Color",
+        "decodedFinite": true
+      }
+    ],
+    "bounds": {
+      "min": [
+        -0.21451812982559204,
+        0,
+        0
+      ],
+      "max": [
+        0.21451812982559204,
+        0.5,
+        0.19986964762210846
+      ]
+    },
+    "nodes": [
+      "board_cloth_mesh",
+      "front_anchor",
+      "hang_anchor",
+      "wall_anchor",
+      "board-cloth"
+    ],
+    "finiteGeometry": true,
+    "patternAndFrontBackReviewed": true,
+    "noExternalTextures": true,
+    "noRequiredExtensions": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-28-r1/validation.json",
+    "renders": "../../work/2026-10-28-r1/renders"
+  },
+  "notes": [
+    "Ready only; not engine accepted. Placement, collision review and dependent lighting bake belong to integrator.",
+    "Original atlas contains source shading/reconstruction imperfections; no full delighting claim.",
+    "Coordinate origin is wall-plane-bottom-center, not floor-center or object center."
+  ]
+}

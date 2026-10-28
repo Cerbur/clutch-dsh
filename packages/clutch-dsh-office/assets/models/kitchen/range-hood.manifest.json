@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/range-hood",
+  "revision": "2026-10-28-normal-r1",
+  "status": "ready",
+  "file": "range-hood.glb",
+  "sha256": "edf10b059844b8fd0d6f973ea442d3994c4757baf68f8ab3919c5e3c5e47eb7c",
+  "bytes": 2700820,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor projection of hood center; installed height already modeled"
+  },
+  "geometry": {
+    "triangles": 28499,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.455466091632843,
+      1.7251482009887695,
+      -0.29993709921836853
+    ],
+    "max": [
+      0.45550602674484253,
+      2.7599587440490723,
+      0.3224407732486725
+    ]
+  },
+  "dimensions": {
+    "width": 0.9109721183776855,
+    "height": 1.0348105430603027,
+    "depth": 0.622377872467041
+  },
+  "requiredNodes": [
+    "抽油烟机",
+    "烟机静态总成",
+    "front_anchor",
+    "mount_rear",
+    "hood_bottom"
+  ],
+  "anchors": {
+    "front_anchor": [
+      0,
+      2.242553472518921,
+      0.3224407732486725
+    ],
+    "mount_rear": [
+      0,
+      1.7251482009887695,
+      -0.29993709921836853
+    ],
+    "hood_bottom": [
+      0,
+      1.7251482009887695,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 30000,
+    "bytes": 8388608,
+    "images": 3,
+    "materials": 1,
+    "primitives": 1
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/range-hood/work/2026-10-28-normal-r1/烟机_加权法线可编辑样板.blend",
+    "runtimeImportProject": "kitchen/range-hood/work/2026-10-28-normal-r1/烟机_正式GLB法线版.blend",
+    "parentRevision": "2026-10-28-r3",
+    "parentGlb": "kitchen/range-hood/deliveries/2026-10-28-r3/range-hood.glb",
+    "parentSha256": "4fcc05cf0604169f4d12f7be0182b05271b6c31a7f416e9d4c13bbea9366b5a5",
+    "sampleProject": "kitchen/range-hood/lookdev/2026-10-28-s3a-diagnosis/weighted-normals.blend",
+    "sampleProjectSha256": "3ed2309df64ee73b5bf4c2bfd761203e1cff71fa923ca2c73fbdc467dd2e661d",
+    "blender": "5.2.3 LTS",
+    "script": "kitchen/range-hood/work/2026-10-28-normal-r1/scripts/export_normals.py",
+    "method": "Only original NORMAL accessor overwritten in-place from evaluated corner normals; original glTF JSON and all other bytes retained."
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "blueEnamelRoughness": 0.35,
+    "normalScale": 0.35,
+    "metalProtected": true,
+    "clearcoat": 0,
+    "baseColor": "resized to1024; source colors and atlas details retained"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "actualFinalGlbCpuRender": true,
+    "allImagesFullyDecodedUnchanged": true,
+    "positionsUVIndicesNodesAnchorsMaterialsImagesProtected": true,
+    "onlyNormalBinaryRangeChanged": true,
+    "jsonChunkByteIdentical": true,
+    "normalMappingWithThreeAuditedCornerCollapses": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "mappingReport": "../../work/2026-10-28-normal-r1/normal-mapping-audit.json",
+    "byteAudit": "../../work/2026-10-28-normal-r1/independent-byte-audit.json",
+    "renderReport": "../../work/2026-10-28-normal-r1/render-validation.json"
+  },
+  "notes": [
+    "Evaluated weighted normals from authorized S3A sample: 24033 vertices exact, 3 incompatible corner-split vertices incident-area collapsed to retain original indices; worst local deviation 3.929581 degrees. No topology, bevel, UV, material or image change.",
+    "Original JSON chunk and all BIN bytes outside original NORMAL accessor byte-identical to r3. TANGENT remains absent as in parent.",
+    "Triangle shading on flue reduced in the actual final GLB under the frozen diagnostic rig; source atlas lighting/geometry defects remain.",
+    "Ready only. Integrator owns dependency rebake, plugin import and ~/.dsh-test deployment; no engine acceptance or final artistic approval claimed."
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-plant",
+  "assetType": "component",
+  "displayName": "W04 壁挂小绿植盆",
+  "revision": "2026-10-28-r1",
+  "status": "ready",
+  "file": "wall-plant.glb",
+  "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50",
+  "bytes": 2818116,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center",
+    "originDescription": "X is ceramic-pot center; Y=0 lowest component point; Z=0 rearmost wooden mounting plate envelope, +Z into room"
+  },
+  "geometry": {
+    "triangles": 11899,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.16810095310211182,
+      0,
+      0
+    ],
+    "max": [
+      0.14430661499500275,
+      0.42062094807624817,
+      0.31012049317359924
+    ]
+  },
+  "dimensions": {
+    "width": 0.31240756809711456,
+    "height": 0.42062094807624817,
+    "depth": 0.31012049317359924
+  },
+  "pot": {
+    "targetWidth": 0.28,
+    "measuredWidth": 0.2800000011920929,
+    "measurement": {
+      "minX": -0.578125,
+      "maxX": 0.6855469942092896,
+      "width": 1.2636719942092896,
+      "excludes": "foliage, backboard; ceramic color and lower-bowl geometry identified from actual source"
+    },
+    "overallPlantWidthNotUsedForScale": true
+  },
+  "budgets": {
+    "scope": "W04 wall-plant only",
+    "triangles": 12000,
+    "bytes": 3145728,
+    "materials": 1,
+    "meshes": 1,
+    "primitives": 1,
+    "images": 3,
+    "imageMaxDimension": 1024
+  },
+  "requiredNodes": [
+    "wall-plant",
+    "wall_plant_mesh",
+    "wall_anchor",
+    "plant_anchor",
+    "front_anchor"
+  ],
+  "anchors": {
+    "front_anchor": [
+      0,
+      0.1599999964237213,
+      0.31012049317359924
+    ],
+    "plant_anchor": [
+      0,
+      0.2199999988079071,
+      0.1599999964237213
+    ],
+    "wall_anchor": [
+      0,
+      0.09740898758172989,
+      0
+    ]
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "rigged": false,
+    "animationClips": false,
+    "independentLeaves": false,
+    "BVariant": "Proposal/feasibility report only; not a second runtime GLB"
+  },
+  "source": {
+    "library": "office",
+    "input": "kitchen/wall-plant/source/壁挂绿植盆_W04_原始_20261028.glb",
+    "originalFilename": "20261028175714_352ae1a9.glb",
+    "inputSha256": "9b3c7cfc85aaa0e4efe6448f00ae3fa46b4757a95e9e1de7e07f59c44d677fb0",
+    "inputBytes": 32433376,
+    "project": "kitchen/wall-plant/work/2026-10-28-r1/壁挂绿植盆_米制材质.blend",
+    "blender": "5.2.3 LTS",
+    "script": "kitchen/wall-plant/work/2026-10-28-r1/scripts/build.py",
+    "sourceTriangles": 22076,
+    "uniformScale": 0.22165934276153368,
+    "simplification": "Blender collapse decimation, retain source UV layer; no unwrap/repaint"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-stage2b",
+    "leafRoughness": [
+      0.48,
+      0.58
+    ],
+    "potRoughness": 0.6,
+    "woodRoughness": 0.58,
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "baseColor": "Original source texture downsample only; no whole-object recolor, new illumination or atlas repaint",
+    "report": "../../work/2026-10-28-r1/build-report.json"
+  },
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "byteBudget": true,
+    "triangleBudget": true,
+    "engineAccepted": false,
+    "report": "validation.json",
+    "renderedViews": [
+      "preview.png",
+      "front.png",
+      "back.png",
+      "side.png",
+      "detail.png"
+    ]
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "placementHint": {
+    "wallLocalPlaneZ": 0,
+    "surfaceOffsetMeters": 0.002,
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "sceneOwnsFinalPlacement": true,
+    "avoidWholeObjectCenteredYaw": true,
+    "leafVariantProposal": "../../work/2026-10-28-r1/leaf-variant-B-proposal.json"
+  },
+  "knownLimits": [
+    "One connected static reconstructed source mesh, no rig or independent leaf objects",
+    "Original atlas shading, underside/back seams and local shape defects retained",
+    "Leaf B only a documented/probed local deformation proposal, no second GLB exported",
+    "No whole-object yaw around a centered fixed wall mount; parent owns wall orientations and placements",
+    "Runtime adoption and scene light bake belong to integrator"
+  ]
+}

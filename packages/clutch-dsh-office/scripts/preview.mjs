@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import process from 'node:process';
+import { inlineAssets } from './inline-assets.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const outDir = await mkdtemp(join(tmpdir(), 'office-preview-'));
@@ -16,6 +17,7 @@ await build({
   platform: 'browser',
   target: 'es2022',
   dts: false,
+  plugins: [inlineAssets({ mode: 'inline' })],
   deps: { alwaysBundle: () => true },
   define: { 'process.env.NODE_ENV': '"production"' },
 });

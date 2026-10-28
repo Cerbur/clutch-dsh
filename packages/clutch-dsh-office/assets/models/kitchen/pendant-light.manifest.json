@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/pendant-light",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "pendant-light.glb",
+  "sha256": "ad416bd4fbcc532c42769524c13491192d2a64600b32ece6d8f419af0c59b353",
+  "bytes": 1240536,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center",
+    "originDetail": "Floor projection of suspension axis; visible geometry is elevated beneath a 2.9m reference mount."
+  },
+  "geometry": {
+    "triangles": 17000,
+    "vertices": 13343,
+    "meshes": 2,
+    "primitives": 2,
+    "materials": 1,
+    "images": 4
+  },
+  "drawCalls": 2,
+  "bounds": {
+    "min": [
+      -0.2108841985464096,
+      2.1639328002929688,
+      -0.3072519302368164
+    ],
+    "max": [
+      0.21050548553466797,
+      2.8999342918395996,
+      0.200014129281044
+    ]
+  },
+  "dimensions": {
+    "width": 0.42138969898223877,
+    "depth": 0.5072660446166992,
+    "height": 0.7360014915466309,
+    "mountHeight": 2.9,
+    "lowestPointHeight": 2.1639328002929688
+  },
+  "requiredNodes": [
+    "pendant-light",
+    "hanging_assembly",
+    "ceiling_mount",
+    "whale_shade",
+    "suspension",
+    "light_anchor"
+  ],
+  "hierarchy": {
+    "pendant-light": null,
+    "hanging_assembly": "pendant-light",
+    "ceiling_mount": "pendant-light",
+    "whale_shade": "hanging_assembly",
+    "suspension": "hanging_assembly",
+    "light_anchor": "hanging_assembly"
+  },
+  "anchors": {
+    "ceiling_mount": [
+      0,
+      2.9000000953674316,
+      0
+    ],
+    "light_anchor": [
+      0.0007244251319207251,
+      2.2127041816711426,
+      0.021539948880672455
+    ]
+  },
+  "anchorSpace": "root-local; root is identity, equal to initial world coordinates",
+  "budget": {
+    "scope": "this-pendant-light-revision",
+    "triangles": 20000,
+    "bytes": 4194304,
+    "materials": 1,
+    "primitives": 2,
+    "images": 4
+  },
+  "lighting": {
+    "emissiveTexture": true,
+    "emissionColor": "warm cream underside mask",
+    "emissionStrength": 1,
+    "embeddedLights": false,
+    "optionalRuntimeLightAnchor": "light_anchor",
+    "downDirection": "local -Y",
+    "castsEnvironmentLightAutomatically": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/pendant-light/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/pendant-light.glb",
+    "inputSha256": "1c0be5c718d1c8afc17cbb26afb8e19e138253239d249993268c21364b2b4290",
+    "parentRevision": "2026-10-27-style-r1",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/pendant-light/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/pendant-light build|review|finalize 2026-10-28-candy-r1"
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "file": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "contractChanges": [
+    "New independent kitchen/pendant-light; importer and runtime need their own explicit component rules.",
+    "Root is the suspension axis projected to floor; no geometry touches the ground. Do not apply a global grounded-bounds check to this hanging component.",
+    "Metric geometry has baked source scale .65; load at unit scale. Default mount is y=2.9m, lowest geometry y=2.163933m.",
+    "Whale front +Z; tail -Z. Hanging assembly pivot at ceiling height; no animation clips.",
+    "Adjust hanging_assembly and ceiling_mount together by a scene-owned height delta when required; root remains at floor.",
+    "Emissive belly is material only. Add optional finite-range warm runtime light separately, with teardown and performance limits.",
+    "Check 3D clearance: refrigerator including props is taller than this lamp lowest point; placement directly above it is unsafe without a height/layout adjustment."
+  ],
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-style-r1",
+    "parentSha256": "1c0be5c718d1c8afc17cbb26afb8e19e138253239d249993268c21364b2b4290",
+    "changes": {
+      "blue-whale-shade": {
+        "pixelsBaseResolution": 1274924,
+        "pixelsMR": 79752,
+        "roughnessTarget": 0.3,
+        "roughnessRangeAfter": 0.2980392156862745,
+        "normalTangentXYMultiplier": 0.55,
+        "clearcoatFactor": 0.12
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  }
+}

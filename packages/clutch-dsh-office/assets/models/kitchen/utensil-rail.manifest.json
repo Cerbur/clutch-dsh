@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/utensil-rail",
+  "displayName": "橙色挂钩杆总成",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "utensil-rail.glb",
+  "sha256": "585846f480de89c41a5e44d00e2553559ba387b92d267eb2def843e9a00802ed",
+  "bytes": 550824,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-center-at-rail-axis",
+    "originDescription": "Local X is lateral, Y=0 is the rail axis, Z=0 is the wall mounting plane; the rail extends into +Z."
+  },
+  "geometry": {
+    "triangles": 17999,
+    "vertices": 13783,
+    "meshes": 4,
+    "primitives": 4,
+    "materials": 4,
+    "images": 0
+  },
+  "drawCalls": 4,
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ]
+  },
+  "bounds": {
+    "min": [
+      -0.5031164884567261,
+      -0.6698795823614542,
+      0.0002189923106925562
+    ],
+    "max": [
+      0.5031125545501709,
+      0.07850854843854904,
+      0.22042995245273234
+    ]
+  },
+  "dimensions": {
+    "width": 1.006229043006897,
+    "height": 0.7483881308000032,
+    "depth": 0.22021096014203978,
+    "railAxisToLowestPoint": 0.6698795823614542
+  },
+  "budgets": {
+    "triangles": 20000,
+    "bytes": 1048576,
+    "scope": "This wall-mounted utensil-rail revision only; does not alter refrigerator, table, storage, sink, pendant or wall budgets."
+  },
+  "requiredNodes": [
+    "UtensilRail",
+    "挂钩杆",
+    "锅铲",
+    "汤勺",
+    "漏勺",
+    "wall_anchor"
+  ],
+  "nodePivots": [
+    {
+      "node": "挂钩杆",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "role": "static rail and hooks"
+    },
+    {
+      "node": "锅铲",
+      "translation": [
+        -0.2474604994058609,
+        -0.06791051907944123,
+        0.13092601225788714
+      ],
+      "role": "left hanging utensil; swing around local X only"
+    },
+    {
+      "node": "汤勺",
+      "translation": [
+        -0.010099492967128754,
+        -0.06820651574539582,
+        0.1340120092135203
+      ],
+      "role": "middle hanging utensil; swing around local X only"
+    },
+    {
+      "node": "漏勺",
+      "translation": [
+        0.25101950764656067,
+        -0.0679975418608133,
+        0.1443570137124789
+      ],
+      "role": "right hanging utensil; swing around local X only"
+    },
+    {
+      "node": "wall_anchor",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "role": "placement/orientation marker"
+    }
+  ],
+  "source": {
+    "library": "office",
+    "project": "kitchen/utensil-rail/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/utensil-rail.glb",
+    "inputSha256": "37f9d7ab7aa0e5a100ea732841dd9795facb5f675f00fd05e0c1142d43411089",
+    "parentRevision": "2026-10-27-style-r1",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/utensil-rail/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/utensil-rail build|review|finalize 2026-10-28-candy-r1"
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "referenceId": "kitchen/utensil-rail/source",
+      "revision": "2026-10-27-r1",
+      "sha256": "b4ff0916e2b70e9fc6aece8ae7add9d588891b8d955712c44659ff84b9fcc014",
+      "libraryPath": "kitchen/utensil-rail/references/原始挂钩杆总成.glb",
+      "role": "user-provided-component-reference"
+    }
+  ],
+  "capabilities": {
+    "static": true,
+    "animations": false,
+    "rigged": false,
+    "swingPivotsPrepared": true,
+    "interactiveUtensils": false
+  },
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "materials": [
+    {
+      "name": "orange_glazed_wood",
+      "roughness": 0.46,
+      "metallic": 0
+    },
+    {
+      "name": "maple_spatula",
+      "roughness": 0.57,
+      "metallic": 0
+    },
+    {
+      "name": "honey_ladle",
+      "roughness": 0.57,
+      "metallic": 0
+    },
+    {
+      "name": "maple_spoon",
+      "roughness": 0.57,
+      "metallic": 0
+    }
+  ],
+  "placementHint": {
+    "railAxisHeightMeters": 1.7,
+    "sceneOwnsFinalPlacement": true,
+    "orientation": "front +Z; place on the rear wall near the sink/window, not against a side wall unless rotated",
+    "rotationYRadiansForRearWall": 0,
+    "note": "1.70 m is an advisory rail-axis height (about 1.03 m at the lowest hanging point); confirm against the actual 0.90 m countertop, window trim, faucet and actor sightlines in Office."
+  },
+  "compatibilityChanges": [
+    "New kitchen/utensil-rail component ID; do not relabel as refrigerator, table, storage-cabinet or sink-cabinet.",
+    "Wall-mounted origin: X and Y are centered on the rail axis, Z=0 is the wall mounting plane. Do not place it with a floor-center assumption or re-center it by the lowest hanging point.",
+    "Four independent semantic meshes and four draw calls; the three hanging tools have authored pivots at their top loops, but no animations are included.",
+    "Front is +Z. The supplied model was converted from its original node X+90-degree transform into final Y-up geometry."
+  ],
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-style-r1",
+    "parentSha256": "37f9d7ab7aa0e5a100ea732841dd9795facb5f675f00fd05e0c1142d43411089",
+    "changes": {
+      "orange_glazed_wood": {
+        "roughnessBefore": 0.46,
+        "roughnessAfter": 0.36,
+        "clearcoat": 0,
+        "normal": "absent; unchanged",
+        "reason": "Restrained polished support; no coat on wood utensils"
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  }
+}

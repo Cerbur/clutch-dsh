@@ -11,5 +11,5 @@
       ]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/office/**/*.ts"]
 }

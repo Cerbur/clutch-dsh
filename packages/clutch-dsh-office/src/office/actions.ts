@@ -1,19 +1,19 @@
 import type { ActionPlan, Activity, Position } from './types.js';
+import { KITCHEN_STATIONS } from './kitchen-layout.js';
 
 /** Kitchen theme policy. Future activity feeds use this same renderer-free seam. */
 export function planAction(activity: Activity, seat: 0 | 1): ActionPlan {
-  const x = seat === 0 ? -1.35 : 0.05;
   switch (activity) {
     case 'working':
     case 'editing':
-      return { station: 'stove', pose: 'cook', target: [x, -0.55] };
+      return { station: 'stove', pose: 'cook', target: KITCHEN_STATIONS.cook[seat] };
     case 'searching':
-      return { station: 'fridge', pose: 'search', target: [1.55, seat === 0 ? 0.1 : 1.05] };
+      return { station: 'fridge', pose: 'search', target: KITCHEN_STATIONS.search[seat] };
     case 'waiting':
-      return { station: 'rest', pose: 'wait', target: [x, 0.7] };
+      return { station: 'rest', pose: 'wait', target: KITCHEN_STATIONS.rest[seat] };
     case 'idle':
     case 'unknown':
-      return { station: 'rest', pose: 'idle', target: [x, 0.7] };
+      return { station: 'rest', pose: 'idle', target: KITCHEN_STATIONS.rest[seat] };
   }
 }
 
