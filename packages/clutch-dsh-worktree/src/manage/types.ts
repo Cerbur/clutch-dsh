@@ -45,6 +45,12 @@ export interface WorktreeManagerOptions {
  * Complete Host-side Manage service; `resolveRuntimeCwd` is intentionally absent from the browser-safe `WorktreeManager` Remote contract.
  */
 export interface WorktreeManagerService extends WorktreeManager {
+  /** Serialize final task admission with baseline saves in this Host, without holding a sidecar lock. */
+  withWorktreeBaseline<T>(
+    input: { readonly workspaceId: string; readonly worktreeId: string },
+    operation: () => Promise<T>,
+  ): Promise<T>;
+
   resolveSessionInstructions(sessionId: string): Promise<string>;
   /**
    * 每次调用都从 DSH Workspace 与 sidecar 重新派生 cwd；active 关系损坏时明确失败，不静默回退。

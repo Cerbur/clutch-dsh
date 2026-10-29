@@ -16,6 +16,8 @@ export interface Execution {
   signal: AbortSignal;
 }
 export interface Options {
+  /** Explicit routes using required+nullable transport input, never catalog/SDK types. */
+  nullableToolProviders?: readonly string[];
   settings?: {
     read(scope: WorktreeToolSettingsScope): Promise<WorktreeToolSelection>;
     subscribe(listener: (scope: WorktreeToolSettingsScope, selection: WorktreeToolSelection) => void): () => void;

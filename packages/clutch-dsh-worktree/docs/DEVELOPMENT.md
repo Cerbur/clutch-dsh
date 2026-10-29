@@ -10,6 +10,16 @@
 
 ## 1. 环境前置要求
 
+Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
+Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs
+test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。
+真实 merge/rebase 流程应在独立临时 Git 仓库和测试 Worktree 中执行，不能使用开发分支作为操作目标。
+
+`node --test test/dashboard-modal-portal.test.mjs` 使用仅供测试的 `jsdom@26.1.0`、真实 React/ReactDOM
+portal，以及已安装 DSH primitives 的原始 Modal/键盘/焦点 helper 声明，覆盖 Escape 冒泡、菜单优先级、
+弹窗重开与 pending 接收后的 Session 导航。CSS、图标与无关子视图被隔离，不替换原生 Modal 的事件逻辑；
+该依赖不进入插件运行包。
+
 - **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
@@ -73,6 +83,17 @@ node --test test/client-build.test.mjs
 ```
 
 ### 3.2 将本地插件添加到 DSH Profile
+
+验证“预设缺失但会话权限仍可生效”的原生接缝，可在本包目录执行：
+
+```bash
+node test/manual/session-permission-native.mjs "$HOME/.dsh-test/profiles/node_modules"
+```
+
+脚本复用指定环境的真实 Session、projection、sandbox、approval 与 permission 模块，
+仅创建内存 fixture Session，不启动服务、不读取历史 Session 或凭据、不切换安装链接。
+它验证确认前无写入、确认后 Custom 完全访问与 ask、幂等、Auto 共存、清理归一化和降权恢复。
+这不是浏览器 DOM/端到端验证。详细机制见 `docs/plans/2026-10-17-session-permission-injection.md`。
 
 bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
 `internal/config` hook 在原生权限 entry 激活前追加 Worktree preset，不替换
@@ -176,10 +197,52 @@ node --test test/worktree-tool-schema.test.mjs
 该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
 确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
 
-参数 schema 使用 DSH 支持的子集。测试通过真实 `assertSupportedJsonSchema`、
-`jsonSchemaToTs`、`renderToolsSdk` 验证全部工具参数不会退化为 unknown，必填的回报 status/summary
-与可选参数正确呈现；长度限制放在字段描述中，由执行时的 Zod 校验。互斥 target 投影为 oneOf，
-重叠 union 或不支持的未来 schema 关键字必须显式失败，不能静默丢失参数信息。
+工具定义必须遵循 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md)：作者层使用每层封闭、无 union 的对象，
+互斥目标在执行前校验；长度由原始 Zod 强制执行。经人类批准，可选字段 null 归一化为省略，必填/未知字段不放宽。
+默认 test/*.test.mjs 自动运行递归 profile、故意无效负样本、真实注册 inventory/SDK 和全部工具输入门禁。
+实际 DSH pi-ai 不属于最小 pinned 依赖图；通过 dwm home 定位已有源码，仅在本 Worktree 运行测试：
+
+~~~bash
+DSH_SCHEMA_ADAPTER_ANCHOR=/absolute/dsh/packages/llm/llm-pi-ai/package.json \
+  pnpm --filter @cerbur/clutch-dsh-worktree test
+~~~
+
+指定 anchor 时测试真实 makeStrictJsonSchema/convertResponsesTools 的 required/null/嵌套 additionalProperties、
+无变异和生成参数的运行时接收，不自写转换器。无 anchor 时仅该外部接缝明确 skipped；提供错误 anchor 必须失败。
+修改 schema 或升级 DSH 基线时需运行该接缝。它不请求账号、不修改 upstream/运行中 profile，不代表 provider E2E。
+
+可选的真实 native Agent loop 接缝（仍使用确定性模型 adapter，不是账号 E2E）：
+
+```bash
+DSH_NATIVE_SOURCE=/absolute/dsh node --test test/native-worktree-tool-lifecycle.test.mjs test/tool-wire-schema.test.mjs
+```
+
+它通过实际 Agent loop、Session relay、模型 hook 和提示词组装验证首次回报后 queue 补充任务、
+provider opt-in 隔离、其他插件不变及不确定回报的 wire 重试字段。未配置源码时仅该外部接缝跳过。
+联调 required+nullable wire 时，在临时 patch 中给 `clutch-dsh-worktree-host` 配置
+`dshHome: !!js dshHomePath()` 和 `nullableToolProviders: [实际 provider id]`，
+以 `DSH_HOME=/测试目录 dsh web --patch /absolute/overlay.yml --port 3088 --no-open` 启动；
+launcher 的 `--patch` 必须在 Web app 的 `--port` 前，且 config 覆盖需保留 dshHome。
+每次重载后使用新派发任务验证回报；旧进程的 token/目标不会恢复。
+
+Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.0-rc.1，开发 pin 同基线），
+避免借用偶然存在的传递依赖，也不导入原生 Session/subagent 服务的 Context 类型图污染 Client。
+锁文件只在本包 importer 添加既有 llm snapshot 引用，不升级其他 graph。
+
+本包默认测试还包含 `native-agent-relay.test.mjs` 的真实原生接缝。通过 `dwm home` 定位已有源码后，在 monorepo 根运行：
+
+~~~bash
+DSH_NATIVE_SOURCE=/absolute/path/to/deepseek-harness \
+DSH_SCHEMA_ADAPTER_ANCHOR=/absolute/path/to/deepseek-harness/packages/llm/llm-pi-ai/package.json \
+  pnpm --filter @cerbur/clutch-dsh-worktree test
+~~~
+
+它执行真实 native inbox/fold、文本 provider context、Chat 分类和 relay body renderer；存储/driver 外壳、CSS、
+未使用的 image/unknown-block 路径被隔离。无源码图时仅该外部接缝明确 skipped；错误路径必须失败。
+必测来源事实：人类仍为 user，Agent 为 agent-message/relay 且 sender 不可伪造；queue/steer、未知历史读取拒绝、
+原 requestId 重试、已消费 receipt、取消/销毁、回报 token 与 callback 门禁均不能退化。不要通过改弱测试过关。
+该测试不修改 DSH 源码或原始 Session，不是已部署 GUI 或真实 provider E2E。验证来源展示需要重新加载 Host 中的新插件，
+然后在原 GUI 刷新；仅 build 当前 feature 不会替换已运行的生产 Host，也不应为验证擅自重启用户任务。
 
 修改代码后，重新构建插件包并重启 DSH：
 
@@ -386,6 +449,11 @@ pnpm run check
 ---
 
 ## 7. 贡献者工作流与门禁
+
+**Tool test-first governance：** 新增/修改 tool 必须通过既定测试。先修 tool；若规则或测试疑似有误，
+停止争议调整，提交失败、实现、官方来源的对照证据，由人类判定。不得先删、跳过、改弱断言或更新快照过关，
+也不能让父 Agent 代批。可增加覆盖、做不减弱契约的测试组织重构；实质放宽须先获人类批准。
+规范、自动/人工审查分工与适配层证据见 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md)。
 
 1. **分支与 Worktree 规范**：遵循根目录 `AGENTS.md` 的 release/feature worktree 模型。所有功能修改必须在独立 feature worktree 中完成。
 2. **提交与门禁**：

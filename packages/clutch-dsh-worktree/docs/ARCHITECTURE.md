@@ -119,8 +119,22 @@ resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `a
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
 先为新 Agent 默认仅注册结果回报工具、固定回报目标及回报指导，再按目标 Worktree 的显式配置
-补齐自动注入能力，最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
-后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
+补齐自动注入能力，最后通过 Host 的 `sendAgentMessage` Adapter 投递；不修改原生 Workspace 成员表、preset 或权限。
+Agent 任务、继续消息、报告均用 DSH 公开 `createUserMessage` / `freezeMessage` 构造原生
+`agent-message`、`form: relay`、真实 `senderSessionId`，并通过接收 Agent 的 `followup/steer`
+进入原生 inbox。这里复用消息语义与原生 admission，不调用要求 durable 父子关系的 subagents.sendMessage，
+不伪造 lineage、不直接 append Session 日志。人类和 Dashboard 来源仍使用 sessionController.prompt。
+requestId 派生稳定、命名空间隔离的原生 messageId；同目标 admission 串行，核对原生 pending、
+`agent/inbox/spliced.inserted` 与 `user/message` 中该 id 的全部来源与正文。
+原生 Loop 在 claim 后、异步 assemble/prepareRequest 完成前尚未追加 `user/message`；持久化 insertion
+覆盖这段窗口，并支持 Adapter 重建和原生日志重放。remove、cancel 或 queue→steer 不撤销已接收事实，
+相同重试不得恢复被移除的消息，也不证明执行完成。保留 id 的 queue edit 若造成历史正文冲突，
+原正文与改后正文的旧 id 重试均拒绝；不得只取首条或最后一条匹配绕过冲突。
+sender/target/正文/mode 一致性还受上层派发摘要门禁保护。
+任何 receipt 读取失败或 insertion 格式不明都拒绝投递，不当作空历史；取消、Agent 替换/销毁和 Adapter 卸载均在最终接收前复核。
+插件不持久化第二份消息/receipt/任务目录；Adapter 仅保留进行中 admission lane。上层另保留最多 512 个
+报告 messageId→发送/接收 Session id 的临时来源条目，不含正文、Agent 对象或 token；只凭报告名称不能保留权限。
+DSH 负责 inbox 和新消息持久化。
 Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
 失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
 Provider 的 DSH adapter 继续完全只读；模型、标题、历史及消息接口仅存在于 Host 的独立 port。
@@ -140,16 +154,26 @@ Session 列表通过原生 `sessionQuery.observeSession` 读取冷历史生成�
 
 新 Session 获得 `clutch_report_result`，用 completed/blocked/failed、短摘要与验证证据
 主动回报。Host 在投递前重新校验执行方与固定接收方的 Workspace、binding 和物理 cwd，
-通过原生 queue admission 发送带来源 Session id 的单条报告；不直接写事件或原始日志。
+通过原生 queue admission 发送带真实 agent-message/relay 来源的单条报告；不直接写事件或原始日志。
 摘要与证据各最多 2,000 字符；不推送整份 transcript、不根据 turn/end 或 idle 推断成功。
 回报是模型声明，需要发起方核验。该机制不保证崩溃、停止或尚待审批的 Session 发出报告，
 也不自动代答审批或用户问题。报告投递的不确定失败保留 requestId，允许原样幂等重试。
-Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 表达，字段描述给出来源、
-默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
-`src/tool/schema.ts` 将参数投影到 DSH 支持的 schema 子集，避免 PTC SDK 参数退化为 unknown。
-字符串 minLength/maxLength 转为字段描述，执行时仍由原始 Zod parser 严格校验；
-只有互不重叠的封闭 object alternatives 才将 anyOf 转为 oneOf，不支持的关键字显式拒绝注册。
-真实 DSH SDK 生成器回归验证全部七个工具的参数、必填回报状态、可选字段与模型结构。
+工具参数遵循 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md) 的跨 provider 作者层保守 profile：
+无 `$schema`，每层对象封闭，不暴露根或嵌套 union；id/name 为可选字段，由运行时校验恰好一个非空目标。
+字段描述给出来源、默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
+`src/tool/schema.ts` 的 Zod 投影将 minLength/maxLength 转为描述，执行时仍由原始 Zod 严格校验。
+低层保留的 disjoint-union 投影仅是历史 DSH 能力，不属于可注册工具的保守 profile。
+经人类批准，执行入口只将已声明可选字段的 null 递归归一化为省略，再执行 Zod；必填值仍由 Zod 校验，未知字段显式拒绝（包括 Zod 自身会忽略的 __proto__）。
+这允许 strict 适配的 required+nullable 表达默认值，不改变原生 SDK 的可选性；不承诺所有 provider E2E。
+默认测试自动发现全部工具注册函数，并对照命令/自动注入/条件回报的真实注册与 DSH SDK 验证。
+可用外部 DSH 图的真实 pi-ai strict/Responses 投影也有集成测试；没有该图时明确报告这一层跳过。
+
+Host 的 `nullableToolProviders` 默认为空，按提示词组装完成后的有效 provider id 显式选择
+wire 投影。在 `system-prompt/assemble` 返回路径，仅当前 Agent 已启用的本插件原生工具
+使用 `src/tool/wire-schema.ts` 从原始 Zod 生成 required+nullable 参数，保留长度限制；
+不改原生注册目录、PTC SDK、其他插件或其他 provider。无不确定回报 attempt 时，
+wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时 token、授权与
+校验仍为最终门禁。投影不写 Sidecar、不切换 provider strict 设置、不扩展空字符串语义。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
 20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
@@ -508,7 +532,7 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
   配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
   官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
 - **Host 可选权限能力生命周期**：
-  `permissionPresets` 与 `sandboxPolicy` 不加入 required inject；旧 profile 缺少服务时 Host
+  `permissionPresets`、`sandboxPolicy` 与 `approval` 不加入 required inject；旧 profile 缺少服务时 Host
   仍可加载。Host 通过 adapter options getter 在每次权限调用时读取所属 Cordis Context 的
   当前能力，而非在构造时捕获对象。权限 manager 完成 Workspace、binding 与物理 cwd 校验
   后才进入 adapter；迟挂载、撤销、替换及恢复后的重试均读取当下 provider，不调用已卸载实例。
@@ -518,7 +542,16 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 - **Worktree Full Access 预设**：
   为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
 - **权限降级与回退**：
-  当命名预设不可用时，系统自动回退至 `workspace-write + ask`；若权限能力无法确认，则进入可重试的降级状态，绝不向用户谎称已获得完全访问。
+  命名预设只是原生菜单贡献，不再是完全访问生效的必要条件。预设缺失且当前原生
+  `sandboxPolicy.resolve` 与 `approval.overrideOf` 可用时，经原有绑定/物理路径校验与
+  RiskConfirmation 确认，Host 按 DSH 原生 setter 的事件协议追加 `approval/policy: ask`
+  再追加 `sandbox/mode: danger-full-access`；前一写入失败绝不放宽文件隔离。不追加虚构的
+  `permission/preset`，原生 UI 自行派生 Custom。两项实际策略读取确认后才报告成功。
+  不重启或改写原生服务，不触碰 preset/default/Auto catalog、Session metadata 或 Sidecar。
+  该能力不可用时保留 workspace-write 回退/未验证语义。命名预设同名项必须确实解析为
+  `danger-full-access + ask` 才允许应用；归一化同样验证 workspace-write 的实际规格。
+  Client 合并同一 Workspace/Worktree/Session/cwd 的待确认请求，结束后不缓存同意；
+  不同身份继续串行确认。原生 sandbox 降权事件会保留为限制证据，adapter 重建也不重新升权。
 - **解耦设计**：
   磁盘清理提交与权限后续处理解耦，清理成功后无论权限重置是否遇到异常，均不会回滚已完成的物理清理。
 - **沙箱宿主上限**：
@@ -622,7 +655,9 @@ Refresh scope is determined by the smallest affected identity.
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
+- 派生 Worktree（2026-10-25）仅从所属 Workspace 的 ready records 投影：候选 `baseBranch` 匹配当前 checkout 的实际本地分支，无法获取时回退受管理记录分支；短名与 `refs/heads/` 等价，显式远端 ref 不匹配。排除自身、跨 Workspace 和间接后代，Detached HEAD 或未知 Main 分支返回空列表。归档项保留并展示生命周期与健康状态，概览预览五项并显示总数，children 页签显示全部，点击复用 `openDashboard` 的 Session 导航门禁。修改已保存基线会改变关系；不新增持久化血缘、委派目录、RPC 或全局刷新。此实现取代历史 Dashboard MVP 计划的 children 占位，不推断 Git 祖先关系，历史计划保持只读。
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
+- Dashboard 顶部基线 fact 复用同一分支匹配与 `openDashboard`，可前往所属 Workspace 中唯一匹配的受管理 Worktree 或 Main；编辑按钮独立保留，所有页签共享。基线保存后立即按已保存值重算目标；远端、未知、detached、自身、跨 Workspace 或多目标歧义时仅显示文本，不新增 RPC 或持久化字段。
 - Dashboard 顶部栏位于页面宽度约束之外，显示 Workspace/Worktree 名称并集中承载 Open In、返回/新建 Session 与 rightbar 操作。macOS 沿用原生 `data-window-drag` 标记及 no-drag 操作区；收起导航时，插件 CSS 提升现有 `shell.leading` 控件的层级并使用原生 clearance 避让，不替换控件或原生回调。Windows center 顶部之外的原生 caption strip 保持可见。
 - Overlay 边界由原生 Sidebar 和 rightbar 宽度动态测量派生，保留 Sidebar 的 resize 拖拽响应；
 - 打开 Worktree Dashboard 时，初始 Session list 处于 pending 会先等待 ready；当前 Session 属于目标 Worktree 时保持当前 Session，否则导航到其保留顺序中的第一个可见 Session；ready 的空 list 产生无 native Session 身份的 page-level Dashboard，不自动创建 Session，并在展示前收起当前 native rightbar；如果仍有可承载 rightbar 的当前 Session 且 rightbar 处于收起状态，Dashboard header 提供原生风格的展开按钮并在打开后自动隐藏；
@@ -631,6 +666,47 @@ Refresh scope is determined by the smallest affected identity.
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
 
 ### 错误通知与恢复入口
+
+Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
+插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
+初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
+UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，
+默认模型解析前后重查目标。最终 branch 枚举完成后才读取并校验目标状态与 `baseBranch` witness，
+过期请求返回 `WORKTREE_STATE_CONFLICT`，不得创建或派发 Session。Manager 的 Host-only
+`withWorktreeBaseline` 按 Workspace/Worktree 串行化最终校验到原生 prompt admission，以及
+`updateWorktreeBaseBranch` 的完整保存流程；先完成的保存淘汰旧同步请求，接收中到达的保存等待接收结束。
+此门禁属于同一 Host Manager 的运行时协调，不持有 Sidecar 文件锁，不阻塞绑定写入或其他 Worktree，
+失败后释放且不污染后续操作，不覆盖 Agent 的 Git 执行阶段。持久化 CAS 与跨进程 Sidecar 锁保持原有职责。
+Session 保持原生权限。任务 prompt 要求干净目录、遇到冲突停止且不 push/publish。
+Host 仅在运行时按 requestId 保存接收结果并合并并发重试（最多 128 项，达到上限明确拒绝），
+按 Worktree 串行化接收阶段；不持久化任务表或 Git projection，重启清除接收记忆。
+创建后任何阶段失败返回 Session 身份及阶段，不自动重建。任务接收与执行完成分离，执行结果在原生 Session 查看。
+快捷操作移除四个占位项，Main 不提供同步，刷新保持 Workspace 作用域与 ready 内容。
+同步 Modal 打开时 Dashboard 不消费 Escape：React portal 先经过 React 祖先，再由原生 Modal 的
+document bubble listener 处理。非 pending 时仅关闭弹窗，pending 时 `closeSync` busy guard 保留
+弹窗和 Dashboard，成功接收后仍打开新 Session。菜单 capture/defaultPrevented 优先级不变，
+弹窗关闭后恢复 Dashboard Escape；不修改 upstream DSH。
+同步通知可选携带现有接收身份 `requestId`，与 Surface 成功返回后的刷新共用 reader 的
+`changeId`。每个 Workspace 最多保留 128 个变更身份，A/B 交错通知与完成回调复用最新的
+变更后在途读取或已完成结果；超出上限淘汰最早身份。新身份和无身份失效仍推进代次，
+无身份失效同时清空身份集合，绝不复用变更前的读取。调用失败执行无身份恢复刷新，
+避免把传输失败误当成 Host 接收完成并压制随后到达的通知；通知缺失时仍由调用完成路径刷新。
+Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context 保留当前身份校验，
+仅刷新匹配的投影，不再次推进 reader 代次或抹掉变更身份。
+`connection/reset` 在重置通知轮询前调用 reader 的 `resetChangeIds()`，建立新的通知重放边界：
+仅清空上一连接的变更身份记忆，不清空 Workspace 缓存或当前 ready 投影。随后即使重放相同
+`requestId`，也必须推进所属 Workspace 的代次，淘汰重连前在途或已完成的读取。Context 与
+Surface 共享该恢复读取，未受影响的 Workspace 缓存保持不变；新连接内通知与调用完成仍正常去重。
+这些身份仅存于运行时，不进入 Sidecar。
+
+绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationToasts，
+提供阶段对应的双语问题与恢复说明。原始错误及 Workspace、Worktree、requestId、Session、
+失败阶段保留在诊断详情；普通展示仅使用本地化说明。恢复仅打开返回的 Session，
+不重建或重派发。通知位于同步弹窗外，关闭弹窗仍可恢复；Dashboard 卸载后沿用共享诊断的
+inactive 历史与回调撤销语义。
+Dashboard 身份、基线或 manager 更换、组件卸载后才返回的部分失败通过 `recordInactive`
+原子记录原始身份与诊断，不重建通知 source、不保留导航回调。同步请求身份使用普通 HTTP
+局域网环境也可用的 `crypto.getRandomValues` 生成；随机源异常同样进入错误通知和 busy 清理。
 
 Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
 消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并
@@ -710,6 +786,15 @@ These constraints govern this plugin's tools; they do not intercept other plugin
 metadata, history, Sidecar facts, business files or native message content. Agent/plugin disposal
 clears runtime authority; no listener infers or fabricates task completion. Restart deliberately
 loses tokens; continuing automatic reporting requires a fresh parent dispatch.
+
+The browser-only Agent steer strip reads the native inbox projection and a private Conversation
+target; it never changes this authority model. Next-step insertion with a Worktree task relay id
+and Agent source qualifies an occurrence, native removal distinguishes claim/cancel, and only an
+identical append-origin user/message establishes receipt. A claim-to-message gap, absent projection
+or incomplete history cannot become success. Queue messages and report ids are excluded. Current
+pending items and up to eight recent terminal entries are derived within the selected Session;
+new turns retire old terminal entries, native window replacement rebuilds the projection, and
+plugin disposal unregisters its target. No Session/Sidecar writes, RPC or global refresh is added.
 
 The native loop collects prompt providers before its assembly waterfall, then runs pre-step.
 Injection at pre-step therefore misses request 1 and edits the request prefix at request 2.

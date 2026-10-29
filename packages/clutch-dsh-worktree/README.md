@@ -12,14 +12,13 @@ Main instructions in its own sidecar. Managed Worktrees expose a read-only basel
 its Workspace-root HEAD history with an optional comparison branch; the plugin does not copy transcripts or rewrite DSH Sessions.
 
 > **Preview:** Worktree Dashboard is an early, plugin-only MVP preview. Worktree navigation, lifecycle actions,
-> Session actions, Worktree/Main instructions, and the managed Worktree or Main Git & Changes view are connected.
-> Derived Worktrees and other unfinished actions remain marked
-> **Coming soon**.
+> Session actions, Worktree/Main instructions, Derived Worktrees, and the managed Worktree or Main Git & Changes view are connected.
+> Baseline synchronization creates an Agent task Session with your selected Rebase or Merge strategy.
 
 ## Installation
 
 After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
-server and refresh the page, to load the plugin Host and permission configuration. Finish
+server and refresh the page, if the plugin Host has not loaded. Finish
 active tasks before restarting. If the Client loads while the Host is still unavailable, a
 native toast reminds you once per Client load. If a Worktree Session permission check reports
 that **Worktree Full Access** is unavailable and falls back to `workspace-write`, a separate
@@ -28,6 +27,13 @@ permission recovery message retains this guidance after the toast closes. Networ
 Workspace errors, unverified permissions, and explicit user restrictions do not trigger the
 missing-preset reminder. The reminder does not reload services or grant Full Access; if the
 preset remains unavailable after restarting, check the DSH plugin and permission configuration.
+
+Once the Host is available, a missing named preset alone no longer requires a restart on
+supported DSH profiles. The existing Full Access confirmation still requires acknowledgement;
+after confirmation, Worktree applies and verifies native per-Session file access and `ask`
+approval. The native menu may display **Custom** until the named preset loads. This changes
+neither the native preset catalog nor its defaults or Auto review integration. Unsupported
+profiles retain the fallback/recovery guidance above.
 
 ### Install from npm
 
@@ -88,7 +94,9 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
-| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees and other unfinished cards remain **Coming soon**.                                                                                                                                                                 |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
+| **Baseline synchronization** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="Sync with Base dialog with Rebase and Merge baseline choices"> | Choose Rebase or Merge baseline and create a native Agent task Session in the current Worktree. |
+| **Agent steer feedback** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="Agent steer receipt above the input box, with sender and content"> | Inspect pending and received steer messages in the recipient Session without treating receipt as task completion. |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
@@ -226,7 +234,7 @@ The six selectable capabilities correspond to these tools:
 
 | Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch at the calling Session's committed Worktree HEAD; Local/Main captures root HEAD, including detached HEAD. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
 | `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local and fetched remote base branches. Defaults to the calling Workspace.                                                                                          |
 | `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
 | `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
@@ -246,9 +254,26 @@ Newly delegated Sessions automatically receive only
 `clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
 to the delegating Session. `status` is `completed`, `blocked`, or `failed`; `summary` and `evidence`
 are each limited to 2,000 characters. The other six capabilities require `/cluworktree` or the
-Worktree's explicit automatic-injection selection. Reports arrive as ordinary queued native messages;
+Worktree's explicit automatic-injection selection. Reports arrive as queued native Agent relays, not human messages;
 verify their claims and evidence before accepting completion. Reports are model-driven:
 a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
+
+Agent-originated task dispatch, continuation and reporting record native `agent-message` /
+`relay` provenance with the actual sending Session. The Host derives that identity; tool inputs
+cannot impersonate another sender. Model-visible content includes an Agent-source envelope while
+preserving the supplied prompt body. Supported native Chat renders a relay/context disclosure with
+the sending Session, or an Agent turn trigger when it wakes the recipient, rather than a human
+message bubble. Protocol-level `user` role does not make it human input or elevate its authority.
+Human prompts and user-originated Dashboard synchronization keep their existing native user route.
+Old history is not rewritten or reclassified by guessing from text.
+
+Agent steer messages sent by this plugin also appear in an **Agent steer** strip above the
+recipient's input box. Expand an entry to see its sender and content. The strip distinguishes
+waiting, preparation, entry into conversation context, cancellation, and unconfirmed status;
+receipt does not mean task completion. Up to eight recent received/canceled entries remain
+after the turn ends and clear when a new turn starts; pending entries remain visible.
+Ordinary queued messages stay in the native queue. History outside the loaded window may
+not have enough evidence to reconstruct a steer receipt.
 
 Reporting is limited to the active delegated task. One successfully admitted `completed`, `blocked`,
 or `failed` report consumes and clears its in-memory token. The reporting tool, SDK and guidance
@@ -279,7 +304,34 @@ history returns one `unavailable` diagnostic while keeping healthy list entries 
 
 In PTC mode, the generated SDK exposes concrete argument types, including required report
 `status` and `summary`. Length limits remain in field descriptions and are enforced at execution;
-mutually exclusive dispatch targets use `oneOf` compatible with DSH's schema subset.
+all tool inputs use closed object roots without unions, including the nested model object.
+Dispatch keeps legacy exact branch names, but requires exactly one nonempty target at runtime;
+invalid targets or unknown fields fail before Session creation. Optional fields accept omission or
+`null` as omission, including model.reasoningEffort and mode (default queue); required fields still
+reject null. Blank identities/title/evidence are not defaults; empty instructions mean no save.
+For defaults, omit optional keys or use JSON `null`; neither `""`, `"null"`, nor a model
+object with empty provider/model fields means inheritance. New messages and first reports
+must omit `requestId` or use JSON `null`: the Host generates it. A rejected first report
+with an invented id explains how to correct it without consuming the report token.
+After uncertain admission, preserve the returned id and identical content for retry.
+
+Native schemas keep genuinely optional fields. For routes that otherwise generate empty optional
+values, opt in by exact provider id in the Host configuration:
+
+```yaml
+- id: clutch-dsh-worktree-host
+  config:
+    dshHome: !!js dshHomePath()
+    nullableToolProviders: [ocx]
+```
+
+This defaults to an empty list. For these providers, plugin tools in native model requests use
+required properties with nullable optional values and closed nested objects, retaining length bounds.
+A first report accepts only null for its wire requestId; an uncertain attempt restores the retry id
+field. The native catalog, PTC SDK, other plugins and execution validation keep their existing contracts.
+This does not enable a provider's strict mode or promise support across gateways. The local DSH pi-ai
+adapter and a real ocx/Luna route have been checked; other routes need their own verification. See the
+[tool schema standard](docs/TOOL-SCHEMA-STANDARD.md) for official sources, tested layers and limits.
 
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection, including reasoning effort; no catalog lookup is required for that default.
@@ -365,9 +417,45 @@ Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to clo
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
 path, open the recorded directory in VS Code, and inspect Git & Changes.
-Derived Worktrees and other marked quick actions remain placeholders. VS Code must be
+Quick Actions offers baseline synchronization and archive. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
+
+**Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
+this checkout's current local branch. Overview previews five entries; the tab shows all matches,
+including archived entries with their availability and paths. Click an entry to open its Dashboard.
+Changing a saved baseline updates the relationship; this view represents direct baseline matches,
+not Git ancestry or delegated Session history. Local branch names and `refs/heads/` refs match;
+explicit remote refs do not. Detached HEAD or an unknown Main branch has no matches. When a
+managed checkout's current branch is unavailable, its recorded branch is used.
+In a derived Worktree's Dashboard header, click the **Base** branch to open the matching
+Worktree or Local/Main Dashboard. The edit button remains separate. A link appears only
+when exactly one checkout in this Workspace matches; remote, missing, and ambiguous bases
+remain plain text. The link follows the saved baseline when you edit it.
+
+**Sync with Base** opens a dialog with **Rebase** and **Merge baseline**. Confirming creates and
+opens a fresh native task Session in the current managed Worktree. Escape closes only this dialog;
+while task admission is pending, Escape closes neither the dialog nor the Dashboard. The Session uses
+the configured default model and normal native permissions. The saved local or fetched remote baseline is used, and the
+Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. A baseline saved
+while branch enumeration is pending invalidates the old request with `WORKTREE_STATE_CONFLICT`;
+reopen the dialog to use the new baseline. Baseline saves wait for any final task admission already
+in progress for that Worktree. Local/Main
+has no synchronization task. The Agent checks for a clean working tree and stops on conflicts;
+Rebase rewrites the current branch's commits. Admission means the task started, not that Git finished.
+Inspect the Session's result before starting further work. Partial creation preserves the Session
+and offers **Open created Session**; retrying a failed transport request reuses its admission identity
+within the current Host lifetime. Binding, model, title, reporting, and task-submission failures also
+show a toast and a localized problem and recovery entry in **Errors & recovery**, including the
+created Session identity. Recovery opens that Session without creating or dispatching another task.
+Closing the Dashboard preserves diagnostic history and revokes its recovery callbacks.
+Partial failures arriving after closing the Dashboard or changing its target or baseline also
+retain the created Session identity in inactive history, without navigating away from the current view.
+Task creation supports plain-HTTP LAN browser access as well as localhost and HTTPS.
+Plugin restart clears admission memory. No automatic push or publish
+is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
+After reconnecting, replayed synchronization notifications refresh the affected Workspace and
+current context while keeping ready content visible; unrelated Workspaces retain their views.
 
 ### Open the recorded directory in an app
 
@@ -595,11 +683,16 @@ text, actions and diagnostic details follow the font size selected in **Settings
 - Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
   confirmation. The plugin appends this preset while preserving DSH's existing presets, default
   selection, and official Auto review integration. It combines DSH `danger-full-access` with `ask`,
-  keeps approval prompts enabled, and does not change network or process policy. If unavailable, the plugin falls back to
+  keeps approval prompts enabled, and does not change network or process policy. If neither the preset nor native Session policy writes are available, the plugin falls back to
   `workspace-write + ask` when possible or reports an unverified, retryable state. Permission
   services may mount late or be replaced: retry uses the currently available capabilities without
   restarting the Worktree Host. A temporarily missing service never grants Full Access, and an
   explicit user restriction is preserved. It cannot exceed the sandbox imposed by the host running DSH.
+- If the named preset is missing but native Session policy services are available, the same
+  confirmation applies `danger-full-access + ask` through native permission events instead.
+  Both effective values are verified before success is reported; the native menu may show
+  **Custom**. No synthetic preset identity is stored. Duplicate pending confirmations for the
+  same Workspace, Worktree, Session and path share one dialog; different targets remain separate.
 - Session-to-Worktree bindings and permission checks compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
 - Git must be installed and available on `PATH`. A missing Git executable shows install guidance
   and no command block; the plugin does not run setup or installation commands.

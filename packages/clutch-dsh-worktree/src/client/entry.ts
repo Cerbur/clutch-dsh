@@ -33,6 +33,8 @@ import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
 import { WorktreeSettings } from './settings/WorktreeSettings.js';
 import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
 import { installWorktreeCommandActivity } from './command-activity.js';
+import { installWorktreeSteerActivity, WORKTREE_STEER_TARGET } from './steer/steer-activity.js';
+import { SteerDock } from './steer/SteerDock.js';
 import { worktreeDiagnostics } from './settings/diagnostics.js';
 import { openWorktreeErrorSettings } from './settings/settings-navigation.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
@@ -195,6 +197,7 @@ export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces'
  */
 export function apply(ctx: Context): void {
   installWorktreeCommandActivity(ctx);
+  installWorktreeSteerActivity(ctx);
   const locale = ctx.locale as unknown as {
     register(
       namespace: typeof WORKTREE_NS,
@@ -234,6 +237,17 @@ export function apply(ctx: Context): void {
   };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  slots.inject('conversation.input.dock', () => slots.register({
+    name: 'conversation.input.dock',
+    id: 'clutch-dsh-worktree-steer',
+    order: 21,
+    locale: WORKTREE_NS,
+    inject: (sessionId: SessionId) => {
+      const binding = ctx.sessions.binding(sessionId);
+      if (binding === undefined) throw new Error('Worktree steer: Session is unavailable');
+      return { steer: ctx.uiConversation.binding(binding).target(WORKTREE_STEER_TARGET) };
+    },
+  }, SteerDock));
   ctx.effect(
     () => slots.inject('shell.overlay', () => slots.register({
       name: 'shell.overlay',
@@ -273,15 +287,18 @@ export function apply(ctx: Context): void {
   });
   const toolChanges = createWorktreeToolChangeMonitor({
     read: (revision, signal) => manager.watchToolChanges(revision, signal),
-    changed: ({ workspaceId }) => {
-      viewReader.invalidate(workspaceId);
+    changed: ({ workspaceId, requestId }) => {
+      viewReader.invalidate(workspaceId, { changeId: requestId });
       if (contextProjection.store.getSnapshot().workspaceId === workspaceId) {
         void contextProjection.refresh();
       }
     },
   });
   ctx.effect(() => () => toolChanges.dispose(), 'clutch-dsh-worktree: tool notification cleanup');
-  ctx.on('connection/reset', () => toolChanges.reset());
+  ctx.on('connection/reset', () => {
+    viewReader.resetChangeIds();
+    toolChanges.reset();
+  });
   if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
@@ -593,8 +610,8 @@ export function apply(ctx: Context): void {
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
           createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
-          invalidateWorktreeContext: (workspaceId?: string) =>
-            contextProjection.invalidate(workspaceId),
+          invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
+            contextProjection.invalidate(workspaceId, options),
           createMainSession: (workspaceId: string) => {
             ctx.uiWorkspace.startSession(workspaceId as WorkspaceId);
           },

@@ -12,18 +12,23 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 不会复制 transcript 或改写 DSH Session。
 
 > **预览：** Worktree Dashboard 是仅 plugin 提供的早期 MVP 预览版。Worktree 导航、生命周期操作、
-> Session 操作、Worktree/Main 指令以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。派生 Worktree 和
-> 其他未完成操作仍标记为**即将推出**。
+> Session 操作、Worktree/Main 指令、派生 Worktree 以及受管理 Worktree 或 Main 的 Git 与变更视图已经连接。
+> 同步基线会按所选 Rebase 或 Merge 方式创建 Agent 任务会话。
 
 ## 安装
 
-向运行中的 DSH 安装插件后，请重启 DSH Desktop，或重启 DSH Web 服务后刷新页面，以加载
-插件 Host 与权限配置。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
+向运行中的 DSH 安装插件后，若插件 Host 尚未加载，请重启 DSH Desktop，或重启 DSH Web
+服务后刷新页面。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
 原生 toast 会在每次 Client 加载期间提醒一次。如果 Worktree Session 权限检查确认
 **Worktree Full Access** 预设不可用并降级为 `workspace-write`，另一条每次加载至多一次的
 toast 会提示在刚安装或更新插件后重启。toast 关闭后，权限修复说明仍保留重启指引。网络故障、
 Workspace 错误、无法确认的权限与用户的显式权限限制不会触发预设缺失提醒。提醒不会重载服务
 或授予完全访问；若重启后预设仍不可用，请检查 DSH 的插件与权限配置。
+
+Host 可用后，在支持的 DSH profile 中，仅缺失命名预设不再需要重启。原有完全访问确认框仍
+要求勾选风险确认；确认后，Worktree 会设置并验证原生 Session 文件访问权限与 `ask` 审批。
+命名预设加载前，原生菜单可能显示 **Custom（自定义）**。此过程不修改原生预设目录、默认值
+或 Auto review 集成。不支持该能力的 profile 仍沿用上述降级与修复指引。
 
 ### 从 npm 安装
 
@@ -83,7 +88,9 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
-| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 和其他未完成卡片仍标记为**即将推出**。                                                                                         |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
+| **同步基线** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="提供 Rebase 与 Merge baseline 选项的同步基线弹窗"> | 选择 Rebase 或 Merge baseline，在当前 Worktree 创建原生 Agent 任务会话。 |
+| **Agent steer 提示** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="输入框上方的 Agent steer 接收记录，包含发送方与内容"> | 在接收方会话查看待处理与已接收的 steer 消息，接收不代表任务完成。 |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
@@ -202,7 +209,7 @@ Git-root Session 保留原有预览范围。
 
 | 工具                    | 参数                                                          | 行为                                                                                                                                                                      |
 | ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 所在的健康 Worktree 分支创建新分支；Local/Main 使用根 checkout 当前分支。显式本地或已获取的远端 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
+| `clutch_new_worktree`   | `name`、可选 `baseBranch`、`instructions`                     | 默认从调用 Session 的 Worktree 已提交 HEAD 创建新分支；Local/Main 捕获根 HEAD，包括 detached HEAD。显式本地或已获取的远端 `baseBranch` 覆盖默认值。返回获取事实 `baseBranch` 与 `baseCommit`。 |
 | `clutch_list_worktrees` | 可选 `workspaceId`                                            | 列出受管 Worktree 的 id、分支、路径、生命周期和健康状态，以及可用的本地和已获取的远端基线分支。默认查询调用方 Workspace。                                                               |
 | `clutch_span_worktree`  | `worktreeId` 或旧参数 `name`、`prompt`、可选 `model`、`title` | 创建新的原生 Session、建立绑定、配置初始模型并提交 prompt。返回 `sessionId` 和投递阶段状态。                                                                              |
 | `clutch_list_models`    | 可选 `provider`                                               | 列出原生 provider/model、推理强度和 provider 错误，同时返回当前 Session 模型及部署默认模型。                                                                              |
@@ -222,8 +229,19 @@ detached HEAD。Detached 来源返回 `baseCommit`，不虚构 `baseBranch`；
 `clutch_report_result({ status, summary, evidence?, requestId? })`。Host 将回报目标固定为
 发起委派的 Session。`status` 为 `completed`、`blocked` 或 `failed`；`summary` 与
 `evidence` 各限 2,000 字符。其余六项能力需通过 `/cluworktree` 或此 Worktree 显式配置的自动注入开启。
-报告作为普通原生消息排队投递，应核验其声明和证据再接受完成。
+报告作为原生 Agent relay 排队投递，而不是人类消息；应核验其声明和证据再接受完成。
 回报由模型主动调用；进程崩溃、Agent 停止或等待用户审批时可能无法回报。`idle` 不代表成功。
+
+Agent 发出的任务派发、继续消息和回报会记录原生 `agent-message` / `relay` 来源及实际发送方 Session。
+身份由 Host 从调用 Agent 取得，工具参数不能冒充发送者。模型可见内容带 Agent 来源外壳，保留所传 prompt 正文。
+支持该能力的原生 Chat 使用带发送 Session 的 relay/context 展示；唤醒接收方时显示 Agent 触发项，而非人类气泡。
+协议层的 `user` role 不等于人类输入，也不会提升指令权限。
+人类输入和用户发起的 Dashboard 同步任务仍走原有原生用户通道；不改写旧历史，也不根据正文猜测来源。
+
+本插件发送的 Agent steer 消息还会显示在接收方输入框上方的 **Agent steer** 提示区，
+展开可查看发送方与内容。提示区分等待、准备接收、已进入会话上下文、取消和状态待确认；
+接收不代表任务完成。当前轮结束后保留最近最多八条接收/取消记录，新一轮开始时清除；
+待处理项继续显示。普通排队消息仍由原生队列展示。加载窗口之外的历史可能不足以重建 steer 接收记录。
 
 回报权限仅属于当前委派任务。`completed`、`blocked` 或 `failed` 报告成功接收一次后，
 即消耗并清空内存令牌。回报工具、SDK 与指导保持稳定，无令牌时调用会被拒绝。
@@ -246,7 +264,31 @@ Schema 说明准确身份、默认值和目标互斥约束，不携带 `$schema`
 单个 Session 历史损坏时仅返回该项 `unavailable` 诊断，其余列表结果仍可用。
 
 PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status` 与 `summary`。
-长度限制保留在字段描述中，并在执行时严格校验；互斥的指派目标使用兼容 DSH schema 子集的 `oneOf`。
+长度限制保留在字段描述中，并在执行时严格校验；所有工具输入均采用无 union 的封闭对象根节点，嵌套 model 对象也封闭。
+派发保留旧参数的准确分支名称，但运行时要求恰好一个非空目标；非法目标或未知字段在创建 Session 前失败。
+可选字段省略或传 `null` 均表示省略，包括 model.reasoningEffort 和 mode（默认 queue）；必填字段仍拒绝 null。
+身份、title、evidence 的空白值不是默认值；instructions 空串表示不保存指令。
+使用默认值时省略可选字段或传 JSON `null`；`""`、`"null"` 和 provider/model 为空的 model 对象均不表示继承。
+新消息与首次回报必须省略 `requestId` 或传 JSON `null`，由 Host 生成身份。
+首次回报若自造 id 而被拒绝，错误会说明如何纠正，且不消耗回报 token。
+投递结果不确定时，重试必须保留返回的 id 和完全相同的内容。
+
+原生 schema 保留真正可选字段。若路由会生成可选字段空值，可在 Host 配置中按准确 provider id 启用：
+
+```yaml
+- id: clutch-dsh-worktree-host
+  config:
+    dshHome: !!js dshHomePath()
+    nullableToolProviders: [ocx]
+```
+
+默认列表为空。对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
+用可空值表达原本可选的字段，封闭嵌套对象并保留长度限制。
+首次回报的 wire requestId 只允许 null；存在不确定投递时恢复重试 id 字段。
+原生目录、PTC SDK、其他插件和执行校验保留既有契约。
+这不会启用 provider 的 strict 模式，也不承诺各网关通用支持。已检查本地 DSH pi-ai
+适配和真实 ocx/Luna 路由；其他路由需单独验证。
+官方来源、验证分层与限制见[工具 Schema 规范](docs/TOOL-SCHEMA-STANDARD.md)。
 
 `model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
 有效模型与推理强度，该默认路径无需查询模型列表。
@@ -325,8 +367,35 @@ macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code
-中打开记录的目录以及查看 Git 与变更。派生 Worktree 和其他标记的快捷操作仍是占位内容。VS Code
+中打开记录的目录以及查看 Git 与变更。快捷操作提供同步基线与归档。VS Code
 必须安装在浏览器所在机器上且能够访问记录的路径；链接不会验证应用是否成功启动。
+
+**派生 Worktree** 显示同一 Workspace 中，已保存基线匹配当前 checkout 本地分支的受管理 Worktree。
+概览预览前五项，页签显示全部匹配项，包括带有可用状态和路径的已归档条目；点击条目可打开其 Dashboard。
+修改已保存基线会更新关系；此视图表示直接基线匹配，不代表 Git 祖先关系或委派 Session 历史。
+本地分支名和 `refs/heads/` ref 可匹配，显式远端 ref 不匹配。Detached HEAD 或 Main 分支未知时
+没有匹配项；受管理 checkout 无法获取当前分支时，使用其记录分支。
+派生 Worktree 的 Dashboard 顶部可点击**基线**分支，打开对应 Worktree 或 Local/Main 的 Dashboard，
+编辑按钮独立保留。仅当同一 Workspace 中恰好一个 checkout 匹配时显示跳转入口；远端基线、
+未匹配或有歧义的基线保持普通文本。修改已保存基线后，入口随之更新。
+
+**同步基线**打开 **Rebase** / **Merge baseline** 选择弹窗。确认后在当前受管理 Worktree 中创建并打开
+新的原生任务会话。Escape 仅关闭该弹窗；任务接收等待期间，Escape 不会关闭弹窗或 Dashboard。
+会话使用配置的默认模型和原生权限策略。任务使用已保存的本地或已获取的远端基线；
+Host 在创建会话前拒绝过期、缺失、歧义或不健康的目标。分支枚举等待期间保存新基线会使旧请求
+返回 `WORKTREE_STATE_CONFLICT`；重新打开弹窗后可使用新基线。若该 Worktree 已进入最终任务接收阶段，
+基线保存会等待接收结束。Local/Main 不提供同步任务。
+Agent 检查工作区是否干净，遇到冲突时停止；Rebase 会改写当前分支的提交。任务接收仅代表开始，
+不代表 Git 已完成，请查看会话结果后再继续工作。部分创建失败会保留会话并提供**打开已创建会话**；
+传输失败后重试在当前 Host 生命周期内复用同一请求身份。绑定、模型、标题、报告准备及任务提交失败
+也会显示 Toast，并在**报错与修复**中记录本地化问题、恢复说明与已创建会话身份。
+恢复操作仅打开该会话，不重复创建会话或派发任务。关闭 Dashboard 后保留诊断历史并撤销其恢复回调。
+关闭 Dashboard 或更换目标、基线后才到达的部分失败，也会在非活动历史记录中保留已创建会话身份，
+不会跳转离开当前视图。任务创建同时支持局域网普通 HTTP、localhost 与 HTTPS 浏览器访问。
+插件重启会清除接收记录。
+不会自动 push 或 publish。终端、Git Diff、Pull Request 和运行测试四个占位按钮已移除。
+重连后，重放的同步通知会刷新受影响的 Workspace 与当前上下文；读取期间保留 ready 内容，
+其他 Workspace 保持原有视图。
 
 ### 在应用中打开记录的目录
 
@@ -506,9 +575,13 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
   追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
-  不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
+  预设与原生 Session 权限写入均不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
   可以迟挂载或被替换：重试使用当前可用能力，不需要重启 Worktree Host。服务暂时缺失时
   绝不授予 Full Access，并保留用户的显式限制；它不能突破 DSH 宿主设置的 sandbox 上限。
+- 若命名预设缺失但原生 Session 权限服务可用，同一确认框会通过原生权限事件设置
+  `danger-full-access + ask`。仅在两个实际值均验证成功后报告生效；原生菜单可能显示
+  **Custom（自定义）**，不会存储虚构的预设身份。同一 Workspace、Worktree、Session 和路径
+  的重复待确认请求共用一个对话框，不同目标仍分别确认。
 - Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。

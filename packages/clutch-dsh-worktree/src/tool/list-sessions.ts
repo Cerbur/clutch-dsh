@@ -9,7 +9,7 @@ const listSessionsArgs = workspace
     worktreeId: text
       .optional()
       .describe(
-        'Optional stable Worktree id from new/list. Prefer this filter when locating a task’s Sessions.',
+        'Worktree id from clutch_new_worktree or clutch_list_worktrees. Omitted/null includes Local/Main and all bound Sessions.',
       ),
   })
   .strict();
@@ -18,7 +18,7 @@ export function registerListSessions(context: ToolContext): void {
   const { add, options, check, scope } = context;
   add(
     'clutch_list_sessions',
-    'Discover existing Sessions in the calling Workspace, optionally filtered by worktreeId. Returns stable ids, binding state, status and title. These are ordinary Sessions, not a parent/subagent task catalog.',
+    'Find Workspace Sessions for follow-ups or explicit human status questions. Returns ids, bindings, observed status, titles and per-entry diagnostics. Read-only; no transcripts or verified completion. These are ordinary Sessions, not native subagents. Do not use for routine monitoring.',
     listSessionsArgs,
     output.object(
       {

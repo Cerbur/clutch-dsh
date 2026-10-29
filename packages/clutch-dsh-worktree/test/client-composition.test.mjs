@@ -1000,6 +1000,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   const fixture = await loadClientEntry();
   assert.equal(typeof fixture.exports.apply, 'function');
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'conversation.input.dock',
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
     'settings.section',
@@ -1014,6 +1015,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
 test('contributes context to the active Session title row and the Hero overlay', async () => {
   const fixture = await loadClientEntry();
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'conversation.input.dock',
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
     'settings.section',
@@ -1031,6 +1033,26 @@ test('contributes context to the active Session title row and the Hero overlay',
   const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
   assert.equal(overlay.hooks.worktreeContext, store);
 
+  for (const dispose of fixture.disposers.reverse()) dispose();
+});
+
+test('steer dock borrows only its scoped native Conversation source without RPC or list scans', async () => {
+  const fixture = await loadClientEntry();
+  const source = { getSnapshot: () => undefined, subscribe: () => () => {} };
+  const binding = {};
+  const calls = [];
+  fixture.fakeContext.sessions.binding = id => { calls.push(id); return binding; };
+  fixture.fakeContext.uiConversation.binding = value => {
+    assert.equal(value, binding);
+    return { target: target => { assert.equal(target, 'clutch-dsh-worktree-steer'); return source; } };
+  };
+  const dock = fixture.registrationsBySlot.get('conversation.input.dock');
+  assert.equal(dock.options.id, 'clutch-dsh-worktree-steer');
+  assert.equal(dock.options.order, 21);
+  const before = fixture.rpcCalls.length;
+  assert.equal(dock.options.inject('viewed-session').steer, source);
+  assert.deepEqual(calls, ['viewed-session']);
+  assert.equal(fixture.rpcCalls.length, before);
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 

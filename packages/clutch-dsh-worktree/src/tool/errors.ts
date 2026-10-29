@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import { optionalInputGuidance } from './schema.js';
+
+/** Only plugin-authored failures may replace the default recovery instructions. */
+export class ToolRecoveryError extends Error {
+  constructor(message: string, readonly code: string, readonly correction: string) {
+    super(message);
+  }
+}
 
 const examples: Record<string, unknown> = {
   clutch_new_worktree: { name: 'feature/demo' },
@@ -33,11 +41,12 @@ const delegationRecovery: Record<string, string> = {
 export function recovery(name: string): string {
   return [
     'Use only the documented fields and exact ids returned by discovery/creation; ids are not paths or titles.',
+    optionalInputGuidance,
     name === 'clutch_span_worktree'
       ? 'Supply exactly one worktreeId or legacy exact branch name, plus a nonempty prompt. List Worktrees to select an active healthy target; list models only for an explicit override.'
       : '',
     name === 'clutch_send_message' || name === 'clutch_report_result'
-      ? 'The target must still belong to the same Workspace with a valid binding/cwd. Repair unavailable or detached relations first. On uncertain admission retry the identical message with the returned requestId.'
+      ? 'The target must still belong to the same Workspace with a valid binding/cwd. Repair unavailable or detached relations first. Omit requestId for a new message/report; never invent one. On uncertain admission retry the identical message with the returned requestId.'
       : '',
     'Do not repeat a failed mutation without checking returned identities and its failed stage.',
     `Example: ${name}(${JSON.stringify(examples[name] ?? {})})`,
@@ -60,6 +69,8 @@ export function actionableError(name: string, cause: unknown): Error {
   const code = invalid
     ? 'INVALID_ARGUMENTS'
     : ((cause as { code?: unknown } | null)?.code ?? 'TOOL_OPERATION_FAILED');
-  const correction = delegationRecovery[String(code)] ?? recovery(name);
+  const correction = cause instanceof ToolRecoveryError
+    ? cause.correction
+    : delegationRecovery[String(code)] ?? recovery(name);
   return new Error(`${name}: ${code}. Why: ${reason.slice(0, 700)}. Correction: ${correction}`);
 }

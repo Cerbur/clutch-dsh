@@ -20,6 +20,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   getToolSettings: 'worktreeManager/getToolSettings',
   updateToolSettings: 'worktreeManager/updateToolSettings',
@@ -214,6 +215,7 @@ export function createWorktreeConnectionAdapter(
   }
 
   return {
+    syncWorktreeBaseline: (input) => invoke('syncWorktreeBaseline', input),
     getToolSettings: (input) => invoke('getToolSettings', input),
     updateToolSettings: (input) => invoke('updateToolSettings', input),
     watchToolChanges: async (afterRevision, signal) =>

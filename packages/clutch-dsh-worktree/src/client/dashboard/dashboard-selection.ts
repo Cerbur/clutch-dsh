@@ -30,6 +30,42 @@ export interface MainDashboardRecord {
 
 export type DashboardRecord = WorktreeRecord | MainDashboardRecord;
 
+function localBranch(record: DashboardRecord): string | undefined {
+  if (record.currentBranch === null ||
+    (record.currentHead !== undefined && record.currentHead.kind !== 'branch')) return undefined;
+  const branch = record.currentHead?.name ?? record.currentBranch ?? record.branch;
+  return branch ? branch.replace(/^refs\/heads\//u, '') : undefined;
+}
+
+function matchesBaseline(baseBranch: string | undefined, branch: string | undefined): boolean {
+  return branch !== undefined && (baseBranch === branch || baseBranch === `refs/heads/${branch}`);
+}
+
+/** Direct baseline relationships from the current Workspace projection, never Git ancestry. */
+export function selectDerivedWorktrees(
+  parent: DashboardRecord,
+  records: readonly WorktreeRecord[],
+): readonly WorktreeRecord[] {
+  const branch = localBranch(parent);
+  return records.filter((candidate) =>
+    candidate.workspaceId === parent.workspaceId && candidate.worktreeId !== parent.worktreeId &&
+    matchesBaseline(candidate.baseBranch, branch));
+}
+
+/** Navigate only when the saved baseline identifies one checkout in this Workspace. */
+export function selectBaseWorktree(
+  child: DashboardRecord,
+  records: readonly WorktreeRecord[],
+  mainRecord?: MainDashboardRecord,
+  baseBranch = child.baseBranch,
+): DashboardRecord | undefined {
+  const candidates: readonly DashboardRecord[] = mainRecord === undefined ? records : [...records, mainRecord];
+  const matches = candidates.filter((candidate) =>
+    candidate.workspaceId === child.workspaceId && candidate.worktreeId !== child.worktreeId &&
+    matchesBaseline(baseBranch, localBranch(candidate)));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export function isMainWorktreeId(worktreeId: string): boolean {
   return worktreeId === 'main' || worktreeId.startsWith('main:');
 }

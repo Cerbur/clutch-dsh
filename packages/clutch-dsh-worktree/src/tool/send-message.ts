@@ -3,35 +3,35 @@ import type { ToolContext } from './context.js';
 import { text, prompt } from './inputs.js';
 import * as output from './outputs.js';
 import { authorize, errorText } from './context.js';
-import { delegationHandoff } from './guidance.js';
+import { toolHandoff } from './guidance.js';
 
 import { randomUUID } from 'node:crypto';
 const sendArgs = z
   .object({
     sessionId: text.describe(
-      'Exact native Session id returned by clutch_span_worktree or clutch_list_sessions; not a Worktree id or path.',
+      'Session id from clutch_span_worktree or clutch_list_sessions in this Workspace. Requires native membership and healthy binding/cwd, including archived Worktrees. Self/ancestors are forbidden.',
     ),
     prompt,
     mode: z
       .enum(['queue', 'steer'])
       .default('queue')
       .describe(
-        'queue adds the message after the current turn; steer corrects work at the next step boundary. Omit for queue.',
+        'queue: after the current turn; steer: next step boundary. Omitted/null defaults to queue.',
       ),
     requestId: text
       .max(200)
       .optional()
       .describe(
-        'Omit for a new message. Reuse a returned id only to retry the identical prompt after uncertain admission.',
+        'Host-returned retry id only; never invent one. Omit for a new message (JSON null also accepted), never an empty string. For uncertain admission reuse the returned id with identical sessionId, prompt and mode.',
       ),
   })
   .strict();
 
 export function registerSendMessage(context: ToolContext): void {
-  const { add, options, check, scope } = context;
+  const { add, agent, options, check, scope } = context;
   add(
     'clutch_send_message',
-    `Continue an existing Session in the calling Workspace. queue (default) runs after the current turn; steer corrects at a native step boundary. Returns admitted or prompt-failed, retaining requestId on failure. Each call gets a fresh requestId; provide the returned requestId only to retry that same message. ${delegationHandoff}`,
+    `Send an Agent follow-up to an existing Session. Returns admitted or prompt-failed with requestId, not task completion or a reply. New isolated tasks need clutch_span_worktree when enabled. ${toolHandoff}`,
     sendArgs,
     output.object(
       {
@@ -56,8 +56,9 @@ export function registerSendMessage(context: ToolContext): void {
       await context.prepareMessage(args.sessionId, requestId, args.prompt, args.mode, exec, args.requestId !== undefined);
       check(exec);
       try {
-        await options.sessions.prompt(
+        await options.sessions.sendAgentMessage(
           {
+            sender: agent,
             sessionId: args.sessionId,
             requestId,
             mode: args.mode,

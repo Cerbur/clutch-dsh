@@ -77,7 +77,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           viewReader.invalidate(workspaceId);
         }
         const contextRefresh =
-          options.invalidateContext === false ? undefined : invalidateWorktreeContext?.();
+          options.invalidateContext === false ? undefined
+            : invalidateWorktreeContext?.(undefined, { alreadyInvalidated: true });
         await refreshGuard.current.run(
           async () => {
             const [views] = await Promise.all([
@@ -121,12 +122,14 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         selectedWorkspaceIds.map(async (workspaceId) => {
           const guard = guardFor(workspaceId);
           if (!options.alreadyInvalidated) {
-            viewReader.invalidate(workspaceId, { reuseInFlight: options.reuseInFlight });
+            viewReader.invalidate(workspaceId, {
+              reuseInFlight: options.reuseInFlight, changeId: options.changeId,
+            });
           }
           const contextRefresh =
             options.invalidateContext === false
               ? undefined
-              : invalidateWorktreeContext?.(workspaceId);
+              : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true });
           const generation = guard.begin();
           try {
             const view = await viewReader.read(workspaceId);

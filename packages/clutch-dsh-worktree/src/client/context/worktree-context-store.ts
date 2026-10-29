@@ -47,7 +47,7 @@ export interface WorktreeContextState {
 export interface WorktreeContextProjection {
   readonly store: SnapshotStore<WorktreeContextState>;
   refresh(): Promise<void>;
-  invalidate(workspaceId?: string): Promise<void>;
+  invalidate(workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }): Promise<void>;
   dispose(): void;
 }
 
@@ -317,12 +317,12 @@ export function createWorktreeContextProjection(
   return {
     store,
     refresh,
-    async invalidate(workspaceId): Promise<void> {
+    async invalidate(workspaceId, options): Promise<void> {
       if (disposed) return;
       const identity = identityFrom(input.sessions, input.workspaces);
       if (workspaceId !== undefined && workspaceId !== identity.workspaceId) return;
       if (identity.workspaceId === undefined) return;
-      input.viewReader.invalidate(identity.workspaceId);
+      if (!options?.alreadyInvalidated) input.viewReader.invalidate(identity.workspaceId);
       await refresh();
       await waitForLatestRefresh(workspaceId ?? identity.workspaceId);
     },

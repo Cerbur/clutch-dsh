@@ -257,3 +257,31 @@ test('detached normalization uses replacement, never the revoked provider', asyn
     await h.dispose();
   }
 });
+
+test('late native policies restore the missing-preset confirmation through the actual Host', async () => {
+  const provider = permissionProvider({ names: ['workspace-write'] });
+  const h = await permissionHost({ provider, sandboxPolicy: null });
+  try {
+    const last = (type, key, fallback) => h.log.findLast(event => event.type === type)?.data[key] ?? fallback;
+    await h.mount('sandboxPolicy', {
+      defaultMode: 'workspace-write',
+      resolve: () => ({ mode: last('sandbox/mode', 'mode', 'workspace-write') }),
+    });
+    await h.mount('approval', {
+      config: { policy: 'ask' },
+      overrideOf: () => last('approval/policy', 'policy'),
+    });
+    const { pending } = await h.startFlow();
+    assert.equal(h.controller.getSnapshot()?.sessionId, h.request.sessionId);
+    assert.deepEqual(h.log, []);
+    h.controller.resolve(true);
+    await pending;
+    assert.equal(h.results.at(-1).status, 'full-applied');
+    assert.equal(h.results.at(-1).approvalPolicy, 'ask');
+    assert.deepEqual(provider.calls, []);
+    assert.deepEqual(h.log.map(event => event.type), ['approval/policy', 'sandbox/mode']);
+    assert.equal(h.mounts, 1);
+  } finally {
+    await h.dispose();
+  }
+});

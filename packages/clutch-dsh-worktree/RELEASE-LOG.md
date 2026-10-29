@@ -1,5 +1,45 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.19 — 2026-10-30
+
+### 中文
+
+#### 新增
+
+- 在接收方输入框上方展示 Agent steer 的待处理与接收记录，并保留发送方和内容以便核对。
+- 新增派发任务看板、基线导航与基线同步会话，支持从看板发起同步并查看任务状态。
+
+#### 优化
+
+- 合并等价的基线刷新请求，串行处理基线保存与任务准入，并在重连后恢复通知去重状态。
+- 精简工具与参数说明，统一跨模型的可选参数、JSON null 与封闭对象契约，并按 Provider 配置适配工具 schema。
+
+#### 修复
+
+- 修复基线同步的部分派发诊断、恢复流程及同步弹窗的 Escape 键归属。
+- 修复具名完全访问预设不可用时的会话权限注入，避免 Worktree 加载受阻。
+- 使用原生 Agent 消息传递委派任务与报告，保留发送方身份，并在输入已被领取或投递结果不确定时阻止相同请求重复执行。
+- 修复首次报告自造请求标识后的纠正流程，明确拒绝原因并允许省略标识后重新报告。
+
+### English
+
+#### Added
+
+- Show pending Agent steer messages and receipt records above the recipient's input box, preserving sender and content for inspection.
+- Add a delegation Dashboard, baseline navigation, and baseline synchronization sessions with task status and synchronization actions.
+
+#### Improved
+
+- Share equivalent baseline refresh requests, serialize baseline saves with task admission, and restore notification deduplication after reconnecting.
+- Simplify tool and parameter descriptions, align optional parameters, JSON null, and closed object contracts across models, and adapt tool schemas by Provider configuration.
+
+#### Fixed
+
+- Fix partial baseline synchronization dispatch diagnostics, recovery, and Escape key ownership in the synchronization modal.
+- Fix session permission injection when the named full access preset is unavailable so Worktree loading can proceed.
+- Relay delegated tasks and reports through native Agent messages with sender identity, preventing duplicate execution when input has been claimed or admission is uncertain.
+- Fix recovery after an invented first-report request identifier by explaining the rejection and allowing a corrected report without the identifier.
+
 ## 0.1.18 — 2026-10-14
 
 ### 中文

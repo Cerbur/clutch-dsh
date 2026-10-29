@@ -53,7 +53,7 @@ history replay, binding generations and plugin disposal use the same native life
 4. `clutch_span_worktree({ worktreeId?, name?, prompt, model?, title? })` resolves an exact active, healthy managed target
    within that Project, creates a native Session with its ordinary creation-time cwd,
    binds it, configures the initial model, optionally renames it through the native API, enables only fixed-destination reporting and reporting guidance by default, and
-   admits the exact prompt in queue mode. Prefer the stable id; specify exactly one id or name.
+   admits the exact prompt payload inside a native Agent relay envelope in queue mode. Prefer the stable id; specify exactly one id or name.
    It returns the native Session identity, selected model, request id and stage after admission,
    without waiting for model execution or changing the current UI focus.
 5. Failure after creation preserves entities. Instruction failure returns
@@ -66,6 +66,12 @@ history replay, binding generations and plugin disposal use the same native life
    Full Access. Native command/tool/prompt lifecycle logging remains DSH-owned.
 
 The name `clutch_span_worktree` is retained exactly as requested.
+The Dashboard's Sync with Base action shares `dispatchWorktreeSession` with this tool:
+native creation, binding, initial model routing, optional title, and prompt admission.
+The tool retains its reporting prepare hook and calling-model inheritance. Dashboard tasks
+are user-originated ordinary Sessions using the configured default model, without inventing
+a delegating Agent or reporting destination. Only the Session executes the requested merge/rebase;
+the plugin still has no Git merge/rebase tool or working-tree mutation provider.
 Activation is runtime-only: run the command again after Agent resume/restart or plugin reload.
 Dispatched Sessions are enabled automatically before prompt admission. Nested Agents inheriting a parent tool catalog
 cannot execute these registrations because the body checks the exact caller.
@@ -108,10 +114,20 @@ a human request or a concrete evidence gap/inconsistency.
 Model guidance explains default inheritance (including effort), explicit catalog-backed selection
 for user model/task-based requirements, and disabled-discovery handling without invented routes.
 Critical handoff and model rules are shared by the scoped section and native tool descriptions.
+Tool descriptions lead with the action, result and recovery behavior, following native DSH
+delegation/control tools. Field descriptions own base/default selection, target eligibility,
+filter scope and retry identity details. Dispatch/follow-up descriptions still retain compact
+handoff rules and dispatch retains model-selection guidance for complete personas; these rules
+must not depend only on extra system-prompt sections.
+Dispatch and continuation share the same nonblank, verbatim prompt validator but use separate
+field descriptions: dispatch requires a self-contained task and checks; continuation describes
+only the follow-up message. Delivery timing belongs to `mode`, and exact retry conditions belong
+to `requestId`. Projected string bounds use `Nonempty.` and concise UTF-16 length notes rather
+than repeating validator implementation prose; original Zod bounds remain authoritative.
 DSH's minimal persona has `complete: true`, so it intentionally drops extra prompt sections.
 The plugin preserves that contract instead of concatenating text onto the complete system prompt;
 native tool descriptions still convey the rules, and PTC SDK rendering retains those descriptions.
-Schemas omit `$schema`; target alternatives expose exact-one id/name validation, all fields explain
+Schemas omit `$schema`; flat optional target fields retain runtime exact-one id/name validation, all fields explain
 source/default/limits. Error bodies identify the reason and a corrected call; partial creation
 failures preserve identities and describe repair. No tool grants permissions or answers approvals.
 
@@ -119,14 +135,15 @@ The subsequent native/PTC smoke run completed dispatch, three pushed reports and
 but both delegates first omitted report `status`. The PTC `ToolArgs` entries had degraded to
 `unknown`: Zod's `minLength`, `maxLength` and `anyOf` exceed DSH's SDK schema vocabulary.
 `src/tool/schema.ts` now projects lengths into descriptions (still enforced by the original
-Zod parser) and converts only disjoint closed-object unions to supported `oneOf`. Unsupported
-keywords and overlapping alternatives fail explicitly. Report guidance names required status
-and summary. Regression tests use DSH's real schema validator and TypeScript SDK generator for
-all seven tools, checking required/optional fields and preserving strict runtime rejection.
+Zod parser). The low-level historical projector can convert disjoint object unions to oneOf,
+but registered tool inputs now follow the stricter union-free profile below (issue #8 amendment).
+Unsupported keywords and overlapping alternatives still fail explicitly. Report guidance names
+required status and summary. Tests use DSH's real registry/validator and SDK generator for all
+seven tools, keeping native optionality separate from provider strict wire normalization.
 
 `clutch_send_message({ sessionId, prompt, mode?, requestId? })` defaults to queue; steer uses
 native step-boundary admission. New messages get independent ids, while an explicit id retries
-the same message through native deduplication. Native failures return `prompt-failed` with the
+the same message through a stable native message id and native pending/insertion/consumed receipt lookup. Native failures return `prompt-failed` with the
 retry id even when acceptance is uncertain. Acceptance is not execution or task completion.
 
 `clutch_report_result({ status, summary, evidence?, requestId? })` is registered for delegated
@@ -144,6 +161,61 @@ payload for identical retries, with a synchronous reservation preventing concurr
 Plugin/Agent restart removes routing and guidance;
 a resumed Session may enable `/cluworktree` and manually use `clutch_send_message` with the known
 delegator id. Existing Sessions are not retroactively assigned a reporting destination.
+
+## All-tool schema audit (2026-10-26, issue #8)
+
+[TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md) is the normative sourced author/native profile,
+provider adaptation boundary and human decision gate. Root-level oneOf is valid JSON Schema and
+DSH vocabulary, but fails some strict gateways before model invocation; merely enabling such a
+tool can break every conversation turn. The fix is a single closed object, not a different union keyword.
+
+| Registered tool | Audit finding and treatment |
+| --- | --- |
+| clutch_new_worktree | Already a closed object; clarified captured HEAD (not assumed main), instruction default/partial preservation and unsafe blind retry. |
+| clutch_list_worktrees | Already closed; clarified discovery-only, no fetch and branchesUnavailable retaining Worktree facts. |
+| clutch_span_worktree | Replaced root union with optional id/name fields; exact-one Zod refinement runs before handler effects. Value-based target selection handles optional undefined/null normalization. Clarified authorization, inheritance, admission and partial recovery; removed duplicated full workflow prose. |
+| clutch_list_models | Already closed; clarified explicit selection use, read-only defaults and unknown vs unavailable provider. |
+| clutch_list_sessions | Already closed; clarified filters, per-item unavailable diagnostics, no transcripts/verified completion or routine monitoring. |
+| clutch_send_message | Already closed and enum/default correct; clarified healthy archived bindings, no ancestor/self messaging, queue/steer, exact destination/prompt/mode retry and admission vs reply. Compact safety remains in tool text for minimal personas. |
+| clutch_report_result | Conditional registration is included, not a seventh-tool blind spot. Closed enum object retained; one-shot token, fixed destination, completed claim and identical retry contract reviewed and tested; optional evidence/retry defaults clarified. |
+
+All seven reject unknown fields before effects, including nested model keys. Optional null-as-omission
+was a genuine strict-adapter/runtime conflict: the human explicitly approved the extension before
+implementation. Required nulls, unknown keys and invalid empty values remain rejected. Prompt text
+stays exact; string lengths are documented as UTF-16 code units. Neither target, both targets, empty,
+whitespace, undefined and null cases have registered-executor coverage.
+
+Default package tests discover real registrar exports recursively and compare their inventory to
+actual DSH registrations after command, automatic and delegated-report activation. Every tool gets
+recursive schema/field-description checks, valid/invalid executor examples and no-effects assertions.
+Fifteen intentionally invalid tool/schema fixtures prove the guard rejects root/nested regressions;
+existing semantic safety tests remain, rather than replacing quality with length thresholds or snapshots.
+The external DSH pi-ai test in the same suite uses DSH_SCHEMA_ADAPTER_ANCHOR when supplied; it
+executes real makeStrictJsonSchema/convertResponsesTools, verifies recursive all-required/null/closed
+shape and no native mutation, and executes normalized nullable arguments. Without this external graph
+only that seam reports skipped. Local integration is not a live provider/gateway E2E claim.
+
+New/changed tools must satisfy the tests. Suspected rule/test defects require a human decision with
+failure, implementation and official evidence; do not weaken/skip assertions to pass. See the
+standard and DEVELOPMENT contributor gate. Implementation/verification record:
+[2026-10-26 tool contracts](plans/2026-10-26-tool-contracts.md).
+
+### Provider opt-in wire projection (2026-10-29)
+
+`nullableToolProviders` defaults to empty. At final native prompt assembly,
+`src/tool/wire-schema.ts` projects enabled plugin validators for explicitly listed
+provider ids to closed objects with all properties required and previously optional
+values nullable. String length constraints survive here. First-report requestId is
+null-only; an uncertain attempt restores the string/null retry field. This protects
+generation without accepting blank identities or weakening runtime authorization,
+retry provenance or tokens. Native registration/PTC remain portable and optional;
+other plugins and non-selected providers retain their schemas. No strict flag is set.
+
+The real native-loop test covers completed report → parent queue → fresh report in
+one process, provider isolation and uncertain admission. A restart between dispatch
+and follow-up invalidates the process-local report target; it is not evidence that
+completion disposed the tool. Live verification must record the same Host process
+throughout, inspect actual parameter payloads and confirm pushed reports at the parent.
 
 ## Tool preferences (2026-10-10 amendment)
 
@@ -185,8 +257,9 @@ This supersedes the 2026-10-09 Agent-lifetime reporting policy and its instructi
 every follow-up. A task must consume its native dispatch input before reporting, and has one report
 admission budget for `completed`, `blocked` or `failed`. Human input and unrelated plugin messages
 invalidate that budget. Explicit parent follow-ups rearm closed tasks; retries of old dispatches
-never do. Native input source `rpcId` matches Host-recorded request identities without modifying
-native messages or reading transcripts to poll task progress.
+never do. Native relay message ids match Host-recorded dispatch identities and the actual sender before
+consumption can activate a task. Human user-RPC inputs cannot activate relay tokens. Legacy queued
+plugin RPC prefixes remain callback-blocked after upgrade; no history is rewritten or polled for progress.
 
 Code rejects message destinations that are the caller or any ancestor. A turn consuming only
 reports or ordinary plugin messages cannot dispatch more messages/tasks through these tools;
@@ -241,6 +314,45 @@ Focused reproduction and regression command (after building the package):
 ```bash
 node --test --test-name-pattern='legacy Git-root|legacy compatibility' test/worktree-tools.test.mjs
 ```
+
+## Agent provenance amendment (2026-10-26)
+
+Task dispatch, continuation and reporting now call the same Host-owned native relay Adapter.
+The sender comes from the exact live calling Agent, not a tool parameter. Public DSH message
+factories supply an immutable user-role message with source kind agent-message, form relay and
+senderSessionId; a native-style Agent envelope preserves attribution in provider-visible text.
+The supplied body stays exact. Agent roles are not elevated to system/developer or forged as
+this Session's assistant. Native Chat uses its existing context/relay renderer and Agent trigger;
+no replacement UI or DSH core change is needed. Dashboard tasks remain human-originated.
+
+The Adapter uses native followup/steer and native durable inbox insertion/consumed facts for retry receipts.
+It serializes admission per target, validates exact live sender/recipient after awaits and fails
+closed when the native receipt read fails. Stable namespaced ids are derived from requestId;
+request bodies and modes remain locked by the existing upper-layer retry signatures. No second
+persistent receipt store is created. Report claims retain a bounded, id-only Host routing
+receipt (sender/recipient, no body or token). Only a matching receipt preserves a valid outer
+task when an incoming report blocks automatic callbacks; a report-looking id alone does not.
+No marker mints a token or proves success. New human input still closes old reporting. Legacy plugin RPCs cannot
+masquerade as fresh human input or activate relay tasks. Old persisted history is left untouched.
+
+The native loop claims pending input before awaited prompt assembly/request preparation,
+and appends `user/message` later. Retry lookup therefore includes every matching
+`agent/inbox/spliced.inserted` message, current pending input and historical `user/message`.
+All occurrences must agree on role, source and exact content; unreadable insertion receipts
+fail closed. A native queue edit preserves the id, so conflicting old/new payloads reject both
+old-id retries even after claim. Remove, cancellation and queue-to-steer movement retain the
+original admission fact: retries never resurrect removed input. Acceptance still does not
+prove execution or completion. Upper-layer dispatch signatures continue to enforce mode;
+native target alone cannot establish it because steering and cancellation can move input.
+Native JSON replay and Adapter recreation need no plugin receipt cache.
+
+Default tests cover the complete new route, stale/forged senders, concurrent/uncertain retries,
+consumed native receipts, cancellation/disposal and task/token races. The optional native-source
+integration in the same test suite executes real ReactLoopInbox/fold, provider context conversion,
+Chat classification, relay body rendering and JSON history replay. Only its persistence/driver
+shell, CSS and unused image/unknown-block dependencies are isolated; this is not a full running
+GUI or live-provider E2E. Set DSH_NATIVE_SOURCE to the existing checkout; a supplied broken path
+fails rather than silently skipping. Evidence and design: [Agent relay record](plans/2026-10-26-agent-relay.md).
 
 ## Notification and refresh design
 

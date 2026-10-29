@@ -35,6 +35,12 @@ interface PermissionPresetService {
 
 interface SandboxPolicyService {
   readonly defaultMode?: WorktreePermissionSandboxMode;
+  resolve?(request: { session: PermissionSession }): { readonly mode: WorktreePermissionSandboxMode };
+}
+
+interface ApprovalService {
+  readonly config: { readonly policy?: WorktreePermissionApprovalPolicy };
+  overrideOf(session: PermissionSession): WorktreePermissionApprovalPolicy | undefined;
 }
 
 export interface DshWorktreePermissionAdapterOptions {
@@ -43,6 +49,7 @@ export interface DshWorktreePermissionAdapterOptions {
   };
   readonly permissionPresets?: PermissionPresetService;
   readonly sandboxPolicy?: SandboxPolicyService;
+  readonly approval?: ApprovalService;
 }
 
 const WORKSPACE_WRITE_PRESET = 'workspace-write';
@@ -72,6 +79,10 @@ function lastEventValue(
 function hasFullThenRestriction(events: readonly PermissionEvent[]): boolean {
   let fullSeen = false;
   for (const event of events) {
+    if (event.type === 'sandbox/mode' && isRecord(event.data)) {
+      if (event.data.mode === 'danger-full-access') fullSeen = true;
+      else if (fullSeen && (event.data.mode === 'workspace-write' || event.data.mode === 'read-only')) return true;
+    }
     if (event.type !== 'permission/preset' || !isRecord(event.data)) continue;
     const preset = stringValue(event.data.preset);
     if (preset === WORKTREE_FULL_ACCESS_PRESET) {
@@ -107,7 +118,8 @@ function readCurrentState(
   permissionPresets: PermissionPresetService | undefined,
   sandboxPolicy: SandboxPolicyService | undefined,
   pluginApplied: ReadonlySet<string>,
-): WorktreePermissionCurrentState {
+  approval?: ApprovalService,
+): WorktreePermissionCurrentState & { readonly unavailable?: boolean } {
   const events = getSessionEvents(session);
   const preset = resolveCurrentPreset(permissionPresets, session, events);
   let presetSpec: PermissionPresetSpec | undefined;
@@ -118,21 +130,35 @@ function readCurrentState(
       presetSpec = undefined;
     }
   }
-  const sandboxMode =
+  let sandboxMode =
     (lastEventValue(events, 'sandbox/mode', 'mode') as WorktreePermissionSandboxMode | undefined) ??
     presetSpec?.sandbox ??
     sandboxPolicy?.defaultMode;
-  const approvalPolicy =
+  let approvalPolicy =
     (lastEventValue(events, 'approval/policy', 'policy') as WorktreePermissionApprovalPolicy | undefined) ??
     presetSpec?.approval;
+  // When available these are the actual consumers of the durable knob events,
+  // not merely the configured preset (which may no longer match the Session).
+  if (typeof sandboxPolicy?.resolve === 'function' && typeof approval?.overrideOf === 'function') {
+    try {
+      sandboxMode = sandboxPolicy.resolve({ session }).mode;
+      approvalPolicy = approval.overrideOf(session) ?? approval.config.policy ?? 'ask';
+      if (!['read-only', 'workspace-write', 'danger-full-access'].includes(sandboxMode) ||
+        !['ask', 'never'].includes(approvalPolicy)) throw new Error('Unsupported native permission state');
+    } catch {
+      return { ...(preset === undefined ? {} : { preset }), explicitUserOverride: false, unavailable: true };
+    }
+  }
   const pluginChangedThisRuntime = pluginApplied.has(session.id);
   const currentIsRestricted =
     pluginChangedThisRuntime && sandboxMode !== 'danger-full-access' ||
     hasFullThenRestriction(events) ||
+    (preset !== undefined && sandboxMode === 'read-only') ||
     (preset !== undefined &&
       preset !== WORKSPACE_WRITE_PRESET &&
       preset !== WORKTREE_FULL_ACCESS_PRESET &&
-      preset !== 'danger-full-access');
+      preset !== 'danger-full-access' &&
+      !(preset === 'custom' && sandboxMode === 'danger-full-access'));
   return {
     ...(preset === undefined ? {} : { preset }),
     ...(sandboxMode === undefined ? {} : { sandboxMode }),
@@ -186,19 +212,40 @@ export function createDshWorktreePermissionAdapter(
       return { status: 'unverified', retryable: true };
     }
     const permissionPresets = options.permissionPresets;
-    const current = readCurrentState(
+    const sandboxPolicy = options.sandboxPolicy;
+    const approval = options.approval;
+    const readState = () => readCurrentState(
       session,
       permissionPresets,
-      options.sandboxPolicy,
+      sandboxPolicy,
       pluginApplied,
+      approval,
     );
+    const current = readState();
     const hasService = serviceAvailable(permissionPresets);
+    if (current.unavailable || (hasService && current.preset === undefined)) {
+      return resultFromCurrent('unverified', current, true);
+    }
+    const sessionPolicyAvailable = hasService && typeof sandboxPolicy?.resolve === 'function' &&
+      typeof approval?.overrideOf === 'function' && current.sandboxMode !== undefined &&
+      current.approvalPolicy !== undefined;
+    const namedFullAvailable = hasService && permissionPresets.names.includes(WORKTREE_FULL_ACCESS_PRESET);
+    const verifiedResult = (
+      status: WorktreePermissionResult['status'],
+      mode: WorktreePermissionSandboxMode,
+      retryable = false,
+    ): WorktreePermissionResult => {
+      const next = readState();
+      const verified = !next.unavailable && next.sandboxMode === mode && next.approvalPolicy === 'ask';
+      return resultFromCurrent(verified ? status : 'unverified', next, !verified || retryable);
+    };
     const decision = decideWorktreePermission({
       binding,
       current,
       capability: {
         permissionService: hasService,
-        fullPreset: hasService && permissionPresets.names.includes(WORKTREE_FULL_ACCESS_PRESET),
+        fullPreset: namedFullAvailable,
+        sessionPolicy: sessionPolicyAvailable,
         workspaceWrite: hasService && permissionPresets.names.includes(WORKSPACE_WRITE_PRESET),
       },
     });
@@ -214,39 +261,51 @@ export function createDshWorktreePermissionAdapter(
     switch (decision.kind) {
       case 'apply-full':
         if (!hasService) return resultFromCurrent('unverified', current, true);
-        permissionPresets.set(session, decision.preset);
+        if (namedFullAvailable) {
+          const spec = permissionPresets.resolve(decision.preset);
+          if (spec.sandbox !== 'danger-full-access' || spec.approval !== 'ask') {
+            return resultFromCurrent('unverified', current, true);
+          }
+          permissionPresets.set(session, decision.preset);
+        } else if (sessionPolicyAvailable) {
+          // Same durable path as native setApprovalPolicy/setSandboxMode. Set
+          // approval first: a failed write must not widen filesystem access.
+          // No fabricated preset identity or native provider mutation.
+          session.append('approval/policy', { policy: 'ask' });
+          session.append('sandbox/mode', { mode: 'danger-full-access' });
+        } else return resultFromCurrent('unverified', current, true);
         pluginApplied.add(session.id);
-        return resultFromCurrent('full-applied', readCurrentState(
-          session,
-          permissionPresets,
-          options.sandboxPolicy,
-          pluginApplied,
-        ), false);
+        return verifiedResult('full-applied', 'danger-full-access');
       case 'preserve-user-restriction':
         return resultFromCurrent('user-restricted', current, false);
       case 'unverified':
         return resultFromCurrent('unverified', current, true);
       case 'fallback-workspace-write':
         if (!hasService) return resultFromCurrent('unverified', current, true);
-        permissionPresets.set(session, WORKSPACE_WRITE_PRESET);
-        return resultFromCurrent('fallback-workspace-write', readCurrentState(
-          session,
-          permissionPresets,
-          options.sandboxPolicy,
-          pluginApplied,
-        ), true);
-      case 'normalize-workspace-write':
-        if (!hasService || !permissionPresets.names.includes(WORKSPACE_WRITE_PRESET)) {
-          return resultFromCurrent('unverified', current, true);
+        {
+          const spec = permissionPresets.resolve(WORKSPACE_WRITE_PRESET);
+          if (spec.sandbox !== 'workspace-write' || spec.approval !== 'ask') {
+            return resultFromCurrent('unverified', current, true);
+          }
         }
         permissionPresets.set(session, WORKSPACE_WRITE_PRESET);
+        return verifiedResult('fallback-workspace-write', 'workspace-write', true);
+      case 'normalize-workspace-write':
+        if (!hasService) {
+          return resultFromCurrent('unverified', current, true);
+        }
+        if (permissionPresets.names.includes(WORKSPACE_WRITE_PRESET)) {
+          const spec = permissionPresets.resolve(WORKSPACE_WRITE_PRESET);
+          if (spec.sandbox !== 'workspace-write' || spec.approval !== 'ask') {
+            return resultFromCurrent('unverified', current, true);
+          }
+          permissionPresets.set(session, WORKSPACE_WRITE_PRESET);
+        } else if (sessionPolicyAvailable) {
+          session.append('sandbox/mode', { mode: 'workspace-write' });
+          session.append('approval/policy', { policy: 'ask' });
+        } else return resultFromCurrent('unverified', current, true);
         pluginApplied.delete(session.id);
-        return resultFromCurrent('normalized-workspace-write', readCurrentState(
-          session,
-          permissionPresets,
-          options.sandboxPolicy,
-          pluginApplied,
-        ), false);
+        return verifiedResult('normalized-workspace-write', 'workspace-write');
       case 'no-op':
         return resultFromCurrent(
           binding === 'active' && isFullAccessState(current) ? 'already-full' : 'no-op',
@@ -257,11 +316,11 @@ export function createDshWorktreePermissionAdapter(
   };
 
   return {
-    ensure(input) {
-      return Promise.resolve(apply(input, 'active'));
+    async ensure(input) {
+      return apply(input, 'active');
     },
-    normalize(input) {
-      return Promise.resolve(apply(input, 'detached'));
+    async normalize(input) {
+      return apply(input, 'detached');
     },
   };
 }

@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
+import { createBaselineSync } from '../lib/host/baseline-sync.js';
 import {
   LocalGitAdapter,
   WORKTREE_GIT_WORKING_TREE,
@@ -517,6 +518,91 @@ test('remote baselines save with CAS, resolve exact refs despite tags, and proje
     assert.equal(unavailable.unavailableReason, 'baseline-unknown');
     assert.deepEqual(await fixture.sidecar.read('ws_dashboard'), before);
   } finally {
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('a saved baseline change during final enumeration prevents native task creation and dispatch', async () => {
+  const fixture = await createFixture();
+  let resume;
+  let paused;
+  const gate = new Promise((resolve) => { resume = resolve; });
+  const enumerating = new Promise((resolve) => { paused = resolve; });
+  const calls = [];
+  const sync = createBaselineSync({ manager: fixture.manager, changed: () => calls.push('changed'), sessions: {
+    modelCatalog: async () => ({ default: { provider: 'test', model: 'default' } }),
+    validateModel: async (value) => value,
+    create: async () => { calls.push('create'); return { sessionId: 'stale' }; },
+    configureModel: async () => { calls.push('model'); },
+    rename: async () => { calls.push('rename'); },
+    prompt: async () => { calls.push('prompt'); return { accepted: true }; },
+  } });
+  try {
+    await runGit(fixture.workspaceRoot, ['branch', 'release']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/sync-race',
+    });
+    const identity = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId };
+    const listBranches = fixture.manager.listBranches.bind(fixture.manager);
+    let enumerations = 0;
+    fixture.manager.listBranches = async (input) => {
+      const branches = await listBranches(input);
+      if (++enumerations === 2) {
+        paused();
+        await gate;
+      }
+      return branches;
+    };
+    const pending = sync.sync({ ...identity, baseBranch: 'main', strategy: 'merge', requestId: 'baseline-race' },
+      new globalThis.AbortController().signal);
+    await enumerating;
+    assert.equal(await fixture.manager.updateWorktreeBaseBranch({ ...identity,
+      baseBranch: 'release', expectedBaseBranch: 'main' }), 'release');
+    resume();
+    await assert.rejects(pending, { code: 'WORKTREE_STATE_CONFLICT' });
+    assert.deepEqual(calls, [], 'must not create or dispatch a task using main');
+    assert.equal((await fixture.sidecar.read(identity.workspaceId)).worktrees[0].baseBranch, 'release');
+  } finally {
+    resume();
+    sync.dispose();
+    await fixture.manager.close();
+    await rm(fixture.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('baseline saves serialize with task admission and recover after a rejected admission', async () => {
+  const fixture = await createFixture();
+  let resume;
+  let paused;
+  const gate = new Promise((resolve) => { resume = resolve; });
+  const admitting = new Promise((resolve) => { paused = resolve; });
+  try {
+    await runGit(fixture.workspaceRoot, ['branch', 'release']);
+    const record = await fixture.manager.createWorktree({
+      workspaceId: 'ws_dashboard', branch: 'main', newBranch: 'feature/save-race',
+    });
+    const identity = { workspaceId: 'ws_dashboard', worktreeId: record.worktreeId };
+    const admission = fixture.manager.withWorktreeBaseline(identity, async () => {
+      paused();
+      await gate;
+      throw new Error('admission failed');
+    });
+    const rejected = assert.rejects(admission, /admission failed/);
+    await admitting;
+    let saved = false;
+    const save = fixture.manager.updateWorktreeBaseBranch({ ...identity,
+      baseBranch: 'release', expectedBaseBranch: 'main' }).then(() => { saved = true; });
+    await fixture.manager.withWorktreeBaseline({ ...identity, worktreeId: 'unrelated' }, async () => {});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(saved, false);
+    assert.equal((await fixture.sidecar.read(identity.workspaceId)).worktrees[0].baseBranch, 'main');
+    resume();
+    await rejected;
+    await save;
+    assert.equal((await fixture.sidecar.read(identity.workspaceId)).worktrees[0].baseBranch, 'release');
+  } finally {
+    resume();
     await fixture.manager.close();
     await rm(fixture.tempRoot, { recursive: true, force: true });
   }

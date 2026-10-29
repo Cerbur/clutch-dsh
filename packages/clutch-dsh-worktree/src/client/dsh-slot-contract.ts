@@ -1,4 +1,5 @@
-import type { ConversationHeaderActionOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type { ConversationHeaderActionOwnerProps, InputZone } from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client';
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { SnapshotSelectorHook, SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
@@ -13,6 +14,7 @@ import type { UseSessions, UseSessionStatus } from '@deepseek-ai/dsh-client-ui-s
  */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone };
     'conversation.session.header.actions': {
       kind: 'list';
       scope: 'session';
@@ -47,6 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
   interface SessionStandardProps {
     sessionId: SessionId;
+    useProjection: UseProjection;
   }
 }
 
