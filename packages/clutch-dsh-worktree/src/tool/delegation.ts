@@ -1,5 +1,6 @@
 import type { CallingAgent } from './types.js';
 import { createHash } from 'node:crypto';
+import { relayMessageId } from './agent-relay.js';
 
 export interface ReportToken {
   readonly parentSessionId: string;
@@ -15,6 +16,7 @@ interface Route {
   humanInput: boolean;
 }
 interface Delivery {
+  messageId: string;
   from: string;
   to: string;
   kind: 'task' | 'message';
@@ -29,6 +31,7 @@ function reject(code: string, message: string): never {
 export class DelegationControl {
   private readonly routes = new Map<string, Route>();
   private readonly deliveries = new Map<string, Delivery>();
+  private readonly reports = new Map<string, { from: string; to: string }>();
   private readonly disposed = new WeakSet<CallingAgent>();
 
   assertAlive(agent: CallingAgent): void {
@@ -60,6 +63,9 @@ export class DelegationControl {
       if (child.token?.parentSessionId === id) this.close(child.token);
     }
     this.routes.delete(id);
+    // An already queued report keeps only its sender id until its recipient is
+    // disposed or this bounded index evicts it; never retain the sender Agent.
+    for (const [messageId, report] of this.reports) if (report.to === id) this.reports.delete(messageId);
     for (const [requestId, delivery] of this.deliveries) {
       if (delivery.from === id || delivery.to === id) this.deliveries.delete(requestId);
     }
@@ -72,6 +78,7 @@ export class DelegationControl {
     }
     this.routes.clear();
     this.deliveries.clear();
+    this.reports.clear();
   }
 
   token(agent: CallingAgent): ReportToken | undefined {
@@ -134,7 +141,7 @@ export class DelegationControl {
     return createHash('sha256').update(JSON.stringify([prompt, mode])).digest('hex');
   }
 
-  private remember(requestId: string, delivery: Delivery): void {
+  private remember(requestId: string, delivery: Omit<Delivery, 'messageId'>): void {
     // Pending task inputs cannot be evicted: losing their provenance would
     // revoke valid authority. Reject overflow when all retained slots are live.
     if (this.deliveries.size >= 512) {
@@ -142,7 +149,7 @@ export class DelegationControl {
       if (!evictable) reject('DELEGATION_CAPACITY', 'Too many pending dispatch inputs. Wait for existing tasks to finish.');
       this.deliveries.delete(evictable[0]);
     }
-    this.deliveries.set(requestId, delivery);
+    this.deliveries.set(requestId, { ...delivery, messageId: relayMessageId(requestId) });
   }
 
   private assertIdentity(delivery: Delivery, from: string, to: string, signature: string, kind: Delivery['kind']): void {
@@ -166,6 +173,9 @@ export class DelegationControl {
       reject('REPORT_RETRY_REQUIRED', 'Retry only the identical report using the original requestId.');
     if (attempt?.pending) reject('REPORT_IN_PROGRESS', 'This task already has a report admission in flight.');
     token.attempt = { requestId, message, pending: true };
+    const messageId = relayMessageId(requestId);
+    if (!this.reports.has(messageId) && this.reports.size >= 512) this.reports.delete(this.reports.keys().next().value!);
+    this.reports.set(messageId, { from: agent.session.id, to: token.parentSessionId });
   }
 
   close(token: ReportToken): void {
@@ -186,9 +196,12 @@ export class DelegationControl {
       return;
     }
     if (event.type !== 'user/message' || (event.surfaceOp !== undefined && event.surfaceOp !== 'append')) return;
-    const source = (event.data as { source?: { kind?: string; rpcId?: string } } | null)?.source;
-    if (source?.kind !== 'user') return;
-    const delivery = source.rpcId === undefined ? undefined : this.deliveries.get(source.rpcId);
+    const data = event.data as { id?: string; source?: { kind?: string; form?: string; rpcId?: string; senderSessionId?: string } } | null;
+    const source = data?.source;
+    if (source?.kind !== 'user' && source?.kind !== 'agent-message') return;
+    const delivery = source.kind === 'agent-message' && source.form === 'relay'
+      ? [...this.deliveries.values()].find((item) => item.messageId === data?.id && item.from === source.senderSessionId)
+      : undefined;
     if (delivery?.to === sessionId) {
       if (delivery.kind === 'task' && delivery.token && delivery.token === route.token && !route.humanInput) {
         delivery.token.active = true;
@@ -199,8 +212,17 @@ export class DelegationControl {
       if (delivery.kind === 'message' && route.token) this.close(route.token);
       return;
     }
-    // Native prompt IDs retain this prefix after plugin/Agent restart. Unknown
-    // plugin admissions never become a human authorization to start a callback.
+    if (source.kind === 'agent-message') {
+      if (!route.humanInput) route.dispatchBlocked = true;
+      // A report can arrive while its recipient owns an outer task. Keeping that
+      // task does not authorize callbacks or assert that the child succeeded.
+      const report = data?.id === undefined ? undefined : this.reports.get(data.id);
+      const knownReport = source.form === 'relay' && report?.to === sessionId && report.from === source.senderSessionId;
+      if (!knownReport && route.token) this.close(route.token);
+      return;
+    }
+    // Legacy queued user-RPC messages retain these prefixes after upgrade.
+    // They never become human authorization or activate a new relay task.
     if (source.rpcId?.startsWith('clutch-worktree:') || source.rpcId?.startsWith('clutch-worktree-report:')) {
       if (!route.humanInput) route.dispatchBlocked = true;
       return;

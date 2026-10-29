@@ -119,8 +119,22 @@ resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `a
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
 先为新 Agent 默认仅注册结果回报工具、固定回报目标及回报指导，再按目标 Worktree 的显式配置
-补齐自动注入能力，最后 `sessionController.prompt(..., signal)`；不修改原生 Workspace 成员表、preset 或权限。
-后续消息通过同一原生 admission，queue/steer 和 request-id 幂等均由 DSH 拥有。
+补齐自动注入能力，最后通过 Host 的 `sendAgentMessage` Adapter 投递；不修改原生 Workspace 成员表、preset 或权限。
+Agent 任务、继续消息、报告均用 DSH 公开 `createUserMessage` / `freezeMessage` 构造原生
+`agent-message`、`form: relay`、真实 `senderSessionId`，并通过接收 Agent 的 `followup/steer`
+进入原生 inbox。这里复用消息语义与原生 admission，不调用要求 durable 父子关系的 subagents.sendMessage，
+不伪造 lineage、不直接 append Session 日志。人类和 Dashboard 来源仍使用 sessionController.prompt。
+requestId 派生稳定、命名空间隔离的原生 messageId；同目标 admission 串行，核对原生 pending、
+`agent/inbox/spliced.inserted` 与 `user/message` 中该 id 的全部来源与正文。
+原生 Loop 在 claim 后、异步 assemble/prepareRequest 完成前尚未追加 `user/message`；持久化 insertion
+覆盖这段窗口，并支持 Adapter 重建和原生日志重放。remove、cancel 或 queue→steer 不撤销已接收事实，
+相同重试不得恢复被移除的消息，也不证明执行完成。保留 id 的 queue edit 若造成历史正文冲突，
+原正文与改后正文的旧 id 重试均拒绝；不得只取首条或最后一条匹配绕过冲突。
+sender/target/正文/mode 一致性还受上层派发摘要门禁保护。
+任何 receipt 读取失败或 insertion 格式不明都拒绝投递，不当作空历史；取消、Agent 替换/销毁和 Adapter 卸载均在最终接收前复核。
+插件不持久化第二份消息/receipt/任务目录；Adapter 仅保留进行中 admission lane。上层另保留最多 512 个
+报告 messageId→发送/接收 Session id 的临时来源条目，不含正文、Agent 对象或 token；只凭报告名称不能保留权限。
+DSH 负责 inbox 和新消息持久化。
 Admission 抛错也返回阶段错误与 request id，避免接收结果不确定时重试成为新消息。
 失败保留已创建实体并返回身份及阶段结果，禁止回滚删除 Session。
 Provider 的 DSH adapter 继续完全只读；模型、标题、历史及消息接口仅存在于 Host 的独立 port。
@@ -140,16 +154,26 @@ Session 列表通过原生 `sessionQuery.observeSession` 读取冷历史生成�
 
 新 Session 获得 `clutch_report_result`，用 completed/blocked/failed、短摘要与验证证据
 主动回报。Host 在投递前重新校验执行方与固定接收方的 Workspace、binding 和物理 cwd，
-通过原生 queue admission 发送带来源 Session id 的单条报告；不直接写事件或原始日志。
+通过原生 queue admission 发送带真实 agent-message/relay 来源的单条报告；不直接写事件或原始日志。
 摘要与证据各最多 2,000 字符；不推送整份 transcript、不根据 turn/end 或 idle 推断成功。
 回报是模型声明，需要发起方核验。该机制不保证崩溃、停止或尚待审批的 Session 发出报告，
 也不自动代答审批或用户问题。报告投递的不确定失败保留 requestId，允许原样幂等重试。
-Schema 不含 `$schema`，目标 id/name 用可见的互斥 object alternatives 表达，字段描述给出来源、
-默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
-`src/tool/schema.ts` 将参数投影到 DSH 支持的 schema 子集，避免 PTC SDK 参数退化为 unknown。
-字符串 minLength/maxLength 转为字段描述，执行时仍由原始 Zod parser 严格校验；
-只有互不重叠的封闭 object alternatives 才将 anyOf 转为 oneOf，不支持的关键字显式拒绝注册。
-真实 DSH SDK 生成器回归验证全部七个工具的参数、必填回报状态、可选字段与模型结构。
+工具参数遵循 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md) 的跨 provider 作者层保守 profile：
+无 `$schema`，每层对象封闭，不暴露根或嵌套 union；id/name 为可选字段，由运行时校验恰好一个非空目标。
+字段描述给出来源、默认值和限制；校验与操作异常带原因、修正方法和正确调用示例。
+`src/tool/schema.ts` 的 Zod 投影将 minLength/maxLength 转为描述，执行时仍由原始 Zod 严格校验。
+低层保留的 disjoint-union 投影仅是历史 DSH 能力，不属于可注册工具的保守 profile。
+经人类批准，执行入口只将已声明可选字段的 null 递归归一化为省略，再执行 Zod；必填值仍由 Zod 校验，未知字段显式拒绝（包括 Zod 自身会忽略的 __proto__）。
+这允许 strict 适配的 required+nullable 表达默认值，不改变原生 SDK 的可选性；不承诺所有 provider E2E。
+默认测试自动发现全部工具注册函数，并对照命令/自动注入/条件回报的真实注册与 DSH SDK 验证。
+可用外部 DSH 图的真实 pi-ai strict/Responses 投影也有集成测试；没有该图时明确报告这一层跳过。
+
+Host 的 `nullableToolProviders` 默认为空，按提示词组装完成后的有效 provider id 显式选择
+wire 投影。在 `system-prompt/assemble` 返回路径，仅当前 Agent 已启用的本插件原生工具
+使用 `src/tool/wire-schema.ts` 从原始 Zod 生成 required+nullable 参数，保留长度限制；
+不改原生注册目录、PTC SDK、其他插件或其他 provider。无不确定回报 attempt 时，
+wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时 token、授权与
+校验仍为最终门禁。投影不写 Sidecar、不切换 provider strict 设置、不扩展空字符串语义。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
 20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和

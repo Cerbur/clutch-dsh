@@ -7,7 +7,7 @@ export function registerListWorktrees(context: ToolContext): void {
   const { add, options, check, scope } = context;
   add(
     'clutch_list_worktrees',
-    'List managed Worktrees and local/fetched remote base branches in workspaceId, defaulting to the calling Workspace. Returns stable ids, branch, path, lifecycle and health. Another Workspace is rejected.',
+    'List managed Worktrees and local/fetched remote branches in the calling Workspace. Returns stable ids, paths, lifecycle and health; Git failures retain Worktrees with branchesUnavailable. Read-only; does not fetch. Use to choose a target or base, not to monitor delegated tasks.',
     workspace,
     output.object(
       {

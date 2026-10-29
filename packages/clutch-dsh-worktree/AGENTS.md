@@ -91,6 +91,14 @@ Refresh scope is determined by the smallest affected identity.
 
 ---
 
+## Tool 定义的人类决策门禁
+
+全部 agent tool（含条件注册）须遵循 [docs/TOOL-SCHEMA-STANDARD.md](docs/TOOL-SCHEMA-STANDARD.md)，
+通过默认 test 中的真实注册、递归跨 provider profile、输入校验与安全事实测试。
+失败时先修 tool；若怀疑测试/规则错误，停止有争议的调整，提供失败输入输出、实现与官方规范对照，
+由人类决定是测试还是 tool 的问题。不得为过关先删/跳过/改弱断言、更新快照或放宽契约；
+父 Session 不能代替人类批准。新增覆盖和不减弱约束的测试组织重构允许进行。
+
 ## 文档同步要求 (Documentation Synchronization)
 
 - **公开行为变动**：修改用户可见能力、菜单项、安装命令或前置兼容条件时，必须同步更新 `README.md` 与 `README.zh.md`，确保标题级别序列和语义完全对齐；

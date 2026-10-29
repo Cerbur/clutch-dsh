@@ -233,7 +233,7 @@ The six selectable capabilities correspond to these tools:
 
 | Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch from the calling Session's healthy Worktree branch; Local/Main uses the root checkout's current branch. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch at the calling Session's committed Worktree HEAD; Local/Main captures root HEAD, including detached HEAD. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
 | `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local and fetched remote base branches. Defaults to the calling Workspace.                                                                                          |
 | `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
 | `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
@@ -253,9 +253,18 @@ Newly delegated Sessions automatically receive only
 `clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
 to the delegating Session. `status` is `completed`, `blocked`, or `failed`; `summary` and `evidence`
 are each limited to 2,000 characters. The other six capabilities require `/cluworktree` or the
-Worktree's explicit automatic-injection selection. Reports arrive as ordinary queued native messages;
+Worktree's explicit automatic-injection selection. Reports arrive as queued native Agent relays, not human messages;
 verify their claims and evidence before accepting completion. Reports are model-driven:
 a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
+
+Agent-originated task dispatch, continuation and reporting record native `agent-message` /
+`relay` provenance with the actual sending Session. The Host derives that identity; tool inputs
+cannot impersonate another sender. Model-visible content includes an Agent-source envelope while
+preserving the supplied prompt body. Supported native Chat renders a relay/context disclosure with
+the sending Session, or an Agent turn trigger when it wakes the recipient, rather than a human
+message bubble. Protocol-level `user` role does not make it human input or elevate its authority.
+Human prompts and user-originated Dashboard synchronization keep their existing native user route.
+Old history is not rewritten or reclassified by guessing from text.
 
 Reporting is limited to the active delegated task. One successfully admitted `completed`, `blocked`,
 or `failed` report consumes and clears its in-memory token. The reporting tool, SDK and guidance
@@ -286,7 +295,34 @@ history returns one `unavailable` diagnostic while keeping healthy list entries 
 
 In PTC mode, the generated SDK exposes concrete argument types, including required report
 `status` and `summary`. Length limits remain in field descriptions and are enforced at execution;
-mutually exclusive dispatch targets use `oneOf` compatible with DSH's schema subset.
+all tool inputs use closed object roots without unions, including the nested model object.
+Dispatch keeps legacy exact branch names, but requires exactly one nonempty target at runtime;
+invalid targets or unknown fields fail before Session creation. Optional fields accept omission or
+`null` as omission, including model.reasoningEffort and mode (default queue); required fields still
+reject null. Blank identities/title/evidence are not defaults; empty instructions mean no save.
+For defaults, omit optional keys or use JSON `null`; neither `""`, `"null"`, nor a model
+object with empty provider/model fields means inheritance. New messages and first reports
+must omit `requestId` or use JSON `null`: the Host generates it. A rejected first report
+with an invented id explains how to correct it without consuming the report token.
+After uncertain admission, preserve the returned id and identical content for retry.
+
+Native schemas keep genuinely optional fields. For routes that otherwise generate empty optional
+values, opt in by exact provider id in the Host configuration:
+
+```yaml
+- id: clutch-dsh-worktree-host
+  config:
+    dshHome: !!js dshHomePath()
+    nullableToolProviders: [ocx]
+```
+
+This defaults to an empty list. For these providers, plugin tools in native model requests use
+required properties with nullable optional values and closed nested objects, retaining length bounds.
+A first report accepts only null for its wire requestId; an uncertain attempt restores the retry id
+field. The native catalog, PTC SDK, other plugins and execution validation keep their existing contracts.
+This does not enable a provider's strict mode or promise support across gateways. The local DSH pi-ai
+adapter and a real ocx/Luna route have been checked; other routes need their own verification. See the
+[tool schema standard](docs/TOOL-SCHEMA-STANDARD.md) for official sources, tested layers and limits.
 
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection, including reasoning effort; no catalog lookup is required for that default.

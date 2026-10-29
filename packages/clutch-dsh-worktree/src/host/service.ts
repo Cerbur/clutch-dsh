@@ -53,6 +53,8 @@ import { WorktreeToolSettings } from './tool-settings.js';
 export interface WorktreeHostConfig {
   /** DSH 解析后的绝对数据根目录。 / Absolute DSH data root resolved by the Host. */
   readonly dshHome: string;
+  /** Provider ids whose wire tools require explicit nullable default fields. */
+  readonly nullableToolProviders?: readonly string[];
 }
 
 /**
@@ -122,6 +124,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
           if (this.baselineSync === sync) this.baselineSync = undefined;
         }, 'clutch-dsh-worktree: baseline task cleanup');
         return registerWorktreeTools(toolCtx, {
+          nullableToolProviders: config.nullableToolProviders,
           manager,
           samePhysicalPath,
           dsh,

@@ -14,8 +14,9 @@ import { registerSendMessage } from './send-message.js';
 import { registerReportResult } from './report-result.js';
 import { registerToolGuidance } from './guidance.js';
 import { actionableError } from './errors.js';
-import { toolParameters } from './schema.js';
+import { normalizeOptionalNulls, toolParameters } from './schema.js';
 import { DelegationControl } from './delegation.js';
+import { nullableToolParameters } from './wire-schema.js';
 const jsonProjection = (value: unknown): Record<string, unknown> =>
   JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 export { createWorktreeToolSessionPort } from './native-session.js';
@@ -28,6 +29,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     names: Set<string>;
     add?: (names: readonly string[], parentSessionId?: string) => number;
     parentSessionId?: string;
+    validators: Map<string, z.ZodType>;
   };
   const enabled = new Map<CallingAgent, State>();
   const delegation = new DelegationControl();
@@ -76,7 +78,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
       delegation.assertAlive(agent);
       return existing.add!(names, parentSessionId);
     }
-    const state = { names: new Set<string>(), parentSessionId } as State;
+    const state = { names: new Set<string>(), validators: new Map<string, z.ZodType>(), parentSessionId } as State;
     const fiber = agent.ctx.inject(['tools', 'systemPrompt'], (scoped) => {
       const scopeLifetime = new AbortController();
       scoped.effect(
@@ -98,10 +100,11 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         outputSchema: unknown,
         execute: (args: z.output<Schema>, exec: Execution) => Promise<unknown>,
       ) => {
+        const parameters = jsonProjection(toolParameters(schema));
         const dispose = registry.register({
           name,
           description,
-          parameters: jsonProjection(toolParameters(schema)),
+          parameters,
           output: {
             schema: outputSchema,
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
@@ -113,7 +116,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
             };
             try {
               check(execution);
-              return jsonProjection(await execute(schema.parse(args), execution));
+              return jsonProjection(await execute(schema.parse(normalizeOptionalNulls(args, parameters)), execution));
             } catch (cause) {
               execution.signal.throwIfAborted();
               throw actionableError(name, cause);
@@ -121,6 +124,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
           },
         });
         transaction.push(dispose);
+        state.validators.set(name, schema);
         return dispose;
       };
       const context = createToolContext(agent, options, check, add, delegation);
@@ -178,6 +182,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
           return missing.length;
         } catch (error) {
           for (const dispose of transaction.reverse()) dispose();
+          for (const name of missing) state.validators.delete(name);
           state.parentSessionId = previousParent;
           throw error;
         }
@@ -275,6 +280,35 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     };
     return prompt.assemble({ ...context, [freshAssembly]: true });
   }, { prepend: true });
+  const nullableProviders = new Set(options.nullableToolProviders ?? []);
+  if (nullableProviders.size) {
+    (ctx as unknown as {
+      on(name: string, listener: (assembly: unknown, context: AssemblyContext, next: () => Promise<{
+        tools: { name: string; parameters: unknown }[];
+        variables: Record<string, unknown>;
+      }>) => Promise<unknown>, options: { prepend: true }): unknown;
+    }).on('system-prompt/assemble', async (_assembly, context, next) => {
+      const assembled = await next();
+      if (lifetime.signal.aborted || options.isDisposed()) return assembled;
+      if (!nullableProviders.has(String(assembled.variables.provider))) return assembled;
+      const agent = (context.agent ?? context.scope) as CallingAgent | undefined;
+      if (!agent || context.scope !== agent) return assembled;
+      const state = enabled.get(agent);
+      if (!state) return assembled;
+      return { ...assembled, tools: assembled.tools.map((tool) => {
+        const validator = state.validators.get(tool.name);
+        if (!validator || !state.names.has(tool.name)) return tool;
+        const parameters = nullableToolParameters(validator);
+        // The Host owns retry identity. With no uncertain report attempt, only
+        // null can start a report; a real attempt restores the nullable retry id.
+        if (tool.name === 'clutch_report_result' && !delegation.token(agent)?.attempt) {
+          const properties = parameters.properties as Record<string, unknown>;
+          properties.requestId = { type: 'null', description: 'No uncertain report attempt exists. Use JSON null; the Host generates the id.' };
+        }
+        return { ...tool, parameters };
+      }) };
+    }, { prepend: true });
+  }
   const commands = ctx.get('commands') as {
     register(command: {
       definitionId: ReturnType<typeof CommandDefinitionId>;
