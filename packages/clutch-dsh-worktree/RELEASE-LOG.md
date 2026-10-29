@@ -1,6 +1,6 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
-## 0.1.19 — Unreleased
+## 0.1.19 — 2026-10-30
 
 ### 中文
 
