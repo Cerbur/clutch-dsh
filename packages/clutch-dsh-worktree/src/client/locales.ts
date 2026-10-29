@@ -1,6 +1,14 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  'steer.title': 'Agent steer',
+  'steer.pending': '等待接收',
+  'steer.preparing': '准备接收',
+  'steer.received': '已进入会话上下文',
+  'steer.canceled': '已取消',
+  'steer.unknown': '状态待确认',
+  'steer.sender': '发送方：{sender}',
+  'steer.receiptHint': '接收不代表任务完成。展示本轮或最近一轮的接收记录。',
   'dashboard.mainReady': '本地 checkout',
   'dashboard.git.sessionRequired': '请先为此工作目录新建会话，再在侧栏打开文件。',
   'dashboard.git.outsideSession': '文件位于此会话工作目录之外。请在 IDE 中打开，或使用仓库根目录的会话。',
@@ -439,6 +447,14 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  'steer.title': 'Agent steer',
+  'steer.pending': 'Waiting for receipt',
+  'steer.preparing': 'Preparing receipt',
+  'steer.received': 'Entered conversation context',
+  'steer.canceled': 'Canceled',
+  'steer.unknown': 'Status unconfirmed',
+  'steer.sender': 'From: {sender}',
+  'steer.receiptHint': 'Receipt does not mean task completion. Entries belong to the current or most recent turn.',
   'dashboard.mainReady': 'Local checkout',
   'dashboard.git.sessionRequired': 'Create a Session for this working directory before opening files in the sidebar.',
   'dashboard.git.outsideSession': 'This file is outside the Session working directory. Open it in an IDE or use a Session at the repository root.',

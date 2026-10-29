@@ -90,6 +90,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
 | **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
 | **同步基线** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="提供 Rebase 与 Merge baseline 选项的同步基线弹窗"> | 选择 Rebase 或 Merge baseline，在当前 Worktree 创建原生 Agent 任务会话。 |
+| **Agent steer 提示** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="输入框上方的 Agent steer 接收记录，包含发送方与内容"> | 在接收方会话查看待处理与已接收的 steer 消息，接收不代表任务完成。 |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
@@ -236,6 +237,11 @@ Agent 发出的任务派发、继续消息和回报会记录原生 `agent-messag
 支持该能力的原生 Chat 使用带发送 Session 的 relay/context 展示；唤醒接收方时显示 Agent 触发项，而非人类气泡。
 协议层的 `user` role 不等于人类输入，也不会提升指令权限。
 人类输入和用户发起的 Dashboard 同步任务仍走原有原生用户通道；不改写旧历史，也不根据正文猜测来源。
+
+本插件发送的 Agent steer 消息还会显示在接收方输入框上方的 **Agent steer** 提示区，
+展开可查看发送方与内容。提示区分等待、准备接收、已进入会话上下文、取消和状态待确认；
+接收不代表任务完成。当前轮结束后保留最近最多八条接收/取消记录，新一轮开始时清除；
+待处理项继续显示。普通排队消息仍由原生队列展示。加载窗口之外的历史可能不足以重建 steer 接收记录。
 
 回报权限仅属于当前委派任务。`completed`、`blocked` 或 `failed` 报告成功接收一次后，
 即消耗并清空内存令牌。回报工具、SDK 与指导保持稳定，无令牌时调用会被拒绝。

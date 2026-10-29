@@ -787,6 +787,15 @@ metadata, history, Sidecar facts, business files or native message content. Agen
 clears runtime authority; no listener infers or fabricates task completion. Restart deliberately
 loses tokens; continuing automatic reporting requires a fresh parent dispatch.
 
+The browser-only Agent steer strip reads the native inbox projection and a private Conversation
+target; it never changes this authority model. Next-step insertion with a Worktree task relay id
+and Agent source qualifies an occurrence, native removal distinguishes claim/cancel, and only an
+identical append-origin user/message establishes receipt. A claim-to-message gap, absent projection
+or incomplete history cannot become success. Queue messages and report ids are excluded. Current
+pending items and up to eight recent terminal entries are derived within the selected Session;
+new turns retire old terminal entries, native window replacement rebuilds the projection, and
+plugin disposal unregisters its target. No Session/Sidecar writes, RPC or global refresh is added.
+
 The native loop collects prompt providers before its assembly waterfall, then runs pre-step.
 Injection at pre-step therefore misses request 1 and edits the request prefix at request 2.
 The plugin now intercepts `system-prompt/assemble` with a prepended middleware and, only when

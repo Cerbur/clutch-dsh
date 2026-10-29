@@ -6,6 +6,7 @@
 
 #### 新增
 
+- 在接收方输入框上方展示 Agent steer 的待处理与接收记录，并保留发送方和内容以便核对。
 - 新增派发任务看板、基线导航与基线同步会话，支持从看板发起同步并查看任务状态。
 
 #### 优化
@@ -24,6 +25,7 @@
 
 #### Added
 
+- Show pending Agent steer messages and receipt records above the recipient's input box, preserving sender and content for inspection.
 - Add a delegation Dashboard, baseline navigation, and baseline synchronization sessions with task status and synchronization actions.
 
 #### Improved

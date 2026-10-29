@@ -101,6 +101,17 @@ never writes DSH Workspace state or exposes the projection as a new Controller o
 
 ## Shared Worktree views and refresh scopes
 
+`steer/` contributes a Session-scoped `conversation.input.dock` status strip using the native
+`useProjection('inbox')` source and a private Conversation event/view target. Only this plugin's
+task relay ids with native Agent provenance qualify; ordinary queue and report messages retain
+their native UI. Native next-step splices establish pending/claim/cancel facts, and an identical
+append-origin `user/message` establishes receipt. Claim, missing projection and partial history
+never establish delivery or task completion. Up to eight recent terminal entries survive turn end
+and clear at the next turn; pending entries retain native order. The source is rebuilt by native
+history replacement, is scoped to the rendered Session, and subscribes only while its slot is
+retained. Unload removes its definitions; no polling, Session writes, Sidecar records, global
+refresh, Chat replacement or new transport is introduced.
+
 Agent tool mutations arrive through `watchToolChanges` on the existing `/api` adapter.
 One cancellable long-poll loop belongs to the Client fiber. Each notification invalidates only
 its Workspace reader generation; the current matching Context and visible Surface share the

@@ -96,6 +96,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
 | **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
 | **Baseline synchronization** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="Sync with Base dialog with Rebase and Merge baseline choices"> | Choose Rebase or Merge baseline and create a native Agent task Session in the current Worktree. |
+| **Agent steer feedback** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="Agent steer receipt above the input box, with sender and content"> | Inspect pending and received steer messages in the recipient Session without treating receipt as task completion. |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
@@ -265,6 +266,14 @@ the sending Session, or an Agent turn trigger when it wakes the recipient, rathe
 message bubble. Protocol-level `user` role does not make it human input or elevate its authority.
 Human prompts and user-originated Dashboard synchronization keep their existing native user route.
 Old history is not rewritten or reclassified by guessing from text.
+
+Agent steer messages sent by this plugin also appear in an **Agent steer** strip above the
+recipient's input box. Expand an entry to see its sender and content. The strip distinguishes
+waiting, preparation, entry into conversation context, cancellation, and unconfirmed status;
+receipt does not mean task completion. Up to eight recent received/canceled entries remain
+after the turn ends and clear when a new turn starts; pending entries remain visible.
+Ordinary queued messages stay in the native queue. History outside the loaded window may
+not have enough evidence to reconstruct a steer receipt.
 
 Reporting is limited to the active delegated task. One successfully admitted `completed`, `blocked`,
 or `failed` report consumes and clears its in-memory token. The reporting tool, SDK and guidance
