@@ -1,5 +1,37 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.21 — 2026-10-31
+
+### 中文
+
+#### 新增
+
+- 在 Local/Main Dashboard 新增**管理 worktree**，可逐项选择或全选当前 Workspace 的 Worktree（含已归档与已清理记录），批量归档、清理磁盘或移出管理；确认弹窗列出选中路径，结果逐项显示，失败项保留选择以便重试，Main 本身不参与批量操作。
+
+#### 优化
+
+- 管理列表沿用派生 Worktree 的分支图标、路径与可用状态徽标，已归档记录单独标注，标题显示总数，各操作按钮显示可适用的目标数量。
+
+#### 修复
+
+- 加固批量操作的生命周期归属：已提交的批量请求返回后重新校验 Surface 与 reader 状态，避免已退役视图重放已提交的变更，或旧操作的收尾清除新操作状态。
+- 将磁盘清理后的权限恢复失败按 Workspace/Worktree 分别保留在**设置 → Worktree → 报错与修复**中，支持独立重试，重试只恢复权限而不会重复清理磁盘。
+
+### English
+
+#### Added
+
+- Add **Manage Worktrees** to the Local/Main Dashboard: select individual records or all Worktrees in the current Workspace, including archived and cleaned records, then batch archive, clean up disk, or remove them from management. Confirmation lists the selected paths, results appear per Worktree, failures stay selected for explicit retry, and Main itself is never a batch target.
+
+#### Improved
+
+- Align the management list with Derived Worktrees using the same branch icons, paths, and availability badges, mark archived records separately, show the total in the heading, and show eligible target counts on each action.
+
+#### Fixed
+
+- Harden batch lifecycle ownership: revalidate Surface and reader state after committed batch requests so retired views do not replay committed mutations and an old operation's cleanup cannot clear a newer operation.
+- Keep cleanup permission recovery failures separate per Workspace/Worktree under **Settings → Worktree → Errors & recovery** with independent Retry that restores permissions only and never repeats disk cleanup.
+
 ## 0.1.20 — 2026-10-30
 
 ### 中文
