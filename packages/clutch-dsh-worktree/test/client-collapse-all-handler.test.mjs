@@ -21,6 +21,7 @@ const { SurfaceHeader } = await loadSource('surface/components/SurfaceHeader.tsx
   'react/jsx-runtime': { jsx, jsxs: jsx },
   '../../worktree.css': { default: {} },
   '../shared.js': { cx: () => '' },
+  '../../session/active-sessions.js': { activeSessions: () => [] },
 });
 
 function collapseButton(node) {
@@ -98,6 +99,7 @@ for (const kind of ['main', 'active', 'archived']) {
       },
     ];
     const source = {
+      bounds: { ready: true, top: 0, height: 600 },
       currentSessionId: 'current',
       mode: 'worktree',
       workspaceIds: ['repo', 'other'],

@@ -12,6 +12,8 @@ import type { useSessionExpansion } from '../state/useSessionExpansion.js';
 import type { useSurfaceMutation } from '../actions/useSurfaceMutation.js';
 import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 import type { useSurfaceSources } from '../state/useSurfaceSources.js';
+import { activeSessions } from '../../session/active-sessions.js';
+import { SessionActivityBell } from './SessionActivityBell.js';
 
 type Input = {
   expansion: Pick<
@@ -28,12 +30,16 @@ type Input = {
     | 'currentSessionLocation'
   >;
   props: Pick<WorktreeSurfaceProps, 't' | 'expandState' | 'createWorkspace' | 'actions'>;
-  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaceIds'>;
+  source: Pick<
+    ReturnType<typeof useSurfaceSources>,
+    'workspaceIds' | 'sessions' | 'sessionPresentations' | 'workspaces' | 'collapsed' | 'bounds'
+  >;
+  onOpenSession: (workspaceId: string, sessionId: string) => void;
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'readState'>;
   mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'runMutation'>;
 };
 
-export function SurfaceHeader({ expansion, props, source, read, mutation }: Input) {
+export function SurfaceHeader({ expansion, props, source, read, mutation, onOpenSession }: Input) {
   const {
     searchExpanded,
     searchRoot,
@@ -129,6 +135,19 @@ export function SurfaceHeader({ expansion, props, source, read, mutation }: Inpu
           </div>
         </div>
         <div className={cx(styles.headerActions, searchExpanded && styles.headerActionsHidden)}>
+          <SessionActivityBell
+            entries={activeSessions(
+              source.sessions,
+              source.sessionPresentations,
+              source.workspaces,
+              readState.views,
+            )}
+            sessions={source.sessions}
+            presentations={source.sessionPresentations}
+            t={t}
+            hidden={searchExpanded || source.collapsed || !source.bounds.ready}
+            onOpenSession={onOpenSession}
+          />
           <Tooltip label={t('workspace.collapseAll')} side="bottom" delayMs={500}>
             <button
               type="button"

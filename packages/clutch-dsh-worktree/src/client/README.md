@@ -101,6 +101,21 @@ never writes DSH Workspace state or exposes the projection as a new Controller o
 
 ## Shared Worktree views and refresh scopes
 
+`surface/components/SessionActivityBell.tsx` renders a portaled native `MenuSurface` between
+Search and Collapse All. `session/active-sessions.ts` joins the existing Session presentations,
+Workspace membership and ready Worktree bindings without extra reads or refreshes. Running,
+pending-interaction and native unread-completion entries are independent of tree filters and
+limits; blank/archived Sessions and catalog-only descendants are excluded. The same native
+StateDot and localized Session time buckets are reused. Opening the panel does not acknowledge
+completion; selecting an entry uses the existing Workspace Session navigation. Outside pointer,
+Escape, search expansion, Sidebar collapse, unavailable Sidebar bounds and unmount dismiss it.
+`SurfaceHeader` passes the real overlay bounds readiness to the bell; losing anchors or valid
+geometry closes the portal and releases its timer/keyboard listener even without native collapse.
+Geometry recovery leaves it closed until another user click. Display clocks retain only
+transient ongoing transitions and timestamps, never unread ownership. Before an observed
+transition, native `updatedAt` supplies the Session-row baseline. A one-second display timer
+exists only while open; it performs no reads and is disposed on close/unmount.
+
 `steer/` contributes a Session-scoped `conversation.input.dock` status strip using the native
 `useProjection('inbox')` source and a private Conversation event/view target. Only this plugin's
 task relay ids with native Agent provenance qualify; ordinary queue and report messages retain
