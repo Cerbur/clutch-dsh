@@ -128,6 +128,23 @@ visible rather than covering its controls. It retries when the layout changes.
 Worktree navigation and Dashboard support AppFrame layouts with extra titlebar or shell controls
 before, between, or after the native columns, while keeping those controls accessible.
 
+### Active sessions
+
+The bell between Search and Collapse All opens a compact list of running Sessions, Sessions
+waiting for interaction, and unread completions across Workspaces. A blue dot marks a nonempty
+list; otherwise it shows **No active sessions**. Search, collapsed groups, and the five-row tree
+limit do not filter this list. Blank and archived Sessions are excluded.
+
+Each entry shows its Session name, Workspace, and Worktree (or Local), with the native Session
+status indicator and time on the right. Select an entry to open it; DSH clears its unread
+completion through normal navigation. Opening the bell alone does not mark anything read.
+Click outside or press Escape to close. The panel also closes if the Sidebar collapses or its
+layout becomes unavailable; reopen it with the bell after the Sidebar recovers.
+Running duration updates while the panel is open;
+observed stops show time since completion. Before this Client observes a transition, time uses
+the same native Session activity timestamp as Session rows, since DSH exposes no start/stop
+timestamp. Display clocks are temporary and reset on Client reload.
+
 ### Create a Worktree
 
 You can also enable Agent tools with `/cluworktree`; see the next section.

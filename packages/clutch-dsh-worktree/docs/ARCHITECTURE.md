@@ -643,6 +643,16 @@ Refresh scope is determined by the smallest affected identity.
 
 ### Shell Overlay 呈现
 
+顶栏活跃 Session 铃铛复用同一 `sessionPresentations`，从现有 Workspace 成员与 ready binding
+投影中筛出运行中、等待交互和完成未读的非空白、非归档 Session，不受搜索、折叠与树行数限制。
+浮窗只读连接既有事实，不新增请求、全局刷新或未读 owner；点击条目走既有 Workspace Session
+导航，由 UiSession 清除完成未读。`activityClocks` 只保留客户端观察到的 ongoing 切换时刻，
+首次显示沿用原生 `updatedAt`（原生接口未提供开始/停止时间戳）；临时计时不落盘。
+仅浮窗打开时每秒更新显示时间，关闭/卸载取消计时和事件监听。浮窗使用原生 `MenuSurface`、
+`StateDot` 与定位/外部点击 hooks，通过 portal 避免 Sidebar 裁剪。
+浮窗可见性同时依赖 Sidebar 的 `bounds.ready`：锚点丢失或几何失效时，即使 `collapsed=false`
+也关闭 portal 并释放计时和键盘监听；几何恢复不自动重开，等待用户再次点击铃铛。
+
 - Sidebar 与 Dashboard 共用 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
   `[data-shell-overlay]`，再从插件 footer action 或公开 Sidebar pane 回溯 frame 直属侧栏；
   右栏只按 `[data-rightbar-col]` 和 `data-rightbar-collapsed` 定位，不要求物理相邻。Center

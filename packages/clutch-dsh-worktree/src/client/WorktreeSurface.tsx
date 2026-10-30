@@ -347,6 +347,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       >
         <div className={styles.wideContent}>
           <SurfaceHeader
+            onOpenSession={session.openWorkspaceSession}
             expansion={expansion}
             props={props}
             source={source}
