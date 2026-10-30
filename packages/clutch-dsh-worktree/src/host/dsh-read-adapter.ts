@@ -55,6 +55,13 @@ export interface DshHostReadContext {
   readonly sessionPersistence: {
     list(): Promise<readonly DshSessionPersistenceEntryView[]>;
   };
+  readonly workingDirectory?: { get(session: DshSessionView): string };
+  readonly sessionQuery?: {
+    observeSession(id: string, options: { signal: AbortSignal }): Promise<{
+      readonly projections?: { readonly values: Readonly<Record<string, unknown>> };
+      [Symbol.dispose](): void;
+    }>;
+  };
   readonly activitySource?: WorktreeActivitySource;
 }
 
@@ -112,11 +119,11 @@ export class DshHostReadAdapter implements DshReadAdapter {
     // Live headers win; the persistence list only fills unloaded Sessions, and neither
     // path reads transcripts.
     const live = this.ctx.sessions.get(sessionId as SessionId);
-    if (live !== undefined) return this.sessionSummary(live.header);
+    if (live !== undefined) return this.withDirectory(this.sessionSummary(live.header), live);
     const header = (await this.listPersistedHeaders()).find(
       (candidate) => candidate.id === sessionId,
     );
-    return header === undefined ? undefined : this.sessionSummary(header);
+    return header === undefined ? undefined : this.withDirectory(this.sessionSummary(header));
   }
 
   async listSessions(): Promise<readonly DshSessionSummary[]> {
@@ -131,7 +138,29 @@ export class DshHostReadAdapter implements DshReadAdapter {
     for (const header of await this.listPersistedHeaders()) {
       if (!summaries.has(header.id)) summaries.set(header.id, this.sessionSummary(header));
     }
-    return [...summaries.values()];
+    return Promise.all([...summaries.values()].map(async (summary) => {
+      try {
+        return await this.withDirectory(summary, this.ctx.sessions.get(summary.sessionId as SessionId));
+      } catch {
+        // One broken cold projection must not hide unrelated native Sessions.
+        // An empty effective cwd cannot authorize history/input; getSession preserves the error.
+        return { ...summary, originalCwd: summary.cwd, cwd: '' };
+      }
+    }));
+  }
+
+  private async withDirectory(summary: DshSessionSummary, live?: DshSessionView): Promise<DshSessionSummary> {
+    if (!this.ctx.workingDirectory) return summary;
+    if (live) return { ...summary, originalCwd: summary.cwd, cwd: this.ctx.workingDirectory.get(live) };
+    if (!this.ctx.sessionQuery) throw new Error('Native working-directory projection read unavailable');
+    const observation = await this.ctx.sessionQuery.observeSession(summary.sessionId, { signal: new AbortController().signal });
+    try {
+      const cwd = observation.projections?.values.workingDirectory;
+      if (cwd === undefined || (cwd !== null && typeof cwd !== 'string')) throw new Error('Invalid native working-directory projection');
+      return { ...summary, originalCwd: summary.cwd, cwd: cwd ?? summary.cwd };
+    } finally {
+      observation[Symbol.dispose]();
+    }
   }
 
   private async listPersistedHeaders(): Promise<readonly DshSessionHeaderView[]> {

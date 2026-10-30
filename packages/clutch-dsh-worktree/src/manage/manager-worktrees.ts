@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { prepareWorktreePool } from '../provider/generated-path.js';
 import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
 import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
@@ -389,10 +390,9 @@ async function createWorktreeAttempt(
     }
   }
 
-  const targetPath = path.resolve(context.dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId);
+  const targetPath = path.resolve(workspace.rootPath, '.agents', 'clutch-worktrees', worktreeId);
 
-  // 创建前同时检查词法和物理目录边界，阻止配置、ID 或 symlink 将目标引回 Workspace 或带出插件根目录。
-  // Check lexical and physical directory boundaries before creation so configuration, IDs, or symlinks cannot redirect the target into the Workspace or outside the plugin root.
+  // Validate the dedicated Workspace pool and its physical ancestors before creation.
   validateGeneratedPath(context, workspace.rootPath, targetPath, worktreeId);
   await validatePhysicalGeneratedPath(context, workspace.rootPath, targetPath);
 
@@ -420,7 +420,8 @@ async function createWorktreeAttempt(
     await context.git.listWorktrees(workspace.rootPath),
   );
 
-  // Git is the first external side effect; the sidecar mutation below is the relation commit point.
+  await prepareWorktreePool(context.dshHome, workspace.rootPath, targetPath);
+  // Git precedes the sidecar relation commit point.
   try {
     await context.git.createWorktree(workspace.rootPath, targetPath, newBranch === undefined ? targetBranch : baseRef, newBranch);
   } catch (error) {

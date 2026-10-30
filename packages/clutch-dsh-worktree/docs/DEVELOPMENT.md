@@ -352,10 +352,10 @@ pnpm dsh web --dump-config | grep -A 10 clutch-dsh-worktree
 
 ### 5.2 Sidecar 存储与跨进程锁排查
 
-插件在本地维护的外部状态位于用户主目录的 DSH Home 下：
+Sidecar、偏好与锁仍位于用户主目录的 DSH Home；新 checkout 放在原 Workspace 范围以沿用默认权限：
 
 - **工作区 Sidecar JSON**：`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`
-- **新建 Worktree 根目录**：`$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/`
+- **新建 Worktree 根目录**：`<workspace>/.agents/clutch-worktrees/wt_<hex>/`（子目录 Workspace 也在其自身范围内）；历史 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
 - **跨进程文件锁**：`$dshHome/clutch-dsh-worktree/locks/`
 
 在开发调试过程中，若遇到并发异常或需要重置本地测试数据：
@@ -493,3 +493,20 @@ description:
 独立配置文件、并发冲突与损坏文件保护。`node --test test/tool-settings.test.mjs test/worktree-tools.test.mjs`
 可定向运行；两处 UI 使用同一 browser-safe 配置接口，不读本地文件。配置修改无需重启，Host 更新通用
 命令注册，Agent 在执行前按当前绑定读取 Local/Main 或 Worktree 配置；已加载工具保留至 Agent 结束。
+
+## 原生 Session 目录能力验证
+
+已有类型与 legacy 测试的最低 graph 仍保留原版本；新建 Worktree Session 额外要求
+原生 workingDirectory 服务，以及 Session 创建的 workspaceId 输入。不能仅按 semver 推断
+该 capability 已加载；缺失时新创建流程显式失败，不自动更改权限或 header cwd。
+
+新增 test/native-session-flow.test.mjs 覆盖原始归属、子目录 Workspace、目录/绑定失败、
+冷投影释放、权限 no-op、清理和请求去重。真实上游目录服务验证：
+
+```bash
+DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/native-session-flow.test.mjs
+```
+
+该测试只创建临时 Git 仓库和内存 Session，调用真实 WorkingDirectory/Projection/SandboxPolicy，
+验证原 header 与权限不变、原生目录事件先发布、取消不改目录。未设置 DSH_NATIVE_SOURCE
+时仅该真实 graph 用例跳过，主要契约回归仍执行。历史 preset smoke 继续只验证 legacy Session。

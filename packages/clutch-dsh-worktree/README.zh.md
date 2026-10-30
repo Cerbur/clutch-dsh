@@ -19,7 +19,7 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 
 向运行中的 DSH 安装插件后，若插件 Host 尚未加载，请重启 DSH Desktop，或重启 DSH Web
 服务后刷新页面。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
-原生 toast 会在每次 Client 加载期间提醒一次。如果 Worktree Session 权限检查确认
+原生 toast 会在每次 Client 加载期间提醒一次。以下预设恢复仅适用于直接以 Worktree cwd 创建的历史 Session，新 Workspace Session 不会进入此流程。如果旧 Worktree Session 权限检查确认
 **Worktree Full Access** 预设不可用并降级为 `workspace-write`，另一条每次加载至多一次的
 toast 会提示在刚安装或更新插件后重启。toast 关闭后，权限修复说明仍保留重启指引。网络故障、
 Workspace 错误、无法确认的权限与用户的显式权限限制不会触发预设缺失提醒。提醒不会重载服务
@@ -94,6 +94,10 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
 
 ## 使用
+
+新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需设置 Worktree Full Access。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+
+历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 
 ### 打开 Worktree 模式
 
@@ -567,8 +571,10 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   替换为除当前 Worktree branch 之外的本地或已获取的远端 branch，保存后的值会成为 Git Tab 选择器的默认值。
   不可变的获取 `baseCommit` 与它分开保存，不会因该编辑被重写。索引位于 DSH host 的 plugin data
   directory，不写入项目目录或 DSH raw data，也不保存 Session 内容或 Workspace 根目录副本。
-- runtime `cwd` 在每次执行时派生。无 binding、Main 或 detached binding 使用 Workspace root；
-  active Worktree binding 使用 Worktree path。cwd 不会持久化写回 DSH Session metadata。
+- 新 Session 保留原 Workspace 与不可变的 header 目录。当前执行目录 projection 及其变更事件由
+  DSH 拥有；插件不改写 Session metadata。Active binding 必须匹配当前执行目录。离开、解绑或
+  清理 Worktree 不会将运行中的 Session 重定向到 Main；目录缺失时 DSH 可能在下一次原生操作中恢复。
+  缺少原生目录事实的旧注入 adapter 保留原有 cwd 派生兼容行为。
 - 一个 Session 最多有一个 active Worktree binding，一个 Worktree 可以有多个 Session。移除或
   清理 Worktree 不会删除 DSH Session。失效的 active binding 会显示 repair 状态，不会静默切换到
   另一个 Worktree。
@@ -595,7 +601,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
   使用独立的前置指示器。视觉上的 Session 排序初始按最新的 `updatedAt` 值排列并只保存在浏览器本地；Main 固定为首行，Worktree 拖拽只
   更新这个本地排序投影，Main 拖拽只有在 DSH 接受后才更新原生 Workspace 顺序。
-- active Worktree Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
+- 直接以 Worktree cwd 创建的历史 Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
   追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
   DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
   预设与原生 Session 权限写入均不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务

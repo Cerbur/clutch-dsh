@@ -127,7 +127,9 @@ test('Worktree Session membership waits for the binding refresh before projectio
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
         const value =
-          endpoint === 'worktreeManager/listWorktrees'
+          endpoint === 'worktreeManager/createWorktreeSession'
+            ? { sessionId: 'session-created', bound: true }
+            : endpoint === 'worktreeManager/listWorktrees'
             ? [{
                 workspaceId: input.workspaceId,
                 worktreeId: 'wt-one',

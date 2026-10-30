@@ -10,6 +10,7 @@ import type {
   WorktreeRemoteResult,
   WorktreeToolChangeBatch,
   WorktreeToolSettingsManager,
+  WorktreeSessionCreationManager,
 } from '../contract/index.js';
 
 /** The one logical channel shared by the DSH Connection and Typert Gateway. */
@@ -20,6 +21,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  createWorktreeSession: 'worktreeManager/createWorktreeSession',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   getToolSettings: 'worktreeManager/getToolSettings',
@@ -77,7 +79,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager, WorktreeToolSettingsManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
   watchToolChanges(afterRevision: number, signal: AbortSignal): Promise<WorktreeToolChangeBatch>;
   /** Check Host composition without requiring a user Workspace or reading its projection. */
   probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
@@ -273,6 +275,7 @@ export function createWorktreeConnectionAdapter(
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
+    createWorktreeSession: (input) => invoke('createWorktreeSession', input),
     ensureWorktreePermission: (input) => invoke('ensureWorktreePermission', input),
     normalizeDetachedWorktreePermissions: (input: WorktreePermissionNormalizationRequest) =>
       invoke('normalizeDetachedWorktreePermissions', input),

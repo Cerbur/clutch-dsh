@@ -9,6 +9,7 @@ import type {
 import type { DshReadAdapter } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
+import { samePhysicalPath } from '../provider/path-identity.js';
 
 export interface WorktreePermissionManagerOptions {
   readonly manager: Pick<WorktreeManager, 'listWorktrees' | 'listBindings'>;
@@ -127,6 +128,11 @@ export function createWorktreePermissionManager(
         );
       }
 
+      // A Workspace-owned Session keeps native policy, including explicit restrictions.
+      // No preset, confirmation, permission event, or remembered consent is needed.
+      if (session.originalCwd !== undefined && session.workspaceId === workspace.workspaceId &&
+        await samePhysicalPath(session.originalCwd, workspace.rootPath))
+        return { status: 'no-op', sessionIds: [input.sessionId], retryable: false };
       if (options.permissions === undefined) return unverified();
       return options.permissions.ensure({ ...input, binding: 'active' });
     },
@@ -176,12 +182,15 @@ export function createWorktreePermissionManager(
       if (sessionIds.length === 0) {
         return { status: 'no-op', sessionIds, retryable: false };
       }
-      if (options.permissions === undefined) {
-        return { ...unverified(), sessionIds };
-      }
-
       const results: WorktreePermissionResult[] = [];
       for (const binding of detachedBindings) {
+        const session = await options.dsh.getSession(binding.sessionId);
+        if (session?.originalCwd !== undefined && session.workspaceId === workspace.workspaceId &&
+          await samePhysicalPath(session.originalCwd, workspace.rootPath)) {
+          results.push({ status: 'no-op', retryable: false });
+          continue;
+        }
+        if (!options.permissions) { results.push(unverified()); continue; }
         results.push(await options.permissions.normalize({
           workspaceId: input.workspaceId,
           worktreeId: input.worktreeId,

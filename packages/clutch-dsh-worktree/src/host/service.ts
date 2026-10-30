@@ -34,6 +34,9 @@ import { DshHostReadAdapter, type DshHostReadContext } from './dsh-read-adapter.
 import type { WorktreeActivitySource } from './worktree-activity.js';
 import { createWorktreeRemoteProjection, project } from './remote.js';
 import { createBaselineSync } from './baseline-sync.js';
+import { createWorktreeSessionCreation } from './session-creation.js';
+import { createWorktreeError } from '../contract/index.js';
+import type { WorktreeSessionCreationRequest, WorktreeSessionCreationResult } from '../contract/index.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
 import {
   createDshWorktreePermissionAdapter,
@@ -41,6 +44,7 @@ import {
 } from './worktree-permission.js';
 import { createWorktreePermissionManager } from './worktree-permission-manager.js';
 import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
+import { createNativeWorktreeSessionDirectoryPort } from '../tool/native-session.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
@@ -81,6 +85,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly toolChanges = new WorktreeToolChanges();
   private readonly toolSettings: WorktreeToolSettings;
   private baselineSync?: ReturnType<typeof createBaselineSync>;
+  private sessionCreation?: ReturnType<typeof createWorktreeSessionCreation>;
 
   /**
    * 为当前 Cordis fiber 建立一次 Host 组合，并复用同一个 Remote projection 处理调用。
@@ -111,6 +116,16 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     this.manager = manager;
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
+    ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
+      const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx);
+      const creation = createWorktreeSessionCreation({ manager, sessions,
+        changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId) });
+      this.sessionCreation = creation;
+      sessionCtx.effect(() => () => {
+        creation.dispose();
+        if (this.sessionCreation === creation) this.sessionCreation = undefined;
+      });
+    });
     // Optional command composition keeps the read-only Provider adapter unchanged.
     ctx.inject(
       ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
@@ -181,6 +196,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // These methods stay deliberately thin so generated Typert descriptors see only
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
+  @Remote
+  createWorktreeSession(input: WorktreeSessionCreationRequest, signal: AbortSignal): Promise<WorktreeRemoteResult<WorktreeSessionCreationResult>> {
+    return project(() => {
+      if (!this.sessionCreation) throw createWorktreeError('WORKTREE_STATE_CONFLICT', 'Native Session creation capability is unavailable.');
+      return this.sessionCreation.create(input, signal);
+    });
+  }
+
   @Remote
   syncWorktreeBaseline(input: WorktreeBaselineSyncRequest, signal: AbortSignal): Promise<WorktreeRemoteResult<WorktreeSessionDispatchResult>> {
     return project(() => {

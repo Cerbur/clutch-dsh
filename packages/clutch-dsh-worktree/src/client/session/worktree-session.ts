@@ -77,6 +77,10 @@ export interface WorktreeSessionConnectorOptions {
   readonly sessions: WorktreeSessionSnapshotReader;
   readonly archivedSessionIds: () => readonly string[];
   readonly createSession: (input: { readonly cwd: string }) => Promise<string>;
+  /** The packaged Host owns native Workspace creation, directory entry and binding. */
+  readonly createBoundSession?: (input: CreateSessionForWorktreeInput & { readonly requestId: string }) => Promise<{
+    readonly sessionId: string; readonly bound: boolean; readonly error?: string;
+  }>;
   readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
   readonly permission?: Pick<WorktreePermissionManager, 'ensureWorktreePermission'>;
@@ -319,6 +323,7 @@ export function createWorktreeSessionConnector(
   options: WorktreeSessionConnectorOptions,
 ): WorktreeSessionConnector {
   const inFlight = new Map<string, Promise<string>>();
+  const creationRequests = new Map<string, string>();
   let disposed = false;
 
   const run = async (input: CreateSessionForWorktreeInput): Promise<string> => {
@@ -386,6 +391,19 @@ export function createWorktreeSessionConnector(
     }
     if (action.kind !== 'create') throw actionError(action);
     if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
+    if (options.createBoundSession) {
+      const key = JSON.stringify([input.workspaceId, input.worktreeId]);
+      let requestId = creationRequests.get(key);
+      if (!requestId) {
+        requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        creationRequests.set(key, requestId);
+      }
+      const created = await options.createBoundSession({ ...input, requestId });
+      if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, new Error(created.error));
+      if (!disposed) options.openSession(created.sessionId);
+      creationRequests.delete(key);
+      return created.sessionId;
+    }
     return createSessionForWorktree({
       ...input,
       createSession: options.createSession,
@@ -423,6 +441,7 @@ export function createWorktreeSessionConnector(
     dispose() {
       disposed = true;
       inFlight.clear();
+      creationRequests.clear();
     },
   };
 }

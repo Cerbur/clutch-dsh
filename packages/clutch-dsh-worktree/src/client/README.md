@@ -44,7 +44,7 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   copy retains the guidance after dismissal. Unverified results and explicit restrictions do not
   request restart. The reminder uses its own `shell.overlay` registration and does not change
   ready views, refresh scopes, Session/Workspace data, the transport graph or native services.
-- Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
+- Legacy Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
   browser Client serializes concurrent confirmation requests, requires the native checkbox
   acknowledgement, and fails pending requests closed when the Client fiber is disposed. The Host
   resolves optional permission capabilities on each invocation, including the confirmed second call:
@@ -216,7 +216,7 @@ text. The browser never reads Git, the sidecar, or a generated `./remote` artifa
 place and the returned WorktreeRecord carries `source: 'external'`.
 
 After registration, Import and Create share the same Session continuation: create or reuse the
-DSH Session at the Worktree cwd, bind and open it, then refresh the browser-local native Workspace
+DSH Session in the original Workspace, enter the Worktree through native directory input, bind and open it, then refresh the browser-local native Workspace
 membership projection while preserving ready content. A newly created Worktree Session is not
 eagerly projected before that binding refresh, so it does not briefly appear in Main. The same
 Retry / Open recovery is exposed when Session creation or binding fails. Client disposal aborts
@@ -499,19 +499,27 @@ placement measurement stays attached to the actual chip element.
 
 ## Current upstream Session membership projection
 
-The Worktree `+` sends the Worktree `cwd` through the DSH Session Controller
-and keeps the Workspace membership projection browser-local. It therefore:
+The Worktree `+` calls the Host `createWorktreeSession` through the existing Connection.
+The Host shares the native creation module used by Agent and Dashboard dispatch. It:
 
-1. creates the normal DSH Session with `session.create({ cwd: worktreePath })`;
-2. binds the returned Session ID through the injected manager;
+1. creates the normal DSH Session with `sessionController.create({ workspaceId })`;
+2. uses DSH `workingDirectory.set` to enter the Worktree, then binds its returned Session ID;
 3. opens the Session without eagerly projecting a newly created ID into native Workspace membership;
 4. refreshes the browser-only binding projection after binding, while the wrapped read-only source
    reprojects each native snapshot before its subscribers observe it; the projection is replayed
    after native list refreshes;
 5. removes the projection when the binding disappears or the Client fiber is disposed.
 
-This projection is not a persistent DSH attach and does not modify DSH source, Session
-metadata or native Workspace storage. A binding failure leaves the created Session ID
+New Sessions already have DSH-owned original Workspace membership. The browser-only legacy
+projection does not modify DSH source, Session metadata or native Workspace storage.
+New Workspace-owned Sessions skip Full Access setup and preserve native permissions;
+legacy Sessions still use the existing confirmation helper. Browser creation retains one
+request id across uncertain failures and the Host shares its promise within one lifetime.
+Client/Host reload or replacement of native Session/Agent capabilities ends that deduplication scope.
+Browser creation uses a minimal native directory port and does not depend on optional commands, tools or LLM services. A Host retains at most 512 identities
+and refuses new ones at capacity; reload the plugin only after resolving pending actions.
+Native directory capability absence fails before native creation; it never falls back to Worktree header cwd.
+A binding failure leaves the created Session ID
 available for retry or direct navigation; it must not trigger Session deletion.
 
 ## Forked Worktree Sessions

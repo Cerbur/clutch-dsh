@@ -4,7 +4,8 @@ import { lstat } from 'node:fs/promises';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import type { PendingOperation } from '../../types.js';
 import type { CreateWorktreeTransactionInput } from '../types.js';
-import { isMissing, isInside } from './paths.js';
+import { isMissing } from './paths.js';
+import { assertGeneratedPath, generatedPathAncestors } from '../../generated-path.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
 
@@ -12,11 +13,9 @@ export function assertGeneratedTarget(
   dependencies: Pick<TransactionDependencies, 'dshHome'>,
   input: CreateWorktreeTransactionInput,
 ): void {
-  const generatedRoot = path.join(dependencies.dshHome, 'clutch-dsh-worktree', 'worktree');
   if (
     !path.isAbsolute(input.targetPath) ||
-    !isInside(generatedRoot, input.targetPath) ||
-    isInside(input.workspaceRoot, input.targetPath)
+    !generatedPathAncestors(dependencies.dshHome, input.workspaceRoot, input.targetPath)
   ) {
     throw providerError(
       'WORKTREE_STATE_CONFLICT',
@@ -36,25 +35,7 @@ export async function assertSafeRemovalPath(
 ): Promise<void> {
   const targetPath = path.resolve(gitWorktreeRoot(record));
   if (record.source === 'plugin') {
-    const generatedRoot = path.join(dependencies.dshHome, 'clutch-dsh-worktree', 'worktree');
-    if (!isInside(generatedRoot, targetPath) || isInside(workspaceRoot, targetPath)) {
-      throw providerError(
-        'WORKTREE_IDENTITY_CHANGED',
-        'Managed Worktree path moved outside its trusted root',
-        {
-          worktreeId: record.worktreeId,
-          targetPath: gitWorktreeRoot(record),
-        },
-      );
-    }
-    for (const trustedPath of [
-      dependencies.dshHome,
-      path.join(dependencies.dshHome, 'clutch-dsh-worktree'),
-      generatedRoot,
-      targetPath,
-    ]) {
-      await assertNotSymlink(trustedPath, record);
-    }
+    await assertGeneratedPath(dependencies.dshHome, workspaceRoot, targetPath);
     return;
   }
 
@@ -69,34 +50,7 @@ export async function assertRecoverableCreatePath(
   pending: Extract<PendingOperation, { readonly type: 'create-worktree' }>,
   workspaceRoot: string,
 ): Promise<void> {
-  const targetPath = path.resolve(pending.targetPath);
-  const generatedRoot = path.join(dependencies.dshHome, 'clutch-dsh-worktree', 'worktree');
-  if (!isInside(generatedRoot, targetPath) || isInside(workspaceRoot, targetPath)) {
-    throw providerError(
-      'WORKTREE_IDENTITY_CHANGED',
-      'Pending Worktree path moved outside its trusted root',
-      {
-        worktreeId: pending.worktreeId,
-        targetPath: pending.targetPath,
-      },
-    );
-  }
-  const record: WorktreeRecord = {
-    worktreeId: pending.worktreeId,
-    workspaceId: pending.workspaceId,
-    absolutePath: pending.targetPath,
-    branch: pending.branch,
-    source: 'plugin',
-    status: 'active',
-  };
-  for (const trustedPath of [
-    dependencies.dshHome,
-    path.join(dependencies.dshHome, 'clutch-dsh-worktree'),
-    generatedRoot,
-    targetPath,
-  ]) {
-    await assertNotSymlink(trustedPath, record);
-  }
+  await assertGeneratedPath(dependencies.dshHome, workspaceRoot, path.resolve(pending.targetPath));
 }
 
 export async function assertNotSymlink(pathname: string, record: WorktreeRecord): Promise<void> {

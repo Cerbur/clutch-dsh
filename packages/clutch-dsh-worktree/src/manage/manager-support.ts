@@ -11,8 +11,9 @@ import {
   providerError,
 } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { samePhysicalPath } from '../provider/path-identity.js';
+import { samePhysicalPath, sameLexicalPath } from '../provider/path-identity.js';
 import { projectWorktreePath, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
+import { assertGeneratedPath, workspaceWorktreePool } from '../provider/generated-path.js';
 
 export { samePhysicalPath };
 
@@ -212,58 +213,30 @@ export async function requireWorkspaceRoot(workspace: DshWorkspaceSummary): Prom
   if (rootState !== 'directory') throwWorkspaceRootUnavailable(workspace.workspaceId, workspace.rootPath, rootState);
 }
 
-// 第一层使用未解析路径验证目标属于插件根且不位于 Workspace 内。
-// The first layer uses unresolved paths to ensure the target belongs to the plugin root and is not inside the Workspace.
+/** New checkouts live in one dedicated pool inside the original Workspace. */
 export function validateGeneratedPath(
-  context: WorktreeManagerContext,
-  workspaceRoot: string,
-  targetPath: string,
-  worktreeId: string,
+  context: WorktreeManagerContext, workspaceRoot: string, targetPath: string, worktreeId: string,
 ): void {
-  const pluginRoot = path.resolve(context.dshHome, 'clutch-dsh-worktree');
-  if (!isSameOrInside(pluginRoot, targetPath) || isSameOrInside(workspaceRoot, targetPath)) {
+  if (isSameOrInside(workspaceRoot, path.resolve(context.dshHome)) ||
+    !sameLexicalPath(path.resolve(targetPath), path.join(workspaceWorktreePool(workspaceRoot), worktreeId)) ||
+    path.basename(worktreeId) !== worktreeId) {
     throw providerError('GIT_OPERATION_FAILED', 'Generated Worktree path is outside the allowed boundary', {
-      workspaceRoot,
-      targetPath,
-      worktreeId,
+      workspaceRoot, targetPath, worktreeId,
     });
   }
 }
 
-// 第二层拒绝受信祖先 symlink，并以 realpath 后的根重新计算目标，防止物理路径逃逸。
-// The second layer rejects symlinked trusted ancestors and recomputes the target from the realpath root to prevent physical path escape.
 export async function validatePhysicalGeneratedPath(
-  context: WorktreeManagerContext,
-  workspaceRoot: string,
-  targetPath: string,
+  context: WorktreeManagerContext, workspaceRoot: string, targetPath: string,
 ): Promise<void> {
+  // Sidecar still lives in DSH Home; preserve its independent trust checks.
   await rejectSymlink(context.dshHome, 'DSH Home');
   await rejectSymlink(path.join(context.dshHome, 'clutch-dsh-worktree'), 'plugin sidecar root');
-  await rejectSymlink(path.join(context.dshHome, 'clutch-dsh-worktree', 'worktree'), 'Worktree root');
-
-  let canonicalDshHome: string;
-  try {
-    canonicalDshHome = await realpath(context.dshHome);
-  } catch (error) {
-    throw providerError('SIDECAR_UNAVAILABLE', `Unable to resolve DSH Home: ${context.dshHome}`, {
-      dshHome: context.dshHome,
-      cause: String(error),
-    });
-  }
-  const targetRelativeToDshHome = path.relative(context.dshHome, targetPath);
-  const canonicalTarget = path.resolve(canonicalDshHome, targetRelativeToDshHome);
-  const canonicalWorkspace = await realpath(workspaceRoot);
-  if (!isSameOrInside(canonicalDshHome, canonicalTarget) || isSameOrInside(canonicalWorkspace, canonicalTarget)) {
-    throw providerError('GIT_OPERATION_FAILED', 'Generated Worktree path crosses a physical boundary', {
-      workspaceRoot: canonicalWorkspace,
-      dshHome: canonicalDshHome,
-      targetPath: canonicalTarget,
-    });
-  }
+  await assertGeneratedPath(context.dshHome, workspaceRoot, targetPath, false);
 }
 
-// 绑定只接受 DSH 已按目标 Worktree cwd 创建的 Session；Manager 不替用户迁移或改写 Session。
-// Binding accepts only Sessions already created by DSH with the target Worktree cwd; the Manager never migrates or rewrites a Session.
+// Bind only after DSH has published the target effective cwd; original membership stays authoritative.
+// Legacy Worktree-header Sessions remain supported without migration or metadata edits.
 export async function assertSessionMatchesWorkspace(
   session: DshSessionSummary,
   workspace: DshWorkspaceSummary,
@@ -271,6 +244,9 @@ export async function assertSessionMatchesWorkspace(
 ): Promise<void> {
   if (
     (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
+    (session.originalCwd !== undefined &&
+      !(await samePhysicalPath(session.originalCwd, worktree.absolutePath)) &&
+      !(session.workspaceId === workspace.workspaceId && await samePhysicalPath(session.originalCwd, workspace.rootPath))) ||
     (session.projectId !== undefined &&
       workspace.projectId !== undefined &&
       session.projectId !== workspace.projectId) ||

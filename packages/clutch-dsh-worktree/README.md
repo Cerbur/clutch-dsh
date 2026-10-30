@@ -20,7 +20,7 @@ its Workspace-root HEAD history with an optional comparison branch; the plugin d
 After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
 server and refresh the page, if the plugin Host has not loaded. Finish
 active tasks before restarting. If the Client loads while the Host is still unavailable, a
-native toast reminds you once per Client load. If a Worktree Session permission check reports
+native toast reminds you once per Client load. The following preset recovery applies only to historical Sessions created directly at a Worktree cwd; new Workspace-owned Sessions never invoke it. If a legacy Worktree Session permission check reports
 that **Worktree Full Access** is unavailable and falls back to `workspace-write`, a separate
 once-per-load toast gives the same restart guidance for a recent install or update. The
 permission recovery message retains this guidance after the toast closes. Network failures,
@@ -100,6 +100,10 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
+
+New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and need no Worktree Full Access setup. The pool contains its own ignore file; existing repository ignore files are untouched.
+
+Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 
 ### Open Worktree mode
 
@@ -677,9 +681,11 @@ text, actions and diagnostic details follow the font size selected in **Settings
   immutable acquisition `baseCommit` remains separate and is not rewritten by that edit. The index is
   kept in the DSH host plugin data directory, not in a project directory or DSH's raw data store. It
   does not store Session content or a copy of the Workspace root.
-- Runtime `cwd` is derived for each execution. No binding, Main, or detached binding uses the
-  Workspace root; an active Worktree binding uses that Worktree path. The cwd is never persisted
-  into DSH Session metadata.
+- New Sessions retain the original Workspace and immutable header directory. DSH owns the effective
+  working-directory projection and its change events; the plugin never rewrites Session metadata.
+  An active binding must match the effective directory. Leaving, detaching or cleaning a Worktree
+  never redirects a running Session to Main; DSH may recover a missing directory on the next native operation.
+  Old injected adapters without native directory facts retain their derived cwd compatibility behavior.
 - One Session can have at most one active Worktree binding, while a Worktree can have many Sessions.
   Removing or cleaning a Worktree never deletes a DSH Session. A broken active binding reports a
   repair state instead of silently falling back to another Worktree.
@@ -712,7 +718,7 @@ text, actions and diagnostic details follow the font size selected in **Settings
   remains a separate leading indicator. Visual Session ordering initially follows the newest `updatedAt` values and
   remains browser-local; Main remains fixed first, Worktree drag updates only this local order projection,
   and Main drag updates native Workspace order only after DSH accepts it.
-- Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
+- Historical Sessions created directly at a Worktree cwd may request the named `worktree-full-access` preset after an explicit
   confirmation. The plugin appends this preset while preserving DSH's existing presets, default
   selection, and official Auto review integration. It combines DSH `danger-full-access` with `ask`,
   keeps approval prompts enabled, and does not change network or process policy. If neither the preset nor native Session policy writes are available, the plugin falls back to

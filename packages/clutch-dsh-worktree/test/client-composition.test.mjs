@@ -430,6 +430,11 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
             value: { ok: true, value: [] },
           });
         }
+        if (endpoint === 'worktreeManager/createWorktreeSession') {
+          assert.equal(input.workspaceId, 'workspace-two');
+          assert.equal(input.worktreeId, 'worktree-target');
+          return Promise.resolve({ ok: true, value: { ok: true, value: { sessionId: 'session-created', bound: true } } });
+        }
         if (endpoint === 'worktreeManager/bindSession') {
           return Promise.resolve({
             ok: true,
@@ -452,7 +457,7 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
-test('does not globally rescan Fork bindings while creating an unconfirmed Worktree Session', async () => {
+test('does not globally rescan Fork bindings while waiting for native Worktree Session creation', async () => {
   const previousDocument = globalThis.document;
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
@@ -474,6 +479,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
   let fixture;
   try {
     const bindingRequests = [];
+    const creation = deferred();
     const initialSessionSnapshot = {
       phase: 'ready',
       ids: ['parent-session', 'child-session'],
@@ -516,6 +522,10 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
               ok: true,
               value: { ok: true, value: [] },
             });
+          }
+          if (endpoint === 'worktreeManager/createWorktreeSession') {
+            assert.equal(input.workspaceId, 'workspace-one');
+            return creation.promise;
           }
           if (endpoint === 'worktreeManager/bindSession') {
             return Promise.resolve({
@@ -560,12 +570,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
       cwd: '/tmp/worktree-one',
     });
     await flush();
-    assert.deepEqual(overlay.fullAccessConfirmation.getSnapshot(), {
-      workspaceId: 'workspace-one',
-      worktreeId: 'worktree-one',
-      sessionId: 'session-created',
-      cwd: '/tmp/worktree-one',
-    });
+    assert.equal(overlay.fullAccessConfirmation.getSnapshot(), undefined);
 
     fixture.setSessionListSnapshot({
       ...initialSessionSnapshot,
@@ -586,7 +591,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
     });
     await flush();
 
-    overlay.fullAccessConfirmation.resolve(true);
+    creation.resolve({ ok: true, value: { ok: true, value: { sessionId: 'session-created', bound: true } } });
     assert.equal(await createPromise, 'session-created');
     assert.deepEqual(bindingRequests.slice(initialBindingRequestCount), ['workspace-one']);
   } finally {

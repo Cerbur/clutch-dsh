@@ -462,6 +462,10 @@ export function apply(ctx: Context): void {
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
     archivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds,
     createSession: async (input) => String(await sessions.create(input)),
+    createBoundSession: (input) => manager.createWorktreeSession({
+      workspaceId: input.workspaceId, worktreeId: input.worktreeId,
+      requestId: input.requestId,
+    }),
     ensureSessionWorkspace,
     permission: permissionManager,
     confirmFullAccess: permissionManager === undefined

@@ -327,7 +327,13 @@ function assertGeneratedPluginPath(
     throw corrupt(pathname, 'Worktree record has an invalid generated ID');
   }
   const expectedPath = path.resolve(generatedWorktreeRoot, record.worktreeId);
-  if (!sameLexicalPath(gitWorktreeRoot(record), expectedPath)) {
+  const checkout = gitWorktreeRoot(record);
+  const pool = path.dirname(checkout);
+  // Syntax only: DSH's authoritative Workspace root is rechecked by Manage and
+  // transaction path safety before filesystem operations; it is never copied here.
+  const workspacePool = path.basename(pool) === 'clutch-worktrees' &&
+    path.basename(path.dirname(pool)) === '.agents' && path.basename(checkout) === record.worktreeId;
+  if (!sameLexicalPath(checkout, expectedPath) && !workspacePool) {
     throw corrupt(pathname, 'Worktree path is outside the generated DSH Home root');
   }
 }

@@ -19,6 +19,7 @@ import type {
   WorkspaceCheckout,
 } from '../contract/index.js';
 import { LocalGitAdapter } from '../provider/git/adapter.js';
+import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { WorktreeMutationTransaction } from '../provider/transaction/index.js';
 import { providerError } from '../provider/types.js';
@@ -216,7 +217,9 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
           const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
           return {
             snapshot,
-            instructions: !record || record.diskCleanup === 'completed' ? '' : record.instructions ?? '',
+            instructions: !record || record.diskCleanup === 'completed' ||
+              (session?.originalCwd !== undefined && !(await boundSessionCwdMatchesWorktree(session.cwd, record)))
+              ? '' : record.instructions ?? '',
           };
         }
         return { snapshot };
@@ -227,7 +230,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       if (session?.workspaceId !== undefined) {
         const workspace = await this.context.dsh.getWorkspace(session.workspaceId);
         const result = await readWorkspace(session.workspaceId);
-        if (workspace !== undefined) return result.instructions ?? result.snapshot.mainInstructions ?? '';
+        if (workspace !== undefined) {
+          if (result.instructions !== undefined) return result.instructions;
+          if (session.originalCwd !== undefined && !(await samePhysicalPath(session.cwd, workspace.rootPath))) return '';
+          return result.snapshot.mainInstructions ?? '';
+        }
         // A stale Session may retain a Workspace id after DSH removes that
         // Workspace. An active binding can still identify Worktree guidance,
         // but an orphaned shard must never supply Main instructions by guess.
