@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.20 — 2026-10-30
+
+### 中文
+
+#### 新增
+
+- 在 Worktree 视图顶部新增活动铃铛通知按钮，聚合跨 Workspace 的运行中、等待交互与未读完成会话，支持快速跳转与实时状态指示。
+
+### English
+
+#### Added
+
+- Add an activity notification bell button to the Worktree view header that aggregates running, interaction-waiting, and unread completed sessions across workspaces with quick jump navigation and real-time status badges.
+
 ## 0.1.19 — 2026-10-30
 
 ### 中文
