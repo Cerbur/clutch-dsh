@@ -7,13 +7,14 @@
 
 ## 包参数
 
-| 参数                           | 值                            |
-| ------------------------------ | ----------------------------- |
-| `<npm-package-name>`           | `@cerbur/clutch-dsh-worktree` |
-| `<plugin>`（workspace 目录名） | `clutch-dsh-worktree`         |
-| `<release-name>`               | `worktree`                    |
-| release branch / worktree 前缀 | `wt-worktree-<version>`       |
-| release tag                    | `worktree-release-<version>`  |
+| 参数                           | 值                                |
+| ------------------------------ | --------------------------------- |
+| `<npm-package-name>`           | `@cerbur/clutch-dsh-worktree`     |
+| `<plugin>`（workspace 目录名） | `clutch-dsh-worktree`             |
+| `<release-name>`               | `worktree`                        |
+| release branch / worktree 前缀 | `wt-worktree-<version>`           |
+| feature branch / worktree      | `wt-worktree/feat-<feature-name>` |
+| release tag                    | `worktree-release-<version>`      |
 
 ## 版本规则
 

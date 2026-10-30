@@ -60,23 +60,24 @@ clutch-dsh-worktree 的专属入口：
 
 ```text
 main
-  └─ wt-<release-name>-<version>/release
-       ├─ wt-<release-name>-<version>/<feature-name>
-       └─ wt-<release-name>-<version>/<feature-name>
+  ├─ wt-<release-name>/feat-<feature-name>      # 从 main 创建，敏捷迭代
+  └─ wt-<release-name>-<version>/release        # 从 main 创建，聚合选定的 feature 后发布
 ```
 
-- release 使用独立 release worktree 作为目标版本的聚合边界，从最新的 `main` 创建，命名为
-  `wt-<release-name>-<version>/release`。`<release-name>` 使用 package short name，例如
-  `clutch-dsh-worktree` 使用 `worktree`，`clutch-dsh-discuss` 使用 `discuss`；例如
-  `wt-worktree-0.1.4/release`。
-- package feature worktree 从对应 release worktree 的当前基线创建，命名为
-  `wt-<release-name>-<version>/<feature-name>`，例如
-  `wt-worktree-0.1.4/feat-readme`。
-- 不属于某个 package 的 root/workspace change 使用 `base/feat-<feature-name>`，例如
-  `base/feat-xxxx`。
+- package feature worktree 直接从最新的 `main` 创建，作为独立功能线敏捷迭代，不绑定 release
+  版本；命名为 `wt-<release-name>/feat-<feature-name>`。`<release-name>` 使用 package short
+  name，例如 `clutch-dsh-worktree` 使用 `worktree`，`clutch-dsh-discuss` 使用 `discuss`；例如
+  `wt-worktree/feat-readme`。
+- release 使用独立 release worktree 作为目标版本的聚合边界，在准备发布时从最新的 `main` 创建，
+  命名为 `wt-<release-name>-<version>/release`，例如 `wt-worktree-0.1.4/release`。复用的
+  release branch 如果落后于 `main`，先把最新 `main` 合并进来并重新验证，再并入新的 feature。
+- 一个 feature 完成后，可以选择并入某个待发布的 release，再随该 release 发布；也可以先留在
+  feature branch 继续迭代或暂不发布。feature branch 不因目标 release 的版本变化而改名。
+- 不属于某个 package 的 root/workspace change 使用 `base/feat-<feature-name>`，同样从 `main`
+  创建并直接合并回 `main`，例如 `base/feat-xxxx`。
 - 每个 worktree 独立运行与改动匹配的检查，并在交接前整理为一个 scoped commit；commit
   message 必须明确说明改动范围。
-- 合并 feature worktree 前，必须先将其 rebase 到 release worktree 的最新基线，再在
+- 合并 feature 到某个 release 前，必须先将其 rebase 到该 release worktree 的最新基线，再在
   release worktree 中合并该 worktree 的单个 scoped commit。发生冲突时先解决并重新验证，
   不能跳过 rebase gate。
 - `feature worktree → release worktree → main` 的每次回合并都有干净工作区门禁：源 feature
@@ -97,6 +98,8 @@ main
 - feature worktree 只用于编写、验证和提交 scoped change；`npm pack`、`npm publish` 和最终
   release verification 必须在 feature commit 合并后的 release worktree 中执行。发布准备
   完成且 npm registry 验证通过后，再将 release worktree 的最终提交合并回 `main`。
+- package version 递增和带版本号的 `RELEASE-LOG.md` 条目属于 release 发布准备：feature
+  worktree 不绑定版本，这两项在选定目标 release 后于 release worktree 中完成。
 - 本流程只定义 worktree、基线和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
   这些操作仍须获得明确授权。
 - 每个可发布 plugin package 的完整发布生命周期（release log 规则、版本递增、clean/rebase/merge

@@ -133,12 +133,15 @@ Publishable public scoped packages should include:
 }
 ```
 
-Release order is: increment the package version, run workspace checks, preview
-the tarball, commit and push the matching `main`, then run
-`npm publish --access public --registry=https://registry.npmjs.org/`. Verify
-with `npm view <package-name> version` before documenting the published install
-command. A package-specific release document may add the exact commands and
-registry recovery steps.
+Release preparation happens in the package's release worktree (see
+[`docs/RELEASING.md`](RELEASING.md)): merge the selected feature commits, update
+`RELEASE-LOG.md` and increment the package version, run workspace checks, and
+preview the tarball. The package owner then runs
+`npm publish --access public --registry=https://registry.npmjs.org/` from that
+release worktree. Verify with `npm view <package-name> version` before merging
+the release back to `main` and documenting the published install command. A
+package-specific release document may add the exact commands and registry
+recovery steps.
 
 The awesome-dsh-plugin entry is a discovery record, not an npm publication. Its
 `repository` mapping is inferred from the published package metadata; do not

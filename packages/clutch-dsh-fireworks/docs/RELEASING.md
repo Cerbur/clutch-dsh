@@ -6,6 +6,8 @@ This package follows the repository release lifecycle in [`../../docs/RELEASING.
 | ---------------- | ---------------------------------------------------------------------------------------------- |
 | npm package      | `@cerbur/clutch-dsh-fireworks`                                                                 |
 | release name     | `fireworks`                                                                                    |
+| release worktree | `wt-fireworks-<version>/release`                                                               |
+| feature branch   | `wt-fireworks/feat-<feature-name>`                                                             |
 | source directory | `packages/clutch-dsh-fireworks`                                                                |
 | bundle patch     | `cordis.patch.yml`                                                                             |
 | source install   | `pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-fireworks` |

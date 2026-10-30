@@ -8,6 +8,7 @@
 | plugin directory | packages/clutch-dsh-title                                                                |
 | release name     | title                                                                                    |
 | release worktree | wt-title-<version>/release                                                               |
+| feature branch   | wt-title/feat-<feature-name>                                                             |
 | release tag      | title-release-<version>                                                                  |
 | bundle patch     | cordis.patch.yml                                                                         |
 | source install   | pnpm dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-title |

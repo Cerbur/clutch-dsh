@@ -455,11 +455,14 @@ pnpm run check
 也不能让父 Agent 代批。可增加覆盖、做不减弱契约的测试组织重构；实质放宽须先获人类批准。
 规范、自动/人工审查分工与适配层证据见 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md)。
 
-1. **分支与 Worktree 规范**：遵循根目录 `AGENTS.md` 的 release/feature worktree 模型。所有功能修改必须在独立 feature worktree 中完成。
+1. **分支与 Worktree 规范**：遵循根目录 `AGENTS.md` 的 worktree 模型。feature worktree 从最新
+   `main` 创建，命名为 `wt-worktree/feat-<feature-name>`；功能完成后可并入某个
+   `wt-worktree-<version>/release` 发布。所有功能修改必须在独立 feature worktree 中完成。
 2. **提交与门禁**：
-   - 合并前必须 rebase 到最新 release worktree 基线；
+   - 并入 release 前必须 rebase 到该 release worktree 的最新基线；
    - 必须通过 clean worktree 检查（无任何 staged、unstaged 或 untracked 文件）；
-   - 严禁从 feature worktree 执行 `npm publish`。
+   - 严禁从 feature worktree 执行 `npm publish`；
+   - package version 递增和带版本号的 `RELEASE-LOG.md` 条目在 release worktree 中完成。
 3. **禁止提交的文件**：
    - `lib/` 构建产物（由 `prepare` 自动生成）
    - `coverage/` 测试覆盖率报告

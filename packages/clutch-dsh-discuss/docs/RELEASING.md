@@ -4,13 +4,14 @@
 
 ## 包参数
 
-| 参数                           | 值                           |
-| ------------------------------ | ---------------------------- |
-| `<npm-package-name>`           | `@cerbur/clutch-dsh-discuss` |
-| `<plugin>`（workspace 目录名） | `clutch-dsh-discuss`         |
-| `<release-name>`               | `discuss`                    |
-| release branch / worktree 前缀 | `wt-discuss-<version>`       |
-| release tag                    | `discuss-release-<version>`  |
+| 参数                           | 值                               |
+| ------------------------------ | -------------------------------- |
+| `<npm-package-name>`           | `@cerbur/clutch-dsh-discuss`     |
+| `<plugin>`（workspace 目录名） | `clutch-dsh-discuss`             |
+| `<release-name>`               | `discuss`                        |
+| release branch / worktree 前缀 | `wt-discuss-<version>`           |
+| feature branch / worktree      | `wt-discuss/feat-<feature-name>` |
+| release tag                    | `discuss-release-<version>`      |
 
 `packages/clutch-dsh-discuss/package.json` 的 `version` 是唯一版本源。README、安装命令和本 package
 文档不重复写当前版本号；已发布的 `name + version` 不能原地覆盖。

@@ -11,19 +11,24 @@
   short name，同时用于分支命名、worktree 命名和 release tag；例如 `clutch-dsh-worktree` 对应
   `worktree`，`clutch-dsh-discuss` 对应 `discuss`。
 
-| 参数                                    | 含义                                        | 示例（worktree）                |
-| --------------------------------------- | ------------------------------------------- | ------------------------------- |
-| `<npm-package-name>`                    | package 完整名称                            | `@cerbur/clutch-dsh-worktree`   |
-| `<release-name>`                        | package short name                          | `worktree`                      |
-| `<version>`                             | 该 package 当前的 `package.json.version`    | `0.1.6`                         |
-| `wt-<release-name>-<version>/release`   | 聚合目标版本的 release worktree             | `wt-worktree-0.1.6/release`     |
-| `wt-<release-name>-<version>/<feature>` | 从 release worktree 创建的 feature worktree | `wt-worktree-0.1.6/feat-readme` |
-| `<release-name>-release-<version>`      | 发布后的 annotated tag                      | `worktree-release-0.1.6`        |
+| 参数                                  | 含义                                                 | 示例（worktree）              |
+| ------------------------------------- | ---------------------------------------------------- | ----------------------------- |
+| `<npm-package-name>`                  | package 完整名称                                     | `@cerbur/clutch-dsh-worktree` |
+| `<release-name>`                      | package short name                                   | `worktree`                    |
+| `<version>`                           | 该 package 当前的 `package.json.version`             | `0.1.6`                       |
+| `wt-<release-name>-<version>/release` | 从 `main` 创建、聚合选定 feature 的 release worktree | `wt-worktree-0.1.6/release`   |
+| `wt-<release-name>/feat-<feature>`    | 从 `main` 创建的 feature worktree                    | `wt-worktree/feat-readme`     |
+| `<release-name>-release-<version>`    | 发布后的 annotated tag                               | `worktree-release-0.1.6`      |
 
 `package.json.version` 是每个 package 唯一的版本源：README、市场 YAML、安装命令和本文档都不
 重复写具体版本号；npm 已发布的 `name + version` 不能原地覆盖，修复必须先递增版本。
 
 ## 分支模型与门禁
+
+feature worktree 从最新 `main` 创建，命名为 `wt-<release-name>/feat-<feature>`，不绑定 release
+版本；一个 feature 完成后可以选择并入某个待发布的 release worktree。release worktree 在准备
+发布时从最新 `main` 创建，命名为 `wt-<release-name>-<version>/release`，只聚合该版本要发布的
+feature。
 
 worktree 组织和 clean/rebase 门禁以仓库根目录 `AGENTS.md` 为准：feature worktree 只用于编写、
 验证和提交 scoped change；feature worktree 不是发布位置，禁止在其中执行 `npm pack` 或
@@ -52,8 +57,8 @@ stash 或忽略输出代替门禁。本流程只定义顺序和门禁，不自�
 不要重新阅读实现文件来还原发布说明，也不要把 commit hash 或 subject 写入日志。每件新增、
 优化、修复或删除的功能只写一句中文和一句英文。
 
-递增 package version 或创建 feature scoped commit 之前，先根据 release branch 的提交历史更新
-候选版本条目：
+feature worktree 不绑定版本，因此带版本号的 release log 条目在 release worktree 的发布准备阶段
+写入。递增 package version 之前，先根据目标 release branch 的提交历史更新候选版本条目：
 
 ```bash
 git log --reverse --no-merges --format='%h%x09%s' main..wt-<release-name>-<version>/release
@@ -74,47 +79,62 @@ registry 与本机镜像可能存在同步延迟；发布和版本验证必须�
 
 以下步骤适用于任何 package；命令中的占位符替换为“角色与参数”表格中的实际值。
 
-### 1. 更新 release log 与其他文档
+### 1. 在 feature worktree 完成功能与文档
 
-在 feature worktree 中，先更新 `RELEASE-LOG.md`，再同步受公开行为影响的 README、README.zh、
-AGENTS、计划等文档。只有文档和 release log 完成后，才能递增 package version 并创建 feature
-scoped commit。
-
-### 2. 递增版本
-
-从 feature worktree 的 package 目录执行：
+从最新 `main` 创建 feature worktree：
 
 ```bash
-cd /path/to/feature-worktree/packages/<plugin>
-npm version patch|minor|major --no-git-tag-version
+cd /path/to/clutch-dsh
+git fetch origin
+git worktree add /path/to/wt-<release-name>/feat-<feature> \
+  -b wt-<release-name>/feat-<feature> origin/main
 ```
 
-新功能用 `minor`，兼容性破坏用 `major`，缺陷修复用 `patch`；不要手工改回已经存在于 npm 的
-version，也不要手工降级。`--no-git-tag-version` 是硬性要求，版本不出现在 feature commit 之外
-的任何 git tag 里。
-
-### 3. 在 feature worktree 检查并提交
+在其中实现功能，并同步受公开行为影响的 README、README.zh、AGENTS、计划等文档。feature
+worktree 不递增 package version，也不写入带版本号的 release log 条目；这些在选定目标 release
+后统一在 release worktree 中处理。
 
 运行与改动匹配的检查，然后把全部改动整理为单个 scoped commit：
 
 ```bash
-cd /path/to/feature-worktree
+cd /path/to/wt-<release-name>/feat-<feature>
 git status --short
 git diff --check
-git commit -m "<type>(<scope>): prepare release metadata"
+git commit -m "<type>(<scope>): <summary>"
 ```
 
 commit message 必须说明改动范围；提交后 feature worktree 必须保持干净。
 
-### 4. 按 clean/rebase/merge 门禁合并到 release worktree
+### 2. 从 `main` 创建 release worktree
 
-确认两个 worktree 干净后，将 feature branch rebase 到最新 release branch，再在 release
+功能完成后，选定目标版本，从最新 `main` 创建 release worktree：
+
+```bash
+cd /path/to/clutch-dsh
+git fetch origin
+git worktree add /path/to/wt-<release-name>-<version>/release \
+  -b wt-<release-name>-<version>/release origin/main
+```
+
+release worktree 已经存在时，先确认它位于目标 release branch 且工作区干净，再把最新 `main`
+合并进 release branch 并重新验证；否则基于 `main` 的 feature rebase 会把 main 上的无关提交
+一并带入 release。
+
+```bash
+cd /path/to/wt-<release-name>-<version>/release
+git fetch origin
+git merge --no-ff origin/main -m "merge: sync main into wt-<release-name>-<version>/release"
+```
+
+### 3. 按 clean/rebase/merge 门禁合并选定的 feature
+
+确认两个 worktree 干净后，将 feature branch rebase 到目标 release branch，再在 release
 worktree 中以 `--no-ff` 合并单个 scoped commit：
 
 ```bash
-FEATURE_WORKTREE=/path/to/wt-<release-name>-<version>/<feature>
+FEATURE_WORKTREE=/path/to/wt-<release-name>/feat-<feature>
 RELEASE_WORKTREE=/path/to/wt-<release-name>-<version>/release
-FEATURE_BRANCH="wt-<release-name>-<version>/<feature>"
+FEATURE_BRANCH="wt-<release-name>/feat-<feature>"
 RELEASE_BRANCH="wt-<release-name>-<version>/release"
 
 test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
@@ -128,7 +148,34 @@ git -C "$RELEASE_WORKTREE" merge --no-ff "$FEATURE_BRANCH" \
 test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
 ```
 
-发生冲突时在 feature worktree 解决并重新验证，不能跳过 rebase gate。
+发生冲突时在 feature worktree 解决并重新验证，不能跳过 rebase gate。对每个选入该版本的
+feature 重复本步骤。
+
+### 4. 在 release worktree 更新 release log 并递增版本
+
+```bash
+cd /path/to/wt-<release-name>-<version>/release
+git log --reverse --no-merges --format='%h%x09%s' main..wt-<release-name>-<version>/release
+```
+
+据此在 `RELEASE-LOG.md` 写入候选版本条目，然后从 package 目录递增版本：
+
+```bash
+cd /path/to/wt-<release-name>-<version>/release/packages/<plugin>
+npm version patch|minor|major --no-git-tag-version
+```
+
+新功能用 `minor`，兼容性破坏用 `major`，缺陷修复用 `patch`；不要手工改回已经存在于 npm 的
+version，也不要手工降级。`--no-git-tag-version` 是硬性要求，版本不出现在任何 git tag 里，
+只随 release 合并进入 `main`。完成文档和版本更新后，把 release 准备改动整理为一个 scoped
+commit：
+
+```bash
+cd /path/to/wt-<release-name>-<version>/release
+git status --short
+git diff --check
+git commit -m "<type>(<scope>): prepare release metadata"
+```
 
 ### 5. 在 release worktree 检查并预览 tarball
 
@@ -180,7 +227,8 @@ npm 发布结果确认后，先将 release worktree 合并回 `main`，并在合
 
 ```bash
 cd /path/to/clutch-dsh
-VERSION=$(node -p "require('./packages/<plugin>/package.json').version")
+VERSION=$(node -p \
+  "require('/path/to/wt-<release-name>-<version>/release/packages/<plugin>/package.json').version")
 RELEASE_BRANCH="wt-<release-name>-${VERSION}/release"
 
 git status --short
@@ -221,16 +269,17 @@ push 之后如有需要，回到目标 package 的 `docs/RELEASING.md` 完成该
 | 状态                             | 处理                                                                                                             |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | 本地版本 = npm 版本              | 不能再次发布；先按变更类型用 `npm version <type> --no-git-tag-version` 递增，`<type>` 取 patch、minor 或 major。 |
-| 本地版本 > npm 版本              | 运行完整校验，推送包含该版本的 `main`，再发布。                                                                  |
+| 本地版本 > npm 版本              | 按目标 release 的发布生命周期在 release worktree 完成校验和发布，发布后再合并回 `main`。                         |
 | 本地版本 < npm 版本              | 不要降级 `package.json`；从 `main` 同步后递增到下一个未使用版本。                                                |
 | npm `view` 成功但 DSH 仍装旧版本 | 检查 DSH 使用的 registry 和 profile；必要时移除后重新添加。                                                      |
 | npm 官方 registry 成功、镜像 404 | 镜像尚未同步；等待刷新后再重新安装验证。                                                                         |
 
 ## 多 package 同步
 
-- 各 package 独立走上述完整生命周期，独立维护 worktree、release 分支、发布和 tag，不强求
+- 各 package 独立走上述完整生命周期，独立维护 feature/release worktree、发布和 tag，不强求
   版本号一致，也不互相等待。
 - 如果一次改动同时影响多个 package，root/workspace 级共享代码先用 `base/feat-<feature>`
-  分支合并回 `main`；之后每个受影响 package 再各自开 release/feature worktree 发布。
+  分支合并回 `main`；之后每个受影响 package 从最新 `main` 创建
+  `wt-<release-name>/feat-<feature>`，再按需要并入各自的 release。
 - 新增可发布 package 时，在该 package 目录内新建 `docs/RELEASING.md`，列出包参数表中的五个
   实际值和该包特有约束，并在开头引用本文档；不要复制完整流程。
