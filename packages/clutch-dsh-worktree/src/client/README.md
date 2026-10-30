@@ -246,8 +246,11 @@ This intentionally replaces the earlier unconditional last-child/root-bottom fal
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
 Worktree projection, not a replacement for DSH's native Session page or a new source of truth.
 
-Local/Main alone adds Manage Worktrees after Settings. `BatchManageWorktrees` owns transient
-selection, frozen confirmation targets and per-item outcomes. It processes items sequentially,
+Local/Main alone adds Manage Worktrees after Settings. Its rows use the derived list's branch
+icons, name/path layout, archive and health badges, and a total count. Checkbox rows retain hover,
+focus and selected feedback; narrow layouts place wrapping badges below the path.
+`BatchManageWorktrees` owns transient selection, frozen confirmation targets and per-item outcomes.
+It processes items sequentially,
 stops scheduling on unmount/owner replacement, and deselects successful items while retaining
 failed and ineligible selections. Action counts and confirmation include only eligible targets;
 cleanup and forget require archived records. Disk cleanup requires a stopped-tasks checkbox
@@ -258,6 +261,15 @@ the owning Workspace without clearing ready content. Cleanup detaches bindings a
 permissions; forget evicts only matching management/binding projections and notifies the existing
 context owner. A committed mutation is successful even if a follow-up read fails; it is never
 automatically replayed. No batch endpoint or durable selection is introduced.
+After an RPC commits, the hook rechecks the captured manager, shared reader and Surface lifecycle
+generation before local projection effects, callbacks or refresh. A retired Surface returns success
+for the committed operation without touching its replacement or inviting replay. Dashboard owner
+retirement only stops remaining items and old UI results: a live Surface still completes the submitted
+item's permission normalization, forget relationship cleanup and scoped refresh. Reader replacement
+retires the old lifecycle and resets its pending state; operation-owned busy tokens prevent an old
+finally block from clearing a replacement operation's lock or pending state.
+Cleanup permission notices are retained by Workspace/Worktree. Each failed target has its own
+Retry in Worktree settings; later results update only their matching target.
 Failed mutations also refresh only the owning Workspace before the next item: a rejected Git
 transaction can roll back its journal while advancing the Sidecar revision. Preserve the original
 item error, retire stale tokens, and continue independent items with the shared reader's new view.
@@ -653,7 +665,9 @@ and the view updates to `cleaned`. Any failure during subsequent permission norm
 or view refresh reports a retryable error without rolling back or repeating disk removal.
 The permission notice exposes Retry for a retryable result on a cleaned Worktree. It calls
 only `normalizeDetachedWorktreePermissions`, coalesces repeated clicks, and discards late
-results after forget, mode changes, disposal, or replacement of the notice. The Archived
+results after forget, mode changes, disposal, or replacement of that target's notice. Successful
+normalization clears only that Workspace/Worktree notice, preserving other failures and their
+retry actions. The Archived
 group activity aggregate excludes native archived Sessions, matching its child groups.
 Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cleans up
 browser-local fork recovery, membership projections, and permission notices for the affected

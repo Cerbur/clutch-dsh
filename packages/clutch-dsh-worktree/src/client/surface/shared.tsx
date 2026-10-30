@@ -14,9 +14,9 @@ export function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
   return { ...viewError, message: String(error) };
 }
 export const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
-export const EMPTY_PERMISSION_NOTICE: WorktreePermissionNotice | undefined = undefined;
+export const EMPTY_PERMISSION_NOTICE: readonly WorktreePermissionNotice[] = [];
 export const EMPTY_PERMISSION_NOTICE_SUBSCRIBE = (): (() => void) => () => {};
-export const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): WorktreePermissionNotice | undefined =>
+export const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): readonly WorktreePermissionNotice[] =>
   EMPTY_PERMISSION_NOTICE;
 export const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
 export const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT = ():

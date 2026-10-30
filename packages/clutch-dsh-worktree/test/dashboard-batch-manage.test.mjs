@@ -11,6 +11,9 @@ import * as batch from '../lib/client/dashboard/batch-manage.js';
 import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
 import { en, zh } from '../lib/client/locales.js';
+import { createWorktreeRefreshGuard } from '../lib/client/view/worktree-view-read.js';
+import { loadClientEntry } from './client-fixture.mjs';
+import * as view from '../lib/client/view/worktree-view.js';
 
 const record = { workspaceId: 'repo', worktreeId: 'one', branch: 'feat/one', absolutePath: '/repo/one',
   status: 'active', health: 'ready', source: 'plugin', mutationToken: 'revision-1' };
@@ -93,16 +96,249 @@ async function operationsFixture() {
     mutation: { actionPending: false, setActionPending: (pending) => { calls.push(['pending', pending]); input.mutation.actionPending = pending; } },
     expansion: { suppressCurrentSessionReveal: (id) => calls.push(['suppress', id]), clearSessionGroups: (ids) => calls.push(['clear', ids]) },
     session: { pendingSessionBinding: { worktreeId: 'one' }, setPendingSessionBinding: (value) => calls.push(['binding', value]) },
-    lifecycleState: { cleanupGuard: { current: { begin: () => 1, isCurrent: () => true, invalidate: () => calls.push(['invalidate']) } } },
+    lifecycleState: { cleanupGuard: { current: createWorktreeRefreshGuard() } },
   };
+  const refs = [];
+  let refIndex = 0;
   const module = await compile('../src/client/surface/actions/useDashboardBatchManage.ts', {
-    react: { useRef: (value) => ({ current: value }), useCallback: (callback) => callback },
+    react: { useRef: (value) => refs[refIndex++] ?? (refs[refIndex - 1] = { current: value }), useCallback: (callback) => callback },
     '../../dashboard/batch-manage.js': batch,
     '../selectors.js': { bindingIdsFor: (bindings, id) => bindings.filter((value) => value.worktreeId === id).map((value) => value.sessionId) },
     './worktree-cleanup-flow.js': { runWorktreeCleanupFlow },
   });
-  return { execute: module.useDashboardBatchManage(input), input, calls, state };
+  const render = (next = input) => { refIndex = 0; return module.useDashboardBatchManage(next); };
+  return { execute: render(), render, input, calls, state };
 }
+
+for (const action of ['archive', 'forget']) {
+  for (const retire of ['manager', 'reader', 'lifecycle']) {
+    test(`committed ${action} ignores local follow-ups after ${retire} replacement during RPC`, async () => {
+      const { execute, render, input, calls, state } = await operationsFixture();
+      const target = action === 'forget' ? archived : record;
+      state.current.views[0].worktrees = [target, second];
+      let finish, started;
+      const submitted = new Promise((resolve) => { started = resolve; });
+      const rpc = new Promise((resolve) => { finish = resolve; });
+      input.props.manager[action === 'archive' ? 'removeWorktree' : 'forgetWorktree'] = () => {
+        calls.push([action, target.worktreeId]); started(); return rpc;
+      };
+      const pending = execute(action, target);
+      await submitted;
+      const replacement = { ...input, props: { ...input.props } };
+      if (retire === 'manager') replacement.props.manager = { ...input.props.manager };
+      if (retire === 'reader') replacement.reader = { ...input.reader };
+      if (retire === 'lifecycle') input.lifecycleState.cleanupGuard.current.invalidate();
+      render(replacement);
+      const projection = state.current;
+      const previousCalls = calls.length;
+      finish();
+      await pending; // The RPC committed: retirement must not invite destructive replay.
+      assert.equal(state.current, projection);
+      assert.deepEqual(calls.slice(previousCalls).filter(([name]) => name !== 'pending'), []);
+      assert.deepEqual(calls.slice(previousCalls), [], 'retired lifecycle cannot update pending state');
+      assert.equal(calls.filter(([name]) => name === action).length, 1);
+    });
+  }
+}
+
+for (const action of ['archive', 'clean', 'forget']) {
+test(`closing batch UI after ${action} submission completes Surface follow-ups once`, async () => {
+  const { execute, input, state, calls } = await operationsFixture();
+  const targets = action === 'archive' ? [record, second] : [archived, archivedSecond];
+  state.current.views[0].worktrees = targets;
+  let finish, started;
+  const submitted = new Promise((resolve) => { started = resolve; });
+  input.props.manager[{ archive: 'removeWorktree', clean: 'cleanWorktree', forget: 'forgetWorktree' }[action]] = () => {
+    calls.push([action, 'one']); started();
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  let owner = true;
+  const results = [];
+  const pending = batch.runWorktreeBatch(action, targets, execute,
+    () => owner, (result) => results.push(result));
+  await submitted;
+  owner = false;
+  finish();
+  await pending;
+  assert.deepEqual(results, [], 'closed batch UI receives no results');
+  if (action === 'clean') {
+    assert.equal(state.current.views[0].worktrees[0].diskCleanup, 'completed');
+    assert.equal(state.current.views[0].bindings[0].status, 'detached');
+    for (const name of ['normalize', 'notice']) assert.equal(calls.filter(([kind]) => kind === name).length, 1, name);
+  }
+  if (action === 'forget') {
+    assert.deepEqual(state.current.views[0].worktrees.map((item) => item.worktreeId), ['two']);
+    assert.deepEqual(state.current.views[0].bindings, []);
+    assert.equal(calls.filter(([kind]) => kind === 'forgotten').length, 1);
+    assert.deepEqual(calls.find(([kind]) => kind === 'forgotten')[1].sessionIds, ['session']);
+  }
+  if (action === 'archive') assert.equal(calls.filter(([kind]) => kind === 'suppress').length, 1);
+  for (const name of [action, 'refresh']) {
+    assert.equal(calls.filter(([action]) => action === name).length, 1, name);
+  }
+  assert.equal(input.mutation.actionPending, false);
+});
+}
+
+test('reader replacement resets the live Surface busy state without old RPC callbacks', async () => {
+  const { input, calls } = await operationsFixture();
+  const lifecycleModule = await compile('../src/client/surface/state/useLifecycleState.tsx', {
+    react: React, '../../view/worktree-view.js': view,
+  });
+  const batchModule = await compile('../src/client/surface/actions/useDashboardBatchManage.ts', {
+    react: React, '../../dashboard/batch-manage.js': batch,
+    '../selectors.js': { bindingIdsFor: () => [] }, './worktree-cleanup-flow.js': { runWorktreeCleanupFlow },
+  });
+  const dom = new JSDOM('<div id="app"></div>');
+  const previous = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const root = createRoot(dom.window.document.getElementById('app'));
+  let execute, busy, started, pending, nextPending, nextStarted;
+  const finishes = [];
+  const submitted = new Promise((resolve) => { started = resolve; });
+  const nextSubmitted = new Promise((resolve) => { nextStarted = resolve; });
+  input.props.manager.removeWorktree = () => {
+    if (finishes.length === 0) started(); else nextStarted();
+    return new Promise((resolve) => { finishes.push(resolve); });
+  };
+  function Harness({ reader }) {
+    const [actionPending, setActionPending] = React.useState(false);
+    const props = { ...input.props, viewReader: reader };
+    const mutation = { ...input.mutation, actionPending, setActionPending };
+    const lifecycleState = lifecycleModule.useLifecycleState({ props, source: { mode: 'worktree' }, mutation });
+    execute = batchModule.useDashboardBatchManage({ ...input, props, reader, mutation, lifecycleState });
+    busy = actionPending;
+    return null;
+  }
+  try {
+    await React.act(async () => root.render(React.createElement(Harness, { reader: input.reader })));
+    await React.act(async () => { pending = execute('archive', record); await submitted; });
+    assert.equal(busy, true);
+    await React.act(async () => root.render(React.createElement(Harness, { reader: { ...input.reader } })));
+    assert.equal(busy, false, 'replacement lifecycle must release the shared busy state');
+    await React.act(async () => { nextPending = execute('archive', second); await nextSubmitted; });
+    assert.equal(busy, true, 'new reader owner can submit while the retired RPC remains pending');
+    await React.act(async () => { finishes[0](); await pending; });
+    assert.equal(busy, true, 'old finally cannot clear the new operation pending state');
+    await assert.rejects(execute('archive', record), { code: 'WORKTREE_STATE_CONFLICT' });
+    assert.deepEqual(calls, [], 'old RPC cannot refresh, mutate or notify the replacement');
+    await React.act(async () => { finishes[1](); await nextPending; });
+    assert.equal(busy, false);
+    assert.equal(calls.filter(([kind]) => kind === 'refresh').length, 1);
+    assert.equal(calls.filter(([kind]) => kind === 'suppress').length, 1);
+  } finally {
+    await React.act(async () => { for (const finish of finishes) finish(); await Promise.allSettled([pending, nextPending]); });
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+  }
+});
+
+async function permissionRecoveryFixture(props, input, state) {
+  const actions = await compile('../src/client/surface/actions/useLifecycleActions.tsx', {
+    '../../view/worktree-view.js': view,
+  });
+  const surface = await compile('../src/client/surface/components/SurfaceContent.tsx', {
+    'react/jsx-runtime': jsx,
+    '../../view/worktree-error-copy.js': { formatWorktreePermissionNotice: (result) => result.status },
+    '../../worktree.css': { default: {} }, '../shared.js': {},
+    './WorkspaceTree.js': { WorkspaceTree: 'tree' }, './OverlayScrollbar.js': { OverlayScrollbar: 'scrollbar' },
+    './NotificationToasts.js': { NotificationToasts: 'notifications' }, '../notification-queue.js': {},
+  });
+  const permissionRetryPending = { current: false };
+  return () => {
+    const source = { mode: 'worktree', permissionNoticeSnapshot: props.permissionNotice.getSnapshot(),
+      workspaces: { items: [] }, sessions: { byId: {} }, forkRecoverySnapshot: { pending: [] } };
+    const read = { ...input.read, readState: state.current,
+      viewByWorkspace: new Map(state.current.views.map((item) => [item.workspaceId, item])) };
+    const lifecycle = actions.useLifecycleActions({ read, source,
+      props: { ...props, permission: input.props.permission }, mutation: input.mutation,
+      lifecycleState: { ...input.lifecycleState, permissionRetryPending } });
+    const element = surface.SurfaceContent({ source, props: { ...props, t: (key) => key }, read,
+      lifecycle, mutation: input.mutation, session: { ...input.session, pendingSessionBinding: undefined }, expansion: {} });
+    const findNotices = (node) => {
+      if (node?.type === 'notifications') return node.props.notices;
+      for (const child of React.Children.toArray(node?.props?.children)) {
+        const found = findNotices(child);
+        if (found) return found;
+      }
+    };
+    return findNotices(element);
+  };
+}
+
+for (const bothFail of [false, true]) {
+  test(`batch cleanup retains scoped permission failures when ${bothFail ? 'both items fail' : 'A fails and B succeeds'}`, async () => {
+    const client = await loadClientEntry();
+    try {
+      const props = client.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
+      const { execute, input, state, calls } = await operationsFixture();
+      state.current.views[0].worktrees = [archived, archivedSecond];
+      input.props.onPermissionNotice = props.onPermissionNotice;
+      const normalizations = [];
+      input.props.permission.normalizeDetachedWorktreePermissions = async (target) => {
+        normalizations.push({ workspaceId: target.workspaceId, worktreeId: target.worktreeId });
+        if (target.worktreeId === 'one') throw new Error('permission unavailable');
+        if (bothFail) return { status: 'unverified', retryable: true };
+        return { status: 'normalized-workspace-write', retryable: false };
+      };
+      const results = [];
+      await batch.runWorktreeBatch('clean', [archived, archivedSecond], execute, () => true, (result) => results.push(result));
+      assert.ok(results.every((result) => !result.error), 'permission follow-up cannot undo committed cleanup');
+      assert.deepEqual(normalizations.map((target) => target.worktreeId), ['one', 'two']);
+      const notices = props.permissionNotice.getSnapshot();
+      assert.deepEqual(notices.map((notice) => [notice.workspaceId, notice.worktreeId]),
+        bothFail ? [['repo', 'one'], ['repo', 'two']] : [['repo', 'one']]);
+      assert.ok(notices.every((notice) => notice.result.retryable));
+      const renderRecovery = await permissionRecoveryFixture(props, input, state);
+      let recovery = renderRecovery();
+      assert.equal(recovery.length, bothFail ? 2 : 1);
+      assert.equal(new Set(recovery.map((notice) => notice.key)).size, recovery.length);
+      assert.ok(recovery.every((notice) => notice.actions.length === 1));
+      input.props.permission.normalizeDetachedWorktreePermissions = async (target) => {
+        normalizations.push(target);
+        return { status: 'normalized-workspace-write', retryable: false };
+      };
+      await recovery[0].actions[0].onClick();
+      assert.deepEqual(normalizations[2], { workspaceId: 'repo', worktreeId: 'one' });
+      assert.deepEqual(props.permissionNotice.getSnapshot(), bothFail ? [notices[1]] : []);
+      if (bothFail) {
+        recovery = renderRecovery();
+        await recovery[0].actions[0].onClick();
+        assert.deepEqual(normalizations[3], { workspaceId: 'repo', worktreeId: 'two' });
+        assert.deepEqual(props.permissionNotice.getSnapshot(), []);
+      }
+      assert.deepEqual(calls.filter(([action]) => action === 'clean'), [['clean', 'one'], ['clean', 'two']]);
+    } finally {
+      for (const dispose of client.disposers.toReversed()) dispose();
+    }
+  });
+}
+
+test('permission successes and forgetting clear only notices in their Workspace/Worktree scope', async () => {
+  const client = await loadClientEntry();
+  try {
+    const props = client.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
+    const scopes = [{ workspaceId: 'A', worktreeId: 'same' }, { workspaceId: 'B', worktreeId: 'same' },
+      { workspaceId: 'A', worktreeId: 'other' }];
+    const failure = { status: 'unverified', retryable: true };
+    for (const scope of scopes) props.onPermissionNotice(scope, failure);
+    props.onPermissionNotice(scopes[1], { status: 'normalized-workspace-write', retryable: false });
+    assert.deepEqual(props.permissionNotice.getSnapshot().map(({ workspaceId, worktreeId }) => ({ workspaceId, worktreeId })),
+      [scopes[0], scopes[2]]);
+    props.onPermissionNotice(scopes[1], failure);
+    props.onWorktreeForgotten({ ...scopes[0], sessionIds: [] });
+    assert.deepEqual(props.permissionNotice.getSnapshot().map(({ workspaceId, worktreeId }) => ({ workspaceId, worktreeId })),
+      [scopes[2], scopes[1]]);
+  } finally {
+    for (const dispose of client.disposers.toReversed()) dispose();
+  }
+});
 
 test('production batch actions refresh tokens between items and preserve unrelated ready views', async () => {
   const { execute, calls, state } = await operationsFixture();
@@ -196,6 +432,7 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
     },
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
     '../surface/components/NotificationToasts.js': { NotificationToasts: () => null },
+    '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
     './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
   });
   const dom = new JSDOM('<div id="app"></div>');

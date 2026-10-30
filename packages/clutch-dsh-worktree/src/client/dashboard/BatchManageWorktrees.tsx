@@ -4,6 +4,7 @@ import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { IconBranchOutline16 } from '../dsh-icons.js';
 import { canManageWorktree, runWorktreeBatch, type BatchWorktreeAction, type BatchWorktreeResult } from './batch-manage.js';
 import styles from './dashboard.css';
 import { isMainWorktreeId } from './dashboard-selection.js';
@@ -60,7 +61,10 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     }
   };
   return <section data-dashboard-batch-manage aria-busy={pending}>
-    <h2>{t('dashboard.tab.manage')}</h2>
+    <div className={styles.dashboardCardHeading}>
+      <h2>{t('dashboard.tab.manage')}</h2>
+      <span>{rows.length}</span>
+    </div>
     <p>{t('dashboard.manage.description')}</p>
     <div className={styles.dashboardManageToolbar}>
       <label><input type="checkbox" checked={allSelected} disabled={disabled || rows.length === 0}
@@ -76,7 +80,7 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
       </Button>)}
     </div>
     <p className={styles.dashboardManageHint}>{t('dashboard.manage.availability')}</p>
-    {rows.length === 0 ? <p>{t('dashboard.manage.empty')}</p> : <ul className={styles.dashboardManageList}>
+    {rows.length === 0 ? <p>{t('dashboard.manage.empty')}</p> : <ul className={`${styles.dashboardSessions} ${styles.dashboardManageList}`}>
       {rows.map((record) => <li key={record.worktreeId}>
         <label><input type="checkbox" checked={selected.has(record.worktreeId)} disabled={disabled}
           aria-label={record.branch + ' · ' + record.absolutePath}
@@ -85,11 +89,12 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
             if (next.has(record.worktreeId)) next.delete(record.worktreeId); else next.add(record.worktreeId);
             return next;
           })} />
+          <IconBranchOutline16 />
           <span className={styles.dashboardSessionLabel}><strong>{record.currentHead?.name ?? record.currentBranch ?? record.branch}</strong>
             <code className={styles.dashboardChildPath}>{record.absolutePath}</code></span>
           <span className={styles.dashboardChildState}>
-            <span>{t(record.status === 'active' ? 'dashboard.manage.active' : 'dashboard.archived')}</span>
-            <span>{t(record.health === 'ready' ? 'worktree.ready' : record.health === 'repair' ? 'worktree.repair'
+            {record.status === 'removed' && <span className={styles.dashboardSoon}>{t('dashboard.archived')}</span>}
+            <span className={styles.dashboardHealth} data-health={record.health ?? 'unknown'}>{t(record.health === 'ready' ? 'worktree.ready' : record.health === 'repair' ? 'worktree.repair'
               : record.health === 'recovery-needed' ? 'worktree.recovery' : record.health === 'branch-drift'
                 ? 'worktree.branchDrift' : record.health === 'cleaned' ? 'dashboard.cleaned' : 'dashboard.unknown')}</span>
           </span>

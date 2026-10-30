@@ -89,8 +89,8 @@ function permissionFixture(normalize) {
     styles: {},
     t: (key) => key,
     formatWorktreePermissionNotice: (result) => result.status,
-    permissionNoticeSnapshot: notice,
-    permissionNotice: { getSnapshot: () => notice },
+    permissionNoticeSnapshot: [notice],
+    permissionNotice: { getSnapshot: () => [notice] },
     permission: { normalizeDetachedWorktreePermissions: normalize },
     onPermissionNotice: (target, result) => published.push({ target, result }),
     mode: 'worktree',
@@ -106,8 +106,8 @@ function permissionFixture(normalize) {
   const declaration = (name) =>
     find((node) => ts.isVariableDeclaration(node) && node.name.getText(ast) === name);
   const noticeStatement = find(
-    node => ts.isIfStatement(node) &&
-      node.expression.getText(ast) === 'permissionNoticeSnapshot !== undefined',
+    node => ts.isForOfStatement(node) &&
+      node.expression.getText(ast) === 'permissionNoticeSnapshot',
   );
   context.workspaceLabel = id => id;
   const render = () => evaluate([
@@ -154,9 +154,9 @@ test('permission retry preserves business failures and only offers cleanup retry
   assert.ok(fixture.button());
   await fixture.button().props.onClick();
   assert.deepEqual(fixture.published[0].result, failure);
-  fixture.context.permissionNoticeSnapshot.result.retryable = false;
+  fixture.context.permissionNoticeSnapshot[0].result.retryable = false;
   assert.equal(fixture.button(), undefined);
-  fixture.context.permissionNoticeSnapshot.result.retryable = true;
+  fixture.context.permissionNoticeSnapshot[0].result.retryable = true;
   delete fixture.context.viewByWorkspace.get('ws').worktrees[0].diskCleanup;
   assert.equal(fixture.button(), undefined);
 });
@@ -170,7 +170,7 @@ test('permission retry drops late results after forget or disposal and coalesces
       context.cleanupGuard.current.invalidate();
     },
     (context) => {
-      context.permissionNotice.getSnapshot = () => undefined;
+      context.permissionNotice.getSnapshot = () => [];
     },
   ]) {
     let resolve;

@@ -678,6 +678,15 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 错误通知与恢复入口
 
+Dashboard 批量生命周期 RPC 提交后，Client 在执行本地投影副作用、回调与刷新前重查捕获的
+manager、reader 与 Surface cleanup 生命周期代次。Surface 已失效时丢弃后续处理，但已提交
+操作仍成功，不产生可重放的失败。Dashboard owner 退休仅停止后续项调度与旧 UI 结果发布；Surface
+仍有效时继续已提交项的权限归一化、forget 关系清理与 Workspace 刷新。reader 单独替换也重置
+Surface 生命周期和 pending；busy token 属于具体操作，旧 finally 不得释放新操作的锁或 pending。
+权限通知在浏览器内按 Workspace/Worktree 独立保留，后续目标
+成功只移除自己的通知；每项重试只调用 `normalizeDetachedWorktreePermissions`，不再次执行
+`cleanWorktree`。移出管理仅淘汰匹配 Workspace 内的目标及其 Session 通知。
+
 Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
 初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。

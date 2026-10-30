@@ -253,7 +253,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   });
   const refreshed = [];
   const input = {
-    source: { forkRecoverySnapshot: { pending: [] },
+    source: { permissionNoticeSnapshot: [], forkRecoverySnapshot: { pending: [] },
       workspaces: { items: [{ workspaceId: 'affected', title: 'My repo', path: '/repo' }] },
       sessions: { byId: { 'retained-session': { displayTitle: 'My Session' } } } },
     props: { t: (key) => en[key], openSession() {} },

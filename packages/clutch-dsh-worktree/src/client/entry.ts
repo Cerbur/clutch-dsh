@@ -218,7 +218,7 @@ export function apply(ctx: Context): void {
   const viewReader = createWorktreeViewReader(manager);
   const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
-  const permissionNotice = createSnapshotStore<WorktreePermissionNotice | undefined>(undefined);
+  const permissionNotice = createSnapshotStore<readonly WorktreePermissionNotice[]>([]);
   const permissionManager = typeof document !== 'undefined' ? manager : undefined;
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const reportPermissionNotice = (
@@ -233,7 +233,9 @@ export function apply(ctx: Context): void {
     const visible = result.status === 'fallback-workspace-write' ||
       result.status === 'user-restricted' ||
       result.status === 'unverified';
-    permissionNotice.set(visible ? { ...input, result } : undefined);
+    const remaining = permissionNotice.getSnapshot().filter((notice) =>
+      notice.workspaceId !== input.workspaceId || notice.worktreeId !== input.worktreeId);
+    permissionNotice.set(visible ? [...remaining, { ...input, result }] : remaining);
   };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
@@ -685,14 +687,10 @@ export function apply(ctx: Context): void {
             for (const sessionId of input.sessionIds) {
               virtualWorkspaceMembership.removeSession(sessionId);
             }
-            const currentNotice = permissionNotice.getSnapshot();
-            if (
-              currentNotice !== undefined &&
-              (currentNotice.worktreeId === input.worktreeId ||
-                (currentNotice.sessionId !== undefined && input.sessionIds.includes(currentNotice.sessionId)))
-            ) {
-              permissionNotice.set(undefined);
-            }
+            permissionNotice.set(permissionNotice.getSnapshot().filter((notice) =>
+              notice.workspaceId !== input.workspaceId ||
+              (notice.worktreeId !== input.worktreeId &&
+                (notice.sessionId === undefined || !input.sessionIds.includes(notice.sessionId)))));
           },
         }),
       },

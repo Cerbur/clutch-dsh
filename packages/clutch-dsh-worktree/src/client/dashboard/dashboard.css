@@ -113,15 +113,21 @@
   list-style: none;
   padding: 0;
 }
-.dashboardManageList > li {
-  border-bottom: 1px solid var(--dsw-alias-border-main, #8884);
-}
 .dashboardManageList label {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 0;
+  gap: 10px;
+  padding: 12px 8px;
+  border-radius: 6px;
   cursor: pointer;
+}
+.dashboardManageList label:hover,
+.dashboardManageList label:has(input:checked) {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+}
+.dashboardManageList label:has(input:focus-visible) {
+  outline: 2px solid #497cd4;
+  outline-offset: 2px;
 }
 .dashboardManageList input,
 .dashboardManageToolbar input,
@@ -791,6 +797,21 @@ html[data-platform='darwin']
 }
 
 @container (max-width: 440px) {
+  .dashboardManageList label {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  .dashboardManageList .dashboardChildState {
+    grid-column: 3;
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .dashboardManageList .dashboardHealth {
+    white-space: normal;
+  }
   .dashboardPage {
     padding: 16px 12px;
   }

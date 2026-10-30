@@ -252,7 +252,7 @@ test('production Client routes missing-preset results to toast without transport
     const fallback = { status: 'fallback-workspace-write', retryable: true };
     props.onPermissionResult(scope, fallback);
     assert.equal(notice.getReasonSnapshot(), 'permission-preset-unavailable');
-    assert.deepEqual(props.permissionNotice.getSnapshot(), { ...scope, result: fallback });
+    assert.deepEqual(props.permissionNotice.getSnapshot(), [{ ...scope, result: fallback }]);
     assert.equal(fixture.fakeContext.workspaces.list.getSnapshot(), workspace);
     assert.equal(fixture.fakeContext.sessions.list.getSnapshot(), sessions);
     assert.equal(fixture.rpcCalls.length, calls);
