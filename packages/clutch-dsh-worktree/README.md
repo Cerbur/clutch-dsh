@@ -438,6 +438,14 @@ Quick Actions offers baseline synchronization and archive. VS Code must be
 installed on the browser's machine and able to access the recorded path; the link does not verify
 launch success.
 
+Local/Main Dashboard adds **Manage Worktrees** after **Settings**. Select individual records or
+all Worktrees in this Workspace, including archived and cleaned records, then archive, clean up
+disk, or remove them from management. Confirmation lists the selected paths; disk cleanup also
+requires confirming that all tasks using them have stopped. Buttons show eligible target counts;
+confirmation includes only those targets, while ineligible items stay selected. Archive before
+cleanup or removal from management. Results appear per Worktree; successful items are deselected and failures
+remain selected for explicit retry. Main itself is never a batch target.
+
 **Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
 this checkout's current local branch. Overview previews five entries; the tab shows all matches,
 including archived entries with their availability and paths. Click an entry to open its Dashboard.

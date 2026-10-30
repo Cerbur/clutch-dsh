@@ -419,6 +419,7 @@ for (const target of ['main', 'wt']) {
       for (const name of [
         'useDragActions',
         'useLifecycleActions',
+        'useDashboardBatchManage',
         'useNativeActions',
         'useSessionActions',
         'useSurfaceMutation',

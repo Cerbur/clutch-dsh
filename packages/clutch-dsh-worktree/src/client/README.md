@@ -246,6 +246,22 @@ This intentionally replaces the earlier unconditional last-child/root-bottom fal
 The Worktree Dashboard is a plugin-only preview MVP. It is a browser presentation over the existing
 Worktree projection, not a replacement for DSH's native Session page or a new source of truth.
 
+Local/Main alone adds Manage Worktrees after Settings. `BatchManageWorktrees` owns transient
+selection, frozen confirmation targets and per-item outcomes. It processes items sequentially,
+stops scheduling on unmount/owner replacement, and deselects successful items while retaining
+failed and ineligible selections. Action counts and confirmation include only eligible targets;
+cleanup and forget require archived records. Disk cleanup requires a stopped-tasks checkbox
+in addition to its destructive confirmation, and lists the actual checkout root for nested cwd.
+`useDashboardBatchManage` calls existing lifecycle RPCs, validates the confirmed target facts,
+uses the latest token after earlier items advance the Workspace revision, and refreshes only
+the owning Workspace without clearing ready content. Cleanup detaches bindings and normalizes
+permissions; forget evicts only matching management/binding projections and notifies the existing
+context owner. A committed mutation is successful even if a follow-up read fails; it is never
+automatically replayed. No batch endpoint or durable selection is introduced.
+Failed mutations also refresh only the owning Workspace before the next item: a rejected Git
+transaction can roll back its journal while advancing the Sidecar revision. Preserve the original
+item error, retire stale tokens, and continue independent items with the shared reader's new view.
+
 `dashboard/` owns the transient dashboard selection, page, and presentation lifecycle.
 `WorktreeSurface` opens it from Local/Main and active/archived Worktree menus and resolves the
 selected Workspace/Worktree IDs against the same ready view used by the Sidebar.

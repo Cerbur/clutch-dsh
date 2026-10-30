@@ -89,6 +89,62 @@
   align-items: flex-end;
   gap: 4px;
 }
+
+.dashboardManageToolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+.dashboardManageToolbar label,
+.dashboardManageStopped {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dashboardManageHint {
+  color: var(--dsw-alias-label-secondary, #788191);
+  font-size: 12px;
+}
+.dashboardManageList,
+.dashboardManageResults,
+.dashboardManageConfirmList {
+  list-style: none;
+  padding: 0;
+}
+.dashboardManageList > li {
+  border-bottom: 1px solid var(--dsw-alias-border-main, #8884);
+}
+.dashboardManageList label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  cursor: pointer;
+}
+.dashboardManageList input,
+.dashboardManageToolbar input,
+.dashboardManageStopped input {
+  flex: none;
+  accent-color: var(--dsw-alias-brand-primary, #497cd4);
+}
+.dashboardManageResults li,
+.dashboardManageConfirmList li {
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+.dashboardManageConfirmList {
+  max-height: 260px;
+  overflow: auto;
+}
+.dashboardManageConfirmList code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.dashboardManageResults [data-batch-result='failed'] {
+  color: var(--dsw-alias-label-error, #d34b4b);
+}
 .dashboardSessionStatus {
   display: inline-flex;
   align-items: center;

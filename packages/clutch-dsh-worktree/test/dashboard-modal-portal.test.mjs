@@ -11,9 +11,13 @@ import ts from 'typescript';
 import { en } from '../lib/client/locales.js';
 import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import * as acquisition from '../lib/client/dashboard/worktree-acquisition-facts.js';
+import * as batch from '../lib/client/dashboard/batch-manage.js';
 
 const source = await readFile(new URL('../src/client/dashboard/WorktreeDashboard.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+const batchCompiled = ts.transpileModule(await readFile(new URL('../src/client/dashboard/BatchManageWorktrees.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
@@ -68,12 +72,17 @@ function dashboard() {
     '../branch/GitBranchSelector.js': { GitBranchPicker: noop },
     '../surface/components/NotificationToasts.js': { NotificationToasts: noop },
     './dashboard.css': { default: {} },
+    './batch-manage.js': batch,
+    '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
   };
+  const batchExports = {};
+  new Function('require', 'exports', batchCompiled)((name) => modules[name] ?? {}, batchExports);
+  modules['./BatchManageWorktrees.js'] = batchExports;
   new Function('require', 'exports', compiled)((name) => modules[name] ?? {}, exports);
   return exports.WorktreeDashboard;
 }
 
-async function fixture() {
+async function fixture({ main = false } = {}) {
   const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'http://localhost' });
   const previous = new Map();
   for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document,
@@ -90,12 +99,15 @@ async function fixture() {
   function Owner() {
     const [visible, setVisible] = React.useState(true);
     return visible && React.createElement(Dashboard, {
-      record: { workspaceId: 'ws', worktreeId: 'wt', branch: 'feature', currentBranch: 'feature',
+      record: main ? selection.createMainWorktreeRecord({ workspaceId: 'ws', path: '/test' }, 'main') : { workspaceId: 'ws', worktreeId: 'wt', branch: 'feature', currentBranch: 'feature',
         baseBranch: 'main', absolutePath: '/test/worktree', source: 'plugin', status: 'active', health: 'ready' },
       workspaceTitle: 'Test', t: (key) => en[key],
       sessions: { ids: [], byId: {} }, sessionPresentations: {}, sessionIds: [], actionPending: false,
       onClose: () => { closed++; setVisible(false); },
       onSyncBaseline: () => pending, onOpenSession: (id) => opened.push(id),
+      worktrees: [{ workspaceId: 'ws', worktreeId: 'wt', branch: 'feature', absolutePath: '/test/worktree',
+        status: 'removed', source: 'plugin', health: 'ready', mutationToken: 'token' }],
+      onManageWorktree: () => pending,
     });
   }
   await act(async () => { root.render(React.createElement(Owner)); });
@@ -139,6 +151,31 @@ test('native portal Escape closes only the sync modal and restores Dashboard Esc
     await h.escape(h.surface());
     assert.equal(h.closed, 1);
     assert.equal(h.surface(), null);
+  } finally { await h.dispose(); }
+});
+
+test('batch native portal owns Escape before confirmation and throughout a pending cleanup', async () => {
+  const h = await fixture({ main: true });
+  try {
+    await h.click([...h.document.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === en['dashboard.tab.manage']));
+    await h.click(h.document.querySelector('input[aria-label="Select all"]'));
+    await h.click(h.document.querySelector('[data-batch-action="clean"]'));
+    assert.ok(h.dialog());
+    assert.equal(h.surface().contains(h.dialog()), false);
+    await h.escape(h.dialog().querySelector('input'));
+    assert.equal(h.dialog(), null);
+    assert.equal(h.closed, 0);
+    await h.click(h.document.querySelector('[data-batch-action="clean"]'));
+    await h.click(h.dialog().querySelector('input'));
+    await h.click(h.document.querySelector('[data-batch-confirm]'));
+    await h.escape(h.dialog());
+    assert.ok(h.dialog());
+    await h.escape(h.surface());
+    assert.equal(h.closed, 0);
+    await act(async () => { h.finish(); });
+    assert.equal(h.dialog(), null);
+    await h.escape(h.surface());
+    assert.equal(h.closed, 1);
   } finally { await h.dispose(); }
 });
 

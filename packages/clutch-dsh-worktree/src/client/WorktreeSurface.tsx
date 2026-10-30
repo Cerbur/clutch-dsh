@@ -7,6 +7,7 @@ import { NotificationProvider } from './surface/components/NotificationToasts.js
 import { SurfaceHeader } from './surface/components/SurfaceHeader.js';
 import { useDragActions } from './surface/actions/useDragActions.js';
 import { useLifecycleActions } from './surface/actions/useLifecycleActions.js';
+import { useDashboardBatchManage } from './surface/actions/useDashboardBatchManage.js';
 import { useLifecycleState } from './surface/state/useLifecycleState.js';
 import { useNativeActions } from './surface/actions/useNativeActions.js';
 import { useRegistrationState } from './surface/state/useRegistrationState.js';
@@ -244,6 +245,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     session,
   });
   const lifecycle = useLifecycleActions({ read, lifecycleState, source, props, mutation });
+  const manageDashboardWorktree = useDashboardBatchManage({ props, read, mutation, expansion, session, lifecycleState, lifecycle, reader: props.viewReader });
   const dashboardWorkspace = source.workspaces.items.find(
     (workspace) => workspace.workspaceId === dashboardRecord?.workspaceId,
   );
@@ -425,6 +427,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           worktrees={dashboardView?.worktrees ?? []}
           mainRecord={dashboardMainRecord}
           onOpenWorktree={openDashboard}
+          onManageWorktree={props.manager === undefined ? undefined : manageDashboardWorktree}
           onSaveInstructions={
             props.manager
               ? async (instructions, expectedInstructions) => {
