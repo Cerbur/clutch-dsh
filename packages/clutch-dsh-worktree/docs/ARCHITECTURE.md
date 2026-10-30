@@ -665,6 +665,7 @@ Refresh scope is determined by the smallest affected identity.
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
+- Local/Main Dashboard 独有的“管理 worktree”页签复用所属 Workspace 的 ready records，包含归档和清理记录，不包含 Main。选择、确认目标与逐项结果仅存在于浏览器；批量串行调用现有归档、磁盘清理和移出管理 RPC。每项执行前比对已确认的路径、分支与生命周期事实，并使用前一项局部刷新后的最新 mutation token，以适配 Sidecar revision 变化。清理需额外确认任务已停止，保留 binding detached 与权限归一化流程；移出管理只移除插件关系。刷新始终限于所属 Workspace，成功项不因后续读取失败而重放，取消或 owner 卸载不再调度剩余项；不新增 Host API、持久化字段或全局刷新。
 - 派生 Worktree（2026-10-25）仅从所属 Workspace 的 ready records 投影：候选 `baseBranch` 匹配当前 checkout 的实际本地分支，无法获取时回退受管理记录分支；短名与 `refs/heads/` 等价，显式远端 ref 不匹配。排除自身、跨 Workspace 和间接后代，Detached HEAD 或未知 Main 分支返回空列表。归档项保留并展示生命周期与健康状态，概览预览五项并显示总数，children 页签显示全部，点击复用 `openDashboard` 的 Session 导航门禁。修改已保存基线会改变关系；不新增持久化血缘、委派目录、RPC 或全局刷新。此实现取代历史 Dashboard MVP 计划的 children 占位，不推断 Git 祖先关系，历史计划保持只读。
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
 - Dashboard 顶部基线 fact 复用同一分支匹配与 `openDashboard`，可前往所属 Workspace 中唯一匹配的受管理 Worktree 或 Main；编辑按钮独立保留，所有页签共享。基线保存后立即按已保存值重算目标；远端、未知、detached、自身、跨 Workspace 或多目标歧义时仅显示文本，不新增 RPC 或持久化字段。
@@ -676,6 +677,15 @@ Refresh scope is determined by the smallest affected identity.
 - Session-bound Dashboard 在当前 Session 身份变化或目标移除时关闭；空 list 的 page-level Dashboard 不绑定当前 Session，且其右上角导航操作改为在该 Worktree 中新建 Session。退出 Dashboard、显式打开原生 Session 或组件销毁时，立即恢复原生 center 的可见性与无障碍焦点，不修改 DSH Session/Workspace 数据。
 
 ### 错误通知与恢复入口
+
+Dashboard 批量生命周期 RPC 提交后，Client 在执行本地投影副作用、回调与刷新前重查捕获的
+manager、reader 与 Surface cleanup 生命周期代次。Surface 已失效时丢弃后续处理，但已提交
+操作仍成功，不产生可重放的失败。Dashboard owner 退休仅停止后续项调度与旧 UI 结果发布；Surface
+仍有效时继续已提交项的权限归一化、forget 关系清理与 Workspace 刷新。reader 单独替换也重置
+Surface 生命周期和 pending；busy token 属于具体操作，旧 finally 不得释放新操作的锁或 pending。
+权限通知在浏览器内按 Workspace/Worktree 独立保留，后续目标
+成功只移除自己的通知；每项重试只调用 `normalizeDetachedWorktreePermissions`，不再次执行
+`cleanWorktree`。移出管理仅淘汰匹配 Workspace 内的目标及其 Session 通知。
 
 Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、

@@ -266,6 +266,7 @@ export async function statusRenderers() {
     './OpenInAppButton.js': { OpenInAppButton: 'OpenInAppButton' },
     './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
     '../settings/ToolSettings.js': { ToolSettings: 'ToolSettings' },
+    './BatchManageWorktrees.js': { BatchManageWorktrees: 'BatchManageWorktrees' },
     './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
     './git/WorktreeGitOverview.js': {
       useWorktreeGitOverview: () => ({ status: 'unavailable' }),

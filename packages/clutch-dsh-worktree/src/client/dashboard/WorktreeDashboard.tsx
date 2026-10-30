@@ -39,8 +39,9 @@ import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.j
 import type { WorktreeSyncStrategy, WorktreeSessionDispatchResult } from '../../contract/baseline-sync.js';
 import { GitBranchPicker } from '../branch/GitBranchSelector.js';
 import { ToolSettings } from '../settings/ToolSettings.js';
+import { BatchManageWorktrees, type BatchManageWorktreesProps } from './BatchManageWorktrees.js';
 
-const TABS = ['overview', 'git', 'sessions', 'children', 'settings'] as const;
+const TABS = ['overview', 'git', 'sessions', 'children', 'settings', 'manage'] as const;
 type DashboardTab = (typeof TABS)[number];
 
 /** getRandomValues is also available on plain-HTTP LAN origins. */
@@ -102,6 +103,7 @@ export interface WorktreeDashboardProps {
   readonly onCreateSession?: () => void;
   readonly onCreateWorktree?: () => void;
   readonly onArchiveWorktree?: () => void;
+  readonly onManageWorktree?: BatchManageWorktreesProps['onManage'];
   readonly onSyncBaseline?: (strategy: WorktreeSyncStrategy, baseBranch: string, requestId: string) => Promise<WorktreeSessionDispatchResult>;
   readonly onOpenFile?: (path: string) => void;
 }
@@ -113,6 +115,7 @@ function DashboardIcon({ kind }: { kind: DashboardTab | 'instructions' | 'action
     sessions: 'M4 4h16v13H9l-5 4z M8 8h8 M8 12h5',
     children: 'M12 7v5 M5 17v-5h14v5 M9 3h6v4H9z M2 17h6v4H2z M16 17h6v4h-6z',
     settings: 'M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6',
+    manage: 'M9 5h12 M9 12h12 M9 19h12 M3 4h2v2H3z M3 11h2v2H3z M3 18h2v2H3z',
     instructions: 'M5 3h14v18H5z M8 7h8 M8 11h8 M8 15h5',
     actions: 'M13 2 4 14h7l-1 8 10-13h-8z',
   };
@@ -420,6 +423,7 @@ export function WorktreeDashboard({
   onCreateSession,
   onCreateWorktree,
   onArchiveWorktree,
+  onManageWorktree,
   onSyncBaseline,
   onOpenFile,
   onSaveInstructions,
@@ -508,6 +512,7 @@ export function WorktreeDashboard({
     }
   };
   const isMain = isMainWorktreeId(record.worktreeId);
+  const tabs = TABS.filter((value) => value !== 'manage' || isMain);
   const refName = record.currentHead?.name ?? record.currentBranch ?? record.branch;
   const branchAvailable = refName.length > 0;
   const displayBranch = branchAvailable ? refName : t('dashboard.branchUnavailable');
@@ -756,7 +761,8 @@ export function WorktreeDashboard({
         if (event.key === 'Escape') {
           // Portal keys bubble through this React ancestor before the native
           // Modal's document listener. Let it closeSync (including its busy guard).
-          if (syncOpen) return;
+          if (syncOpen || surface.current?.ownerDocument.querySelector('[data-dashboard-batch-dialog]') ||
+            (event.target as Element | undefined)?.closest?.('[role="dialog"]')) return;
           if ((event.target as Element | undefined)?.closest?.('[data-single-select-picker]')) return;
           // Other dashboard menus own Escape even when focus remains elsewhere in the surface.
           if (event.currentTarget.querySelector('[role="menu"]')) return;
@@ -915,7 +921,7 @@ export function WorktreeDashboard({
           </div>
         </header>
         <div className={styles.dashboardTabs} role="tablist" aria-label={t('dashboard.title')}>
-          {TABS.map((value) => (
+          {tabs.map((value) => (
             <button
               type="button"
               key={value}
@@ -926,16 +932,16 @@ export function WorktreeDashboard({
               tabIndex={tab === value ? 0 : -1}
               onClick={() => selectTab(value)}
               onKeyDown={(event) => {
-                const index = TABS.indexOf(value);
+                const index = tabs.indexOf(value);
                 const next =
                   event.key === 'ArrowRight'
-                    ? TABS[(index + 1) % TABS.length]
+                    ? tabs[(index + 1) % tabs.length]
                     : event.key === 'ArrowLeft'
-                      ? TABS[(index + TABS.length - 1) % TABS.length]
+                      ? tabs[(index + tabs.length - 1) % tabs.length]
                       : event.key === 'Home'
-                        ? TABS[0]
+                        ? tabs[0]
                         : event.key === 'End'
-                          ? TABS[TABS.length - 1]
+                          ? tabs[tabs.length - 1]
                           : undefined;
                 if (next) {
                   event.preventDefault();
@@ -1104,6 +1110,11 @@ export function WorktreeDashboard({
             >
               {sessionList(sessionIds)}
             </Card>
+          ) : tab === 'manage' && isMain ? (
+            <div className={styles.dashboardCard}>
+              <BatchManageWorktrees workspaceId={record.workspaceId} worktrees={worktrees} t={t}
+                actionPending={actionPending} onManage={onManageWorktree} />
+            </div>
           ) : tab === 'settings' ? (
             <Card title={tabLabel('settings')} icon={<DashboardIcon kind="settings" />}>
               <ToolSettings

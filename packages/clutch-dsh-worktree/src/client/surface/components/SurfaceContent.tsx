@@ -165,14 +165,16 @@ export function SurfaceContent({
     const recovery = recoveryAction(error);
     return recovery === null ? [] : [recovery];
   };
-  if (permissionNoticeSnapshot !== undefined) {
+  for (const notice of permissionNoticeSnapshot) {
+    const target = permissionRetryTarget(notice);
     notices.push({
-      key: 'permission:' + permissionNoticeSnapshot.workspaceId + ':' + permissionNoticeSnapshot.worktreeId,
-      text: formatWorktreePermissionNotice(permissionNoticeSnapshot.result, t),
-      message: (translate) => formatWorktreePermissionNotice(permissionNoticeSnapshot.result, translate),
-      context: t('settings.permission') + ' · ' + workspaceLabel(permissionNoticeSnapshot.workspaceId),
-      actions: permissionRetryTarget === undefined ? [] : [{
-        label: t('action.retry'), disabled: actionPending, onClick: retryCleanupPermissions,
+      key: 'permission:' + JSON.stringify([notice.workspaceId, notice.worktreeId]),
+      text: formatWorktreePermissionNotice(notice.result, t),
+      message: (translate) => formatWorktreePermissionNotice(notice.result, translate),
+      context: [t('settings.permission'), workspaceLabel(notice.workspaceId),
+        target?.absolutePath ?? notice.worktreeId].join(' · '),
+      actions: target === undefined ? [] : [{
+        label: t('action.retry'), disabled: actionPending, onClick: () => retryCleanupPermissions(notice),
       }],
     });
   }

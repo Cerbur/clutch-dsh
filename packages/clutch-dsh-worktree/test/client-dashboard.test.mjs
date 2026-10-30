@@ -355,6 +355,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics, 
         },
         './WorktreeInstructions.js': { WorktreeInstructions: 'Instructions' },
         '../settings/ToolSettings.js': { ToolSettings: 'ToolSettings' },
+        './BatchManageWorktrees.js': { BatchManageWorktrees: 'BatchManageWorktrees' },
         './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
         './git/WorktreeGitOverview.js': {
           useWorktreeGitOverview: () => ({ status: 'unavailable' }),
@@ -427,6 +428,26 @@ const copyButton = (node) =>
 const copyBranchTitle = (node) =>
   findAll(node, (item) => item.props?.['data-dashboard-copy'] === 'branch')[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('only Local/Main adds batch management after Settings, including keyboard navigation', () => {
+  const harness = renderHarness(async () => true);
+  const previous = globalThis.document;
+  let focused;
+  globalThis.document = { getElementById: (id) => ({ focus: () => { focused = id; } }) };
+  try {
+    assert.equal(byRole(harness.render(), 'tab').length, 5);
+    let node = harness.render({ record: createMainWorktreeRecord({ workspaceId: 'repo', path: '/repo' }, 'main'),
+      worktrees: [record], onManageWorktree: async () => {} });
+    assert.deepEqual(byRole(node, 'tab').slice(-2).map((tab) => tab.props.id), ['dashboard-settings', 'dashboard-manage']);
+    byRole(node, 'tab')[4].props.onKeyDown({ key: 'ArrowRight', preventDefault() {} });
+    node = harness.render();
+    assert.equal(focused, 'dashboard-manage');
+    assert.equal(byRole(node, 'tab')[5].props['aria-selected'], true);
+    assert.equal(findAll(node, (item) => item.type === 'BatchManageWorktrees').length, 1);
+    byRole(node, 'tab')[5].props.onKeyDown({ key: 'ArrowRight', preventDefault() {} });
+    assert.equal(byRole(harness.render(), 'tab')[0].props['aria-selected'], true);
+  } finally { globalThis.document = previous; harness.dispose(); }
+});
 
 test('sync dialog selects a strategy, coalesces activation and opens the admitted native Session', async () => {
   for (const strategy of ['merge', 'rebase']) {

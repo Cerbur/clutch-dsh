@@ -6,13 +6,13 @@ import type { useSurfaceMutation } from '../actions/useSurfaceMutation.js';
 import type { useSurfaceSources } from './useSurfaceSources.js';
 
 type Input = {
-  props: Pick<WorktreeSurfaceProps, 'manager'>;
+  props: Pick<WorktreeSurfaceProps, 'manager' | 'viewReader'>;
   source: Pick<ReturnType<typeof useSurfaceSources>, 'mode'>;
   mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'setActionPending'>;
 };
 
 export function useLifecycleState({ props, source, mutation }: Input) {
-  const { manager } = props;
+  const { manager, viewReader } = props;
   const { mode } = source;
   const { setActionPending } = mutation;
   const [worktreeBranchAdoption, setWorktreeBranchAdoption] = useState<WorktreeRecord>();
@@ -25,14 +25,14 @@ export function useLifecycleState({ props, source, mutation }: Input) {
     const guard = branchAdoptionGuard.current;
     setWorktreeBranchAdoption(undefined);
     return () => guard.invalidate();
-  }, [manager, mode]);
+  }, [manager, mode, viewReader]);
   const permissionRetryPending = useRef(false);
   useEffect(() => {
     const guard = cleanupGuard.current;
     permissionRetryPending.current = false;
     setActionPending(false);
     return () => guard.invalidate();
-  }, [manager, mode]);
+  }, [manager, mode, viewReader]);
   return {
     worktreeBranchAdoption,
     setWorktreeBranchAdoption,

@@ -113,7 +113,7 @@ export interface WorktreeSurfaceInjected {
     },
     result: WorktreePermissionResult,
   ) => void;
-  readonly permissionNotice?: ObservableSnapshot<WorktreePermissionNotice | undefined>;
+  readonly permissionNotice?: ObservableSnapshot<readonly WorktreePermissionNotice[]>;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
   readonly invalidateWorktreeContext?: (
