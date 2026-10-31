@@ -63,9 +63,9 @@ hood static. No new interaction or animation is claimed.
   warnings/errors. Reduced motion was false in this browser; it was not manually
   toggled this pass. Existing redraw/disposal regression tests passed.
 
-Evidence: [whole kitchen](../assets/screenshots/office-cooking-set.png),
-[two characters](../assets/screenshots/office-cooking-set-preview.png),
-[search transition](../assets/screenshots/office-cooking-set-search.png).
+Evidence: [whole kitchen](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-cooking-set.png),
+[two characters](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-cooking-set-preview.png),
+[search transition](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-cooking-set-search.png).
 Matching evidence and component-specific receipts are in the Blender library's
 `sync/evidence/2026-10-27-cooking-set/` and `sync/receipts/`.
 

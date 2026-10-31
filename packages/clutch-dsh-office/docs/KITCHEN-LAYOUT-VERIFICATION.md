@@ -48,8 +48,8 @@ The previously open tab accumulated one duplicate-Three.js warning during HMR;
 it is not included in the cold-load result. Reduced motion was not manually
 retested in this pass; asynchronous-load/resource regression tests passed.
 
-Evidence: [focused room](../assets/screenshots/office-reference-layout.png),
-[two actors](../assets/screenshots/office-reference-preview.png).
+Evidence: [focused room](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-reference-layout.png),
+[two actors](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-reference-preview.png).
 The server and reviewed kitchen tab are left open.
 
 ## Limits

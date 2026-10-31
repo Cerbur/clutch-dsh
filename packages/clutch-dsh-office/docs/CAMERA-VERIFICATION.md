@@ -18,7 +18,7 @@ complete room envelope fits at 1200x800, 900x660, 600x520 and 340x350. Real
 `DSH_HOME=/Users/yuancheng/.dsh-test`, `http://127.0.0.1:3088/`, was cold-loaded;
 the focused room displayed the full kitchen and no horizontal page overflow.
 The current 768px browser measured a 673x520 focused canvas. Fresh-tab console
-warnings/errors: zero. Screenshot: `assets/screenshots/office-isometric-view.png`.
+warnings/errors: zero. Screenshot: [office-isometric-view.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-isometric-view.png).
 
 This pass changes the camera and webpage sizing only. No geometry, asset delivery,
 DSH source, native Session, production profile, commit, push or publication change.

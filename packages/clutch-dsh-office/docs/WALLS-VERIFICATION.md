@@ -58,11 +58,11 @@ Cooking/waiting and search preview verified without running native Sessions.
 Scroll to final room:1 canvas/0 alerts; return to first room successfully rebuilds
 both walls and floor. Fresh tab captured zero console warnings/errors.
 
-![Real test overview](../assets/screenshots/office-walls-overview.png)
-![Two-character preview](../assets/screenshots/office-walls-preview.png)
+[Real test overview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-walls-overview.png)
+[Two-character preview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-walls-preview.png)
 
-Additional evidence: `office-walls-search.png`, `office-walls-list-end.png` and
-`office-walls-rebuilt.png` in assets/screenshots. Mirrored to library
+Additional evidence: [office-walls-search.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-walls-search.png), [office-walls-list-end.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-walls-list-end.png) and
+[office-walls-rebuilt.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-walls-rebuilt.png) in assets/screenshots. Mirrored to library
 `sync/evidence/2026-10-27-walls/`, along with bake/import/native audits and logs.
 Per-wall revision/hash receipts are in library `sync/receipts/` and catalog.
 

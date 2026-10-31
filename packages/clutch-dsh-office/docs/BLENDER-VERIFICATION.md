@@ -61,7 +61,7 @@ Rebuilding while the page was open produced a transient duplicate Three.js
 instance warning through DSH HMR, and the active Office panel was reset. A cold
 reload cleared it; final acceptance uses that clean load.
 
-Screenshot: [real test profile with Blender refrigerator](../assets/screenshots/office-fridge.png).
+Screenshot: [real test profile with Blender refrigerator](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-fridge.png).
 The library receipt is at
 `/Users/yuancheng/Documents/blender/office/sync/receipts/kitchen-refrigerator-2026-10-27-r1.json`.
 

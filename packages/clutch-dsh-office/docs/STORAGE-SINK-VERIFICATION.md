@@ -10,5 +10,5 @@ Validation: official Blender5.2.3 LTS independent import and full-scene BVH/Cycl
 
 Source textures already contain baked highlights and countertop triangular shading; accepted as current replacement without claiming those were fixed. GLB authoring remains in the Office library. Exact cabinet revision/hash/geometry/source and fit transform in `sync/receipts/kitchen-storage-cabinet-2026-10-28-r1.json` / `sync/receipts/kitchen-layout-2026-10-28-storage-sink-v1.json`. Eighteen GLBs 38,037,304 bytes; uncompressed Client 52,659,591bytes. Only cabinet adopted GLB/manifest changed, plus layout sink-fit/root heights; other17asset pairs, CSS verified unchanged; lighting separately updated to the user-selected Cycles review target. No Harness source/production profile edits or commit/push/publish.
 
-![Updated kitchen](../assets/screenshots/office-storage-sink-overview.png)
-![Fridge route](../assets/screenshots/office-storage-sink-search.png)
+[Updated kitchen](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-storage-sink-overview.png)
+[Fridge route](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-storage-sink-search.png)

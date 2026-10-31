@@ -46,6 +46,8 @@ pulling updates before restarting DSH. Reloading the page alone does not rebuild
 
 The Session and character screenshots use the labeled local preview; their four entries are simulated.
 
+The plugin marketplace screenshot list is maintained in [screenshots.json](screenshots.json), using the same four documentation images.
+
 | Kitchen rendering                    | Preview                                                                                                                                                                                  | Behavior                                                                                                                                                                       |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Softer surfaces and lighter geometry | <img src="assets/screenshots/office-optimized-kitchen.jpg" width="600" alt="Optimized empty kitchen with restrained window light, coated range hood and continuous wooden platform rim"> | Uses reviewed medium geometry with Meshopt decoding. The window keeps a gentle warm pane glow, the hood uses a soft coated finish, and the wooden rim avoids baked seam lines. |

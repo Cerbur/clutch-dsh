@@ -52,7 +52,7 @@ Playwright checked:
   restores the two visible canvases.
 - Offscreen kitchens do not create a canvas until they intersect the viewport.
 
-The committed [overview screenshot](../assets/screenshots/office-overview.png)
+The committed [overview screenshot](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-overview.png)
 is a real browser capture of that simulated fixture, not a DSH installation.
 
 ## Real-profile acceptance
@@ -101,7 +101,7 @@ Two real integration failures were found, corrected and reproduced as passing:
    online status, native connection readiness, and an active connection generation
    before it shows live rooms/counts. Reconnection uses the native refreshed facts.
 
-The real-profile [screenshot](../assets/screenshots/office-live-profile.png) now shows
+The real-profile [screenshot](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-live-profile.png) now shows
 the all-kitchens vertical-list revision in the normal test profile, including idle
 workspaces without characters.
 The seven dedicated Sessions were stopped and archived after acceptance. Existing

@@ -100,8 +100,8 @@ focused room, dual-actor cooking/waiting/search, last room and first-room rebuil
 not manually toggled; loading/redraw/disposal regressions cover that path.
 No native Session started for preview. Server left running.
 
-![Actual overview](../assets/screenshots/office-layout-overview.png)
-![Dual-actor preview](../assets/screenshots/office-layout-preview.png)
+[Actual overview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-layout-overview.png)
+[Dual-actor preview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-layout-preview.png)
 
 Evidence mirrored to library `sync/evidence/2026-10-27-aligned-layout/`, including
 native round-corner close-up, bin open/closed renders, BVH report and test logs.

@@ -268,7 +268,7 @@ the camera direction (45-degree azimuth, 30-degree elevation), position (8,7.532
 toward (0,1,0.5); intensity2.8→2.2. Other lights, exposure, layout and models stay fixed.
 Built and visually reviewed in ~/.dsh-test; two walls now receive more balanced light,
 and the large exterior side shadow no longer dominates. Resource ownership is unchanged.
-Current overview evidence: `assets/screenshots/office-lighting-front.png` in the plugin;
+Current overview evidence: [office-lighting-front.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-lighting-front.png) in the plugin;
 Blender receipt: `sync/receipts/kitchen-lighting-2026-10-27-v2.json`. The v1 captures and
 receipt remain historical. This pass did not repeat the v1 two-actor/offscreen checks.
 
@@ -281,7 +281,7 @@ Actual cold ~/.dsh-test overview reviewed with zero console warnings/errors. Bui
 typecheck, lint and existing lighting resource test passed. This pass did not rerun
 two-character or offscreen scenarios. GLB/manifest/layout/CSS byte identities retained;
 no material or camera edits. These are artistic RGB light colors, not calibrated CCT.
-Current screenshot `assets/screenshots/office-lighting-temperature.png`; library
+Current screenshot [office-lighting-temperature.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-lighting-temperature.png); library
 receipt `sync/receipts/kitchen-lighting-2026-10-27-v3.json`. Previous captures remain
 historical. Reference modeling/texture differences and missing window light remain.
 

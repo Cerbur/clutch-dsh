@@ -20,7 +20,7 @@ loading placeholders. Inspected zero actors and the built-in four-actor local
 preview. The previously reported broad diagonal bands on the bin body did not
 reproduce in those views. Captured the settled four-actor view:
 
-![Actual DSH four-actor view](reports/2026-10-31-trash-dsh-recheck.png)
+[Actual DSH four-actor view](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/docs/reports/2026-10-31-trash-dsh-recheck.png)
 
 The local production-runtime fixture was also checked at 5× zoom with shadows
 enabled/disabled. The old scan's vertical dents and irregular lid/handle boundaries

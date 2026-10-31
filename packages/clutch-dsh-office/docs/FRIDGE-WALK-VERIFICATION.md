@@ -10,5 +10,5 @@ Validation: `pnpm run test` (79passed, includes full build), `pnpm run typecheck
 
 Native source models/deliveries remain unchanged. This iteration does not reexport Blender art. Library root/scene/component handoffs and catalog layoutReceipt synchronized; previous accepted revisions retained. Plugin-only; no Harness source, production profile or commit/push/publish. Service http://127.0.0.1:3088/ remains running via existing test-profile package symlink.
 
-![Walking to fridge](../assets/screenshots/office-fridge-walk-walking.png)
-![Arrived](../assets/screenshots/office-fridge-walk-arrived.png)
+[Walking to fridge](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-fridge-walk-walking.png)
+[Arrived](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-fridge-walk-arrived.png)

@@ -89,7 +89,7 @@ GPU46.8ms；本轮前后采用重新采样的基线，系统其他工作未完�
 画布到`/tmp/office-performance-scene.png`。工具只绑定127.0.0.1，使用模拟Session，不访问用户会话。
 
 最终原始样本与画布截图在本目录`reports/2026-10-31-performance-optimized.json`及
-`reports/2026-10-31-performance-optimized.png`。首次四人baseline摘要见本表，前轮原始分析数据不覆盖。
+[2026-10-31-performance-optimized.png](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/docs/reports/2026-10-31-performance-optimized.png)。首次四人baseline摘要见本表，前轮原始分析数据不覆盖。
 
 取舍：小道具近距离放大细节减少，八次采样阴影边缘可能较粗；WebP解码是新增浏览器要求。
 截图和本机性能验证不代表用户最终美术批准，也不代表手机设备可稳定30FPS。

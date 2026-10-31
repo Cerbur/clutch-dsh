@@ -45,8 +45,8 @@ separate so it does not disappear or double with floor adoption. Existing late-l
   -Other11 asset hashes unchanged. Camera/lighting/CSS/room/furniture/routes unchanged. Only floor root local
   origin and separately compensated legacy mat coordinates changed. Tile contact height remains .025m.
 
-Evidence:[overview](../assets/screenshots/office-floor-overview.png),[actors](../assets/screenshots/office-floor-preview.png),
-[search](../assets/screenshots/office-floor-search.png),[list-end](../assets/screenshots/office-floor-list-end.png).
+Evidence:[overview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-floor-overview.png),[actors](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-floor-preview.png),
+[search](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-floor-search.png),[list-end](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-floor-list-end.png).
 Library receipt `sync/receipts/kitchen-floor-2026-10-27-r1.json` and evidence directory `sync/evidence/2026-10-27-floor/`.
 
 ## Limits

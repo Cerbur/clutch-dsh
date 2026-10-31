@@ -4,7 +4,7 @@
 
 Table and both stools moved another0.40m outward on user confirmation. Table[1.45,0,.95], stools[.95,.025,1.83]/[1.98,.025,1.83]; same right-edge clearance and relative spacing. All18GLB/manifests retain their prior hashes; other furniture, actor stations, lighting and camera unchanged.79tests/full build/typecheck passed; actual refreshed ~/.dsh-test overview and two-character preview checked, no scene alerts or warning/error logs. Blender and offscreen manual checks were not repeated this iteration. Latest library receipt `sync/receipts/kitchen-layout-2026-10-28-outward-v1.json`; prior sections below are historical for the earlier placement.
 
-![Outward table](../assets/screenshots/office-outward-r2.png)
+[Outward table](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-outward-r2.png)
 
 The table stays at the right edge, aligned around the stove center then moved outward0.40m by the user's latest request. Final table[1.45,0,.55], stools[.95,.025,1.43]/[1.98,.025,1.43], rug[-.95,.0255,2.42]. Original authored units and sizes remain. New sink r2 at[-.05,0,-1.463], new source DeepSeek r2 adopted. This supersedes the prior aligned-layout report's placements/asset versions; its frozen snapshots remain historical.
 
@@ -27,5 +27,5 @@ Actual checks: `pnpm run test` (79passed, includes full build), `pnpm run typech
 
 Library root docs, catalog, component handoffs and accepted receipts synchronized; complete layout/hash record `sync/receipts/kitchen-layout-2026-10-27-centered-v1.json`. All authoring stays under `office/<scene>/<component>` or `office/character/<id>`.
 
-![Updated kitchen](../assets/screenshots/office-centered-overview.png)
-![New whale girls](../assets/screenshots/office-centered-preview.png)
+[Updated kitchen](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-centered-overview.png)
+[New whale girls](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-centered-preview.png)

@@ -48,8 +48,8 @@ GPU/CPU 负载不在稳态承诺内。未用 Windows GPU 冒充实测。
 HDR 半浮点存储与 MSAA 解析后再色调映射允许少量边缘差异；并非逐字节相同。
 宽区域光照、地板和角色阴影通过同帧比较；没有降低分辨率或用截图代替动态人物。
 
-- [缓存渲染](reports/2026-10-31-30fps-cached.png)
-- [相同姿态完整渲染](reports/2026-10-31-30fps-reference.png)
+- [缓存渲染](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/docs/reports/2026-10-31-30fps-cached.png)
+- [相同姿态完整渲染](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/docs/reports/2026-10-31-30fps-reference.png)
 - [量化比较](reports/2026-10-31-30fps-comparison.json)
 
 复现：运行 `node scripts/performance-preview.mjs`，访问

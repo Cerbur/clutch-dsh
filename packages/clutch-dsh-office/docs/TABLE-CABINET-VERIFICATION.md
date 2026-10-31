@@ -78,7 +78,7 @@ No login token is recorded in the handoff.
 - Final cold-loaded warning/error log has zero entries; no scene alerts. Intermediate
   build HMR produced the known duplicate-Three.js warning; cold load is the baseline.
 
-Screenshot: [installed kitchen](../assets/screenshots/office-kitchen-assets.png).
+Screenshot: [installed kitchen](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-kitchen-assets.png).
 Full overview/focused/actor/list-end evidence is retained in each component's
 `reviews/2026-10-27-r1/office/` directory. Receipts:
 

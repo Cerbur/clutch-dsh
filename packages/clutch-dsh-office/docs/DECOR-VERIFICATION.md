@@ -91,8 +91,8 @@ appear together without duplicate placeholders. Scroll to final room leaves1canv
 OS reduced-motion preference was not manually toggled; asynchronous redraw, late
 dispose and fallback regressions passed. No native Session was run for preview.
 
-![Actual test overview](../assets/screenshots/office-decor-overview.png)
-![Dual-actor preview](../assets/screenshots/office-decor-preview.png)
+[Actual test overview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-decor-overview.png)
+[Dual-actor preview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-decor-preview.png)
 
 Additional focused/search/list-end/rebuilt captures and model collision report are
 mirrored to library `sync/evidence/2026-10-27-decor/`. Six revision/hash receipts in

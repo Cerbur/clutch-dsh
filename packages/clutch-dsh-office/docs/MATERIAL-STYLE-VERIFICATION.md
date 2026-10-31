@@ -55,11 +55,11 @@ after. Preview activities never run or modify native Sessions. Reduced motion
 was not manually toggled in this pass; asynchronous redraw/disposal tests pass.
 The listener profile and linked release package were verified; service left open.
 
-Evidence: [before](../assets/screenshots/office-material-before.png),
-[after](../assets/screenshots/office-material-after.png),
-[characters before](../assets/screenshots/office-material-character-before.png),
-[characters after](../assets/screenshots/office-material-character-after.png),
-[search](../assets/screenshots/office-material-search.png).
+Evidence: [before](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-material-before.png),
+[after](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-material-after.png),
+[characters before](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-material-character-before.png),
+[characters after](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-material-character-after.png),
+[search](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-material-search.png).
 Paired library evidence is `sync/evidence/2026-10-27-material-style/`; separate
 revision/hash receipts record acceptance and catalog adoption for all 11 assets.
 

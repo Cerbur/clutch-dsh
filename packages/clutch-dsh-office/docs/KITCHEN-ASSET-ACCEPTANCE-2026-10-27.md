@@ -82,11 +82,11 @@ zero console errors and zero warnings. The fixture also confirmed:
 
 ## Evidence
 
-- [Overview](../assets/screenshots/office-overview.png)
-- [Focused kitchen](../assets/screenshots/office-kitchen-assets.png)
-- [Two-character local preview](../assets/screenshots/office-deepseek-preview.png)
-- [Reduced-motion search](../assets/screenshots/office-reduced-motion.png)
-- [Vertical list end](../assets/screenshots/office-list-end.png)
+- [Overview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-overview.png)
+- [Focused kitchen](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-kitchen-assets.png)
+- [Two-character local preview](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-deepseek-preview.png)
+- [Reduced-motion search](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-reduced-motion.png)
+- [Vertical list end](https://github.com/Cerbur/clutch-dsh/blob/66c88d734b53cf539dc5aabb59011bf3c4f32cbd/packages/clutch-dsh-office/assets/screenshots/office-list-end.png)
 
 The library keeps the same acceptance images under
 `sync/evidence/2026-10-27-r1/`. Component receipts are under `sync/receipts/`.
