@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import process from 'node:process';
 import { Box3, Object3D, Vector3, Matrix4 } from 'three';
+import { validateCharacterRig } from './validate-character.mjs';
 
 const MIB = 1024 * 1024;
 export const ASSET_RULES = {
@@ -45,6 +46,26 @@ export const ASSET_RULES = {
       'front_anchor',
     ],
     revisions: {
+      '2026-10-29-refined-r1': {
+        materials: 3,
+        primitives: 3,
+        meshes: 3,
+        images: 3,
+        nodes: [
+          '灶台总成',
+          '灶台静态总成',
+          '烤箱烟色玻璃',
+          '转角接缝台面',
+          'work_surface',
+          'cook_anchor',
+          'burner_left',
+          'burner_right',
+          'front_anchor',
+          'join_right',
+          'counter_back_left',
+          'counter_front_left',
+        ],
+      },
       '2026-10-28-candy-r1': {
         materials: 2,
         primitives: 2,
@@ -255,6 +276,62 @@ export const ASSET_RULES = {
     origin: 'wall-plane-bottom-center',
     nodes: ['wall-calendar', 'wall_calendar_mesh', 'wall_anchor', 'front_anchor', 'hang_anchor'],
   },
+  'kitchen/spice-rack': {
+    file: 'spice-rack.glb',
+    triangles: 25000,
+    bytes: 4 * MIB,
+    materials: 1,
+    primitives: 1,
+    meshes: 1,
+    images: 3,
+    origin: 'wall-plane-bottom-center',
+    nodes: ['spice-rack', 'spice_rack_mesh', 'wall_anchor', 'front_anchor', 'hang_anchor'],
+  },
+  'kitchen/open-cubby': {
+    file: 'open-cubby.glb',
+    triangles: 10000,
+    bytes: 4 * MIB,
+    materials: 1,
+    primitives: 1,
+    meshes: 1,
+    images: 3,
+    origin: 'wall-plane-bottom-center',
+    nodes: ['open-cubby', 'open_cubby_mesh', 'wall_anchor', 'front_anchor', 'hang_anchor'],
+  },
+  'kitchen/black-utensil-rail': {
+    file: 'black-utensil-rail.glb',
+    triangles: 15000,
+    bytes: 4 * MIB,
+    materials: 1,
+    primitives: 1,
+    meshes: 1,
+    images: 3,
+    origin: 'wall-plane-bottom-center',
+    nodes: [
+      'black-utensil-rail',
+      'black_utensil_rail_mesh',
+      'wall_anchor',
+      'front_anchor',
+      'hang_anchor',
+    ],
+  },
+  'kitchen/wall-storage-box': {
+    file: 'wall-storage-box.glb',
+    triangles: 15000,
+    bytes: 4 * MIB,
+    materials: 1,
+    primitives: 1,
+    meshes: 1,
+    images: 3,
+    origin: 'wall-plane-bottom-center',
+    nodes: [
+      'wall-storage-box',
+      'wall_storage_box_mesh',
+      'wall_anchor',
+      'front_anchor',
+      'hang_anchor',
+    ],
+  },
   'kitchen/window': {
     file: 'window.glb',
     triangles: 30000,
@@ -283,6 +360,17 @@ export const ASSET_RULES = {
     primitives: 1,
     origin: 'floor-center',
     nodes: ['chair', 'chair_mesh', 'seat_surface'],
+  },
+  'kitchen/floor-mat': {
+    file: 'floor-mat.glb',
+    triangles: 6000,
+    bytes: 4 * MIB,
+    materials: 1,
+    primitives: 1,
+    meshes: 1,
+    images: 2,
+    origin: 'floor-center',
+    nodes: ['floor-mat', 'floor_mat_mesh', 'floor_contact_anchor', 'mat_surface'],
   },
   'kitchen/rug': {
     file: 'rug.glb',
@@ -411,6 +499,50 @@ export const ASSET_RULES = {
       'look_anchor',
       'forward_anchor',
     ],
+    revisions: {
+      '2026-10-30-anime-r1': {
+        materials: 3,
+        primitives: 3,
+        meshes: 1,
+        images: 4,
+        rigged: true,
+        nodes: [
+          'deepseek',
+          'body',
+          'deepseek_mesh',
+          'nameplate_anchor',
+          'look_anchor',
+          'forward_anchor',
+          'WhaleGirl_Rig',
+          'root',
+          'hips',
+          'head',
+          'foot.L',
+          'foot.R',
+        ],
+      },
+      '2026-10-29-face-blink-r2': {
+        materials: 3,
+        primitives: 3,
+        meshes: 1,
+        images: 4,
+        rigged: true,
+        nodes: [
+          'deepseek',
+          'body',
+          'deepseek_mesh',
+          'nameplate_anchor',
+          'look_anchor',
+          'forward_anchor',
+          'WhaleGirl_Rig',
+          'root',
+          'hips',
+          'head',
+          'foot.L',
+          'foot.R',
+        ],
+      },
+    },
   },
 };
 
@@ -520,6 +652,8 @@ export function validateAsset(manifest, bytes) {
   const hash = createHash('sha256').update(bytes).digest('hex');
   if (hash !== manifest.sha256) throw new Error('GLB hash does not match the delivery manifest');
   const facts = inspectGlb(bytes);
+  if (manifest.assetId === 'character/deepseek')
+    validateCharacterRig(manifest, bytes, rule.rigged === true);
   for (const key of ['triangles', 'primitives', 'meshes', 'materials', 'images']) {
     if (manifest.geometry[key] === undefined) continue;
     if (facts[key] !== manifest.geometry[key]) throw new Error(`GLB ${key} differs from manifest`);

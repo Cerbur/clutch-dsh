@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-storage-box",
+  "revision": "2026-10-29-r1",
+  "status": "ready",
+  "file": "wall-storage-box.glb",
+  "sha256": "377bc964ce8eed4b7cb1e75efd68d584bc84ec9b3f245d7dd7a922eb72f00595",
+  "bytes": 1743004,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 11649,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.1899999976158142,
+      0,
+      0
+    ],
+    "max": [
+      0.1899999976158142,
+      0.30149751901626587,
+      0.1802263706922531
+    ]
+  },
+  "dimensions": {
+    "width": 0.3799999952316284,
+    "height": 0.30149751901626587,
+    "depth": 0.1802263706922531
+  },
+  "requiredNodes": [
+    "wall-storage-box",
+    "wall_storage_box_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.15074875950813293,
+      0.1802263706922531
+    ],
+    "hang_anchor": [
+      0,
+      0.30149751901626587,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 15000,
+    "bytes": 4194304,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "input": "kitchen/wall-storage-box/source/20261029134813_d5ca8d38.glb",
+    "inputSha256": "15ab234bc5ec9ba5febe5f3c391a3a836abc5187704a236a587412e5babe1d99",
+    "inputBytes": 25670876,
+    "project": "kitchen/wall-storage-box/work/2026-10-29-r1/迷你木质墙面收纳盒_可编辑工程.blend",
+    "script": "kitchen/wall-storage-box/work/2026-10-29-r1/scripts/build.py",
+    "preservationScript": "kitchen/wall-storage-box/work/2026-10-29-r1/scripts/verify.py",
+    "blender": "5.2.3 LTS",
+    "uniformScale": 0.20016455877746864,
+    "sourceDimensions": {
+      "width": 1.8984379768371582,
+      "height": 1.5062482357025146,
+      "depth": 0.900391012430191
+    }
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood": {
+        "pixels": 800086,
+        "roughnessRange": [
+          0.5400000214576721,
+          0.5559999942779541
+        ],
+        "metallic": 0
+      },
+      "painted-blue-lid": {
+        "pixels": 43146,
+        "roughnessRange": [
+          0.3203137218952179,
+          0.32721567153930664
+        ],
+        "metallic": 0
+      },
+      "ceramic-jar": {
+        "pixels": 13777,
+        "roughnessRange": [
+          0.40031373500823975,
+          0.4144313931465149
+        ],
+        "metallic": 0
+      }
+    },
+    "baseColor": "original sRGB colors/pattern; resize to1024 only; embedded pixels independently verified",
+    "specular": "invalid original optional specularColorFactor[2,2,2] removed; no forced mirror/plastic"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-29-r1/validation.json",
+    "preservationReport": "../../work/2026-10-29-r1/preservation-audit.json",
+    "visualReview": "../../work/2026-10-29-r1/visual-review.json"
+  },
+  "sizing": {
+    "completeWidthMeters": 0.38,
+    "fit": "uniform across all axes, complete original envelope; no height normalization",
+    "sceneProposedBottomMeters": 1.49,
+    "sceneOwnedByIntegrator": true
+  },
+  "notes": [
+    "Static complete source assembly; no articulation fabricated.",
+    "All oriented source triangles and exact UV corner values retained; positions match uniform-fit source within1e-6m.",
+    "Origin at bottom center of full rear envelope; +Z faces room.",
+    "Rear brackets and all hanging items included in bounds; not only face/backboard bounds.",
+    "Source includes baked lighting and reconstructed geometry blemishes; no de-lighting or geometry repair claimed.",
+    "New scene instances must join collision/route/source signature checks and full scene lighting rebake.",
+    "Worker ready only; no plugin/profile/common catalog/HANDOFF modifications."
+  ]
+}

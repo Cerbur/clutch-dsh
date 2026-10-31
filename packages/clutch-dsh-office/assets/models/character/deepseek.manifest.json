@@ -6,11 +6,11 @@
   "compatibleScenes": [
     "kitchen"
   ],
-  "revision": "2026-10-28-candy-r1",
+  "revision": "2026-10-29-face-blink-r2",
   "status": "ready",
   "file": "deepseek.glb",
-  "sha256": "0cfeed80dcc1734cbb5f3a334d7785c9dfd97de713371683ec57985740663535",
-  "bytes": 4000012,
+  "sha256": "eea3bc03f99ea735948a8e33c108b3ae5eb2bbb860651d4bc217421a604bc003",
+  "bytes": 7172924,
   "coordinates": {
     "unit": "meter",
     "up": "+Y",
@@ -18,11 +18,15 @@
     "origin": "feet-ground-center"
   },
   "geometry": {
-    "triangles": 57979,
+    "triangles": 57002,
     "meshes": 1,
-    "primitives": 1,
-    "materials": 1,
-    "images": 3
+    "primitives": 3,
+    "materials": 3,
+    "images": 4,
+    "bones": 31,
+    "skins": 1,
+    "skinMaxInfluences": 4,
+    "morphTargets": 4
   },
   "bounds": {
     "min": [
@@ -40,7 +44,7 @@
     "width": 1.1357985138893127,
     "height": 1.5,
     "depth": 0.8511080741882324,
-    "includes": "new source hair loop, wide side hair, skirt, accessories and asymmetric whale tail"
+    "includes": "original hair/headwear/outfit/tail silhouette plus locally rebuilt face and independent eyelids"
   },
   "requiredNodes": [
     "deepseek",
@@ -48,15 +52,53 @@
     "deepseek_mesh",
     "nameplate_anchor",
     "look_anchor",
-    "forward_anchor"
+    "forward_anchor",
+    "WhaleGirl_Rig",
+    "root",
+    "hips",
+    "head",
+    "foot.L",
+    "foot.R"
   ],
   "hierarchy": {
-    "deepseek": null,
+    "skirt.B": "hips",
+    "skirt.F": "hips",
+    "skirt.L": "hips",
+    "skirt.R": "hips",
+    "hair_lower.L": "hair_upper.L",
+    "hair_upper.L": "head",
+    "hair_lower.R": "hair_upper.R",
+    "hair_upper.R": "head",
+    "head": "neck",
+    "neck": "chest",
+    "hand.L": "forearm.L",
+    "forearm.L": "upper_arm.L",
+    "upper_arm.L": "chest",
+    "hand.R": "forearm.R",
+    "forearm.R": "upper_arm.R",
+    "upper_arm.R": "chest",
+    "chest": "spine",
+    "spine": "hips",
+    "tail_03": "tail_02",
+    "tail_02": "tail_01",
+    "tail_01": "hips",
+    "toe.L": "foot.L",
+    "foot.L": "shin.L",
+    "shin.L": "thigh.L",
+    "thigh.L": "hips",
+    "toe.R": "foot.R",
+    "foot.R": "shin.R",
+    "shin.R": "thigh.R",
+    "thigh.R": "hips",
+    "hips": "root",
+    "root": "WhaleGirl_Rig",
+    "deepseek_mesh": "WhaleGirl_Rig",
+    "WhaleGirl_Rig": "body",
     "body": "deepseek",
-    "deepseek_mesh": "body",
-    "nameplate_anchor": "deepseek",
+    "forward_anchor": "deepseek",
     "look_anchor": "deepseek",
-    "forward_anchor": "deepseek"
+    "nameplate_anchor": "deepseek",
+    "deepseek": null
   },
   "anchors": {
     "nameplate_anchor": [
@@ -76,23 +118,29 @@
     ]
   },
   "budget": {
-    "scope": "this-character-revision-per-instance",
+    "scope": "this-character-face-blink-revision; two added PBR materials for clean face and transferred eye artwork, not a global asset-budget change",
     "triangles": 60000,
     "bytes": 8388608,
-    "materials": 1,
-    "primitives": 1
+    "materials": 3,
+    "primitives": 3,
+    "images": 4
   },
   "capabilities": {
-    "rigged": false,
-    "skinned": false,
-    "morphTargets": false,
-    "animationClips": [],
+    "rigged": true,
+    "skinned": true,
+    "morphTargets": true,
+    "animationClips": [
+      "Walk_InPlace",
+      "Blink"
+    ],
     "wholeBodyTranslation": true,
     "wholeBodyRotation": true,
     "bodyOffset": true,
-    "articulatedArms": false,
-    "articulatedTail": false,
-    "interaction": "static appearance and whole-body motion; no reaching/cooking/grabbing animation"
+    "articulatedArms": true,
+    "articulatedTail": true,
+    "interaction": "skeletal walk and independent stationary/locomotion blink; no idle/start-stop/turn/reach/cook/grab/finger/lip-sync clips",
+    "independentBlink": true,
+    "independentLeftRightEyelids": true
   },
   "placement": {
     "runtimeScale": [
@@ -129,15 +177,22 @@
   },
   "source": {
     "library": "office",
-    "project": "character/deepseek/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
-    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/character/deepseek.glb",
-    "inputSha256": "42cf4de8d70b9f2301342afe7979144a5bcf2568c4ed03a3f2578189cab26132",
-    "parentRevision": "2026-10-27-r2",
+    "project": "character/deepseek/rig/2026-10-29-face-blink-r2/鲸鱼娘_修型与独立眨眼.blend",
+    "input": "character/deepseek/deliveries/2026-10-29-walk-r1/deepseek.glb",
+    "inputSha256": "74edcfd0afe874a4877d2be96ca2e4fb6a42c1b797125bda8e9a5df269c492cb",
+    "parentRevision": "2026-10-29-walk-r1",
     "blender": "5.2.3 LTS",
+    "faceArtworkSource": "character/deepseek/rig/2026-10-29-face-blink-r2/face-art-source.png",
     "pipeline": [
-      "character/deepseek/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
-    ],
-    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- character/deepseek build|review|finalize 2026-10-28-candy-r1"
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/build_face.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/package_face.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/validate_preview.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/render_walk_overlay.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/render_before.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/assemble_preview.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/audit_saved_project.py",
+      "character/deepseek/rig/2026-10-29-face-blink-r2/scripts/freeze_delivery.py"
+    ]
   },
   "references": [
     {
@@ -152,53 +207,49 @@
     "independentBlenderGlbImport": true,
     "blenderRender": true,
     "embeddedTextures": true,
-    "requiredNodes": true,
+    "fourImagesFullyDecoded": true,
     "studioExcluded": true,
-    "allGeometryAccessorsByteIdentical": true,
-    "nodesTransformsPivotsUnchanged": true,
-    "baseColorImageBytesUnchanged": true,
-    "imagePixelDecode": true,
-    "triangleBudget": true,
-    "byteBudget": true,
+    "nonFaceGeometryPreserved": true,
+    "originalPbrAndThreeImagesPreserved": true,
+    "walkChannelsAndSamplesPreserved": true,
+    "blinkOnlyWeights": true,
+    "independentSingleEyeControl": true,
+    "bodyMotionDuringStationaryBlinkMeters": 0,
+    "bodyMotionFromBlinkWhileWalkingMeters": 0,
+    "walkLoopMaxVertexErrorMeters": 1.714818201716331e-18,
+    "closedEyeSampleRays": {
+      "total": 850,
+      "eyeArtworkVisibleRays": 0
+    },
+    "savedBlendReopened": true,
+    "savedBlendDefaultsToStationaryBlink": true,
+    "runtimeUnitTestsPassed": 3,
     "engineAccepted": false,
-    "fixedComparisonLightsCamera": true,
-    "report": "validation.json"
+    "userVisualApproval": false,
+    "reports": [
+      "binary-audit.json",
+      "independent-validation.json",
+      "source-project-audit.json",
+      "runtime-validation.json"
+    ]
   },
   "contractChanges": [
     {
-      "kind": "geometry-source-replacement",
-      "previousRevision": "2026-10-27-style-r1",
-      "previousSha256": "83bb40a9ff77250ea05c2605c49aa221c1daa23176480389b5d443d17f393cc1",
-      "newSourceSha256": "5bf18b3bb8350f2f1ad6d58387d9eea230779831423a0c20291a361f6a5bc7bb",
-      "description": "User replacement whale-girl model; geometry/UV/normal/index bytes and silhouette intentionally change. This is not a material-only revision."
+      "kind": "static-to-skeletal",
+      "parentRevision": "2026-10-28-candy-r1",
+      "description": "Add 31-joint skin and Walk_InPlace; mesh now child of WhaleGirl_Rig below body. Rest geometry/UV/normals/indices, original PBR/images, ground origin and application anchors preserved. Runtime loader/clone/mixer, reduced motion, route and lighting dependencies need explicit revalidation."
     },
     {
-      "kind": "bounds",
-      "previous": {
-        "min": [
-          -0.49369239807128906,
-          0,
-          -0.8281769156455994
-        ],
-        "max": [
-          0.49417567253112793,
-          1.5,
-          0.2624991238117218
-        ]
-      },
-      "current": {
-        "min": [
-          -0.540632426738739,
-          0,
-          -0.5822924971580505
-        ],
-        "max": [
-          0.5951660871505737,
-          1.5,
-          0.2688155770301819
-        ]
-      },
-      "description": "New extents require engine route/turning/furniture clearance review. Stable height, feet-origin, axes, node hierarchy, anchor positions and static capabilities preserved."
+      "kind": "local-face-remodel",
+      "description": "Replace 5505 source face/eye triangles with 4528 smooth face, eye artwork surface, upper eyelids and mouth triangles. Body/hair/outfit/tail geometry and source three images/PBR preserved. New skin appearance is intentionally authored."
+    },
+    {
+      "kind": "independent-facial-morphs",
+      "description": "Add four expression targets and Blink one-shot containing only weights. Existing Walk_InPlace bone channels and sampler payloads remain exact. GLB default eyes open; random scheduling provided as a separate runtime module."
+    },
+    {
+      "kind": "character-specific-render-budget",
+      "description": "This revision uses 3 materials/3 primitives/4 images, replacing former 1/1/3. GLTFLoader can create three SkinnedMesh children under a group; loader/clone/morph scheduling and cleanup must explicitly support this revision. Added draw/morph cost has not been benchmarked."
     }
   ],
   "style": {
@@ -216,7 +267,8 @@
         "clearcoatFactor": 0
       }
     },
-    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "faceRevision": "2026-10-29-face-blink-r2"
   },
   "geometryRevision": {
     "sourceTriangles": 876182,
@@ -260,16 +312,12 @@
     "report": "build-report.json"
   },
   "knownLimits": [
-    "Static aggregate only: no rig, skin, morph targets, animation clips, independent arm or tail controls. All 25 source parts remain geometry and named vertex groups in the editable project.",
-    "New source has a different asymmetric silhouette from the previous character. Revalidate room routes, table-side lanes, furniture and turning clearance using these actual vertices/bounds; do not reuse old actor extents or recenter by the tail-inclusive bounds.",
-    "Source painted highlights/contact shading, fine lace/hair/hand reconstruction defects and intersecting/thin source surfaces remain. Deep-blue identity retained; no global recolor or new lighting bake.",
-    "87 zero-area UV triangles remain; all 87 exact UV-corner sets exist in the original source (143 originally). They are not zero-area geometry. No UV unwrapping or repaint was fabricated.",
-    "Normals are finite/unit. Supplemental averaged-corner-normal versus triangle-winding test has 381 negative dots, including 11 below -0.5, on smooth/thin fragments; this heuristic is not an exterior-orientation proof. Actual front/back/feet renders show no broad exterior reversal. Not a watertight collision mesh.",
-    "GLB splits vertices at UV/normal seams: imported boundary/non-manifold edge counts include those splits and must not be reported as watertight topology.",
-    "Approximate deterministic source-vertex-to-low-surface samples have worst distance 7.1244mm (part_10), not an exhaustive bidirectional Hausdorff bound. Collapse may soften sub-pixel folds and tiny trim.",
-    "Normal/MR reduced to 1024; base color reduced to 2048 JPEG95. Metallic factor is 0 even though exporter fills unused MR B with 1; effective metallic stays 0. Roughness G measured 0.54118–0.69804.",
-    "Optional standard KHR_materials_specular carries specularFactor 0.5 to reduce source response; no required extensions or extra geometry/texture decoder. Anchors are inherited static targets, not joints or a gaze rig.",
-    "Office engine visual/path acceptance remains pending main agent. No catalog, receipt, plugin, room layout, global lighting, commit, push or publish was changed by this worker."
+    "Local face cleanup, not a full-body retopology or identity-perfect reconstruction; new face proportions, clean skin and simplified mouth await user visual review.",
+    "Source hair/outfit/hand reconstruction edges, thin surfaces and painted lighting remain; no cloth or hair collision simulation.",
+    "Runtime random blinking supplied and unit-tested in the asset library; Office plugin/profile not modified or deployed. New budget, multi-instance skeleton/morph ownership, reduced motion and release need engine acceptance.",
+    "No idle/start/stop/turn/reach/grab/cook/finger/lip-sync animation. Walk path, lighting signatures and room collisions are not reaccepted by this asset-only delivery.",
+    "850 sampled closed-eye rays found no visible eye artwork; this is not exhaustive self-intersection or all-view physical certification.",
+    "Three primitives and four morph targets add runtime cost. Triangle count is lower but GLB size and draw count are higher than walk-r1; no FPS/VRAM benchmark."
   ],
   "notes": [
     "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
@@ -277,5 +325,84 @@
     "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
     "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
     "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
-  ]
+  ],
+  "animations": [
+    {
+      "name": "Walk_InPlace",
+      "durationSeconds": 1,
+      "loop": true,
+      "sampleRate": 30,
+      "blenderFrames": [
+        1,
+        31
+      ],
+      "rootMotion": false,
+      "nominalTravelSpeedMetersPerSecond": 0.32,
+      "distancePerCycleMeters": 0.32,
+      "stepsPerCycle": 2,
+      "stanceFraction": 0.62,
+      "runtimeNote": "Move and turn deepseek root externally; animation timeScale = travelSpeed/.32; replace legacy body bob; SkeletonUtils.clone per instance."
+    },
+    {
+      "name": "Blink",
+      "durationSeconds": 0.23333333333333334,
+      "loop": false,
+      "sampleRate": 30,
+      "rootMotion": false,
+      "channels": [
+        "weights"
+      ],
+      "independentOfLocomotion": true,
+      "suggestedIntervalSeconds": [
+        3,
+        6
+      ],
+      "runtimeScheduler": "runtime/auto-blink.mjs",
+      "note": "GLB is not a timer. Attach the scheduler to each character update loop, or independently trigger the one-shot clip."
+    }
+  ],
+  "animationBounds": {
+    "clip": "Walk_InPlace",
+    "coordinateSpace": "glTF local meters Y-up +Z-front",
+    "sampledFrames": 31,
+    "min": [
+      -0.5515954494476318,
+      -0.000003878321876982227,
+      -0.5889501571655273
+    ],
+    "max": [
+      0.6167557835578918,
+      1.480024814605713,
+      0.26884201169013977
+    ],
+    "note": "Sampled sweep only, no scene furniture or inter-character clearance verification."
+  },
+  "expressions": {
+    "controls": [
+      "Blink_L",
+      "Blink_R"
+    ],
+    "open": 0,
+    "closed": 1,
+    "internalCorrectives": {
+      "BlinkCurve_L": "4*Blink_L*(1-Blink_L)",
+      "BlinkCurve_R": "4*Blink_R*(1-Blink_R)"
+    },
+    "defaultWeights": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "skinBinding": "new face and eyelids weighted 1.0 to existing head joint",
+    "mechanism": "upper-lid occlusion of stationary round eye artwork; no iris squash"
+  },
+  "previews": {
+    "stationaryBlink": "blink-stationary.gif",
+    "stationaryVideo": "blink-stationary.mp4",
+    "independentOverlayVideo": "blink-independent-review.mp4",
+    "sameFixtureBeforeAfter": "before-after-face.png",
+    "overall": "preview.png",
+    "closed": "closed.png"
+  }
 }

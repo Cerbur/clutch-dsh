@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/black-utensil-rail",
+  "revision": "2026-10-29-r1",
+  "status": "ready",
+  "file": "black-utensil-rail.glb",
+  "sha256": "49c81a4fddde4c83b6f219203e5dd22f2834842da6f1332418eb908fe7f190af",
+  "bytes": 2592288,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 10622,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.4099999964237213,
+      0,
+      0
+    ],
+    "max": [
+      0.4099999964237213,
+      0.6251230835914612,
+      0.1383536010980606
+    ]
+  },
+  "dimensions": {
+    "width": 0.8199999928474426,
+    "height": 0.6251230835914612,
+    "depth": 0.1383536010980606
+  },
+  "requiredNodes": [
+    "black-utensil-rail",
+    "black_utensil_rail_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.3125615417957306,
+      0.1383536010980606
+    ],
+    "hang_anchor": [
+      0,
+      0.6251230835914612,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 15000,
+    "bytes": 4194304,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "input": "kitchen/black-utensil-rail/source/20261029153103_de0c2698.glb",
+    "inputSha256": "27a88a0e86d172f2f547ef2488ff3d8ae6cc04410deb239cea91e6ec8ddb082d",
+    "inputBytes": 32763408,
+    "project": "kitchen/black-utensil-rail/work/2026-10-29-r1/左侧黑色挂钩杆总成_可编辑工程.blend",
+    "script": "kitchen/black-utensil-rail/work/2026-10-29-r1/scripts/build.py",
+    "preservationScript": "kitchen/black-utensil-rail/work/2026-10-29-r1/scripts/verify.py",
+    "blender": "5.2.3 LTS",
+    "uniformScale": 0.43193404788822176,
+    "sourceDimensions": {
+      "width": 1.8984379768371582,
+      "height": 1.4472651481628418,
+      "depth": 0.32031187415122986
+    }
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood": {
+        "pixels": 437545,
+        "roughnessRange": [
+          0.5456470847129822,
+          0.6030588746070862
+        ],
+        "metallic": 0
+      },
+      "cloth-blue": {
+        "pixels": 211741,
+        "roughnessRange": [
+          0.6547058820724487,
+          0.6941176056861877
+        ],
+        "metallic": 0
+      },
+      "cloth-cream": {
+        "pixels": 49922,
+        "roughnessRange": [
+          0.6536470651626587,
+          0.6896470785140991
+        ],
+        "metallic": 0
+      },
+      "dark-coated-metal": {
+        "pixels": 48679,
+        "roughnessRange": [
+          0.4291764795780182,
+          0.4439215660095215
+        ],
+        "metallic": 0.18
+      }
+    },
+    "baseColor": "original sRGB colors/pattern; resize to1024 only; embedded pixels independently verified",
+    "specular": "invalid original optional specularColorFactor[2,2,2] removed; no forced mirror/plastic"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-29-r1/validation.json",
+    "preservationReport": "../../work/2026-10-29-r1/preservation-audit.json",
+    "visualReview": "../../work/2026-10-29-r1/visual-review.json"
+  },
+  "sizing": {
+    "completeWidthMeters": 0.82,
+    "fit": "uniform across all axes, complete original envelope; no height normalization",
+    "sceneProposedBottomMeters": 1.35,
+    "sceneOwnedByIntegrator": true
+  },
+  "notes": [
+    "Static complete source assembly; no articulation fabricated.",
+    "All oriented source triangles and exact UV corner values retained; positions match uniform-fit source within1e-6m.",
+    "Origin at bottom center of full rear envelope; +Z faces room.",
+    "Rear brackets and all hanging items included in bounds; not only face/backboard bounds.",
+    "Source includes baked lighting and reconstructed geometry blemishes; no de-lighting or geometry repair claimed.",
+    "New scene instances must join collision/route/source signature checks and full scene lighting rebake.",
+    "Worker ready only; no plugin/profile/common catalog/HANDOFF modifications."
+  ]
+}

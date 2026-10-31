@@ -25,7 +25,7 @@ async function harness(t, reducedMotion = false) {
   const canvas = new EventTarget();
   canvas.setAttribute = () => {};
   canvas.remove = () => {};
-  const bubbles = [{ style: {} }, { style: {} }];
+  const bubbles = Array.from({ length: 4 }, () => ({ style: {} }));
   const container = {
     clientWidth: 800,
     clientHeight: 600,
@@ -151,6 +151,38 @@ async function harness(t, reducedMotion = false) {
 }
 
 const actor = { id: 'one', label: 'One', seat: 0, activity: 'working' };
+
+test('skeletal actor updates use actual ground speed with no legacy body bob and pause with visibility', async (t) => {
+  const h = await harness(t);
+  h.runtime.update([actor]);
+  const model = h.appearances[0];
+  const updates = [];
+  let pauses = 0;
+  model.animation = {
+    walkSpeed: 0.48,
+    update: (...args) => updates.push(args),
+    pause: () => pauses++,
+    dispose() {},
+  };
+  for (let i = 0; i <= 600; i++) h.tick((i * 1000) / 60);
+  assert.equal(model.body.position.y, 0, 'skeletal hips replace whole-body floating');
+  assert.equal(model.root.position.y, 0.025, 'shoe origin uses the actual floor surface');
+  assert.ok(updates.some(([, speed]) => Math.abs(speed) > 0.47));
+  assert.ok(updates.every(([, speed]) => Math.abs(speed) <= 0.48000001));
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event('visibilitychange'));
+  assert.ok(pauses > 0);
+  assert.equal(h.pending.size, 0);
+  h.document.hidden = false;
+  h.document.dispatchEvent(new Event('visibilitychange'));
+  h.tick(20_000);
+  assert.equal(updates.at(-1)[0], 0, 'resume does not catch up hidden animation time');
+  h.reduced.matches = true;
+  h.reduced.dispatchEvent(new Event('change'));
+  h.tick(20_100);
+  assert.equal(updates.at(-1)[2], true);
+  assert.equal(h.pending.size, 0);
+});
 
 test('empty kitchens draw once per invalidation, coalesce requests and preserve resolution', async (t) => {
   const h = await harness(t);
@@ -318,4 +350,27 @@ test('render failure, context loss and disposal cancel pending work and ignore l
       ending === 'render' ? ['webgl'] : ending === 'context' ? ['contextLost'] : [],
     );
   }
+});
+
+test('session board keeps four independent owners, caps overflow and refreshes labels without respawning', async (t) => {
+  const h = await harness(t);
+  const group = [0, 1, 2, 3, 4].map((seat) => ({
+    id: 'session-' + seat,
+    label: 'Session ' + seat,
+    seat,
+    activity: 'working',
+    roaming: true,
+  }));
+  h.runtime.update(group);
+  assert.equal(h.appearances.length, 4);
+  assert.equal(h.owners.filter((o) => o.dynamic && !o.disposed).length, 4);
+  h.tick(0);
+  h.tick(40);
+  h.runtime.update(group.slice(0, 4).map((a) => ({ ...a, label: 'Renamed', activity: 'waiting' })));
+  assert.equal(h.appearances.length, 4);
+  const before = h.appearances.map((a) => a.root.position.clone());
+  for (let i = 2; i < 400; i++) h.tick(i * 40);
+  assert.ok(h.appearances.some((a, i) => a.root.position.distanceTo(before[i]) > 0.1));
+  h.runtime.update([]);
+  assert.equal(h.owners.filter((o) => o.dynamic && !o.disposed).length, 0);
 });

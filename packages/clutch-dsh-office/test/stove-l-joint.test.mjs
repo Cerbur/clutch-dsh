@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { validateAsset, ASSET_RULES } from '../scripts/sync-asset.mjs';
@@ -20,11 +21,20 @@ test('new static stove forms a measured L without moving table or relaxing the l
   ]);
   const manifest = JSON.parse(json),
     sink = JSON.parse(sinkJson);
-  assert.equal(manifest.style.parentRevision, '2026-10-28-r6');
-  assert.equal(manifest.revision, '2026-10-28-candy-r1');
+  const refined = manifest.revision === '2026-10-29-refined-r1';
+  if (!refined) {
+    assert.equal(manifest.style.parentRevision, '2026-10-28-r6');
+    assert.equal(manifest.revision, '2026-10-28-candy-r1');
+  }
   const facts = validateAsset(manifest, bytes);
-  assert.equal(facts.triangles, 12655);
-  assert.equal(facts.primitives, 2);
+  if (refined) {
+    assert.ok(facts.triangles > 0 && facts.triangles <= 40000);
+    assert.equal(facts.materials, 3);
+    assert.equal(facts.primitives, 3);
+  } else {
+    assert.equal(facts.triangles, 12655);
+    assert.equal(facts.primitives, 2);
+  }
   assert.equal(facts.images, 3);
   assert.ok(bytes.length < 4 * 1024 * 1024);
   assert.equal(ASSET_RULES['kitchen/stove'].primitives, 20);

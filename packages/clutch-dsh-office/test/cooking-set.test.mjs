@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
 import * as T from 'three';
 import { geometryOnlyGlb } from '../scripts/export-lighting-geometry.mjs';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -15,6 +16,10 @@ test('textured static stove retains worktop height, source capability limits and
   const roots = {};
   const owners = [];
   try {
+    const manifest = JSON.parse(
+      await readFile(new URL('../assets/models/kitchen/stove.manifest.json', import.meta.url)),
+    );
+    const refined = manifest.revision === '2026-10-29-refined-r1';
     for (const name of ['stove', 'range-hood']) {
       const bytes = await readFile(
         new URL(`../assets/models/kitchen/${name}.glb`, import.meta.url),
@@ -53,6 +58,12 @@ test('textured static stove retains worktop height, source capability limits and
     assert.ok(Math.abs(hoodBounds.max.z - hoodBounds.min.z - 1.3743247389793396) < 1e-5);
     assert.ok(stove.getObjectByName('灶台静态总成'));
     assert.ok(stove.getObjectByName('转角接缝台面'));
+    if (refined) {
+      assert.equal(stove.getObjectByName('烤箱烟色玻璃')?.isMesh, true);
+      assert.equal(manifest.capabilities.staticAssembly, true);
+      for (const capability of ['semanticHinges', 'animationClips', 'rigged', 'emissiveFlames'])
+        assert.equal(manifest.capabilities[capability], false, capability);
+    }
     for (const name of ['左柜门', '右柜门', '左抽屉', '右抽屉', '烤箱门', '蓝色火焰', '炒锅'])
       assert.equal(
         stove.getObjectByName(name),

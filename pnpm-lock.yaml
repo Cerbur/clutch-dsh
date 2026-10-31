@@ -396,6 +396,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: 0.2.1-rc.2
         version: 0.2.1-rc.2(@deepseek-ai/cordis@4.0.5)
+      '@deepseek-ai/dsh-client-ui-workspace':
+        specifier: 0.2.1-rc.2
+        version: 0.2.1-rc.2(@deepseek-ai/cordis@4.0.5)
       '@types/node':
         specifier: ^22.15.3
         version: 22.20.1

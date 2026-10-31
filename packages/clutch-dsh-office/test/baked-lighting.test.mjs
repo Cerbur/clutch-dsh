@@ -17,6 +17,7 @@ import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,
   KITCHEN_SCALE,
+  KITCHEN_INSTANCE_GROUPS,
 } from '../lib/office/kitchen-layout.js';
 import { geometrySignature, geometryOnlyGlb } from '../scripts/export-lighting-geometry.mjs';
 test('late texture ownership is idempotent even after its room has been disposed', () => {
@@ -414,22 +415,49 @@ test('chair wrappers validate as occluders but stay realtime; shell waits for ev
   owner.dispose();
   configureKitchenBake(undefined);
 });
-test('shared wall plants both validate as distinct rotated occluders before the shell can commit', async (t) => {
-  const f = await fixture(['wall-plant-left', 'wall-plant-right', 'floor']);
+test('all five shared wall plants validate as distinct occluders before the shell can commit', async (t) => {
+  const ids = [
+    'wall-plant-left',
+    'wall-plant-right',
+    'wall-plant-window-left',
+    'wall-plant-window-middle',
+    'wall-plant-window-right',
+  ];
+  assert.deepEqual(KITCHEN_INSTANCE_GROUPS['wall-plants'], ids);
+  const f = await fixture([...ids, 'floor']);
   bitmap(t);
+  const warnings = mockWarnings(t);
   const owner = new Models();
+  t.after(() => {
+    owner.dispose();
+    configureKitchenBake(undefined);
+  });
   const plants = new T.Group();
-  plants.add(f.roots[0], f.roots[1]);
+  const plantRoots = f.roots.slice(0, ids.length);
+  const floor = f.roots.at(-1);
+  for (const root of plantRoots) {
+    root.position.fromArray(KITCHEN_PLACEMENT[root.name]);
+    root.rotation.y = KITCHEN_ROTATION[root.name] ?? 0;
+    root.scale.fromArray(KITCHEN_SCALE[root.name] ?? [1, 1, 1]);
+    plants.add(root);
+  }
   owner.ownObject(plants);
-  owner.ownObject(f.roots[2]);
+  owner.ownObject(floor);
   configureKitchenBake(f.bundle);
+  await applyKitchenBake(owner, 'floor', floor, f.bytes);
+  assert.equal(floor.children[0].geometry, f.shared, 'shell waits for the plant group');
   await applyKitchenBake(owner, 'wall-plants', plants, f.bytes);
-  assert.equal(f.roots[0].children[0].geometry, f.shared);
-  assert.equal(f.roots[1].children[0].geometry, f.shared);
-  await applyKitchenBake(owner, 'floor', f.roots[2], f.bytes);
-  assert.notEqual(f.roots[2].children[0].geometry, f.shared);
-  owner.dispose();
-  configureKitchenBake(undefined);
+  for (const root of plantRoots) {
+    assert.equal(root.children[0].geometry, f.shared, root.name);
+    assert.equal(root.children[0].material, f.mat, root.name);
+    assert.equal(root.children[0].material.lightMap, null, root.name);
+    assert.deepEqual(root.position.toArray(), [...KITCHEN_PLACEMENT[root.name]]);
+    assert.equal(root.rotation.y, KITCHEN_ROTATION[root.name] ?? 0);
+    assert.deepEqual(root.scale.toArray(), [...(KITCHEN_SCALE[root.name] ?? [1, 1, 1])]);
+  }
+  assert.notEqual(floor.children[0].geometry, f.shared);
+  assert.ok(floor.children[0].material.lightMap);
+  assert.equal(warnings.length, 0);
 });
 test('compact UV binds only the shell after all current sources validate without expanding occluders', async (t) => {
   const f = await compactFixture(),

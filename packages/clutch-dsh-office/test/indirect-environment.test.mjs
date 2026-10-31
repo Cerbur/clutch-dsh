@@ -39,7 +39,9 @@ test('full-sphere passive radiance stays bounded and keeps directional contrast 
   assert.equal(KITCHEN_LIGHTING.exposure, 1);
   const scene = new T.Scene(),
     rig = createKitchenLightRig(scene);
-  assert.equal(scene.getObjectsByProperty('isRectAreaLight', true).length, 4);
+  assert.equal(scene.getObjectsByProperty('isRectAreaLight', true).length, 7);
+  assert.equal(scene.getObjectsByProperty('isPointLight', true).length, 1);
+  assert.equal(scene.getObjectsByProperty('castShadow', true).filter((o) => o.isLight).length, 4);
   assert.equal(scene.getObjectsByProperty('isSpotLight', true).length, 4);
   assert.equal(scene.getObjectsByProperty('isHemisphereLight', true).length, 0);
   rig.dispose();

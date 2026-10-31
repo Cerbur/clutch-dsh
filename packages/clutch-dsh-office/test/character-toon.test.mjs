@@ -1,0 +1,34 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import { applyCharacterToon } from '../lib/client/scene/character/toon.js';
+import { configureKitchenMaterial } from '../lib/client/scene/area-shadow.js';
+
+test('cel shading composes with room shadow hooks and preserves skinned/morph geometry and owned resources', () => {
+  const group = new T.Group();
+  const material = new T.MeshPhysicalMaterial();
+  material.map = new T.Texture();
+  const mesh = new T.SkinnedMesh(new T.BufferGeometry(), material);
+  mesh.morphTargetInfluences = [0, 0, 0, 0];
+  group.add(mesh);
+  const map = material.map, geometry = mesh.geometry, morphs = mesh.morphTargetInfluences;
+  configureKitchenMaterial(material);
+  const previousKey = material.customProgramCacheKey();
+  applyCharacterToon(group);
+  const firstKey = material.customProgramCacheKey();
+  applyCharacterToon(group);
+  assert.equal(material.customProgramCacheKey(), firstKey);
+  assert.ok(firstKey.startsWith(previousKey));
+  const shader = { ...T.ShaderLib.physical, uniforms: {} };
+  material.onBeforeCompile(shader, {});
+  assert.equal(shader.vertexShader, T.ShaderLib.physical.vertexShader);
+  assert.match(shader.fragmentShader, /kitchenAreaVisibility/);
+  assert.equal(shader.fragmentShader.split('// office-character-cel-v1').length, 2);
+  assert.ok(shader.fragmentShader.indexOf('vec3 celKey') < shader.fragmentShader.indexOf('#include <tonemapping_fragment>'));
+  assert.equal(mesh.geometry, geometry);
+  assert.equal(mesh.morphTargetInfluences, morphs);
+  assert.equal(material.map, map);
+  assert.equal(mesh.material, material);
+  assert.deepEqual(material.normalScale.toArray(), [0, 0]);
+  assert.equal(new T.MeshStandardMaterial().userData.characterShading, undefined);
+});

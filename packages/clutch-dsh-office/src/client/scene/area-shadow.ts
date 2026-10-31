@@ -1,6 +1,6 @@
 import * as T from 'three';
 
-const PATCH_ID = 'kitchen-area-shell-front-fill-v5';
+const PATCH_ID = 'kitchen-area-shell-practicals-v6';
 const configured = new WeakSet<T.Material>();
 const include = '#include <lights_fragment_begin>';
 const shadowInclude = '#include <shadowmap_pars_fragment>';
@@ -71,7 +71,7 @@ float kitchenAreaVisibility(
  * wide-kernel self-shadow stripes without increasing constant bias.
  * This is one center-of-area projection with a fixed 16-tap Poisson PCF, not area-integrated
  * occlusion: a partially hidden large emitter can be too dark or too bright.
- * Private kitchen invariant: three shadowed rectangles, an optional unshadowed front fill, and four shadow-only,
+ * Private kitchen invariant: three shadowed rectangles, an unshadowed front fill plus three practical rectangles, and four shadow-only,
  * map-less spots: key/fill/rim, then the character-only key projection. Three's stable light sort preserves
  * that order within each type. Do not add/hide/reorder individual rig lights.
  */
@@ -102,7 +102,7 @@ export function configureKitchenMaterial(material: T.Material): void {
       assignment +
         `
         // Mask only this emitter, leaving native spot filtering untouched.
-        #if defined( USE_SHADOWMAP ) && ( defined( SHADOWMAP_TYPE_PCF ) || defined( SHADOWMAP_TYPE_PCF_SOFT ) ) && (NUM_RECT_AREA_LIGHTS == 3 || NUM_RECT_AREA_LIGHTS == 4) && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_MAPS == 0
+        #if defined( USE_SHADOWMAP ) && ( defined( SHADOWMAP_TYPE_PCF ) || defined( SHADOWMAP_TYPE_PCF_SOFT ) ) && (NUM_RECT_AREA_LIGHTS == 3 || NUM_RECT_AREA_LIGHTS == 4 || NUM_RECT_AREA_LIGHTS == 7) && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_MAPS == 0
           #if UNROLLED_LOOP_INDEX < 3
           rectAreaLight.color *= receiveShadow ? kitchenAreaVisibility(
             spotShadowMap[ i ],

@@ -91,6 +91,11 @@ test('published browser bundle registers beside native slots and withdraws on un
     },
   });
   const disposeLayout = ctx.reflect.provide('layout', {});
+  const disposeNavigation = ctx.reflect.provide('uiWorkspace', {
+    openSession() {
+      throw new Error('Registration cannot navigate or mark read');
+    },
+  });
   const disposeConnection = ctx.reflect.provide('connection', {});
   try {
     const fork = ctx.plugin(plugin);
@@ -113,6 +118,7 @@ test('published browser bundle registers beside native slots and withdraws on un
     await disposeLocale();
     await disposeWorkspaces();
     await disposeLayout();
+    await disposeNavigation();
     await disposeConnection();
     await ctx.fiber.dispose();
     if (oldDocument === undefined) delete globalThis.document;

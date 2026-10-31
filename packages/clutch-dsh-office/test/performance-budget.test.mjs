@@ -15,7 +15,8 @@ test('production Client keeps binaries out of JS and the baked shell within its 
   const index = JSON.parse(
     await readFile(new URL('../lib/asset-index.json', import.meta.url), 'utf8'),
   );
-  assert.equal(index.assets.filter((a) => a.assetId.endsWith('.glb')).length, 24);
+  assert.equal(index.assets.filter((a) => a.assetId.endsWith('.glb')).length, 29);
+  assert.equal(index.assets.filter((a) => a.assetId === 'models/kitchen/floor-mat.glb').length, 1);
   const script = await readFile(client, 'utf8');
   for (const asset of index.assets) {
     assert.ok(
