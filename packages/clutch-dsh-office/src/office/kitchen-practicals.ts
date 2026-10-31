@@ -8,7 +8,7 @@ function offset(id: keyof typeof KITCHEN_PLACEMENT, delta: Vec3): Vec3 {
 
 /** Shared Three/Cycles practical emitters. Colors are linear; watts are scene calibration. */
 export const KITCHEN_PRACTICALS = {
-  id: 'kitchen-warm-practicals-v2',
+  id: 'kitchen-warm-practicals-v3',
   areas: [
     {
       name: 'hood-task-warm',
@@ -30,22 +30,25 @@ export const KITCHEN_PRACTICALS = {
     },
     {
       name: 'window-warm',
-      position: offset('window', [0, 0.372, 0.27]),
-      target: offset('window', [0, -0.42, 1.1]),
+      // Emit from the recessed pane, facing into the room. A light in front of
+      // the timber frame turned its lower rail pink and overlit the blue cabinet.
+      position: offset('window', [0, 0.372, 0.105]),
+      target: offset('window', [0, 0.372, 1.1]),
       width: 0.78,
       height: 0.46,
-      color: [1, 0.64, 0.32],
-      watts: 16,
+      color: [1, 0.78, 0.48],
+      watts: 8,
     },
   ],
   // Raycast-reviewed panes sit at depth .097m; frame fronts start beyond .15m.
   windowGlow: {
-    halfWidth: 0.455,
-    minHeight: 0.1,
-    maxHeight: 0.68,
-    maxDepth: 0.115,
-    color: [1, 0.64, 0.27],
-    intensity: 0.9,
+    halfWidth: 0.425,
+    minHeight: 0.135,
+    maxHeight: 0.635,
+    minDepth: 0.09,
+    maxDepth: 0.105,
+    color: [1, 0.78, 0.48],
+    intensity: 0.32,
   },
   pendant: {
     name: 'pendant-light-glow',

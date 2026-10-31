@@ -1,0 +1,65 @@
+{
+  "method": "Visible DOM metrics in the local model comparison tool; one sample per quality, not a formal cold-load or FPS benchmark.",
+  "viewport": {
+    "width": 1088,
+    "height": 950,
+    "pixelRatio": 1
+  },
+  "camera": "review",
+  "characters": 0,
+  "bakedShell": false,
+  "notes": "Renderer triangles include the transparent stove double-sided pass. Rapid-switch sample verifies byte accounting remains isolated.",
+  "samples": [
+    {
+      "quality": "medium",
+      "triangles": 399961,
+      "drawCalls": 50,
+      "sourceMiB": 45.87,
+      "loadMs": 1606.1,
+      "fps": 33.9,
+      "frameMs": 29.48,
+      "loadedAssets": 28
+    },
+    {
+      "quality": "original",
+      "triangles": 544001,
+      "drawCalls": 50,
+      "sourceMiB": 53.18,
+      "loadMs": 1618.6,
+      "fps": 26.4,
+      "frameMs": 37.94,
+      "loadedAssets": 28
+    },
+    {
+      "quality": "high",
+      "triangles": 477763,
+      "drawCalls": 50,
+      "sourceMiB": 46.82,
+      "loadMs": 1484.5,
+      "fps": 29.7,
+      "frameMs": 33.7,
+      "loadedAssets": 28
+    },
+    {
+      "quality": "low",
+      "triangles": 347753,
+      "drawCalls": 50,
+      "sourceMiB": 45.23,
+      "loadMs": 1538.9,
+      "fps": 36.1,
+      "frameMs": 27.68,
+      "loadedAssets": 28
+    },
+    {
+      "quality": "original",
+      "triangles": 544001,
+      "drawCalls": 50,
+      "sourceMiB": 53.18,
+      "loadMs": 1629.9,
+      "fps": 25,
+      "frameMs": 39.93,
+      "loadedAssets": 28,
+      "scenario": "rapid-switch"
+    }
+  ]
+}

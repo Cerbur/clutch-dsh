@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { KITCHEN_PRACTICALS } from '../../office/kitchen-practicals.js';
 
-const ID = 'office-window-pane-warm-v1';
+const ID = 'office-window-pane-warm-v2';
 const configured = new WeakSet<T.Material>();
 
 /** Reviewed root-local pane mask; preserve the wooden frame, UVs and source PBR. */
@@ -22,12 +22,12 @@ export function configureWindowGlow(scene: T.Object3D): void {
           !shader.fragmentShader.includes('#include <emissivemap_fragment>')
         )
           throw new Error(ID + ': required material includes missing');
-        const varying = 'varying vec3 vOfficeWindowPosition;\n';
+        const varying = 'varying vec3 vOfficeWindowPosition;\nvarying vec3 vOfficeWindowNormal;\n';
         shader.vertexShader =
           varying +
           shader.vertexShader.replace(
             '#include <begin_vertex>',
-            '#include <begin_vertex>\nvOfficeWindowPosition = position;',
+            '#include <begin_vertex>\nvOfficeWindowPosition = position;\nvOfficeWindowNormal = normal;',
           );
         shader.fragmentShader =
           varying +
@@ -38,7 +38,9 @@ export function configureWindowGlow(scene: T.Object3D): void {
           float officePane = step(abs(vOfficeWindowPosition.x), ${g.halfWidth.toFixed(6)})
             * step(${g.minHeight.toFixed(6)}, vOfficeWindowPosition.y)
             * step(vOfficeWindowPosition.y, ${g.maxHeight.toFixed(6)})
-            * step(vOfficeWindowPosition.z, ${g.maxDepth.toFixed(6)});
+            * step(${g.minDepth.toFixed(6)}, vOfficeWindowPosition.z)
+            * step(vOfficeWindowPosition.z, ${g.maxDepth.toFixed(6)})
+            * smoothstep(0.85, 0.98, normalize(vOfficeWindowNormal).z);
           totalEmissiveRadiance += officePane * vec3(${g.color.join(', ')}) * ${g.intensity.toFixed(6)};`,
           );
       };

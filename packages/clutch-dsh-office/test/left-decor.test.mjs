@@ -8,6 +8,7 @@ import process from 'node:process';
 import * as T from 'three';
 import { ASSET_RULES, validateAsset } from '../scripts/sync-asset.mjs';
 import { assertCurrentKitchenSources } from '../lib/client/scene/baked-lighting.js';
+import { runtimeModelPath } from '../scripts/runtime-models.mjs';
 import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,
@@ -159,7 +160,11 @@ test('production lightmap requires all four decor sources and their baked geomet
   );
   assertCurrentKitchenSources(manifest);
   for (const [id] of components) {
-    const { bytes } = await asset(id);
+    const bytes = await readFile(
+      await runtimeModelPath(
+        new URL('../assets/models/kitchen/' + id + '.glb', import.meta.url).pathname,
+      ),
+    );
     const source = manifest.sources.find((item) => item.id === id);
     assert.equal(source?.assetId, `kitchen/${id}`);
     assert.equal(source.sha256, sha(bytes));

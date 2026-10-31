@@ -413,6 +413,10 @@ async function commit(models: Models, room: Room, bake: DecodedBake): Promise<vo
     for (const [id, binding] of room.bindings) {
       if (!receivers.has(id)) continue;
       binding.meshes.forEach((mesh, i) => {
+        // The rounded timber rim has thin bevel charts. Keep its continuous PBR
+        // shading instead of sampling discontinuous baked irradiance at the lip.
+        // It still participates in source/signature validation and Cycles bounce.
+        if (id === 'floor' && mesh.name === '圆角木框') return;
         const entry = binding.entries[i];
         if (entry.offset === undefined) throw new Error('missing receiver UV offset: ' + id);
         const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];

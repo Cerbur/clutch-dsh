@@ -8,6 +8,8 @@ import { Buffer } from 'node:buffer';
 import console from 'node:console';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { runtimeModelPath } from '../scripts/runtime-models.mjs';
 import { validateAsset, syncAsset } from '../scripts/sync-asset.mjs';
 import { bundledAsset } from '../lib/client/scene/kitchen/asset.js';
 import { Models } from '../lib/client/scene/models.js';
@@ -435,12 +437,26 @@ function furnitureTransform(name) {
   );
 }
 
-async function furnitureTriangles(bytes, matrix) {
+async function furnitureTriangles(bytes, matrix, runtimeName) {
+  if (runtimeName) {
+    const name = runtimeName.startsWith('wall-plant-')
+      ? 'wall-plant'
+      : runtimeName.startsWith('chair-')
+        ? 'chair'
+        : runtimeName;
+    bytes = await readFile(
+      await runtimeModelPath(
+        new URL('../assets/models/kitchen/' + name + '.glb', import.meta.url).pathname,
+      ),
+    );
+  }
   const stripped = geometryOnly(bytes);
-  const { scene } = await new GLTFLoader().parseAsync(
-    stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
-    '',
-  );
+  const { scene } = await new GLTFLoader()
+    .setMeshoptDecoder(MeshoptDecoder)
+    .parseAsync(
+      stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
+      '',
+    );
   scene.applyMatrix4(matrix);
   scene.updateMatrixWorld(true);
   const items = [];
@@ -638,7 +654,7 @@ test('furniture and delivered actor activity transitions keep the aisle clear', 
     if (!triangleCache.has(obstacle.name))
       triangleCache.set(
         obstacle.name,
-        await furnitureTriangles(obstacle.bytes, furnitureTransform(obstacle.name)),
+        await furnitureTriangles(obstacle.bytes, furnitureTransform(obstacle.name), obstacle.name),
       );
     return triangleCache.get(obstacle.name);
   };

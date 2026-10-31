@@ -3,6 +3,7 @@ import deepseekBytes from '../../../../assets/models/character/deepseek.glb?inli
 import { bundledAsset } from '../kitchen/asset.js';
 import { buildWhaleGirl, type CharacterAppearance, type Models } from '../models.js';
 import { createCharacterAnimation } from './animation.js';
+import { applyCharacterSoftFill } from './soft-fill.js';
 
 /** Each actor parses an independent skeleton/morph state; byte transport is shared. */
 export function buildDeepSeek(models: Models, seat: 0 | 1 | 2 | 3): CharacterAppearance {
@@ -14,6 +15,7 @@ export function buildDeepSeek(models: Models, seat: 0 | 1 | 2 | 3): CharacterApp
     tail: fallback.tail,
   };
   const load = bundledAsset('deepseek', deepseekBytes, (scene, clips) => {
+    applyCharacterSoftFill(scene);
     appearance.body = scene.getObjectByName('body') ?? scene;
     appearance.arm = undefined;
     appearance.tail = undefined;

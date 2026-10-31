@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { runtimeModelPath } from '../scripts/runtime-models.mjs';
 import * as T from 'three';
 import { Models } from '../lib/client/scene/models.js';
 import {
@@ -819,13 +821,17 @@ async function actualScene() {
     let asset = cache.get(source.assetId);
     if (!asset) {
       const raw = await readFile(
-        new URL('../assets/models/' + source.assetId + '.glb', import.meta.url),
+        await runtimeModelPath(
+          new URL('../assets/models/' + source.assetId + '.glb', import.meta.url).pathname,
+        ),
       );
       const stripped = geometryOnlyGlb(raw);
-      const { scene } = await new GLTFLoader().parseAsync(
-        stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
-        '',
-      );
+      const { scene } = await new GLTFLoader()
+        .setMeshoptDecoder(MeshoptDecoder)
+        .parseAsync(
+          stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
+          '',
+        );
       asset = { scene, bytes: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) };
       cache.set(source.assetId, asset);
     }
@@ -887,7 +893,8 @@ test('all current real sources and primitives validate, while only the three she
   const privateInstances = new Set();
   for (const instance of f.instances)
     instance.meshes.forEach((mesh, i) => {
-      if (KITCHEN_BAKED_RECEIVERS.includes(instance.id)) {
+      const rim = instance.id === 'floor' && mesh.name === '圆角木框';
+      if (KITCHEN_BAKED_RECEIVERS.includes(instance.id) && !rim) {
         privateInstances.add(instance.id);
         assert.equal(typeof f.bundle.manifest.instances[instance.id][i].offset, 'number');
         assert.notEqual(mesh.geometry, instance.originals[i].geometry);
@@ -896,7 +903,7 @@ test('all current real sources and primitives validate, while only the three she
         assert.equal(mesh.geometry.getAttribute('uv1').normalized, true);
         assert.ok(mesh.material.lightMap);
       } else {
-        assert.equal('offset' in f.bundle.manifest.instances[instance.id][i], false);
+        assert.equal('offset' in f.bundle.manifest.instances[instance.id][i], rim);
         assert.equal(mesh.geometry, instance.originals[i].geometry, instance.id);
         assert.equal(mesh.material, instance.originals[i].material, instance.id);
         assert.equal(mesh.material.lightMap, null, instance.id);

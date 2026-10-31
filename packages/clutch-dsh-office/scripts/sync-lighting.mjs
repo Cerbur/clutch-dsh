@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { runtimeModelPath } from './runtime-models.mjs';
 import { basename, dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { isDeepStrictEqual } from 'node:util';
@@ -318,7 +319,10 @@ export async function syncLighting(
   for (const id of Object.keys(layout.positions)) {
     const name = assetName(id);
     if (!hashesByAsset.has(name))
-      hashesByAsset.set(name, sha256(await readFile(join(modelRoot, `${name}.glb`))));
+      hashesByAsset.set(
+        name,
+        sha256(await readFile(await runtimeModelPath(join(modelRoot, `${name}.glb`)))),
+      );
     sourceHashes[id] = hashesByAsset.get(name);
   }
   const facts = validateLighting(manifest, atlasBytes, uvBytes, { layout, sourceHashes });

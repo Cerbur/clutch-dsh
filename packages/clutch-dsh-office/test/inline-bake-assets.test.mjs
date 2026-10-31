@@ -13,7 +13,10 @@ test('all inline extensions load as JavaScript modules and preserve PNG alpha/bi
     for (const extension of ['glb', 'png', 'bin', 'json']) {
       const file = join(folder, 'asset.' + extension);
       await writeFile(file, bytes);
-      const id = plugin.resolveId('./asset.' + extension + '?inline', join(folder, 'entry.js'));
+      const id = await plugin.resolveId(
+        './asset.' + extension + '?inline',
+        join(folder, 'entry.js'),
+      );
       const module = await plugin.load(id);
       // The virtual ID retains .json/.png/.bin: Rolldown must not infer its parser.
       assert.equal(
@@ -30,7 +33,7 @@ test('all inline extensions load as JavaScript modules and preserve PNG alpha/bi
       );
       assert.deepEqual(Buffer.from(executed.default, 'base64'), bytes);
     }
-    assert.equal(plugin.resolveId('./other.svg?inline', join(folder, 'entry.js')), null);
+    assert.equal(await plugin.resolveId('./other.svg?inline', join(folder, 'entry.js')), null);
   } finally {
     await rm(folder, { recursive: true, force: true });
   }

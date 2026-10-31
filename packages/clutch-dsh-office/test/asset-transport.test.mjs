@@ -53,13 +53,13 @@ test('production transforms only packaged binary imports; index and descriptors 
   const plugin = inlineAssets({ mode: 'external', root, indexFile });
   const importer = join(root, 'entry.js');
   const binary = await plugin.load(
-    plugin.resolveId('./assets/models/kitchen/test.glb?inline', importer),
+    await plugin.resolveId('./assets/models/kitchen/test.glb?inline', importer),
   );
   const exported = JSON.parse(binary.code.slice('export default '.length, -1));
   assert.deepEqual(exported, descriptor());
   assert.equal(binary.moduleType, 'js');
   const json = await plugin.load(
-    plugin.resolveId('./assets/models/kitchen/manifest.json?inline', importer),
+    await plugin.resolveId('./assets/models/kitchen/manifest.json?inline', importer),
   );
   assert.equal(
     JSON.parse(json.code.slice('export default '.length, -1)),
@@ -79,11 +79,11 @@ test('production transforms only packaged binary imports; index and descriptors 
   });
   await writeFile(join(root, 'outside.glb'), bytes);
   await assert.rejects(
-    plugin.load(plugin.resolveId('./outside.glb?inline', importer)),
+    plugin.load(await plugin.resolveId('./outside.glb?inline', importer)),
     /outside the packaged allowlist/,
   );
   const preview = inlineAssets();
-  const inline = await preview.load(preview.resolveId('./outside.glb?inline', importer));
+  const inline = await preview.load(await preview.resolveId('./outside.glb?inline', importer));
   assert.deepEqual(
     Buffer.from(JSON.parse(inline.code.slice('export default '.length, -1)), 'base64'),
     bytes,

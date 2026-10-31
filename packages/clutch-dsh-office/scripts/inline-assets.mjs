@@ -1,6 +1,7 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, resolve, relative, sep } from 'node:path';
+import { runtimeModelPath } from './runtime-models.mjs';
 
 /** DSH owns module loading; inline the fixed MVP asset without a Host file route. */
 export function inlineAssets({ mode = 'inline', root, indexFile } = {}) {
@@ -11,9 +12,12 @@ export function inlineAssets({ mode = 'inline', root, indexFile } = {}) {
   const assets = new Map();
   return {
     name: 'office-inline-glb',
-    resolveId(id, importer) {
+    async resolveId(id, importer) {
       if (!/\.(glb|png|bin|json)\?inline$/.test(id) || !importer) return null;
-      return prefix + resolve(dirname(importer), id.slice(0, -'?inline'.length));
+      return (
+        prefix +
+        (await runtimeModelPath(resolve(dirname(importer), id.slice(0, -'?inline'.length))))
+      );
     },
     async load(id) {
       if (!id.startsWith(prefix)) return null;
