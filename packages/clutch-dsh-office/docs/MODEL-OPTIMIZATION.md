@@ -1,5 +1,24 @@
 # Kitchen geometry and surface revision · 2026-10-31
 
+## Lossless transport and runtime budgets
+
+The geometry selection below remains medium. Production builds additionally select
+`assets/models/kitchen/transport/manifest.json`: 28 separately hashed GLBs with PNG
+images losslessly encoded as WebP. JPEG images stay byte-identical. Geometry streams,
+UVs, materials and decoded pixels are verified; the original optimized files remain
+the bake source. Packaged files include transport GLBs instead of duplicate optimized
+GLBs. Inline modeling previews continue to use the original optimized GLBs.
+
+Run `pnpm --filter @cerbur/clutch-dsh-office textures:compress` after changing an
+optimized source, then run `node --test test/texture-transport.test.mjs` after build.
+Stale source/transport hashes fail the production build. This does not authorize
+changing geometry or material response without rebaking.
+
+Runtime small props use 512px images; larger surfaces and characters retain 1024px.
+The character template is parsed once per room with shared geometry/textures and
+independent skeletons, morph weights and mixers. Replaced procedural geometry is
+released immediately. These are memory/loading optimizations, not triangle reduction.
+
 Production selects `assets/models/kitchen/optimized/manifest.json`, quality **medium**.
 The original 28 kitchen GLBs and their delivery manifests remain byte-identical.
 `runtime-models.mjs` verifies both the original and derivative hashes before the

@@ -469,6 +469,7 @@ export async function applyKitchenBake(
   name: string,
   root: T.Object3D,
   bytes: ArrayBuffer,
+  transport?: { sha256: string; bakeSourceSha256?: string },
 ): Promise<void> {
   if (!provider || name === 'deepseek' || models.disposed) return;
   let room = rooms.get(models);
@@ -491,7 +492,10 @@ export async function applyKitchenBake(
     }
     for (const id of ids) {
       const source = bake.manifest.sources.find((record) => record.id === id);
-      if (!source || source.sha256 !== (await sourceHash))
+      const actualHash = await sourceHash;
+      const losslessSource =
+        transport?.sha256 === actualHash ? transport.bakeSourceSha256 : undefined;
+      if (!source || source.sha256 !== (losslessSource ?? actualHash))
         throw new Error('source GLB hash mismatch: ' + id);
       const instance = ids.length === 1 ? root : root.getObjectByName(id);
       if (!instance) throw new Error('missing instance: ' + id);

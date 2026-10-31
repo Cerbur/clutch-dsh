@@ -5,6 +5,7 @@ import type { Models } from '../models.js';
 import { applyKitchenBake, rejectKitchenBake } from '../baked-lighting.js';
 import { loadAssetBytes, withAssetSlot, type AssetBytes } from '../asset-bytes.js';
 import { limitObjectTextures } from '../texture-budget.js';
+import { kitchenTextureSize } from '../render-budget.js';
 
 const lifetimes = new WeakMap<Models, AbortController>();
 function lifetime(models: Models): AbortSignal {
@@ -43,7 +44,10 @@ export function bundledAsset(
         .setMeshoptDecoder(MeshoptDecoder)
         .parseAsync(bytes, '');
       try {
-        await limitObjectTextures(scene, { disposed: () => models.disposed });
+        await limitObjectTextures(scene, {
+          maxSize: kitchenTextureSize(name),
+          disposed: () => models.disposed,
+        });
       } catch (error) {
         models.ownObject(scene);
         throw error;
@@ -54,9 +58,16 @@ export function bundledAsset(
       scene.name = `${name}-asset`;
       afterLoad?.(scene, animations);
       root.remove(fallback);
+      models.releaseFallbackGeometry(fallback);
       root.add(scene);
       root.userData.assetState = 'ready';
-      void applyKitchenBake(models, name, scene, bytes);
+      void applyKitchenBake(
+        models,
+        name,
+        scene,
+        bytes,
+        typeof asset === 'string' ? undefined : asset,
+      );
       models.invalidate();
     }).catch((error: unknown) => {
       if (models.disposed) return;

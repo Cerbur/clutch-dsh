@@ -32,6 +32,9 @@ pnpm dsh web
 Restart DSH Web or Desktop after installation and asset changes, then reload the
 client. The plugin uses public DSH services; no Harness source changes are needed.
 
+For Windows source checkouts, use your local Windows paths and rerun the build after
+pulling updates before restarting DSH. Reloading the page alone does not rebuild assets.
+
 ## Features
 
 | Feature                       | Preview                                                                                                                                                           | Behavior                                                                                                                                                                                                                                                |
@@ -49,6 +52,10 @@ The Session and character screenshots use the labeled local preview; their four 
 
 Whale girls use a soft character-only fill to keep their faces, blue hair and clothing
 readable in shadow while retaining the kitchen's warm lighting.
+
+Rendering uses a bounded pixel budget and lighter soft shadows. Characters share model
+geometry and textures while keeping independent skeletons and blinking. Kitchen PNG
+textures use lossless WebP transport; small props use smaller textures on the GPU.
 
 ## Usage
 
@@ -88,6 +95,16 @@ physical cooking, grabbing or opening the refrigerator.
 - Reduced motion freezes wandering and blinking. Offscreen/hidden scenes pause;
   offscreen canvases release GPU resources and rebuild when visible.
 - WebGL 2 is required. Shader or context failures show an explicit reload action.
+- Canvas resolution supports DPR 2 with an eight-million-pixel budget and never falls
+  below CSS resolution (or the device ratio when below 1). Very large windows can exceed
+  that budget at the CSS floor. High-resolution animation costs more GPU time; 30 FPS
+  is a ceiling, not a guarantee. Text labels keep native CSS resolution.
+  Fixed kitchen lighting is cached at full resolution; characters, their shadows and
+  glass stay live. The cache uses additional GPU memory and is released offscreen.
+  Devices without renderable HDR targets retain the full-quality direct renderer.
+  Small props use 512px textures, larger surfaces and characters
+  up to 1024px. Close zooms may show less detail, and eight-tap soft shadows can show
+  coarser edges. WebP image decoding is required for the packaged kitchen.
 - The accepted Blender kitchen and warm lighting remain in place, including the independent blue-and-cream floor mat in front of the refrigerator; the whale rug stays in place. The rejected fridge
   refinement is not used. Source projects and original imports are retained; builds select
   separately reviewed medium derivatives without loading all quality levels. Character

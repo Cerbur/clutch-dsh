@@ -13,6 +13,7 @@ async function harness(t, reducedMotion = false) {
     appearances = [],
     renders = [],
     shadowUpdates = [],
+    cacheInvalidations = [],
     failures = [];
   let nextFrame = 0,
     now = 0,
@@ -84,6 +85,20 @@ async function harness(t, reducedMotion = false) {
     }
   }
   const mocks = {
+    './static-frame.js': {
+      // Scheduling tests isolate the compositor; its real multi-pass ownership
+      // and invalidation contract is covered by static-frame.test.mjs.
+      createKitchenStaticFrame: (renderer, scene, camera, updateShadows) => ({
+        render() {
+          updateShadows();
+          renderer.render(scene, camera);
+        },
+        invalidate() {
+          cacheInvalidations.push(now);
+        },
+        dispose() {},
+      }),
+    },
     three: { ...T, WebGLRenderer: Renderer },
     './baked-assets.js': {},
     './models.js': { Models },
@@ -133,6 +148,7 @@ async function harness(t, reducedMotion = false) {
     appearances,
     renders,
     shadowUpdates,
+    cacheInvalidations,
     failures,
     pending,
     bubbles,
@@ -151,6 +167,21 @@ async function harness(t, reducedMotion = false) {
 }
 
 const actor = { id: 'one', label: 'One', seat: 0, activity: 'working' };
+
+test('room arrivals and camera resize invalidate color cache, actor updates retain it', async (t) => {
+  const h = await harness(t);
+  h.tick(0);
+  h.resize();
+  assert.equal(h.cacheInvalidations.length, 1);
+  h.owners[0].invalidate();
+  assert.equal(h.cacheInvalidations.length, 2);
+  h.runtime.update([actor]);
+  h.tick(50);
+  h.owners[1].invalidate();
+  h.runtime.update([{ ...actor, label: 'Updated' }]);
+  h.runtime.update([]);
+  assert.equal(h.cacheInvalidations.length, 2);
+});
 
 test('skeletal actor updates use actual ground speed with no legacy body bob and pause with visibility', async (t) => {
   const h = await harness(t);
@@ -191,7 +222,7 @@ test('empty kitchens draw once per invalidation, coalesce requests and preserve 
   h.tick(0);
   assert.equal(h.pending.size, 0);
   assert.equal(h.renders.length, 1);
-  assert.equal(h.renderer.pixelRatio, 1.5);
+  assert.equal(h.renderer.pixelRatio, 2);
   assert.deepEqual(h.renderer.size, [800, 600]);
   assert.equal(h.renders[0].staticShadows, true);
   h.resize();
@@ -206,14 +237,21 @@ test('empty kitchens draw once per invalidation, coalesce requests and preserve 
   assert.equal(h.pending.size, 0);
 });
 
+test('small RAF timestamp jitter does not turn the 30 fps budget into 20–25 fps', async (t) => {
+  const h = await harness(t);
+  h.runtime.update([actor]);
+  for (let frame = 0; frame <= 120; frame++) h.tick(frame * (1000 / 60 - 0.01));
+  assert.ok(h.renders.length >= 59 && h.renders.length <= 61, String(h.renders.length));
+});
+
 for (const hz of [60, 120, 144]) {
   test(`actors draw at most 30 fps on a ${hz} Hz display and shadows update only on drawn frames`, async (t) => {
     const h = await harness(t);
     h.runtime.update([actor, { ...actor, id: 'two', seat: 1 }]);
     for (let frame = 0; frame <= hz * 2; frame++) h.tick((frame * 1000) / hz);
-    assert.ok(h.renders.length >= 55 && h.renders.length <= 61);
+    assert.ok(h.renders.length >= 59 && h.renders.length <= 61);
     for (let i = 1; i < h.renders.length; i++)
-      assert.ok(h.renders[i].now - h.renders[i - 1].now >= 1000 / 30 - 1e-6);
+      assert.ok(h.renders[i].now - h.renders[i - 1].now >= 1000 / 30 - 1000 / hz - 1e-6);
     assert.equal(h.shadowUpdates.length, h.renders.length);
     assert.equal(h.renders.filter((frame) => frame.staticShadows).length, 1);
     assert.equal(h.pending.size, 1);

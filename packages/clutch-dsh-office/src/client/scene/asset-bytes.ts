@@ -2,6 +2,8 @@ export interface AssetDescriptor {
   assetId: string;
   sha256: string;
   bytes: number;
+  /** Build-verified lossless texture transport; geometry/materials and decoded pixels unchanged. */
+  bakeSourceSha256?: string;
 }
 export type AssetBytes = string | AssetDescriptor;
 

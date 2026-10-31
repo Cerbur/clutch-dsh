@@ -1,0 +1,714 @@
+[
+  {
+    "variant": {
+      "dpr": 2,
+      "shadows": true
+    },
+    "durationMs": 8002.9,
+    "frames": 119,
+    "actualDrawFps": 14.87,
+    "cpuFrameMs": {
+      "p50": 1.5,
+      "p95": 1.9
+    },
+    "cpuRenderMs": {
+      "p50": 0.9,
+      "p95": 1.2
+    },
+    "gpuMs": {
+      "supported": true,
+      "samples": 115,
+      "p50": 59.077,
+      "p95": 73.585
+    },
+    "calls": {
+      "main": 62,
+      "shadow": 12,
+      "total": 74
+    },
+    "triangles": {
+      "main": 627969,
+      "shadow": 228008,
+      "total": 855977
+    },
+    "cpuMeasuredMsPerSecond": 23.39,
+    "start": {
+      "actors": 4,
+      "meshes": 61,
+      "loading": 0,
+      "fallback": 0,
+      "geometries": 47,
+      "skeletons": 4,
+      "geometryAttributeMiB": 15.25,
+      "morphAttributeMiB": 5.97,
+      "materialTextureObjects": 79,
+      "estimatedUniqueMaterialUploads": 78,
+      "estimatedMaterialTextureMiB": 234.67,
+      "gpuResourceCounts": {
+        "geometries": 50,
+        "textures": 92,
+        "programs": 22
+      },
+      "drawingBuffer": {
+        "width": 3682,
+        "height": 1900,
+        "dpr": 2
+      },
+      "jsHeapMiB": 141.3,
+      "lastRender": {
+        "renderCpuMs": 0.800000011920929,
+        "totalCalls": 74,
+        "mainCalls": 62,
+        "shadowCalls": 12,
+        "totalTriangles": 855977,
+        "mainTriangles": 627969,
+        "shadowTriangles": 228008
+      }
+    },
+    "end": {
+      "actors": 4,
+      "meshes": 61,
+      "loading": 0,
+      "fallback": 0,
+      "geometries": 47,
+      "skeletons": 4,
+      "geometryAttributeMiB": 15.25,
+      "morphAttributeMiB": 5.97,
+      "materialTextureObjects": 79,
+      "estimatedUniqueMaterialUploads": 78,
+      "estimatedMaterialTextureMiB": 234.67,
+      "gpuResourceCounts": {
+        "geometries": 50,
+        "textures": 92,
+        "programs": 22
+      },
+      "drawingBuffer": {
+        "width": 3682,
+        "height": 1900,
+        "dpr": 2
+      },
+      "jsHeapMiB": 143.24,
+      "lastRender": {
+        "renderCpuMs": 0.699999988079071,
+        "totalCalls": 74,
+        "mainCalls": 62,
+        "shadowCalls": 12,
+        "totalTriangles": 855977,
+        "mainTriangles": 627969,
+        "shadowTriangles": 228008
+      }
+    },
+    "device": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 8,
+      "deviceMemory": 16,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"
+    },
+    "resources": [
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fleft-wall.glb",
+        "startTime": 112.6,
+        "responseEnd": 115.4,
+        "durationMs": 2.8,
+        "transferSize": 9404,
+        "decodedBodySize": 9104
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ffloor.glb",
+        "startTime": 112.6,
+        "responseEnd": 116.3,
+        "durationMs": 3.7,
+        "transferSize": 1534592,
+        "decodedBodySize": 1534292
+      },
+      {
+        "name": "lighting%2Fkitchen%2Fuv.bin",
+        "startTime": 156.4,
+        "responseEnd": 163.7,
+        "durationMs": 7.3,
+        "transferSize": 21132,
+        "decodedBodySize": 20832
+      },
+      {
+        "name": "lighting%2Fkitchen%2Fdiffuse.png",
+        "startTime": 157.9,
+        "responseEnd": 298.4,
+        "durationMs": 140.5,
+        "transferSize": 3042872,
+        "decodedBodySize": 3042572
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fright-wall.glb",
+        "startTime": 298.3,
+        "responseEnd": 302.6,
+        "durationMs": 4.3,
+        "transferSize": 9404,
+        "decodedBodySize": 9104
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fstove.glb",
+        "startTime": 305.4,
+        "responseEnd": 310,
+        "durationMs": 4.6,
+        "transferSize": 222296,
+        "decodedBodySize": 221996
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ftable.glb",
+        "startTime": 323.3,
+        "responseEnd": 330.2,
+        "durationMs": 6.9,
+        "transferSize": 1889700,
+        "decodedBodySize": 1889400
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frefrigerator.glb",
+        "startTime": 770.5,
+        "responseEnd": 776.7,
+        "durationMs": 6.2,
+        "transferSize": 2009776,
+        "decodedBodySize": 2009476
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fstorage-cabinet.glb",
+        "startTime": 871.1,
+        "responseEnd": 970,
+        "durationMs": 98.9,
+        "transferSize": 2499512,
+        "decodedBodySize": 2499212
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fsink-cabinet.glb",
+        "startTime": 945.9,
+        "responseEnd": 970.6,
+        "durationMs": 24.7,
+        "transferSize": 2217736,
+        "decodedBodySize": 2217436
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fpendant-light.glb",
+        "startTime": 1010.4,
+        "responseEnd": 1014.2,
+        "durationMs": 3.8,
+        "transferSize": 863440,
+        "decodedBodySize": 863140
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Futensil-rail.glb",
+        "startTime": 1098.6,
+        "responseEnd": 1102.2,
+        "durationMs": 3.6,
+        "transferSize": 228656,
+        "decodedBodySize": 228356
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-cabinet.glb",
+        "startTime": 1159.4,
+        "responseEnd": 1165.6,
+        "durationMs": 6.2,
+        "transferSize": 586328,
+        "decodedBodySize": 586028
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frange-hood.glb",
+        "startTime": 1288.7,
+        "responseEnd": 1292.6,
+        "durationMs": 3.9,
+        "transferSize": 1115548,
+        "decodedBodySize": 1115248
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-shelf.glb",
+        "startTime": 1307.5,
+        "responseEnd": 1317.1,
+        "durationMs": 9.6,
+        "transferSize": 3908848,
+        "decodedBodySize": 3908548
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-art.glb",
+        "startTime": 1710.6,
+        "responseEnd": 1717.2,
+        "durationMs": 6.6,
+        "transferSize": 852016,
+        "decodedBodySize": 851716
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwindow.glb",
+        "startTime": 1763.2,
+        "responseEnd": 1773.1,
+        "durationMs": 9.9,
+        "transferSize": 1281920,
+        "decodedBodySize": 1281620
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwhale-mitt.glb",
+        "startTime": 1840.5,
+        "responseEnd": 1916.5,
+        "durationMs": 76,
+        "transferSize": 994856,
+        "decodedBodySize": 994556
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-clock.glb",
+        "startTime": 1957.6,
+        "responseEnd": 1960.8,
+        "durationMs": 3.2,
+        "transferSize": 655444,
+        "decodedBodySize": 655144
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fboard-cloth.glb",
+        "startTime": 1976.4,
+        "responseEnd": 1981.4,
+        "durationMs": 5,
+        "transferSize": 1559832,
+        "decodedBodySize": 1559532
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-calendar.glb",
+        "startTime": 2324.1,
+        "responseEnd": 2329,
+        "durationMs": 4.9,
+        "transferSize": 783776,
+        "decodedBodySize": 783476
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frug.glb",
+        "startTime": 2342.3,
+        "responseEnd": 2349.3,
+        "durationMs": 7,
+        "transferSize": 2475448,
+        "decodedBodySize": 2475148
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ftrash-can.glb",
+        "startTime": 2379.7,
+        "responseEnd": 2382.7,
+        "durationMs": 3,
+        "transferSize": 214796,
+        "decodedBodySize": 214496
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ffloor-mat.glb",
+        "startTime": 2384.5,
+        "responseEnd": 2387.1,
+        "durationMs": 2.6,
+        "transferSize": 781964,
+        "decodedBodySize": 781664
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fspice-rack.glb",
+        "startTime": 2386.3,
+        "responseEnd": 2390.9,
+        "durationMs": 4.6,
+        "transferSize": 1845784,
+        "decodedBodySize": 1845484
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fopen-cubby.glb",
+        "startTime": 2405.8,
+        "responseEnd": 2408.9,
+        "durationMs": 3.1,
+        "transferSize": 961248,
+        "decodedBodySize": 960948
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fblack-utensil-rail.glb",
+        "startTime": 2450,
+        "responseEnd": 2454.2,
+        "durationMs": 4.2,
+        "transferSize": 1726788,
+        "decodedBodySize": 1726488
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-storage-box.glb",
+        "startTime": 2559,
+        "responseEnd": 2562.8,
+        "durationMs": 3.8,
+        "transferSize": 1168248,
+        "decodedBodySize": 1167948
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fchair.glb",
+        "startTime": 2604.1,
+        "responseEnd": 2606.4,
+        "durationMs": 2.3,
+        "transferSize": 520832,
+        "decodedBodySize": 520532
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-plant.glb",
+        "startTime": 2625.2,
+        "responseEnd": 2631.8,
+        "durationMs": 6.6,
+        "transferSize": 2009800,
+        "decodedBodySize": 2009500
+      },
+      {
+        "name": "models%2Fcharacter%2Fdeepseek.glb",
+        "startTime": 2674.3,
+        "responseEnd": 2707.4,
+        "durationMs": 33.1,
+        "transferSize": 7173224,
+        "decodedBodySize": 7172924
+      }
+    ]
+  },
+  {
+    "variant": {
+      "dpr": 2,
+      "shadows": true
+    },
+    "durationMs": 8005.2,
+    "frames": 0,
+    "actualDrawFps": 0,
+    "cpuFrameMs": {
+      "p50": null,
+      "p95": null
+    },
+    "cpuRenderMs": {
+      "p50": null,
+      "p95": null
+    },
+    "gpuMs": {
+      "supported": true,
+      "samples": 0,
+      "p50": null,
+      "p95": null
+    },
+    "calls": {
+      "main": null,
+      "shadow": null,
+      "total": null
+    },
+    "triangles": {
+      "main": null,
+      "shadow": null,
+      "total": null
+    },
+    "cpuMeasuredMsPerSecond": 0,
+    "start": {
+      "actors": 0,
+      "meshes": 49,
+      "loading": 0,
+      "fallback": 0,
+      "geometries": 44,
+      "skeletons": 0,
+      "geometryAttributeMiB": 10.86,
+      "morphAttributeMiB": 0,
+      "materialTextureObjects": 75,
+      "estimatedUniqueMaterialUploads": 74,
+      "estimatedMaterialTextureMiB": 213.33,
+      "gpuResourceCounts": {
+        "geometries": 50,
+        "textures": 88,
+        "programs": 22
+      },
+      "drawingBuffer": {
+        "width": 3682,
+        "height": 1900,
+        "dpr": 2
+      },
+      "jsHeapMiB": 135.88,
+      "lastRender": {
+        "renderCpuMs": 0.9000000059604645,
+        "totalCalls": 50,
+        "mainCalls": 50,
+        "shadowCalls": 0,
+        "totalTriangles": 399961,
+        "mainTriangles": 399961,
+        "shadowTriangles": 0
+      }
+    },
+    "end": {
+      "actors": 0,
+      "meshes": 49,
+      "loading": 0,
+      "fallback": 0,
+      "geometries": 44,
+      "skeletons": 0,
+      "geometryAttributeMiB": 10.86,
+      "morphAttributeMiB": 0,
+      "materialTextureObjects": 75,
+      "estimatedUniqueMaterialUploads": 74,
+      "estimatedMaterialTextureMiB": 213.33,
+      "gpuResourceCounts": {
+        "geometries": 50,
+        "textures": 88,
+        "programs": 22
+      },
+      "drawingBuffer": {
+        "width": 3682,
+        "height": 1900,
+        "dpr": 2
+      },
+      "jsHeapMiB": 136.17,
+      "lastRender": {
+        "renderCpuMs": 0.9000000059604645,
+        "totalCalls": 50,
+        "mainCalls": 50,
+        "shadowCalls": 0,
+        "totalTriangles": 399961,
+        "mainTriangles": 399961,
+        "shadowTriangles": 0
+      }
+    },
+    "device": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 8,
+      "deviceMemory": 16,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"
+    },
+    "resources": [
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fleft-wall.glb",
+        "startTime": 112.6,
+        "responseEnd": 115.4,
+        "durationMs": 2.8,
+        "transferSize": 9404,
+        "decodedBodySize": 9104
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ffloor.glb",
+        "startTime": 112.6,
+        "responseEnd": 116.3,
+        "durationMs": 3.7,
+        "transferSize": 1534592,
+        "decodedBodySize": 1534292
+      },
+      {
+        "name": "lighting%2Fkitchen%2Fuv.bin",
+        "startTime": 156.4,
+        "responseEnd": 163.7,
+        "durationMs": 7.3,
+        "transferSize": 21132,
+        "decodedBodySize": 20832
+      },
+      {
+        "name": "lighting%2Fkitchen%2Fdiffuse.png",
+        "startTime": 157.9,
+        "responseEnd": 298.4,
+        "durationMs": 140.5,
+        "transferSize": 3042872,
+        "decodedBodySize": 3042572
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fright-wall.glb",
+        "startTime": 298.3,
+        "responseEnd": 302.6,
+        "durationMs": 4.3,
+        "transferSize": 9404,
+        "decodedBodySize": 9104
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fstove.glb",
+        "startTime": 305.4,
+        "responseEnd": 310,
+        "durationMs": 4.6,
+        "transferSize": 222296,
+        "decodedBodySize": 221996
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ftable.glb",
+        "startTime": 323.3,
+        "responseEnd": 330.2,
+        "durationMs": 6.9,
+        "transferSize": 1889700,
+        "decodedBodySize": 1889400
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frefrigerator.glb",
+        "startTime": 770.5,
+        "responseEnd": 776.7,
+        "durationMs": 6.2,
+        "transferSize": 2009776,
+        "decodedBodySize": 2009476
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fstorage-cabinet.glb",
+        "startTime": 871.1,
+        "responseEnd": 970,
+        "durationMs": 98.9,
+        "transferSize": 2499512,
+        "decodedBodySize": 2499212
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fsink-cabinet.glb",
+        "startTime": 945.9,
+        "responseEnd": 970.6,
+        "durationMs": 24.7,
+        "transferSize": 2217736,
+        "decodedBodySize": 2217436
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fpendant-light.glb",
+        "startTime": 1010.4,
+        "responseEnd": 1014.2,
+        "durationMs": 3.8,
+        "transferSize": 863440,
+        "decodedBodySize": 863140
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Futensil-rail.glb",
+        "startTime": 1098.6,
+        "responseEnd": 1102.2,
+        "durationMs": 3.6,
+        "transferSize": 228656,
+        "decodedBodySize": 228356
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-cabinet.glb",
+        "startTime": 1159.4,
+        "responseEnd": 1165.6,
+        "durationMs": 6.2,
+        "transferSize": 586328,
+        "decodedBodySize": 586028
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frange-hood.glb",
+        "startTime": 1288.7,
+        "responseEnd": 1292.6,
+        "durationMs": 3.9,
+        "transferSize": 1115548,
+        "decodedBodySize": 1115248
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-shelf.glb",
+        "startTime": 1307.5,
+        "responseEnd": 1317.1,
+        "durationMs": 9.6,
+        "transferSize": 3908848,
+        "decodedBodySize": 3908548
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-art.glb",
+        "startTime": 1710.6,
+        "responseEnd": 1717.2,
+        "durationMs": 6.6,
+        "transferSize": 852016,
+        "decodedBodySize": 851716
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwindow.glb",
+        "startTime": 1763.2,
+        "responseEnd": 1773.1,
+        "durationMs": 9.9,
+        "transferSize": 1281920,
+        "decodedBodySize": 1281620
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwhale-mitt.glb",
+        "startTime": 1840.5,
+        "responseEnd": 1916.5,
+        "durationMs": 76,
+        "transferSize": 994856,
+        "decodedBodySize": 994556
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-clock.glb",
+        "startTime": 1957.6,
+        "responseEnd": 1960.8,
+        "durationMs": 3.2,
+        "transferSize": 655444,
+        "decodedBodySize": 655144
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fboard-cloth.glb",
+        "startTime": 1976.4,
+        "responseEnd": 1981.4,
+        "durationMs": 5,
+        "transferSize": 1559832,
+        "decodedBodySize": 1559532
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-calendar.glb",
+        "startTime": 2324.1,
+        "responseEnd": 2329,
+        "durationMs": 4.9,
+        "transferSize": 783776,
+        "decodedBodySize": 783476
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Frug.glb",
+        "startTime": 2342.3,
+        "responseEnd": 2349.3,
+        "durationMs": 7,
+        "transferSize": 2475448,
+        "decodedBodySize": 2475148
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ftrash-can.glb",
+        "startTime": 2379.7,
+        "responseEnd": 2382.7,
+        "durationMs": 3,
+        "transferSize": 214796,
+        "decodedBodySize": 214496
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Ffloor-mat.glb",
+        "startTime": 2384.5,
+        "responseEnd": 2387.1,
+        "durationMs": 2.6,
+        "transferSize": 781964,
+        "decodedBodySize": 781664
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fspice-rack.glb",
+        "startTime": 2386.3,
+        "responseEnd": 2390.9,
+        "durationMs": 4.6,
+        "transferSize": 1845784,
+        "decodedBodySize": 1845484
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fopen-cubby.glb",
+        "startTime": 2405.8,
+        "responseEnd": 2408.9,
+        "durationMs": 3.1,
+        "transferSize": 961248,
+        "decodedBodySize": 960948
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fblack-utensil-rail.glb",
+        "startTime": 2450,
+        "responseEnd": 2454.2,
+        "durationMs": 4.2,
+        "transferSize": 1726788,
+        "decodedBodySize": 1726488
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-storage-box.glb",
+        "startTime": 2559,
+        "responseEnd": 2562.8,
+        "durationMs": 3.8,
+        "transferSize": 1168248,
+        "decodedBodySize": 1167948
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fchair.glb",
+        "startTime": 2604.1,
+        "responseEnd": 2606.4,
+        "durationMs": 2.3,
+        "transferSize": 520832,
+        "decodedBodySize": 520532
+      },
+      {
+        "name": "models%2Fkitchen%2Ftransport%2Fwall-plant.glb",
+        "startTime": 2625.2,
+        "responseEnd": 2631.8,
+        "durationMs": 6.6,
+        "transferSize": 2009800,
+        "decodedBodySize": 2009500
+      },
+      {
+        "name": "models%2Fcharacter%2Fdeepseek.glb",
+        "startTime": 2674.3,
+        "responseEnd": 2707.4,
+        "durationMs": 33.1,
+        "transferSize": 7173224,
+        "decodedBodySize": 7172924
+      }
+    ]
+  }
+]

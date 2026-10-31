@@ -25,6 +25,18 @@ const unroller = rendererSource.slice(
 );
 const unroll = new Function(unroller + '; return unrollLoops;')();
 
+test('four shadow-only spots skip their zero-contribution native BRDF loop, retaining LTC sampling', () => {
+  const material = new T.MeshStandardMaterial();
+  configureKitchenMaterial(material);
+  const shader = compile(material).fragmentShader;
+  assert.ok(
+    shader.includes(
+      '&& !( NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHT_MAPS == 0 )',
+    ),
+  );
+  assert.ok(shader.includes('rectAreaLight.color *= receiveShadow ? kitchenAreaVisibility('));
+});
+
 for (const [kind, Material] of [
   ['standard', T.MeshStandardMaterial],
   ['physical', T.MeshPhysicalMaterial],
@@ -97,9 +109,9 @@ test('material setup is idempotent and preserves previous hooks, this binding an
   assert.equal(material.version, version + 1);
   assert.equal(material.onBeforeCompile, hook);
   assert.equal(material.customProgramCacheKey, key);
-  assert.equal(material.customProgramCacheKey(), 'first|kitchen-area-shell-practicals-v6');
+  assert.equal(material.customProgramCacheKey(), 'first|kitchen-area-shell-practicals-v8');
   material.userData.variant = 'second';
-  assert.equal(material.customProgramCacheKey(), 'second|kitchen-area-shell-practicals-v6');
+  assert.equal(material.customProgramCacheKey(), 'second|kitchen-area-shell-practicals-v8');
   const shader = compile(material);
   assert.equal(shader.uniforms.previous.value, 7);
   assert.equal(calls, 1);
@@ -117,7 +129,7 @@ test('default program key retains original compile-hook identity and other mater
   const originalFirst = first.customProgramCacheKey();
   configureKitchenMaterial(first);
   configureKitchenMaterial(second);
-  assert.equal(first.customProgramCacheKey(), originalFirst + '|kitchen-area-shell-practicals-v6');
+  assert.equal(first.customProgramCacheKey(), originalFirst + '|kitchen-area-shell-practicals-v8');
   assert.notEqual(first.customProgramCacheKey(), second.customProgramCacheKey());
   for (const material of [
     new T.Material(),
@@ -143,7 +155,7 @@ test('an incompatible previous hook fails explicitly instead of silently keeping
   assert.throws(() => compile(material, 'physical'), /previous material hook removed/);
 });
 
-test('private Poisson PCF has sixteen stable balanced taps, uses one depth compare per tap and leaves native shader chunks intact', () => {
+test('private Poisson PCF has eight stable balanced taps, uses one depth compare per tap and leaves native shader chunks intact', () => {
   const originalShadowChunk = T.ShaderChunk.shadowmap_pars_fragment;
   const originalGroundShader = T.ShaderLib.shadow.fragmentShader;
   const material = new T.MeshStandardMaterial();
@@ -160,9 +172,9 @@ test('private Poisson PCF has sixteen stable balanced taps, uses one depth compa
     Number(match[1]),
     Number(match[2]),
   ]);
-  assert.equal(offsets.length, 16);
-  assert.equal(new Set(offsets.map((offset) => offset.join(','))).size, 16);
-  assert.equal((helper.match(/texture2DCompare\(/g) ?? []).length, 16);
+  assert.equal(offsets.length, 8);
+  assert.equal(new Set(offsets.map((offset) => offset.join(','))).size, 8);
+  assert.equal((helper.match(/texture2DCompare\(/g) ?? []).length, 8);
   assert.equal(helper.includes('getShadow('), false);
   assert.equal(/time|random|sin\(|cos\(/.test(helper), false);
   assert.ok(offsets.every(([x, y]) => Math.hypot(x, y) < 1));
@@ -174,7 +186,7 @@ test('private Poisson PCF has sixteen stable balanced taps, uses one depth compa
   assert.ok(helper.includes('any(lessThan(coord, vec3(0.0)))'));
   assert.ok(helper.includes('any(greaterThan(coord, vec3(1.0)))'));
   assert.ok(helper.includes('halfTexel, vec2(1.0) - halfTexel'));
-  assert.ok(helper.includes('mix(1.0, visibility * (1.0 / 16.0), shadowIntensity)'));
+  assert.ok(helper.includes('mix(1.0, visibility * (1.0 / 8.0), shadowIntensity)'));
   assert.equal(T.ShaderChunk.shadowmap_pars_fragment, originalShadowChunk);
   assert.equal(T.ShaderLib.shadow.fragmentShader, originalGroundShader);
   assert.ok(originalGroundShader.includes('getShadowMask()'));
@@ -182,6 +194,49 @@ test('private Poisson PCF has sixteen stable balanced taps, uses one depth compa
   const originalHook = ground.onBeforeCompile;
   configureKitchenMaterial(ground);
   assert.equal(ground.onBeforeCompile, originalHook);
+});
+
+test('receiver depth matches the nearest sampled texel on steep planes without losing blockers', () => {
+  const material = new T.MeshStandardMaterial();
+  configureKitchenMaterial(material);
+  const shader = compile(material).fragmentShader;
+  // Exercise subtexel phases, not just idealized continuous UVs. PCF maps use NearestFilter.
+  const snapped = shader.includes('sampleUV = (floor(sampleUV * shadowMapSize) + 0.5) * texel;');
+  for (const size of [512, 1024]) {
+    for (let phase = 0; phase < 100; phase++) {
+      const uv = (100 + phase / 100) / size;
+      const center = (Math.floor(uv * size) + 0.5) / size;
+      const storedDepth = 0.8 + 0.6 * center;
+      const compareDepth = 0.8 + 0.6 * (snapped ? center : uv) - 0.00015;
+      assert.ok(compareDepth <= storedDepth, `self shadow at ${size}/${phase}`);
+      assert.ok(compareDepth > storedDepth - 0.002, 'nearby blocker remains visible');
+    }
+  }
+});
+
+test('curved receivers do not extrapolate comparison depth behind their surface', () => {
+  const material = new T.MeshStandardMaterial();
+  configureKitchenMaterial(material);
+  const shader = compile(material).fragmentShader;
+  const expression = shader.match(
+    /visibility \+= texture2DCompare\(shadowMap, sampleUV, (.*)\);/,
+  )[1];
+  const compare = new Function(
+    'receiverDepth',
+    'slope',
+    'return ' +
+      expression
+        .replace('coord.z', 'receiverDepth')
+        .replace('dot(gradient, sampleUV - coord.xy)', 'slope')
+        .replace('min(', 'Math.min('),
+  );
+  // The neighboring curved triangle is flatter than this fragment's tangent.
+  // Positive extrapolation would turn the same surface into a false blocker.
+  for (const slope of [-0.001, 0, 0.001, 0.01]) {
+    const depth = compare(0.8 - 0.0004, slope);
+    assert.ok(depth <= 0.8, 'same surface remains lit');
+    assert.ok(depth > 0.798, 'a separate nearer blocker still casts a shadow');
+  }
 });
 
 test('missing shadow declarations fail before producing an invalid helper call', () => {
@@ -204,7 +259,10 @@ test('receiver-plane derivatives precede early returns and every Poisson tap adj
   assert.ok(helper.includes('max(shadowCoord.w, 0.000001)'));
   assert.ok(helper.includes('if (abs(detUV) > 0.0000000001)'));
   assert.ok(helper.includes('vec2 gradient = vec2(0.0)'));
-  assert.equal((helper.match(/coord.z \+ dot\(gradient, sampleUV - coord.xy\)/g) ?? []).length, 16);
+  assert.equal(
+    helper.split('coord.z + min(0.0, dot(gradient, sampleUV - coord.xy))').length - 1,
+    8,
+  );
   // Evaluate the shader's actual gradient expression against a known oblique plane.
   const numerator = helper.match(/gradient = vec2\(([^;]+)\) \/ detUV;/)[1];
   const solve = new Function(
@@ -222,13 +280,12 @@ test('receiver-plane derivatives precede early returns and every Poisson tap adj
     (Number(m[1]) * 8) / 1024,
     (Number(m[2]) * 8) / 1024,
   ]);
-  assert.equal(offsets.length, 16);
+  assert.equal(offsets.length, 8);
   for (const [du, dv] of offsets) {
     const planeDepth = 0.8 + expected[0] * du + expected[1] * dv;
-    const corrected = 0.8 - 0.00015 + gradient[0] * du + gradient[1] * dv;
-    assert.ok(Math.abs(corrected - planeDepth + 0.00015) < 1e-12);
+    const corrected = 0.8 - 0.00015 + Math.min(0, gradient[0] * du + gradient[1] * dv);
     assert.ok(corrected < planeDepth, 'same plane stays lit across the wide kernel');
-    assert.ok(corrected > planeDepth - 0.002, 'a nearer blocker still casts shadow');
+    assert.ok(corrected > planeDepth - 0.004, 'a nearer blocker still casts shadow');
   }
 });
 
