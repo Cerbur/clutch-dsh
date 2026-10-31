@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto';
 
 /** Build/export/import share one reviewed derivative selection, never a runtime filesystem URL. */
 export async function runtimeModelPath(path) {
+  // Node on Windows accepts forward slashes too. Normalize before classifying:
+  // skipping this selection also invalidates the bake's reviewed source hashes.
+  path = path.replaceAll('\\', '/');
   if (!path.endsWith('.glb') || !path.includes('/models/kitchen/') || path.includes('/optimized/'))
     return path;
   let manifest;

@@ -20,6 +20,8 @@ import { createKitchenCamera, resizeKitchenCamera } from './camera.js';
 import { buildDeepSeek } from './character/deepseek.js';
 import { createKitchenLighting } from './lighting.js';
 import { createKitchenRenderGuard } from './render-failure.js';
+import { kitchenPixelRatio } from './render-budget.js';
+import { createKitchenStaticFrame } from './static-frame.js';
 
 export interface SceneRuntime {
   update(actors: readonly Actor[]): void;
@@ -42,7 +44,9 @@ export function createKitchenRuntime(
   onFailure: (kind: 'webgl' | 'contextLost') => void,
 ): SceneRuntime {
   const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(
+    kitchenPixelRatio(container.clientWidth, container.clientHeight, window.devicePixelRatio),
+  );
   renderer.domElement.setAttribute('aria-hidden', 'true');
   const scene = new T.Scene();
   let lighting: ReturnType<typeof createKitchenLighting>;
@@ -65,19 +69,18 @@ export function createKitchenRuntime(
   let frame = 0;
   const frameInterval = 1000 / 30;
   let last: number | undefined;
+  let nextDrawAt: number | undefined;
   let elapsed = 0;
-  let characterShadowsDirty = true;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const clock = new T.Vector3();
+  const staticFrame = createKitchenStaticFrame(renderer, scene, camera, () => {
+    lighting.updateCharacterShadows(camera);
+  });
   const renderGuard = createKitchenRenderGuard(
     {
       debug: renderer.debug,
-      render(renderScene, renderCamera) {
-        if (actors.size || characterShadowsDirty) {
-          lighting.updateCharacterShadows(renderCamera);
-          characterShadowsDirty = false;
-        }
-        renderer.render(renderScene, renderCamera);
+      render() {
+        staticFrame.render();
       },
     },
     () => {
@@ -92,17 +95,19 @@ export function createKitchenRuntime(
     frame = 0;
     if (disposed || failed || !visible || document.hidden) return;
     // Keep the timestamp of the last *drawn* frame: skipped RAFs must not slow motion.
-    if (
-      actors.size &&
-      !reduced.matches &&
-      last !== undefined &&
-      now - last < frameInterval - 1e-6
-    ) {
+    if (actors.size && !reduced.matches && nextDrawAt !== undefined && now < nextDrawAt - 1e-6) {
       frame = requestAnimationFrame(draw);
       return;
     }
     const delta = last === undefined ? 0 : Math.min((now - last) / 1000, 0.06);
     last = now;
+    // Keep a cadence deadline rather than resetting it to the last RAF. Small
+    // refresh-rate drift otherwise forces a whole extra RAF skip every frame.
+    nextDrawAt =
+      nextDrawAt === undefined
+        ? now + frameInterval
+        : nextDrawAt +
+          Math.max(1, Math.floor((now - nextDrawAt) / frameInterval) + 1) * frameInterval;
     elapsed += delta;
     for (const live of actors.values()) {
       const { model, actor } = live;
@@ -198,12 +203,17 @@ export function createKitchenRuntime(
     }
     if (!renderGuard.render(scene, camera)) return;
     if (actors.size && !reduced.matches) frame = requestAnimationFrame(draw);
-    else last = undefined;
+    else {
+      last = undefined;
+      nextDrawAt = undefined;
+    }
   };
   const schedule = (staticShadows = false) => {
-    characterShadowsDirty = true;
     // Only room asset arrivals alter static occluders; actors have their own map.
-    if (staticShadows) renderer.shadowMap.needsUpdate = true;
+    if (staticShadows) {
+      renderer.shadowMap.needsUpdate = true;
+      staticFrame.invalidate();
+    }
     if (!frame && !disposed && !failed && visible && !document.hidden)
       frame = requestAnimationFrame(draw);
   };
@@ -211,6 +221,7 @@ export function createKitchenRuntime(
     cancelAnimationFrame(frame);
     frame = 0;
     last = undefined;
+    nextDrawAt = undefined;
     for (const live of actors.values()) live.model.animation?.pause();
   };
   const visibility = () => {
@@ -228,7 +239,9 @@ export function createKitchenRuntime(
     height = Math.max(1, container.clientHeight);
     const aspect = width / height;
     resizeKitchenCamera(camera, aspect);
+    renderer.setPixelRatio(kitchenPixelRatio(width, height, window.devicePixelRatio));
     renderer.setSize(width, height, false);
+    staticFrame.invalidate();
     schedule();
   });
   container.prepend(renderer.domElement);
@@ -255,7 +268,7 @@ export function createKitchenRuntime(
           continue;
         }
         const actorModels = new Models(() => schedule(), true);
-        const model = buildDeepSeek(actorModels, actor.seat);
+        const model = buildDeepSeek(actorModels, actor.seat, models);
         if (actor.roaming) model.root.scale.setScalar(ROAM_SCALE);
         const bubble = container.querySelector<HTMLElement>(`[data-seat="${actor.seat}"]`);
         if (!bubble) {
@@ -287,6 +300,7 @@ export function createKitchenRuntime(
       actors.clear();
       models.dispose();
       renderGuard.dispose();
+      staticFrame.dispose();
       lighting.dispose();
       renderer.dispose();
       renderer.forceContextLoss();

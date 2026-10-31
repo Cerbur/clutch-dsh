@@ -1,23 +1,19 @@
 import * as T from 'three';
 
-const PATCH_ID = 'kitchen-area-shell-practicals-v6';
+const PATCH_ID = 'kitchen-area-shell-practicals-v8';
 const configured = new WeakSet<T.Material>();
 const include = '#include <lights_fragment_begin>';
 const shadowInclude = '#include <shadowmap_pars_fragment>';
 const assignment = 'rectAreaLight = rectAreaLights[ i ];';
 
-// Eight irregular disk points and their antipodes, rotated once at module load.
-// The compiled GLSL has 16 literal taps, zero per-pixel/frame random state.
+// Four irregular disk points and their antipodes, rotated once at module load.
+// Eight stable taps preserve the footprint without temporal noise or 16-tap cost.
 const rotation = 0.37;
 const disk = [
   [0.13, 0.09],
-  [0.42, -0.21],
-  [-0.28, 0.43],
   [0.62, 0.32],
-  [-0.68, 0.12],
   [0.18, 0.78],
   [-0.42, -0.67],
-  [0.78, -0.52],
 ];
 const taps = disk.flatMap(([x, y]) => {
   const u = x * Math.cos(rotation) - y * Math.sin(rotation);
@@ -54,10 +50,10 @@ float kitchenAreaVisibility(
   ${taps
     .map(
       ([x, y]) =>
-        `sampleUV = clamp(coord.xy + vec2(${x.toFixed(8)}, ${y.toFixed(8)}) * spread, halfTexel, vec2(1.0) - halfTexel);\n  visibility += texture2DCompare(shadowMap, sampleUV, coord.z + dot(gradient, sampleUV - coord.xy));`,
+        `sampleUV = clamp(coord.xy + vec2(${x.toFixed(8)}, ${y.toFixed(8)}) * spread, halfTexel, vec2(1.0) - halfTexel);\n  sampleUV = (floor(sampleUV * shadowMapSize) + 0.5) * texel;\n  visibility += texture2DCompare(shadowMap, sampleUV, coord.z + min(0.0, dot(gradient, sampleUV - coord.xy)));`,
     )
     .join('\n  ')}
-  return mix(1.0, visibility * (1.0 / 16.0), shadowIntensity);
+  return mix(1.0, visibility * (1.0 / 8.0), shadowIntensity);
 }
 #endif
 `;
@@ -67,9 +63,14 @@ float kitchenAreaVisibility(
  * Only the direct LTC light color is masked: both diffuse and specular keep their
  * original BRDF. Indirect PMREM/bounce are deliberately not multiplied by this mask.
  *
+ * Nearest-filtered depth maps store depth at texel centers. Snap the correction
+ * to that same center, otherwise subtexel depth error produces surface acne.
+ * A tangent plane is only local on rounded props: never push a tap behind the
+ * receiver. This conservative correction can slightly soften thin occluders
+ * at grazing angles, but avoids projecting noisy triangles across the kernel.
  * Receiver-plane depth correction follows each tap on sloped surfaces, avoiding
  * wide-kernel self-shadow stripes without increasing constant bias.
- * This is one center-of-area projection with a fixed 16-tap Poisson PCF, not area-integrated
+ * This is one center-of-area projection with a fixed 8-tap Poisson PCF, not area-integrated
  * occlusion: a partially hidden large emitter can be too dark or too bright.
  * Private kitchen invariant: three shadowed rectangles, an unshadowed front fill plus three practical rectangles, and four shadow-only,
  * map-less spots: key/fill/rim, then the character-only key projection. Three's stable light sort preserves
@@ -92,7 +93,13 @@ export function configureKitchenMaterial(material: T.Material): void {
         PATCH_ID + ': previous material hook removed a required lighting/shadow include',
       );
     }
-    const chunk = T.ShaderChunk.lights_fragment_begin;
+    // The rig's four spots carry shadow maps only (zero radiance). Their native
+    // BRDF loop cannot contribute light, but still costs ALU on every fragment.
+    // Keep shadow declarations and our LTC/shell sampling; skip only that loop.
+    const chunk = T.ShaderChunk.lights_fragment_begin.replace(
+      '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )',
+      '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct ) && !( NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHT_MAPS == 0 )',
+    );
     if (!chunk.includes(assignment))
       throw new Error(PATCH_ID + ': unsupported Three lighting chunk');
     // Keep [ i ] and UNROLLED_LOOP_INDEX for Three's own loop unroller: sampler

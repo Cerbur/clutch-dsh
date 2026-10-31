@@ -67,6 +67,26 @@ function geometry() {
   return value;
 }
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+test('lossless transport keeps bake provenance only when the actual transport hash matches', async (t) => {
+  bitmap(t);
+  const warnings = mockWarnings(t);
+  for (const valid of [true, false]) {
+    const f = await fixture(),
+      owner = new Models();
+    owner.ownObject(f.roots[0]);
+    configureKitchenBake(f.bundle);
+    const bytes = new TextEncoder().encode('different container, identical decoded art').buffer;
+    await applyKitchenBake(owner, 'floor', f.roots[0], bytes, {
+      sha256: valid ? hash(new Uint8Array(bytes)) : '0'.repeat(64),
+      bakeSourceSha256: hash(new Uint8Array(f.bytes)),
+    });
+    assert.equal(f.roots[0].children[0].geometry !== f.shared, valid);
+    owner.dispose();
+  }
+  assert.equal(warnings.length, 1);
+  configureKitchenBake(undefined);
+});
 async function fixture(ids = ['floor']) {
   const shared = geometry(),
     mat = new T.MeshStandardMaterial({ roughness: 0.58, metalness: 0.14 });

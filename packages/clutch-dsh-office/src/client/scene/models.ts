@@ -66,6 +66,21 @@ export class Models {
     else this.cleanups.add(cleanup);
   }
 
+  /** Retired procedural fallback only. Its palette may still be used by other assets. */
+  releaseFallbackGeometry(root: T.Object3D): void {
+    const retired = new Set<T.BufferGeometry>();
+    root.traverse((object) => {
+      if (object instanceof T.Mesh) retired.add(object.geometry);
+    });
+    for (const geometry of retired) {
+      const index = this.geometries.indexOf(geometry);
+      if (index < 0) continue;
+      for (let i = this.geometries.length - 1; i >= 0; i--)
+        if (this.geometries[i] === geometry) this.geometries.splice(i, 1);
+      geometry.dispose();
+    }
+  }
+
   /** Register per-room atlas textures, including arrivals after teardown. */
   ownTexture(texture: T.Texture): boolean {
     if (this.textures.has(texture)) return !this.closed;

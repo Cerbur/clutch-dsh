@@ -3,6 +3,27 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import { Models } from '../lib/client/scene/models.js';
 
+test('replacement releases whitebox geometry immediately but preserves its shared palette', () => {
+  const owner = new Models();
+  const palette = owner.material('#ffffff');
+  const fallback = new T.Group();
+  const geometry = new T.BoxGeometry();
+  owner.mesh(fallback, geometry, palette, [0, 0, 0]);
+  owner.mesh(fallback, geometry, palette, [1, 0, 0]);
+  let releases = 0,
+    materials = 0;
+  geometry.addEventListener('dispose', () => releases++);
+  palette.addEventListener('dispose', () => materials++);
+  owner.releaseFallbackGeometry(fallback);
+  owner.releaseFallbackGeometry(fallback);
+  assert.equal(releases, 1);
+  assert.equal(materials, 0);
+  assert.equal(owner.geometries.length, 0);
+  owner.dispose();
+  assert.equal(releases, 1);
+  assert.equal(materials, 1);
+});
+
 function asset() {
   const group = new T.Group();
   const geometry = new T.BoxGeometry();

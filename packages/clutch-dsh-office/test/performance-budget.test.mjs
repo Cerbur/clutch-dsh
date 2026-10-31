@@ -17,13 +17,13 @@ test('production Client keeps binaries out of JS and the baked shell within its 
   );
   assert.equal(index.assets.filter((a) => a.assetId.endsWith('.glb')).length, 29);
   assert.equal(
-    index.assets.filter((a) => a.assetId === 'models/kitchen/optimized/floor-mat.glb').length,
+    index.assets.filter((a) => a.assetId === 'models/kitchen/transport/floor-mat.glb').length,
     1,
   );
   assert.ok(
     index.assets
       .filter((a) => a.assetId.startsWith('models/kitchen/'))
-      .every((a) => a.assetId.startsWith('models/kitchen/optimized/')),
+      .every((a) => a.assetId.startsWith('models/kitchen/transport/')),
     'Only the selected quality is downloaded',
   );
   const script = await readFile(client, 'utf8');

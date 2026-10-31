@@ -136,7 +136,9 @@ export function createKitchenLightRig(scene: T.Scene): {
     proxy.shadow.mapSize.set(spec.shadowSize, spec.shadowSize);
     proxy.shadow.camera.near = KITCHEN_LIGHTING.shadow.near;
     proxy.shadow.camera.far = KITCHEN_LIGHTING.shadow.far;
-    proxy.shadow.bias = KITCHEN_LIGHTING.shadow.bias;
+    // Wide static PCF needs a small depth tolerance at curved triangle boundaries.
+    // Keep the character-only projection's tighter bias for floor contacts.
+    proxy.shadow.bias = -0.0004;
     proxy.shadow.normalBias = KITCHEN_LIGHTING.shadow.normalBias;
     proxy.shadow.radius = spec.shadowRadius;
     root.add(light, proxy, proxy.target);

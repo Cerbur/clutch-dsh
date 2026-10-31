@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "encoding": "lossless-webp-png-only",
+  "assets": {
+    "black-utensil-rail.glb": {
+      "sourceSha256": "bab480757dcdfb6825ab2c03ce6a74ad7e29975d2707f0eb8f0507114cb358a7",
+      "sha256": "e207cc4d5df595819bfed97785823ed6ce63ab3411d15058b568e94b9f38e331",
+      "sourceBytes": 2446228,
+      "bytes": 1726488
+    },
+    "board-cloth.glb": {
+      "sourceSha256": "0f1b9b570ece310058a5f07d886d0e116213d2d0eadead5f293567f698b093ef",
+      "sha256": "1d603581af0a0c47922b85ba15cb7d5271e50d71b0cf0695ae84cc4a56f482db",
+      "sourceBytes": 2142476,
+      "bytes": 1559532
+    },
+    "chair.glb": {
+      "sourceSha256": "c1d531b2187f60a7d3a1fc48f43ddca83967c74d7f1df55dbc99bf4aa6c90d27",
+      "sha256": "b1f948672d1a6b8cf1f1a1399fae9c2b2fb527d5fa2dabf9ff0b868f33fce940",
+      "sourceBytes": 628532,
+      "bytes": 520532
+    },
+    "floor-mat.glb": {
+      "sourceSha256": "c4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f",
+      "sha256": "88ffa9fa29715f80683475ee4e6f82c0094c14f86b4b6196a73f21f29bc8543a",
+      "sourceBytes": 1427356,
+      "bytes": 781664
+    },
+    "floor.glb": {
+      "sourceSha256": "4c4044eead24f761e41ea65c4112c49459b884737e6b367619931d9a87aac006",
+      "sha256": "d4fbdc463a2431302ecfdad33ff1b867c9d4186e32f936887a682dc12fadc3ad",
+      "sourceBytes": 3687020,
+      "bytes": 1534292
+    },
+    "left-wall.glb": {
+      "sourceSha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b",
+      "sha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b",
+      "sourceBytes": 9104,
+      "bytes": 9104
+    },
+    "open-cubby.glb": {
+      "sourceSha256": "69004d512d97923d7e356092307b743e39f92f6f421babca1391745be5fe57d0",
+      "sha256": "a841840c705cf6a4a709c43e1949911ea198dd7abf022c29a4cff723e06557a3",
+      "sourceBytes": 1386384,
+      "bytes": 960948
+    },
+    "pendant-light.glb": {
+      "sourceSha256": "175b1775ad067085930f9b1d5dedbaab11b5eafea3abd078adf208853d308afd",
+      "sha256": "34f6f464a5ef2a7f2a6dfabb9c4f9ecb5acc403f321e285e1c1b17eac0cd5cf8",
+      "sourceBytes": 996260,
+      "bytes": 863140
+    },
+    "range-hood.glb": {
+      "sourceSha256": "d29ac764815a4f123b02ae46bc9ea85605d67435a2a3ba15491e30253384b088",
+      "sha256": "aacb9f032524cea6c193c05966a1a3bad537ffc6e9ccc46154908a4b2dee6db4",
+      "sourceBytes": 1508724,
+      "bytes": 1115248
+    },
+    "refrigerator.glb": {
+      "sourceSha256": "ee75d472c6cc28503db0533a8d8a879d339a9985d57f3c03eae97b18a325762f",
+      "sha256": "3c1eb7c0470497e06b43437ca524b860cd8c86a517785c5578536463977f8df8",
+      "sourceBytes": 2426356,
+      "bytes": 2009476
+    },
+    "right-wall.glb": {
+      "sourceSha256": "7a4cd1f93ee2ddef33328f2805614d08166d28924807a4acf4459682ea28b1f5",
+      "sha256": "7a4cd1f93ee2ddef33328f2805614d08166d28924807a4acf4459682ea28b1f5",
+      "sourceBytes": 9104,
+      "bytes": 9104
+    },
+    "rug.glb": {
+      "sourceSha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+      "sha256": "88636596a9742436847e75952755fdc39e3ef533793f573dada3744d7203a840",
+      "sourceBytes": 2916784,
+      "bytes": 2475148
+    },
+    "sink-cabinet.glb": {
+      "sourceSha256": "35f1e5c7f5c41239ef74c32a2821d5f6f1c37f71e6ac66e65cc2e953b0f75c85",
+      "sha256": "f02406cfa0cd4f83fbc8ab3e0651e6d371604f2473984a74ff217fc8c793f800",
+      "sourceBytes": 3179512,
+      "bytes": 2217436
+    },
+    "spice-rack.glb": {
+      "sourceSha256": "cf3a90adca5f15f7aba887c9f0f2927cafef887e061e89a8a50648a090f36feb",
+      "sha256": "67f7065e0a3a681d4396175317794af5f5e99da2918ee63fbf981ec6bce6ef7b",
+      "sourceBytes": 2464364,
+      "bytes": 1845484
+    },
+    "storage-cabinet.glb": {
+      "sourceSha256": "e643a26e537b2f62a54af2105e684dd69bd42c3cf1e05b54bd1c1fa320621c1f",
+      "sha256": "06f29b576cbbca81d685ace59296ff4c4f97ca57ed8f90e77693ea203fdf1204",
+      "sourceBytes": 3525052,
+      "bytes": 2499212
+    },
+    "stove.glb": {
+      "sourceSha256": "db32801df5d9c8288a364c4b91927b14dea482e5043010b941ec8ee23675895c",
+      "sha256": "24170b352ba2c95d31468cf13fbfd7368ead51f4804034f2da5338db0eb8c5b9",
+      "sourceBytes": 284488,
+      "bytes": 221996
+    },
+    "table.glb": {
+      "sourceSha256": "b0457c8ec7b5014e096e214f0d5f6745a672e052415ee0573c348a038472c20c",
+      "sha256": "eee2d22358b9dd54e2da6d2ca73c3be22906d3bee8b09696b639f48cd2b4cf16",
+      "sourceBytes": 2037328,
+      "bytes": 1889400
+    },
+    "trash-can.glb": {
+      "sourceSha256": "ba3f9c3591efe2473d0b7e0c6f5d69b0baf2e03d31830c8c5bbd699ae30c2554",
+      "sha256": "ba3f9c3591efe2473d0b7e0c6f5d69b0baf2e03d31830c8c5bbd699ae30c2554",
+      "sourceBytes": 214496,
+      "bytes": 214496
+    },
+    "utensil-rail.glb": {
+      "sourceSha256": "4f3bd6ba5aa4226a114c2c609762c0e11d1a3be584532b6d0220871192a0028a",
+      "sha256": "4f3bd6ba5aa4226a114c2c609762c0e11d1a3be584532b6d0220871192a0028a",
+      "sourceBytes": 228356,
+      "bytes": 228356
+    },
+    "wall-art.glb": {
+      "sourceSha256": "6c055310f1c5d79fa1b46a6a8aae484083f7dd4168f5657cfbca762b012956d6",
+      "sha256": "25d799480da4bae11dddc0a7d21c6c429fd22a910eb68b845d2db9aacb153b48",
+      "sourceBytes": 1331732,
+      "bytes": 851716
+    },
+    "wall-cabinet.glb": {
+      "sourceSha256": "a76c70eaaca4e8c2777454fd931f2cff1d1d699c84f0c52c094e0034ce7df6c9",
+      "sha256": "a6de66216f1d48a4790a8490b418b1b928d4b5ca373a540265a3f5f0237af324",
+      "sourceBytes": 841740,
+      "bytes": 586028
+    },
+    "wall-calendar.glb": {
+      "sourceSha256": "87722b9832010ee16e2cc9c3c8d50be57555421739662fb62373c62e1b763d34",
+      "sha256": "a1322bbbbaa2dd7ec8ff34616995a3ec89b48b5745398408a0b08500c0d73c35",
+      "sourceBytes": 1096448,
+      "bytes": 783476
+    },
+    "wall-clock.glb": {
+      "sourceSha256": "f6a25c335da2a778bc0607479241a27b11a6cd5906d2c36ad819a0f41eaec3fc",
+      "sha256": "ed7cd7c8ea0fe862f17862b5f6b87e3b9ef560b79533a10413440e61111b9849",
+      "sourceBytes": 919948,
+      "bytes": 655144
+    },
+    "wall-plant.glb": {
+      "sourceSha256": "b509170fb7e6534171841a656c483ba6a206316e8df6a2da20145f3b9d4ba6ea",
+      "sha256": "9df325269e61724a0c6b89e8f91c300307840d7f2ca477e4999f473612f2cf78",
+      "sourceBytes": 2626372,
+      "bytes": 2009500
+    },
+    "wall-shelf.glb": {
+      "sourceSha256": "a9d903747e15c5fa65a1f95d49ca4d7113f8688fa5d88d4f74d67743e51df61b",
+      "sha256": "08a3a94102212b65f41ea3173d33ab30a863b1b5df4687eb268e513550c7c8a4",
+      "sourceBytes": 4960072,
+      "bytes": 3908548
+    },
+    "wall-storage-box.glb": {
+      "sourceSha256": "e407bc8ba8b165daa3a3642789f292aeb1d2bf7268a3041ef822a72dc7b7d2ff",
+      "sha256": "0a6fb537047268751402fd34addc9b840ab5144e73edcc8e4515d482fbe36350",
+      "sourceBytes": 1575128,
+      "bytes": 1167948
+    },
+    "whale-mitt.glb": {
+      "sourceSha256": "1778dd60262c90cdc0013e2c132268a45dd0c49c44b26b6c1b611a74d1696c36",
+      "sha256": "f861d25cfad661a5d3cd654e674638f042185aeaf1f3ecef32f7c668a8f0d9da",
+      "sourceBytes": 1319424,
+      "bytes": 994556
+    },
+    "window.glb": {
+      "sourceSha256": "8fc7baf53ec8a49402f0cf816a59060ddd0a98df5ab114dae1a9437749204a74",
+      "sha256": "5bba868f93da1cb247e5146a0cb739ba7569970dee0692b8154840c096d156e7",
+      "sourceBytes": 1912732,
+      "bytes": 1281620
+    }
+  }
+}

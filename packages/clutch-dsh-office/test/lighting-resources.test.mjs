@@ -73,7 +73,7 @@ test('review softboxes face their target and retain Blender linear colors; zero-
     assert.deepEqual(proxy.position.toArray(), areas[i].position.toArray());
     assert.deepEqual(proxy.color.toArray(), areas[i].color.toArray());
     assert.equal(proxy.shadow.normalBias, KITCHEN_LIGHTING.shadow.normalBias);
-    assert.equal(proxy.shadow.bias, KITCHEN_LIGHTING.shadow.bias);
+    assert.equal(proxy.shadow.bias, -0.0004);
     assert.equal(proxy.shadow.camera.near, KITCHEN_LIGHTING.shadow.near);
     assert.equal(proxy.shadow.camera.far, KITCHEN_LIGHTING.shadow.far);
     assert.equal(proxy.shadow.radius, KITCHEN_LIGHTING.areaLights[i].shadowRadius);

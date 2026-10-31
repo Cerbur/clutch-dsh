@@ -26,7 +26,8 @@
     "lib",
     "cordis.patch.yml",
     "assets",
-    "!assets/models/kitchen/*.glb"
+    "!assets/models/kitchen/*.glb",
+    "!assets/models/kitchen/optimized/*.glb"
   ],
   "publishConfig": {
     "access": "public",
@@ -39,6 +40,7 @@
     "test": "pnpm run build && node --test test/*.test.mjs",
     "preview": "node scripts/preview.mjs",
     "models:optimize": "node scripts/optimize-models.mjs",
+    "textures:compress": "node scripts/texture-transport.mjs",
     "models:compare": "node scripts/model-preview.mjs",
     "assets:import": "node scripts/sync-asset.mjs",
     "lighting:import": "node scripts/sync-lighting.mjs",
