@@ -54,7 +54,9 @@ export async function bindSession(
     const resolvedWorktree = await resolveWorktreeWorkspaceRecord(context, workspace, worktree, {
       sessionId: input.sessionId,
     });
-    await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree);
+    if (session.sessionId !== input.sessionId)
+      throw providerError('SESSION_CWD_MISMATCH', 'Session identity changed', { sessionId: input.sessionId });
+    await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree, existing !== undefined);
 
     if (existing) {
       // Reuse validates current native facts too; an idempotent retry never redirects cwd.
@@ -113,10 +115,14 @@ export async function resolveRuntimeCwd(
 ): Promise<string> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   const snapshot = await context.sidecar.read(input.workspaceId);
-  const binding = snapshot.bindings.find((candidate) => candidate.sessionId === input.sessionId);
+  const bindings = snapshot.bindings.filter((candidate) => candidate.sessionId === input.sessionId);
+  const binding = bindings[0];
 
   const session = await context.dsh.getSession(input.sessionId);
-  if (session?.originalCwd !== undefined && session.workspaceId !== workspace.workspaceId)
+  if (session?.originalCwd !== undefined &&
+    (session.sessionId !== input.sessionId || bindings.length > 1 ||
+      (session.workspaceId !== workspace.workspaceId &&
+        !(session.workspaceId === undefined && binding?.status === 'active' && binding.workspaceId === workspace.workspaceId))))
     throw providerError('SESSION_CWD_MISMATCH', 'Session no longer belongs to this Workspace', { sessionId: input.sessionId });
   // Native cwd is a DSH fact, including after detach; never switch running work to Main.
   // Legacy adapters retain the older derived fallback for compatibility.

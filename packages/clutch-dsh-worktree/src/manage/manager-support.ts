@@ -12,7 +12,7 @@ import {
 } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { samePhysicalPath, sameLexicalPath } from '../provider/path-identity.js';
-import { projectWorktreePath, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
+import { boundSessionCwdMatchesWorktree, projectWorktreePath, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedPath, workspaceWorktreePool } from '../provider/generated-path.js';
 
 export { samePhysicalPath };
@@ -241,17 +241,21 @@ export async function assertSessionMatchesWorkspace(
   session: DshSessionSummary,
   workspace: DshWorkspaceSummary,
   worktree: WorktreeRecord,
+  existingBinding = false,
 ): Promise<void> {
+  const matches = (cwd: string) => existingBinding
+    ? boundSessionCwdMatchesWorktree(cwd, worktree)
+    : samePhysicalPath(cwd, worktree.absolutePath);
   if (
     (session.workspaceId !== undefined && session.workspaceId !== workspace.workspaceId) ||
     (session.originalCwd !== undefined &&
-      !(await samePhysicalPath(session.originalCwd, worktree.absolutePath)) &&
+      !(await matches(session.originalCwd)) &&
       !(session.workspaceId === workspace.workspaceId && await samePhysicalPath(session.originalCwd, workspace.rootPath))) ||
     (session.projectId !== undefined &&
       workspace.projectId !== undefined &&
       session.projectId !== workspace.projectId) ||
     !(path.isAbsolute(session.cwd) &&
-      (await samePhysicalPath(session.cwd, worktree.absolutePath)))
+      (await matches(session.cwd)))
   ) {
     throw providerError('SESSION_CWD_MISMATCH', `Session cwd or Workspace association does not match Worktree`, {
       sessionId: session.sessionId,

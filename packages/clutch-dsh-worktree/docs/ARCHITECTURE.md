@@ -265,7 +265,8 @@ Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。�
 ### Session 与 Worktree 绑定模型
 
 - **1 对多约束**：一个 Session 最多绑定一个 active Worktree；一个 Worktree 可同时绑定多个 Session。
-- **幂等重试仍校验事实**：复用已有 active binding 时，Host 重新校验原生 Session 归属与当前 cwd；匹配时不写 Sidecar，错配时显式失败并保留原绑定，不自动切换目录。
+- **幂等重试仍校验事实**：复用已有 active binding 时，Host 重新校验原生 Session 归属与当前 cwd；历史绑定允许该 Worktree 的 Git-root cwd，新绑定仍仅接受工作目录。历史 Session 缺少原生 Workspace 成员关系时，唯一 active binding 可作为 runtime cwd 与 HEAD 读取的归属依据，但不能覆盖显式其他 Workspace 归属或 cwd 错配。匹配时不写 Sidecar，错配时显式失败并保留原绑定，不自动切换目录。
+- **创建重试身份**：Host 仅释放原生创建调用之前失败的请求，包括原生适配器以专用错误明确证明未调用创建的能力预检失败；原生创建一旦尝试，失败结果也保留以防重复创建。Client 在成功复用或补绑空白 Session 后清除该 Worktree 的待恢复请求身份，后续新建使用新身份；失败的恢复仍保留原身份。
 - **运行时 cwd 事实与兼容派生**：
   - 原生目录能力存在时读取 DSH effective cwd；解绑、清理或 Main 分组不构成目录切换；
   - Active Worktree binding 必须与 effective cwd 匹配；缺少原生目录事实的旧 adapter 才保留 Main/detached 使用 Workspace 根、active 使用 Worktree 的派生规则；

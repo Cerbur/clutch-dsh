@@ -1,7 +1,7 @@
 import { createWorktreeError } from '../contract/index.js';
 import type { WorktreeManager, WorktreeSessionCreationRequest, WorktreeSessionCreationResult } from '../contract/index.js';
 import { createBoundWorktreeSession } from '../tool/create-session.js';
-import type { WorktreeToolSessionPort } from '../tool/native-session.js';
+import { NativeSessionCreationPreflightError, type WorktreeToolSessionPort } from '../tool/native-session.js';
 
 /** One native admission identity per browser action, without persistent task/message state. */
 export function createWorktreeSessionCreation(options: {
@@ -24,6 +24,7 @@ export function createWorktreeSessionCreation(options: {
       if (requests.size >= 512) return Promise.reject(conflict('Session creation capacity reached; reload the plugin.'));
       const combined = AbortSignal.any([signal, lifetime.signal]);
       const check = () => combined.throwIfAborted();
+      let creationAttempted = false;
       const promise = (async () => {
         check();
         const record = (await options.manager.listWorktrees(input)).find((item) => item.worktreeId === input.worktreeId);
@@ -31,10 +32,17 @@ export function createWorktreeSessionCreation(options: {
           record.diskCleanup === 'completed' || (record.health !== undefined && record.health !== 'ready'))
           throw conflict('Worktree is unavailable; refresh or repair it before creating a Session.');
         check();
+        // From this boundary onward, even a rejected create can have an uncertain native result.
+        creationAttempted = true;
         const result = await createBoundWorktreeSession({ record, manager: options.manager, sessions: options.sessions, signal: combined, check });
         options.changed(input.workspaceId, input.worktreeId);
         return result;
-      })();
+      })().catch((error: unknown) => {
+        if ((!creationAttempted || error instanceof NativeSessionCreationPreflightError) &&
+          requests.get(input.requestId)?.promise === promise)
+          requests.delete(input.requestId);
+        throw error;
+      });
       requests.set(input.requestId, { payload, promise });
       return promise;
     },

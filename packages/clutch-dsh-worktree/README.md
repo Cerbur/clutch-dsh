@@ -88,6 +88,11 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Usage
 
+Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
+subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.
+Temporary failures before Session creation can be retried. After recovery opens a blank Session,
+the next new-Session action creates a fresh Session once that Session is no longer blank.
+
 New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
 
 Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.

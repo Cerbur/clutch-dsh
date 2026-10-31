@@ -84,3 +84,13 @@ Git 仓库根的 .agents/worktrees，否则仍越出 sandbox root。忽略策略
 - 包目录运行 `node --test test/readme-parity.test.mjs` 通过；以 `DSH_NATIVE_SOURCE=/Users/yuancheng/Documents/Code/deepseek-harness` 运行 `node --test test/native-session-flow.test.mjs`，14 项全部通过。
 - 重启独立 3088 测试服务，确认安装链接指向本 feature worktree。浏览器在 `qa/session-flow` 新建 Session 成功，再次点击加号复用同一空白 Session；原生权限仍为工作区内修改。只读检查原生记录确认 header cwd 保留原 Workspace，working-directory/change 指向 Worktree，未写入 Full Access。
 - 此次仅完成 feature 验收；未提交、合并、发布或调整版本。
+
+## 2026-11-01 Review 修复
+
+- 保留已有 active binding 的 Git-root cwd 兼容性；新绑定仍要求 Worktree 工作目录，复用仍验证原生身份、归属和物理 cwd。
+- 历史 Session 缺少原生 Workspace 成员关系时，唯一 active binding 支撑 cwd 与 HEAD 读取；显式其他 Workspace 归属和错配 cwd 仍拒绝。
+- 创建前的读取或校验失败释放请求缓存，允许相同 requestId 重试；尝试原生创建之后的不确定失败不释放，避免重复创建。
+- Client 成功 open-bound 或 bind-existing 恢复后清除对应请求身份，后续新建不再重放旧 Session。
+- 回归测试先复现 5 项失败，再验证修复；另覆盖不确定创建失败只尝试一次与归属/cwd 冲突拒绝。
+- 第一轮原会话复审发现原生目录服务缺失的能力预检仍被缓存；补充真实 Cordis 同 requestId 恢复回归，先红后绿。适配器以专用 preflight 错误标识确定未调用原生创建，Host 仅对该明确无副作用错误释放缓存，普通原生创建错误仍保留去重。
+- 最终补修后重新验证：feature 根目录 `pnpm run check:workspace`、`pnpm run check:patches`、`pnpm --filter @cerbur/clutch-dsh-worktree lint`、`typecheck`、`test`（内含 `build`）均通过；全量 1,256 通过、0 失败、12 跳过。包目录以 `DSH_NATIVE_SOURCE=/Users/yuancheng/Documents/Code/deepseek-harness` 运行 `node --test test/native-session-flow.test.mjs test/readme-parity.test.mjs`，22 项全部通过。

@@ -228,6 +228,7 @@ export function createWorktreeSessionConnector(
   let disposed = false;
 
   const run = async (input: CreateSessionForWorktreeInput): Promise<string> => {
+    const key = JSON.stringify([input.workspaceId, input.worktreeId]);
     const [worktrees, bindings] = await Promise.all([
       options.manager.listWorktrees({ workspaceId: input.workspaceId }),
       options.manager.listBindings({ workspaceId: input.workspaceId }),
@@ -261,6 +262,7 @@ export function createWorktreeSessionConnector(
         throw new WorktreeSessionBindingError(action.sessionId, error);
       }
       if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
+      creationRequests.delete(key);
       options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
       if (!disposed) options.openSession(action.sessionId);
       return action.sessionId;
@@ -277,6 +279,7 @@ export function createWorktreeSessionConnector(
       }
 
       if (!disposed) {
+        creationRequests.delete(key);
         options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
         if (!disposed) options.openSession(action.sessionId);
       }
@@ -285,7 +288,6 @@ export function createWorktreeSessionConnector(
     if (action.kind !== 'create') throw actionError(action);
     if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
     if (options.createBoundSession) {
-      const key = JSON.stringify([input.workspaceId, input.worktreeId]);
       let requestId = creationRequests.get(key);
       if (!requestId) {
         requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;

@@ -98,6 +98,9 @@ interface NativeContext {
   readonly llm: { resolveCallConfig(model: ToolModel, signal: AbortSignal): Promise<ToolModel> };
 }
 
+/** Only thrown by capability preflight, before invoking native Session creation. */
+export class NativeSessionCreationPreflightError extends Error {}
+
 /** Minimal native Session creation/directory seam; browser creation needs no commands, tools or model provider. */
 export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<WorktreeToolSessionPort,
   'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory'> {
@@ -107,7 +110,7 @@ export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<Wor
     create: (input) => {
       if (input.workspaceId === undefined) return controller.create({ cwd: input.cwd });
       const directories = ctx.get('workingDirectory') as { set?: unknown } | undefined;
-      if (typeof directories?.set !== 'function') throw new Error('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
+      if (typeof directories?.set !== 'function') throw new NativeSessionCreationPreflightError('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
       return controller.create({ workspaceId: input.workspaceId });
     },
     enterWorkingDirectory: async (sessionId, cwd, signal) => {

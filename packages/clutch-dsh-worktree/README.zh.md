@@ -86,6 +86,10 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ## 使用
 
+Worktree Session 重试兼容已有历史绑定，包括子目录 Workspace 中的 Git-root Session，
+但仍拒绝归属冲突或无关执行目录。创建 Session 前的临时失败可以重试。恢复并打开空白
+Session 后，待该 Session 不再为空白，再次新建会创建新的 Session。
+
 新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需插件专属权限配置。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
 
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
