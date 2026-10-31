@@ -18,9 +18,6 @@ import type {
   WorktreeId,
   WorktreeRecord,
   WorktreeImportCandidate,
-  WorktreePermissionRequest,
-  WorktreePermissionNormalizationRequest,
-  WorktreePermissionResult,
   WorkspaceId,
   WorkspaceGitState,
   WorktreeRemoteManager,
@@ -38,11 +35,6 @@ import { createWorktreeSessionCreation } from './session-creation.js';
 import { createWorktreeError } from '../contract/index.js';
 import type { WorktreeSessionCreationRequest, WorktreeSessionCreationResult } from '../contract/index.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
-import {
-  createDshWorktreePermissionAdapter,
-  type DshWorktreePermissionAdapterOptions,
-} from './worktree-permission.js';
-import { createWorktreePermissionManager } from './worktree-permission-manager.js';
 import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
 import { createNativeWorktreeSessionDirectoryPort } from '../tool/native-session.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
@@ -103,7 +95,20 @@ export class WorktreeRemoteService extends TypertRemoteService {
       'clutch-dsh-worktree: activity reader disposal',
     );
     const activitySource = ctx.get('activitySource') as WorktreeActivitySource | undefined;
-    const dsh = new DshHostReadAdapter(ctx as Context & DshHostReadContext, {
+    const native = ctx as Context & DshHostReadContext;
+    const dsh = new DshHostReadAdapter({
+      workspaceRegistry: native.workspaceRegistry,
+      sessions: native.sessions,
+      sessionPersistence: native.sessionPersistence,
+      // Optional sibling services must use get(); undeclared Context property reads throw.
+      // Resolve on each call so late mounting and replacement remain visible.
+      get workingDirectory() {
+        return ctx.get('workingDirectory') as DshHostReadContext['workingDirectory'];
+      },
+      get sessionQuery() {
+        return ctx.get('sessionQuery') as DshHostReadContext['sessionQuery'];
+      },
+    }, {
       activitySource,
       isDisposed: () => disposed,
     });
@@ -159,36 +164,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
       () => () => this.manager.close(),
       'clutch-dsh-worktree: Host manager cleanup',
     );
-    // Optional capabilities can mount late, disappear or be replaced without
-    // remounting this Host. Read the owning Context at call time, never capture
-    // a provider instance; older profiles remain loadable and fail closed.
-    const permissionAdapter = createDshWorktreePermissionAdapter({
-      sessions: {
-        get: (sessionId) =>
-          (
-            ctx as unknown as {
-              readonly sessions: { get(id: string): unknown };
-            }
-          ).sessions.get(sessionId),
-      },
-      get permissionPresets() {
-        return ctx.get('permissionPresets') as DshWorktreePermissionAdapterOptions['permissionPresets'];
-      },
-      get sandboxPolicy() {
-        return ctx.get('sandboxPolicy') as DshWorktreePermissionAdapterOptions['sandboxPolicy'];
-      },
-      get approval() {
-        return ctx.get('approval') as DshWorktreePermissionAdapterOptions['approval'];
-      },
-    });
-    this.remote = createWorktreeRemoteProjection(
-      manager,
-      createWorktreePermissionManager({
-        manager,
-        dsh,
-        permissions: permissionAdapter,
-      }),
-    );
+    this.remote = createWorktreeRemoteProjection(manager);
   }
 
   // 这些方法保持为薄边界，生成的 Typert 描述符只看到 contract-safe 签名；错误归一化
@@ -429,19 +405,6 @@ export class WorktreeRemoteService extends TypertRemoteService {
     return this.remote.bindSession(input);
   }
 
-  @Remote
-  ensureWorktreePermission(
-    input: WorktreePermissionRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>> {
-    return this.remote.ensureWorktreePermission(input);
-  }
-
-  @Remote
-  normalizeDetachedWorktreePermissions(
-    input: WorktreePermissionNormalizationRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>> {
-    return this.remote.normalizeDetachedWorktreePermissions(input);
-  }
 }
 
 export default WorktreeRemoteService;

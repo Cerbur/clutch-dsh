@@ -26,10 +26,8 @@ export function useLifecycleState({ props, source, mutation }: Input) {
     setWorktreeBranchAdoption(undefined);
     return () => guard.invalidate();
   }, [manager, mode, viewReader]);
-  const permissionRetryPending = useRef(false);
   useEffect(() => {
     const guard = cleanupGuard.current;
-    permissionRetryPending.current = false;
     setActionPending(false);
     return () => guard.invalidate();
   }, [manager, mode, viewReader]);
@@ -44,6 +42,5 @@ export function useLifecycleState({ props, source, mutation }: Input) {
     setWorktreeForget,
     cleanupGuard,
     branchAdoptionGuard,
-    permissionRetryPending,
   };
 }

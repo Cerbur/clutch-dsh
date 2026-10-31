@@ -4,8 +4,6 @@ import type {
   BranchRecord,
   WorktreeError,
   WorktreeManager,
-  WorktreePermissionManager,
-  WorktreePermissionNormalizationRequest,
   WorktreeRemoteMethod,
   WorktreeRemoteResult,
   WorktreeToolChangeBatch,
@@ -49,8 +47,6 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   updateWorktreeBaseBranch: 'worktreeManager/updateWorktreeBaseBranch',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
-  ensureWorktreePermission: 'worktreeManager/ensureWorktreePermission',
-  normalizeDetachedWorktreePermissions: 'worktreeManager/normalizeDetachedWorktreePermissions',
 }) satisfies Readonly<Record<WorktreeRemoteMethod, string>>;
 
 /** Deliberately narrow transport seam: the adapter only needs `call`. */
@@ -79,7 +75,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
   watchToolChanges(afterRevision: number, signal: AbortSignal): Promise<WorktreeToolChangeBatch>;
   /** Check Host composition without requiring a user Workspace or reading its projection. */
   probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
@@ -276,9 +272,6 @@ export function createWorktreeConnectionAdapter(
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
     createWorktreeSession: (input) => invoke('createWorktreeSession', input),
-    ensureWorktreePermission: (input) => invoke('ensureWorktreePermission', input),
-    normalizeDetachedWorktreePermissions: (input: WorktreePermissionNormalizationRequest) =>
-      invoke('normalizeDetachedWorktreePermissions', input),
     dispose(): void {
       if (disposed) return;
       disposed = true;

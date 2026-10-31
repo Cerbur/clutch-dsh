@@ -37,11 +37,7 @@ export async function bindSession(
     }
 
     const existing = snapshot.bindings.find((binding) => binding.sessionId === input.sessionId);
-    if (existing) {
-      if (existing.worktreeId === input.worktreeId && existing.status === 'active') {
-        // Exact retries do not write; detached history is never implicitly reactivated.
-        return { result: existing, snapshot, changed: false };
-      }
+    if (existing && (existing.worktreeId !== input.worktreeId || existing.status !== 'active')) {
       throw providerError('SESSION_ALREADY_BOUND', `Session is already bound to Worktree ${existing.worktreeId}`, {
         sessionId: input.sessionId,
         worktreeId: existing.worktreeId,
@@ -59,6 +55,11 @@ export async function bindSession(
       sessionId: input.sessionId,
     });
     await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree);
+
+    if (existing) {
+      // Reuse validates current native facts too; an idempotent retry never redirects cwd.
+      return { result: existing, snapshot, changed: false };
+    }
 
     const binding: SessionBinding = {
       workspaceId: input.workspaceId,

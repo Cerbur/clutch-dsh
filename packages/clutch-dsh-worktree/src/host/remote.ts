@@ -3,7 +3,6 @@ import {
   createWorktreeError,
   type WorktreeError,
   type WorktreeManager,
-  type WorktreePermissionManager,
   type WorktreeRemoteManager,
   type WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -55,7 +54,6 @@ export async function project<Value>(operation: () => Promise<Value>): Promise<W
  */
 export function createWorktreeRemoteProjection(
   manager: WorktreeManager,
-  permissions?: WorktreePermissionManager,
 ): WorktreeRemoteManager {
   return {
     getWorkspaceCheckout: (input) => project(() => {
@@ -105,17 +103,5 @@ export function createWorktreeRemoteProjection(
     insertWorktreeBefore: (input) => project(() => manager.insertWorktreeBefore(input)),
     listBindings: (input) => project(() => manager.listBindings(input)),
     bindSession: (input) => project(() => manager.bindSession(input)),
-    ensureWorktreePermission: (input) =>
-      project(() =>
-        permissions === undefined
-          ? Promise.resolve({ status: 'unverified', retryable: true })
-          : permissions.ensureWorktreePermission(input),
-      ),
-    normalizeDetachedWorktreePermissions: (input) =>
-      project(() =>
-        permissions === undefined
-          ? Promise.resolve({ status: 'unverified', sessionIds: [], retryable: true })
-          : permissions.normalizeDetachedWorktreePermissions(input),
-      ),
   };
 }

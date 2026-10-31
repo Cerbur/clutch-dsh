@@ -16,8 +16,6 @@ import type {
   WorktreeImportCandidate,
   BranchRecord,
   WorktreeManager,
-  WorktreePermissionManager,
-  WorktreePermissionResult,
   WorktreeRecord,
   WorktreeToolChange,
 } from '../../contract/index.js';
@@ -31,7 +29,6 @@ import type {
 } from '../session/session-view.js';
 import type { createWorktreeViewStore } from '../view/view-mode-store.js';
 import type { WorktreeExpandStateStore } from '../view/worktree-expand-state.js';
-import type { WorktreeFullAccessConfirmationController } from '../permission/worktree-permission.js';
 import type { ForgottenWorktree, WorktreeForkRecoveryStore } from '../session/worktree-session-fork.js';
 import type { WorktreeSessionOrderStore } from '../session/worktree-session-order.js';
 import type { WorktreeViewReader } from '../view/worktree-view-read.js';
@@ -58,13 +55,6 @@ export interface WorkspaceListLike {
   readonly phase?: string;
 }
 
-export interface WorktreePermissionNotice {
-  readonly workspaceId: string;
-  readonly worktreeId: string;
-  readonly sessionId?: string;
-  readonly result: WorktreePermissionResult;
-}
-
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
   readonly available: boolean;
@@ -85,35 +75,6 @@ export interface WorktreeSurfaceInjected {
   readonly manager?: WorktreeManager;
   readonly viewReader: WorktreeViewReader;
   readonly subscribeToolChanges?: (listener: (change: WorktreeToolChange) => void) => () => void;
-  readonly permission?: Pick<
-    WorktreePermissionManager,
-    'ensureWorktreePermission' | 'normalizeDetachedWorktreePermissions'
-  >;
-  readonly confirmFullAccess?: (input: {
-    readonly workspaceId: string;
-    readonly worktreeId: string;
-    readonly sessionId: string;
-    readonly cwd: string;
-  }) => boolean | Promise<boolean>;
-  readonly fullAccessConfirmation?: WorktreeFullAccessConfirmationController;
-  readonly onPermissionResult?: (
-    input: {
-      readonly workspaceId: string;
-      readonly worktreeId: string;
-      readonly sessionId: string;
-      readonly cwd: string;
-    },
-    result: WorktreePermissionResult,
-  ) => void;
-  readonly onPermissionNotice?: (
-    input: {
-      readonly workspaceId: string;
-      readonly worktreeId: string;
-      readonly sessionId?: string;
-    },
-    result: WorktreePermissionResult,
-  ) => void;
-  readonly permissionNotice?: ObservableSnapshot<readonly WorktreePermissionNotice[]>;
   readonly createWorkspace?: () => Promise<void>;
   readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
   readonly invalidateWorktreeContext?: (
@@ -202,7 +163,6 @@ export interface RefreshOptions {
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {
   readonly sessionId: string;
-  readonly permissionRequired?: boolean;
   readonly error?: WorktreeViewError;
 }
 

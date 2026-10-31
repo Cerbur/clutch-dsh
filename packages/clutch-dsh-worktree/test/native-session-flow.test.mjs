@@ -9,8 +9,8 @@ import { createRequire } from 'node:module';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { createWorktreeManager } from '../lib/manage/index.js';
+import { WorktreeRemoteService } from '../lib/host/service.js';
 import { DshHostReadAdapter } from '../lib/host/dsh-read-adapter.js';
-import { createWorktreePermissionManager } from '../lib/host/worktree-permission-manager.js';
 import { createWorktreeSessionCreation } from '../lib/host/session-creation.js';
 import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
 import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
@@ -59,6 +59,32 @@ async function fixture(t, nested = false) {
   return { root, home, repo, workspace, git, dsh, native, actors, manager, record, sessions, calls };
 }
 
+test('mounted Cordis Host creates and binds a Workspace-owned Session with native directory reads', async (t) => {
+  const f = await fixture(t);
+  const ctx = new Context();
+  t.after(() => ctx.fiber.dispose());
+  for (const name of ['workspaceRegistry', 'sessions', 'sessionPersistence']) ctx.provide(name, f.native[name]);
+  const agent = { session: { id: 'child' } };
+  ctx.provide('agents', { get: () => agent });
+  ctx.provide('sessionController', {
+    create: (input) => f.sessions.create(input),
+    resolveAgent: async () => ({ agent }),
+  });
+  await ctx.plugin((directoryCtx) => directoryCtx.provide('workingDirectory', {
+    get: f.native.workingDirectory.get,
+    set: async (_agent, cwd, signal) => f.sessions.enterWorkingDirectory('child', cwd, signal),
+  }));
+  await ctx.plugin(WorktreeRemoteService, { dshHome: f.home });
+  const service = ctx.get('worktreeManager');
+  assert.equal(service.ensureWorktreePermission, undefined);
+  assert.equal(service.normalizeDetachedWorktreePermissions, undefined);
+  const result = await service.createWorktreeSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'mounted' }, new AbortController().signal);
+  assert.deepEqual(result, { ok: true, value: { sessionId: 'child', bound: true } });
+  assert.equal((await f.dsh.getSession('child')).cwd, f.record.absolutePath);
+  assert.equal(f.actors.get('child').header.cwd, f.workspace);
+  assert.deepEqual((await f.manager.listBindings({ workspaceId: 'ws' })).map((b) => b.sessionId), ['child']);
+});
+
 for (const nested of [false, true]) test(
   `Workspace-owned execution and cleanup preserve native policy (nested=${nested})`,
   async (t) => {
@@ -79,20 +105,28 @@ for (const nested of [false, true]) test(
     assert.equal(await f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'child' }), f.record.baseCommit);
     await f.manager.updateWorktreeInstructions({ workspaceId: 'ws', worktreeId: f.record.worktreeId, instructions: 'Worktree guidance', expectedInstructions: '' });
     assert.equal(await f.manager.resolveSessionInstructions('child'), 'Worktree guidance');
-    const forbidden = () => assert.fail('Workspace-owned Sessions must never change permissions');
-    const permissions = createWorktreePermissionManager({ manager: f.manager, dsh: f.dsh, permissions: { ensure: forbidden, normalize: forbidden } });
-    assert.equal((await permissions.ensureWorktreePermission({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' })).status, 'no-op');
     f.actors.get('child').effectiveCwd = f.workspace;
-    assert.equal(await f.manager.resolveSessionInstructions('child'), '', 'leaving clears Worktree guidance');
-    await assert.rejects(permissions.ensureWorktreePermission({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' }), { code: 'SESSION_CWD_MISMATCH' });
+    assert.equal(await f.manager.resolveSessionInstructions('child'), '');
+    await assert.rejects(f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'child' }), { code: 'SESSION_CWD_MISMATCH' });
     const lifecycle = async (name) => f.manager[name]({ workspaceId: 'ws', worktreeId: f.record.worktreeId,
       mutationToken: (await f.manager.listWorktrees({ workspaceId: 'ws' }))[0].mutationToken });
     await lifecycle('removeWorktree'); await lifecycle('cleanWorktree');
-    assert.equal((await permissions.normalizeDetachedWorktreePermissions({ workspaceId: 'ws', worktreeId: f.record.worktreeId })).status, 'no-op');
-    const withoutProvider = createWorktreePermissionManager({ manager: f.manager, dsh: f.dsh });
-    assert.equal((await withoutProvider.normalizeDetachedWorktreePermissions({ workspaceId: 'ws', worktreeId: f.record.worktreeId })).status, 'no-op');
     assert.equal(f.actors.get('child').header.cwd, f.workspace);
   });
+
+test('reusing an active binding revalidates native cwd and preserves the relation on mismatch', async (t) => {
+  const f = await fixture(t);
+  const signal = new AbortController().signal;
+  const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions: f.sessions,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', signal, check() {} });
+  assert.equal(result.status, 'dispatched');
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' };
+  const before = await f.manager.listBindings({ workspaceId: 'ws' });
+  assert.deepEqual(await f.manager.bindSession(input), before[0], 'valid retries remain idempotent');
+  f.actors.get('child').effectiveCwd = f.workspace;
+  await assert.rejects(f.manager.bindSession(input), { code: 'SESSION_CWD_MISMATCH' });
+  assert.deepEqual(await f.manager.listBindings({ workspaceId: 'ws' }), before);
+});
 
 for (const failed of ['enter', 'bind']) test(`partial ${failed} failure preserves Session and never admits input`, async (t) => {
   const f = await fixture(t);

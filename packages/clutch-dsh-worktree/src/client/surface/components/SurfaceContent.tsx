@@ -1,5 +1,4 @@
 import {
-  formatWorktreePermissionNotice,
   formatWorktreeViewError,
 } from '../../view/worktree-error-copy.js';
 import styles from '../../worktree.css';
@@ -21,7 +20,6 @@ import type { useWorktreeRegistration } from '../actions/useWorktreeRegistration
 type Input = {
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
-    | 'permissionNoticeSnapshot'
     | 'forkRecoverySnapshot'
     | 'expandSnapshot'
     | 'workspaces'
@@ -44,8 +42,6 @@ type Input = {
   >;
   lifecycle: Pick<
     ReturnType<typeof useLifecycleActions>,
-    | 'permissionRetryTarget'
-    | 'retryCleanupPermissions'
     | 'recoveryAction'
     | 'branchLabel'
     | 'branchActions'
@@ -135,9 +131,9 @@ export function SurfaceContent({
   native,
   lifecycleState,
 }: Input) {
-  const { permissionNoticeSnapshot, forkRecoverySnapshot } = source;
+  const { forkRecoverySnapshot } = source;
   const { t, retryForkSession, openSession } = props;
-  const { permissionRetryTarget, retryCleanupPermissions, recoveryAction } = lifecycle;
+  const { recoveryAction } = lifecycle;
   const { actionPending, actionError, setActionError } = mutation;
   const {
     forkRetryKey,
@@ -165,19 +161,6 @@ export function SurfaceContent({
     const recovery = recoveryAction(error);
     return recovery === null ? [] : [recovery];
   };
-  for (const notice of permissionNoticeSnapshot) {
-    const target = permissionRetryTarget(notice);
-    notices.push({
-      key: 'permission:' + JSON.stringify([notice.workspaceId, notice.worktreeId]),
-      text: formatWorktreePermissionNotice(notice.result, t),
-      message: (translate) => formatWorktreePermissionNotice(notice.result, translate),
-      context: [t('settings.permission'), workspaceLabel(notice.workspaceId),
-        target?.absolutePath ?? notice.worktreeId].join(' · '),
-      actions: target === undefined ? [] : [{
-        label: t('action.retry'), disabled: actionPending, onClick: () => retryCleanupPermissions(notice),
-      }],
-    });
-  }
   for (const recovery of forkRecoverySnapshot.pending) {
     const error = forkRecoveryError(recovery);
     notices.push({
@@ -236,7 +219,7 @@ export function SurfaceContent({
         { label: t('action.retryBinding'),
           disabled: actionPending || pendingSessionArchived || error.retryable === false,
           onClick: () => { void retrySessionBinding(); } },
-        ...(binding.permissionRequired ? [] : [{
+        {
           label: t('action.openCreatedSession'), disabled: actionPending,
           leaveSettings: true,
           onClick: () => {
@@ -244,7 +227,7 @@ export function SurfaceContent({
             if (actionError?.details?.sessionId === binding.sessionId) setActionError(undefined);
             openSession(binding.sessionId);
           },
-        }]),
+        },
       ],
     });
   }

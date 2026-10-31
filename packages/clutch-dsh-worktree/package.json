@@ -24,10 +24,6 @@
       "import": "./lib/index.js",
       "default": "./lib/index.js"
     },
-    "./permission-presets": {
-      "types": "./lib/host/permission-preset-append.d.ts",
-      "default": "./lib/host/permission-preset-append.js"
-    },
     "./contract": {
       "types": "./lib/contract/index.d.ts",
       "import": "./lib/contract/index.js",

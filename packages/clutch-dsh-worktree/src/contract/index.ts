@@ -1,8 +1,3 @@
-import type {
-  WorktreePermissionNormalizationRequest,
-  WorktreePermissionRequest,
-  WorktreePermissionResult,
-} from './worktree-permission.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from './baseline-sync.js';
 export type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult, WorktreeSyncStrategy, WorktreeBaselineSyncManager } from './baseline-sync.js';
 
@@ -40,7 +35,6 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_STATE_CONFLICT',
   'WORKTREE_RECOVERY_REQUIRED',
   'WORKTREE_IDENTITY_CHANGED',
-  'WORKTREE_PERMISSION_BINDING_REQUIRED',
   'WORKTREE_SESSION_BUSY',
   'WORKTREE_ACTIVITY_UNAVAILABLE',
 ] as const);
@@ -203,7 +197,6 @@ export interface WorktreeGitFileDiff {
   readonly segments?: readonly WorktreeGitDiffSegment[];
 }
 
-export * from './worktree-permission.js';
 export * from './session-flow.js';
 export * from './worktree-tool-changes.js';
 export * from './tool-settings.js';
@@ -517,8 +510,6 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
-  'ensureWorktreePermission',
-  'normalizeDetachedWorktreePermissions',
 ] as const);
 
 export type WorktreeRemoteMethod = (typeof WORKTREE_REMOTE_METHODS)[number];
@@ -625,11 +616,4 @@ export interface WorktreeRemoteManager {
     sessionId: SessionId;
   }): Promise<WorktreeRemoteResult<SessionBinding>>;
 
-  ensureWorktreePermission(
-    input: WorktreePermissionRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
-
-  normalizeDetachedWorktreePermissions(
-    input: WorktreePermissionNormalizationRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
 }

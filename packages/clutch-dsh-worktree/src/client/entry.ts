@@ -51,17 +51,7 @@ import {
 } from './session/worktree-session.js';
 import { renameWorktreeSession } from './session/session-rename.js';
 import { openWorktreeSession } from './session/session-navigation.js';
-import {
-  createWorktreeFullAccessConfirmationController,
-} from './permission/worktree-permission.js';
-import { installWorktreePermissionIcon } from './permission/worktree-permission-icon.js';
-import type {
-  SessionBinding,
-  WorktreePermissionResult,
-} from '../contract/index.js';
-import type {
-  WorktreePermissionNotice,
-} from './surface/types.js';
+import type { SessionBinding } from '../contract/index.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
 import {
@@ -204,39 +194,14 @@ export function apply(ctx: Context): void {
       dictionaries: { readonly zh: typeof zh; readonly en: typeof en },
     ): () => void;
   };
-  if (typeof document !== 'undefined') {
-    ctx.effect(
-      () => installWorktreePermissionIcon(document),
-      'clutch-dsh-worktree: permission icon cleanup',
-    );
-  }
   ctx.effect(
     () => locale.register(WORKTREE_NS, { zh, en }),
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
   const viewReader = createWorktreeViewReader(manager);
-  const fullAccessConfirmation = createWorktreeFullAccessConfirmationController();
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
-  const permissionNotice = createSnapshotStore<readonly WorktreePermissionNotice[]>([]);
-  const permissionManager = typeof document !== 'undefined' ? manager : undefined;
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
-  const reportPermissionNotice = (
-    input: {
-      readonly workspaceId: string;
-      readonly worktreeId: string;
-      readonly sessionId?: string;
-    },
-    result: WorktreePermissionResult,
-  ): void => {
-    restartNotice.reportPermissionResult(result);
-    const visible = result.status === 'fallback-workspace-write' ||
-      result.status === 'user-restricted' ||
-      result.status === 'unverified';
-    const remaining = permissionNotice.getSnapshot().filter((notice) =>
-      notice.workspaceId !== input.workspaceId || notice.worktreeId !== input.worktreeId);
-    permissionNotice.set(visible ? [...remaining, { ...input, result }] : remaining);
-  };
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
   slots.inject('conversation.input.dock', () => slots.register({
@@ -304,10 +269,6 @@ export function apply(ctx: Context): void {
   if (typeof document !== 'undefined') toolChanges.start();
   ctx.effect(() => () => manager.dispose(), 'clutch-dsh-worktree: connection cleanup');
   ctx.effect(() => () => viewReader.dispose(), 'clutch-dsh-worktree: view reader cleanup');
-  ctx.effect(
-    () => () => fullAccessConfirmation.dispose(),
-    'clutch-dsh-worktree: Full Access confirmation cleanup',
-  );
   ctx.effect(
     () => () => virtualWorkspaceMembership.dispose(),
     'clutch-dsh-worktree: Workspace membership cleanup',
@@ -467,11 +428,6 @@ export function apply(ctx: Context): void {
       requestId: input.requestId,
     }),
     ensureSessionWorkspace,
-    permission: permissionManager,
-    confirmFullAccess: permissionManager === undefined
-      ? undefined
-      : fullAccessConfirmation.request,
-    onPermissionResult: reportPermissionNotice,
     openSession: (sessionId) =>
       openWorktreeSession(ctx.uiWorkspace, ctx.sessions, sessionId as SessionId),
   });
@@ -601,16 +557,6 @@ export function apply(ctx: Context): void {
           manager,
           viewReader,
           subscribeToolChanges: toolChanges.subscribe,
-          permission: permissionManager,
-          confirmFullAccess: permissionManager === undefined
-            ? undefined
-            : fullAccessConfirmation.request,
-          fullAccessConfirmation: typeof document === 'undefined'
-            ? undefined
-            : fullAccessConfirmation,
-          onPermissionResult: reportPermissionNotice,
-          onPermissionNotice: reportPermissionNotice,
-          permissionNotice,
           createWorkspace: async () => {
             const workspacePath = await ctx.uiWorkspace.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
@@ -691,10 +637,6 @@ export function apply(ctx: Context): void {
             for (const sessionId of input.sessionIds) {
               virtualWorkspaceMembership.removeSession(sessionId);
             }
-            permissionNotice.set(permissionNotice.getSnapshot().filter((notice) =>
-              notice.workspaceId !== input.workspaceId ||
-              (notice.worktreeId !== input.worktreeId &&
-                (notice.sessionId === undefined || !input.sessionIds.includes(notice.sessionId)))));
           },
         }),
       },

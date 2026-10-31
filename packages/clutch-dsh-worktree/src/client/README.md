@@ -34,27 +34,8 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   Only `gateway/service-unavailable`, `gateway/definition-unavailable`, and
   `gateway/invocation-unavailable` show the native restart toast, once per Client fiber. Rechecks
   abort superseded probes, disposal aborts pending probes, and stale responses never update the
-  reminder. The same controller also consumes the existing permission-result callback: only
-  `fallback-workspace-write` establishes the missing Full Access preset and shows a separate
-  once-per-fiber reminder with conditional install/update restart guidance. Host success does
-  not dismiss this reason; a confirmed Full Access result does. Native permission results
-  invalidate older in-flight Host probes. The native Toast consumes a reason snapshot so a
-  reason change updates its copy/lifetime even while visibility stays true. Completion is
-  reason-scoped so an older Toast cannot dismiss a newer reason; persistent recovery
-  copy retains the guidance after dismissal. Unverified results and explicit restrictions do not
-  request restart. The reminder uses its own `shell.overlay` registration and does not change
-  ready views, refresh scopes, Session/Workspace data, the transport graph or native services.
-- Legacy Worktree Full Access confirmation is rendered as the DSH `RiskConfirmation` in-page dialog. The
-  browser Client serializes concurrent confirmation requests, requires the native checkbox
-  acknowledgement, and fails pending requests closed when the Client fiber is disposed. The Host
-  resolves optional permission capabilities on each invocation, including the confirmed second call:
-  provider revocation reports unverified/retryable without using an old setter, and recovery/retry
-  retains explicit user restrictions. This controller coverage does not validate DOM/portal rendering.
-  Equivalent pending Workspace/Worktree/Session/cwd confirmations share one Promise/dialog;
-  settled consent is never cached. A missing named preset can now use native Session policy
-  events after the same acknowledgement, with actual policy readback. The native menu may
-  display Custom; the dialog explains this. Successful policy application does not trigger
-  the missing-preset restart reminder. Unsupported profiles keep existing recovery behavior.
+  reminder. The toast uses a separate shell overlay and preserves ready views.
+- Session permissions remain owned by DSH. There is no plugin-specific preset, confirmation, permission RPC, icon decoration or cleanup normalization. Historical saved policies remain unchanged.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 - `command-activity.ts` registers a private native Conversation activity target for
@@ -257,7 +238,7 @@ cleanup and forget require archived records. Disk cleanup requires a stopped-tas
 in addition to its destructive confirmation, and lists the actual checkout root for nested cwd.
 `useDashboardBatchManage` calls existing lifecycle RPCs, validates the confirmed target facts,
 uses the latest token after earlier items advance the Workspace revision, and refreshes only
-the owning Workspace without clearing ready content. Cleanup detaches bindings and normalizes
+the owning Workspace without clearing ready content. Cleanup detaches bindings and preserves native
 permissions; forget evicts only matching management/binding projections and notifies the existing
 context owner. A committed mutation is successful even if a follow-up read fails; it is never
 automatically replayed. No batch endpoint or durable selection is introduced.
@@ -265,11 +246,9 @@ After an RPC commits, the hook rechecks the captured manager, shared reader and 
 generation before local projection effects, callbacks or refresh. A retired Surface returns success
 for the committed operation without touching its replacement or inviting replay. Dashboard owner
 retirement only stops remaining items and old UI results: a live Surface still completes the submitted
-item's permission normalization, forget relationship cleanup and scoped refresh. Reader replacement
+item's forget relationship cleanup and scoped refresh. Reader replacement
 retires the old lifecycle and resets its pending state; operation-owned busy tokens prevent an old
 finally block from clearing a replacement operation's lock or pending state.
-Cleanup permission notices are retained by Workspace/Worktree. Each failed target has its own
-Retry in Worktree settings; later results update only their matching target.
 Failed mutations also refresh only the owning Workspace before the next item: a rejected Git
 transaction can roll back its journal while advancing the Sidecar revision. Preserve the original
 item error, retire stale tokens, and continue independent items with the shared reader's new view.
@@ -450,7 +429,7 @@ modify DSH source or native Session/Workspace data.
 Dashboard actions reuse `session.createSession`, `session.openWorkspaceSession`,
 `registration.openWorktreeCreator`, and `lifecycleState.setWorktreeRemoval` in the
 surface composition. New Session closes the dashboard before entering the existing
-permission/binding/recovery flow; Worktree dialogs retain the dashboard underneath.
+binding/recovery flow; Worktree dialogs retain the dashboard underneath.
 The Session list joins the retained Sessions and Workspace bindings, excludes archived
 and non-current blank Sessions, and follows the existing group order without a new read.
 Overview limits presentation to five rows; Sessions shows every visible member.
@@ -512,8 +491,7 @@ The Host shares the native creation module used by Agent and Dashboard dispatch.
 
 New Sessions already have DSH-owned original Workspace membership. The browser-only legacy
 projection does not modify DSH source, Session metadata or native Workspace storage.
-New Workspace-owned Sessions skip Full Access setup and preserve native permissions;
-legacy Sessions still use the existing confirmation helper. Browser creation retains one
+All Sessions preserve native permissions. Browser creation retains one
 request id across uncertain failures and the Host shares its promise within one lifetime.
 Client/Host reload or replacement of native Session/Agent capabilities ends that deduplication scope.
 Browser creation uses a minimal native directory port and does not depend on optional commands, tools or LLM services. A Host retains at most 512 identities
@@ -559,7 +537,7 @@ the Dashboard record's `absolutePath`, never probes the operating system, and fa
 protocol link when no application is available or a Host request fails. The selected application is remembered
 only in current-page memory; after a refresh, the first available application is used.
 
-Surface operation, permission, fork-binding, and read errors are announced by the public
+Surface operation, fork-binding, and read errors are announced by the public
 DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
 are announced once while present; resolved entries leave the queue and a later recurrence
 can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
@@ -605,7 +583,6 @@ client/
 ├── context/     # Conversation and Hero context projection
 ├── dashboard/   # Dashboard preview, selection and open-in-app action
 ├── session/     # Session creation, fork, ordering and membership
-├── permission/  # Permission confirmation and native icon integration
 ├── view/        # View mode, scoped reads, actions and error presentation
 ├── overlay/     # Overlay composition and geometry
 └── surface/
@@ -667,18 +644,9 @@ Read-only menu refreshes share an equivalent in-flight Workspace read and do not
 Conversation context. Mutation refreshes still invalidate the read generation and context so
 they cannot reuse a pre-mutation response.
 
-Clean Up Disk (`cleanWorktree`) decouples Git directory removal from subsequent permission
-normalization using `runWorktreeCleanupFlow`. Once disk deletion succeeds, the dialog closes
-and the view updates to `cleaned`. Any failure during subsequent permission normalization
-or view refresh reports a retryable error without rolling back or repeating disk removal.
-The permission notice exposes Retry for a retryable result on a cleaned Worktree. It calls
-only `normalizeDetachedWorktreePermissions`, coalesces repeated clicks, and discards late
-results after forget, mode changes, disposal, or replacement of that target's notice. Successful
-normalization clears only that Workspace/Worktree notice, preserving other failures and their
-retry actions. The Archived
-group activity aggregate excludes native archived Sessions, matching its child groups.
+Clean Up Disk (`cleanWorktree`) uses `runWorktreeCleanupFlow` to project `cleaned` and detached bindings after a successful disk removal, then refreshes the owning Workspace. Read failures never roll back or repeat the removal. Native permissions stay unchanged. The Archived group activity aggregate excludes native archived Sessions, matching its child groups.
 Forget Worktree (`forgetWorktree`) retires sidecar management and immediately cleans up
-browser-local fork recovery, membership projections, and permission notices for the affected
+browser-local fork recovery and membership projections for the affected
 Worktree and its bound Sessions. Neither cleanup nor forget gates on activity; only pending
 mutations and recovery health disable these actions. Cleanup requires explicit user confirmation.
 Positioning is scoped to the Worktree content scroll container. It keeps the navigation position when the current row is already visible and adjusts only the minimum vertical distance when the row is outside the viewport.
@@ -782,7 +750,7 @@ The Worktree surface is additive:
      states that the plugin does not check Session/subagent activity and requires the user to confirm
      all tasks using the directory have stopped, warning about task failures or data loss,
      runs real non-forced `git worktree remove`, and upon success records `diskCleanup: completed`,
-     projects health as `cleaned`, transitions bindings to detached, and normalizes permissions;
+     projects health as `cleaned`, transitions bindings to detached, and preserves native permissions;
   2. `Remove from Management`: Prompts for confirmation and removes the Worktree sidecar record and all
      its bindings, while preserving disk files and native DSH Sessions;
 - The Main group is localized as `Local (current branch)` / `本地（当前分支）` when DSH reports a current local branch, including a Workspace imported from a Git subdirectory after the Host resolves its Git root, and falls back to `Local` / `本地` when it does not;

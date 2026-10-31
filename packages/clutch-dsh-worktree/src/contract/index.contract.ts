@@ -57,8 +57,6 @@ const expectedRemoteKeys = [
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
-  'ensureWorktreePermission',
-  'normalizeDetachedWorktreePermissions',
   'updateWorktreeInstructions',
   'updateWorktreeBaseBranch',
 ] as const;

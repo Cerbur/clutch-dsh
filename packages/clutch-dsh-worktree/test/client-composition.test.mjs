@@ -533,23 +533,6 @@ test('does not globally rescan Fork bindings while waiting for native Worktree S
               value: { ok: true, value: { ...input, status: 'active' } },
             });
           }
-          if (endpoint === 'worktreeManager/ensureWorktreePermission') {
-            return Promise.resolve({
-              ok: true,
-              value: {
-                ok: true,
-                value: input.confirmed === true
-                  ? {
-                      status: 'full-applied',
-                      preset: 'worktree-full-access',
-                      sandboxMode: 'danger-full-access',
-                      approvalPolicy: 'ask',
-                      retryable: false,
-                    }
-                  : { status: 'confirmation-required', retryable: false },
-              },
-            });
-          }
           return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
         },
       },
@@ -570,7 +553,7 @@ test('does not globally rescan Fork bindings while waiting for native Worktree S
       cwd: '/tmp/worktree-one',
     });
     await flush();
-    assert.equal(overlay.fullAccessConfirmation.getSnapshot(), undefined);
+    assert.equal(overlay.fullAccessConfirmation, undefined);
 
     fixture.setSessionListSnapshot({
       ...initialSessionSnapshot,

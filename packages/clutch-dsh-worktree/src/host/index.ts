@@ -13,11 +13,3 @@ export type { DshHostReadContext } from './dsh-read-adapter.js';
 export { createWorktreeRemoteProjection } from './remote.js';
 export { WorktreeRemoteService } from './service.js';
 export type { WorktreeHostConfig } from './service.js';
-export {
-  createDshWorktreePermissionAdapter,
-} from './worktree-permission.js';
-export type { DshWorktreePermissionAdapterOptions } from './worktree-permission.js';
-export {
-  createWorktreePermissionManager,
-} from './worktree-permission-manager.js';
-export type { WorktreePermissionManagerOptions } from './worktree-permission-manager.js';

@@ -19,16 +19,7 @@ Main 指令。受管理的 Worktree 提供可选择本地或已获取的远端 b
 
 向运行中的 DSH 安装插件后，若插件 Host 尚未加载，请重启 DSH Desktop，或重启 DSH Web
 服务后刷新页面。重启前请先结束正在运行的任务。如果 Client 已加载而 Host 尚未挂载，
-原生 toast 会在每次 Client 加载期间提醒一次。以下预设恢复仅适用于直接以 Worktree cwd 创建的历史 Session，新 Workspace Session 不会进入此流程。如果旧 Worktree Session 权限检查确认
-**Worktree Full Access** 预设不可用并降级为 `workspace-write`，另一条每次加载至多一次的
-toast 会提示在刚安装或更新插件后重启。toast 关闭后，权限修复说明仍保留重启指引。网络故障、
-Workspace 错误、无法确认的权限与用户的显式权限限制不会触发预设缺失提醒。提醒不会重载服务
-或授予完全访问；若重启后预设仍不可用，请检查 DSH 的插件与权限配置。
-
-Host 可用后，在支持的 DSH profile 中，仅缺失命名预设不再需要重启。原有完全访问确认框仍
-要求勾选风险确认；确认后，Worktree 会设置并验证原生 Session 文件访问权限与 `ask` 审批。
-命名预设加载前，原生菜单可能显示 **Custom（自定义）**。此过程不修改原生预设目录、默认值
-或 Auto review 集成。不支持该能力的 profile 仍沿用上述降级与修复指引。
+原生 toast 会在每次 Client 加载期间提醒一次。
 
 ### 从 npm 安装
 
@@ -68,7 +59,7 @@ dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-ds
 ```
 
 安装完成后重新打开 Desktop。本地链接生效期间，需要保留 checkout 及其已安装的 `node_modules`；
-只复制 `lib/` 或移除 checkout 的依赖可能导致 Host 和权限 preset 入口导入失败。
+只复制 `lib/` 或移除 checkout 的依赖可能导致 Host 入口导入失败。
 Client 的实现依赖在构建时打包，Desktop 无需另外提供 Zustand 或 Immer 模块。
 
 ### 从 GitHub 源码安装（可选）
@@ -95,7 +86,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ## 使用
 
-新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需设置 Worktree Full Access。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需插件专属权限配置。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
 
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 
@@ -317,7 +308,7 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
-不会自动授予 Worktree Full Access。
+权限由 DSH 原生设置管理。
 Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。指令不接受额外参数。
 所有发现、回报和补充投递仅限调用方 Workspace；传入其他 `workspaceId` 不会获得额外访问权。
 这些 Session 是普通原生 Session，不是原生 subagent 子会话，也没有持久化的委派任务目录。
@@ -393,9 +384,7 @@ Worktree（含已归档和已清理记录），批量归档、清理磁盘或移
 确认所有使用这些目录的任务均已停止。按钮显示可操作数量，确认弹窗仅包含适用目标，不适用项保留选择。
 清理或移出管理前需先归档。结果逐项显示，成功项
 取消选择，失败项保留选择供显式重试。Main 本身不会成为批量操作目标。
-磁盘清理后的权限恢复失败按 Workspace/Worktree 分别保留在**设置 → Worktree → 报错与修复**中，
-每项提供独立的重试入口。重试只恢复权限，不会再次清理磁盘；其他目标成功不会清除该项失败。
-关闭 Dashboard 会停止剩余排队项；只要 Worktree 视图仍有效，已提交项的后续处理仍会完成。
+
 
 **派生 Worktree** 显示同一 Workspace 中，已保存基线匹配当前 checkout 本地分支的受管理 Worktree。
 概览预览前五项，页签显示全部匹配项，包括带有可用状态和路径的已归档条目；点击条目可打开其 Dashboard。
@@ -601,17 +590,8 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
   使用独立的前置指示器。视觉上的 Session 排序初始按最新的 `updatedAt` 值排列并只保存在浏览器本地；Main 固定为首行，Worktree 拖拽只
   更新这个本地排序投影，Main 拖拽只有在 DSH 接受后才更新原生 Workspace 顺序。
-- 直接以 Worktree cwd 创建的历史 Session 在明确确认后可以请求名为 `worktree-full-access` 的 preset。插件
-  追加该 preset，保留 DSH 现有的权限列表、默认选择与官方 Auto review 集成。它将
-  DSH `danger-full-access` 与 `ask` 组合，保留审批提示，不改变 network 或 process policy。
-  预设与原生 Session 权限写入均不可用时尽可能回退到 `workspace-write + ask`，否则显示未验证且可重试的状态。权限服务
-  可以迟挂载或被替换：重试使用当前可用能力，不需要重启 Worktree Host。服务暂时缺失时
-  绝不授予 Full Access，并保留用户的显式限制；它不能突破 DSH 宿主设置的 sandbox 上限。
-- 若命名预设缺失但原生 Session 权限服务可用，同一确认框会通过原生权限事件设置
-  `danger-full-access + ask`。仅在两个实际值均验证成功后报告生效；原生菜单可能显示
-  **Custom（自定义）**，不会存储虚构的预设身份。同一 Workspace、Worktree、Session 和路径
-  的重复待确认请求共用一个对话框，不同目标仍分别确认。
-- Session 与 Worktree 绑定及权限检查在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
+- 创建、复用、归档、清理和移出管理均保留 DSH 原生权限。插件不提供专属访问预设、确认框或权限恢复。历史 Session 已保存的权限保持不变；需要普通审批时使用 DSH 原生设置。
+- Session 与 Worktree 绑定在 Host 端基于物理文件系统身份（`stat`/`realpath`）进行比较，而非单纯依赖词法路径字符串。这确保了在 Windows 与 macOS 各种路径形态下的稳健兼容（包括盘符大小写、正反斜杠、UNC 路径以及 `\\?\\` 等长路径前缀）。在 Windows 平台上，sidecar 原子持久化采用可写文件句柄同步并对目录同步保持容错（best-effort），Git CLI 集成兼容 `NUL` 空设备路径与 CRLF 换行符。
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
 - Workspace 根目录缺失时，Worktree 视图仍会渲染索引中的 Worktree、Session 绑定和指令，并显示

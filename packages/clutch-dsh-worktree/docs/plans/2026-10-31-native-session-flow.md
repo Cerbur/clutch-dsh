@@ -69,3 +69,18 @@ Git 仓库根的 .agents/worktrees，否则仍越出 sandbox root。忽略策略
 
 编辑工具限制：本环境没有 apply_patch 可执行文件（exit 127）；本新增调研文档通过
 原生 write 工具创建，未覆盖现有文件，未修改业务实现。
+
+## 2026-10-31 修复与范围更新
+
+人类明确要求完全删除 Worktree Full Access 代码，取代上文待定的 legacy helper 兼容选项。已移除 preset 安装贡献、权限修改 adapter、确认 UI、权限 RPC 和清理归一化；历史 Session 策略不自动变更。
+
+真实浏览器复现新建 Session 后绑定失败，原始错误为 `cannot get property "workingDirectory" without inject`。根因是只读 adapter 直接读取未注入的 Cordis sibling service；Host 改为调用时 `ctx.get()`，回归使用独立 Cordis fiber 复现，覆盖创建、目录发布和绑定。复用空白 Session 继续通过 Host bind 校验物理身份。
+
+## 2026-11-01 续接验收
+
+- active binding 的幂等重试重新校验原生归属与 effective cwd；错配显式失败，保留原绑定，不自动重定向。已覆盖成功重试与目录变化后的拒绝。
+- 清理已删除 Full Access 模块对应的旧 `lib` 编译产物；源码和重新构建的产物均无该 preset、权限 RPC 或确认组件。
+- 在 feature worktree 根运行 `pnpm run check:workspace`、`pnpm run check:patches`，以及 `pnpm --filter @cerbur/clutch-dsh-worktree` 的 `lint`、`typecheck`、`build`、`test`，全部通过。全量测试 1,249 通过、0 失败、12 跳过。
+- 包目录运行 `node --test test/readme-parity.test.mjs` 通过；以 `DSH_NATIVE_SOURCE=/Users/yuancheng/Documents/Code/deepseek-harness` 运行 `node --test test/native-session-flow.test.mjs`，14 项全部通过。
+- 重启独立 3088 测试服务，确认安装链接指向本 feature worktree。浏览器在 `qa/session-flow` 新建 Session 成功，再次点击加号复用同一空白 Session；原生权限仍为工作区内修改。只读检查原生记录确认 header cwd 保留原 Workspace，working-directory/change 指向 Worktree，未写入 Full Access。
+- 此次仅完成 feature 验收；未提交、合并、发布或调整版本。
