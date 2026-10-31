@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/floor-mat",
+  "assetType": "component",
+  "displayName": "厨房蓝白条纹脚垫",
+  "revision": "2026-10-29-r1",
+  "status": "ready",
+  "file": "floor-mat.glb",
+  "sha256": "c4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f",
+  "bytes": 1427356,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center",
+    "description": "Local X is the long axis and stripe direction; local +Y is up, local +Z is the front short-depth direction. Origin is the underside footprint center, not the room origin."
+  },
+  "geometry": {
+    "triangles": 1900,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 2
+  },
+  "bounds": {
+    "min": [
+      -0.675000011920929,
+      0,
+      -0.38499999046325684
+    ],
+    "max": [
+      0.675000011920929,
+      0.017999999225139618,
+      0.38499999046325684
+    ]
+  },
+  "dimensions": {
+    "width": 1.350000023841858,
+    "height": 0.017999999225139618,
+    "depth": 0.7699999809265137
+  },
+  "requiredNodes": [
+    "floor-mat",
+    "floor_mat_mesh",
+    "floor_contact_anchor",
+    "mat_surface"
+  ],
+  "anchors": {
+    "floor_contact_anchor": [
+      0,
+      0,
+      0
+    ],
+    "mat_surface": [
+      0,
+      0.01640000008046627,
+      0
+    ]
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "triangles": 6000,
+    "bytes": 4194304,
+    "materials": 1,
+    "meshes": 1,
+    "primitives": 1,
+    "images": 2,
+    "scope": "Independent budget for new kitchen/floor-mat only. Does not replace kitchen/rug or inherit refrigerator budgets."
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/floor-mat/蓝白条纹脚垫.blend",
+    "input": "kitchen/floor-mat/source/蓝白条纹脚垫_原始_20261029.glb",
+    "inputSha256": "4271bbd9980b9e7cfee32c7b03a3ae0d797ab6dda93c47502c1bb12e8a655e3d",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/floor-mat/scripts/build_floor_mat.py",
+      "kitchen/floor-mat/scripts/validate_delivery.py",
+      "kitchen/floor-mat/scripts/review_in_kitchen.py",
+      "kitchen/floor-mat/scripts/make_multiview.py"
+    ],
+    "method": "Reference-guided native reconstruction; source outline/piping are design cues, not byte-preserved geometry."
+  },
+  "references": [
+    {
+      "file": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb"
+    },
+    {
+      "file": "kitchen/floor-mat/references/蓝白条纹脚垫_用户参考.png",
+      "role": "user-provided-component-reference",
+      "sha256": "57acc54ea15cd66adb2166683860ae4a3b554be2f6bb815c1cb9129e3a933d90"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-stage2b",
+    "paletteSRGB": {
+      "blue": "#7199C5",
+      "cream": "#F6EAD7"
+    },
+    "roughness": 0.7,
+    "metallic": 0,
+    "normalScale": 0.5,
+    "clearcoat": 0,
+    "stripes": {
+      "blue": 4,
+      "cream": 3,
+      "direction": "longitudinal/local X"
+    },
+    "textureSize": [
+      1024,
+      1024
+    ],
+    "notes": [
+      "Clean authored sRGB albedo; no camera highlights, ambient shadow or source baked lighting copied.",
+      "Towel-loop microstructure is normal-only. Piping is native geometry."
+    ]
+  },
+  "textures": [
+    {
+      "name": "蓝白脚垫_normal_1024",
+      "mimeType": "image/png",
+      "bytes": 1022996,
+      "sha256": "85573c4657afd7c159978a5e8759d38eec048855b37806ba12ddab2e1771bbbf"
+    },
+    {
+      "name": "蓝白脚垫_basecolor_1024",
+      "mimeType": "image/png",
+      "bytes": 355951,
+      "sha256": "3a103ae65ea48498ae84b4c11f2ce0f1e8212fed1c234149b5622ffbace343ea"
+    }
+  ],
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "floorDecoration": true,
+    "physicalPileGeometry": false
+  },
+  "placement": {
+    "scale": 1,
+    "sceneOwnsFinalPlacement": true,
+    "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",
+    "provisionalPosition": [
+      1.4,
+      0.0255,
+      -0.37
+    ],
+    "rotationYRadians": 0,
+    "runtimeAccepted": false,
+    "notes": [
+      "Provisional placement has no surface intersections with the 40 existing static scene meshes. It is not an accepted runtime coordinate.",
+      "The existing seat-0 fridge search station [1.4,-.18] is inside this provisional footprint: fixed-height actor feet can penetrate the 16.4 mm top. Office must resolve/test this before accepting the placement.",
+      "Preserve all existing furniture, whale rug, stations, routes, camera and lights; placement and any required local actor-floor contact handling belong to the explicit Office integration.",
+      "Floor top is approximately y=.025; underside .0255 is a visual starting value only. Recompute against actual floor and avoid z-fighting."
+    ]
+  },
+  "validation": {
+    "blender": "5.2.3 LTS",
+    "independentFinalGlbImport": true,
+    "independentExportReimport": true,
+    "roundtripTriangles": 1900,
+    "finiteGeometry": true,
+    "zeroAreaGeometry": 0,
+    "zeroAreaUV": 0,
+    "weldedNonmanifoldEdges": 0,
+    "palettePixelsVerified": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "cyclesMultiviewRendered": true,
+    "staticKitchenSurfaceIntersectionCount": 0,
+    "engineAccepted": false,
+    "report": "validation.json",
+    "placementReport": "placement-review.json",
+    "renders": [
+      "preview.png",
+      "detail.png",
+      "top.png",
+      "front.png",
+      "right.png",
+      "back.png",
+      "underside-lit.png",
+      "independent-glb.png",
+      "multiview.png",
+      "kitchen-provisional.png"
+    ]
+  },
+  "notes": [
+    "New independent component; keep accepted kitchen/rug and all frozen deliveries.",
+    "Only one component reference image and the supplied GLB were received in this chat. Additional views are generated review renders.",
+    "Underside is a reasonable plain-blue backing, not exact recovery of unseen reference geometry.",
+    "The reconstruction is intentionally thinner/cleaner than the source; tiny reference fibers are not literal geometry.",
+    "Ready only. Office integration, actor-foot contact, lighting dependency rebake and browser acceptance remain pending."
+  ]
+}

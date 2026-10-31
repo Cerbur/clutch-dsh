@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/stove",
+  "revision": "2026-10-29-refined-r1",
+  "status": "ready",
+  "file": "stove.glb",
+  "sha256": "0f7756d88da214ff51f5a4e4601bfe1dcb928c97c59b34e8610b70580347e1a2",
+  "bytes": 777032,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 31532,
+    "meshes": 3,
+    "primitives": 3,
+    "materials": 3,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -1.6330000162124634,
+      0,
+      -0.4998129606246948
+    ],
+    "max": [
+      1.704795002937317,
+      1.1505540609359741,
+      0.5730000436306
+    ]
+  },
+  "dimensions": {
+    "width": 3.3377950191497803,
+    "height": 1.1505540609359741,
+    "depth": 1.0728130042552948
+  },
+  "requiredNodes": [
+    "灶台总成",
+    "灶台静态总成",
+    "烤箱烟色玻璃",
+    "转角接缝台面",
+    "work_surface",
+    "cook_anchor",
+    "burner_left",
+    "burner_right",
+    "front_anchor",
+    "join_right",
+    "counter_back_left",
+    "counter_front_left"
+  ],
+  "anchors": {
+    "work_surface": [
+      0,
+      0.8915539979934692,
+      0
+    ],
+    "cook_anchor": [
+      -0.3206600844860077,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "burner_left": [
+      -0.3206600844860077,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "burner_right": [
+      0.40964606404304504,
+      0.8937187194824219,
+      0.015284470282495022
+    ],
+    "front_anchor": [
+      0,
+      0,
+      0.4998129606246948
+    ],
+    "join_right": [
+      1.704795002937317,
+      0.8911539912223816,
+      0
+    ],
+    "counter_back_left": [
+      -1.6235548257827759,
+      0.8915539979934692,
+      -0.4998129606246948
+    ],
+    "counter_front_left": [
+      -1.6235548257827759,
+      0.8915539979934692,
+      0.4998129606246948
+    ]
+  },
+  "budgets": {
+    "triangles": 40000,
+    "bytes": 4194304,
+    "materials": 3,
+    "primitives": 3,
+    "meshes": 3,
+    "images": 3
+  },
+  "countertop": {
+    "height": 0.8915539979934692,
+    "width": 3.2471096636952224,
+    "depth": 0.9996259421448968,
+    "localBounds": {
+      "min": [
+        -1.6235548318476112,
+        0,
+        -0.4998129710724484
+      ],
+      "max": [
+        1.6235548318476112,
+        0.8915539979934692,
+        0.4998129710724484
+      ]
+    },
+    "fit": {
+      "depth": 0.9996259421448968,
+      "countertopLocalHeight": 0.8915539979934692,
+      "sinkLocalModuleBoundsX": [
+        -0.824959933757782,
+        -0.28947094082832336
+      ],
+      "sinkScale": [
+        1.8667534820395086,
+        1,
+        1.2303512683915283
+      ],
+      "sinkRoot": [
+        -0.75,
+        0.024960769226163,
+        -1.4
+      ],
+      "backX": -2.289996828885422,
+      "seamZ": -1.0653605337662522,
+      "countertopWorldY": 0.9165147672196322,
+      "measurement": "Actual left module frame X range; left countertop connected-component front min BlenderY=-.27198693 and topZ=.891554. Source total faucet/handles not used."
+    },
+    "join": {
+      "bodyMinWorldZ": -0.997,
+      "thinCap": true,
+      "sinkProfileSamples": [
+        2,
+        2
+      ],
+      "clearanceMeters": 0.001,
+      "frontToBackExtensionMeters": 0.07494650936126712,
+      "topHeightOffsetMeters": -0.0001,
+      "sourceBodyRearCompression": "last120mm compressed to stay behind countertop rear envelope; no new faces",
+      "fitScene": [
+        -1.7901838578129736,
+        0.0252,
+        0.6407950014610851
+      ],
+      "lengthCorrection": {
+        "userRequestedNoCompression": true,
+        "sourceHeightProportionalCounterWidth": 2.2774162951378374,
+        "finalCounterWidth": 3.2471096636952224,
+        "bodyRun": 3.270994963169098,
+        "cartRootZ": 2.6368660533428194,
+        "cartFrontZ": 2.99,
+        "gapToCart": 0.01,
+        "lengthFactorFromCandidate": 1.792003125659615,
+        "capWorldSeamUnchanged": true
+      }
+    }
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/stove/work/2026-10-29-refined-r1/灶台_规整柜体双炉头.blend",
+    "parentRevision": "2026-10-28-candy-r1",
+    "parentSha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de",
+    "parentFile": "kitchen/stove/work/2026-10-29-refined-r1/parent-stove.glb",
+    "script": "kitchen/stove/work/2026-10-29-refined-r1/scripts/build.py",
+    "blender": "5.2.3 LTS",
+    "construction": "reference-driven parametric geometry, independently reimported; measured existing sink-joint cap retained"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-29-refined-r1",
+    "parentRevision": "2026-10-28-candy-r1",
+    "changes": "New real beveled shapes and weighted normals. Unlit palette atlas assigns blue/cream/iron/steel/gold/bottle regions separate PBR response; glass isolated from opaque assembly."
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false,
+    "emissiveFlames": false,
+    "cookware": false
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "file": "kitchen/references/kitchen-reference.png",
+      "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-1.png",
+      "sha256": "b1b8e6583d75bc86b98e5038316f9e6f4f6f9d45922f283f9a4db60b17b6f45d",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-2.png",
+      "sha256": "90df380481fbef2a9308c52332d677744cf74df8153a1786629574f7a771f4a6",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-3.png",
+      "sha256": "fcbbf0fd9877eaeafcc5f9f556d4850d61a3f40b53e50811be9cdf006353923f",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-4.png",
+      "sha256": "897a279f65d16243baaf47772747d78a037e9f827fd36887076d7d396fc1da2b",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "degenerateTriangles": 0,
+    "badNormals": 0,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-29-refined-r1/validation.json"
+  },
+  "notes": [
+    "Geometry revision, not a material-only child. Old snapshots retained.",
+    "Metric enlarged counter length/depth, stove root placement and all existing installation anchors preserved.",
+    "Burner anchors retain workplane installation coordinates; they are not grate top or character hand-contact points.",
+    "Both cabinets have equal .777m door/drawer widths, mirrored .1.164m centers, consistent reveals and no side-face handle.",
+    "Separate static smoked-glass pane and modeled oven racks; no opening, interior interaction, flames or cookware.",
+    "Reference micro stone grain is omitted at runtime; no baked studio shadows or reconstructed texture dents.",
+    "Source edit parts are hidden in .blend; runtime main is one opaque atlas batch plus glass and measured cap."
+  ]
+}

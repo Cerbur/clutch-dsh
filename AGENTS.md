@@ -95,6 +95,7 @@ main
   feature rebase 完成后必须再次检查 feature worktree；任一检查有输出都必须停止，先将改动
   整理进 feature 的 scoped commit 并重新验证，不能用 stash 或忽略输出代替该门禁。合并完成
   后还要检查 release worktree 干净，再进入下一阶段。
+
 - feature worktree 只用于编写、验证和提交 scoped change；`npm pack`、`npm publish` 和最终
   release verification 必须在 feature commit 合并后的 release worktree 中执行。发布准备
   完成且 npm registry 验证通过后，再将 release worktree 的最终提交合并回 `main`。
@@ -156,11 +157,12 @@ Package scope:
 - User-visible changes in `packages/clutch-dsh-worktree` require checking both `packages/clutch-dsh-worktree/README.md` and `packages/clutch-dsh-worktree/README.zh.md`.
 - User-visible changes in `packages/clutch-dsh-fireworks` require checking both corresponding README files.
 - User-visible changes in `packages/clutch-dsh-discuss` require checking both corresponding README files.
+- User-visible changes in `packages/clutch-dsh-office` require checking both corresponding README files.
 - Adding or removing a repository-level plugin, or changing root installation or workspace structure, requires checking both `/README.md` and `/README.zh.md`.
 
-The localized README set currently covers the repository root plus these four plugin packages:
-clutch-dsh-worktree, clutch-dsh-fireworks, clutch-dsh-discuss, and clutch-dsh-title.
-Repository-wide documentation changes therefore cover five English and five Simplified Chinese
+The localized README set currently covers the repository root plus these five plugin packages:
+clutch-dsh-worktree, clutch-dsh-fireworks, clutch-dsh-discuss, clutch-dsh-title, and clutch-dsh-office.
+Repository-wide documentation changes therefore cover six English and six Simplified Chinese
 README files.
 
 These rules apply to user-visible behavior, installation, compatibility, screenshots, public APIs,

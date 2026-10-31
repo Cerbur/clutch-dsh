@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-10-31-meshopt-soft-r3",
+  "quality": "medium",
+  "error": 0.001,
+  "assets": {
+    "black-utensil-rail.glb": {
+      "sourceSha256": "49c81a4fddde4c83b6f219203e5dd22f2834842da6f1332418eb908fe7f190af",
+      "sha256": "bab480757dcdfb6825ab2c03ce6a74ad7e29975d2707f0eb8f0507114cb358a7",
+      "bytes": 2446228,
+      "triangles": 7572,
+      "vertices": 5624
+    },
+    "board-cloth.glb": {
+      "sourceSha256": "6f486c54e20e20e470d214782aad523eead4baa6d1e72f156945bdbc838258a8",
+      "sha256": "0f1b9b570ece310058a5f07d886d0e116213d2d0eadead5f293567f698b093ef",
+      "bytes": 2142476,
+      "triangles": 10796,
+      "vertices": 13624
+    },
+    "chair.glb": {
+      "sourceSha256": "0de38d12fb92007c962a972ec7a5be2caa09118e0023e1ab0f8fdc7419aee1ba",
+      "sha256": "c1d531b2187f60a7d3a1fc48f43ddca83967c74d7f1df55dbc99bf4aa6c90d27",
+      "bytes": 628532,
+      "triangles": 11396,
+      "vertices": 7558
+    },
+    "floor-mat.glb": {
+      "sourceSha256": "c4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f",
+      "sha256": "c4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f",
+      "bytes": 1427356,
+      "triangles": 1900,
+      "vertices": 1093
+    },
+    "floor.glb": {
+      "sourceSha256": "4c4044eead24f761e41ea65c4112c49459b884737e6b367619931d9a87aac006",
+      "sha256": "4c4044eead24f761e41ea65c4112c49459b884737e6b367619931d9a87aac006",
+      "bytes": 3687020,
+      "triangles": 880,
+      "vertices": 577
+    },
+    "left-wall.glb": {
+      "sourceSha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b",
+      "sha256": "a41c9d34da7460c1a4d4da7d7af4665c563bb7828c7aa0753930f8ee4263365b",
+      "bytes": 9104,
+      "triangles": 428,
+      "vertices": 216
+    },
+    "open-cubby.glb": {
+      "sourceSha256": "44d57c6a786398a1a24a2f997f8040bb8aeb9629cd455aa4703971cda8aef8e6",
+      "sha256": "69004d512d97923d7e356092307b743e39f92f6f421babca1391745be5fe57d0",
+      "bytes": 1386384,
+      "triangles": 4164,
+      "vertices": 2911
+    },
+    "pendant-light.glb": {
+      "sourceSha256": "ad416bd4fbcc532c42769524c13491192d2a64600b32ece6d8f419af0c59b353",
+      "sha256": "175b1775ad067085930f9b1d5dedbaab11b5eafea3abd078adf208853d308afd",
+      "bytes": 996260,
+      "triangles": 12708,
+      "vertices": 10966
+    },
+    "range-hood.glb": {
+      "sourceSha256": "edf10b059844b8fd0d6f973ea442d3994c4757baf68f8ab3919c5e3c5e47eb7c",
+      "sha256": "d29ac764815a4f123b02ae46bc9ea85605d67435a2a3ba15491e30253384b088",
+      "bytes": 1508724,
+      "triangles": 20229,
+      "vertices": 19326
+    },
+    "refrigerator.glb": {
+      "sourceSha256": "250242b0f81f83e1efbf1ac82f686eb464dfcba89b0ed2ff13138bda49e6b6c4",
+      "sha256": "ee75d472c6cc28503db0533a8d8a879d339a9985d57f3c03eae97b18a325762f",
+      "bytes": 2426356,
+      "triangles": 23223,
+      "vertices": 18909
+    },
+    "right-wall.glb": {
+      "sourceSha256": "7a4cd1f93ee2ddef33328f2805614d08166d28924807a4acf4459682ea28b1f5",
+      "sha256": "7a4cd1f93ee2ddef33328f2805614d08166d28924807a4acf4459682ea28b1f5",
+      "bytes": 9104,
+      "triangles": 428,
+      "vertices": 216
+    },
+    "rug.glb": {
+      "sourceSha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+      "sha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
+      "bytes": 2916784,
+      "triangles": 4604,
+      "vertices": 3072
+    },
+    "sink-cabinet.glb": {
+      "sourceSha256": "4a481ac8d4659c601b829475558e3178a1d3f2ee5ca7f2a073a73129138ae2f0",
+      "sha256": "35f1e5c7f5c41239ef74c32a2821d5f6f1c37f71e6ac66e65cc2e953b0f75c85",
+      "bytes": 3179512,
+      "triangles": 22781,
+      "vertices": 20271
+    },
+    "spice-rack.glb": {
+      "sourceSha256": "3b138a15120aab25aca0206c43228848fed1a08078435a7b9c259951c35fbd6c",
+      "sha256": "cf3a90adca5f15f7aba887c9f0f2927cafef887e061e89a8a50648a090f36feb",
+      "bytes": 2464364,
+      "triangles": 17335,
+      "vertices": 18495
+    },
+    "storage-cabinet.glb": {
+      "sourceSha256": "d6ee04d7c0b7676b7bf38ba51123771af04711c2663c104d2d40d3a1db4a6e64",
+      "sha256": "e643a26e537b2f62a54af2105e684dd69bd42c3cf1e05b54bd1c1fa320621c1f",
+      "bytes": 3525052,
+      "triangles": 28794,
+      "vertices": 26307
+    },
+    "stove.glb": {
+      "sourceSha256": "0f7756d88da214ff51f5a4e4601bfe1dcb928c97c59b34e8610b70580347e1a2",
+      "sha256": "db32801df5d9c8288a364c4b91927b14dea482e5043010b941ec8ee23675895c",
+      "bytes": 284488,
+      "triangles": 18920,
+      "vertices": 9935
+    },
+    "table.glb": {
+      "sourceSha256": "27f4c21585f3114ac6211be996f149a06c72ecae936637753b42a11591fee290",
+      "sha256": "b0457c8ec7b5014e096e214f0d5f6745a672e052415ee0573c348a038472c20c",
+      "bytes": 2037328,
+      "triangles": 40396,
+      "vertices": 30494
+    },
+    "trash-can.glb": {
+      "sourceSha256": "9a24be020e981a3df752a7ab72c8202d10c5dd1d3edc193c7d58464e49cf2401",
+      "sha256": "ba3f9c3591efe2473d0b7e0c6f5d69b0baf2e03d31830c8c5bbd699ae30c2554",
+      "bytes": 214496,
+      "triangles": 11577,
+      "vertices": 10195
+    },
+    "utensil-rail.glb": {
+      "sourceSha256": "585846f480de89c41a5e44d00e2553559ba387b92d267eb2def843e9a00802ed",
+      "sha256": "4f3bd6ba5aa4226a114c2c609762c0e11d1a3be584532b6d0220871192a0028a",
+      "bytes": 228356,
+      "triangles": 12665,
+      "vertices": 10499
+    },
+    "wall-art.glb": {
+      "sourceSha256": "1ae5f88bd832a03829685ee05d9a028c50230bc455a4dd78e9a8a4b30149145d",
+      "sha256": "6c055310f1c5d79fa1b46a6a8aae484083f7dd4168f5657cfbca762b012956d6",
+      "bytes": 1331732,
+      "triangles": 7200,
+      "vertices": 6334
+    },
+    "wall-cabinet.glb": {
+      "sourceSha256": "480782fd3883df8e248d6277964450bb8bed78f45064b8b90697fc1a8888309c",
+      "sha256": "a76c70eaaca4e8c2777454fd931f2cff1d1d699c84f0c52c094e0034ce7df6c9",
+      "bytes": 841740,
+      "triangles": 1998,
+      "vertices": 1582
+    },
+    "wall-calendar.glb": {
+      "sourceSha256": "59105a9207c615f6c1f0e4cf315af848e60b8f3796ba5a07e4130c4cae97ace6",
+      "sha256": "87722b9832010ee16e2cc9c3c8d50be57555421739662fb62373c62e1b763d34",
+      "bytes": 1096448,
+      "triangles": 3546,
+      "vertices": 2224
+    },
+    "wall-clock.glb": {
+      "sourceSha256": "8cd8ffae57c0b0addb8f1bfd4d04fed6ba24f96ee45fe7aa603ca291fb44909e",
+      "sha256": "f6a25c335da2a778bc0607479241a27b11a6cd5906d2c36ad819a0f41eaec3fc",
+      "bytes": 919948,
+      "triangles": 3294,
+      "vertices": 2271
+    },
+    "wall-plant.glb": {
+      "sourceSha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50",
+      "sha256": "b509170fb7e6534171841a656c483ba6a206316e8df6a2da20145f3b9d4ba6ea",
+      "bytes": 2626372,
+      "triangles": 11783,
+      "vertices": 22025
+    },
+    "wall-shelf.glb": {
+      "sourceSha256": "4be2626ad122877997e60576552e0bcda2538744528f9184fc2607dae026cee5",
+      "sha256": "a9d903747e15c5fa65a1f95d49ca4d7113f8688fa5d88d4f74d67743e51df61b",
+      "bytes": 4960072,
+      "triangles": 31524,
+      "vertices": 26648
+    },
+    "wall-storage-box.glb": {
+      "sourceSha256": "377bc964ce8eed4b7cb1e75efd68d584bc84ec9b3f245d7dd7a922eb72f00595",
+      "sha256": "e407bc8ba8b165daa3a3642789f292aeb1d2bf7268a3041ef822a72dc7b7d2ff",
+      "bytes": 1575128,
+      "triangles": 9385,
+      "vertices": 8839
+    },
+    "whale-mitt.glb": {
+      "sourceSha256": "44a4d80cbdece4ea5a38f455b317be2d7877e19c63a18cc22c78c9b4f7dc3eec",
+      "sha256": "1778dd60262c90cdc0013e2c132268a45dd0c49c44b26b6c1b611a74d1696c36",
+      "bytes": 1319424,
+      "triangles": 4459,
+      "vertices": 2478
+    },
+    "window.glb": {
+      "sourceSha256": "c9b8eef09df5d96654ba0fa9a53096cc4371bd521052041ed1fca52b0c39e035",
+      "sha256": "8fc7baf53ec8a49402f0cf816a59060ddd0a98df5ab114dae1a9437749204a74",
+      "bytes": 1912732,
+      "triangles": 17398,
+      "vertices": 12323
+    }
+  }
+}

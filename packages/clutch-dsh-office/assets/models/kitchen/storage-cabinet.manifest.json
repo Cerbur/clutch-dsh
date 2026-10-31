@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/storage-cabinet",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "storage-cabinet.glb",
+  "sha256": "d6ee04d7c0b7676b7bf38ba51123771af04711c2663c104d2d40d3a1db4a6e64",
+  "bytes": 3849872,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 29342,
+    "meshes": 1,
+    "materials": 1,
+    "images": 3,
+    "primitives": 1
+  },
+  "drawCalls": 1,
+  "bounds": {
+    "min": [
+      -0.524876594543457,
+      0.0005007862928323448,
+      -0.3528710901737213
+    ],
+    "max": [
+      0.5251103639602661,
+      1.4133415222167969,
+      0.3531339466571808
+    ]
+  },
+  "dimensions": {
+    "width": 1.0499869585037231,
+    "height": 1.4128407359239645,
+    "depth": 0.7060050368309021
+  },
+  "budgets": {
+    "triangles": 30000,
+    "bytes": 8388608,
+    "scope": "storage-cabinet"
+  },
+  "requiredNodes": [
+    "置物柜",
+    "置物柜_用户原件静态总成"
+  ],
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "manifest": "kitchen/references/reference.json"
+    }
+  ],
+  "source": {
+    "library": "office",
+    "project": "kitchen/storage-cabinet/lookdev/2026-10-28-candy-r1/糖果感_分材质响应.blend",
+    "input": "kitchen/storage-cabinet/lookdev/2026-10-28-candy-r1/inputs/storage-cabinet.glb",
+    "inputSha256": "0eeb04aabea9d090ffc0dab2279c55027ae72cc54611335493f962496ef86e55",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/storage-cabinet/work/2026-10-28-candy-r1/build_candy_material.py"
+    ]
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-28-r1",
+    "parentSha256": "0eeb04aabea9d090ffc0dab2279c55027ae72cc54611335493f962496ef86e55",
+    "changes": [
+      "UV-island/height/color conservative wood countertop top-face only: satin roughness .55 + 15% of original variation; tangent normal XY x.85.",
+      "No clearcoat. Dark structural frame, metallic texels, leaves, vegetables, pots and baskets remain protected outside the wood mask. Not an enamel/plastic replacement."
+    ],
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json",
+    "protection": "../../lookdev/2026-10-28-candy-r1/protected-regions.json"
+  },
+  "validation": {
+    "independentFinalGlbImport": true,
+    "fixedComparisonCyclesCpuRender": true,
+    "allAccessorBytesIncludingColorUnchanged": true,
+    "nodesAndHierarchyUnchanged": true,
+    "baseColorBytesUnchanged": true,
+    "materialPrimitiveImageCountsUnchanged": true,
+    "requiredNodes": true,
+    "embeddedTextures": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../lookdev/2026-10-28-candy-r1/render-validation.json",
+    "independentBlenderExportImport": "../../work/2026-10-28-candy-r1/blender-roundtrip-import.json"
+  },
+  "compatibilityChanges": [
+    "User source replaces previous cart. One static mesh; old wheel pivots and semantic component nodes are absent. Do not simulate wheel rotation or require old nodes.",
+    "Uniformly scaled to approximately 1.05 m wide; ground-center origin. Overall height includes plant; never normalize based on total height.",
+    "Blender decimation to 29342 triangles after welding coincident seams. Small triangular shading artifacts remain on countertop.",
+    "Existing atlas retains source baked shading; reduced normals and source color are not full delighting.",
+    "Office importer currently requires old nodes and must be updated for this revision before import."
+  ],
+  "notes": [
+    "Source basecolor embedded lighting/imperfections retained; no delighting claim.",
+    "Component fixed-rig review only; no plugin import, room lighting or bake change.",
+    "Roughness/normal mask boundaries are conservative semantic approximations.",
+    "Any new GLB/material adoption requires dependent scene bake verification by integrator."
+  ]
+}

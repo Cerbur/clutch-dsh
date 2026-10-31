@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/sink-cabinet",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "sink-cabinet.glb",
+  "sha256": "4a481ac8d4659c601b829475558e3178a1d3f2ee5ca7f2a073a73129138ae2f0",
+  "bytes": 3802300,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "floor-center"
+  },
+  "geometry": {
+    "triangles": 37971,
+    "meshes": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "drawCalls": 1,
+  "bounds": {
+    "min": [
+      -0.824959933757782,
+      0.000039230773836607113,
+      -0.32507655024528503
+    ],
+    "max": [
+      0.8249633312225342,
+      1.3502424955368042,
+      0.3251442611217499
+    ]
+  },
+  "dimensions": {
+    "width": 1.6499232649803162,
+    "height": 1.3502032647629676,
+    "depth": 0.6502208113670349,
+    "countertopHeightApprox": 0.9
+  },
+  "budgets": {
+    "triangles": 40000,
+    "bytes": 8388608,
+    "scope": "sink-cabinet"
+  },
+  "requiredNodes": [
+    "水槽柜",
+    "水槽柜静态总成",
+    "work_surface",
+    "wash_anchor",
+    "prep_anchor"
+  ],
+  "anchors": {
+    "work_surface": [
+      0,
+      0.9,
+      0
+    ],
+    "wash_anchor": [
+      0,
+      0.91,
+      0
+    ],
+    "prep_anchor": [
+      0.53,
+      0.93,
+      0
+    ]
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "manifest": "kitchen/references/reference.json",
+      "file": "kitchen/references/kitchen-reference.png"
+    }
+  ],
+  "source": {
+    "library": "office",
+    "project": "kitchen/sink-cabinet/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/sink-cabinet.glb",
+    "inputSha256": "9b13e43bc017fb7a2e73b7e0159625610d32f52173d0d766fbc0ce879584d238",
+    "parentRevision": "2026-10-27-r2",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/sink-cabinet/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/sink-cabinet build|review|finalize 2026-10-28-candy-r1"
+  },
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "compatibilityChanges": [
+    "Single static mesh; old door/drawer pivots and semantic subgroups no longer exist. Do not animate or require the removed nodes.",
+    "The three surface anchors are approximate placement hints, not certified interaction points.",
+    "Source was nonuniformly scaled: x/y 1.6610343, z 2.3076923; countertop height about 0.90 m, confirm in scene.",
+    "Source atlas retains existing baked shading and original colors, not a full delighting or semantic material revision.",
+    "The existing importer hardcodes old semantic nodes and must be updated for this revision before import."
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r2",
+    "parentSha256": "9b13e43bc017fb7a2e73b7e0159625610d32f52173d0d766fbc0ce879584d238",
+    "changes": {
+      "painted-blue-cabinet": {
+        "pixelsBaseResolution": 148824,
+        "pixelsMR": 148824,
+        "roughnessTarget": 0.32,
+        "roughnessRangeAfter": 0.2980392156862745,
+        "normalTangentXYMultiplier": 0.55,
+        "clearcoatFactor": 0.12
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  },
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "width": 3682,
+  "height": 1900,
+  "meanAbsoluteChannelError": 0.09053717945052746,
+  "pixelsOverEightPercent": 0.4015266302638726,
+  "maximumChannelError": 181,
+  "limits": {
+    "meanAbsoluteChannelError": 0.25,
+    "pixelsOverEightPercent": 0.75
+  }
+}

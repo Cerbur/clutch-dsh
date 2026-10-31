@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "styleId": "office-soft-toy-v1",
+  "revision": "2026-10-27-v1",
+  "colorSpace": "sRGB HEX; convert factors and vertex colors to linear exactly once",
+  "palette": {
+    "cream": "#F6EAD7",
+    "wall": "#E9D6BA",
+    "cabinetBlue": "#7199C5",
+    "fridgeBlue": "#95BDD4",
+    "whaleBlue": "#6FA4CF",
+    "wood": "#D6A66F",
+    "gold": "#D99B4C",
+    "terracotta": "#B98250",
+    "leaf": "#7C9C42",
+    "leafLight": "#A6BA61",
+    "dark": "#435365",
+    "metal": "#A3AFB5"
+  },
+  "roughness": {
+    "enamel": [
+      0.4,
+      0.5
+    ],
+    "wood": [
+      0.5,
+      0.65
+    ],
+    "terracotta": [
+      0.5,
+      0.65
+    ],
+    "leafFabric": [
+      0.48,
+      0.7
+    ],
+    "metal": [
+      0.35,
+      0.48
+    ],
+    "hood": [
+      0.43,
+      0.52
+    ]
+  },
+  "constraints": {
+    "layoutChange": false,
+    "cameraChange": false,
+    "lightChange": false,
+    "geometryChange": false,
+    "immutableDeliveries": true
+  },
+  "kitchenWall": {
+    "revision": "2026-10-27-plain-wall",
+    "userOverride": true,
+    "color": "#F0E3D2",
+    "roughness": 0.68,
+    "metallic": 0,
+    "thicknessMeters": 0.285,
+    "textures": false,
+    "normalMap": false,
+    "bump": false,
+    "noise": false,
+    "tilePattern": false,
+    "scope": "Only left/right kitchen wall surface; existing asset palette/PBR remains."
+  },
+  "kitchenCandyStage2b": {
+    "revision": "2026-10-28-stage2b",
+    "enamelRoughness": [
+      0.3,
+      0.34
+    ],
+    "hoodPaintRoughness": [
+      0.333,
+      0.357
+    ],
+    "paintNormalXYMultiplier": 0.55,
+    "maskedClearcoatMax": 0.12,
+    "fridgeSample": {
+      "roughness": [
+        0.27,
+        0.3
+      ],
+      "clearcoatMax": 0.15
+    },
+    "preserved": {
+      "wall": 0.68,
+      "rug": 0.7,
+      "floorWood": 0.58
+    },
+    "woodCountertop": 0.55,
+    "windowWood": 0.54,
+    "protected": [
+      "metal",
+      "skin",
+      "eyes",
+      "textile",
+      "leaf",
+      "pot",
+      "food",
+      "graphics"
+    ],
+    "sourceColorsAndGeometryUnchanged": true,
+    "stage3GeometryCorrections": false
+  }
+}

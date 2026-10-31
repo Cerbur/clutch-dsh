@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/wall-art",
+  "assetType": "component",
+  "displayName": "厨房鲸鱼浮雕挂画",
+  "revision": "2026-10-28-candy-r1",
+  "status": "ready",
+  "file": "wall-art.glb",
+  "sha256": "1ae5f88bd832a03829685ee05d9a028c50230bc455a4dd78e9a8a4b30149145d",
+  "bytes": 1526120,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-center",
+    "description": "Root at horizontal/vertical center of original backing plane, not floor center. Geometry extends +Z into the room. Scene root Y is installation center height; no built-in elevation."
+  },
+  "geometry": {
+    "triangles": 12000,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.31999561190605164,
+      -0.3197260797023773,
+      0.000014481469406746328
+    ],
+    "max": [
+      0.319981187582016,
+      0.31977415084838867,
+      0.09389878809452057
+    ]
+  },
+  "dimensions": {
+    "width": 0.6399767994880676,
+    "height": 0.639500230550766,
+    "depth": 0.09388430662511382
+  },
+  "requiredNodes": [
+    "鲸鱼挂画",
+    "画框与鲸鱼浮雕",
+    "wall_anchor",
+    "front_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0,
+      0.10000000149011612
+    ]
+  },
+  "drawCalls": 1,
+  "budgets": {
+    "triangles": 16000,
+    "bytes": 2097152,
+    "materials": 1,
+    "primitives": 1,
+    "images": 3,
+    "scope": "Independent budget for kitchen/wall-art only."
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/wall-art/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
+    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/wall-art.glb",
+    "inputSha256": "bdcf1d393ab7f7b9e4235556dccc6259368472946e60a8e73a3be5a1576ac03c",
+    "parentRevision": "2026-10-27-r1",
+    "blender": "5.2.3 LTS",
+    "pipeline": [
+      "kitchen/wall-art/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
+    ],
+    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/wall-art build|review|finalize 2026-10-28-candy-r1"
+  },
+  "references": [
+    {
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "file": "kitchen/references/kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "file": "kitchen/wall-art/source/挂画_原始_20261027.glb",
+      "sha256": "8ac12729ea718977c990e6d9a8ccd89d90bed23239d2b6f8156cf685527b9ca4",
+      "role": "user-provided-component-geometry-and-artwork"
+    }
+  ],
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-28-candy-r1",
+    "parentRevision": "2026-10-27-r1",
+    "parentSha256": "bdcf1d393ab7f7b9e4235556dccc6259368472946e60a8e73a3be5a1576ac03c",
+    "changes": {
+      "blue-whale-relief": {
+        "pixelsBaseResolution": 66741,
+        "pixelsMR": 66741,
+        "roughnessTarget": 0.34,
+        "roughnessRangeAfter": 0.3411764705882353,
+        "normalTangentXYMultiplier": 0.65,
+        "clearcoatFactor": 0.08
+      }
+    },
+    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
+  },
+  "textures": [
+    {
+      "name": "挂画_normal",
+      "size": [
+        1024,
+        1024
+      ],
+      "bytes": 498999,
+      "sha256": "e87ab6973f2689254a4e9feecda907f35cda7ec135a736c5cc89167d30caaa31"
+    },
+    {
+      "name": "挂画_basecolor",
+      "size": [
+        1024,
+        1024
+      ],
+      "bytes": 731426,
+      "sha256": "9018117d730cfc6e2d337c5a587bb11764e3fe1b89fad592e59950ced2a6f037"
+    },
+    {
+      "name": "挂画_ORM",
+      "size": [
+        1024,
+        1024
+      ],
+      "bytes": 50608,
+      "sha256": "b67a8e7f1c83e2c42f69dad2369bfd0ee826cbed3a1a2d2776db0bb1c006bbff"
+    }
+  ],
+  "capabilities": {
+    "static": true,
+    "rigged": false,
+    "animations": false,
+    "wallDecoration": true,
+    "separateMovingParts": false
+  },
+  "placement": {
+    "scale": 1,
+    "initialPosition": [
+      1.4,
+      2.95,
+      -1.888
+    ],
+    "rotationYRadians": 0,
+    "sceneOwnsFinalPlacement": true,
+    "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",
+    "notes": [
+      "Provisional back-wall upper-right placement above/left of the refrigerator, inspired by the main reference. Not runtime-accepted.",
+      "Read-only current room is 5 x 5 x 3.5 m; right wall center Z=-1.95 with .12 m thickness, so inner surface Z=-1.89. Initial anchor adds .002 m forward clearance. Recompute from actual scene geometry.",
+      "At Y=2.95, art spans approximately 2.6303–3.2698 m. No automatic normalization or added installation height.",
+      "Check actual shelf and vines, refrigerator/top plant and whale, pendant cord/body, wall trim, camera occlusion. Adjust this new decorative instance before considering any existing layout change.",
+      "wall_anchor is the rear-plane center; front_anchor at local [0,0,.1] is a forward direction reference slightly ahead of the relief, not a character or lamp anchor."
+    ]
+  },
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "embeddedTextures": true,
+    "requiredNodes": true,
+    "studioExcluded": true,
+    "allGeometryAccessorsByteIdentical": true,
+    "nodesTransformsPivotsUnchanged": true,
+    "baseColorImageBytesUnchanged": true,
+    "imagePixelDecode": true,
+    "triangleBudget": true,
+    "byteBudget": true,
+    "engineAccepted": false,
+    "fixedComparisonLightsCamera": true,
+    "report": "validation.json"
+  },
+  "notes": [
+    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
+    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
+    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
+    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
+    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "name": "@cerbur/clutch-dsh-office",
+  "version": "0.1.0",
+  "description": "Plugin-only 3D kitchen offices for active DeepSeek Harness workspaces.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cerbur/clutch-dsh.git",
+    "directory": "packages/clutch-dsh-office"
+  },
+  "homepage": "https://github.com/Cerbur/clutch-dsh/tree/main/packages/clutch-dsh-office",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/entry.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "assets",
+    "!assets/models/kitchen/*.glb",
+    "!assets/models/kitchen/optimized/*.glb"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.client.json",
+    "test": "pnpm run build && node --test test/*.test.mjs",
+    "preview": "node scripts/preview.mjs",
+    "models:optimize": "node scripts/optimize-models.mjs",
+    "textures:compress": "node scripts/texture-transport.mjs",
+    "models:compare": "node scripts/model-preview.mjs",
+    "assets:import": "node scripts/sync-asset.mjs",
+    "lighting:import": "node scripts/sync-lighting.mjs",
+    "lighting:geometry": "node scripts/export-lighting-geometry.mjs",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
+    }
+  },
+  "clutchDsh": {
+    "plugin": "@cerbur/clutch-dsh-office",
+    "role": "plugin",
+    "serviceDefinition": "@cerbur/clutch-dsh-office"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-api-session-controller": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-api-workspace-controller": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-workspace": ">=0.2.1-rc.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "0.2.1-rc.2",
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@types/node": "^22.15.3",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.180.0",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

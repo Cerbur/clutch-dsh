@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/open-cubby",
+  "revision": "2026-10-29-r1",
+  "status": "ready",
+  "file": "open-cubby.glb",
+  "sha256": "44d57c6a786398a1a24a2f997f8040bb8aeb9629cd455aa4703971cda8aef8e6",
+  "bytes": 1468892,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 5834,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.10999999940395355,
+      0,
+      0
+    ],
+    "max": [
+      0.10999999940395355,
+      0.7373799085617065,
+      0.15779326856136322
+    ]
+  },
+  "dimensions": {
+    "width": 0.2199999988079071,
+    "height": 0.7373799085617065,
+    "depth": 0.15779326856136322
+  },
+  "requiredNodes": [
+    "open-cubby",
+    "open_cubby_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.36868995428085327,
+      0.16279326379299164
+    ],
+    "hang_anchor": [
+      0,
+      0.7373799085617065,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 10000,
+    "bytes": 4194304,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/open-cubby/work/2026-10-29-r1/左侧开放木格柜总成_可编辑工程.blend",
+    "input": "kitchen/open-cubby/source/20261029153007_cd2bc74b.glb",
+    "inputSha256": "55b36206f2c05d27187b519755a682414288151cb5c84845ebdf418fd10aaa48",
+    "inputBytes": 24682092,
+    "uniformScale": 0.3884139565993554,
+    "sourceDimensions": {
+      "width": 0.5664060115814209,
+      "height": 1.8984382152557373,
+      "depth": 0.4062502533197403
+    },
+    "script": "kitchen/open-cubby/work/2026-10-29-r1/scripts/build.py",
+    "blender": "5.2.3 LTS"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "baseColor": "original image patterns; 1024 downsample only, no repaint",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood-frame-shelves-and-back": {
+        "pixels": 577773,
+        "roughnessRange": [
+          0.5560392141342163,
+          0.5730588436126709
+        ],
+        "metallic": 0
+      },
+      "painted-bottle-and-bowl": {
+        "pixels": 16431,
+        "roughnessRange": [
+          0.3279999792575836,
+          0.33858823776245117
+        ],
+        "metallic": 0
+      },
+      "cream-ceramic-and-label": {
+        "pixels": 36945,
+        "roughnessRange": [
+          0.40799999237060547,
+          0.4188235402107239
+        ],
+        "metallic": 0
+      },
+      "remaining-ceramic-spice-containers": {
+        "pixels": 137135,
+        "roughnessRange": [
+          0.38909804821014404,
+          0.405098021030426
+        ],
+        "metallic": 0
+      }
+    },
+    "specular": "invalid source KHR_materials_specular factor [2,2,2] removed"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-29-r1/validation.json",
+    "visualReview": true,
+    "sourceTriangleAreaAudit": {
+      "triangles": 5834,
+      "exactZeroAreaSourceTriangles": 0,
+      "normalizedCrossLengthBelow1e12": 0,
+      "minimumNormalizedCrossLength": 2.195246540763788e-12,
+      "removedTriangles": 0,
+      "interpretation": "Inherited source triangle area, uniform scale applied; no topology repair or decimation."
+    }
+  },
+  "notes": [
+    "Complete original assembly and UV retained, no geometry decimation.",
+    "Three embedded 1024x1024 textures, no external decoder required.",
+    "Original base-color illumination / source reconstruction imperfections remain; not de-lit.",
+    "Rear envelopeZ0 and bottomY0; place with explicit manifest dimensions, do not height-normalize.",
+    "Static decorative assembly; no bowl/bottle interaction or shelf hinges.",
+    "hang_anchor is top-center reference, not a recovered physical screw position.",
+    "Integrator owns layout, collision and heat-zone checks, bake dependency update and actual DSH-test acceptance.",
+    "Final GLB contains one near-degenerate triangle below cross-length 1e-12 after float32 uniform normalization; source minimum equivalent cross-length is 2.19525e-12. All original triangles retained; bad normals 0; see validation."
+  ]
+}

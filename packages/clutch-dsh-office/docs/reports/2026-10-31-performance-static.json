@@ -1,0 +1,420 @@
+{
+  "commit": "cc59bb3",
+  "clientBytes": 2237505,
+  "runtimeAssetBytes": 58337848,
+  "kitchenModelBytes": 48101520,
+  "characterModelBytes": 7172924,
+  "embeddedImageBytes": 42860157,
+  "staticTriangles": 399911,
+  "topGeometry": [
+    {
+      "name": "wall-plant.glb",
+      "bytes": 2626372,
+      "imageBytes": 2037993,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 5,
+      "triangles": 11783
+    },
+    {
+      "name": "table.glb",
+      "bytes": 2037328,
+      "imageBytes": 1238748,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 40396
+    },
+    {
+      "name": "wall-shelf.glb",
+      "bytes": 4960072,
+      "imageBytes": 4269187,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 31524
+    },
+    {
+      "name": "storage-cabinet.glb",
+      "bytes": 3525052,
+      "imageBytes": 2819191,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 28794
+    },
+    {
+      "name": "refrigerator.glb",
+      "bytes": 2426356,
+      "imageBytes": 1924483,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 23223
+    },
+    {
+      "name": "chair.glb",
+      "bytes": 628532,
+      "imageBytes": 426642,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 2,
+      "triangles": 11396
+    },
+    {
+      "name": "sink-cabinet.glb",
+      "bytes": 3179512,
+      "imageBytes": 2651499,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 22781
+    },
+    {
+      "name": "range-hood.glb",
+      "bytes": 1508724,
+      "imageBytes": 1018031,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 20229
+    }
+  ],
+  "topBytes": [
+    {
+      "name": "wall-shelf.glb",
+      "bytes": 4960072,
+      "imageBytes": 4269187,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 31524
+    },
+    {
+      "name": "floor.glb",
+      "bytes": 3687020,
+      "imageBytes": 3650036,
+      "imageCount": 5,
+      "materials": 2,
+      "instances": 1,
+      "triangles": 880
+    },
+    {
+      "name": "storage-cabinet.glb",
+      "bytes": 3525052,
+      "imageBytes": 2819191,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 28794
+    },
+    {
+      "name": "sink-cabinet.glb",
+      "bytes": 3179512,
+      "imageBytes": 2651499,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 22781
+    },
+    {
+      "name": "rug.glb",
+      "bytes": 2916784,
+      "imageBytes": 2788900,
+      "imageCount": 2,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 4604
+    },
+    {
+      "name": "wall-plant.glb",
+      "bytes": 2626372,
+      "imageBytes": 2037993,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 5,
+      "triangles": 11783
+    },
+    {
+      "name": "spice-rack.glb",
+      "bytes": 2464364,
+      "imageBytes": 1970280,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 17335
+    },
+    {
+      "name": "black-utensil-rail.glb",
+      "bytes": 2446228,
+      "imageBytes": 2291774,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 7572
+    }
+  ],
+  "assets": [
+    {
+      "name": "deepseek.glb",
+      "bytes": 7172924,
+      "imageBytes": 2494223,
+      "imageCount": 4,
+      "materials": 3,
+      "instances": 1,
+      "triangles": 57002
+    },
+    {
+      "name": "black-utensil-rail.glb",
+      "bytes": 2446228,
+      "imageBytes": 2291774,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 7572
+    },
+    {
+      "name": "board-cloth.glb",
+      "bytes": 2142476,
+      "imageBytes": 1788629,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 10796
+    },
+    {
+      "name": "chair.glb",
+      "bytes": 628532,
+      "imageBytes": 426642,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 2,
+      "triangles": 11396
+    },
+    {
+      "name": "floor-mat.glb",
+      "bytes": 1427356,
+      "imageBytes": 1378947,
+      "imageCount": 2,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 1900
+    },
+    {
+      "name": "floor.glb",
+      "bytes": 3687020,
+      "imageBytes": 3650036,
+      "imageCount": 5,
+      "materials": 2,
+      "instances": 1,
+      "triangles": 880
+    },
+    {
+      "name": "left-wall.glb",
+      "bytes": 9104,
+      "imageBytes": 0,
+      "imageCount": 0,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 428
+    },
+    {
+      "name": "open-cubby.glb",
+      "bytes": 1386384,
+      "imageBytes": 1306545,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 4164
+    },
+    {
+      "name": "pendant-light.glb",
+      "bytes": 996260,
+      "imageBytes": 707898,
+      "imageCount": 4,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 12708
+    },
+    {
+      "name": "range-hood.glb",
+      "bytes": 1508724,
+      "imageBytes": 1018031,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 20229
+    },
+    {
+      "name": "refrigerator.glb",
+      "bytes": 2426356,
+      "imageBytes": 1924483,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 23223
+    },
+    {
+      "name": "right-wall.glb",
+      "bytes": 9104,
+      "imageBytes": 0,
+      "imageCount": 0,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 428
+    },
+    {
+      "name": "rug.glb",
+      "bytes": 2916784,
+      "imageBytes": 2788900,
+      "imageCount": 2,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 4604
+    },
+    {
+      "name": "sink-cabinet.glb",
+      "bytes": 3179512,
+      "imageBytes": 2651499,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 22781
+    },
+    {
+      "name": "spice-rack.glb",
+      "bytes": 2464364,
+      "imageBytes": 1970280,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 17335
+    },
+    {
+      "name": "storage-cabinet.glb",
+      "bytes": 3525052,
+      "imageBytes": 2819191,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 28794
+    },
+    {
+      "name": "stove.glb",
+      "bytes": 284488,
+      "imageBytes": 63399,
+      "imageCount": 3,
+      "materials": 3,
+      "instances": 1,
+      "triangles": 18920
+    },
+    {
+      "name": "table.glb",
+      "bytes": 2037328,
+      "imageBytes": 1238748,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 40396
+    },
+    {
+      "name": "trash-can.glb",
+      "bytes": 214496,
+      "imageBytes": 0,
+      "imageCount": 0,
+      "materials": 3,
+      "instances": 1,
+      "triangles": 11577
+    },
+    {
+      "name": "utensil-rail.glb",
+      "bytes": 228356,
+      "imageBytes": 0,
+      "imageCount": 0,
+      "materials": 4,
+      "instances": 1,
+      "triangles": 12665
+    },
+    {
+      "name": "wall-art.glb",
+      "bytes": 1331732,
+      "imageBytes": 1160782,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 7200
+    },
+    {
+      "name": "wall-cabinet.glb",
+      "bytes": 841740,
+      "imageBytes": 797706,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 1998
+    },
+    {
+      "name": "wall-calendar.glb",
+      "bytes": 1096448,
+      "imageBytes": 1033514,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 3546
+    },
+    {
+      "name": "wall-clock.glb",
+      "bytes": 919948,
+      "imageBytes": 856208,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 3294
+    },
+    {
+      "name": "wall-plant.glb",
+      "bytes": 2626372,
+      "imageBytes": 2037993,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 5,
+      "triangles": 11783
+    },
+    {
+      "name": "wall-shelf.glb",
+      "bytes": 4960072,
+      "imageBytes": 4269187,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 31524
+    },
+    {
+      "name": "wall-storage-box.glb",
+      "bytes": 1575128,
+      "imageBytes": 1346113,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 9385
+    },
+    {
+      "name": "whale-mitt.glb",
+      "bytes": 1319424,
+      "imageBytes": 1248769,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 4459
+    },
+    {
+      "name": "window.glb",
+      "bytes": 1912732,
+      "imageBytes": 1590660,
+      "imageCount": 3,
+      "materials": 1,
+      "instances": 1,
+      "triangles": 17398
+    }
+  ]
+}
