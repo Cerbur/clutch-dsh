@@ -3,7 +3,6 @@ import pendantBytes from '../../../../assets/models/kitchen/pendant-light.glb?in
 import type { Models } from '../models.js';
 import { bundledAsset } from './asset.js';
 import type { KitchenPalette } from './shared.js';
-import { KITCHEN_LIGHTING } from '../lighting.js';
 
 function buildWhitebox(models: Models, palette: KitchenPalette): T.Group {
   const root = new T.Group();
@@ -20,17 +19,8 @@ function buildWhitebox(models: Models, palette: KitchenPalette): T.Group {
   return root;
 }
 
-function addKitchenGlow(scene: T.Group): void {
-  const anchor = scene.getObjectByName('light_anchor');
-  if (!anchor || anchor.getObjectByName('pendant-light-glow')) return;
-  const { color, intensity, distance } = KITCHEN_LIGHTING.pendant;
-  const light = new T.PointLight(color, intensity, distance, 2);
-  light.name = 'pendant-light-glow';
-  light.castShadow = false;
-  anchor.add(light);
-}
-
-const loadPendant = bundledAsset('pendant-light', pendantBytes, addKitchenGlow);
+// The scene rig owns the practical bulb, so fallback/reload cannot duplicate it.
+const loadPendant = bundledAsset('pendant-light', pendantBytes);
 
 /** Metric floor-projection root; visible suspension begins around y=2.16. */
 export function buildPendantLight(models: Models, palette: KitchenPalette): T.Group {

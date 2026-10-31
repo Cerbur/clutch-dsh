@@ -1,10 +1,11 @@
 import * as T from 'three';
+import { configureWindowGlow } from '../window-glow.js';
 import windowBytes from '../../../../assets/models/kitchen/window.glb?inline';
 import type { Models } from '../models.js';
 import { bundledAsset } from './asset.js';
 import type { KitchenPalette } from './shared.js';
 
-const loadWindow = bundledAsset('window', windowBytes);
+const loadWindow = bundledAsset('window', windowBytes, configureWindowGlow);
 
 /** Opaque wall decoration, bottom-center origin; no opening or built-in height. */
 export function buildWindow(models: Models, palette: KitchenPalette): T.Group {

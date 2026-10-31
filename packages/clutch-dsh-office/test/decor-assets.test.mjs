@@ -12,7 +12,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ASSET_RULES, validateAsset } from '../scripts/sync-asset.mjs';
 import { Models } from '../lib/client/scene/models.js';
 import { createKitchenPalette } from '../lib/client/scene/kitchen/shared.js';
-import { KITCHEN_PLACEMENT } from '../lib/office/kitchen-layout.js';
+import {
+  KITCHEN_PLACEMENT,
+  KITCHEN_ROTATION,
+  KITCHEN_SCALE,
+  KITCHEN_INSTANCE_GROUPS,
+  kitchenAssetName,
+} from '../lib/office/kitchen-layout.js';
 
 // Match the Client's inline transport without requiring browser texture decoding.
 const inlineHook = registerHooks({
@@ -37,6 +43,7 @@ const inlineHook = registerHooks({
 const { buildWallShelf } = await import('../lib/client/scene/kitchen/wall-shelf.js');
 const { buildWallArt } = await import('../lib/client/scene/kitchen/wall-art.js');
 const { buildChairs } = await import('../lib/client/scene/kitchen/chair.js');
+const { buildFloorMat } = await import('../lib/client/scene/kitchen/floor-mat.js');
 const { buildRug } = await import('../lib/client/scene/kitchen/rug.js');
 const { buildWindow } = await import('../lib/client/scene/kitchen/window.js');
 const { buildWhaleMitt } = await import('../lib/client/scene/kitchen/whale-mitt.js');
@@ -44,6 +51,10 @@ const { buildWallClock } = await import('../lib/client/scene/kitchen/wall-clock.
 const { buildBoardCloth } = await import('../lib/client/scene/kitchen/board-cloth.js');
 const { buildWallCalendar } = await import('../lib/client/scene/kitchen/wall-calendar.js');
 const { buildWallPlants } = await import('../lib/client/scene/kitchen/wall-plant.js');
+const { buildSpiceRack } = await import('../lib/client/scene/kitchen/spice-rack.js');
+const { buildOpenCubby } = await import('../lib/client/scene/kitchen/open-cubby.js');
+const { buildBlackUtensilRail } = await import('../lib/client/scene/kitchen/black-utensil-rail.js');
+const { buildWallStorageBox } = await import('../lib/client/scene/kitchen/wall-storage-box.js');
 inlineHook.deregister();
 
 const components = [
@@ -51,11 +62,16 @@ const components = [
   ['wall-art', '2026-10-27-r1', buildWallArt],
   ['chair', '2026-10-27-r1', buildChairs],
   ['rug', '2026-10-27-r1', buildRug],
+  ['floor-mat', '2026-10-29-r1', buildFloorMat],
   ['window', '2026-10-28-r1', buildWindow],
   ['whale-mitt', 'new-static', buildWhaleMitt],
   ['wall-clock', 'new-static', buildWallClock],
   ['board-cloth', 'new-static', buildBoardCloth],
   ['wall-calendar', 'new-static', buildWallCalendar],
+  ['spice-rack', '2026-10-29-r1', buildSpiceRack],
+  ['open-cubby', '2026-10-29-r1', buildOpenCubby],
+  ['black-utensil-rail', '2026-10-29-r1', buildBlackUtensilRail],
+  ['wall-storage-box', '2026-10-29-r1', buildWallStorageBox],
 ];
 
 async function delivery(name) {
@@ -85,13 +101,16 @@ for (const [name, revision] of components) {
     const { bytes, manifest } = await delivery(name);
     assert.equal(
       manifest.revision,
-      revision === 'new-static'
-        ? '2026-10-28-r1'
-        : name === 'window'
-          ? '2026-10-28-candy-r2'
-          : '2026-10-28-candy-r1',
+      revision === '2026-10-29-r1'
+        ? revision
+        : revision === 'new-static'
+          ? '2026-10-28-r1'
+          : name === 'window'
+            ? '2026-10-28-candy-r2'
+            : '2026-10-28-candy-r1',
     );
-    if (revision !== 'new-static') assert.equal(manifest.style.parentRevision, revision);
+    if (revision !== 'new-static' && revision !== '2026-10-29-r1')
+      assert.equal(manifest.style.parentRevision, revision);
     const facts = validateAsset(manifest, bytes);
     assert.equal(facts.assetId, `kitchen/${name}`);
     assert.equal(facts.primitives, 1);
@@ -299,7 +318,27 @@ test('two chairs parse once, share PBR resources and release once under one owne
   assert.equal(loaded.closed(), 1);
 });
 
-test('two wall plants parse once, share PBR resources and release once under one owner', async (t) => {
+test('five wall plants parse once, preserve wall transforms, share PBR resources and release once', async (t) => {
+  const ids = [
+    'wall-plant-left',
+    'wall-plant-right',
+    'wall-plant-window-left',
+    'wall-plant-window-middle',
+    'wall-plant-window-right',
+  ];
+  assert.deepEqual(KITCHEN_INSTANCE_GROUPS['wall-plants'], ids);
+  const checkTransform = (instance) => {
+    const id = instance.name;
+    assert.equal(kitchenAssetName(id), 'wall-plant');
+    assert.deepEqual(instance.position.toArray(), [...KITCHEN_PLACEMENT[id]], id);
+    const expectedScale = id.startsWith('wall-plant-window-') ? [0.85, 0.85, 0.85] : [1, 1, 1];
+    assert.deepEqual(KITCHEN_SCALE[id] ?? [1, 1, 1], expectedScale, id);
+    assert.deepEqual(instance.scale.toArray(), expectedScale, id);
+    assert.equal(instance.rotation.x, 0, id + ' stays upright');
+    assert.equal(instance.rotation.z, 0, id + ' stays upright');
+    assert.equal(instance.rotation.y, KITCHEN_ROTATION[id] ?? 0, id);
+    assert.equal(instance.rotation.y, id === 'wall-plant-left' ? Math.PI / 2 : 0, id);
+  };
   const loaded = parsedAsset();
   let finish;
   const parse = t.mock.method(
@@ -317,9 +356,11 @@ test('two wall plants parse once, share PBR resources and release once under one
   assert.equal(root.name, 'wall-plants');
   assert.deepEqual(root.position.toArray(), [0, 0, 0]);
   const fallback = root.children[0];
-  for (const key of ['wall-plant-left', 'wall-plant-right']) {
-    assert.deepEqual(fallback.getObjectByName(key).position.toArray(), [...KITCHEN_PLACEMENT[key]]);
-  }
+  assert.deepEqual(
+    fallback.children.map((child) => child.name),
+    ids,
+  );
+  for (const instance of fallback.children) checkTransform(instance);
   await t.waitFor(() => assert.equal(typeof finish, 'function'));
   assert.equal(parse.mock.callCount(), 1);
   const { bytes } = await delivery('wall-plant');
@@ -332,21 +373,39 @@ test('two wall plants parse once, share PBR resources and release once under one
   assert.equal(redraws, 1);
   const left = root.getObjectByName('wall-plant-left');
   const right = root.getObjectByName('wall-plant-right');
-  assert.notEqual(left, right);
-  for (const instance of [left, right]) {
-    assert.deepEqual(instance.position.toArray(), [...KITCHEN_PLACEMENT[instance.name]]);
-    assert.deepEqual(instance.scale.toArray(), [1, 1, 1]);
+  const instances = root.children[0].children;
+  assert.deepEqual(
+    instances.map((child) => child.name),
+    ids,
+  );
+  assert.equal(new Set(instances).size, 5, 'each plant has its own transform wrapper');
+  assert.equal(
+    new Set(instances.map((instance) => instance.getObjectByName('chair_mesh'))).size,
+    5,
+  );
+  for (const instance of instances) {
+    checkTransform(instance);
     const mesh = instance.getObjectByName('chair_mesh');
     assert.equal(mesh.geometry, loaded.geometry);
     assert.equal(mesh.material, loaded.material);
     assert.equal(mesh.material.map, loaded.texture);
+    assert.equal(mesh.material.roughnessMap, loaded.texture);
     assert.equal(mesh.material.roughness, 0.64);
   }
   assert.equal(left.rotation.y, Math.PI / 2);
   assert.equal(right.rotation.y, 0);
-  const originalRight = right.position.clone();
+  for (const instance of instances) instance.updateMatrix();
+  const originalTransforms = instances.slice(1).map((instance) => instance.matrix.clone());
   left.position.x += 1;
-  assert.ok(right.position.equals(originalRight));
+  left.scale.multiplyScalar(2);
+  left.rotation.y += 0.1;
+  for (const [i, instance] of instances.slice(1).entries()) {
+    instance.updateMatrix();
+    assert.ok(
+      instance.matrix.equals(originalTransforms[i]),
+      instance.name + ' transform is independent',
+    );
+  }
   left.removeFromParent();
   assert.deepEqual(loaded.disposed, { geometry: 0, material: 0, texture: 0 });
   owner.dispose();

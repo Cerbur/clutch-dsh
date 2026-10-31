@@ -13,10 +13,11 @@ import type {
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client';
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
-import { projectOffices } from '../office/project.js';
-import type { Office } from '../office/types.js';
-import { sessionFacts } from './native-facts.js';
+import { projectSessionBoard } from '../office/session-board.js';
+import type { Actor } from '../office/types.js';
+import { recentSessionFacts } from './native-facts.js';
 import { OfficeDashboard } from './OfficeDashboard.js';
 import { en, zh } from './locales.js';
 import { OFFICE_CSS } from './styles.js';
@@ -28,7 +29,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-export const inject = ['slots', 'locale', 'workspaces', 'layout', 'connection'];
+declare const __OFFICE_VERSION__: string;
+
+export const inject = ['slots', 'locale', 'workspaces', 'layout', 'connection', 'uiWorkspace'];
 
 function subscribeOnline(listener: () => void): () => void {
   window.addEventListener('online', listener);
@@ -58,9 +61,17 @@ type NativeProps = PropsRuntime<'main'> &
   PropsLocale<'clutch.office'> & {
     source: Context['workspaces']['list'];
     connection: ConnectionHandle;
+    openSession: (id: string) => void;
   };
 
-function NativeOffice({ source, connection, useSessions, useSessionStatus, t }: NativeProps) {
+function NativeOffice({
+  source,
+  connection,
+  useSessions,
+  useSessionStatus,
+  openSession,
+  t,
+}: NativeProps) {
   const online = useSyncExternalStore(subscribeOnline, isOnline);
   const state = useSyncExternalStore(connection.state.subscribe, connection.state.getSnapshot);
   const generation = useSyncExternalStore(
@@ -75,28 +86,32 @@ function NativeOffice({ source, connection, useSessions, useSessionStatus, t }: 
   const status: SessionStatusSnapshot = (useSessionStatus as UseSessionStatus)(
     (value: SessionStatusSnapshot) => value,
   );
-  const previous = useRef<readonly Office[]>([]);
-  const offices = useMemo(() => {
+  const previous = useRef<readonly Actor[]>([]);
+  const board = useMemo(() => {
     const projections = new Map(Object.entries(list.projectionsBySession));
-    const facts = sessionFacts(list.ids, list.byId, status, workspace.archivedSessionIds, (id) => {
-      const title: unknown = Object.entries(projections.get(id)?.values ?? {}).find(
-        ([key]) => key === 'title',
-      )?.[1];
-      return typeof title === 'string' ? title : undefined;
-    });
-    return projectOffices(
+    const facts = recentSessionFacts(
+      list.ids,
+      list.byId,
+      status,
+      workspace.archivedSessionIds,
       workspace.items.map((item) => ({
         id: item.workspaceId,
         title: item.title,
         sessionIds: item.sessionIds,
       })),
-      facts,
-      previous.current,
+      (id) => {
+        const title: unknown = Object.entries(projections.get(id)?.values ?? {}).find(
+          ([key]) => key === 'title',
+        )?.[1];
+        return typeof title === 'string' ? title : undefined;
+      },
+      t('ungrouped'),
     );
-  }, [workspace, list, status]);
+    return projectSessionBoard(facts, previous.current);
+  }, [workspace, list, status, t]);
   useLayoutEffect(() => {
-    previous.current = offices;
-  }, [offices]);
+    previous.current = board.office.actors;
+  }, [board]);
   const phase = officePhase({
     online,
     connection: state,
@@ -105,7 +120,15 @@ function NativeOffice({ source, connection, useSessions, useSessionStatus, t }: 
     workspacePhase: workspace.phase,
     sessionPhase: list.phase,
   });
-  return <OfficeDashboard offices={offices} phase={phase} t={t} />;
+  return (
+    <OfficeDashboard
+      version={__OFFICE_VERSION__}
+      board={board}
+      phase={phase}
+      t={t}
+      onOpenSession={openSession}
+    />
+  );
 }
 
 export function apply(ctx: Context): void {
@@ -126,6 +149,8 @@ export function apply(ctx: Context): void {
         inject: () => ({
           source: ctx.workspaces.list,
           connection: ctx.get('connection') as ConnectionHandle,
+          openSession: (id: string) =>
+            ctx.uiWorkspace.openSession(id as Parameters<Context['uiWorkspace']['openSession']>[0]),
         }),
       },
       NativeOffice,

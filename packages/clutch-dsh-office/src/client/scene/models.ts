@@ -5,6 +5,8 @@ export class Models {
   readonly geometries: T.BufferGeometry[] = [];
   readonly materials: T.Material[] = [];
   private readonly textures = new Set<T.Texture>();
+  private readonly skeletons = new Set<T.Skeleton>();
+  private readonly cleanups = new Set<() => void>();
   private readonly releasedTextures = new WeakSet<T.Texture>();
   private readonly closedImages = new WeakSet<object>();
   private closed = false;
@@ -27,8 +29,10 @@ export class Models {
     const geometries = new Set<T.BufferGeometry>();
     const materials = new Set<T.Material>();
     const textures = new Set<T.Texture>();
+    const skeletons = new Set<T.Skeleton>();
     object.traverse((child) => {
       if (!(child instanceof T.Mesh)) return;
+      if (child instanceof T.SkinnedMesh) skeletons.add(child.skeleton);
       if (this.dynamicShadowCaster) child.layers.enable(1);
       child.castShadow = true;
       child.receiveShadow = true;
@@ -42,6 +46,7 @@ export class Models {
       }
     });
     if (this.closed) {
+      for (const skeleton of skeletons) skeleton.dispose();
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       this.releaseTextures(textures);
@@ -52,7 +57,13 @@ export class Models {
     for (const material of materials)
       if (!this.materials.includes(material)) this.materials.push(material);
     for (const texture of textures) this.textures.add(texture);
+    for (const skeleton of skeletons) this.skeletons.add(skeleton);
     return true;
+  }
+
+  onDispose(cleanup: () => void): void {
+    if (this.closed) cleanup();
+    else this.cleanups.add(cleanup);
   }
 
   /** Register per-room atlas textures, including arrivals after teardown. */
@@ -129,6 +140,10 @@ export class Models {
   dispose(): void {
     if (this.closed) return;
     this.closed = true;
+    for (const cleanup of this.cleanups) cleanup();
+    this.cleanups.clear();
+    for (const skeleton of this.skeletons) skeleton.dispose();
+    this.skeletons.clear();
     for (const geometry of this.geometries) geometry.dispose();
     for (const material of this.materials) material.dispose();
     this.releaseTextures(this.textures);
@@ -143,6 +158,14 @@ export interface CharacterAppearance {
   body: T.Object3D;
   arm?: T.Group;
   tail?: T.Group;
+  animation?: CharacterAnimation;
+}
+
+export interface CharacterAnimation {
+  readonly walkSpeed: number;
+  update(delta: number, speed: number, reducedMotion: boolean, searching?: boolean): void;
+  pause(): void;
+  dispose(): void;
 }
 
 export interface WhaleGirl extends CharacterAppearance {

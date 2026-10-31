@@ -22,8 +22,13 @@ import { buildBoardCloth } from './board-cloth.js';
 import { buildWallCalendar } from './wall-calendar.js';
 import { buildWallPlants } from './wall-plant.js';
 import { buildChairs } from './chair.js';
+import { buildFloorMat } from './floor-mat.js';
 import { buildRug } from './rug.js';
 import { buildTrashCan } from './trash-can.js';
+import { buildSpiceRack } from './spice-rack.js';
+import { buildOpenCubby } from './open-cubby.js';
+import { buildBlackUtensilRail } from './black-utensil-rail.js';
+import { buildWallStorageBox } from './wall-storage-box.js';
 import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,
@@ -78,7 +83,12 @@ export function buildKitchen(models: Models): T.Group {
     boardCloth,
     calendar,
     rug,
+    buildFloorMat(models, palette),
     trashCan,
+    buildSpiceRack(models, palette),
+    buildOpenCubby(models, palette),
+    buildBlackUtensilRail(models, palette),
+    buildWallStorageBox(models, palette),
   ]) {
     const position = KITCHEN_PLACEMENT[model.name as keyof typeof KITCHEN_PLACEMENT];
     model.position.set(position[0], position[1], position[2]);

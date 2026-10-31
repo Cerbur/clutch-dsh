@@ -414,3 +414,11 @@ GLB/manifest/布局/运动/CSS原字节保持，所有冻结交付与旧回执�
 按最终18实例/57primitive/源hash和布局重新64sample Metal烘焙2K墙地面r15，OIDN为r16，UV20832bytes/16MiB atlas预算，s1环境/相机/四面光/曝光不变。r2/r3/r4/r5和r13/r14保留候选历史，不列当前accepted。实际构建、231项测试、typecheck、lint与~/.dsh-test总览/单间/双角色/冰箱往返/末间/离屏重建通过；视觉最终认可待用户。材质推广暂停，阶段3未开始。plugin-only，无DSH源码/生产profile修改，无commit/push/publish。
 
 回执 `sync/receipts/kitchen-stove-2026-10-28-r6.json`，证据 `sync/evidence/2026-10-28-stove-long-l/`；测试服务 http://127.0.0.1:3088/ 保留运行。
+
+## Implementation follow-up · 2026-10-30
+
+The whale-girl runtime now supports the user-authorized face-blink-r2 skin and independent automatic blinking. Static body bob remains only as the procedural fallback. Skeletal walking uses actual .48m/s movement, reversible gait, fade-to-bind stops and sole support; blink timing is independent of activity. Per-actor ownership, reduced motion and demand-render lifecycle are tested. See ../CHARACTER-ANIMATION-VERIFICATION.md for checks and remaining DSH in-app binary timeout; this does not authorize publication or source-library acceptance.
+
+## 2026-10-31 用户范围覆盖
+
+共享会话看板取代旧workspace多厨房和两人活动映射。当前实现与验收以 `2026-10-31-session-board.md` 为准；此前各节为历史，不作为当前产品验收条件。

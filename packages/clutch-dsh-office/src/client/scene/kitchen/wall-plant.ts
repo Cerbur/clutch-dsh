@@ -3,20 +3,22 @@ import bytes from '../../../../assets/models/kitchen/wall-plant.glb?inline';
 import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,
+  KITCHEN_SCALE,
   KITCHEN_INSTANCE_GROUPS,
 } from '../../../office/kitchen-layout.js';
 import type { Models } from '../models.js';
 import { bundledAsset } from './asset.js';
 import type { KitchenPalette } from './shared.js';
 
-/** Clone object transforms only; both hanging pots share their room-owned PBR resources. */
+/** Clone object transforms only; all hanging pots share their room-owned PBR resources. */
 function addPlants(root: T.Group, plant: T.Group): void {
-  const instances = [plant, plant.clone(true)];
   for (const [i, key] of KITCHEN_INSTANCE_GROUPS['wall-plants'].entries()) {
-    const instance = instances[i];
+    const instance = i === 0 ? plant : plant.clone(true);
     instance.name = key;
     instance.position.fromArray(KITCHEN_PLACEMENT[key as keyof typeof KITCHEN_PLACEMENT]);
     instance.rotation.y = KITCHEN_ROTATION[key as keyof typeof KITCHEN_ROTATION] ?? 0;
+    const scale = KITCHEN_SCALE[key as keyof typeof KITCHEN_PLACEMENT];
+    instance.scale.set(...(scale ?? [1, 1, 1]));
     root.add(instance);
   }
 }

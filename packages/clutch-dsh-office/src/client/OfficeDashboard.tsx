@@ -1,166 +1,201 @@
-import { useState } from 'react';
-import type { Activity, Office } from '../office/types.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { activityClocks, elapsedTime, type ActivityClock } from './session-time.js';
+import type { RecentSession, SessionBoard } from '../office/types.js';
+import { projectSessionBoard } from '../office/session-board.js';
 import type { Copy } from './locales.js';
 import { KitchenCanvas } from './scene/KitchenCanvas.js';
 
 export interface DashboardProps {
-  readonly offices: readonly Office[];
+  readonly board: SessionBoard;
+  readonly version: string;
   readonly phase: 'loading' | 'ready' | 'error';
   readonly t: Copy;
+  readonly onOpenSession: (id: string) => void;
 }
 
-const previewActivities = [
-  ['working', 'demoWorking'],
-  ['waiting', 'demoWaiting'],
-  ['searching', 'demoSearching'],
-  ['editing', 'demoEditing'],
-  ['idle', 'demoIdle'],
-] as const;
-
-export function OfficeDashboard({ offices, phase, t }: DashboardProps) {
-  const [focus, setFocus] = useState<string>();
+export function OfficeDashboard({ board, phase, t, onOpenSession, version }: DashboardProps) {
   const [preview, setPreview] = useState(false);
-  const [activity, setActivity] = useState<Activity>('working');
-  const [two, setTwo] = useState(true);
-  const demo: Office = {
-    id: 'office-local-preview',
-    title: t('previewLabel'),
-    activeCount: two ? 2 : 1,
-    overflow: 0,
-    actors: [
-      { id: 'preview-a', label: 'Mio', activity, seat: 0 },
-      ...(two
-        ? [
-            {
-              id: 'preview-b',
-              label: 'Nami',
-              activity: activity === 'working' ? ('waiting' as const) : ('working' as const),
-              seat: 1 as const,
-            },
-          ]
-        : []),
-    ],
-  };
-  const visible = preview
-    ? [demo]
-    : focus
-      ? offices.filter((office) => office.id === focus)
-      : offices;
-  const total = offices.reduce((sum, office) => sum + office.activeCount, 0);
+  const [count, setCount] = useState(4);
+  const [previewEpoch] = useState(Date.now);
+  const demo: RecentSession[] = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `preview-${i}`,
+        label: [t('sampleBuild'), t('sampleReview'), t('sampleDone'), t('samplePlan')][i],
+        workspaceTitle: ['clutch-dsh', 'whale-studio', 'kitchen', 'clutch-dsh'][i],
+        eligible: true,
+        activity: i === 1 || i === 3 ? 'waiting' : i === 2 ? 'idle' : 'working',
+        status: (['running', 'question', 'unread', 'approval'] as const)[i],
+        running: i === 0,
+        unread: i === 2,
+        updatedAt: previewEpoch - (i === 0 ? 20_000 : 65_000),
+      })),
+    [count, t, previewEpoch],
+  );
+  const display = useMemo(
+    () => (preview ? projectSessionBoard(demo) : board),
+    [preview, demo, board],
+  );
+  const ready = preview || phase === 'ready';
+  const office = ready
+    ? display.office
+    : { ...display.office, actors: [], activeCount: 0, overflow: 0 };
+  const rows = useMemo(() => (ready ? display.sessions : []), [ready, display.sessions]);
+  const previousClocks = useRef<ReadonlyMap<string, ActivityClock>>(new Map());
+  const [now, setNow] = useState(Date.now);
+  const clocks = useMemo(() => activityClocks(previousClocks.current, rows, Date.now()), [rows]);
+  useEffect(() => {
+    previousClocks.current = clocks;
+    setNow(Date.now());
+  }, [clocks]);
+  const hasRunning = rows.some((row) => row.status === 'running');
+  useEffect(() => {
+    if (!hasRunning) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+      if (!document.hidden) {
+        setNow(Date.now());
+        timer = setInterval(() => setNow(Date.now()), 1000);
+      }
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      if (timer !== undefined) clearInterval(timer);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [hasRunning]);
   return (
     <section className="co-office" aria-label={t('nav')}>
       <header className="co-header">
         <div>
           <div className="co-eyebrow">
-            DSH OFFICE <span>·</span> KITCHEN SERIES
+            DSH Office{' '}
+            <span
+              className="co-version"
+              title={t('previewVersionHint')}
+              onDoubleClick={() => setPreview((value) => !value)}
+            >
+              v{version}
+            </span>
           </div>
-          <h1>{t('title')}</h1>
-          <p>{t('subtitle')}</p>
+          <h1>{t('boardTitle')}</h1>
         </div>
-        <button
-          className={preview ? 'co-button co-selected' : 'co-button'}
-          onClick={() => {
-            setPreview(!preview);
-            setFocus(undefined);
-          }}
-        >
-          {preview ? t('overview') : t('preview')}
-        </button>
-      </header>
-      <div className="co-toolbar">
-        {focus && !preview ? (
-          <button className="co-back" onClick={() => setFocus(undefined)}>
-            ← {t('back')}
-          </button>
-        ) : (
-          <span className="co-section-label">{preview ? t('previewLabel') : t('overview')}</span>
-        )}
-        {!preview && phase === 'ready' && (
-          <span className="co-count">
-            {offices.length} / {total} {t('active')}
+        <div className="co-header-right">
+          <span className="co-count" role="status">
+            {ready ? `${office.activeCount} ${t('attentionSessions')}` : t('loading')}
           </span>
-        )}
-      </div>
+        </div>
+      </header>
       {preview && (
         <div className="co-preview-controls">
-          <div>
-            {previewActivities.map(([value, key]) => (
-              <button
-                key={value}
-                className={activity === value ? 'co-chip co-selected' : 'co-chip'}
-                aria-pressed={activity === value}
-                onClick={() => setActivity(value)}
-              >
-                {t(key)}
-              </button>
-            ))}
-          </div>
-          <button className="co-chip" aria-pressed={two} onClick={() => setTwo(!two)}>
-            {two ? t('single') : t('double')}
-          </button>
+          <strong>{t('previewLabel')}</strong>
+          {[1, 2, 3, 4].map((n) => (
+            <button
+              key={n}
+              className="co-chip"
+              aria-pressed={count === n}
+              onClick={() => setCount(n)}
+            >
+              {n} {t('actors')}
+            </button>
+          ))}
           <small>{t('previewNote')}</small>
         </div>
       )}
-      {!preview && phase !== 'ready' ? (
-        <div className="co-empty" role="status">
-          {t(phase === 'error' ? 'unavailable' : 'loading')}
-        </div>
-      ) : visible.length === 0 ? (
-        <div className="co-empty">
-          <div className="co-empty-icon" aria-hidden="true">
-            ☕
+      <article className="co-room">
+        <KitchenCanvas office={office} t={t} onOpenSession={preview ? undefined : onOpenSession} />
+        {!ready && (
+          <div className="co-scene-caption" role="status">
+            {t(phase === 'error' ? 'unavailable' : 'loading')}
           </div>
-          <h2>{t(focus ? 'focusedEmpty' : 'empty')}</h2>
-          <p>{t('emptyBody')}</p>
-        </div>
-      ) : (
-        <div className={focus || preview ? 'co-grid co-focused' : 'co-grid'}>
-          {visible.map((office) => (
-            <article className="co-room" key={office.id}>
-              <div className="co-room-heading">
-                <div>
-                  <span className="co-live-dot" data-active={office.activeCount > 0} />{' '}
-                  <h2>{office.title}</h2>
-                </div>
-                <span className="co-count">
-                  {office.activeCount} {t('active')}
-                </span>
-              </div>
-              <KitchenCanvas office={office} t={t} />
-              <div className="co-room-footer">
-                <span>
-                  {t('whitebox')}
-                  {office.overflow > 0 && (
-                    <>
-                      {' '}
-                      · +{office.overflow} {t('overflow')}
-                    </>
-                  )}
-                </span>
-                {!preview && !focus && (
-                  <button className="co-back" onClick={() => setFocus(office.id)}>
-                    {t('focus')} ↗
-                  </button>
-                )}
-              </div>
-              <div className="co-roster">
-                {office.actors.length === 0 && <p className="co-vacant">{t('roomEmpty')}</p>}
-                {office.actors.map((actor) => (
-                  <div key={actor.id}>
-                    <span className={`co-avatar co-seat-${actor.seat}`} aria-hidden="true">
-                      ◡
-                    </span>
-                    <span className="co-roster-name" title={actor.label}>
-                      {actor.label}
-                    </span>
-                    <span className="co-status">{t(actor.activity)}</span>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+        )}
+      </article>
+      <section className="co-recent" aria-label={t('recentSessions')}>
+        <header>
+          <h2>{t('recentSessions')}</h2>
+          <span className="co-count">{ready ? rows.length : '—'}</span>
+        </header>
+        {!ready ? (
+          <p role="status">{t(phase === 'error' ? 'unavailable' : 'loading')}</p>
+        ) : rows.length === 0 ? (
+          <p className="co-vacant">{t('noRecent')}</p>
+        ) : (
+          <ul className="co-session-list">
+            {rows.map((row) => (
+              <li key={row.id}>
+                <button
+                  className="co-session-row"
+                  disabled={preview}
+                  onClick={() => onOpenSession(row.id)}
+                  data-office-session={row.id}
+                >
+                  <span className="co-session-identity">
+                    <strong>{row.label}</strong>
+                    <span>{row.workspaceTitle}</span>
+                  </span>
+                  <span className="co-session-meta">
+                    {row.status === 'running' ? (
+                      <>
+                        <span
+                          className="co-running-icon"
+                          role="img"
+                          aria-label={t('running')}
+                          title={t('running')}
+                        />
+                        <time
+                          title={
+                            clocks.get(row.id)?.since === undefined
+                              ? undefined
+                              : new Date(clocks.get(row.id)!.since!).toLocaleString()
+                          }
+                        >
+                          {elapsedTime(clocks.get(row.id)?.since, now) === undefined
+                            ? t('timeUnknown')
+                            : `${t('runningFor')} ${elapsedTime(clocks.get(row.id)?.since, now)}`}
+                        </time>
+                      </>
+                    ) : row.status === 'unread' ? (
+                      <>
+                        <span
+                          className="co-done-icon"
+                          role="img"
+                          aria-label={t('unread')}
+                          title={t('unread')}
+                        >
+                          ✓
+                        </span>
+                        <time
+                          dateTime={
+                            clocks.get(row.id)?.since === undefined
+                              ? undefined
+                              : new Date(clocks.get(row.id)!.since!).toISOString()
+                          }
+                          title={
+                            clocks.get(row.id)?.since === undefined
+                              ? undefined
+                              : new Date(clocks.get(row.id)!.since!).toLocaleString()
+                          }
+                        >
+                          {clocks.get(row.id)?.since === undefined
+                            ? t('timeUnknown')
+                            : `${t('completedAt')} ${new Date(clocks.get(row.id)!.since!).toLocaleTimeString()}`}
+                        </time>
+                      </>
+                    ) : (
+                      <span className="co-state" data-state={row.status}>
+                        {t(row.status === 'idle' ? 'sessionIdle' : row.status)}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </section>
   );
 }

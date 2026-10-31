@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "assetId": "kitchen/lighting",
-  "revision": "2026-10-28-window-top-shell-r30",
+  "revision": "2026-10-31-floor-mat-shell-r48",
   "status": "ready",
   "receiverIds": [
     "floor",
@@ -15,7 +15,7 @@
     "range": 8,
     "width": 2048,
     "height": 2048,
-    "sha256": "a0a5496ea6f5366a60e2a26b5ca092182eb9b730e847fe6989a0f550bb557098"
+    "sha256": "b3aac2eb9185c31fce47c5584996d739a6b58abf3f0e31fe51726526dcc8fb31"
   },
   "uv": {
     "file": "uv.bin",
@@ -72,14 +72,14 @@
         -1.48
       ],
       "utensil-rail": [
-        -2.313,
-        2.03,
-        2.45
+        -2.307,
+        1.63,
+        -0.36
       ],
       "wall-cabinet": [
         -2.113,
         1.86,
-        -0.7
+        -0.84
       ],
       "range-hood": [
         -2.013,
@@ -87,7 +87,7 @@
         0.6362635881443585
       ],
       "wall-shelf": [
-        -0.1,
+        -0.3,
         0.15,
         -1.813
       ],
@@ -116,6 +116,11 @@
         0.0255,
         2.42
       ],
+      "floor-mat": [
+        1.4,
+        0.0255,
+        -0.37
+      ],
       "trash-can": [
         2.23,
         0.025,
@@ -123,8 +128,8 @@
       ],
       "whale-mitt": [
         -2.307,
-        2.14,
-        2.83
+        1.43,
+        1.75
       ],
       "wall-clock": [
         -2.307,
@@ -132,24 +137,59 @@
         2.62
       ],
       "board-cloth": [
-        2.26,
-        2.13,
-        -1.807
+        -2.307,
+        1.12,
+        -0.95
       ],
       "wall-calendar": [
-        -1.35,
-        2.72,
+        2.26,
+        1.08,
         -1.807
       ],
       "wall-plant-left": [
         -2.302,
         2.18,
-        2.49
+        1.67
       ],
       "wall-plant-right": [
         2.26,
-        1.65,
+        2.15,
         -1.802
+      ],
+      "wall-plant-window-left": [
+        -2.12,
+        1.4,
+        -1.802
+      ],
+      "wall-plant-window-middle": [
+        -1.78,
+        1.4,
+        -1.802
+      ],
+      "wall-plant-window-right": [
+        -1.44,
+        1.4,
+        -1.802
+      ],
+      "spice-rack": [
+        -2.307,
+        2.06,
+        2.45
+      ],
+      "open-cubby": [
+        -2.307,
+        1.86,
+        -0.18
+      ],
+      "black-utensil-rail": [
+        -2.307,
+        1.35,
+        2.45
+      ],
+      "wall-storage-box": [
+        2.26,
+        1.65,
+        -1.807
       ]
     },
     "rotations": {
@@ -159,6 +199,10 @@
       "wall-cabinet": 1.5707963267948966,
       "range-hood": 1.5707963267948966,
       "whale-mitt": 1.5707963267948966,
+      "board-cloth": 1.5707963267948966,
+      "spice-rack": 1.5707963267948966,
+      "open-cubby": 1.5707963267948966,
+      "black-utensil-rail": 1.5707963267948966,
       "wall-clock": 1.5707963267948966,
       "wall-plant-left": 1.5707963267948966
     },
@@ -172,6 +216,31 @@
         1.508635348167209,
         1,
         1
+      ],
+      "board-cloth": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "utensil-rail": [
+        0.45,
+        0.45,
+        0.45
+      ],
+      "wall-plant-window-left": [
+        0.85,
+        0.85,
+        0.85
+      ],
+      "wall-plant-window-middle": [
+        0.85,
+        0.85,
+        0.85
+      ],
+      "wall-plant-window-right": [
+        0.85,
+        0.85,
+        0.85
       ]
     }
   },
@@ -214,11 +283,17 @@
       {
         "meshIndex": 0,
         "name": "灶台静态总成",
-        "vertexCount": 37929,
-        "geometrySignature": "bec9c0295a70dfbf3561663cf356b561355cfeba6d1c58ae9395b39956753542"
+        "vertexCount": 94308,
+        "geometrySignature": "ee561e0d5022d5903bba4d8e90164b9f098b27a9518167941f1f3982ba8b7c6a"
       },
       {
         "meshIndex": 1,
+        "name": "烤箱烟色玻璃",
+        "vertexCount": 252,
+        "geometrySignature": "8ece553ab6209cc69801089aa00b1afdadcce9267bd6406fa9b7e91cd905df05"
+      },
+      {
+        "meshIndex": 2,
         "name": "转角接缝台面",
         "vertexCount": 36,
         "geometrySignature": "6e600321af2282211cd0325a371a2382be7b9396fe7d12a0cd0b9bd72698d7e0"
@@ -384,6 +459,14 @@
         "geometrySignature": "05926d6a62add7657647172492d81b31b24093f67fab90fb0a1541b485a025a4"
       }
     ],
+    "floor-mat": [
+      {
+        "meshIndex": 0,
+        "name": "floor_mat_mesh",
+        "vertexCount": 5700,
+        "geometrySignature": "4c973b0730ceaec3c6f1541373fee86cae13a1333c6b38a0851896c1bfb53e47"
+      }
+    ],
     "trash-can": [
       {
         "meshIndex": 0,
@@ -469,6 +552,62 @@
         "vertexCount": 35697,
         "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
       }
+    ],
+    "wall-plant-window-left": [
+      {
+        "meshIndex": 0,
+        "name": "wall_plant_mesh",
+        "vertexCount": 35697,
+        "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
+      }
+    ],
+    "wall-plant-window-middle": [
+      {
+        "meshIndex": 0,
+        "name": "wall_plant_mesh",
+        "vertexCount": 35697,
+        "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
+      }
+    ],
+    "wall-plant-window-right": [
+      {
+        "meshIndex": 0,
+        "name": "wall_plant_mesh",
+        "vertexCount": 35697,
+        "geometrySignature": "07b550a683091ac27ce34cd7e50f480ba25185f2e1d7d780e17e5dc96bacd39f"
+      }
+    ],
+    "spice-rack": [
+      {
+        "meshIndex": 0,
+        "name": "spice_rack_mesh",
+        "vertexCount": 60939,
+        "geometrySignature": "0433ab113fed4f381790e525ca5684f46293924a531d57d4562a795c32bf850c"
+      }
+    ],
+    "open-cubby": [
+      {
+        "meshIndex": 0,
+        "name": "open_cubby_mesh",
+        "vertexCount": 17502,
+        "geometrySignature": "8c750f3f743d3ea9904a74138f7065d9d29e90755b8ae3e4c33f026536169374"
+      }
+    ],
+    "black-utensil-rail": [
+      {
+        "meshIndex": 0,
+        "name": "black_utensil_rail_mesh",
+        "vertexCount": 31866,
+        "geometrySignature": "340e3a7df1abf8a21ea67ae1459be7c56c03ab7edc998daa73bfce7c547a5240"
+      }
+    ],
+    "wall-storage-box": [
+      {
+        "meshIndex": 0,
+        "name": "wall_storage_box_mesh",
+        "vertexCount": 34947,
+        "geometrySignature": "d0df5df5f922184f63255b1f91e839471baaf55415ae7edb61a16133479a4367"
+      }
     ]
   },
   "sources": [
@@ -490,7 +629,7 @@
     {
       "id": "stove",
       "assetId": "kitchen/stove",
-      "sha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de"
+      "sha256": "0f7756d88da214ff51f5a4e4601bfe1dcb928c97c59b34e8610b70580347e1a2"
     },
     {
       "id": "table",
@@ -563,6 +702,11 @@
       "sha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235"
     },
     {
+      "id": "floor-mat",
+      "assetId": "kitchen/floor-mat",
+      "sha256": "c4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f"
+    },
+    {
       "id": "trash-can",
       "assetId": "kitchen/trash-can",
       "sha256": "9a24be020e981a3df752a7ab72c8202d10c5dd1d3edc193c7d58464e49cf2401"
@@ -596,15 +740,146 @@
       "id": "wall-plant-right",
       "assetId": "kitchen/wall-plant",
       "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    },
+    {
+      "id": "wall-plant-window-left",
+      "assetId": "kitchen/wall-plant",
+      "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    },
+    {
+      "id": "wall-plant-window-middle",
+      "assetId": "kitchen/wall-plant",
+      "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    },
+    {
+      "id": "wall-plant-window-right",
+      "assetId": "kitchen/wall-plant",
+      "sha256": "60e5617d64f4012d9cac64027d65afcd6ffb9846537ac63e71881712cc499f50"
+    },
+    {
+      "id": "spice-rack",
+      "assetId": "kitchen/spice-rack",
+      "sha256": "3b138a15120aab25aca0206c43228848fed1a08078435a7b9c259951c35fbd6c"
+    },
+    {
+      "id": "open-cubby",
+      "assetId": "kitchen/open-cubby",
+      "sha256": "44d57c6a786398a1a24a2f997f8040bb8aeb9629cd455aa4703971cda8aef8e6"
+    },
+    {
+      "id": "black-utensil-rail",
+      "assetId": "kitchen/black-utensil-rail",
+      "sha256": "49c81a4fddde4c83b6f219203e5dd22f2834842da6f1332418eb908fe7f190af"
+    },
+    {
+      "id": "wall-storage-box",
+      "assetId": "kitchen/wall-storage-box",
+      "sha256": "377bc964ce8eed4b7cb1e75efd68d584bc84ec9b3f245d7dd7a922eb72f00595"
     }
   ],
   "bake": {
     "engine": "CYCLES",
     "samples": 64,
-    "device": "METAL",
+    "device": "CPU",
     "islandMargin": 0.003,
     "scope": "shell-only; all furniture participates as occluder and bounce",
-    "materialRevision": "left wall edge window aligned with cabinet top/right shelf left20cm/calendar raised; frozen normal-r1 and other sources; see all25 source hashes",
+    "materialRevision": "Independent floor-mat added; rejected fridge refinement remains rolled back to candy-r2; all33 instances participate, practical-v2/window panes retained",
+    "practicals": {
+      "id": "kitchen-warm-practicals-v2",
+      "areas": [
+        {
+          "name": "hood-task-warm",
+          "position": [
+            -2.013,
+            1.69,
+            0.6362635881443585
+          ],
+          "target": [
+            -2.163,
+            0.92,
+            0.6362635881443585
+          ],
+          "width": 1.12,
+          "height": 0.26,
+          "color": [
+            1,
+            0.53,
+            0.22
+          ],
+          "watts": 26
+        },
+        {
+          "name": "shelf-task-warm",
+          "position": [
+            -0.32,
+            1.94,
+            -1.573
+          ],
+          "target": [
+            -0.32,
+            0.92,
+            -1.693
+          ],
+          "width": 1.22,
+          "height": 0.12,
+          "color": [
+            1,
+            0.55,
+            0.24
+          ],
+          "watts": 22
+        },
+        {
+          "name": "window-warm",
+          "position": [
+            -1.78,
+            2.2520518369674685,
+            -1.538
+          ],
+          "target": [
+            -1.78,
+            1.4600518369674687,
+            -0.708
+          ],
+          "width": 0.78,
+          "height": 0.46,
+          "color": [
+            1,
+            0.64,
+            0.32
+          ],
+          "watts": 16
+        }
+      ],
+      "windowGlow": {
+        "halfWidth": 0.455,
+        "minHeight": 0.1,
+        "maxHeight": 0.68,
+        "maxDepth": 0.115,
+        "color": [
+          1,
+          0.64,
+          0.27
+        ],
+        "intensity": 0.9
+      },
+      "pendant": {
+        "name": "pendant-light-glow",
+        "position": [
+          1.9507244251319207,
+          2.742704181671143,
+          -1.4584600511193275
+        ],
+        "color": [
+          1,
+          0.57,
+          0.25
+        ],
+        "watts": 16,
+        "distance": 1.6,
+        "radius": 0.12
+      }
+    },
     "runtimeEnvironment": "kitchen-candy-indirect-s1-v1 remains runtime-only; Cycles World .05 unchanged",
     "passes": [
       "DIFFUSE",
@@ -615,16 +890,16 @@
     "storedQuantity": "white-Lambert outgoing diffuse radiance E/pi",
     "viewTransformAppliedToAtlas": false,
     "margin": 8,
-    "rgbMax": 2.0387065410614014,
+    "rgbMax": 7.940722465515137,
     "uvFallbackMatches": 0,
-    "seconds": 36.03598999977112,
-    "reviewScriptSha256": "e8ecfb6f025582ad2394320334a3c50988488b364ca682aaae617646ac284b53",
+    "seconds": 124.41135597229004,
+    "reviewScriptSha256": "1305520b150602fa2931e78b0d7717981aa221e0c88187749ca1ee1932e6c02c",
     "denoise": {
       "method": "OpenImageDenoise via Blender compositor",
       "input": "linear diffuse E/pi with opaque alpha to avoid associated-alpha color conversion",
       "albedoNormalAuxiliary": false,
       "notes": "Color-only denoise of packed atlas; inspect chart borders, finite padding and small props."
     },
-    "upstreamRevision": "2026-10-28-window-top-shell-r29"
+    "upstreamRevision": "2026-10-31-floor-mat-shell-r47"
   }
 }

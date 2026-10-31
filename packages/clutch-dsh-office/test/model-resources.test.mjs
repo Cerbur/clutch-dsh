@@ -38,3 +38,29 @@ test('GLB arriving after teardown releases its resources without scheduling a fr
   assert.deepEqual(loaded.disposed, { geometry: 1, material: 1, texture: 1 });
   assert.equal(loaded.closed(), 1);
 });
+
+test('shared skin bone textures and animation callbacks release exactly once, including late arrivals', () => {
+  for (const late of [false, true]) {
+    const owner = new Models();
+    const group = new T.Group();
+    const skeleton = new T.Skeleton([new T.Bone()]);
+    skeleton.computeBoneTexture();
+    let boneTextures = 0,
+      callbacks = 0;
+    skeleton.boneTexture.addEventListener('dispose', () => boneTextures++);
+    const geometry = new T.BoxGeometry();
+    const material = new T.MeshStandardMaterial();
+    for (let i = 0; i < 3; i++) {
+      const mesh = new T.SkinnedMesh(geometry, material);
+      mesh.bind(skeleton);
+      group.add(mesh);
+    }
+    if (late) owner.dispose();
+    owner.onDispose(() => callbacks++);
+    assert.equal(owner.ownObject(group), !late);
+    owner.dispose();
+    owner.dispose();
+    assert.equal(callbacks, 1);
+    assert.equal(boneTextures, 1);
+  }
+});

@@ -39,7 +39,7 @@ test('review softboxes face their target and retain Blender linear colors; zero-
   const scene = new T.Scene();
   const rig = createKitchenLightRig(scene);
   const areas = scene.getObjectsByProperty('isRectAreaLight', true);
-  assert.equal(areas.length, 4);
+  assert.equal(areas.length, 7);
   for (const [i, light] of areas.slice(0, 3).entries()) {
     const source = KITCHEN_LIGHTING.sourceBlender.areas[i];
     const [x, y, z] = source.position;
@@ -61,7 +61,7 @@ test('review softboxes face their target and retain Blender linear colors; zero-
     lights.filter((light) => light.castShadow).map((light) => light.name),
     ['warm-key', 'review-fill-area-shadow', 'review-rim-area-shadow', 'review-character-shadow'],
   );
-  assert.equal(lights.length, 8);
+  assert.equal(lights.length, 12);
   assert.equal(
     lights.some((light) => light.isDirectionalLight),
     false,
@@ -83,6 +83,11 @@ test('review softboxes face their target and retain Blender linear colors; zero-
   const rendererLights = WebGLLights({ has: () => true });
   rendererLights.setup(lights);
   assert.equal(rendererLights.state.spotShadow.length, 4);
+  assert.equal(rendererLights.state.spot.length, 4);
+  assert.equal(rendererLights.state.spotLightMap.length, 0);
+  assert.equal(rendererLights.state.rectArea.length, 7);
+  assert.equal(rendererLights.state.point.length, 1);
+  assert.equal(rendererLights.state.pointShadow.length, 0);
   assert.equal(rendererLights.state.directional.length, 0);
   proxies.slice(0, 3).forEach((proxy, i) => {
     assert.equal(rendererLights.state.spotLightMatrix[i], proxy.shadow.matrix);
@@ -107,14 +112,89 @@ test('review softboxes face their target and retain Blender linear colors; zero-
   assert.equal(actorShadow.shadow.radius, 8);
   assert.equal(rendererLights.state.spotLightMatrix[3], actorShadow.shadow.matrix);
   assert.equal(scene.getObjectsByProperty('isHemisphereLight', true).length, 0);
-  assert.equal(KITCHEN_LIGHTING.pendant.intensity, 0);
+  const practicals = KITCHEN_LIGHTING.practicals;
+  assert.deepEqual(
+    areas.slice(4).map((light) => light.name),
+    ['hood-task-warm', 'shelf-task-warm', 'window-warm'],
+  );
+  practicals.areas.forEach((spec, i) => {
+    const light = areas[i + 4];
+    assert.equal(light.castShadow, false);
+    assert.deepEqual(light.position.toArray(), spec.position);
+    assert.equal(light.width, spec.width);
+    assert.equal(light.height, spec.height);
+    assert.equal(light.intensity, spec.watts / (Math.PI * spec.width * spec.height));
+    assert.deepEqual(light.color.toArray(), spec.color);
+    const direction = new T.Vector3(0, 0, -1).applyQuaternion(light.quaternion);
+    const expected = new T.Vector3(...spec.target).sub(light.position).normalize();
+    assert.ok(direction.distanceTo(expected) < 1e-12);
+  });
+  const points = lights.filter((light) => light.isPointLight);
+  assert.equal(points.length, 1, 'the rig owns exactly one pendant bulb');
+  const bulb = points[0];
+  assert.equal(bulb.name, practicals.pendant.name);
+  assert.equal(bulb.castShadow, false);
+  assert.deepEqual(bulb.position.toArray(), practicals.pendant.position);
+  assert.deepEqual(bulb.color.toArray(), practicals.pendant.color);
+  assert.ok(bulb.color.r > bulb.color.g && bulb.color.g > bulb.color.b);
+  assert.ok(bulb.intensity > 0);
+  assert.equal(bulb.intensity, practicals.pendant.watts / (4 * Math.PI));
+  assert.equal(bulb.distance, practicals.pendant.distance);
+  assert.equal(bulb.decay, 2);
+  // setup sorts the real scene light list; setupView must preserve each type's pairing.
+  assert.deepEqual(
+    lights.filter((light) => light.isRectAreaLight),
+    areas,
+  );
+  assert.deepEqual(
+    lights.filter((light) => light.isSpotLight),
+    proxies,
+  );
+  const camera = new T.PerspectiveCamera();
+  camera.position.set(8, 7, 8.5);
+  camera.lookAt(0, 1.3, 0.5);
+  camera.updateMatrixWorld(true);
+  rendererLights.setupView(lights, camera);
+  areas.forEach((light, i) => {
+    const uniform = rendererLights.state.rectArea[i];
+    assert.deepEqual(
+      uniform.color.toArray(),
+      light.color.clone().multiplyScalar(light.intensity).toArray(),
+    );
+    assert.ok(
+      uniform.position.distanceTo(
+        light.getWorldPosition(new T.Vector3()).applyMatrix4(camera.matrixWorldInverse),
+      ) < 1e-12,
+    );
+    assert.ok(Math.abs(uniform.halfWidth.length() - light.width / 2) < 1e-12);
+    assert.ok(Math.abs(uniform.halfHeight.length() - light.height / 2) < 1e-12);
+  });
+  proxies.forEach((proxy, i) => {
+    assert.equal(rendererLights.state.spotLightMatrix[i], proxy.shadow.matrix);
+  });
+  assert.deepEqual(
+    rendererLights.state.point[0].color.toArray(),
+    bulb.color.clone().multiplyScalar(bulb.intensity).toArray(),
+  );
+  assert.ok(
+    rendererLights.state.point[0].position.distanceTo(
+      bulb.getWorldPosition(new T.Vector3()).applyMatrix4(camera.matrixWorldInverse),
+    ) < 1e-12,
+  );
   // Another room must reuse the LTC library rather than replace its shared textures.
-  const lookup = T.UniformsLib.LTC_HALF_1;
-  assert.ok(lookup.isDataTexture);
+  const lookups = ['LTC_HALF_1', 'LTC_HALF_2', 'LTC_FLOAT_1', 'LTC_FLOAT_2'].map(
+    (name) => T.UniformsLib[name],
+  );
+  assert.ok(lookups.every((lookup) => lookup.isDataTexture));
+  const lookupDisposed = trackDisposals(lookups);
   const other = createKitchenLightRig(new T.Scene());
-  assert.equal(T.UniformsLib.LTC_HALF_1, lookup);
+  ['LTC_HALF_1', 'LTC_HALF_2', 'LTC_FLOAT_1', 'LTC_FLOAT_2'].forEach((name, i) =>
+    assert.equal(T.UniformsLib[name], lookups[i]),
+  );
+  other.dispose();
   other.dispose();
   rig.dispose();
+  assert.deepEqual(lookupDisposed, [0, 0, 0, 0], 'room teardown retains shared LTC textures');
 });
 
 test('lighting teardown releases primary and optional blur targets once, without a presentation ground, retaining scene assets', () => {

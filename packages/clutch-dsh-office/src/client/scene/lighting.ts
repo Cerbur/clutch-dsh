@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { KITCHEN_PRACTICALS } from '../../office/kitchen-practicals.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { createCharacterShadowPass } from './character-shadow.js';
 import { sampleIndirectEnvironment } from './indirect-environment.js';
@@ -63,8 +64,7 @@ export const KITCHEN_LIGHTING = {
   // Broad low-energy front polish: no additional shadow map, shell diffuse stays Cycles-baked.
   frontFill: { position: [5, 4.5, 7], size: 5, color: [1, 0.94, 0.86], watts: 80 },
   dynamicShadow: { mapSize: 512, radius: 8, directFraction: 0.7 },
-  // The review has no practical lights. Keep the component API without adding another warm pool.
-  pendant: { color: '#fff0e1', intensity: 0, distance: 2.6 },
+  practicals: KITCHEN_PRACTICALS,
   sourceBlender: {
     script: 'sync/evidence/2026-10-28-cycles-lighting/review_storage_sink_office.py',
     image: 'sync/evidence/2026-10-28-cycles-lighting/cycles-review.png',
@@ -154,6 +154,31 @@ export function createKitchenLightRig(scene: T.Scene): {
   polish.position.set(...front.position);
   polish.lookAt(...KITCHEN_LIGHTING.target);
   root.add(polish);
+
+  // Appended after the three shadowed softboxes and front polish. No extra shadow maps.
+  for (const spec of KITCHEN_PRACTICALS.areas) {
+    const practical = new T.RectAreaLight(
+      linearColor(spec.color),
+      spec.watts / (Math.PI * spec.width * spec.height),
+      spec.width,
+      spec.height,
+    );
+    practical.name = spec.name;
+    practical.position.set(...spec.position);
+    practical.lookAt(...spec.target);
+    root.add(practical);
+  }
+  const bulb = KITCHEN_PRACTICALS.pendant;
+  const glow = new T.PointLight(
+    linearColor(bulb.color),
+    bulb.watts / (4 * Math.PI),
+    bulb.distance,
+    2,
+  );
+  glow.name = bulb.name;
+  glow.position.set(...bulb.position);
+  glow.castShadow = false;
+  root.add(glow);
 
   // A separate key projection contains only layer-1 Session characters. Static
   // Cycles diffuse never gets the old center-of-area furniture shadow multiplied in.

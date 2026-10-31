@@ -62,6 +62,7 @@ export function advanceKitchenMotion(
   plan: ActionPlan,
   delta: number,
   reducedMotion = false,
+  walkSpeed = 1.3,
 ): KitchenMotion {
   const destination = key(plan);
   if (reducedMotion) {
@@ -105,7 +106,9 @@ export function advanceKitchenMotion(
     }
     const step = Math.min(0.06, Math.max(0, delta));
     const walking = distance(position, next.position) >= 1e-8;
-    const nextPosition = walking ? advancePosition(position, next.position, step) : position;
+    const nextPosition = walking
+      ? advancePosition(position, next.position, step, walkSpeed)
+      : position;
     return {
       ...previous,
       destination,

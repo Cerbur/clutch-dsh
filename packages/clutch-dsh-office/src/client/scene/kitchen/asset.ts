@@ -26,7 +26,7 @@ function lifetime(models: Models): AbortSignal {
 export function bundledAsset(
   name: string,
   asset: AssetBytes,
-  afterLoad?: (scene: T.Group) => void,
+  afterLoad?: (scene: T.Group, animations: readonly T.AnimationClip[]) => void,
 ) {
   return (models: Models, fallback: T.Group): T.Group => {
     const root = new T.Group();
@@ -38,7 +38,7 @@ export function bundledAsset(
     void withAssetSlot(signal, async () => {
       const bytes = await loadAssetBytes(asset, signal);
       signal.throwIfAborted();
-      const { scene } = await new GLTFLoader().parseAsync(bytes, '');
+      const { scene, animations = [] } = await new GLTFLoader().parseAsync(bytes, '');
       try {
         await limitObjectTextures(scene, { disposed: () => models.disposed });
       } catch (error) {
@@ -49,7 +49,7 @@ export function bundledAsset(
         return;
       }
       scene.name = `${name}-asset`;
-      afterLoad?.(scene);
+      afterLoad?.(scene, animations);
       root.remove(fallback);
       root.add(scene);
       root.userData.assetState = 'ready';

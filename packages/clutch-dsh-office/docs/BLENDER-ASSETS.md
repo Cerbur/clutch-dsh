@@ -38,31 +38,36 @@ pnpm --filter @cerbur/clutch-dsh-office test
 
 The importer explicitly supports these IDs and their matching runtime filenames:
 
-| Asset ID                  | Runtime file          | Triangles | Bytes | Additional contract                                            |
-| ------------------------- | --------------------- | --------: | ----: | -------------------------------------------------------------- |
-| `kitchen/refrigerator`    | `refrigerator.glb`    |    30,000 | 8 MiB | Independent upper/lower door pivots                            |
-| `kitchen/table`           | `table.glb`           |    60,000 | 8 MiB | One material; table/table_mesh/work_surface/prep_anchor        |
-| `kitchen/storage-cabinet` | `storage-cabinet.glb` |    30,000 | 8 MiB | Four static batches and four wheel pivots                      |
-| `kitchen/left-wall`       | `left-wall.glb`       |    10,000 | 1 MiB | Window-free static wall hierarchy                              |
-| `kitchen/right-wall`      | `right-wall.glb`      |    10,000 | 1 MiB | Wall surface only; scene-owned shelf props stay separate       |
-| `kitchen/wall-shelf`      | `wall-shelf.glb`      |    55,000 | 8 MiB | Installed height authored; rear-envelope ground projection     |
-| `kitchen/whale-mitt` | `whale-mitt.glb` | 10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center |
-| `kitchen/wall-clock` | `wall-clock.glb` | 10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center |
-| `kitchen/board-cloth` | `board-cloth.glb` | 15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center |
-| `kitchen/wall-plant` | `wall-plant.glb` | 12,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center |
-| `kitchen/wall-calendar` | `wall-calendar.glb` | 15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center |
-| `kitchen/window` | `window.glb` | 30,000 | 4 MiB | Opaque static decoration, rear-wall-bottom-center, one mesh/material |
-| `kitchen/wall-art`        | `wall-art.glb`        |    16,000 | 2 MiB | Wall-plane-center origin, installation height scene-owned      |
-| `kitchen/chair`           | `chair.glb`           |    20,000 | 4 MiB | One asset, two shared-resource instances, floor-center         |
-| `kitchen/rug`             | `rug.glb`             |     6,000 | 4 MiB | Walkable surface decoration, floor-center                      |
-| `kitchen/trash-can`       | `trash-can.glb`       |    20,000 | 2 MiB | Three materials/six primitives, independent lid/pedal X pivots |
-| `kitchen/pendant-light`   | `pendant-light.glb`   |    20,000 | 4 MiB | Hanging hierarchy and light_anchor                             |
-| `kitchen/sink-cabinet`    | `sink-cabinet.glb`    |    40,000 | 8 MiB | Three Y-axis doors and one +Z drawer                           |
-| `kitchen/utensil-rail`    | `utensil-rail.glb`    |    20,000 | 1 MiB | Wall-plane origin at rail axis                                 |
-| `kitchen/stove`           | `stove.glb`           |    40,000 | 4 MiB | Five materials, 20 primitives, closed doors, COLOR_0           |
-| `kitchen/wall-cabinet`    | `wall-cabinet.glb`    |    10,000 | 2 MiB | Cabinet-bottom origin, three materials, ten primitives         |
-| `kitchen/range-hood`      | `range-hood.glb`      |    20,000 | 2 MiB | Installed height modeled, seven materials, 20 primitives       |
-| `character/deepseek`      | `deepseek.glb`        |    60,000 | 8 MiB | One material; static, feet-ground-center, no rig               |
+| Asset ID                     | Runtime file             | Triangles | Bytes | Additional contract                                                  |
+| ---------------------------- | ------------------------ | --------: | ----: | -------------------------------------------------------------------- |
+| `kitchen/refrigerator`       | `refrigerator.glb`       |    30,000 | 8 MiB | Independent upper/lower door pivots                                  |
+| `kitchen/table`              | `table.glb`              |    60,000 | 8 MiB | One material; table/table_mesh/work_surface/prep_anchor              |
+| `kitchen/storage-cabinet`    | `storage-cabinet.glb`    |    30,000 | 8 MiB | Four static batches and four wheel pivots                            |
+| `kitchen/left-wall`          | `left-wall.glb`          |    10,000 | 1 MiB | Window-free static wall hierarchy                                    |
+| `kitchen/right-wall`         | `right-wall.glb`         |    10,000 | 1 MiB | Wall surface only; scene-owned shelf props stay separate             |
+| `kitchen/wall-shelf`         | `wall-shelf.glb`         |    55,000 | 8 MiB | Installed height authored; rear-envelope ground projection           |
+| `kitchen/whale-mitt`         | `whale-mitt.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
+| `kitchen/wall-clock`         | `wall-clock.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
+| `kitchen/board-cloth`        | `board-cloth.glb`        |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
+| `kitchen/wall-plant`         | `wall-plant.glb`         |    12,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
+| `kitchen/wall-calendar`      | `wall-calendar.glb`      |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
+| `kitchen/spice-rack`         | `spice-rack.glb`         |    25,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
+| `kitchen/open-cubby`         | `open-cubby.glb`         |    10,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
+| `kitchen/black-utensil-rail` | `black-utensil-rail.glb` |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
+| `kitchen/wall-storage-box`   | `wall-storage-box.glb`   |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
+| `kitchen/window`             | `window.glb`             |    30,000 | 4 MiB | Opaque static decoration, rear-wall-bottom-center, one mesh/material |
+| `kitchen/wall-art`           | `wall-art.glb`           |    16,000 | 2 MiB | Wall-plane-center origin, installation height scene-owned            |
+| `kitchen/chair`              | `chair.glb`              |    20,000 | 4 MiB | One asset, two shared-resource instances, floor-center               |
+| `kitchen/floor-mat` | `floor-mat.glb` | 6,000 | 4 MiB | Independent walkable textile, floor-center, one mesh/material, two images |
+| `kitchen/rug`                | `rug.glb`                |     6,000 | 4 MiB | Walkable surface decoration, floor-center                            |
+| `kitchen/trash-can`          | `trash-can.glb`          |    20,000 | 2 MiB | Three materials/six primitives, independent lid/pedal X pivots       |
+| `kitchen/pendant-light`      | `pendant-light.glb`      |    20,000 | 4 MiB | Hanging hierarchy and light_anchor                                   |
+| `kitchen/sink-cabinet`       | `sink-cabinet.glb`       |    40,000 | 8 MiB | Three Y-axis doors and one +Z drawer                                 |
+| `kitchen/utensil-rail`       | `utensil-rail.glb`       |    20,000 | 1 MiB | Wall-plane origin at rail axis                                       |
+| `kitchen/stove`              | `stove.glb`              |    40,000 | 4 MiB | Five materials, 20 primitives, closed doors, COLOR_0                 |
+| `kitchen/wall-cabinet`       | `wall-cabinet.glb`       |    10,000 | 2 MiB | Cabinet-bottom origin, three materials, ten primitives               |
+| `kitchen/range-hood`         | `range-hood.glb`         |    20,000 | 2 MiB | Installed height modeled, seven materials, 20 primitives             |
+| `character/deepseek`         | `deepseek.glb`           |    60,000 | 8 MiB | One material; static, feet-ground-center, no rig                     |
 
 Floor additionally uses `floor.glb`, a5,000-triangle/6MiB/two-material ceiling and
 `floor-surface-center` origin. Its52-triangle rounded ceramic insert carries the retained true baked tangent
@@ -327,3 +332,79 @@ Current material/profile/source/position/acceptance are in [verification](KITCHE
 whale-mitt/wall-clock/board-cloth/wall-plant/wall-calendar are independently imported r1 deliveries. Source originals and editable Blender projects remain in office/kitchen/<component>. Five assets add six scene instances because wall-plant is reused on two walls. kitchenAssetName is the common resource identity mapping for import/export; KITCHEN_INSTANCE_GROUPS supplies the runtime clone groups. Each room parses the plant once and shares geometry/material/textures, disposing them once. The plant transforms face the two walls (Y90°/0°) while keeping upright backplates.
 
 The production bake provider decodes inline base64/JSON first, then checks all current source IDs and instance keys plus resource aliases before downloading or applying the atlas. A missing plant cannot let the shell commit early. Imported r20 validates25instances/40primitives and their source hashes, transforms and exact geometry signatures. Clock/calendar are decorative, no real-time information or interaction capability is inferred.
+
+## 当前采用：左墙生活收纳四件 · 2026-10-29
+
+四件独立交付均为2026-10-29-r1：小调味架spice-rack（.74×.703457×.269506m/20313tri）、开放木格柜open-cubby（.22×.737380×.157793m/5834tri）、黑挂钩杆black-utensil-rail（.82×.625123×.138354m/10622tri）、迷你收纳盒wall-storage-box（.38×.301498×.180226m/11649tri）。各单mesh/primitive/material、三张1024内嵌图、normal .35；独立25k/10k/15k/15k面和各4MiB上限，冰箱30k/8MiB约束保持。原始用户文件逐字节保存在各source，中文可编辑工程/脚本/纹理/审核图在work/2026-10-29-r1；冻结delivery不回写accepted状态，以本回执和catalog为准。四件原拓扑/UV保留，原图明暗及重建瑕疵仍在。
+
+摆放唯一源src/office/kitchen-layout.ts：调味架[-2.307,2.06,2.45]、黑挂杆[-2.307,1.35,2.45]在左推车上方，挂杆顶1.975m、距调味架底约85mm；窄格柜[-2.307,1.86,-.18]紧邻蓝柜，顶2.597m为低频上层收纳。三者yaw90°/scale1。收纳盒原试摆在水槽右后方被冰箱遮挡，最终[2.26,1.65,-1.807]、yaw0/scale1，顶1.9515m；右挂盆升至Y2.15，挂历维持Y1.08，三者同列、两处净距约198.5/90mm。不采用隐藏的候选位置。
+
+为留出新收纳空间，蓝柜后移14cm至Z-.84、砧板抹布至Z-.95且保留120%尺寸；旧橙杆移备餐区[-2.307,1.63,-.36]、等比45%，避免两套全尺寸挂杆重复；左挂盆移Z1.67。其余家具/窗户/桌椅/角色站位路线、相机/曝光/softboxes/practical-v2参数及全部既有GLB/manifest字节保持。灶眼和烟机实际热柱留空：左盆位于备餐侧的非火灶区域，覆盖旧“整条台面上空一律禁挂”的粗规则，保留两个fire anchor热柱反例检查。
+
+全场真实Blender BVH仅双墙拼角41对既有接触，无新增非地面相交。最终32实例/47primitive全部参加Cycles64samples Metal光照计算；仅墙地面接收新2K RGBM8/OIDN，采用2026-10-29-left-decor-shell-r40（raw r39），UV20832bytes、atlas16MiB预算保持，PNG2766589bytes/hash1fbf55f5adb0cdeb14ef29dae92424dd1ca3731d4641f66d59d595eaee62d5b2。家具仍实时PBR，保留四处暖光，不增加shadow map。四新件增加48418tri/8556396bytes/四次静态绘制，未做FPS或加载基准，不宣称零成本。
+
+实际build/typecheck/lint/Prettier/workspace/patches通过，完整含真实素材库校验290tests/0fail；角色双人绕桌、冰箱往返及中断碰撞检查覆盖32实例。真实~/.dsh-test总览/单间/本地预览/离屏重建与最终资源加载结果见browser字段；最终美术认可待用户，静态挂件不具备拿取/开门动画。回执sync/receipts/kitchen-left-decor-2026-10-29-r1.json，证据sync/evidence/2026-10-29-kitchen-left-decor/，主工程kitchen/lighting/lookdev/2026-10-29-left-decor-shell-r39/厨房_Cycles光照烘焙.blend。plugin-only，无DSH源码/生产profile修改，无commit/push/publish。
+
+## 当前采用：灶台规整柜体与双炉头精修 · 2026-10-29
+
+用户四张新参考已长期保存kitchen/stove/work/2026-10-29-refined-r1/references，并记录原图hash。主厨房原参考继续保留。用户明确授权本组件重建几何，覆盖材质阶段对此件的形体冻结；当前delivery为2026-10-29-refined-r1，hash0f7756d88da214ff51f5a4e4601bfe1dcb928c97c59b34e8610b70580347e1a2，777032bytes，31532tri/3mesh/3primitive/3material/3张1024内嵌图，40ktri/4MiB上限未放宽，旧r6/candy快照保持不可变。独立refined契约不影响旧版门轴或其他组件。
+
+重做蓝色柜体/脚块/封板、左右各.777m等宽奶油门板与抽屉、镜像中心±1.164m、统一分缝和暖金把手；右柜不再用被横向拉伸的重建表面。双炉头为规整黑搪瓷灶面、铸铁方形框/凸支架、金色炉圈、黑顶盖和暖金旋钮；烤箱重做金属面板/拉手、内搁架及单独烟色玻璃。真实圆角/加权法线，非单纯提高贴图锐度。基础色是无摄影棚明暗的分区色板，roughness/metallic按漆、搪瓷、铸铁、裸金属、标签和瓶身独立响应；不宣称已经烘焙高模法线。源图微细石纹/透明油瓶精度仍有差异，本版瓶罐为简化静态几何。
+
+保留加长台面3.247109664m×.999625942m、work_surface高度.891553998m、现有stove根位置/yaw、全部历史安装锚点、实际接缝cap顶点世界坐标、烟机火灶中线、桌椅/水槽/挂件/角色站位与路线、相机/曝光/practical-v2灯位。burner锚点是安装工作平面，不是炉架顶或角色手部接触点。新的柜门只是闭合静态造型，没有runtime门轴、开门/拿取、炒锅或火焰能力；不能套旧r1动作。
+
+中文可编辑工程kitchen/stove/work/2026-10-29-refined-r1/灶台_规整柜体双炉头.blend；隐藏“可编辑零件_不导出”collection保留单件参数，runtime仅opaque图集合批、烟色玻璃及既有cap三批。脚本同work/scripts/build.py，parent-stove.glb/parent-manifest.json保留精确前版，四视图前后在同灯光/相机32sample CyclesCPU渲染。最终独立GLB回导零退化三角面/零无效法线，非继承旧验证。正式delivery冻结后再从该路径导入。
+
+真实全场Blender BVH仅双墙41对历史拼接接触，无新增家具穿插；完整角色路径测试覆盖新实体。32实例/48primitive重新Cycles64sample Metal、OIDN烘焙，当前2026-10-29-stove-refined-shell-r42（raw r41），仅墙地面2K RGBM8，UV20832bytes/atlas16MiB预算保持，PNG2782504bytes/hash5c8f2fde5c860e184a521cb790c76120783e34882992508e604494c66e494213；全部其他厨房GLB/manifest保持。本轮仅importer增加独立revision、替换灶台及依赖光照，不通过实时材质替换掩盖模型问题。收尾发现并行角色/动画文件变化，明确列入回执externalConcurrentChanges，保留不覆盖；本轮300tests与截图对应已构建的灶台集成产物，不把之后的角色源码修改冒充已验收。
+
+实际完整300tests/0fail，build/typecheck/lint/Prettier/workspace/patches通过；真实~/.dsh-test单间/总览/本地双角色与冰箱活动、光照加载及浏览器结果见回执browser。最终美术批准待用户，Stage3仅灶台此子项技术完成，壁钟等其余几何修正仍未完成。回执sync/receipts/kitchen-stove-2026-10-29-refined-r1.json；证据sync/evidence/2026-10-29-stove-refined/。plugin-only，无DSH源码/生产profile修改，无commit/push/publish。
+
+## Whale-girl face / skeletal walk / independent blink · 2026-10-30
+
+Imported immutable character/deepseek/2026-10-29-face-blink-r2 through sync-asset.mjs. GLB SHA256 eea3bc03f99ea735948a8e33c108b3ae5eb2bbb860651d4bc217421a604bc003; 7,172,924bytes / 57,002triangles / 31bones / one skin / 3materials and primitives / 4embedded images / four morphs. This revision has its own importer budget; historical 1material rules remain. Walk_InPlace is skeletal-only, normalized from its 1/30s source start to a one-second loop. Blink is weights-only; runtime independently schedules each actor every3–6s and applies eyelid correctives. No reaching, cooking, grabbing, idle or dedicated turning clips.
+
+The runtime keeps external scene placement, removes legacy body bob for skeletal actors, follows existing routes at .48m/s and derives gait from signed actual travel. Per-frame sole probes correct small between-sample dips without moving scene furniture. Actors parse separately, sharing only immutable CPU bytes; skeleton bone textures, mixers and morph state have explicit cleanup. Characters remain outside static bake validation, so this actor update does not trigger a shell rebake. The concurrent fridge/stove/lightmap revisions were preserved.
+
+Current implementation and actual browser limitations: [verification](CHARACTER-ANIMATION-VERIFICATION.md). The independent in-app kitchen preview passes; final DSH in-app binary loading is still timing out, so source-library latestAccepted remains unchanged. Frozen delivery manifest stays ready.
+
+## 当前采用：冰箱本体与鲸鱼精修、原绿植精确保护 · 2026-10-30
+
+用户四张新参考归kitchen/refrigerator/work/2026-10-29-refined-r1/references，hash入清单；主厨房参考不替换。新采用2026-10-29-refined-r1，hash4b9c6615a097d5cddf93e8c60742621377153437cdb7fd4a9eb36a30b3669ce4，2696828bytes/26848tri/5mesh/5primitive/2material/6内嵌图。仍30ktri/8MiB，旧candy-r2及更早delivery保留。真实Blender重建平整圆角壳、上下门、银色弧形把手、规整便笺与鲸鱼磁贴、圆润鲸鱼主体/连续白肚皮/黑眼高光/粉色腮红/侧鳍/翘尾/喷水饰。非仅调粗糙度或假装修复贴图，未做微细肚皮刻线，便笺与照片是简化造型而非逐像素重现参考。
+
+用户明确要求绿植不变，原参考图陶土盆栽9300tri单独保护：顶点/索引/UV/法线/材质参数/三张原嵌图逐字节复用，root/top/plant世界变换原样，花盆/叶片没有重拓扑、缩放、改色或移动。原图集保留供盆栽，新增本体鲸鱼共享的三张1024图；GLB原字节拼接脚本scripts/merge-plant.py重定位资源索引，plant-protection.json与测试使用真实parent证明内容相等。上下门原local-Y右铰链translation及extras原JSON精确保留；新门板为各pivot子mesh，仍闭合静态展示，无内胆/开门活动交付。源工程kitchen/refrigerator/work/2026-10-29-refined-r1/中文冰箱_本体鲸鱼精修.blend，隐藏可编辑零件保留。
+
+原盆栽位置不动；新壳顶约低于盆底1mm，鲸鱼缩至90%并移到不碰原叶片的位置，独立最终GLB审阅证实plant与壳/门/鲸鱼零表面交。新白肚皮通过连续球面UV底色呈现，没有拼接半球接缝。原盆栽旧贴图里的光影与形体瑕疵按用户要求保留，不宣称去光照；新壳/鲸鱼色板不烘焙摄影棚明暗。同机位/同灯光32sampleCPU四视图前后已实际渲染，独立回导零退化三角面/零无效法线。
+
+房间布局、冰箱根坐标、水槽/垃圾桶/吊灯位置、桌椅与角色站位/路线、相机/曝光和practical-v2灯位保持。全厨房真实BVH仅双墙41对历史共同面，无新增家具相交。完整32实例/48primitive按新几何重烘Cycles64sampleCPU/OIDN，采用2026-10-29-fridge-refined-shell-r46（raw r45，r43 Metal未完成候选不采用），仅墙地面2K RGBM8，UV20832bytes/atlas16MiB预算保持；atlas2790317bytes/hash285e64ebd46634725dd256d68d07ee3c913a471e1724192175399b559d004b53。其他厨房GLB及manifest字节保持；并行角色/动画变化仅列入回执、不覆盖或归因本轮。新增三张模型贴图有内存成本，未做FPS/VRAM基准，不宣称零开销。
+
+实际完整316tests/0fail（含真实parent植物字节/材质/变换与铰链校验）、build/typecheck/lint/Prettier/workspace/patches通过，真实~/.dsh-test页面加载/双角色与冰箱预览/控制台结果见browser。早期启动曾有冰箱与光图请求超时，临时诊断证实Host已完成读取；随后重载成功，根因未确认，不宣称已修复传输。临时诊断已移除，未改超时阈值或DSH源码，最终构建重启后无回退告警。此为技术验收，最终美术认可待用户。Spec/Plan只将冰箱本子项完成，其他Stage3几何工作不冒充完成。revision和证据目录保留开始制作的2026-10-29，技术验收于2026-10-30完成。回执sync/receipts/kitchen-refrigerator-2026-10-29-refined-r1.json；证据sync/evidence/2026-10-29-fridge-refined/。plugin-only，无DSH源码/生产profile修改，无commit/push/publish。
+
+## 用户撤回冰箱精修：恢复前一版 · 2026-10-30
+
+用户明确不接受本体/鲸鱼精修外观，当前恢复refrigerator/2026-10-28-candy-r2（SHA256 250242b0f81f83e1efbf1ac82f686eb464dfcba89b0ed2ff13138bda49e6b6c4），同时恢复与旧冰箱几何相符的2026-10-29-stove-refined-shell-r42光照。只撤回本轮冰箱，不撤回已精修灶台、新挂件、当前布局、暖光参数或并行角色动画改动。
+
+2026-10-29-refined-r1及r46光图为已撤回候选，前一节技术测试通过不代表用户美术认可；不能再次默认采用。精修Blender工程和不可变交付保留为历史，catalog当前采用与插件资源恢复旧版。仅依赖被撤回形体的新增测试从当前回归移出，原文归sync/evidence/2026-10-30-fridge-rollback/rejected-refinement-test.mjs.txt，原candy材质回归恢复。不得自动回滚其他改动。当前回执sync/receipts/kitchen-refrigerator-2026-10-30-rollback-v1.json。全程plugin-only，无commit/push/publish。
+
+## 当前采用：共享会话看板 / face-blink-r2 · 2026-10-31
+
+用户覆盖旧workspace厨房设计：Office现在为单个全宽厨房+完整最近会话列表。来自DSH原生list.ids、workspace元数据和useSessionStatus；待交互>运行>未读完成>空闲，空白/归档/subagent/catalog-only行不加入列表，运行子代理汇总到列出的父会话。运行/待交互/未读各有角色资格，最多4位按ID保留槽位，超出计数与列表均保留。列表按updatedAt降序显示完整标题/workspace/状态/时间/已知cwd/ID；没有截为4条。关系缺失标未分组，不根据路径猜测管理关系。Office不retain、不读历史、不发模型请求、不管理第二份未读；原生未读是当前Client UI事实，刷新后的重置语义跟随DSH，不能以自己的缓存伪装未读。
+
+用户明确采用character/deepseek/2026-10-29-face-blink-r2，SHA256 eea3bc03f99ea735948a8e33c108b3ae5eb2bbb860651d4bc217421a604bc003，7172924bytes/57002tri/31骨骼/4morph/3material/4image；源工程character/deepseek/rig/2026-10-29-face-blink-r2/鲸鱼娘_修型与独立眨眼.blend。原交付GLB逐字节复用，导入器规范化manifest格式但JSON内容一致，撤下运行时cel应用，后续anime-r1仅作ready历史，不默认采用。每角色独立skeleton/mixer/随机眨眼，场景显示比例.75，源尺寸未改。游走与会话状态独立，在固定通道内停留/转身/行走，目标预留与.75m中心间距，不是任意场景通用寻路。地毯表面站立Y.054m。真实网格通道节点及中间点完整旋转共168姿态通过；旧动态骨骼路线回归仍通过，不声称新四人游走每动画帧网格对网格完备验证。
+
+气泡始终显示完整可访问title/workspace和右侧状态，视觉长标题省略但tooltip/下方列表完整；点击通过公开ctx.uiWorkspace.openSession导航，Office本身不写已读。互相靠近时标签错开并用线指向角色。下方列表独立于WebGL错误。空闲仍有一间空厨房；离线/断连撤下陈旧角色和列表；减少动态停止游走与眨眼，离屏释放。冰箱继续用户恢复的candy-r2、光照stove-refined-shell-r42、厨房布局/相机/暖光参数保持，不重烘动态人物到静态光图。
+
+实际~/.dsh-test内置浏览器完成：223最近会话；5个待关注会话对应4角色/+1，原生running->completionUnread；点击未读气泡正确导航并由原生清已读；Standard-mode ask_user_question待回答入场，点击返回原生问题并完成回答。五条既有隔离QA会话仅执行sleep150/sleep120、无文件操作或子代理，全部已结束。最终刷新无warn/error，1canvas/0alert；列表离屏canvas0，回顶部重建；本地预览1/4人切换通过。最终内置浏览器停留明确标注的四人模拟供用户看效果，真实列表可一键返回，刷新后原生idle列表223条。
+
+完整321tests/0fail/0skip；格式整理后22项核心回归通过，build/typecheck/lint/Prettier/workspace/patches通过。pnpm安装器曾重写无关锁内容，已用捕获副本哈希保护撤销自身副作用；最终锁文件仅新增Office UI Workspace导航依赖3行，其他package不动。全程plugin-only，无DSH源码/生产profile修改，无commit/push/publish。回执sync/receipts/office-session-board-2026-10-31-v1.json，证据sync/evidence/2026-10-31-session-board/。技术验收通过，最终美术认可待用户；其他材质几何优化不冒充完成。
+
+## 蓝白条纹脚垫 · 2026-10-31（技术验收通过）
+
+独立采用kitchen/floor-mat/2026-10-29-r1，原GLB 1427356bytes/hashc4c982fcbe133b70cb3e534bc5a2a66186f0ea3f1b06695289af9b37f035059f，1900tri/1mesh/1primitive/1material/两张1024嵌图。6000tri/4MiB独立上限，冰箱30k/8MiB预算不变。原织物roughness约.70、metallic0、normal.50、coat0与原几何/贴图保持；不替换鲸鱼地毯。最终Three位置[1.4,.0255,-.37]、yaw0、scale1，垫最高面Y.0435m，底面距地板约.5mm；既有家具、站位/路线、相机、暖光及全部既有模型文件不动。
+
+薄垫为可走地面，不添加导航阻挡。kitchenActorGroundY按垫的半宽.675/半深.385加保守鞋底触及范围.35m提供最高面+1mm支撑；现有roaming根高.054m不降低，旧低脚底路径接近垫沿时整体抬高，程序白模另保留12mm起伏余量。这是防穿插支撑，不是逐足IK或精确踩踏形变，垫边有小幅保守提前抬高。真实骨骼角色冰箱往返/停留/转身/中断与四人通道网格回归均通过；当前共享会话UI不恢复历史的单间/找食材按钮，浏览器验证双人/四人游走，旧冰箱动作通过Node实际模型检查。
+
+Blender全场BVH只有双墙41对历史拼角接触，无新增家具穿插。33实例/49primitive按现有r42几何基线和practical-v2灯位重新Cycles64sample CPU烘焙r47、OIDN为2026-10-31-floor-mat-shell-r48；仅三墙地面receiver、2K RGBM8、UV20832bytes与16MiB atlas预算保持。运行时家具仍PBR，新垫增加1900tri/一绘制批/两图及1.36MiB源数据，不宣称无性能成本。
+
+实际build/TypeScript/lint/格式通过；全套330项首跑329通过，唯一失败为旧生产GLB数量28的断言；新增独立脚垫后门禁改为29并断言脚垫仅注册一次，该项单独重跑1pass/0fail。修改仅测试期待，不改产品或放宽JS/贴图预算，未重复四分钟全套。补充接触/runtime14项通过，初轮组件/角色几何92项通过。完整日志保留，不能将首跑描述为330项一次全绿。
+
+真实~/.dsh-test内置浏览器查看新垫/暖光、双击Tag预览四人/双人、离开Office时canvas0、返回重建canvas1、0alert，最终刷新后无warn/error。最终留真实活跃会话页面，空闲0人仍显示完整厨房。回执sync/receipts/kitchen-floor-mat-2026-10-29-r1.json，证据sync/evidence/2026-10-31-floor-mat/。组件原delivery不改，ready指交付阶段，current采用以catalog和本回执为准；最终美术审阅待用户。全程plugin-only，无DSH源码/生产profile修改，无commit/push/publish。

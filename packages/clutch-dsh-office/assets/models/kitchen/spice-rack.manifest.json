@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "assetId": "kitchen/spice-rack",
+  "revision": "2026-10-29-r1",
+  "status": "ready",
+  "file": "spice-rack.glb",
+  "sha256": "3b138a15120aab25aca0206c43228848fed1a08078435a7b9c259951c35fbd6c",
+  "bytes": 2752212,
+  "coordinates": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "origin": "wall-plane-bottom-center"
+  },
+  "geometry": {
+    "triangles": 20313,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "bounds": {
+    "min": [
+      -0.3700000047683716,
+      0,
+      0
+    ],
+    "max": [
+      0.3700000047683716,
+      0.7034568786621094,
+      0.26950603723526
+    ]
+  },
+  "dimensions": {
+    "width": 0.7400000095367432,
+    "height": 0.7034568786621094,
+    "depth": 0.26950603723526
+  },
+  "requiredNodes": [
+    "spice-rack",
+    "spice_rack_mesh",
+    "wall_anchor",
+    "front_anchor",
+    "hang_anchor"
+  ],
+  "anchors": {
+    "wall_anchor": [
+      0,
+      0,
+      0
+    ],
+    "front_anchor": [
+      0,
+      0.3517284393310547,
+      0.2745060324668884
+    ],
+    "hang_anchor": [
+      0,
+      0.7034568786621094,
+      0
+    ]
+  },
+  "budgets": {
+    "triangles": 25000,
+    "bytes": 4194304,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3
+  },
+  "capabilities": {
+    "staticAssembly": true,
+    "semanticHinges": false,
+    "animationClips": false,
+    "rigged": false
+  },
+  "source": {
+    "library": "office",
+    "project": "kitchen/spice-rack/work/2026-10-29-r1/左侧小调味架总成_可编辑工程.blend",
+    "input": "kitchen/spice-rack/source/20261029155104_74696ecf.glb",
+    "inputSha256": "33ee71fb2a0ff49c3cc52429686140f19cb55347c597ec5dc54ba1bb432959ed",
+    "inputBytes": 30565028,
+    "uniformScale": 0.3897941407771758,
+    "sourceDimensions": {
+      "width": 1.8984379768371582,
+      "height": 1.8046882152557373,
+      "depth": 0.6914061009883881
+    },
+    "script": "kitchen/spice-rack/work/2026-10-29-r1/scripts/build.py",
+    "blender": "5.2.3 LTS"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "stage": "2026-10-28-stage2b",
+    "baseColor": "original image patterns; 1024 downsample only, no repaint",
+    "normalScale": 0.35,
+    "clearcoat": 0,
+    "surfaceRegions": {
+      "wood-support": {
+        "pixels": 270708,
+        "roughnessRange": [
+          0.5598823428153992,
+          0.5642745494842529
+        ],
+        "metallic": 0
+      },
+      "bottles-and-ceramic": {
+        "pixels": 348035,
+        "roughnessRange": [
+          0.35333332419395447,
+          0.35960784554481506
+        ],
+        "metallic": 0
+      }
+    },
+    "specular": "invalid source KHR_materials_specular factor [2,2,2] removed"
+  },
+  "references": [
+    {
+      "schemaVersion": 1,
+      "referenceId": "kitchen/main",
+      "revision": "2026-10-27-r1",
+      "scene": "kitchen",
+      "role": "mandatory-primary-scene-reference",
+      "file": "kitchen-reference.png",
+      "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
+      "bytes": 2064993,
+      "width": 1254,
+      "height": 1254,
+      "origin": "User-provided original image, designated 2026-10-27",
+      "scope": [
+        "scene composition",
+        "all kitchen components",
+        "whale-girl character art",
+        "materials and lighting"
+      ],
+      "libraryPath": "kitchen/references/kitchen-reference.png",
+      "pluginPath": "assets/references/kitchen/kitchen-reference.png",
+      "rules": [
+        "Read the actual image before kitchen modeling or visual scene changes.",
+        "Component closeups supplement this image; they do not replace it.",
+        "Current engine whitebox and previous model previews are not the visual target.",
+        "Keep the original bytes; crops/annotations are separate derived references.",
+        "Any designated reference update must synchronize image, manifest, docs and receipt on both sides."
+      ]
+    }
+  ],
+  "validation": {
+    "independentBlenderGlbImport": true,
+    "blenderRender": true,
+    "imagesFullyDecoded": true,
+    "studioExcluded": true,
+    "engineAccepted": false,
+    "report": "../../work/2026-10-29-r1/validation.json",
+    "visualReview": true,
+    "sourceTriangleAreaAudit": {
+      "triangles": 20313,
+      "exactZeroAreaSourceTriangles": 0,
+      "normalizedCrossLengthBelow1e12": 0,
+      "minimumNormalizedCrossLength": 1.415046604203216e-10,
+      "removedTriangles": 0,
+      "interpretation": "Inherited source triangle area, uniform scale applied; no topology repair or decimation."
+    }
+  },
+  "notes": [
+    "Complete original assembly and UV retained, no geometry decimation.",
+    "Three embedded 1024x1024 textures, no external decoder required.",
+    "Original base-color illumination / source reconstruction imperfections remain; not de-lit.",
+    "Rear envelopeZ0 and bottomY0; place with explicit manifest dimensions, do not height-normalize.",
+    "Static decorative assembly; no bowl/bottle interaction or shelf hinges.",
+    "hang_anchor is top-center reference, not a recovered physical screw position.",
+    "Integrator owns layout, collision and heat-zone checks, bake dependency update and actual DSH-test acceptance."
+  ]
+}

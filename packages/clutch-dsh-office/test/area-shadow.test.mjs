@@ -44,7 +44,7 @@ for (const [kind, Material] of [
       assert.equal(shader.fragmentShader.includes('#include <lights_fragment_begin>'), false);
       assert.match(
         shader.fragmentShader,
-        /\(NUM_RECT_AREA_LIGHTS == 3 \|\| NUM_RECT_AREA_LIGHTS == 4\) && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_MAPS == 0/,
+        /\(NUM_RECT_AREA_LIGHTS == 3 \|\| NUM_RECT_AREA_LIGHTS == 4 \|\| NUM_RECT_AREA_LIGHTS == 7\) && NUM_SPOT_LIGHT_SHADOWS == 4 && NUM_SPOT_LIGHTS == 4 && NUM_SPOT_LIGHT_MAPS == 0/,
       );
       const rectStart = shader.fragmentShader.indexOf('rectAreaLight = rectAreaLights[ i ];');
       const mask = shader.fragmentShader.indexOf(
@@ -97,9 +97,9 @@ test('material setup is idempotent and preserves previous hooks, this binding an
   assert.equal(material.version, version + 1);
   assert.equal(material.onBeforeCompile, hook);
   assert.equal(material.customProgramCacheKey, key);
-  assert.equal(material.customProgramCacheKey(), 'first|kitchen-area-shell-front-fill-v5');
+  assert.equal(material.customProgramCacheKey(), 'first|kitchen-area-shell-practicals-v6');
   material.userData.variant = 'second';
-  assert.equal(material.customProgramCacheKey(), 'second|kitchen-area-shell-front-fill-v5');
+  assert.equal(material.customProgramCacheKey(), 'second|kitchen-area-shell-practicals-v6');
   const shader = compile(material);
   assert.equal(shader.uniforms.previous.value, 7);
   assert.equal(calls, 1);
@@ -117,7 +117,7 @@ test('default program key retains original compile-hook identity and other mater
   const originalFirst = first.customProgramCacheKey();
   configureKitchenMaterial(first);
   configureKitchenMaterial(second);
-  assert.equal(first.customProgramCacheKey(), originalFirst + '|kitchen-area-shell-front-fill-v5');
+  assert.equal(first.customProgramCacheKey(), originalFirst + '|kitchen-area-shell-practicals-v6');
   assert.notEqual(first.customProgramCacheKey(), second.customProgramCacheKey());
   for (const material of [
     new T.Material(),
@@ -232,17 +232,49 @@ test('receiver-plane derivatives precede early returns and every Poisson tap adj
   }
 });
 
-test('fourth front softbox remains unshadowed instead of sampling the character-only shadow', () => {
-  const material = new T.MeshStandardMaterial();
-  configureKitchenMaterial(material);
-  const shader = compile(material).fragmentShader;
-  assert.match(shader, /#if UNROLLED_LOOP_INDEX < 3/);
-  const start = shader.lastIndexOf(
-    '#pragma unroll_loop_start',
-    shader.indexOf('rectAreaLight = rectAreaLights[ i ];'),
-  );
-  const end = shader.indexOf('#pragma unroll_loop_end', start) + '#pragma unroll_loop_end'.length;
-  const expanded = unroll(shader.slice(start, end).replaceAll('NUM_RECT_AREA_LIGHTS', '4'));
-  assert.ok(expanded.includes('rectAreaLight = rectAreaLights[ 3 ];'));
-  assert.ok(expanded.includes('#if 3 < 3'));
-});
+for (const [kind, Material] of [
+  ['standard', T.MeshStandardMaterial],
+  ['physical', T.MeshPhysicalMaterial],
+]) {
+  for (const count of [3, 4, 7]) {
+    test(kind + ': ' + count + ' rectangles keep shadow sampler indices safe', () => {
+      const material = new Material();
+      configureKitchenMaterial(material);
+      const shader = compile(material, kind).fragmentShader;
+      assert.match(shader, /#if UNROLLED_LOOP_INDEX < 3/);
+      const start = shader.lastIndexOf(
+        '#pragma unroll_loop_start',
+        shader.indexOf('rectAreaLight = rectAreaLights[ i ];'),
+      );
+      const end =
+        shader.indexOf('#pragma unroll_loop_end', start) + '#pragma unroll_loop_end'.length;
+      const expanded = unroll(
+        shader.slice(start, end).replaceAll('NUM_RECT_AREA_LIGHTS', String(count)),
+      );
+      assert.equal(expanded.includes('[ i ]'), false);
+      assert.equal(expanded.includes('UNROLLED_LOOP_INDEX'), false);
+      for (let i = 0; i < count; i++) {
+        assert.ok(expanded.includes('rectAreaLight = rectAreaLights[ ' + i + ' ];'));
+        assert.ok(expanded.includes('#if ' + i + ' < 3'));
+      }
+      // Resolve only the literal inner guard after Three's real unroller. Full GLSL
+      // compilation remains a browser check; no GPU/compiler dependency is introduced here.
+      const guards = [...expanded.matchAll(/#if (\d+) < 3\s*([\s\S]*?)#endif/g)];
+      assert.equal(guards.length, count);
+      for (const [, index, body] of guards) {
+        assert.ok(body.includes('spotShadowMap[ ' + index + ' ]'));
+      }
+      const active = expanded.replace(/#if (\d+) < 3\s*([\s\S]*?)#endif/g, (_, index, body) =>
+        Number(index) < 3 ? body : '',
+      );
+      for (const name of ['spotShadowMap', 'spotLightShadows', 'vSpotLightCoord']) {
+        const indices = [...active.matchAll(new RegExp(name + '\\[\\s*(\\d+)\\s*\\]', 'g'))].map(
+          (match) => Number(match[1]),
+        );
+        assert.deepEqual([...new Set(indices)], [0, 1, 2]);
+      }
+      assert.equal((active.match(/rectAreaLight.color \*=/g) ?? []).length, 3);
+      assert.equal((active.match(/RE_Direct_RectArea\( rectAreaLight,/g) ?? []).length, count);
+    });
+  }
+}

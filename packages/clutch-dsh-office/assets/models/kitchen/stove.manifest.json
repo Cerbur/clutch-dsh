@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "assetId": "kitchen/stove",
-  "revision": "2026-10-28-candy-r1",
+  "revision": "2026-10-29-refined-r1",
   "status": "ready",
   "file": "stove.glb",
-  "sha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de",
-  "bytes": 2581324,
+  "sha256": "0f7756d88da214ff51f5a4e4601bfe1dcb928c97c59b34e8610b70580347e1a2",
+  "bytes": 777032,
   "coordinates": {
     "unit": "meter",
     "up": "+Y",
@@ -13,32 +13,34 @@
     "origin": "floor-center"
   },
   "geometry": {
-    "triangles": 12655,
-    "meshes": 2,
-    "primitives": 2,
-    "materials": 2,
+    "triangles": 31532,
+    "meshes": 3,
+    "primitives": 3,
+    "materials": 3,
     "images": 3
   },
   "bounds": {
     "min": [
-      -1.63319993019104,
+      -1.6330000162124634,
       0,
-      -0.497812956571579
+      -0.4998129606246948
     ],
     "max": [
       1.704795002937317,
-      1.2154955863952637,
-      0.5537775158882141
+      1.1505540609359741,
+      0.5730000436306
     ]
   },
   "dimensions": {
-    "width": 3.337994933128357,
-    "height": 1.2154955863952637,
-    "depth": 1.051590472459793
+    "width": 3.3377950191497803,
+    "height": 1.1505540609359741,
+    "depth": 1.0728130042552948
   },
   "requiredNodes": [
     "灶台总成",
     "灶台静态总成",
+    "烤箱烟色玻璃",
+    "转角接缝台面",
     "work_surface",
     "cook_anchor",
     "burner_left",
@@ -46,8 +48,7 @@
     "front_anchor",
     "join_right",
     "counter_back_left",
-    "counter_front_left",
-    "转角接缝台面"
+    "counter_front_left"
   ],
   "anchors": {
     "work_surface": [
@@ -94,8 +95,10 @@
   "budgets": {
     "triangles": 40000,
     "bytes": 4194304,
-    "materials": 2,
-    "primitives": 2
+    "materials": 3,
+    "primitives": 3,
+    "meshes": 3,
+    "images": 3
   },
   "countertop": {
     "height": 0.8915539979934692,
@@ -166,15 +169,19 @@
   },
   "source": {
     "library": "office",
-    "project": "kitchen/stove/lookdev/2026-10-28-candy-r1/糖果分区材质.blend",
-    "input": "/Users/yuancheng/.dsh/clutch-dsh-worktree/worktree/wt_29c81af66e9e/packages/clutch-dsh-office/assets/models/kitchen/stove.glb",
-    "inputSha256": "d42eb667911d1e850ca547c497ea6de9b93511418006ac03366277e88305f769",
-    "parentRevision": "2026-10-28-r6",
+    "project": "kitchen/stove/work/2026-10-29-refined-r1/灶台_规整柜体双炉头.blend",
+    "parentRevision": "2026-10-28-candy-r1",
+    "parentSha256": "b97069a377a6e1246b587158c45a32ed4a3faa770807afde11ac4c842ec004de",
+    "parentFile": "kitchen/stove/work/2026-10-29-refined-r1/parent-stove.glb",
+    "script": "kitchen/stove/work/2026-10-29-refined-r1/scripts/build.py",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/stove/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
-    ],
-    "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/stove build|review|finalize 2026-10-28-candy-r1"
+    "construction": "reference-driven parametric geometry, independently reimported; measured existing sink-joint cap retained"
+  },
+  "style": {
+    "id": "office-soft-toy-v1",
+    "revision": "2026-10-29-refined-r1",
+    "parentRevision": "2026-10-28-candy-r1",
+    "changes": "New real beveled shapes and weighted normals. Unlit palette atlas assigns blue/cream/iron/steel/gold/bottle regions separate PBR response; glass isolated from opaque assembly."
   },
   "capabilities": {
     "staticAssembly": true,
@@ -191,52 +198,43 @@
       "sha256": "a9fd9e7a5a539b31efa70471d774fd70091ce9ea97ed8e6eabaacabf0d5411cb",
       "file": "kitchen/references/kitchen-reference.png",
       "role": "mandatory-primary-scene-reference"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-1.png",
+      "sha256": "b1b8e6583d75bc86b98e5038316f9e6f4f6f9d45922f283f9a4db60b17b6f45d",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-2.png",
+      "sha256": "90df380481fbef2a9308c52332d677744cf74df8153a1786629574f7a771f4a6",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-3.png",
+      "sha256": "fcbbf0fd9877eaeafcc5f9f556d4850d61a3f40b53e50811be9cdf006353923f",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
+    },
+    {
+      "file": "kitchen/stove/work/2026-10-29-refined-r1/references/user-stove-4.png",
+      "sha256": "897a279f65d16243baaf47772747d78a037e9f827fd36887076d7d396fc1da2b",
+      "role": "user designated stove shape and finish reference, 2026-10-29"
     }
   ],
   "validation": {
     "independentBlenderGlbImport": true,
     "blenderRender": true,
-    "embeddedTextures": true,
-    "requiredNodes": true,
-    "studioExcluded": true,
-    "allGeometryAccessorsByteIdentical": true,
-    "nodesTransformsPivotsUnchanged": true,
-    "baseColorImageBytesUnchanged": true,
-    "imagePixelDecode": true,
-    "triangleBudget": true,
-    "byteBudget": true,
+    "degenerateTriangles": 0,
+    "badNormals": 0,
     "engineAccepted": false,
-    "fixedComparisonLightsCamera": true,
-    "report": "validation.json"
+    "report": "../../work/2026-10-29-refined-r1/validation.json"
   },
   "notes": [
-    "Material-only child of exact current adopted GLB; immutable parent snapshot in lookdev.",
-    "All geometry/accessor/COLOR/UV/node/pivot/anchor bytes preserved; original baseColor and emissive images preserved.",
-    "No new material/image/texture/primitive batches or required extensions; wood/cloth/skin/eyes/metal protected according to component masks.",
-    "Static capabilities and source reconstruction/painted-lighting limitations inherited; no rig, bevel or geometry edits.",
-    "Ready only; integration/lighting rebake and user visual acceptance are parent-agent responsibilities."
-  ],
-  "style": {
-    "id": "office-soft-toy-v1",
-    "revision": "2026-10-28-candy-r1",
-    "parentRevision": "2026-10-28-r6",
-    "parentSha256": "d42eb667911d1e850ca547c497ea6de9b93511418006ac03366277e88305f769",
-    "changes": {
-      "painted-blue-cabinet": {
-        "pixelsBaseResolution": 73671,
-        "pixelsMR": 73671,
-        "roughnessTarget": 0.32,
-        "roughnessRangeAfter": 0.28627450980392155,
-        "normalTangentXYMultiplier": 0.55,
-        "clearcoatFactor": 0.12
-      },
-      "thin-enamel-cap": {
-        "roughnessBefore": 0.46000000834465027,
-        "roughnessAfter": 0.32,
-        "coat": 0.12,
-        "allCapGeometryByteIdentical": true
-      }
-    },
-    "record": "../../lookdev/2026-10-28-candy-r1/change-record.json"
-  }
+    "Geometry revision, not a material-only child. Old snapshots retained.",
+    "Metric enlarged counter length/depth, stove root placement and all existing installation anchors preserved.",
+    "Burner anchors retain workplane installation coordinates; they are not grate top or character hand-contact points.",
+    "Both cabinets have equal .777m door/drawer widths, mirrored .1.164m centers, consistent reveals and no side-face handle.",
+    "Separate static smoked-glass pane and modeled oven racks; no opening, interior interaction, flames or cookware.",
+    "Reference micro stone grain is omitted at runtime; no baked studio shadows or reconstructed texture dents.",
+    "Source edit parts are hidden in .blend; runtime main is one opaque atlas batch plus glass and measured cap."
+  ]
 }

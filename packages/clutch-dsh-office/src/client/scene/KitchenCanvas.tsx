@@ -3,28 +3,48 @@ import type { Actor, Office } from '../../office/types.js';
 import type { Copy } from '../locales.js';
 import { createKitchenRuntime, type SceneRuntime } from './runtime.js';
 
-function Bubble({ actor, t }: { actor: Actor; t: Copy }) {
-  const [show, setShow] = useState(true);
-  useEffect(() => {
-    setShow(true);
-    if (actor.activity === 'waiting') return;
-    const timer = setTimeout(() => setShow(false), 5500);
-    return () => clearTimeout(timer);
-  }, [actor.activity]);
+function Bubble({
+  actor,
+  t,
+  onOpenSession,
+}: {
+  actor: Actor;
+  t: Copy;
+  onOpenSession?: (id: string) => void;
+}) {
+  const state =
+    actor.status ??
+    (actor.activity === 'waiting' ? 'question' : actor.activity === 'working' ? 'running' : 'idle');
   return (
-    <div
+    <button
+      type="button"
       data-seat={actor.seat}
-      data-waiting={actor.activity === 'waiting'}
+      data-state={state}
       className="co-bubble"
-      style={{ visibility: show ? 'visible' : 'hidden' }}
-      aria-hidden="true"
+      disabled={!onOpenSession}
+      onClick={() => onOpenSession?.(actor.id)}
+      title={`${actor.label} · ${actor.workspaceTitle ?? ''} · ${t(state === 'idle' ? 'sessionIdle' : state)}`}
     >
-      {t(actor.activity)}
-    </div>
+      <span className="co-bubble-identity">
+        <strong>{actor.label}</strong>
+        <small>{actor.workspaceTitle}</small>
+      </span>
+      <span className="co-state" data-state={state}>
+        {t(state === 'idle' ? 'sessionIdle' : state)}
+      </span>
+    </button>
   );
 }
 
-export function KitchenCanvas({ office, t }: { office: Office; t: Copy }) {
+export function KitchenCanvas({
+  office,
+  t,
+  onOpenSession,
+}: {
+  office: Office;
+  t: Copy;
+  onOpenSession?: (id: string) => void;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const runtime = useRef<SceneRuntime>();
   const latestActors = useRef(office.actors);
@@ -68,7 +88,7 @@ export function KitchenCanvas({ office, t }: { office: Office; t: Copy }) {
   return (
     <div className="co-canvas" ref={container} aria-label={office.title}>
       {office.actors.map((actor) => (
-        <Bubble key={actor.id} actor={actor} t={t} />
+        <Bubble key={actor.id} actor={actor} t={t} onOpenSession={onOpenSession} />
       ))}
       {failure && (
         <div className="co-scene-error" role="alert">

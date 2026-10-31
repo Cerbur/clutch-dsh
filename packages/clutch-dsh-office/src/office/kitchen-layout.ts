@@ -16,22 +16,30 @@ export const KITCHEN_PLACEMENT = {
   'storage-cabinet': [-1.715, 0.024499213707168, 2.6368660533428194],
   'sink-cabinet': [-0.75, 0.024960769226163, -1.4],
   'pendant-light': [1.95, KITCHEN_ROOM.wallHeight - 2.9, -1.48],
-  'utensil-rail': [-2.313, 2.03, 2.45],
-  'wall-cabinet': [-2.113, 1.86, -0.7],
+  'utensil-rail': [-2.307, 1.63, -0.36],
+  'wall-cabinet': [-2.113, 1.86, -0.84],
   'range-hood': [-2.013, 0, 0.6362635881443585],
-  'wall-shelf': [-0.1, 0.15, -1.813],
+  'wall-shelf': [-0.3, 0.15, -1.813],
   'wall-art': [0.9, 2.79, -1.813],
   window: [-1.78, 1.8800518369674686, -1.808],
   'chair-left': [0.95, 0.025, TABLE_CENTER_Z + 0.88],
   'chair-right': [1.98, 0.025, TABLE_CENTER_Z + 0.88],
   rug: [-0.3798896241188049, 0.0255, 2.42],
+  'floor-mat': [1.4, 0.0255, -0.37],
   'trash-can': [2.23, 0.025, -1.18],
-  'whale-mitt': [-2.307, 2.14, 2.83],
+  'whale-mitt': [-2.307, 1.43, 1.75],
   'wall-clock': [-2.307, 2.94, 2.62],
-  'board-cloth': [2.26, 2.13, -1.807],
-  'wall-calendar': [-1.35, 2.72, -1.807],
-  'wall-plant-left': [-2.302, 2.18, 2.49],
-  'wall-plant-right': [2.26, 1.65, -1.802],
+  'board-cloth': [-2.307, 1.12, -0.95],
+  'wall-calendar': [2.26, 1.08, -1.807],
+  'wall-plant-left': [-2.302, 2.18, 1.67],
+  'wall-plant-right': [2.26, 2.15, -1.802],
+  'wall-plant-window-left': [-2.12, 1.4, -1.802],
+  'wall-plant-window-middle': [-1.78, 1.4, -1.802],
+  'wall-plant-window-right': [-1.44, 1.4, -1.802],
+  'spice-rack': [-2.307, 2.06, 2.45],
+  'open-cubby': [-2.307, 1.86, -0.18],
+  'black-utensil-rail': [-2.307, 1.35, 2.45],
+  'wall-storage-box': [2.26, 1.65, -1.807],
 } as const;
 
 /** User-requested fit to the rear counter run, preserving the authored counter height. */
@@ -40,6 +48,11 @@ export const KITCHEN_SCALE: Partial<
 > = {
   'sink-cabinet': [1.8667534820395086, 1, 1.2303512683915283],
   'range-hood': [1.508635348167209, 1, 1],
+  'board-cloth': [1.2, 1.2, 1.2],
+  'utensil-rail': [0.45, 0.45, 0.45],
+  'wall-plant-window-left': [0.85, 0.85, 0.85],
+  'wall-plant-window-middle': [0.85, 0.85, 0.85],
+  'wall-plant-window-right': [0.85, 0.85, 0.85],
 };
 
 export const KITCHEN_ROTATION = {
@@ -49,6 +62,10 @@ export const KITCHEN_ROTATION = {
   'wall-cabinet': Math.PI / 2,
   'range-hood': Math.PI / 2,
   'whale-mitt': Math.PI / 2,
+  'board-cloth': Math.PI / 2,
+  'spice-rack': Math.PI / 2,
+  'open-cubby': Math.PI / 2,
+  'black-utensil-rail': Math.PI / 2,
   'wall-clock': Math.PI / 2,
   'wall-plant-left': Math.PI / 2,
 } as const;
@@ -56,13 +73,19 @@ export const KITCHEN_ROTATION = {
 /** One parsed resource per group, with instance transforms owned by the scene. */
 export const KITCHEN_INSTANCE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   chairs: ['chair-left', 'chair-right'],
-  'wall-plants': ['wall-plant-left', 'wall-plant-right'],
+  'wall-plants': [
+    'wall-plant-left',
+    'wall-plant-right',
+    'wall-plant-window-left',
+    'wall-plant-window-middle',
+    'wall-plant-window-right',
+  ],
 };
 
 /** Stable delivery identity for repeated scene instances, shared by export and import. */
 export function kitchenAssetName(id: string): string {
   if (id === 'chair-left' || id === 'chair-right') return 'chair';
-  if (id === 'wall-plant-left' || id === 'wall-plant-right') return 'wall-plant';
+  if (KITCHEN_INSTANCE_GROUPS['wall-plants'].includes(id)) return 'wall-plant';
   return id;
 }
 
@@ -101,4 +124,16 @@ export function kitchenFacing(station: Station, seat: 0 | 1 = 0): number {
 export function turnToward(current: number, target: number, maxStep: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + Math.sign(delta) * Math.min(Math.abs(delta), maxStep);
+}
+
+/** Conservative sole footprint support; a thin mat is walkable, never a route obstacle.
+ * The existing higher roaming/rug support is preserved. No skeletal IK is claimed.
+ */
+export function kitchenActorGroundY(position: Position, baseY: number, bobAllowance = 0): number {
+  const mat = KITCHEN_PLACEMENT['floor-mat'];
+  const soleReach = 0.35;
+  const onMat =
+    Math.abs(position[0] - mat[0]) <= 0.675 + soleReach &&
+    Math.abs(position[1] - mat[2]) <= 0.385 + soleReach;
+  return onMat ? Math.max(baseY, mat[1] + 0.018 + 0.001 + bobAllowance) : baseY;
 }
