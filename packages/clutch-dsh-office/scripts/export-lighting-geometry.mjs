@@ -6,6 +6,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { runtimeModelPath } from './runtime-models.mjs';
 import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,
@@ -81,10 +83,12 @@ export function geometrySignature(geometry) {
 
 export async function exportInstanceGeometry(id, assetId, bytes, rootMatrix) {
   const stripped = geometryOnlyGlb(bytes);
-  const { scene, parser } = await new GLTFLoader().parseAsync(
-    stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
-    '',
-  );
+  const { scene, parser } = await new GLTFLoader()
+    .setMeshoptDecoder(MeshoptDecoder)
+    .parseAsync(
+      stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
+      '',
+    );
   const meshes = [];
   const geometries = new Set();
   const materials = new Set();
@@ -147,7 +151,10 @@ export async function exportLightingGeometry(output = '/tmp/office-bake/geometry
   for (const [id, position] of Object.entries(KITCHEN_PLACEMENT)) {
     const name = kitchenAssetName(id);
     if (!bytesByAsset.has(name))
-      bytesByAsset.set(name, await readFile(join(assetRoot, name + '.glb')));
+      bytesByAsset.set(
+        name,
+        await readFile(await runtimeModelPath(join(assetRoot, name + '.glb'))),
+      );
     const matrix = new Matrix4().compose(
       new Vector3(...position),
       new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), KITCHEN_ROTATION[id] ?? 0),

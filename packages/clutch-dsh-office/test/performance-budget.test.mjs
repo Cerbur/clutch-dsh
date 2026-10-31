@@ -16,7 +16,16 @@ test('production Client keeps binaries out of JS and the baked shell within its 
     await readFile(new URL('../lib/asset-index.json', import.meta.url), 'utf8'),
   );
   assert.equal(index.assets.filter((a) => a.assetId.endsWith('.glb')).length, 29);
-  assert.equal(index.assets.filter((a) => a.assetId === 'models/kitchen/floor-mat.glb').length, 1);
+  assert.equal(
+    index.assets.filter((a) => a.assetId === 'models/kitchen/optimized/floor-mat.glb').length,
+    1,
+  );
+  assert.ok(
+    index.assets
+      .filter((a) => a.assetId.startsWith('models/kitchen/'))
+      .every((a) => a.assetId.startsWith('models/kitchen/optimized/')),
+    'Only the selected quality is downloaded',
+  );
   const script = await readFile(client, 'utf8');
   for (const asset of index.assets) {
     assert.ok(

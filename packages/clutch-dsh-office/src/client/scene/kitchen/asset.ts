@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Models } from '../models.js';
 import { applyKitchenBake, rejectKitchenBake } from '../baked-lighting.js';
 import { loadAssetBytes, withAssetSlot, type AssetBytes } from '../asset-bytes.js';
@@ -38,7 +39,9 @@ export function bundledAsset(
     void withAssetSlot(signal, async () => {
       const bytes = await loadAssetBytes(asset, signal);
       signal.throwIfAborted();
-      const { scene, animations = [] } = await new GLTFLoader().parseAsync(bytes, '');
+      const { scene, animations = [] } = await new GLTFLoader()
+        .setMeshoptDecoder(MeshoptDecoder)
+        .parseAsync(bytes, '');
       try {
         await limitObjectTextures(scene, { disposed: () => models.disposed });
       } catch (error) {

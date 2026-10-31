@@ -1,5 +1,23 @@
 # Blender asset handoff
 
+## Runtime derivative layer · 2026-10-31
+
+The adopted source GLBs and their frozen delivery manifests remain intact. Builds
+now select reviewed medium derivatives through `assets/models/kitchen/optimized/manifest.json`.
+The build/export/import resolver checks original and derivative hashes; only the
+selected binaries enter `lib/asset-index.json`. npm excludes the unused source
+kitchen GLBs while retaining them in the checkout and Blender library. This layer
+does not replace source-delivery identities or restore the rejected fridge.
+
+The runtime supports required `EXT_meshopt_compression` with Three's bundled
+decoder. Uncompressed bake inputs and high/medium/low candidates live under each
+component's `work/2026-10-31-meshopt-soft-r3/`; this explicit runtime exception
+does not require Blender to support compressed GLBs. See
+[model optimization](MODEL-OPTIMIZATION.md) for generation, provenance and limits.
+Lighting export/import resolves the same selected bytes and keeps the full
+source/layout/geometry gate. The final dependency bake is r56, not a re-labelled
+historical atlas. Local preview verification is distinct from profile installation.
+
 Current user-approved room-shell override: width/depth are 5 m and height is 3.5 m.
 Both walls retain a5m interior side and3.5m height, scale1; their rounded miter
 envelopes are about5.09145m wide and.285174m thick. Plain matte cream replaces tile textures. The historical
@@ -38,36 +56,36 @@ pnpm --filter @cerbur/clutch-dsh-office test
 
 The importer explicitly supports these IDs and their matching runtime filenames:
 
-| Asset ID                     | Runtime file             | Triangles | Bytes | Additional contract                                                  |
-| ---------------------------- | ------------------------ | --------: | ----: | -------------------------------------------------------------------- |
-| `kitchen/refrigerator`       | `refrigerator.glb`       |    30,000 | 8 MiB | Independent upper/lower door pivots                                  |
-| `kitchen/table`              | `table.glb`              |    60,000 | 8 MiB | One material; table/table_mesh/work_surface/prep_anchor              |
-| `kitchen/storage-cabinet`    | `storage-cabinet.glb`    |    30,000 | 8 MiB | Four static batches and four wheel pivots                            |
-| `kitchen/left-wall`          | `left-wall.glb`          |    10,000 | 1 MiB | Window-free static wall hierarchy                                    |
-| `kitchen/right-wall`         | `right-wall.glb`         |    10,000 | 1 MiB | Wall surface only; scene-owned shelf props stay separate             |
-| `kitchen/wall-shelf`         | `wall-shelf.glb`         |    55,000 | 8 MiB | Installed height authored; rear-envelope ground projection           |
-| `kitchen/whale-mitt`         | `whale-mitt.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
-| `kitchen/wall-clock`         | `wall-clock.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
-| `kitchen/board-cloth`        | `board-cloth.glb`        |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
-| `kitchen/wall-plant`         | `wall-plant.glb`         |    12,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
-| `kitchen/wall-calendar`      | `wall-calendar.glb`      |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center         |
-| `kitchen/spice-rack`         | `spice-rack.glb`         |    25,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
-| `kitchen/open-cubby`         | `open-cubby.glb`         |    10,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
-| `kitchen/black-utensil-rail` | `black-utensil-rail.glb` |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
-| `kitchen/wall-storage-box`   | `wall-storage-box.glb`   |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center      |
-| `kitchen/window`             | `window.glb`             |    30,000 | 4 MiB | Opaque static decoration, rear-wall-bottom-center, one mesh/material |
-| `kitchen/wall-art`           | `wall-art.glb`           |    16,000 | 2 MiB | Wall-plane-center origin, installation height scene-owned            |
-| `kitchen/chair`              | `chair.glb`              |    20,000 | 4 MiB | One asset, two shared-resource instances, floor-center               |
-| `kitchen/floor-mat` | `floor-mat.glb` | 6,000 | 4 MiB | Independent walkable textile, floor-center, one mesh/material, two images |
-| `kitchen/rug`                | `rug.glb`                |     6,000 | 4 MiB | Walkable surface decoration, floor-center                            |
-| `kitchen/trash-can`          | `trash-can.glb`          |    20,000 | 2 MiB | Three materials/six primitives, independent lid/pedal X pivots       |
-| `kitchen/pendant-light`      | `pendant-light.glb`      |    20,000 | 4 MiB | Hanging hierarchy and light_anchor                                   |
-| `kitchen/sink-cabinet`       | `sink-cabinet.glb`       |    40,000 | 8 MiB | Three Y-axis doors and one +Z drawer                                 |
-| `kitchen/utensil-rail`       | `utensil-rail.glb`       |    20,000 | 1 MiB | Wall-plane origin at rail axis                                       |
-| `kitchen/stove`              | `stove.glb`              |    40,000 | 4 MiB | Five materials, 20 primitives, closed doors, COLOR_0                 |
-| `kitchen/wall-cabinet`       | `wall-cabinet.glb`       |    10,000 | 2 MiB | Cabinet-bottom origin, three materials, ten primitives               |
-| `kitchen/range-hood`         | `range-hood.glb`         |    20,000 | 2 MiB | Installed height modeled, seven materials, 20 primitives             |
-| `character/deepseek`         | `deepseek.glb`           |    60,000 | 8 MiB | One material; static, feet-ground-center, no rig                     |
+| Asset ID                     | Runtime file             | Triangles | Bytes | Additional contract                                                       |
+| ---------------------------- | ------------------------ | --------: | ----: | ------------------------------------------------------------------------- |
+| `kitchen/refrigerator`       | `refrigerator.glb`       |    30,000 | 8 MiB | Independent upper/lower door pivots                                       |
+| `kitchen/table`              | `table.glb`              |    60,000 | 8 MiB | One material; table/table_mesh/work_surface/prep_anchor                   |
+| `kitchen/storage-cabinet`    | `storage-cabinet.glb`    |    30,000 | 8 MiB | Four static batches and four wheel pivots                                 |
+| `kitchen/left-wall`          | `left-wall.glb`          |    10,000 | 1 MiB | Window-free static wall hierarchy                                         |
+| `kitchen/right-wall`         | `right-wall.glb`         |    10,000 | 1 MiB | Wall surface only; scene-owned shelf props stay separate                  |
+| `kitchen/wall-shelf`         | `wall-shelf.glb`         |    55,000 | 8 MiB | Installed height authored; rear-envelope ground projection                |
+| `kitchen/whale-mitt`         | `whale-mitt.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center              |
+| `kitchen/wall-clock`         | `wall-clock.glb`         |    10,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center              |
+| `kitchen/board-cloth`        | `board-cloth.glb`        |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center              |
+| `kitchen/wall-plant`         | `wall-plant.glb`         |    12,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center              |
+| `kitchen/wall-calendar`      | `wall-calendar.glb`      |    15,000 | 3 MiB | One static mesh/material, 3 images; wall-plane-bottom-center              |
+| `kitchen/spice-rack`         | `spice-rack.glb`         |    25,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center           |
+| `kitchen/open-cubby`         | `open-cubby.glb`         |    10,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center           |
+| `kitchen/black-utensil-rail` | `black-utensil-rail.glb` |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center           |
+| `kitchen/wall-storage-box`   | `wall-storage-box.glb`   |    15,000 | 4 MiB | One static mesh/material,3 images1024; wall-plane-bottom-center           |
+| `kitchen/window`             | `window.glb`             |    30,000 | 4 MiB | Opaque static decoration, rear-wall-bottom-center, one mesh/material      |
+| `kitchen/wall-art`           | `wall-art.glb`           |    16,000 | 2 MiB | Wall-plane-center origin, installation height scene-owned                 |
+| `kitchen/chair`              | `chair.glb`              |    20,000 | 4 MiB | One asset, two shared-resource instances, floor-center                    |
+| `kitchen/floor-mat`          | `floor-mat.glb`          |     6,000 | 4 MiB | Independent walkable textile, floor-center, one mesh/material, two images |
+| `kitchen/rug`                | `rug.glb`                |     6,000 | 4 MiB | Walkable surface decoration, floor-center                                 |
+| `kitchen/trash-can`          | `trash-can.glb`          |    20,000 | 2 MiB | Three materials/six primitives, independent lid/pedal X pivots            |
+| `kitchen/pendant-light`      | `pendant-light.glb`      |    20,000 | 4 MiB | Hanging hierarchy and light_anchor                                        |
+| `kitchen/sink-cabinet`       | `sink-cabinet.glb`       |    40,000 | 8 MiB | Three Y-axis doors and one +Z drawer                                      |
+| `kitchen/utensil-rail`       | `utensil-rail.glb`       |    20,000 | 1 MiB | Wall-plane origin at rail axis                                            |
+| `kitchen/stove`              | `stove.glb`              |    40,000 | 4 MiB | Five materials, 20 primitives, closed doors, COLOR_0                      |
+| `kitchen/wall-cabinet`       | `wall-cabinet.glb`       |    10,000 | 2 MiB | Cabinet-bottom origin, three materials, ten primitives                    |
+| `kitchen/range-hood`         | `range-hood.glb`         |    20,000 | 2 MiB | Installed height modeled, seven materials, 20 primitives                  |
+| `character/deepseek`         | `deepseek.glb`           |    60,000 | 8 MiB | One material; static, feet-ground-center, no rig                          |
 
 Floor additionally uses `floor.glb`, a5,000-triangle/6MiB/two-material ceiling and
 `floor-surface-center` origin. Its52-triangle rounded ceramic insert carries the retained true baked tangent

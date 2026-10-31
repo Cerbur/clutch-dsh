@@ -34,14 +34,21 @@ client. The plugin uses public DSH services; no Harness source changes are neede
 
 ## Features
 
-| Feature                       | Preview                                                                                                                                                       | Behavior                                                                                                                                                                                                                                                |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One shared kitchen            | <img src="assets/screenshots/office-session-board.jpg" width="600" alt="Kitchen Chaos header and four simulated Session characters in labeled local preview"> | A full-width scene replaces per-workspace kitchens. The top-right count includes all Sessions needing attention; at most four characters roam in the kitchen. Overflow remains in the active list.                                                      |
-| Persistent Session bubbles    | Same view above                                                                                                                                               | Every character has a persistent title, workspace and status bubble. Click it to open that native Session. Long titles remain available in the tooltip and complete list.                                                                               |
-| Active Session list           | <img src="assets/screenshots/office-session-list.jpg" width="600" alt="Labeled local preview: four active Session states, with no idle rows">                 | Newest updates first, with title and workspace. Running rows show a spinning indicator and elapsed time; unread completions show completion time. Pending interactions retain their status. The list is not limited to four and excludes idle Sessions. |
-| Whale-girl models and preview | Same kitchen above                                                                                                                                            | Uses the `2026-10-29-face-blink-r2` asset with independent skeletal walking and automatic blinking. A clearly labeled local preview shows one to four simulated characters without changing real Sessions.                                              |
+| Feature                       | Preview                                                                                                                                                           | Behavior                                                                                                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One shared kitchen            | <img src="assets/screenshots/office-session-board.jpg" width="600" alt="Kitchen Chaos header and four simulated Session characters in labeled local preview">     | A full-width scene replaces per-workspace kitchens. The top-right count includes all Sessions needing attention; at most four characters roam in the kitchen. Overflow remains in the active list.                                                      |
+| Persistent Session bubbles    | Same view above                                                                                                                                                   | Every character has a persistent title, workspace and status bubble. Click it to open that native Session. Long titles remain available in the tooltip and complete list.                                                                               |
+| Active Session list           | <img src="assets/screenshots/office-session-list.jpg" width="600" alt="Labeled local preview: four active Session states, with no idle rows">                     | Newest updates first, with title and workspace. Running rows show a spinning indicator and elapsed time; unread completions show completion time. Pending interactions retain their status. The list is not limited to four and excludes idle Sessions. |
+| Whale-girl models and preview | <img src="assets/screenshots/office-character-soft-fill.jpg" width="600" alt="Local preview: four simulated whale girls with softer, brighter character shading"> | Uses the `2026-10-29-face-blink-r2` asset with independent skeletal walking and automatic blinking. A clearly labeled local preview shows one to four simulated characters without changing real Sessions.                                              |
 
-Both screenshots use the labeled local preview; their four entries are simulated.
+The Session and character screenshots use the labeled local preview; their four entries are simulated.
+
+| Kitchen rendering                    | Preview                                                                                                                                                                                  | Behavior                                                                                                                                                                       |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Softer surfaces and lighter geometry | <img src="assets/screenshots/office-optimized-kitchen.jpg" width="600" alt="Optimized empty kitchen with restrained window light, coated range hood and continuous wooden platform rim"> | Uses reviewed medium geometry with Meshopt decoding. The window keeps a gentle warm pane glow, the hood uses a soft coated finish, and the wooden rim avoids baked seam lines. |
+
+Whale girls use a soft character-only fill to keep their faces, blue hair and clothing
+readable in shadow while retaining the kitchen's warm lighting.
 
 ## Usage
 
@@ -82,10 +89,14 @@ physical cooking, grabbing or opening the refrigerator.
   offscreen canvases release GPU resources and rebuild when visible.
 - WebGL 2 is required. Shader or context failures show an explicit reload action.
 - The accepted Blender kitchen and warm lighting remain in place, including the independent blue-and-cream floor mat in front of the refrigerator; the whale rug stays in place. The rejected fridge
-  refinement is not used. Source projects live in the Blender library; runtime GLBs
-  are immutable imports. See [asset handoff](docs/BLENDER-ASSETS.md).
+  refinement is not used. Source projects and original imports are retained; builds select
+  separately reviewed medium derivatives without loading all quality levels. Character
+  skinning, morphs and animation are unchanged. See [asset handoff](docs/BLENDER-ASSETS.md).
 
 ## Development
+
+Reproducible high/medium/low generation, the local model comparison tool and measured
+geometry limits are documented in [model optimization](docs/MODEL-OPTIMIZATION.md).
 
 ```bash
 pnpm --filter @cerbur/clutch-dsh-office typecheck

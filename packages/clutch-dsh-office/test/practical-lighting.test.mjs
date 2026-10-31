@@ -53,6 +53,8 @@ test('window pane emission composes with PBR/area-shadow hooks, retaining source
   assert.equal(shader.uniforms.priorHook.value, 1);
   assert.match(shader.vertexShader, /vOfficeWindowPosition = position/);
   assert.match(shader.fragmentShader, /totalEmissiveRadiance \+= officePane/);
+  assert.match(shader.fragmentShader, /normalize\(vOfficeWindowNormal\)\.z/);
+  assert.match(shader.fragmentShader, /step\(0\.090000, vOfficeWindowPosition\.z\)/);
   assert.match(shader.fragmentShader, /kitchenAreaVisibility/);
   assert.match(shader.fragmentShader, /#include <emissivemap_fragment>/);
   assert.equal(mesh.geometry, geometry);
@@ -81,7 +83,11 @@ test('all four real window panes emit while raised timber frame faces stay outsi
   scene.updateMatrixWorld(true);
   const g = KITCHEN_PRACTICALS.windowGlow;
   const emitting = (p) =>
-    Math.abs(p.x) <= g.halfWidth && p.y >= g.minHeight && p.y <= g.maxHeight && p.z <= g.maxDepth;
+    Math.abs(p.x) <= g.halfWidth &&
+    p.y >= g.minHeight &&
+    p.y <= g.maxHeight &&
+    p.z >= g.minDepth &&
+    p.z <= g.maxDepth;
   const hit = (x, y) =>
     new T.Raycaster(new T.Vector3(x, y, 2), new T.Vector3(0, 0, -1)).intersectObject(scene, true)[0]
       .point;
@@ -99,6 +105,16 @@ test('all four real window panes emit while raised timber frame faces stay outsi
     [-0.22, 0.68],
   ])
     assert.equal(emitting(hit(x, y)), false, `wood at ${x},${y}`);
+  const back = new T.Raycaster(
+    new T.Vector3(-0.22, 0.55, -1),
+    new T.Vector3(0, 0, 1),
+  ).intersectObject(scene, true)[0];
+  assert.ok(back, 'actual window rear surface exists');
+  assert.equal(
+    emitting(back.point),
+    false,
+    'rear timber must not emit through the pane depth mask',
+  );
   scene.traverse((o) => {
     if (o.isMesh) {
       o.geometry.dispose();
