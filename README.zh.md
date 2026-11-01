@@ -54,7 +54,7 @@ pnpm dsh web
 | [`@cerbur/clutch-dsh-fireworks`](packages/clutch-dsh-fireworks/README.zh.md) | <img src="packages/clutch-dsh-fireworks/assets/screenshots/screenshots-zh.png" width="240" alt="DSH Web UI 中的礼花覆盖层">      | 增加 `happy_fireworks` 工具，在重要里程碑完成时显示短暂的庆祝覆盖层。                                         |
 | [`@cerbur/clutch-dsh-discuss`](packages/clutch-dsh-discuss/README.zh.md)     | <img src="packages/clutch-dsh-discuss/assets/screenshots/discuss-mvp.svg" width="240" alt="Discuss brainstorming 流程">          | 增加 `/discuss [topic]`，作为 bundled brainstorming workflow 和 review 后 design doc 的入口。                 |
 | [`@cerbur/clutch-dsh-title`](packages/clutch-dsh-title/README.zh.md)         | <img src="packages/clutch-dsh-title/assets/screenshots/session-title-list.png" width="240" alt="DSH Session 标题列表">           | 增加可配置的 Session title template 和新 DSH Session 的设置管理器。                                           |
-| [`@cerbur/clutch-dsh-office`](packages/clutch-dsh-office/README.zh.md)       | <img src="packages/clutch-dsh-office/assets/screenshots/office-overview.png" width="240" alt="使用模拟工作区的 Office 白模预览"> | 将所有原生工作区按纵向列表展示为 3D 厨房，每间最多两位鲸鱼娘代表 Session。尚未发布的 MVP。                    |
+| [`@cerbur/clutch-dsh-office`](packages/clutch-dsh-office/README.zh.md)       | <img src="packages/clutch-dsh-office/assets/screenshots/office-session-board.jpg" width="240" alt="包含四位模拟 Session 角色的 Office 厨房预览"> | 将所有原生工作区按纵向列表展示为 3D 厨房，每间最多两位鲸鱼娘代表 Session。尚未发布的 MVP。                    |
 
 ## 开发
 
