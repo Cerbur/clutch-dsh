@@ -37,6 +37,7 @@ equivalent `pnpm dsh` form.
 ### Install from a local checkout
 
 Build this package, build the DSH source checkout, and add the package by absolute path:
+Use the pnpm version pinned in this package’s `package.json` for plugin builds.
 
 ```bash
 cd /absolute/path/to/clutch-dsh

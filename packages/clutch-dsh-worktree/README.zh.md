@@ -36,6 +36,7 @@ dsh web
 ### 从本地 checkout 安装
 
 先构建本 package 和 DSH 源码 checkout，再用绝对路径添加 package：
+构建插件时使用本 package 的 `package.json` 固定的 pnpm 版本。
 
 ```bash
 cd /absolute/path/to/clutch-dsh

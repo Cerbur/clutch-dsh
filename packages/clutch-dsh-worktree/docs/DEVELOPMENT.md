@@ -68,6 +68,8 @@ pnpm --filter @cerbur/clutch-dsh-worktree build
 
 构建产物将输出至 `packages/clutch-dsh-worktree/lib/`。Typert Host 分析通过 `tsconfig.host.json` 将 DSH Client Locale 和 Workspace 的类型导入映射到 `scripts/typert-client-locale-meta.d.ts` 与 `scripts/typert-client-ui-workspace-meta.d.ts`。这些 build-only projection 只描述 Worktree 实际使用的 Context 服务，避免 Host 生成时递归载入 Client UI 的 API-remotes 类型图；普通 Client 类型检查和运行时类型仍使用 DSH 的真实模块，Worktree Client 仍只通过现有 `/api` Connection 通信。
 
+本包 TypeScript 启用 `preserveSymlinks`，让 DSH UI 声明从本包安装的依赖解析 Controller、Session 和类型扩展，避免 pnpm 共享提升目录中的其他 DSH 版本混入。不要用 `as unknown as` 绕过不同 graph 的 branded id 或 retention 类型冲突；`pnpm run typecheck` 和 `npm pack --dry-run`（保留 prepare）共同验证编译与发布生命周期。Steer matcher 使用 reducer 的结构化事件输入，允许处理基线类型未枚举的可选 inbox 事件，payload 仍由 reducer 校验。
+
 Client 的 Git 文件地址使用直接依赖 `@deepseek-ai/dsh-util-workspace-path` 的官方
 `fileAddressFor`。该 browser-safe helper 随 Client bundle 打包，不新增 Host 注入服务。
 

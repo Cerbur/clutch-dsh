@@ -16,6 +16,7 @@
 #### 修复
 
 - 加固原生会话流的重试与恢复逻辑，兼容子目录 Workspace 的历史绑定和共享指令注入，并在生命周期变更或并发刷新时复用最新读取，防止误报绑定需要修复。
+- 修复发布构建时 pnpm 提升目录混入其他 DSH 版本类型导致的编译失败，保持 Session 类型检查与原生 UI 类型扩展一致。
 
 ### English
 
@@ -31,7 +32,7 @@
 #### Fixed
 
 - Harden retry and recovery in native session flows, preserve compatibility for legacy bindings and shared instructions in subdirectory Workspaces, and reuse the latest read during concurrent notifications or lifecycle transitions to prevent spurious binding-repair alerts.
-
+- Fix release compilation failures caused by pnpm hoisting types from another DSH version, keeping Session type checks and native UI augmentations consistent.
 
 ## 0.1.21 — 2026-10-31
 
