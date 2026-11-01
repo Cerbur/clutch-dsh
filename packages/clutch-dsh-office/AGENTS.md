@@ -10,6 +10,10 @@ provide an Office feature. The DSH checkout is a read-only integration reference
 - Commit, push, publish, and installation into a user's DSH profile still require
   explicit authorization. No such authorization is implied by this document.
 - Read both READMEs and `docs/plans/2026-10-26-office-mvp.md` before behavior changes.
+- Read [Office maintenance constraints](docs/CONSTRAINTS.md) before changing behavior
+  or assets. Keep implementation constraints, asset revisions and iteration notes
+  there or in its linked specialist documents; the bilingual READMEs are the public
+  product introduction, installation and usage guide.
 - Keep DSH adaptation, Office projection, action scheduling, and Three.js rendering
   separate. Never retain or activate Sessions just to draw a character.
 - Runtime session facts stay native; the Office projection is disposable Client
