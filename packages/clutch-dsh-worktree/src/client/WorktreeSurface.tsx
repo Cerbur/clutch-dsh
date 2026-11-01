@@ -1,4 +1,3 @@
-import { AccessConfirmation } from './surface/components/AccessConfirmation.js';
 import { LifecycleDialogs } from './surface/components/LifecycleDialogs.js';
 import { NativeDialogs } from './surface/components/NativeDialogs.js';
 import { RegistrationDialog } from './surface/components/RegistrationDialog.js';
@@ -92,7 +91,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         ? undefined
         : (workspaceId) => {
             closeDashboard();
-            inputProps.createMainSession?.(workspaceId);
+            void mutation.runMutation(async () => { await inputProps.createMainSession?.(workspaceId); });
           },
   };
   const registrationState = useRegistrationState({ props });
@@ -394,7 +393,6 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           session={session}
         />
 
-        <AccessConfirmation source={source} props={props} />
       </aside>
       {dashboard !== undefined &&
         dashboardRecord === undefined &&

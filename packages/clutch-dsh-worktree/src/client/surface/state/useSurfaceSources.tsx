@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   deriveSessionPresentationIndex,
   type SessionListLike,
@@ -8,10 +8,6 @@ import { effectiveViewMode } from '../../view/view-mode.js';
 import { currentSessionIdFromList } from '../../session/session-selection.js';
 import {
   EMPTY_FORK_RECOVERY_STORE,
-  EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
-  EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE,
-  EMPTY_PERMISSION_NOTICE_SNAPSHOT,
-  EMPTY_PERMISSION_NOTICE_SUBSCRIBE,
   useStableWorkspaceIds,
 } from '../shared.js';
 import type { WorkspaceListLike, WorktreeSurfaceProps } from '../types.js';
@@ -27,8 +23,6 @@ type Input = {
     | 'useWorkspaces'
     | 'forkRecovery'
     | 'expandState'
-    | 'permissionNotice'
-    | 'fullAccessConfirmation'
     | 'sessionOrder'
   >;
 };
@@ -43,8 +37,6 @@ export function useSurfaceSources({ props }: Input) {
     useWorkspaces,
     forkRecovery,
     expandState,
-    permissionNotice,
-    fullAccessConfirmation,
     sessionOrder,
   } = props;
   const preferredMode = useStore((state) => state.viewMode);
@@ -68,29 +60,6 @@ export function useSurfaceSources({ props }: Input) {
     expandState.getSnapshot,
     expandState.getSnapshot,
   );
-  const permissionNoticeSnapshot = useSyncExternalStore(
-    permissionNotice?.subscribe ?? EMPTY_PERMISSION_NOTICE_SUBSCRIBE,
-    permissionNotice?.getSnapshot ?? EMPTY_PERMISSION_NOTICE_SNAPSHOT,
-    permissionNotice?.getSnapshot ?? EMPTY_PERMISSION_NOTICE_SNAPSHOT,
-  );
-  const fullAccessConfirmationSnapshot = useSyncExternalStore(
-    fullAccessConfirmation?.subscribe ?? EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE,
-    fullAccessConfirmation?.getSnapshot ?? EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
-    fullAccessConfirmation?.getSnapshot ?? EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT,
-  );
-  const fullAccessConfirmationKey =
-    fullAccessConfirmationSnapshot === undefined
-      ? ''
-      : [
-          fullAccessConfirmationSnapshot.workspaceId,
-          fullAccessConfirmationSnapshot.worktreeId,
-          fullAccessConfirmationSnapshot.sessionId,
-          fullAccessConfirmationSnapshot.cwd,
-        ].join('\u0000');
-  const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
-  useEffect(() => {
-    setFullAccessAcknowledged(false);
-  }, [fullAccessConfirmationKey]);
   const sessionOrderSnapshot = useSyncExternalStore(
     sessionOrder.subscribe,
     sessionOrder.getSnapshot,
@@ -115,11 +84,6 @@ export function useSurfaceSources({ props }: Input) {
     workspaceIds,
     workspaceIdsRef,
     expandSnapshot,
-    permissionNoticeSnapshot,
-    fullAccessConfirmationSnapshot,
-    fullAccessConfirmationKey,
-    fullAccessAcknowledged,
-    setFullAccessAcknowledged,
     sessionOrderSnapshot,
     sessionPresentations,
     ref,

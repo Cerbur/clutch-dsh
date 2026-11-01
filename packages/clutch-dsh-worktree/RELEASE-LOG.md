@@ -1,5 +1,39 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.22 — 2026-11-02
+
+### 中文
+
+#### 新增
+
+- 新 Worktree 默认存放在 Workspace 内的专属目录池（`.agents/clutch-worktrees/`），新 Session 保留原始 Workspace 归属与原生执行目录切换，直接沿用 DSH 原生权限，不再依赖专属 Full Access 预设。
+
+#### 优化
+
+- 打开新建或复用 Session 前先等待目标 Worktree 分组投影就绪，避免新空白会话短暂显示在 Local，并在就绪后于后台完成上下文刷新。
+- 隔离 Local 会话复用逻辑，Local 的新建按钮自动排除已绑定 Worktree 的空白会话和未绑定残留会话，支持在未发送消息时直接切换至独立的 Local 空白会话。
+
+#### 修复
+
+- 加固原生会话流的重试与恢复逻辑，兼容子目录 Workspace 的历史绑定和共享指令注入，并在生命周期变更或并发刷新时复用最新读取，防止误报绑定需要修复。
+- 修复发布构建时 pnpm 提升目录混入其他 DSH 版本类型导致的编译失败，保持 Session 类型检查与原生 UI 类型扩展一致。
+
+### English
+
+#### Added
+
+- Place new Worktrees in a dedicated in-workspace pool (`.agents/clutch-worktrees/`), preserve original Workspace ownership and native working directory switching for new Sessions, and rely directly on DSH native permissions without a dedicated Full Access preset.
+
+#### Improved
+
+- Await target Worktree grouping projection before opening a new or reused Session to prevent blank sessions from briefly appearing in Local, and complete context refreshes in the background once ready.
+- Isolate Local session reuse so the Local new session button excludes blanks bound to Worktrees or lingering unbound directories, allowing switching directly to an independent Local blank session without sending a message first.
+
+#### Fixed
+
+- Harden retry and recovery in native session flows, preserve compatibility for legacy bindings and shared instructions in subdirectory Workspaces, and reuse the latest read during concurrent notifications or lifecycle transitions to prevent spurious binding-repair alerts.
+- Fix release compilation failures caused by pnpm hoisting types from another DSH version, keeping Session type checks and native UI augmentations consistent.
+
 ## 0.1.21 — 2026-10-31
 
 ### 中文

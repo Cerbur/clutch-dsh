@@ -62,15 +62,6 @@ export function useDashboardBatchManage(input: LifecycleDialogInput & { readonly
             bindings: value.bindings.map((item) => item.worktreeId !== record.worktreeId ? item : { ...item, status: 'detached' }),
           }) })),
           refresh,
-          normalize: async () => {
-            if (!props.permission?.normalizeDetachedWorktreePermissions) return;
-            try {
-              const result = await props.permission.normalizeDetachedWorktreePermissions(target);
-              if (result && lifecycleCurrent()) props.onPermissionNotice?.(target, result);
-            } catch {
-              if (lifecycleCurrent()) props.onPermissionNotice?.(target, { status: 'unverified', retryable: true });
-            }
-          },
           onFollowUpError: () => {},
         });
         return;

@@ -24,14 +24,14 @@
 
 - **DSH 是唯一原始数据源**：插件绝不写入、复制或篡改 Project 原始目录、Session 身份与元数据、原始列表、消息、提示词与会话历史。
 - **Sidecar 存储范围**：插件仅在 host 数据目录维护外部关系索引（`projectId`、`worktreeId`、`sessionId`、Worktree 路径、branch、source、生命周期状态、指令，以及获取事实 `createdAt`/`importedAt`、不可变获取 commit `baseCommit` 和用户可改写的 Dashboard 基线 `baseBranch`）。Git ahead/behind、changed-file 行数与 working-tree 快照属于运行时 projection，只读且绝不写入 Sidecar。
-- **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。
+- **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。经人类在 Session flow feature 选择方案 A，新 checkout 允许放在原 Workspace 的 `.agents/clutch-worktrees/` 专属池；仅在该池创建自己的忽略文件，不改已有业务配置。Sidecar、锁与偏好仍在 DSH Home。
 - **降级容灾**：Sidecar 损坏或不可用时，原生 Project/Session 视图必须完全可读；插件进入降级只读状态，严禁使用空索引覆盖 DSH 原始数据。
 - **根目录缺失降级**：仅当 `stat` 明确返回 `ENOENT` 确认 Workspace 根目录确实缺失时，Sidecar 支撑的读取（Worktree 列表、Session 绑定、已记录指令）才允许继续投影，Git 相关读取以专用 `WORKSPACE_ROOT_MISSING` 失败并由 Client 显示本地化的目录缺失状态（`workspaceMissing`）；未知 Workspace、非绝对 root、存在但不是目录或无法解析的 root 必须保留 `WORKSPACE_NOT_FOUND` 语义，严禁误报为目录缺失。降级读取不得放宽身份校验、写入门禁与破坏性操作确认。
 
 ### 2. Session 与运行时 cwd 契约
 
 - 一个 Session 最多绑定一个 active Worktree；一个 Worktree 可绑定多个 Session。
-- 运行时 cwd 是执行时派生的上下文：无绑定/main/detached 时使用 Project 根目录，active binding 时使用 Worktree 路径；**严禁将 cwd 持久化写回 DSH Session 元数据**。
+- 原生 Session 通过原 Workspace 创建，当前 cwd 由 DSH `workingDirectory` 服务和 projection 拥有；插件不得改写 header、直接追加事件或权限配置。Active binding 必须匹配当前 cwd，解绑或清理不得重定向运行任务。旧注入 adapter 仍可按无绑定/main/detached 使用 Project 根、active 使用 Worktree 的兼容规则派生；**严禁将 cwd 持久化写回 DSH Session 元数据**。
 - 绑定操作必须幂等；绑定冲突必须显式报错。删除 Worktree 时关系转为 detached，绝不删除 DSH Session。
 - **平台路径身份**：Provider 通过 `stat`/`realpath` 比较物理身份；只有明确的 `ENOENT` 才允许回退词法比较，权限或其他 I/O 不确定性必须 fail closed。Client 快照路径仅用于候选筛选，最终 Session cwd 关系由 Host 重新校验。
 - **Sidecar durability**：临时文件必须通过可写句柄同步后才能发布；临时文件同步失败不得吞掉，只有目录同步保持 best effort。
@@ -82,7 +82,7 @@ Refresh scope is determined by the smallest affected identity.
 ## 重要禁止事项 (Prohibitions)
 
 - ❌ 严禁修改 DSH 核心源码、Session/Project 元数据或消息记录；
-- ❌ 严禁往用户项目目录写入 `AGENTS.md`、配置文件或临时数据；
+- ❌ 严禁往用户项目目录写入 `AGENTS.md`、配置文件或临时数据；§1 已批准的专属 Worktree 池及池内独立忽略文件除外；
 - ❌ 严禁通过 shell 执行任何 Git 命令；
 - ❌ 严禁从 feature worktree 执行 `npm publish`（发布必须在 release worktree 进行）；
 - ❌ 严禁在未经确信或未经用户二次确认时执行破坏性清理；

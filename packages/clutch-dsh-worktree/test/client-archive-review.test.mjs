@@ -1,12 +1,10 @@
 import { readSurfaceSource } from './client-surface-source.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import React from 'react';
 import ts from 'typescript';
 import { aggregateSessionStatus } from '../lib/client/session/session-view.js';
 import { bindingIdsFor } from '../lib/client/surface/selectors.js';
 import { filterArchivedSessionIds } from '../lib/client/view/worktree-view.js';
-import { createWorktreeRefreshGuard } from '../lib/client/view/worktree-view-read.js';
 
 // Execute the actual surface JSX and its event handler without mounting DSH's
 // browser-only shell. React elements retain the production onClick callback.
@@ -69,126 +67,4 @@ test('Archived group ignores native archived activity but retains hidden live ac
     labelKey: 'running',
     runningSubagentCount: 0,
   });
-});
-
-function permissionFixture(normalize) {
-  const notice = {
-    workspaceId: 'ws',
-    worktreeId: 'wt',
-    result: { status: 'unverified', retryable: true },
-  };
-  const record = {
-    workspaceId: 'ws',
-    worktreeId: 'wt',
-    status: 'removed',
-    diskCleanup: 'completed',
-  };
-  const published = [];
-  const context = {
-    React,
-    styles: {},
-    t: (key) => key,
-    formatWorktreePermissionNotice: (result) => result.status,
-    permissionNoticeSnapshot: [notice],
-    permissionNotice: { getSnapshot: () => [notice] },
-    permission: { normalizeDetachedWorktreePermissions: normalize },
-    onPermissionNotice: (target, result) => published.push({ target, result }),
-    mode: 'worktree',
-    actionPending: false,
-    setActionPending: (value) => {
-      context.actionPending = value;
-    },
-    cleanupGuard: { current: createWorktreeRefreshGuard() },
-    permissionRetryPending: { current: false },
-    readStateRef: { current: { views: [{ workspaceId: 'ws', worktrees: [record] }] } },
-    viewByWorkspace: new Map([['ws', { worktrees: [record] }]]),
-  };
-  const declaration = (name) =>
-    find((node) => ts.isVariableDeclaration(node) && node.name.getText(ast) === name);
-  const noticeStatement = find(
-    node => ts.isForOfStatement(node) &&
-      node.expression.getText(ast) === 'permissionNoticeSnapshot',
-  );
-  context.workspaceLabel = id => id;
-  const render = () => evaluate([
-    ...['permissionRetryTarget', 'retryCleanupPermissions'].flatMap(name => {
-      const node = declaration(name);
-      return node ? [`const ${node.getText(ast)};`] : [];
-    }),
-    'const notices = [];', noticeStatement.getText(ast),
-    'return notices[0]?.actions?.[0];',
-  ].join('\n'), context);
-  const button = () => {
-    const action = render();
-    return action === undefined ? undefined : { props: action };
-  };
-  return { context, published, button };
-}
-
-test('permission notice retry invokes only normalization and publishes its result', async () => {
-  const calls = [];
-  const fixture = permissionFixture(async (input) => {
-    calls.push(input);
-    return { status: 'normalized-workspace-write', retryable: false };
-  });
-  const button = fixture.button();
-  assert.ok(button, 'cleanup permission notice must expose a retry button');
-  await button.props.onClick();
-  assert.deepEqual(calls, [{ workspaceId: 'ws', worktreeId: 'wt' }]);
-  assert.equal(fixture.published[0].result.status, 'normalized-workspace-write');
-  assert.equal(fixture.context.actionPending, false);
-});
-
-test('permission retry rejection remains retryable without repeating disk cleanup', async () => {
-  const fixture = permissionFixture(async () => {
-    throw new Error('offline');
-  });
-  assert.ok(fixture.button(), 'retry button is present');
-  await fixture.button().props.onClick();
-  assert.deepEqual(fixture.published[0].result, { status: 'unverified', retryable: true });
-});
-
-test('permission retry preserves business failures and only offers cleanup retry for cleaned targets', async () => {
-  const failure = { status: 'unverified', retryable: true, sessionIds: ['s'] };
-  const fixture = permissionFixture(async () => failure);
-  assert.ok(fixture.button());
-  await fixture.button().props.onClick();
-  assert.deepEqual(fixture.published[0].result, failure);
-  fixture.context.permissionNoticeSnapshot[0].result.retryable = false;
-  assert.equal(fixture.button(), undefined);
-  fixture.context.permissionNoticeSnapshot[0].result.retryable = true;
-  delete fixture.context.viewByWorkspace.get('ws').worktrees[0].diskCleanup;
-  assert.equal(fixture.button(), undefined);
-});
-
-test('permission retry drops late results after forget or disposal and coalesces repeated clicks', async () => {
-  for (const invalidate of [
-    (context) => {
-      context.readStateRef.current.views[0].worktrees = [];
-    },
-    (context) => {
-      context.cleanupGuard.current.invalidate();
-    },
-    (context) => {
-      context.permissionNotice.getSnapshot = () => [];
-    },
-  ]) {
-    let resolve;
-    let calls = 0;
-    const fixture = permissionFixture(() => {
-      calls++;
-      return new Promise((done) => {
-        resolve = done;
-      });
-    });
-    const button = fixture.button();
-    assert.ok(button, 'retry button is present');
-    const first = button.props.onClick();
-    await button.props.onClick();
-    assert.equal(calls, 1);
-    invalidate(fixture.context);
-    resolve({ status: 'normalized-workspace-write', retryable: false });
-    await first;
-    assert.deepEqual(fixture.published, []);
-  }
 });

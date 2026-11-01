@@ -15,7 +15,8 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
 export const worktreeSteerNode: ConversationNodeDefinition<SteerState> = {
   kind: WORKTREE_STEER_TARGET,
   target: WORKTREE_STEER_TARGET,
-  match: event => event.type === 'turn/start' || event.type === 'agent/inbox/spliced' ||
+  // Inbox events are optional across DSH graphs; the reducer validates their payload.
+  match: (event: Parameters<typeof reduceSteerState>[1]) => event.type === 'turn/start' || event.type === 'agent/inbox/spliced' ||
     (event.type === 'user/message' && event.surfaceOp === 'append' && steerRelay(event.data) !== undefined)
     ? { id: 'state', role: 'start' } : null,
   start: (_context, match) => reduceSteerState(EMPTY_STEER_STATE, match.event),

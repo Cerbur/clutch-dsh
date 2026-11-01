@@ -17,6 +17,7 @@ import {
   assertRepositoryCompatible,
 } from '../support/admission.js';
 import { assertGeneratedTarget } from '../support/path-safety.js';
+import { prepareWorktreePool } from '../../generated-path.js';
 import { publishCreated, markRecovery } from '../support/publication.js';
 import type { TransactionDependencies } from '../dependencies.js';
 import { providerError } from '../../types.js';
@@ -190,6 +191,7 @@ export async function createWorktreeTransaction(
         });
 
         try {
+          await prepareWorktreePool(dependencies.dshHome, input.workspaceRoot, input.targetPath);
           await dependencies.git.createWorktree(
             input.workspaceRoot,
             input.targetPath,

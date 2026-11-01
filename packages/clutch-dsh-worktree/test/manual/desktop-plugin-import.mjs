@@ -42,7 +42,7 @@ try {
   await ctx.plugin(PluginPackages, { resolution });
   await ctx.plugin(Loader);
   let failures = 0;
-  for (const subpath of ['/permission-presets', '', '/typert']) {
+  for (const subpath of ['', '/typert']) {
     const specifier = manifest.name + subpath;
     try {
       const module = await ctx.loader.import(specifier);

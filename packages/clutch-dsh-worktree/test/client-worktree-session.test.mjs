@@ -6,7 +6,6 @@ import {
   createWorktreeSessionConnector,
   resolveWorktreeSessionAction,
   retryWorktreeSessionBinding,
-  WorktreeSessionPermissionError,
 } from '../lib/client/session/worktree-session.js';
 
 function target(overrides = {}) {
@@ -308,7 +307,7 @@ test('rejects removed and repair Worktrees before considering Sessions', () => {
   }
 });
 
-test('opens a bound blank Session without creating or rebinding it', async () => {
+test('revalidates a bound blank Session before opening without creating another', async () => {
   const calls = [];
   const connector = createWorktreeSessionConnector({
     manager: {
@@ -327,7 +326,6 @@ test('opens a bound blank Session without creating or rebinding it', async () =>
       },
       async bindSession() {
         calls.push('bindSession');
-        throw new Error('must not bind');
       },
     },
     sessions: { getSnapshot: () => sessions() },
@@ -336,6 +334,7 @@ test('opens a bound blank Session without creating or rebinding it', async () =>
       calls.push('createSession');
       return 'unexpected';
     },
+    createBoundSession: async () => { throw new Error('must not create'); },
     ensureSessionWorkspace(workspaceId, sessionId) {
       calls.push(['ensure', workspaceId, sessionId]);
     },
@@ -354,7 +353,7 @@ test('opens a bound blank Session without creating or rebinding it', async () =>
   );
   assert.deepEqual(calls.slice(0, 2), ['listWorktrees', 'listBindings']);
   assert.equal(calls.includes('createSession'), false);
-  assert.equal(calls.includes('bindSession'), false);
+  assert.equal(calls.includes('bindSession'), true);
   assert.deepEqual(calls.slice(-2), [
     ['ensure', 'ws-one', 'blank-one'],
     ['open', 'blank-one'],
@@ -376,9 +375,7 @@ test('defers physical cwd alias validation to Host before opening a bound Sessio
           status: 'active',
         }];
       },
-      async bindSession() {
-        throw new Error('must not bind');
-      },
+      async bindSession(input) { calls.push(['validate', input.sessionId]); },
     },
     sessions: {
       getSnapshot: () => sessions({
@@ -389,12 +386,7 @@ test('defers physical cwd alias validation to Host before opening a bound Sessio
     createSession: async () => {
       throw new Error('must not create');
     },
-    permission: {
-      async ensureWorktreePermission(input) {
-        calls.push(['permission', input.sessionId]);
-        return { status: 'full-applied', retryable: false };
-      },
-    },
+    createBoundSession: async () => { throw new Error('must not create'); },
     ensureSessionWorkspace(workspaceId, sessionId) {
       calls.push(['ensure', workspaceId, sessionId]);
     },
@@ -409,7 +401,7 @@ test('defers physical cwd alias validation to Host before opening a bound Sessio
     cwd: '/private/var/tmp/worktree-one',
   }), 'blank-one');
   assert.deepEqual(calls, [
-    ['permission', 'blank-one'],
+    ['validate', 'blank-one'],
     ['ensure', 'ws-one', 'blank-one'],
     ['open', 'blank-one'],
   ]);
@@ -500,143 +492,6 @@ test('creates, binds, and opens without projecting before the binding refresh', 
     ['create', { cwd: '/tmp/worktree-one' }],
     ['bind', 'created-blank'],
     ['open', 'created-blank'],
-  ]);
-});
-
-test('confirms Worktree Full Access after binding and before opening a new Session', async () => {
-  const calls = [];
-  const permissionResults = [
-    { status: 'confirmation-required', retryable: false },
-    {
-      status: 'full-applied',
-      preset: 'worktree-full-access',
-      sandboxMode: 'danger-full-access',
-      approvalPolicy: 'ask',
-      retryable: false,
-    },
-  ];
-  const connector = createWorktreeSessionConnector({
-    manager: {
-      async listWorktrees() {
-        return [target()];
-      },
-      async listBindings() {
-        return [];
-      },
-      async bindSession(input) {
-        calls.push(['bind', input.sessionId]);
-        return { ...input, status: 'active' };
-      },
-    },
-    sessions: { getSnapshot: () => sessions({ ids: [], byId: {} }) },
-    archivedSessionIds: () => [],
-    createSession: async (input) => {
-      calls.push(['create', input]);
-      return 'permission-session';
-    },
-    permission: {
-      async ensureWorktreePermission(input) {
-        calls.push(['permission', input]);
-        return permissionResults.shift();
-      },
-    },
-    confirmFullAccess(input) {
-      calls.push(['confirm', input]);
-      return true;
-    },
-    ensureSessionWorkspace(workspaceId, sessionId) {
-      calls.push(['ensure', workspaceId, sessionId]);
-    },
-    openSession(sessionId) {
-      calls.push(['open', sessionId]);
-    },
-  });
-
-  assert.equal(await connector.create({
-    workspaceId: 'ws-one',
-    worktreeId: 'wt-one',
-    cwd: '/tmp/worktree-one',
-  }), 'permission-session');
-  assert.deepEqual(calls, [
-    ['create', { cwd: '/tmp/worktree-one' }],
-    ['bind', 'permission-session'],
-    ['permission', {
-      workspaceId: 'ws-one',
-      worktreeId: 'wt-one',
-      sessionId: 'permission-session',
-      binding: 'active',
-    }],
-    ['confirm', {
-      workspaceId: 'ws-one',
-      worktreeId: 'wt-one',
-      sessionId: 'permission-session',
-      cwd: '/tmp/worktree-one',
-    }],
-    ['permission', {
-      workspaceId: 'ws-one',
-      worktreeId: 'wt-one',
-      sessionId: 'permission-session',
-      binding: 'active',
-      confirmed: true,
-    }],
-    ['open', 'permission-session'],
-  ]);
-});
-
-test('keeps a newly bound Session closed when Full Access confirmation is cancelled', async () => {
-  const calls = [];
-  const connector = createWorktreeSessionConnector({
-    manager: {
-      async listWorktrees() {
-        return [target()];
-      },
-      async listBindings() {
-        return [];
-      },
-      async bindSession(input) {
-        calls.push(['bind', input.sessionId]);
-        return { ...input, status: 'active' };
-      },
-    },
-    sessions: { getSnapshot: () => sessions({ ids: [], byId: {} }) },
-    archivedSessionIds: () => [],
-    createSession: async () => 'cancelled-session',
-    permission: {
-      async ensureWorktreePermission() {
-        calls.push('permission');
-        return { status: 'confirmation-required', retryable: false };
-      },
-    },
-    confirmFullAccess() {
-      calls.push('confirm');
-      return false;
-    },
-    ensureSessionWorkspace() {
-      calls.push('ensure');
-    },
-    openSession() {
-      calls.push('open');
-    },
-  });
-
-  await assert.rejects(
-    connector.create({
-      workspaceId: 'ws-one',
-      worktreeId: 'wt-one',
-      cwd: '/tmp/worktree-one',
-    }),
-    (error) => {
-      assert.ok(error instanceof WorktreeSessionPermissionError);
-      assert.equal(error.sessionId, 'cancelled-session');
-      assert.equal(error.createdSession, true);
-      assert.equal(error.retryable, true);
-      return true;
-    },
-  );
-  assert.deepEqual(calls, [
-    ['bind', 'cancelled-session'],
-    'permission',
-    'confirm',
   ]);
 });
 

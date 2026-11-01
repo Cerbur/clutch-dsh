@@ -1527,7 +1527,7 @@ test('preserves the Workspace subdirectory in created Worktree cwd and public pa
     const record = await provider.createWorktree({
       workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-cwd',
     });
-    const expectedCwd = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId, relativeDirectory);
+    const expectedCwd = path.join(nestedRoot, '.agents', 'clutch-worktrees', record.worktreeId, relativeDirectory);
     assert.equal(record.absolutePath, expectedCwd);
     assert.equal(record.gitRootPath, path.dirname(path.dirname(expectedCwd)));
     assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].absolutePath, expectedCwd);
@@ -1838,12 +1838,12 @@ test('keeps injected Git adapters without a root resolver compatible', async () 
   });
 });
 
-test('retries an occupied generated name with a suffix but rejects paths inside the Workspace', async () => {
+test('retries an occupied pool name but rejects Sidecar storage inside the Workspace', async () => {
   await withGitFixture(async ({ dshHome, workspaceRoot, dsh }) => {
     await runGit(workspaceRoot, ['branch', 'feature/existing']);
     await runGit(workspaceRoot, ['branch', 'feature/inside']);
     const existingId = 'wt_existing';
-    const existingPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', existingId);
+    const existingPath = path.join(workspaceRoot, '.agents', 'clutch-worktrees', existingId);
     await mkdir(existingPath, { recursive: true });
     const existingProvider = createWorktreeManager({
       dsh,
@@ -1918,7 +1918,7 @@ test('creates a generated Worktree and persists only approved relation metadata'
     await writeFile(dshFixturePath, '{"title":"DSH-owned","messages":["history"],"cwd":"original"}\n');
     const dshFixtureBefore = await readFile(dshFixturePath);
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/example' });
-    const expectedPath = path.join(dshHome, 'clutch-dsh-worktree', 'worktree', record.worktreeId);
+    const expectedPath = path.join(workspaceRoot, '.agents', 'clutch-worktrees', record.worktreeId);
 
     assert.equal(record.absolutePath, expectedPath);
     assert.match(record.worktreeId, /^wt_[a-f0-9]{12}$/);
@@ -1950,7 +1950,11 @@ test('creates a generated Worktree and persists only approved relation metadata'
     const sidecarText = await readFile(path.join(dshHome, 'clutch-dsh-worktree', 'workspaces', 'ws_one.json'), 'utf8');
     assert.equal(sidecarText.includes('must stay in DSH'), false);
     assert.equal(sidecarText.includes('messages'), false);
-    assert.equal(sidecarText.includes(workspaceRoot), false);
+    const saved = JSON.parse(sidecarText);
+    assert.equal(Object.hasOwn(saved, 'rootPath'), false);
+    const withoutCheckoutPaths = saved.worktrees.map((record) => Object.fromEntries(
+      Object.entries(record).filter(([key]) => key !== 'absolutePath' && key !== 'gitRootPath')));
+    assert.equal(JSON.stringify({ ...saved, worktrees: withoutCheckoutPaths }).includes(workspaceRoot), false);
     await provider.removeWorktree({
       workspaceId: 'ws_one',
       worktreeId: record.worktreeId,
@@ -2429,7 +2433,7 @@ test('returns sync-required when cleanup after sidecar failure also fails', asyn
     });
 
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/cleanup-failure' }), 'SIDECAR_SYNC_REQUIRED');
-    assert.equal(await exists(path.join(dshHome, 'clutch-dsh-worktree', 'worktree', 'wt_cleanup_failure')), true);
+    assert.equal(await exists(path.join(workspaceRoot, '.agents', 'clutch-worktrees', 'wt_cleanup_failure')), true);
   });
 });
 

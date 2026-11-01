@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "preserveSymlinks": true,
     "outDir": "lib",
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

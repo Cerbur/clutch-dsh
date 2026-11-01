@@ -112,7 +112,10 @@ Local/Main 与 Worktree 的独立配置可在执行前自动注入所选能力�
 创建沿用 Manage 的 Git/Sidecar 事务，从固定获取 commit 创建新分支，
 避免分支移动导致记录基线与实际起点不同。未提交文件不会复制，随后保存可选共享指令。
 
-派发通过原生 `sessionController.create({ cwd })` 创建普通 Session，然后 `bindSession`。
+派发通过原生 `sessionController.create({ workspaceId })` 在原 Workspace 创建普通 Session，
+由 `workingDirectory.set` 进入 Worktree，然后 `bindSession`；目录发布与绑定成功后才允许任务输入。
+浏览器 `createWorktreeSession`、Agent 派发与 Dashboard 同步复用同一个创建 module，
+不直接修改 Session header、事件或权限；只有旧注入 adapter 保留 cwd 创建兼容 seam。
 模型省略时继承调用 Session 的有效 provider/model/effort，显式模型通过原生目录和 LLM
 resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
 外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
@@ -185,7 +188,8 @@ wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时
 
 `WorktreeRecord.source` 记录来源类型：
 
-- `plugin`：在插件管理目录（`$dshHome/clutch-dsh-worktree/worktree/wt_<12-hex-chars>`）下新建；
+- `plugin`：在原 Workspace 的专属池（`<workspace>/.agents/clutch-worktrees/wt_<12-hex-chars>`）下新建；
+  池内仅创建自己的 `.gitignore`（`*`），不修改已有业务忽略文件。历史 DSH Home 外置路径保留用于读取、恢复和清理，不自动迁移；
 - `external`：登记已存在的独立 Git linked worktree。
 
 ### Git 根目录与 Workspace 工作目录
@@ -194,6 +198,9 @@ Main 与 managed Worktree 共用 checkout projection：工作目录与 Git check
 `currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
 不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
 通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+Manage 的 Worktree 列表投影在同一 Sidecar 快照上按最多 4 项一批并行读取路径、活动与 HEAD，
+避免会话打开时逐项累加读取延迟；结果保持快照顺序、逐项错误语义与原有身份校验，
+不缓存或持久化运行时事实。并行上限按单次列表读取约束，不是全局 Git 进程上限。
 `getWorkspaceCheckout` 只解析 Main checkout，Manage 的列表只解析匹配到的受管 Worktree：
 detached 时对捕获的 commit 做 exact-tag 探测，无 tag 直接取 `commit.slice(0, 7)`；解析失败仅省略
 `currentHead`，不阻断列表或将其他目录标为 repair。读取采用
@@ -234,7 +241,7 @@ mutation token 仍基于持久记录，避免投影变化破坏生命周期门�
 `defaultBase` 与 Host-only `readSessionHead` 同样接受旧 cwd，并从已授权 Session 的原始 cwd
 读取实际 checkout HEAD；不得因投影变化读取 Main 或其他 checkout 的 HEAD。Workspace 写入门禁、
 目录可用性、身份、歧义、detached 和 cleaned 检查保持原有规则，任意后代目录不构成匹配。但新绑定
-必须匹配工作目录；DSH 实际继续使用原 Session 元数据，要改变其执行目录需创建新的 Session。
+必须匹配工作目录；原生 DSH 可通过 working_directory 改变 effective cwd，header 原始目录保持不变。
 
 Git Dashboard 的公开路径统一为 Workspace-relative，Main 与 managed Worktree 均相对其工作目录。
 文件树、rename oldPath、Diff 请求和返回 path 使用同一坐标；目录外的 checkout 文件保留为
@@ -261,12 +268,14 @@ Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。�
 ### Session 与 Worktree 绑定模型
 
 - **1 对多约束**：一个 Session 最多绑定一个 active Worktree；一个 Worktree 可同时绑定多个 Session。
-- **运行时 cwd 派生**：
-  - 无绑定、绑定 Main 或处于 detached 状态时：cwd 使用 Project / Workspace 根目录；
-  - 拥有 active Worktree 绑定时：cwd 使用对应的 Worktree 绝对路径；
+- **幂等重试仍校验事实**：复用已有 active binding 时，Host 重新校验原生 Session 归属与当前 cwd；历史绑定允许该 Worktree 的 Git-root cwd，新绑定仍仅接受工作目录。历史 Session 缺少原生 Workspace 成员关系时，唯一 active binding 可作为 runtime cwd 与 HEAD 读取的归属依据，但不能覆盖显式其他 Workspace 归属或 cwd 错配。匹配时不写 Sidecar，错配时显式失败并保留原绑定，不自动切换目录。
+- **创建重试身份**：Host 仅释放原生创建调用之前失败的请求，包括原生适配器以专用错误明确证明未调用创建的能力预检失败；原生创建一旦尝试，失败结果也保留以防重复创建。Client 在成功复用或补绑空白 Session 后清除该 Worktree 的待恢复请求身份，后续新建使用新身份；失败的恢复仍保留原身份。
+- **运行时 cwd 事实与兼容派生**：
+  - 原生目录能力存在时读取 DSH effective cwd；解绑、清理或 Main 分组不构成目录切换；
+  - Active Worktree binding 必须与 effective cwd 匹配；缺少原生目录事实的旧 adapter 才保留 Main/detached 使用 Workspace 根、active 使用 Worktree 的派生规则；
   - 绑定校验比较 Worktree 与 DSH Session cwd 的物理路径，而不是要求路径字符串完全一致，以兼容平台路径大小写、符号链接和别名规范化；Client 端快照只用于候选筛选，最终关系与物理身份必须由 Host 重新校验；
-  - **cwd 是动态派生的运行时上下文，严禁持久化写回 DSH Session 元数据**。
-- **孤儿与解绑语义**：未绑定的 Session 归入 Main 分组展示；删除 Worktree 不会删除 Session，关系转换为 `detached`；只有显式解绑才会回归 Main。
+  - **cwd 是 DSH 原生执行事实；插件不改写 Session 元数据或直接追加事件**。旧 adapter 的关系派生只用于兼容。
+- **孤儿与解绑语义**：未绑定的 Session 归入 Main 分组展示；删除 Worktree 不会删除 Session，关系转换为 `detached`；只有显式解绑才会回归 Main。分组变更不是原生目录切换，绝不把运行中的任务重定向。
 
 ### 时序约束
 
@@ -310,11 +319,11 @@ Worktree 生命周期由四个正交的独立操作组成：
    - 必须经过用户二次确认，明确告知插件不检测 Session/子代理活动状态，必须由用户确认所有使用该目录的任务已停止；
    - 执行真正的非强制 `git worktree remove`；
    - 成功后标记 `diskCleanup: 'completed'`，运行时投影 `health = 'cleaned'`，其 active binding 原子转为 `detached`；
-   - 磁盘清理操作与权限后续操作解耦，后续权限规范化失败不回滚磁盘删除；
+   - 成功后刷新所属 Workspace，读取失败不得重放磁盘删除；不更改 Session 权限；
    - **缺失目录（ENOENT）语义**：若确认清理时目录或 `.git` 已在外部被删除，插件仅在锁内标记记录完成并解绑，不执行 Git mutation。仅 `.git` 缺失时保留剩余文件。
 4. **移出管理（Remove from Management）**：
    - 删除该 Worktree 的 Sidecar 记录及所有关联 binding；
-   - 定向淘汰未决的 fork 恢复与权限通知；
+   - 定向淘汰未决的 fork 恢复；
    - 完整保留物理磁盘文件与 DSH 原生 Session。
 
 ---
@@ -520,42 +529,9 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 
 ## 10. 权限与安全边界 (Permissions & Security)
 
-- **权限列表追加与生命周期**：
-  `cordis.patch.yml` 不再覆盖 `permission.config`。同包的 `./permission-presets` Host
-  入口注册全局 `internal/config` hook，且仅匹配原生 `permission` entry 的 root fiber
-  与 `@deepseek-ai/dsh-permission-presets` 模块名。`clutchWorktreePermissionPresets` 注入门禁
-  保证首次权限服务激活前 hook 已就绪。hook 在 Loader 表达式解析后读取原生 schema 的
-  默认表，构造只追加 `worktree-full-access` 的新 config，保留其余原始字段与已有同名项，
-  不写 Loader 原始配置或 profile 文件；热重载重新追加，fiber 卸载时撤销 hook 与门禁。
-  bundle 移除时重新解析仍存活的原生权限 fiber；旧 Loader 若残留已撤销的注入依赖，
-  仅删除插件自己的运行时门禁，保留 DSH 静态依赖与原始 entry options。贡献自身 HMR 时，
-  配置中的门禁仍存在，等待替代贡献激活，不提前恢复无贡献的权限表。
-  官方 `registerAuto` 与动态 catalog 仍由 DSH 管理，插件不注册或复制 `auto`。
-- **Host 可选权限能力生命周期**：
-  `permissionPresets`、`sandboxPolicy` 与 `approval` 不加入 required inject；旧 profile 缺少服务时 Host
-  仍可加载。Host 通过 adapter options getter 在每次权限调用时读取所属 Cordis Context 的
-  当前能力，而非在构造时捕获对象。权限 manager 完成 Workspace、binding 与物理 cwd 校验
-  后才进入 adapter；迟挂载、撤销、替换及恢复后的重试均读取当下 provider，不调用已卸载实例。
-  同一个 adapter 保留本运行期的权限所有权记录，不能因 provider 替换清掉用户降权证据。
-  Full Access 仍需显式确认；确认期间服务失效时第二次调用 fail closed 并保持可恢复。
-  这不修改原生 preset/default/Auto catalog、Session 身份或 Sidecar。
-- **Worktree Full Access 预设**：
-  为满足关联 Git 元数据访问需求，插件提供名为 `worktree-full-access` 的权限预设。它将 DSH 底层的 `danger-full-access` 沙箱模式与 `ask` 审批策略组合：仅放宽关联 Git 元数据的文件系统隔离限制，依然保留所有需要用户确认的操作审批提示；网络与子进程策略保持不变。
-- **权限降级与回退**：
-  命名预设只是原生菜单贡献，不再是完全访问生效的必要条件。预设缺失且当前原生
-  `sandboxPolicy.resolve` 与 `approval.overrideOf` 可用时，经原有绑定/物理路径校验与
-  RiskConfirmation 确认，Host 按 DSH 原生 setter 的事件协议追加 `approval/policy: ask`
-  再追加 `sandbox/mode: danger-full-access`；前一写入失败绝不放宽文件隔离。不追加虚构的
-  `permission/preset`，原生 UI 自行派生 Custom。两项实际策略读取确认后才报告成功。
-  不重启或改写原生服务，不触碰 preset/default/Auto catalog、Session metadata 或 Sidecar。
-  该能力不可用时保留 workspace-write 回退/未验证语义。命名预设同名项必须确实解析为
-  `danger-full-access + ask` 才允许应用；归一化同样验证 workspace-write 的实际规格。
-  Client 合并同一 Workspace/Worktree/Session/cwd 的待确认请求，结束后不缓存同意；
-  不同身份继续串行确认。原生 sandbox 降权事件会保留为限制证据，adapter 重建也不重新升权。
-- **解耦设计**：
-  磁盘清理提交与权限后续处理解耦，清理成功后无论权限重置是否遇到异常，均不会回滚已完成的物理清理。
-- **沙箱宿主上限**：
-  插件权限调整严格限制在 DSH 官方 per-Session 权限系统内，不能也不可能突破宿主运行 DSH 时的外部系统沙箱边界。
+插件不贡献专属权限 preset，不读写 Session sandbox/approval 策略，不提供权限确认、回退或清理归一化 RPC。创建、复用、归档、清理与移出管理仅处理原生目录与插件关系；历史 Session 已保存的策略也不自动改动。文件访问、Auto review、审批与宿主 sandbox 上限全部由 DSH 管理。
+
+Host 只读 adapter 使用 `ctx.get()` 动态解析可选的 `workingDirectory` 与 `sessionQuery` sibling service；不得直接读取未声明 inject 的 Context 属性。独立 Cordis fiber 中的目录服务覆盖真实创建与绑定回归。缺少目录写入能力时，在新建 Session 前显式失败。
 
 ---
 
@@ -565,7 +541,7 @@ facts 基线时才更新 `baseBranch`，且不会重写 `baseCommit`。Sidecar �
 
 - 最低兼容基线为 DSH `dsh-v0.2.0-rc.1`，并已按 `dsh-v0.2.0-rc.1` 的 Client graph 验证。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
-- 导航与目录选取委托至 `ctx.uiWorkspace.startSession()`、`ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
+- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航与目录选取委托至 `ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。
 - **Session 归属与 Projection**：
   Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
@@ -590,6 +566,41 @@ Worktree Session 不属于 DSH 原生 Workspace 成员列表，因此 Session �
 reconcile 会把用户刚移动的 Session 当作“有更新活动”再次提升到队首。
 
 ### 浏览器本地视图状态刷新不变量 (Browser-local View State Refresh Invariant)
+
+新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
+权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、
+原始 cwd 匹配根目录、未归档且无任何 Worktree 关系（含 detached）。不得直接使用按
+Workspace/header cwd 选空白会话的 `uiWorkspace.startSession()`，否则会错误复用已绑定
+Worktree 的空白会话。只传候选给 Host 重新判断是否可复用，不修改原生元数据、草稿或 cwd。
+重复 Local 点击合并为同一请求，失败留在当前会话并显示错误，卸载后不导航。
+
+Worktree 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
+权威投影，确认目标 Worktree 与 active binding，然后同步提交 ready 内容，再调用原生导航。
+这样原生当前 Session 更新不会把空白行短暂放入 Local。创建完成与 Host 通知刷新重叠时，
+打开流程追随并复用最新在途读取，不把读取代次替换误判为绑定损坏，也不额外发起 RPC。
+打开门禁只等待目标分组，不等待旧 Session 的 context invalidation 完成；后者可能追随
+后续 invalidation，因而不应延长导航等待。上下文刷新仍在后台运行并立即捕获拒绝，
+原生身份切换后由 context store 的订阅与代次校验更新目标上下文；普通刷新保持原等待语义。
+只有最新读取失败、绑定缺失或生命周期取消时才保留原视图并阻止打开，允许重试；
+不新增持久状态、不猜测绑定，也不刷新无关 Workspace。
+
+Session 创建快路径使用 `readWorktreeSessionState({workspaceId, worktreeId})`：从同一
+Sidecar snapshot 返回 revision、完整 bindings 和目标 Worktree 的运行时投影。先筛选目标，
+再做路径、活动、health 与 HEAD 读取；Git porcelain 仍读取仓库 checkout 清单以校验身份。
+Host 准入使用同一接口，原生创建、进入目录和 bind 的锁、身份校验及同步落盘保持不变。
+提交后读取目标状态随创建结果返回，通知的 changeId 使用原请求 requestId。状态读取失败
+不把已成功创建误报为创建失败，而由 Client 回退完整的 Workspace 读取。
+目标读取中的 Git 根目录解析与 checkout 清单从 Workspace cwd 并行读取；Git 支持在
+子目录中枚举同一仓库的 checkout。两项读取都 settle 后再投影，任一失败仍降级为不可用，
+不缓存跨操作的 Git 身份。Host 在提交后快照完成（或失败并决定回退）之后才广播变更，
+避免其他 Client 的通知刷新与这次创建的最后一次目标读取争用子进程；并不延迟绑定落盘。
+
+Client 在准入前登记变更 ticket。仅当有 ready 基础投影、读取代次未变、revision 不早于
+准入与已合并状态时，才将目标记录和权威 bindings 合入缓存；打开前仍校验目标生命周期
+与 active binding，并同步提交分组。相同 requestId 的在途通知被合并，完成后有界去重。
+其他变更、重连、销毁或过期结果不能命中快路径，必须回退所属 Workspace 的权威读取。
+热路径新建为 3 次目标读取、复用为 2 次目标读取，不再由此触发整组 Worktree 扫描或
+读取无关 Worktree 的 HEAD。普通刷新、冷启动与修复路径继续使用完整 projection。
 
 展开状态（`clutch-dsh-worktree.expand-state`）与 Session 顺序
 （`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的
@@ -665,7 +676,7 @@ Refresh scope is determined by the smallest affected identity.
 - 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
-- Local/Main Dashboard 独有的“管理 worktree”页签复用所属 Workspace 的 ready records，包含归档和清理记录，不包含 Main。选择、确认目标与逐项结果仅存在于浏览器；批量串行调用现有归档、磁盘清理和移出管理 RPC。每项执行前比对已确认的路径、分支与生命周期事实，并使用前一项局部刷新后的最新 mutation token，以适配 Sidecar revision 变化。清理需额外确认任务已停止，保留 binding detached 与权限归一化流程；移出管理只移除插件关系。刷新始终限于所属 Workspace，成功项不因后续读取失败而重放，取消或 owner 卸载不再调度剩余项；不新增 Host API、持久化字段或全局刷新。
+- Local/Main Dashboard 独有的“管理 worktree”页签复用所属 Workspace 的 ready records，包含归档和清理记录，不包含 Main。选择、确认目标与逐项结果仅存在于浏览器；批量串行调用现有归档、磁盘清理和移出管理 RPC。每项执行前比对已确认的路径、分支与生命周期事实，并使用前一项局部刷新后的最新 mutation token，以适配 Sidecar revision 变化。清理需额外确认任务已停止，保留 binding detached 流程与原生权限；移出管理只移除插件关系。刷新始终限于所属 Workspace，成功项不因后续读取失败而重放，取消或 owner 卸载不再调度剩余项；不新增 Host API、持久化字段或全局刷新。
 - 派生 Worktree（2026-10-25）仅从所属 Workspace 的 ready records 投影：候选 `baseBranch` 匹配当前 checkout 的实际本地分支，无法获取时回退受管理记录分支；短名与 `refs/heads/` 等价，显式远端 ref 不匹配。排除自身、跨 Workspace 和间接后代，Detached HEAD 或未知 Main 分支返回空列表。归档项保留并展示生命周期与健康状态，概览预览五项并显示总数，children 页签显示全部，点击复用 `openDashboard` 的 Session 导航门禁。修改已保存基线会改变关系；不新增持久化血缘、委派目录、RPC 或全局刷新。此实现取代历史 Dashboard MVP 计划的 children 占位，不推断 Git 祖先关系，历史计划保持只读。
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
 - Dashboard 顶部基线 fact 复用同一分支匹配与 `openDashboard`，可前往所属 Workspace 中唯一匹配的受管理 Worktree 或 Main；编辑按钮独立保留，所有页签共享。基线保存后立即按已保存值重算目标；远端、未知、detached、自身、跨 Workspace 或多目标歧义时仅显示文本，不新增 RPC 或持久化字段。
@@ -681,11 +692,9 @@ Refresh scope is determined by the smallest affected identity.
 Dashboard 批量生命周期 RPC 提交后，Client 在执行本地投影副作用、回调与刷新前重查捕获的
 manager、reader 与 Surface cleanup 生命周期代次。Surface 已失效时丢弃后续处理，但已提交
 操作仍成功，不产生可重放的失败。Dashboard owner 退休仅停止后续项调度与旧 UI 结果发布；Surface
-仍有效时继续已提交项的权限归一化、forget 关系清理与 Workspace 刷新。reader 单独替换也重置
+仍有效时继续已提交项的 forget 关系清理与 Workspace 刷新。reader 单独替换也重置
 Surface 生命周期和 pending；busy token 属于具体操作，旧 finally 不得释放新操作的锁或 pending。
-权限通知在浏览器内按 Workspace/Worktree 独立保留，后续目标
-成功只移除自己的通知；每项重试只调用 `normalizeDetachedWorktreePermissions`，不再次执行
-`cleanWorktree`。移出管理仅淘汰匹配 Workspace 内的目标及其 Session 通知。
+
 
 Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
@@ -844,3 +853,38 @@ command-run records. It lets new Sessions leave the Hero before any model Turn w
 Chat owns the sole result row. Already-retained binding generations activate this target;
 unload removes its Definitions and pending activation. No Session metadata, history,
 Host lifecycle events, or Sidecar facts are written by this presentation projection.
+
+## 原 Workspace Session 与原生执行目录（2026-10-31）
+
+审查修复：Local 候选与打开前通过只读 `canReuseLocalSession` RPC 校验 DSH Workspace
+归属、全部绑定（含 detached）与 effective cwd 的物理身份；读取错误拒绝导航，不修改目录。
+Client 记录部分创建返回的 Session id，后续目标读取确认该 Session 已 active 绑定时退休旧
+requestId，覆盖手动恢复后已开始对话的情况；未知传输结果仍保留原身份。
+共享指令读取对缺少 gitRootPath 的历史记录应用既有 Workspace 子目录投影，再校验 native cwd；
+此投影仅在内存中使用，不迁移原 Sidecar、Session 或指令。
+
+人类选择 Workspace 内新建方案。新 checkout 根固定为原 Workspace 的
+`<workspace>/.agents/clutch-worktrees/wt_<id>`，子目录 Workspace 也在自己的可写范围内；
+完整仓库仍位于该 checkout，公开 absolutePath 保留原 Workspace 的相对子目录。
+池中的独立 .gitignore 只包含 *；用户已有 .gitignore、配置、AGENTS 与业务文件不修改。
+Sidecar、锁、偏好始终在 DSH Home，禁止把它们随 checkout 放进业务目录。
+
+Session 身份与不可变 original cwd 保留在 DSH；effective cwd 来自 workingDirectory.get
+或冷 Session 的 sessionQuery workingDirectory projection。冷观察在 finally 释放，
+单个读取失败不影响其他 Session 的发现，但该项使用不可授权的空 cwd；getSession 保留错误。
+插件不自行持久化 cwd 事件，DSH 的 set 负责验证目录、发布事件及输入通知。
+绑定与 Agent 输入/回报继续进行原生 Workspace、物理路径与 active relation 校验。
+离开目标目录后，共享指令在下一步失效；绑定不会强制切回，错误也不会回退到 Main。
+
+浏览器新入口只使用已有 /api 与 Typert；createWorktreeSession 的 requestId 在一次
+Client/Host lifetime 中去重，进行中读写不重复创建。Host 最多保留 512 个请求身份；
+容量满时显式拒绝新建，不能驱逐未确认请求并悄悄制造重复。Client/Host 重载或原生 Session/Agent 能力替换后去重范围结束。
+目录进入或绑定失败返回原生 Session id 和有界诊断，不删除 Session、不投递任务；
+目录阶段失败需先恢复目录，再重试绑定。DSH native directory 能力缺失时，创建前失败。
+旧注入 port 没有目录接缝时保留原来的 cwd 创建契约，真实 Host port 不走该回退。
+
+所有 Session 均保留 DSH 原生权限，旧路径及 Session 不迁移；外置/导入 checkout、Git common metadata 位于原 Workspace 外时，仍受正常 DSH 审批与宿主 sandbox 约束。
+
+Sidecar v7 的事实字段不变，只扩展 plugin path 的词法形状。Workspace 根不复制到索引；
+实际创建、恢复、删除仍根据当前 DSH Workspace 根与物理祖先重新校验。
+旧插件不能识别新池路径，会将该索引视为不可用；因此不能无备份降级后继续操作新记录。

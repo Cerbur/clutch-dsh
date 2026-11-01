@@ -5,7 +5,7 @@ import {
   type WorktreeViewError,
 } from '../../view/worktree-view.js';
 import type { WorktreeNotification } from '../notification-queue.js';
-import type { WorktreePermissionNotice, WorktreeSurfaceProps } from '../types.js';
+import type { WorktreeSurfaceProps } from '../types.js';
 import type { useLifecycleState } from '../state/useLifecycleState.js';
 import type { useSurfaceMutation } from './useSurfaceMutation.js';
 import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
@@ -20,7 +20,6 @@ type Input = {
     ReturnType<typeof useLifecycleState>,
     | 'worktreeCleanDisk'
     | 'worktreeForget'
-    | 'permissionRetryPending'
     | 'cleanupGuard'
     | 'setWorktreeBranchAdoption'
     | 'worktreeBranchAdoption'
@@ -28,11 +27,11 @@ type Input = {
   >;
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
-    'mode' | 'permissionNoticeSnapshot' | 'workspaceIdsRef'
+    'mode' | 'workspaceIdsRef'
   >;
   props: Pick<
     WorktreeSurfaceProps,
-    'permission' | 'permissionNotice' | 'onPermissionNotice' | 'manager' | 't' | 'viewReader'
+    'manager' | 't' | 'viewReader'
   >;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
@@ -41,18 +40,16 @@ type Input = {
 };
 
 export function useLifecycleActions({ read, lifecycleState, source, props, mutation }: Input) {
-  const { viewByWorkspace, readStateRef, refresh, setReadState } = read;
+  const { viewByWorkspace, refresh, setReadState } = read;
   const {
     worktreeCleanDisk,
     worktreeForget,
-    permissionRetryPending,
-    cleanupGuard,
     setWorktreeBranchAdoption,
     worktreeBranchAdoption,
     branchAdoptionGuard,
   } = lifecycleState;
-  const { mode, workspaceIdsRef } = source;
-  const { permission, permissionNotice, onPermissionNotice, manager, t, viewReader } = props;
+  const { workspaceIdsRef } = source;
+  const { manager, t, viewReader } = props;
   const { actionPending, setActionPending, runMutation, setActionError } = mutation;
   const latestLifecycleTarget = (target: WorktreeRecord | undefined) =>
     target === undefined
@@ -62,53 +59,6 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
           ?.worktrees.find((record) => record.worktreeId === target.worktreeId);
   const cleanDiskTarget = latestLifecycleTarget(worktreeCleanDisk);
   const forgetTarget = latestLifecycleTarget(worktreeForget);
-  const permissionRetryTarget = (notice: WorktreePermissionNotice) =>
-    mode === 'worktree' &&
-    notice.result.retryable === true &&
-    permission?.normalizeDetachedWorktreePermissions !== undefined
-      ? viewByWorkspace
-          .get(notice.workspaceId)
-          ?.worktrees.find(
-            (record) =>
-              record.worktreeId === notice.worktreeId &&
-              record.diskCleanup === 'completed',
-          )
-      : undefined;
-  const retryCleanupPermissions = async (notice: WorktreePermissionNotice): Promise<void> => {
-    const record = permissionRetryTarget(notice);
-    if (!record || !permission || actionPending || permissionRetryPending.current)
-      return;
-    const target = {
-      workspaceId: record.workspaceId,
-      worktreeId: record.worktreeId,
-    };
-    const generation = cleanupGuard.current.begin();
-    const isCurrent = () =>
-      cleanupGuard.current.isCurrent(generation) &&
-      permissionNotice?.getSnapshot().includes(notice) === true &&
-      readStateRef.current.views.some(
-        (view) =>
-          view.workspaceId === target.workspaceId &&
-          view.worktrees.some(
-            (record) =>
-              record.worktreeId === target.worktreeId && record.diskCleanup === 'completed',
-          ),
-      );
-    if (!isCurrent()) return;
-    permissionRetryPending.current = true;
-    setActionPending(true);
-    try {
-      const result = await permission.normalizeDetachedWorktreePermissions(target);
-      if (isCurrent()) onPermissionNotice?.(target, result);
-    } catch {
-      if (isCurrent()) onPermissionNotice?.(target, { status: 'unverified', retryable: true });
-    } finally {
-      if (cleanupGuard.current.isCurrent(generation)) {
-        permissionRetryPending.current = false;
-        setActionPending(false);
-      }
-    }
-  };
   const recoveryAction = (
     error: WorktreeViewError | undefined,
   ): NonNullable<WorktreeNotification['actions']>[number] | null => {
@@ -195,8 +145,6 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
     latestLifecycleTarget,
     cleanDiskTarget,
     forgetTarget,
-    permissionRetryTarget,
-    retryCleanupPermissions,
     recoveryAction,
     branchActions,
     refreshBranchAdoption,

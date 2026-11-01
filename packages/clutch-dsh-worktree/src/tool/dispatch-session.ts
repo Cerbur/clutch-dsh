@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createBoundWorktreeSession } from './create-session.js';
 import type { WorktreeRecord, WorktreeManager } from '../contract/index.js';
 import type { WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
 import type { ToolModel, WorktreeToolSessionPort } from './native-session.js';
@@ -19,14 +20,14 @@ export async function dispatchWorktreeSession(input: {
 }): Promise<WorktreeSessionDispatchResult> {
   const { record, manager, sessions, model, signal, check } = input;
   check();
-  const { sessionId } = await sessions.create({ cwd: record.absolutePath });
+  const created = await createBoundWorktreeSession({ record, manager, sessions, signal, check });
+  const { sessionId } = created;
   const requestId = `clutch-worktree:${sessionId}:${randomUUID()}`;
-  let status: WorktreeSessionDispatchResult['status'] = 'binding-failed';
+  if (!created.bound) return { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+    sessionId, requestId, model, status: 'binding-failed', error: created.error };
+  let status: WorktreeSessionDispatchResult['status'] = 'model-failed';
   let error: string | undefined;
   try {
-    check();
-    await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId });
-    status = 'model-failed';
     check();
     await sessions.configureModel(sessionId, model, signal);
     if (input.title) {
@@ -40,6 +41,8 @@ export async function dispatchWorktreeSession(input: {
       await input.prepare(sessionId, requestId);
     }
     status = 'prompt-failed';
+    check();
+    await sessions.assertWorkingDirectory?.(sessionId, record.absolutePath, signal);
     check();
     const message = { sessionId, requestId, mode: 'queue' as const, content: [{ type: 'text' as const, text: input.prompt }] };
     if (input.sender) await sessions.sendAgentMessage({ ...message, sender: input.sender }, signal);

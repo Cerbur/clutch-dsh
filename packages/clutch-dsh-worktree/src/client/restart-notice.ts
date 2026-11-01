@@ -1,7 +1,6 @@
 import type { WorktreeHostProbeResult } from './worktree-connection.js';
-import type { WorktreePermissionResult } from '../contract/index.js';
 
-export type RestartNoticeReason = 'host-unavailable' | 'permission-preset-unavailable';
+export type RestartNoticeReason = 'host-unavailable';
 
 const MISSING_HOST_CODES = new Set([
   'gateway/service-unavailable',
@@ -29,28 +28,6 @@ export class RestartNotice {
   dismissReason = (reason: RestartNoticeReason): void => {
     if (this.reason === reason) this.dismiss();
   };
-
-  /** Only this domain result establishes that the named preset is missing. */
-  reportPermissionResult(result: WorktreePermissionResult): void {
-    if (this.disposed) return;
-    if (
-      result.status === 'fallback-workspace-write' ||
-      result.status === 'full-applied' || result.status === 'already-full'
-    ) {
-      // These native results are newer evidence of a live Host. A pending probe
-      // must not overwrite them with an earlier missing-Host response.
-      this.pending?.abort();
-      if (this.reason === 'host-unavailable') this.dismiss();
-    }
-    if (result.status === 'fallback-workspace-write') {
-      this.show('permission-preset-unavailable');
-    } else if (
-      this.reason === 'permission-preset-unavailable' &&
-      (result.status === 'full-applied' || result.status === 'already-full')
-    ) {
-      this.dismiss();
-    }
-  }
 
   async check(): Promise<void> {
     if (this.disposed) return;
