@@ -66,8 +66,10 @@ The injected DSH services have deliberately separate read and command faces:
 - `ctx.workspaces.list` is the read-only `WorkspaceSource` with only `getSnapshot()` and
   `subscribe()`. Workspace creation, rename, deletion, ordering, and archive commands use the
   corresponding `ctx.workspaces` methods; the Consumer never performs writable-list mutation.
-- `ctx.uiWorkspace` owns cross-Controller navigation and directory UI: Main Session creation uses
-  `startSession()`, Worktree Session opening uses `openSession()`, and the Workspace picker uses
+- `ctx.uiWorkspace` owns cross-Controller navigation and directory UI: Local creation uses
+  `sessions.create({ workspaceId, sessionId? })` after excluding all Worktree relationships from blank
+  reuse candidates; original header cwd alone cannot distinguish a Worktree blank from Local.
+  Both Local and Worktree Session opening use `openSession()`, and the Workspace picker uses
   `pickDirectory()` before calling the native Workspace Controller's `create()` command.
 
 On DSH 1.7, `SessionListState` no longer carries a `current` field: the selected Main Session is
@@ -678,7 +680,7 @@ The Worktree surface is additive:
 - Session menus retain Rename/Fork/Archive and Copy session ID for ordinary Sessions. A provisional blank Session is visible only while it is the current DSH Session, uses the localized `New Session` label, and has no Session action menu; the binding remains browser/sidecar-owned even when the row is hidden. Session drag ordering is restricted to the current visual Main or Worktree group;
 - the Worktree dialog keeps Create as the default and exposes Import as a horizontal tab; Import candidates are branch-attached, non-root, unmanaged records supplied by the Host and selected through a standard dropdown, and imported records follow the same Session, binding, membership projection, opening, refresh, and recovery lifecycle as plugin-created records;
 - the browser-only Worktree Session connector coalesces concurrent creation requests per `workspaceId:worktreeId`, clears settled requests, and suppresses late projection/open callbacks after Client disposal;
-- Session creation, reuse and binding retry await the Surface's opening callback before native navigation. It reads only the owning Workspace, verifies the active binding and destination Worktree, and synchronously commits the ready projection before a blank Session becomes current. If a notification supersedes this read, opening follows the newest existing read (including after an obsolete read fails), without starting another RPC. Only the latest failure, missing binding or lifecycle cancellation blocks opening; previous ready content remains visible. No transient Local row or speculative binding is introduced.
+- Session creation, reuse and binding retry await the Surface's opening callback before native navigation. `readWorktreeSessionState` returns the target projection and bindings from one revision. `beginSessionChange` correlates the create response and notification by requestId; with an unchanged ready base and a non-stale revision it merges that state before the callback. The callback verifies the active binding and destination Worktree and synchronously commits grouping before a blank becomes current. Cold reads, reconnects, unrelated invalidations and stale results fall back to the owning Workspace refresh. If a notification supersedes that read, opening follows the newest existing read (including after an obsolete read fails), without starting another RPC. Only the latest failure, missing binding or lifecycle cancellation blocks opening; previous ready content remains visible. No transient Local row or speculative binding is introduced.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Worktree rows can be reordered within their owning Workspace with native-style drag behavior; the persistent Worktree order is stored in the plugin sidecar's ordered `worktrees` array.
 - Main is a fixed first row and is not a drag source or Worktree ordering anchor; Worktree rows cannot move across Workspace boundaries.

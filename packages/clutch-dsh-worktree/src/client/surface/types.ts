@@ -76,11 +76,11 @@ export interface WorktreeSurfaceInjected {
   readonly viewReader: WorktreeViewReader;
   readonly subscribeToolChanges?: (listener: (change: WorktreeToolChange) => void) => () => void;
   readonly createWorkspace?: () => Promise<void>;
-  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string) => Promise<void>) => Promise<string>;
+  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string, projectionReady?: boolean) => Promise<void>) => Promise<string>;
   readonly invalidateWorktreeContext?: (
     workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean },
   ) => Promise<void>;
-  readonly createMainSession?: (workspaceId: string) => void;
+  readonly createMainSession?: (workspaceId: string) => void | Promise<void>;
   readonly renameWorkspace?: (workspaceId: string, title: string) => Promise<void>;
   readonly deleteWorkspace?: (workspaceId: string) => Promise<void>;
   readonly insertWorkspaceBefore?: (

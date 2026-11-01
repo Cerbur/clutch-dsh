@@ -89,6 +89,12 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 打开新建或复用的 Worktree Session 前，会先等待对应 Worktree 分组就绪，使其直接出现在
 目标 Worktree 下，不再短暂出现在 Local。若分组刷新失败，当前视图保持可见，并提示错误以便重试。
 创建完成与通知刷新重叠时，会复用最新读取结果，不会仅因旧读取被替换就误报绑定需要修复。
+目标分组就绪后，打开会话不再等待上一会话的上下文刷新；该刷新在后台继续完成。
+Worktree 状态采用有限并行读取，减少包含多个 Worktree 的工作区中的等待时间。
+分组已就绪时，新建和复用只读取目标 Worktree，并在打开前合并已确认的绑定。
+遇到其他变更、重连或过期结果时，回退到所属 Workspace 的权威刷新，期间保留当前视图。
+Local 的 **+** 在选择可复用会话时会排除已有 Worktree 绑定的空白会话（包括 detached 绑定）。
+即使没有发送消息，也能从 Worktree 空白会话切换到独立的 Local 空白会话。
 
 Worktree Session 重试兼容已有历史绑定，包括子目录 Workspace 中的 Git-root Session，
 但仍拒绝归属冲突或无关执行目录。创建 Session 前的临时失败可以重试。恢复并打开空白

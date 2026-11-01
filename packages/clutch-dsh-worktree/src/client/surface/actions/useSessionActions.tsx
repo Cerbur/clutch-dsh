@@ -55,7 +55,8 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
-      await createSessionCallback(input, (sessionId) => refresh({
+      await createSessionCallback(input, (sessionId, projectionReady) => refresh({
+        alreadyInvalidated: projectionReady,
         scope: { kind: 'workspace', workspaceId: input.workspaceId },
         preserveCurrent: true,
         openingSession: { sessionId, worktreeId: input.worktreeId },

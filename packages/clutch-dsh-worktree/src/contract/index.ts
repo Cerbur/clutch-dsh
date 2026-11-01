@@ -1,4 +1,6 @@
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from './baseline-sync.js';
+import type { WorktreeSessionState } from './session-flow.js';
+export type { WorktreeSessionState } from './session-flow.js';
 export type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult, WorktreeSyncStrategy, WorktreeBaselineSyncManager } from './baseline-sync.js';
 
 /**
@@ -380,6 +382,7 @@ export interface WorktreeManager {
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
+  readWorktreeSessionState?(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeSessionState>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
   listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory>;
@@ -483,6 +486,7 @@ export interface WorktreeManager {
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'createWorktreeSession',
+  'readWorktreeSessionState',
   'syncWorktreeBaseline',
   'getWorkspaceGitState',
   'getToolSettings',
@@ -547,6 +551,7 @@ export interface WorktreeRemoteManager {
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+  readWorktreeSessionState(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeRemoteResult<WorktreeSessionState>>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>>;
 
   listWorktreeCommits(input: {

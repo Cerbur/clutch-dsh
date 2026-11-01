@@ -17,6 +17,7 @@ import type {
   WorktreeGitHistoryRequest,
   WorktreeId,
   WorktreeRecord,
+  WorktreeSessionState,
   WorktreeImportCandidate,
   WorkspaceId,
   WorkspaceGitState,
@@ -124,7 +125,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
       const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx);
       const creation = createWorktreeSessionCreation({ manager, sessions,
-        changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId) });
+        changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
       this.sessionCreation = creation;
       sessionCtx.effect(() => () => {
         creation.dispose();
@@ -263,6 +264,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
     readonly workspaceId: string;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>> {
     return this.remote.listWorktrees(input);
+  }
+
+  @Remote
+  readWorktreeSessionState(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeRemoteResult<WorktreeSessionState>> {
+    return this.remote.readWorktreeSessionState(input);
   }
 
   @Remote

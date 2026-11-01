@@ -59,6 +59,17 @@ async function fixture(t, nested = false) {
   return { root, home, repo, workspace, git, dsh, native, actors, manager, record, sessions, calls };
 }
 
+for (const nested of [false, true]) test(`target Session reads preserve full projection from a Workspace cwd (nested: ${nested})`, async (t) => {
+  const f = await fixture(t, nested);
+  for (const detached of [false, true]) {
+    if (detached) execFileSync('git', ['switch', '--detach'], { cwd: f.record.gitRootPath ?? f.record.absolutePath });
+    const [full] = await f.manager.listWorktrees({ workspaceId: 'ws' });
+    const state = await f.manager.readWorktreeSessionState({ workspaceId: 'ws', worktreeId: f.record.worktreeId });
+    assert.deepEqual(state.target, full);
+    assert.equal(state.target.health, detached ? 'branch-drift' : 'ready');
+  }
+});
+
 test('mounted Cordis Host creates and binds a Workspace-owned Session with native directory reads', async (t) => {
   const f = await fixture(t);
   const ctx = new Context();
@@ -79,7 +90,10 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
   assert.equal(service.ensureWorktreePermission, undefined);
   assert.equal(service.normalizeDetachedWorktreePermissions, undefined);
   const result = await service.createWorktreeSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'mounted' }, new AbortController().signal);
-  assert.deepEqual(result, { ok: true, value: { sessionId: 'child', bound: true } });
+  assert.equal(result.ok, true);
+  const { state, ...created } = result.value;
+  assert.deepEqual(created, { sessionId: 'child', bound: true });
+  assert.deepEqual(state, await f.manager.readWorktreeSessionState({ workspaceId: 'ws', worktreeId: f.record.worktreeId }));
   assert.equal((await f.dsh.getSession('child')).cwd, f.record.absolutePath);
   assert.equal(f.actors.get('child').header.cwd, f.workspace);
   assert.deepEqual((await f.manager.listBindings({ workspaceId: 'ws' })).map((b) => b.sessionId), ['child']);
@@ -234,7 +248,9 @@ test('browser native creation coalesces identities, keeps partial Session and re
   const signal = new AbortController().signal;
   const first = creation.create(input, signal);
   assert.equal(creation.create(input, signal), first);
-  assert.deepEqual(await first, { sessionId: 'child', bound: true });
+  const { state, ...created } = await first;
+  assert.deepEqual(created, { sessionId: 'child', bound: true });
+  assert.deepEqual(state, await f.manager.readWorktreeSessionState(input));
   assert.equal(creation.create(input, signal), first);
   await assert.rejects(creation.create({ ...input, worktreeId: 'other' }, signal), { code: 'WORKTREE_STATE_CONFLICT' });
   assert.equal(f.calls.filter(([kind]) => kind === 'create').length, 1);

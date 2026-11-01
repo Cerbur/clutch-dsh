@@ -15,6 +15,7 @@ import type {
   WorktreeGitHistory,
   WorktreeGitHistoryRequest,
   WorktreeRecord,
+  WorktreeSessionState,
   WorkspaceId,
   WorkspaceCheckout,
 } from '../contract/index.js';
@@ -255,6 +256,16 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
     return this.afterRecovery(() => listWorktrees(this.context, input));
+  }
+
+  readWorktreeSessionState(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeSessionState> {
+    return this.afterRecovery(async () => {
+      await requireWorkspaceForRead(this.context, input.workspaceId);
+      const snapshot = await this.context.sidecar.read(input.workspaceId);
+      const [target] = await listWorktrees(this.context, input, snapshot);
+      return { workspaceId: input.workspaceId, revision: snapshot.revision, bindings: snapshot.bindings,
+        ...(target === undefined ? {} : { target }) };
+    });
   }
 
   getWorkspaceGitState(input: { readonly workspaceId: WorkspaceId }) {

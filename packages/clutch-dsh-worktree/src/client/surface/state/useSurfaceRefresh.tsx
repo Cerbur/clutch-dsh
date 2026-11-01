@@ -141,7 +141,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           const contextRefresh =
             options.invalidateContext === false
               ? undefined
-              : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true });
+              : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true })
+                ?.catch(() => undefined);
           let request = { generation: guard.begin(), promise: viewReader.read(workspaceId) };
           targetReads.current.set(workspaceId, request);
           try {
@@ -220,7 +221,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               };
             });
           } finally {
-            await contextRefresh?.catch(() => undefined);
+            // Opening requires the destination grouping, not completion of the old
+            // Session's context refresh (which may follow further invalidations).
+            // Keep refreshing in the background, including when reusing a Session.
+            if (!options.openingSession) await contextRefresh;
           }
         }),
       );

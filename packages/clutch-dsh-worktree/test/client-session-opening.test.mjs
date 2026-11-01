@@ -44,7 +44,7 @@ async function loadHook(file, dependencies) {
   return exports;
 }
 
-for (const outcome of ['ready', 'failed', 'missing-binding', 'superseded', 'overlap-ready',
+for (const outcome of ['ready', 'slow-context', 'failed', 'missing-binding', 'superseded', 'overlap-ready',
   'overlap-old-failed', 'overlap-latest-failed', 'overlap-latest-missing']) {
   test(`Session action publishes the real scoped projection before opening: ${outcome}`, async () => {
     const target = { workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo/wt', status: 'active' };
@@ -70,7 +70,8 @@ for (const outcome of ['ready', 'failed', 'missing-binding', 'superseded', 'over
     const read = useSurfaceRefresh({
       source: { forkRecoverySnapshot: { revision: 0 }, workspaceIdsRef: { current: ['ws', 'other'] },
         mode: 'worktree', workspaceIds: ['ws', 'other'], sessionPresentations: {} },
-      props: { manager: {}, viewReader: {
+      props: { manager: {}, invalidateWorktreeContext: outcome === 'slow-context'
+        ? () => new Promise(() => {}) : undefined, viewReader: {
         invalidate: (id) => calls.push(`invalidate:${id}`),
         read: async (id) => {
           const sequence = ++reads;
@@ -107,12 +108,16 @@ for (const outcome of ['ready', 'failed', 'missing-binding', 'superseded', 'over
       alreadyInvalidated: true, invalidateContext: false,
     }) : undefined;
     release();
+    if (outcome === 'slow-context') {
+      await flush();
+      assert.ok(calls.includes('open:wt'), 'Ready destination must open without waiting for the previous Session context');
+    }
     await pending;
     await notification;
     assert.equal(reads, notification ? 2 : 1, 'Opening follows the existing read without another RPC');
     assert.equal(state.views[1], other);
     assert.equal(calls.includes('open:Local'), false);
-    if (outcome === 'ready' || outcome === 'overlap-ready' || outcome === 'overlap-old-failed') {
+    if (outcome === 'ready' || outcome === 'slow-context' || outcome === 'overlap-ready' || outcome === 'overlap-old-failed') {
       assert.deepEqual(calls.slice(-2), ['commit', 'open:wt']);
       assert.deepEqual(errors, []);
     } else {

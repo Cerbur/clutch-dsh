@@ -198,6 +198,9 @@ Main 与 managed Worktree 共用 checkout projection：工作目录与 Git check
 `currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
 不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
 通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+Manage 的 Worktree 列表投影在同一 Sidecar 快照上按最多 4 项一批并行读取路径、活动与 HEAD，
+避免会话打开时逐项累加读取延迟；结果保持快照顺序、逐项错误语义与原有身份校验，
+不缓存或持久化运行时事实。并行上限按单次列表读取约束，不是全局 Git 进程上限。
 `getWorkspaceCheckout` 只解析 Main checkout，Manage 的列表只解析匹配到的受管 Worktree：
 detached 时对捕获的 commit 做 exact-tag 探测，无 tag 直接取 `commit.slice(0, 7)`；解析失败仅省略
 `currentHead`，不阻断列表或将其他目录标为 repair。读取采用
@@ -538,7 +541,7 @@ Host 只读 adapter 使用 `ctx.get()` 动态解析可选的 `workingDirectory` 
 
 - 最低兼容基线为 DSH `dsh-v0.2.0-rc.1`，并已按 `dsh-v0.2.0-rc.1` 的 Client graph 验证。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
-- 导航与目录选取委托至 `ctx.uiWorkspace.startSession()`、`ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
+- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航与目录选取委托至 `ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。
 - **Session 归属与 Projection**：
   Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
@@ -565,11 +568,39 @@ reconcile 会把用户刚移动的 Session 当作“有更新活动”再次提�
 ### 浏览器本地视图状态刷新不变量 (Browser-local View State Refresh Invariant)
 
 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
+权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、
+原始 cwd 匹配根目录、未归档且无任何 Worktree 关系（含 detached）。不得直接使用按
+Workspace/header cwd 选空白会话的 `uiWorkspace.startSession()`，否则会错误复用已绑定
+Worktree 的空白会话。只传候选给 Host 重新判断是否可复用，不修改原生元数据、草稿或 cwd。
+重复 Local 点击合并为同一请求，失败留在当前会话并显示错误，卸载后不导航。
+
+Worktree 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
 权威投影，确认目标 Worktree 与 active binding，然后同步提交 ready 内容，再调用原生导航。
 这样原生当前 Session 更新不会把空白行短暂放入 Local。创建完成与 Host 通知刷新重叠时，
 打开流程追随并复用最新在途读取，不把读取代次替换误判为绑定损坏，也不额外发起 RPC。
+打开门禁只等待目标分组，不等待旧 Session 的 context invalidation 完成；后者可能追随
+后续 invalidation，因而不应延长导航等待。上下文刷新仍在后台运行并立即捕获拒绝，
+原生身份切换后由 context store 的订阅与代次校验更新目标上下文；普通刷新保持原等待语义。
 只有最新读取失败、绑定缺失或生命周期取消时才保留原视图并阻止打开，允许重试；
 不新增持久状态、不猜测绑定，也不刷新无关 Workspace。
+
+Session 创建快路径使用 `readWorktreeSessionState({workspaceId, worktreeId})`：从同一
+Sidecar snapshot 返回 revision、完整 bindings 和目标 Worktree 的运行时投影。先筛选目标，
+再做路径、活动、health 与 HEAD 读取；Git porcelain 仍读取仓库 checkout 清单以校验身份。
+Host 准入使用同一接口，原生创建、进入目录和 bind 的锁、身份校验及同步落盘保持不变。
+提交后读取目标状态随创建结果返回，通知的 changeId 使用原请求 requestId。状态读取失败
+不把已成功创建误报为创建失败，而由 Client 回退完整的 Workspace 读取。
+目标读取中的 Git 根目录解析与 checkout 清单从 Workspace cwd 并行读取；Git 支持在
+子目录中枚举同一仓库的 checkout。两项读取都 settle 后再投影，任一失败仍降级为不可用，
+不缓存跨操作的 Git 身份。Host 在提交后快照完成（或失败并决定回退）之后才广播变更，
+避免其他 Client 的通知刷新与这次创建的最后一次目标读取争用子进程；并不延迟绑定落盘。
+
+Client 在准入前登记变更 ticket。仅当有 ready 基础投影、读取代次未变、revision 不早于
+准入与已合并状态时，才将目标记录和权威 bindings 合入缓存；打开前仍校验目标生命周期
+与 active binding，并同步提交分组。相同 requestId 的在途通知被合并，完成后有界去重。
+其他变更、重连、销毁或过期结果不能命中快路径，必须回退所属 Workspace 的权威读取。
+热路径新建为 3 次目标读取、复用为 2 次目标读取，不再由此触发整组 Worktree 扫描或
+读取无关 Worktree 的 HEAD。普通刷新、冷启动与修复路径继续使用完整 projection。
 
 展开状态（`clutch-dsh-worktree.expand-state`）与 Session 顺序
 （`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的

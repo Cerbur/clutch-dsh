@@ -408,6 +408,14 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
     rpc: {
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
+        if (endpoint === 'worktreeManager/readWorktreeSessionState') {
+          bindingRequests.push(input.workspaceId);
+          return Promise.resolve({ ok: true, value: { ok: true, value: {
+            workspaceId: input.workspaceId, revision: '1', bindings: [],
+            target: { workspaceId: input.workspaceId, worktreeId: 'worktree-target',
+              absolutePath: '/tmp/worktree-target', status: 'active', health: 'ready' },
+          } } });
+        }
         if (endpoint === 'worktreeManager/listWorktrees') {
           return Promise.resolve({
             ok: true,
@@ -501,6 +509,14 @@ test('does not globally rescan Fork bindings while waiting for native Worktree S
       rpc: {
         call(_channel, endpoint, payload) {
           const input = payload.args.input;
+          if (endpoint === 'worktreeManager/readWorktreeSessionState') {
+            bindingRequests.push(input.workspaceId);
+            return Promise.resolve({ ok: true, value: { ok: true, value: {
+              workspaceId: input.workspaceId, revision: '1', bindings: [],
+              target: { workspaceId: input.workspaceId, worktreeId: 'worktree-one',
+                absolutePath: '/tmp/worktree-one', status: 'active', health: 'ready' },
+            } } });
+          }
           if (endpoint === 'worktreeManager/listWorktrees') {
             return Promise.resolve({
               ok: true,
@@ -918,7 +934,8 @@ test('routes Worktree Session creation through the browser Session connector', a
 test('routes native Workspace creation through uiWorkspace and workspaces commands', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /ctx\.uiWorkspace\.pickDirectory\(\)/);
-  assert.match(source, /ctx\.uiWorkspace\.startSession\(/);
+  assert.match(source, /createMainSession:.*localSessionConnector\.create\(workspaceId\)/);
+  assert.match(source, /createLocalSessionConnector\(/);
   assert.doesNotMatch(source, /ctx\.workspaces\.pickDirectory/);
   assert.doesNotMatch(source, /ctx\.workspaces\.startSession/);
 

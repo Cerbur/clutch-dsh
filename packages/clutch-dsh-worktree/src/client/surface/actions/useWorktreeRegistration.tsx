@@ -244,7 +244,8 @@ export function useWorktreeRegistration({
       cwd: registeredWorktree.absolutePath,
     };
     try {
-      await createSessionCallback(sessionInput, (sessionId) => refresh({
+      await createSessionCallback(sessionInput, (sessionId, projectionReady) => refresh({
+        alreadyInvalidated: projectionReady,
         scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
         preserveCurrent: true,
         openingSession: { sessionId, worktreeId: registeredWorktree.worktreeId },

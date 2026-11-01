@@ -20,6 +20,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   createWorktreeSession: 'worktreeManager/createWorktreeSession',
+  readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   getToolSettings: 'worktreeManager/getToolSettings',
@@ -272,6 +273,7 @@ export function createWorktreeConnectionAdapter(
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
     createWorktreeSession: (input) => invoke('createWorktreeSession', input),
+    readWorktreeSessionState: (input) => invoke('readWorktreeSessionState', input),
     dispose(): void {
       if (disposed) return;
       disposed = true;

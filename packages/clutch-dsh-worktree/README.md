@@ -93,6 +93,14 @@ so it appears directly under that Worktree without briefly appearing in Local. I
 cannot be refreshed, the current view stays visible and the action reports an error for retry.
 Overlapping creation and notification refreshes share the latest result instead of reporting a
 binding repair error just because an earlier read was superseded.
+Once the destination grouping is ready, opening does not wait for the previous Session's
+context refresh; that refresh continues in the background.
+Worktree status reads run with bounded parallelism to reduce waiting in Workspaces with multiple Worktrees.
+With an existing ready grouping, creation and reuse read only the target Worktree and merge the
+confirmed bindings before opening. An unrelated change, reconnect, or stale result falls back to
+an authoritative Workspace refresh while keeping the current view visible.
+Local's **+** excludes Worktree-bound blanks (including detached bindings) when choosing a reusable
+Session. You can switch from an untouched Worktree blank to a separate Local blank without sending a message.
 
 Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
 subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.

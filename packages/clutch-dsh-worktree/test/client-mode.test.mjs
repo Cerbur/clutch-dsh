@@ -129,6 +129,10 @@ test('Worktree Session membership waits for the binding refresh before projectio
         const value =
           endpoint === 'worktreeManager/createWorktreeSession'
             ? { sessionId: 'session-created', bound: true }
+            : endpoint === 'worktreeManager/readWorktreeSessionState'
+            ? { workspaceId: input.workspaceId, revision: '1', bindings: [], target: {
+              workspaceId: input.workspaceId, worktreeId: 'wt-one', absolutePath: '/tmp/wt-one', status: 'active', health: 'ready',
+            } }
             : endpoint === 'worktreeManager/listWorktrees'
             ? [{
                 workspaceId: input.workspaceId,
@@ -187,7 +191,12 @@ test('Worktree plus reuses a bound blank Session through the Client entry', asyn
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
         const value =
-          endpoint === 'worktreeManager/listWorktrees'
+          endpoint === 'worktreeManager/readWorktreeSessionState'
+            ? { workspaceId: input.workspaceId, revision: '1', bindings: [{ workspaceId: input.workspaceId,
+              worktreeId: 'wt-one', sessionId: 'blank-existing', status: 'active' }], target: {
+              workspaceId: input.workspaceId, worktreeId: 'wt-one', absolutePath: '/tmp/wt-one', status: 'active', health: 'ready',
+            } }
+            : endpoint === 'worktreeManager/listWorktrees'
             ? [{
                 workspaceId: input.workspaceId,
                 worktreeId: 'wt-one',
@@ -450,13 +459,25 @@ test('native Workspace refresh publishes the projected membership atomically', a
   membership.dispose();
 });
 
-test('Main Session creation delegates to the native Workspace service', async () => {
-  const fixture = await loadClientEntry();
+test('Local creation uses the native Session service without reusing a bound Workspace blank', async () => {
+  const fixture = await loadClientEntry({
+    sessionListSnapshot: { phase: 'ready', ids: ['session-current'], current: 'session-current',
+      byId: { 'session-current': { blank: true, cwd: '/tmp/workspace-current' } } },
+    rpc: { call(_channel, endpoint) {
+      const value = endpoint === 'worktreeManager/listBindings'
+        ? [{ workspaceId: 'workspace-current', worktreeId: 'wt', sessionId: 'session-current', status: 'active' }]
+        : endpoint === 'worktreeManager/getWorktreeInstructions' ? '' : [];
+      return Promise.resolve({ ok: true, value: { ok: true, value } });
+    } },
+  });
   const injected = fixture.registrationsBySlot.get('shell.overlay').options.inject();
 
-  injected.createMainSession('workspace-current');
+  await injected.createMainSession('workspace-current');
 
-  assert.deepEqual(fixture.startedSessions, ['workspace-current']);
+  assert.deepEqual(fixture.startedSessions, []);
+  assert.deepEqual(fixture.createdSessions, [{ workspaceId: 'workspace-current', cwd: '/tmp/workspace-current' }]);
+  assert.deepEqual(fixture.openedSessions, ['session-created']);
+  assert.equal(fixture.fakeContext.sessions.list.getSnapshot().byId['session-current'].blank, true);
 });
 
 test('unavailable or degraded Worktree service falls back to the original view', () => {

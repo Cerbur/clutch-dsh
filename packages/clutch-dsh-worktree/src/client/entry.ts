@@ -3,6 +3,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { Context } from '@deepseek-ai/cordis';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types';
+import { createLocalSessionConnector } from './session/local-session.js';
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
 import type {
   SessionListState,
@@ -420,6 +421,7 @@ export function apply(ctx: Context): void {
   }
   const worktreeSessionConnector = createWorktreeSessionConnector({
     manager,
+    viewReader,
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
     archivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds,
     createSession: async (input) => String(await sessions.create(input)),
@@ -431,6 +433,19 @@ export function apply(ctx: Context): void {
     openSession: (sessionId) =>
       openWorktreeSession(ctx.uiWorkspace, ctx.sessions, sessionId as SessionId),
   });
+  const localSessionConnector = createLocalSessionConnector({
+    manager,
+    sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
+    workspace: (id) => ctx.workspaces.list.getSnapshot().items.find((item) => item.workspaceId === id),
+    archivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds,
+    createSession: async ({ workspaceId, cwd, sessionId }) => String(await sessions.create({
+      workspaceId: workspaceId as WorkspaceId, cwd,
+      ...(sessionId === undefined ? {} : { sessionId: sessionId as SessionId }),
+    })),
+    refreshSession: async (id) => { await sessions.refreshProjections(id as SessionId); },
+    openSession: (id) => openWorktreeSession(ctx.uiWorkspace, ctx.sessions, id as SessionId),
+  });
+  ctx.effect(() => () => localSessionConnector.dispose(), 'clutch-dsh-worktree: Local Session connector cleanup');
   ctx.effect(
     () => () => worktreeSessionConnector.dispose(),
     'clutch-dsh-worktree: Worktree Session connector cleanup',
@@ -564,9 +579,7 @@ export function apply(ctx: Context): void {
           createSessionForWorktree: (input, beforeOpen) => worktreeSessionConnector.create(input, beforeOpen),
           invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
             contextProjection.invalidate(workspaceId, options),
-          createMainSession: (workspaceId: string) => {
-            ctx.uiWorkspace.startSession(workspaceId as WorkspaceId);
-          },
+          createMainSession: (workspaceId: string) => localSessionConnector.create(workspaceId),
           renameWorkspace: async (workspaceId: string, title: string) => {
             await ctx.workspaces.rename(
               workspaceId as Parameters<typeof ctx.workspaces.rename>[0],

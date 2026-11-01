@@ -91,7 +91,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         ? undefined
         : (workspaceId) => {
             closeDashboard();
-            inputProps.createMainSession?.(workspaceId);
+            void mutation.runMutation(async () => { await inputProps.createMainSession?.(workspaceId); });
           },
   };
   const registrationState = useRegistrationState({ props });

@@ -1,8 +1,11 @@
+import type { SessionBinding, WorktreeRecord } from './index.js';
+
 /** Host-owned creation, shared by browser, Agent dispatch and Dashboard tasks. */
 export interface WorktreeSessionCreationResult {
   readonly sessionId: string;
   readonly bound: boolean;
   readonly error?: string;
+  readonly state?: WorktreeSessionState;
 }
 export interface WorktreeSessionCreationRequest {
   readonly workspaceId: string;
@@ -12,4 +15,11 @@ export interface WorktreeSessionCreationRequest {
 }
 export interface WorktreeSessionCreationManager {
   createWorktreeSession(input: WorktreeSessionCreationRequest): Promise<WorktreeSessionCreationResult>;
+}
+/** One authoritative relationship snapshot, with health reads limited to the target. */
+export interface WorktreeSessionState {
+  readonly workspaceId: string;
+  readonly revision: string;
+  readonly target?: WorktreeRecord;
+  readonly bindings: readonly SessionBinding[];
 }
