@@ -1,5 +1,39 @@
 # Worktree Session 原生执行机制：调研与待决策方案
 
+## 2026-11-01 Local 短暂跳转修复
+
+创建成功后的原生导航先于 Client 分组刷新，导致当前空白 Session 短暂显示在 Local。
+新增创建时序回归先复现该失败，再将创建、复用、导入续接及绑定重试改为先等待所属
+Workspace 的权威绑定投影同步提交，再打开 Session。读取失败、绑定缺失或读取过期时
+保留 ready 内容并报告可重试错误，不生成临时绑定或修改原生 Session 数据。
+回归覆盖延迟投影、读取失败、绑定缺失，以及无关 Workspace 内容保持。
+
+验证：新增回归先红后绿；最终全量 1,262 通过、0 失败、12 跳过。实际运行并通过：
+`pnpm run check:workspace`、`pnpm run check:patches`、
+`pnpm --filter @cerbur/clutch-dsh-worktree lint`、
+`pnpm --filter @cerbur/clutch-dsh-worktree typecheck`、
+`pnpm --filter @cerbur/clutch-dsh-worktree build`、
+`pnpm --filter @cerbur/clutch-dsh-worktree test`；包目录运行
+`node --test test/client-session-opening.test.mjs test/readme-parity.test.mjs` 通过。
+初轮交付未做浏览器验收。以下为用户反馈首次新建报错后的追加验证。
+
+### 首次新建误报与内置浏览器验收
+
+- 原 opening gate 把同 Workspace 的后续通知刷新视为 binding repair；双刷新回归稳定复现失败。
+  修复后等待并复用最新读取，旧读取的结果或失败都不再阻止新读取成功后的打开；最新读取失败、
+  缺失 binding 与生命周期取消仍拒绝打开，且不增加 RPC。
+- 用户要求使用内置浏览器，在 `DSH_HOME=~/.dsh-test`、`127.0.0.1:3088` 验证。
+  已确认安装链接指向本 feature worktree、无活跃任务后重启测试服务加载 bundle。
+- 浏览器未稳定复现原截图的 binding-repair toast；通过双刷新回归锁定上述竞态，不将浏览器成功
+  误写成原问题已在浏览器稳定复现。修复后实际验证：新建 `qa/session-first-open-1101-fixed`
+  自动打开；加号复用同一空白 ID；发送一次“仅回复 OK，不执行任何工具。”后加号创建不同 ID；
+  已有 `dsh/79579bf9` 的新建与页面重载成功，重载前后 ID 一致，均落在目标 Worktree。
+- 测试环境启动时另有三个历史 `hello` fork 的 `WORKTREE_NOT_FOUND` 恢复提示；这些是已有记录，
+  没有删除原始 Session 或修改其绑定。本次验收的创建与复用未新增 binding-repair 错误。
+- 浏览器截图：`/tmp/session-flow-browser-acceptance.jpg`。只更新测试环境；未提交、发布或重启生产 DSH。
+- 追加修复后重新执行上述七项门禁，全部通过：全量 1,266 通过、0 失败、12 跳过；
+  `node --test test/client-session-opening.test.mjs` 的 10 项时序回归全部通过。
+
 状态：人类已选择方案 A（原 Workspace 内新建）；按该决策实施并验证。本文件补充历史 bootstrap 计划。历史目录、Session 与权限不自动迁移。
 
 ## 已验证事实

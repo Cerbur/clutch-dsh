@@ -76,7 +76,7 @@ export interface WorktreeSurfaceInjected {
   readonly viewReader: WorktreeViewReader;
   readonly subscribeToolChanges?: (listener: (change: WorktreeToolChange) => void) => () => void;
   readonly createWorkspace?: () => Promise<void>;
-  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput) => Promise<string>;
+  readonly createSessionForWorktree?: (input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string) => Promise<void>) => Promise<string>;
   readonly invalidateWorktreeContext?: (
     workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean },
   ) => Promise<void>;
@@ -150,6 +150,8 @@ export interface TargetedWorktreeReadError {
 }
 
 export interface RefreshOptions {
+  /** Navigation must wait for this confirmed binding to be committed to the tree. */
+  readonly openingSession?: { readonly sessionId: string; readonly worktreeId: string };
   /** A Host tool notification already retired the shared reader generation. */
   readonly alreadyInvalidated?: boolean;
   /** Same mutation identity as its Host notification; never reuse a pre-change read. */

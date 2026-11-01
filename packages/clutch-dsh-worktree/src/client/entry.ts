@@ -561,7 +561,7 @@ export function apply(ctx: Context): void {
             const workspacePath = await ctx.uiWorkspace.pickDirectory();
             if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
           },
-          createSessionForWorktree: (input) => worktreeSessionConnector.create(input),
+          createSessionForWorktree: (input, beforeOpen) => worktreeSessionConnector.create(input, beforeOpen),
           invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
             contextProjection.invalidate(workspaceId, options),
           createMainSession: (workspaceId: string) => {

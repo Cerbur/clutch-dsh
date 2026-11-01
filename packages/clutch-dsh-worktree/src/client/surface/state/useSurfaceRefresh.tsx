@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { WorktreeSessionActionError } from '../../session/worktree-session.js';
 import {
   createWorktreeRefreshGuard,
   mergeWorktreeView,
   mergeWorktreeViews,
   toWorktreeViewError,
+  type WorktreeWorkspaceView,
 } from '../../view/worktree-view.js';
 import { worktreeActivityRefreshWorkspaceIds } from '../selectors.js';
 import { EMPTY_READ_STATE } from '../shared.js';
@@ -48,6 +51,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   const targetRefreshGuards = useRef(
     new Map<string, ReturnType<typeof createWorktreeRefreshGuard>>(),
   );
+  const targetReads = useRef(new Map<string, {
+    generation: number;
+    promise: Promise<WorktreeWorkspaceView>;
+  }>());
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
   const guardFor = (workspaceId: string) => {
     const current = targetRefreshGuards.current.get(workspaceId);
@@ -59,8 +66,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   const refresh = useCallback(
     async (options: RefreshOptions = {}): Promise<void> => {
       if (manager === undefined) {
+        if (options.openingSession) throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'manager unavailable', true);
         refreshGuard.current.invalidate();
         for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
+        targetReads.current.clear();
         setReadState(EMPTY_READ_STATE);
         return;
       }
@@ -116,9 +125,12 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       const selectedWorkspaceIds = [...new Set(requestedWorkspaceIds)].filter((workspaceId) =>
         currentWorkspaceIds.includes(workspaceId),
       );
-      if (selectedWorkspaceIds.length === 0) return;
+      if (selectedWorkspaceIds.length === 0) {
+        if (options.openingSession) throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'workspace projection unavailable', true);
+        return;
+      }
 
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         selectedWorkspaceIds.map(async (workspaceId) => {
           const guard = guardFor(workspaceId);
           if (!options.alreadyInvalidated) {
@@ -130,12 +142,36 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             options.invalidateContext === false
               ? undefined
               : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true });
-          const generation = guard.begin();
+          let request = { generation: guard.begin(), promise: viewReader.read(workspaceId) };
+          targetReads.current.set(workspaceId, request);
           try {
-            const view = await viewReader.read(workspaceId);
-            if (!guard.isCurrent(generation)) return;
+            let view: WorktreeWorkspaceView | undefined;
+            const opening = options.openingSession;
+            for (;;) {
+              try {
+                view = await request.promise;
+              } catch (error) {
+                if (!opening || guard.isCurrent(request.generation)) throw error;
+              }
+              if (!opening || guard.isCurrent(request.generation)) break;
+              // Creation completion and the Host notification can overlap. Follow
+              // the newer authoritative read instead of reporting a broken binding.
+              const latest = targetReads.current.get(workspaceId);
+              if (!latest || latest === request) {
+                throw new WorktreeSessionActionError('WORKTREE_VIEW_FAILED', 'opening refresh cancelled', true);
+              }
+              request = latest;
+            }
+            if (!view) throw new WorktreeSessionActionError('WORKTREE_VIEW_FAILED', 'workspace projection unavailable', true);
+            if (opening && (!workspaceIdsRef.current.includes(workspaceId) ||
+              !view.worktrees.some((record) => record.worktreeId === opening.worktreeId) ||
+              !view.bindings.some((binding) => binding.sessionId === opening.sessionId &&
+                binding.worktreeId === opening.worktreeId && binding.status === 'active'))) {
+              throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'binding projection not ready', true);
+            }
+            if (!guard.isCurrent(request.generation)) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
-            setReadState((current) => {
+            const publish = () => setReadState((current) => {
               const remainingTargetError =
                 current.targetError?.workspaceIds.filter(
                   (candidate) => candidate !== workspaceId,
@@ -159,8 +195,13 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
                 },
               };
             });
+            // Native navigation updates an external store synchronously. Commit its
+            // destination first so that the newly current blank row cannot enter Local.
+            if (options.openingSession) flushSync(publish);
+            else publish();
           } catch (error) {
-            if (!guard.isCurrent(generation)) return;
+            if (options.openingSession) throw error;
+            if (!guard.isCurrent(request.generation)) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
             setReadState((current) => {
               const previousIds = current.targetError?.workspaceIds ?? [];
@@ -183,6 +224,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           }
         }),
       );
+      if (options.openingSession) {
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
+      }
     },
     [invalidateWorktreeContext, manager, viewReader],
   );
@@ -232,6 +277,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     } else {
       refreshGuard.current.invalidate();
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
+      targetReads.current.clear();
       modalReadLoader.current.invalidate();
       modalReadViewRef.current = undefined;
       setWorktreeModalWorkspaceId(undefined);
@@ -254,6 +300,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     );
     for (const workspaceId of removedWorkspaceIds) {
       targetRefreshGuards.current.delete(workspaceId);
+      targetReads.current.delete(workspaceId);
     }
     setReadState((current) => {
       const views = mergeWorktreeViews(current.views, workspaceIds, []);

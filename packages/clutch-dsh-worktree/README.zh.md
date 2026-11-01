@@ -86,6 +86,10 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 ## 使用
 
+打开新建或复用的 Worktree Session 前，会先等待对应 Worktree 分组就绪，使其直接出现在
+目标 Worktree 下，不再短暂出现在 Local。若分组刷新失败，当前视图保持可见，并提示错误以便重试。
+创建完成与通知刷新重叠时，会复用最新读取结果，不会仅因旧读取被替换就误报绑定需要修复。
+
 Worktree Session 重试兼容已有历史绑定，包括子目录 Workspace 中的 Git-root Session，
 但仍拒绝归属冲突或无关执行目录。创建 Session 前的临时失败可以重试。恢复并打开空白
 Session 后，待该 Session 不再为空白，再次新建会创建新的 Session。

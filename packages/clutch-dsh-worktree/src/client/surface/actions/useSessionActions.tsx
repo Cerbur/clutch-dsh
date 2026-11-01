@@ -55,11 +55,11 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
-      await createSessionCallback(input);
-      await refresh({
+      await createSessionCallback(input, (sessionId) => refresh({
         scope: { kind: 'workspace', workspaceId: input.workspaceId },
         preserveCurrent: true,
-      });
+        openingSession: { sessionId, worktreeId: input.worktreeId },
+      }));
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: toWorktreeViewError(error) });
@@ -85,12 +85,13 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
           ensureSessionWorkspace?.(workspaceId, sessionId);
         },
         openSession,
+        beforeOpen: (sessionId) => refresh({
+          scope: { kind: 'workspace', workspaceId: pending.workspaceId },
+          preserveCurrent: true,
+          openingSession: { sessionId, worktreeId: pending.worktreeId },
+        }),
       });
       setPendingSessionBinding(undefined);
-      await refresh({
-        scope: { kind: 'workspace', workspaceId: pending.workspaceId },
-        preserveCurrent: true,
-      });
     } catch (error) {
       setPendingSessionBinding({ ...pending, error: toWorktreeViewError(error) });
       setActionError(toWorktreeViewError(error));

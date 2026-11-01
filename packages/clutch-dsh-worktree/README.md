@@ -88,6 +88,12 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Usage
 
+Opening a newly created or reused Worktree Session waits for its Worktree grouping to be ready,
+so it appears directly under that Worktree without briefly appearing in Local. If the grouping
+cannot be refreshed, the current view stays visible and the action reports an error for retry.
+Overlapping creation and notification refreshes share the latest result instead of reporting a
+binding repair error just because an earlier read was superseded.
+
 Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
 subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.
 Temporary failures before Session creation can be retried. After recovery opens a blank Session,

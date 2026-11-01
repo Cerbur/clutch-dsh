@@ -81,7 +81,7 @@ export interface WorktreeSessionConnectorOptions {
 }
 
 export interface WorktreeSessionConnector {
-  create(input: CreateSessionForWorktreeInput): Promise<string>;
+  create(input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string) => Promise<void>): Promise<string>;
   dispose(): void;
 }
 
@@ -195,6 +195,7 @@ export async function retryWorktreeSessionBinding(input: {
   readonly archived: boolean;
   readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
+  readonly beforeOpen?: (sessionId: string) => Promise<void>;
 }): Promise<string> {
   if (input.archived) {
     throw new WorktreeSessionActionError('SESSION_ARCHIVED', '', false, {
@@ -211,6 +212,7 @@ export async function retryWorktreeSessionBinding(input: {
     throw new WorktreeSessionBindingError(input.pending.sessionId, error);
   }
 
+  await input.beforeOpen?.(input.pending.sessionId);
   input.ensureSessionWorkspace(input.pending.workspaceId, input.pending.sessionId);
   input.openSession(input.pending.sessionId);
   return input.pending.sessionId;
@@ -227,7 +229,12 @@ export function createWorktreeSessionConnector(
   const creationRequests = new Map<string, string>();
   let disposed = false;
 
-  const run = async (input: CreateSessionForWorktreeInput): Promise<string> => {
+  const run = async (input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string) => Promise<void>): Promise<string> => {
+    const prepareOpen = async (sessionId: string): Promise<void> => {
+      if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
+      await beforeOpen?.(sessionId);
+      if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
+    };
     const key = JSON.stringify([input.workspaceId, input.worktreeId]);
     const [worktrees, bindings] = await Promise.all([
       options.manager.listWorktrees({ workspaceId: input.workspaceId }),
@@ -263,6 +270,7 @@ export function createWorktreeSessionConnector(
       }
       if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
       creationRequests.delete(key);
+      await prepareOpen(action.sessionId);
       options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
       if (!disposed) options.openSession(action.sessionId);
       return action.sessionId;
@@ -280,6 +288,7 @@ export function createWorktreeSessionConnector(
 
       if (!disposed) {
         creationRequests.delete(key);
+        await prepareOpen(action.sessionId);
         options.ensureSessionWorkspace(input.workspaceId, action.sessionId);
         if (!disposed) options.openSession(action.sessionId);
       }
@@ -295,6 +304,7 @@ export function createWorktreeSessionConnector(
       }
       const created = await options.createBoundSession({ ...input, requestId });
       if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, new Error(created.error));
+      await prepareOpen(created.sessionId);
       if (!disposed) options.openSession(created.sessionId);
       creationRequests.delete(key);
       return created.sessionId;
@@ -303,9 +313,7 @@ export function createWorktreeSessionConnector(
       ...input,
       createSession: options.createSession,
       manager: options.manager,
-      beforeOpen: async () => {
-        if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
-      },
+      beforeOpen: prepareOpen,
       openSession: (sessionId) => {
         if (!disposed) options.openSession(sessionId);
       },
@@ -313,11 +321,11 @@ export function createWorktreeSessionConnector(
   };
 
   return {
-    create(input) {
+    create(input, beforeOpen) {
       const key = `${input.workspaceId}\u0000${input.worktreeId}`;
       const current = inFlight.get(key);
       if (current !== undefined) return current;
-      const promise = run(input).finally(() => {
+      const promise = run(input, beforeOpen).finally(() => {
         if (inFlight.get(key) === promise) inFlight.delete(key);
       });
       inFlight.set(key, promise);

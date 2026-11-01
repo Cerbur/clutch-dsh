@@ -564,6 +564,13 @@ reconcile 会把用户刚移动的 Session 当作“有更新活动”再次提�
 
 ### 浏览器本地视图状态刷新不变量 (Browser-local View State Refresh Invariant)
 
+新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
+权威投影，确认目标 Worktree 与 active binding，然后同步提交 ready 内容，再调用原生导航。
+这样原生当前 Session 更新不会把空白行短暂放入 Local。创建完成与 Host 通知刷新重叠时，
+打开流程追随并复用最新在途读取，不把读取代次替换误判为绑定损坏，也不额外发起 RPC。
+只有最新读取失败、绑定缺失或生命周期取消时才保留原视图并阻止打开，允许重试；
+不新增持久状态、不猜测绑定，也不刷新无关 Workspace。
+
 展开状态（`clutch-dsh-worktree.expand-state`）与 Session 顺序
 （`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的
 完整读取之上做破坏性收敛：

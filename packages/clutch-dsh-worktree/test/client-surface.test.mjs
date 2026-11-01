@@ -1128,7 +1128,8 @@ test('creates a Worktree Session immediately after creating the Worktree', async
 
   assert.match(source, /const\s+registeredWorktree\s*=\s*worktreeModalMode\s*===\s*'create'/);
   assert.match(source, /await continueWorktreeRegistration\(registeredWorktree\)/);
-  assert.match(source, /await createSessionCallback\(sessionInput\)/);
+  assert.match(source, /await createSessionCallback\(sessionInput, \(sessionId\) => refresh\(\{/);
+  assert.match(source, /openingSession: \{ sessionId, worktreeId: registeredWorktree\.worktreeId \}/);
   assert.match(source, /worktreeId: registeredWorktree\.worktreeId/);
   assert.match(source, /cwd: registeredWorktree\.absolutePath/);
   assert.match(source, /t\('worktree\.name'\)/);

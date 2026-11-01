@@ -244,7 +244,11 @@ export function useWorktreeRegistration({
       cwd: registeredWorktree.absolutePath,
     };
     try {
-      await createSessionCallback(sessionInput);
+      await createSessionCallback(sessionInput, (sessionId) => refresh({
+        scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
+        preserveCurrent: true,
+        openingSession: { sessionId, worktreeId: registeredWorktree.worktreeId },
+      }));
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId,
@@ -252,10 +256,6 @@ export function useWorktreeRegistration({
       }
       throw error;
     }
-    await refresh({
-      scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
-      preserveCurrent: true,
-    });
   };
   const submitWorktree = async (): Promise<void> => {
     const worktreeName = newBranch.trim();

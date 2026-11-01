@@ -910,7 +910,7 @@ test('shares an overlapping direct Fork lookup with notification reconciliation'
 test('routes Worktree Session creation through the browser Session connector', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /createWorktreeSessionConnector/);
-  assert.match(source, /worktreeSessionConnector\.create\(input\)/);
+  assert.match(source, /worktreeSessionConnector\.create\(input, beforeOpen\)/);
   assert.match(source, /worktreeSessionConnector\.dispose\(\)/);
   assert.doesNotMatch(source, /createSessionForWorktree\(\{/);
 });
