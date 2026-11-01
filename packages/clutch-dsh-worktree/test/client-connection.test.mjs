@@ -8,6 +8,7 @@ import {
 } from '../lib/client/worktree-connection.js';
 
 const METHODS = [
+  ['canReuseLocalSession', { workspaceId: 'ws1', sessionId: 's1' }, true],
   ['createWorktreeSession', { workspaceId: 'ws1', worktreeId: 'wt1', requestId: 'create-1' }, { sessionId: 's1', bound: true }],
   ['readWorktreeSessionState', { workspaceId: 'ws1', worktreeId: 'wt1' }, { workspaceId: 'ws1', revision: '2', bindings: [] }],
   ['syncWorktreeBaseline', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main', strategy: 'merge', requestId: 'req1' }, { sessionId: 's1', status: 'dispatched' }],
@@ -96,6 +97,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     })),
   );
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/canReuseLocalSession',
     'worktreeManager/createWorktreeSession',
     'worktreeManager/readWorktreeSessionState',
     'worktreeManager/syncWorktreeBaseline',

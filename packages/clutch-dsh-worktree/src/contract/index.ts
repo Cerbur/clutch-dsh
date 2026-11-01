@@ -485,6 +485,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'canReuseLocalSession',
   'createWorktreeSession',
   'readWorktreeSessionState',
   'syncWorktreeBaseline',

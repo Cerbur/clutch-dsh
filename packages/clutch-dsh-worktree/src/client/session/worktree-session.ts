@@ -229,13 +229,15 @@ export function createWorktreeSessionConnector(
   options: WorktreeSessionConnectorOptions,
 ): WorktreeSessionConnector {
   const inFlight = new Map<string, Promise<string>>();
-  const creationRequests = new Map<string, string>();
+  const creationRequests = new Map<string, { requestId: string; sessionId?: string }>();
   let disposed = false;
 
   const run = async (input: CreateSessionForWorktreeInput, beforeOpen?: (sessionId: string, projectionReady?: boolean) => Promise<void>): Promise<string> => {
     const key = JSON.stringify([input.workspaceId, input.worktreeId]);
-    const requestId = creationRequests.get(key) ?? globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const commitProjection = options.viewReader?.beginSessionChange?.(input.workspaceId, requestId);
+    const knownRequest = creationRequests.get(key);
+    const newRequestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    let requestId = knownRequest?.requestId ?? newRequestId();
+    let commitProjection = options.viewReader?.beginSessionChange?.(input.workspaceId, requestId);
     let minimumRevision = '0';
     const prepareOpen = async (sessionId: string, state?: WorktreeSessionState): Promise<void> => {
       if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
@@ -261,6 +263,16 @@ export function createWorktreeSessionConnector(
       ]);
       if (disposed) {
         throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
+      }
+      // Manual binding recovery runs outside this connector. Its authoritative
+      // relation retires the partial creation even if the Session has since started.
+      if (knownRequest?.sessionId && bindings.some((binding) =>
+        binding.sessionId === knownRequest.sessionId && binding.worktreeId === input.worktreeId &&
+        binding.workspaceId === input.workspaceId && binding.status === 'active')) {
+        creationRequests.delete(key);
+        requestId = newRequestId();
+        commitProjection?.();
+        commitProjection = options.viewReader?.beginSessionChange?.(input.workspaceId, requestId);
       }
       const target = worktrees.find((record) => record.worktreeId === input.worktreeId);
       if (
@@ -316,8 +328,9 @@ export function createWorktreeSessionConnector(
       if (action.kind !== 'create') throw actionError(action);
       if (disposed) throw new WorktreeSessionActionError('CLIENT_DISPOSED', '', false);
       if (options.createBoundSession) {
-        creationRequests.set(key, requestId);
+        creationRequests.set(key, { requestId });
         const created = await options.createBoundSession({ ...input, requestId });
+        creationRequests.set(key, { requestId, sessionId: created.sessionId });
         if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, new Error(created.error));
         await prepareOpen(created.sessionId, created.state);
         if (!disposed) options.openSession(created.sessionId);

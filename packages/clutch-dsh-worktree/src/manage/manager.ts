@@ -53,7 +53,7 @@ import {
   updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
-import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
+import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, resolveWorktreeWorkspaceRecord, samePhysicalPath } from './manager-support.js';
 
 function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
   // `main` is retained for legacy browser callers; the canonical synthetic ID is
@@ -216,10 +216,19 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
         );
         if (binding) {
           const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
+          let matches = true;
+          if (record && record.diskCleanup !== 'completed' && session?.originalCwd !== undefined) {
+            matches = await boundSessionCwdMatchesWorktree(session.cwd, record);
+            if (!matches && record.gitRootPath === undefined) {
+              const workspace = await this.context.dsh.getWorkspace(workspaceId);
+              if (workspace) matches = await boundSessionCwdMatchesWorktree(session.cwd,
+                await resolveWorktreeWorkspaceRecord(this.context, workspace, record));
+            }
+          }
           return {
             snapshot,
             instructions: !record || record.diskCleanup === 'completed' ||
-              (session?.originalCwd !== undefined && !(await boundSessionCwdMatchesWorktree(session.cwd, record)))
+              !matches
               ? '' : record.instructions ?? '',
           };
         }

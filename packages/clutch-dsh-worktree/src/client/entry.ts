@@ -435,6 +435,7 @@ export function apply(ctx: Context): void {
   });
   const localSessionConnector = createLocalSessionConnector({
     manager,
+    canReuseSession: (input) => manager.canReuseLocalSession(input),
     sessions: ctx.sessions.list as unknown as WorktreeSessionSnapshotReader,
     workspace: (id) => ctx.workspaces.list.getSnapshot().items.find((item) => item.workspaceId === id),
     archivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds,

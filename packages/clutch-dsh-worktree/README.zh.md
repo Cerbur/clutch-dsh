@@ -95,10 +95,14 @@ Worktree 状态采用有限并行读取，减少包含多个 Worktree 的工作�
 遇到其他变更、重连或过期结果时，回退到所属 Workspace 的权威刷新，期间保留当前视图。
 Local 的 **+** 在选择可复用会话时会排除已有 Worktree 绑定的空白会话（包括 detached 绑定）。
 即使没有发送消息，也能从 Worktree 空白会话切换到独立的 Local 空白会话。
+Local 在复用前和打开前还会检查原生执行目录，排除绑定失败后仍留在 Worktree 目录的未绑定
+Session。目录读取失败时保留当前视图。
 
 Worktree Session 重试兼容已有历史绑定，包括子目录 Workspace 中的 Git-root Session，
 但仍拒绝归属冲突或无关执行目录。创建 Session 前的临时失败可以重试。恢复并打开空白
 Session 后，待该 Session 不再为空白，再次新建会创建新的 Session。
+手动绑定恢复同样遵循此规则。历史子目录 Worktree 中的新 Session 也能获取共享指令；
+离开绑定目录后仍会停止注入这些指令。
 
 新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需插件专属权限配置。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
 

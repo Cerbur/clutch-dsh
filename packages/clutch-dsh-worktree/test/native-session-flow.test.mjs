@@ -15,7 +15,8 @@ import { createWorktreeSessionCreation } from '../lib/host/session-creation.js';
 import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
 import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
 import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/generated-path.js';
-import { createWorktreeSessionConnector } from '../lib/client/session/worktree-session.js';
+import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
+import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
 const { AbortController } = globalThis;
 
 async function fixture(t, nested = false) {
@@ -87,6 +88,11 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
   }));
   await ctx.plugin(WorktreeRemoteService, { dshHome: f.home });
   const service = ctx.get('worktreeManager');
+  await f.sessions.create({ workspaceId: 'ws' });
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'child' }), { ok: true, value: true });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'child' }), { ok: true, value: false });
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'missing' }), { ok: true, value: false });
   assert.equal(service.ensureWorktreePermission, undefined);
   assert.equal(service.normalizeDetachedWorktreePermissions, undefined);
   const result = await service.createWorktreeSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'mounted' }, new AbortController().signal);
@@ -362,7 +368,7 @@ test('uncertain native creation failure retains identity and never creates twice
   creation.dispose();
 });
 
-for (const recovery of ['open-bound', 'bind-existing']) test(`successful ${recovery} recovery retires creation identity`, async () => {
+for (const recovery of ['open-bound', 'bind-existing', 'manual']) test(`successful ${recovery} recovery retires creation identity`, async () => {
   const target = { workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' };
   const requests = [];
   let bindings = [];
@@ -376,20 +382,47 @@ for (const recovery of ['open-bound', 'bind-existing']) test(`successful ${recov
     archivedSessionIds: () => [], createSession: () => assert.fail('Host owns creation'),
     createBoundSession: async ({ requestId }) => {
       requests.push(requestId);
-      if (requests.length === 1) throw new Error('response lost');
+      if (requests.length === 1) {
+        if (recovery === 'manual') return { sessionId: 'first', bound: false, error: 'bind failed' };
+        throw new Error('response lost');
+      }
       return { sessionId: requestId === requests[0] ? 'first' : 'second', bound: true };
     },
     ensureSessionWorkspace() {}, openSession() {},
   });
   const input = { workspaceId: 'ws', worktreeId: 'wt', cwd: '/wt' };
-  await assert.rejects(connector.create(input), /response lost/);
+  await assert.rejects(connector.create(input), recovery === 'manual' ? /bind failed/ : /response lost/);
   byId = { first: { cwd: '/wt', blank: true } };
   if (recovery === 'open-bound') bindings = [{ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'first', status: 'active' }];
-  assert.equal(await connector.create(input), 'first');
+  if (recovery === 'manual') {
+    await retryWorktreeSessionBinding({
+      manager: { bindSession: async () => { bindings = [{ ...input, sessionId: 'first', status: 'active' }]; } },
+      pending: { ...input, sessionId: 'first' }, archived: false,
+      ensureSessionWorkspace() {}, openSession() {},
+    });
+  } else assert.equal(await connector.create(input), 'first');
   byId.first.blank = false;
   assert.equal(await connector.create(input), 'second');
   assert.notEqual(requests[0], requests[1]);
   connector.dispose();
+});
+
+test('historical subdirectory checkout supplies instructions to newly bound native Sessions', async (t) => {
+  const f = await fixture(t, true);
+  const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: f.home });
+  const shard = sidecar.getShardPath('ws');
+  const snapshot = JSON.parse(await readFile(shard, 'utf8'));
+  const record = snapshot.worktrees[0];
+  record.absolutePath = f.record.gitRootPath;
+  delete record.gitRootPath;
+  record.instructions = 'historical guidance';
+  await writeFile(shard, JSON.stringify(snapshot));
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  await f.manager.bindSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' });
+  assert.equal(await f.manager.resolveSessionInstructions('child'), 'historical guidance');
+  f.actors.get('child').effectiveCwd = f.workspace;
+  assert.equal(await f.manager.resolveSessionInstructions('child'), '');
 });
 
 test('contained pools reject replaced ancestors and never overwrite an existing ignore file', async (t) => {

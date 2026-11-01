@@ -480,6 +480,12 @@ placement measurement stays attached to the actual chip element.
 
 ## Current upstream Session membership projection
 
+Local candidates and the returned native Session are checked through the read-only
+`canReuseLocalSession` Host endpoint: native Workspace ownership, no active/detached binding,
+and physical effective cwd equal to the Workspace root. A failed read blocks navigation.
+Partial Worktree creation retains its returned Session id; an authoritative active binding
+for that same target retires the request even after manual recovery and a first message.
+
 The Worktree `+` calls the Host `createWorktreeSession` through the existing Connection.
 The Host shares the native creation module used by Agent and Dashboard dispatch. It:
 

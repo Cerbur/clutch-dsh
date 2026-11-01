@@ -101,11 +101,15 @@ confirmed bindings before opening. An unrelated change, reconnect, or stale resu
 an authoritative Workspace refresh while keeping the current view visible.
 Local's **+** excludes Worktree-bound blanks (including detached bindings) when choosing a reusable
 Session. You can switch from an untouched Worktree blank to a separate Local blank without sending a message.
+Local also checks the native execution directory before reuse and opening, excluding unbound
+Sessions left in a Worktree after a binding failure. Directory read failures keep the current view visible.
 
 Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
 subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.
 Temporary failures before Session creation can be retried. After recovery opens a blank Session,
 the next new-Session action creates a fresh Session once that Session is no longer blank.
+This includes manual binding recovery. New Sessions in historical subdirectory Worktrees receive
+the same shared instructions; moving outside the bound directory still disables those instructions.
 
 New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
 

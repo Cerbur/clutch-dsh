@@ -19,6 +19,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  canReuseLocalSession: 'worktreeManager/canReuseLocalSession',
   createWorktreeSession: 'worktreeManager/createWorktreeSession',
   readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
@@ -272,6 +273,7 @@ export function createWorktreeConnectionAdapter(
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
+    canReuseLocalSession: (input) => invoke('canReuseLocalSession', input),
     createWorktreeSession: (input) => invoke('createWorktreeSession', input),
     readWorktreeSessionState: (input) => invoke('readWorktreeSessionState', input),
     dispose(): void {

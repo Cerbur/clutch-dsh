@@ -10,6 +10,7 @@ function fixture(bindings = []) {
       byId: Object.fromEntries(['wt', 'detached', 'archived', 'local'].map((id) => [id, { blank: true, cwd: '/repo' }])) }) },
     workspace: () => ({ path: '/repo', sessionIds: ['wt', 'detached', 'archived', 'local'] }),
     archivedSessionIds: () => ['archived'],
+    canReuseSession: async () => true,
     createSession: async (input) => { calls.push(input); return input.sessionId ?? 'fresh'; },
     refreshSession: async (id) => calls.push(`refresh:${id}`),
     openSession: (id) => calls.push(`open:${id}`),
@@ -22,6 +23,28 @@ test('Local excludes both active and detached Worktree blanks with the same orig
   const connector = createLocalSessionConnector(options);
   await connector.create('ws');
   assert.deepEqual(calls, [{ workspaceId: 'ws', cwd: '/repo', sessionId: 'local' }, 'open:local']);
+});
+
+test('Local skips an unbound blank whose native effective cwd is still a Worktree', async () => {
+  const { options, calls } = fixture();
+  options.canReuseSession = async ({ sessionId }) => sessionId === 'local';
+  await createLocalSessionConnector(options).create('ws');
+  assert.deepEqual(calls, [{ workspaceId: 'ws', cwd: '/repo', sessionId: 'local' }, 'open:local']);
+});
+
+test('Local fails closed when effective directory validation fails', async () => {
+  const { options, calls } = fixture();
+  options.canReuseSession = async () => { throw new Error('directory unavailable'); };
+  await assert.rejects(createLocalSessionConnector(options).create('ws'), /directory unavailable/);
+  assert.deepEqual(calls, []);
+});
+
+test('Local refuses navigation if the candidate directory changes during native reuse', async () => {
+  const { options, calls } = fixture();
+  let reads = 0;
+  options.canReuseSession = async () => ++reads === 1;
+  await assert.rejects(createLocalSessionConnector(options).create('ws'), { code: 'SESSION_CWD_MISMATCH' });
+  assert.deepEqual(calls, [{ workspaceId: 'ws', cwd: '/repo', sessionId: 'wt' }]);
 });
 
 test('when only a Worktree blank exists Local creates a distinct native Session', async () => {

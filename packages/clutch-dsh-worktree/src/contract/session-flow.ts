@@ -14,6 +14,7 @@ export interface WorktreeSessionCreationRequest {
   readonly requestId: string;
 }
 export interface WorktreeSessionCreationManager {
+  canReuseLocalSession(input: { readonly workspaceId: string; readonly sessionId: string }): Promise<boolean>;
   createWorktreeSession(input: WorktreeSessionCreationRequest): Promise<WorktreeSessionCreationResult>;
 }
 /** One authoritative relationship snapshot, with health reads limited to the target. */

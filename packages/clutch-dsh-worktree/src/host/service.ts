@@ -174,6 +174,22 @@ export class WorktreeRemoteService extends TypertRemoteService {
   // contract-safe signatures; error normalization and JSON projection remain centralized
   // in `createWorktreeRemoteProjection`.
   @Remote
+  canReuseLocalSession(input: { workspaceId: string; sessionId: string }): Promise<WorktreeRemoteResult<boolean>> {
+    return project(async () => {
+      const workspace = await this.dsh.getWorkspace(input.workspaceId);
+      const bindings = await this.manager.listBindings(input);
+      const session = await this.dsh.getSession(input.sessionId);
+      if (session && session.originalCwd === undefined) {
+        throw createWorktreeError('SESSION_CWD_MISMATCH', 'Native execution directory is unavailable.');
+      }
+      return !!workspace && !!session && session.sessionId === input.sessionId &&
+        session.workspaceId === input.workspaceId &&
+        !bindings.some((binding) => binding.sessionId === input.sessionId) &&
+        await samePhysicalPath(session.cwd, workspace.rootPath);
+    });
+  }
+
+  @Remote
   createWorktreeSession(input: WorktreeSessionCreationRequest, signal: AbortSignal): Promise<WorktreeRemoteResult<WorktreeSessionCreationResult>> {
     return project(() => {
       if (!this.sessionCreation) throw createWorktreeError('WORKTREE_STATE_CONFLICT', 'Native Session creation capability is unavailable.');

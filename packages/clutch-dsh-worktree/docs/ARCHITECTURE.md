@@ -856,6 +856,13 @@ Host lifecycle events, or Sidecar facts are written by this presentation project
 
 ## 原 Workspace Session 与原生执行目录（2026-10-31）
 
+审查修复：Local 候选与打开前通过只读 `canReuseLocalSession` RPC 校验 DSH Workspace
+归属、全部绑定（含 detached）与 effective cwd 的物理身份；读取错误拒绝导航，不修改目录。
+Client 记录部分创建返回的 Session id，后续目标读取确认该 Session 已 active 绑定时退休旧
+requestId，覆盖手动恢复后已开始对话的情况；未知传输结果仍保留原身份。
+共享指令读取对缺少 gitRootPath 的历史记录应用既有 Workspace 子目录投影，再校验 native cwd；
+此投影仅在内存中使用，不迁移原 Sidecar、Session 或指令。
+
 人类选择 Workspace 内新建方案。新 checkout 根固定为原 Workspace 的
 `<workspace>/.agents/clutch-worktrees/wt_<id>`，子目录 Workspace 也在自己的可写范围内；
 完整仓库仍位于该 checkout，公开 absolutePath 保留原 Workspace 的相对子目录。

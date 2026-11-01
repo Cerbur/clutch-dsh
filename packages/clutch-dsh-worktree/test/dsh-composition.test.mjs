@@ -157,6 +157,7 @@ test('generates exactly the browser-safe Worktree Remote descriptors', async () 
     [
       'worktreeManager/adoptWorktreeBranch',
       'worktreeManager/bindSession',
+      'worktreeManager/canReuseLocalSession',
       'worktreeManager/cleanWorktree',
       'worktreeManager/createWorktree',
       'worktreeManager/createWorktreeSession',
@@ -410,6 +411,7 @@ test('carries missing Git from Provider through Host projection and /api Client 
 
 test('canonical upstream Host Gateway claims Worktree endpoints on the shared /api channel', () => {
   assert.deepEqual(Object.values(WORKTREE_CONNECTION_ENDPOINTS), [
+    'worktreeManager/canReuseLocalSession',
     'worktreeManager/createWorktreeSession',
     'worktreeManager/readWorktreeSessionState',
     'worktreeManager/syncWorktreeBaseline',
