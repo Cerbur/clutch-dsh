@@ -13,7 +13,7 @@ export async function listBindings(
   return (await context.sidecar.read(input.workspaceId)).bindings;
 }
 
-/** Bind a DSH-created Session whose cwd already targets the Worktree. */
+/** Bind only after DSH has published the target effective directory. */
 export async function bindSession(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string; readonly sessionId: string },
@@ -37,11 +37,7 @@ export async function bindSession(
     }
 
     const existing = snapshot.bindings.find((binding) => binding.sessionId === input.sessionId);
-    if (existing) {
-      if (existing.worktreeId === input.worktreeId && existing.status === 'active') {
-        // Exact retries do not write; detached history is never implicitly reactivated.
-        return { result: existing, snapshot, changed: false };
-      }
+    if (existing && (existing.worktreeId !== input.worktreeId || existing.status !== 'active')) {
       throw providerError('SESSION_ALREADY_BOUND', `Session is already bound to Worktree ${existing.worktreeId}`, {
         sessionId: input.sessionId,
         worktreeId: existing.worktreeId,
@@ -58,7 +54,14 @@ export async function bindSession(
     const resolvedWorktree = await resolveWorktreeWorkspaceRecord(context, workspace, worktree, {
       sessionId: input.sessionId,
     });
-    await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree);
+    if (session.sessionId !== input.sessionId)
+      throw providerError('SESSION_CWD_MISMATCH', 'Session identity changed', { sessionId: input.sessionId });
+    await assertSessionMatchesWorkspace(session, workspace, resolvedWorktree, existing !== undefined);
+
+    if (existing) {
+      // Reuse validates current native facts too; an idempotent retry never redirects cwd.
+      return { result: existing, snapshot, changed: false };
+    }
 
     const binding: SessionBinding = {
       workspaceId: input.workspaceId,
@@ -79,7 +82,7 @@ export async function readSessionHead(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly sessionId: string },
 ): Promise<string> {
-  const cwd = await resolveRuntimeCwd(context, input);
+  await resolveRuntimeCwd(context, input);
   const session = await context.dsh.getSession(input.sessionId);
   if (!session) throw providerError('SESSION_NOT_FOUND', 'Session not found', { sessionId: input.sessionId });
   const snapshot = await context.sidecar.read(input.workspaceId);
@@ -98,24 +101,32 @@ export async function readSessionHead(
     ? await boundSessionCwdMatchesWorktree(session.cwd, await resolveWorktreeWorkspaceRecord(
         context, await requireWorkspace(context, input.workspaceId), record, { sessionId: input.sessionId },
       ))
-    : await samePhysicalPath(session.cwd, cwd);
+    : await samePhysicalPath(session.cwd, (await requireWorkspace(context, input.workspaceId)).rootPath);
   if (!cwdMatches)
     throw providerError('SESSION_CWD_MISMATCH', 'Session ownership or cwd no longer matches', { sessionId: input.sessionId });
   if (!context.git.resolveCommit) throw providerError('GIT_OPERATION_FAILED', 'Git HEAD resolution is unavailable', {});
   return context.git.resolveCommit(session.cwd, 'HEAD', { signal: context.signal });
 }
 
-/** Derive one execution cwd from the current Workspace and binding projection. */
+/** Read native execution cwd, or derive it only for legacy adapters without directory facts. */
 export async function resolveRuntimeCwd(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly sessionId: string },
 ): Promise<string> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   const snapshot = await context.sidecar.read(input.workspaceId);
-  const binding = snapshot.bindings.find((candidate) => candidate.sessionId === input.sessionId);
+  const bindings = snapshot.bindings.filter((candidate) => candidate.sessionId === input.sessionId);
+  const binding = bindings[0];
 
-  // Detached is a safe main fallback; a broken active relation fails explicitly below.
-  if (!binding || binding.status === 'detached') return workspace.rootPath;
+  const session = await context.dsh.getSession(input.sessionId);
+  if (session?.originalCwd !== undefined &&
+    (session.sessionId !== input.sessionId || bindings.length > 1 ||
+      (session.workspaceId !== workspace.workspaceId &&
+        !(session.workspaceId === undefined && binding?.status === 'active' && binding.workspaceId === workspace.workspaceId))))
+    throw providerError('SESSION_CWD_MISMATCH', 'Session no longer belongs to this Workspace', { sessionId: input.sessionId });
+  // Native cwd is a DSH fact, including after detach; never switch running work to Main.
+  // Legacy adapters retain the older derived fallback for compatibility.
+  if (!binding || binding.status === 'detached') return session?.originalCwd === undefined ? workspace.rootPath : session.cwd;
 
   const worktree = snapshot.worktrees.find((candidate) => candidate.worktreeId === binding.worktreeId);
   if (!worktree) {
@@ -132,7 +143,11 @@ export async function resolveRuntimeCwd(
       sessionId: input.sessionId,
     });
   }
-  return (await resolveWorktreeWorkspaceRecord(context, workspace, worktree, {
-    sessionId: input.sessionId,
-  })).absolutePath;
+  const projected = await resolveWorktreeWorkspaceRecord(context, workspace, worktree, { sessionId: input.sessionId });
+  if (session?.originalCwd !== undefined) {
+    if (!(await boundSessionCwdMatchesWorktree(session.cwd, projected)))
+      throw providerError('SESSION_CWD_MISMATCH', 'Native working directory no longer matches the bound Worktree', { sessionId: input.sessionId });
+    return session.cwd;
+  }
+  return projected.absolutePath;
 }

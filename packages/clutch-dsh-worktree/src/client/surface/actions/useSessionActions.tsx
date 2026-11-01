@@ -4,7 +4,6 @@ import { retryWorktreeSessionBinding } from '../../session/worktree-session.js';
 import {
   toWorktreeViewError,
   WorktreeSessionBindingError,
-  WorktreeSessionPermissionError,
   type CreateSessionForWorktreeInput,
 } from '../../view/worktree-view.js';
 import { toNativeWorktreeViewError } from '../shared.js';
@@ -20,9 +19,6 @@ type Input = {
     | 'createSessionForWorktree'
     | 'manager'
     | 'ensureSessionWorkspace'
-    | 'permission'
-    | 'confirmFullAccess'
-    | 'onPermissionResult'
     | 'openSession'
     | 'retryForkSession'
   >;
@@ -36,9 +32,6 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     createSessionForWorktree: createSessionCallback,
     manager,
     ensureSessionWorkspace,
-    permission,
-    confirmFullAccess,
-    onPermissionResult,
     openSession,
     retryForkSession,
   } = props;
@@ -62,22 +55,15 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
-      await createSessionCallback(input);
-      await refresh({
+      await createSessionCallback(input, (sessionId, projectionReady) => refresh({
+        alreadyInvalidated: projectionReady,
         scope: { kind: 'workspace', workspaceId: input.workspaceId },
         preserveCurrent: true,
-      });
+        openingSession: { sessionId, worktreeId: input.worktreeId },
+      }));
     } catch (error) {
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: toWorktreeViewError(error) });
-      }
-      if (error instanceof WorktreeSessionPermissionError && error.retryable) {
-        setPendingSessionBinding({
-          ...input,
-          sessionId: error.sessionId,
-          permissionRequired: true,
-          error: toWorktreeViewError(error),
-        });
       }
       setActionError(toWorktreeViewError(error));
     } finally {
@@ -99,16 +85,14 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
         ensureSessionWorkspace: (workspaceId, sessionId) => {
           ensureSessionWorkspace?.(workspaceId, sessionId);
         },
-        permission,
-        confirmFullAccess,
-        onPermissionResult,
         openSession,
+        beforeOpen: (sessionId) => refresh({
+          scope: { kind: 'workspace', workspaceId: pending.workspaceId },
+          preserveCurrent: true,
+          openingSession: { sessionId, worktreeId: pending.worktreeId },
+        }),
       });
       setPendingSessionBinding(undefined);
-      await refresh({
-        scope: { kind: 'workspace', workspaceId: pending.workspaceId },
-        preserveCurrent: true,
-      });
     } catch (error) {
       setPendingSessionBinding({ ...pending, error: toWorktreeViewError(error) });
       setActionError(toWorktreeViewError(error));

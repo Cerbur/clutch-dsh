@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
 
-test('committed cleanup refreshes even when permission normalization rejects', async () => {
+test('committed cleanup refreshes without invoking legacy permission normalization', async () => {
   const calls = [];
   const failure = new Error('permission offline');
   await runWorktreeCleanupFlow({
@@ -27,7 +27,7 @@ test('committed cleanup refreshes even when permission normalization rejects', a
   });
   assert.equal(calls.filter((call) => call === 'clean').length, 1);
   assert.ok(calls.indexOf('committed') < calls.indexOf('refresh'));
-  assert.ok(calls.includes('permission-error'));
+  assert.deepEqual(calls, ['clean', 'committed', 'refresh']);
 });
 
 test('clean rejection does not call onCommitted, refresh, or normalize', async () => {
@@ -58,7 +58,7 @@ test('clean rejection does not call onCommitted, refresh, or normalize', async (
   assert.deepEqual(calls, ['clean']);
 });
 
-test('refresh failure still runs normalize and reports error', async () => {
+test('refresh failure reports the error without changing permissions or replaying cleanup', async () => {
   const calls = [];
   const refreshError = new Error('refresh failed');
   await runWorktreeCleanupFlow({
@@ -82,7 +82,7 @@ test('refresh failure still runs normalize and reports error', async () => {
     },
   });
   assert.ok(calls.includes('refresh-error'));
-  assert.ok(calls.includes('normalize'));
+  assert.deepEqual(calls, ['clean', 'committed', 'refresh', 'refresh-error']);
 });
 
 test('stale or forgotten worktree stops follow-up operations and error reporting', async () => {
@@ -109,31 +109,27 @@ test('stale or forgotten worktree stops follow-up operations and error reporting
   });
   assert.deepEqual(calls, ['clean']);
 });
-test('late permission completion after forget does not publish notice or revive state', async () => {
+test('late refresh failure after forget does not publish an error or revive state', async () => {
   let isCurrent = true;
   let noticePublished = false;
-  let resolveNormalize;
-  const normalizePromise = new Promise((resolve) => {
-    resolveNormalize = resolve;
-  });
+  let rejectRefresh, started;
+  const refreshing = new Promise((resolve) => { started = resolve; });
 
   const flowPromise = runWorktreeCleanupFlow({
     clean: async () => {},
     onCommitted: () => {},
-    refresh: async () => {},
-    normalize: async () => {
-      await normalizePromise;
-      if (isCurrent) {
-        noticePublished = true;
-      }
+    refresh: async () => {
+      started();
+      await new Promise((_resolve, reject) => { rejectRefresh = reject; });
     },
     isCurrent: () => isCurrent,
-    onFollowUpError: () => {},
+    onFollowUpError: () => { noticePublished = true; },
   });
 
-  // User forgets worktree while normalize is still in-flight
+  await refreshing;
+  // User forgets worktree while refresh is still in-flight.
   isCurrent = false;
-  resolveNormalize();
+  rejectRefresh(new Error('stale read'));
   await flowPromise;
 
   assert.equal(noticePublished, false);

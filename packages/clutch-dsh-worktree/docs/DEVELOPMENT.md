@@ -84,23 +84,6 @@ node --test test/client-build.test.mjs
 
 ### 3.2 将本地插件添加到 DSH Profile
 
-验证“预设缺失但会话权限仍可生效”的原生接缝，可在本包目录执行：
-
-```bash
-node test/manual/session-permission-native.mjs "$HOME/.dsh-test/profiles/node_modules"
-```
-
-脚本复用指定环境的真实 Session、projection、sandbox、approval 与 permission 模块，
-仅创建内存 fixture Session，不启动服务、不读取历史 Session 或凭据、不切换安装链接。
-它验证确认前无写入、确认后 Custom 完全访问与 ask、幂等、Auto 共存、清理归一化和降权恢复。
-这不是浏览器 DOM/端到端验证。详细机制见 `docs/plans/2026-10-17-session-permission-injection.md`。
-
-bundle 会同时装载 Host 服务与同包 `./permission-presets` 配置贡献。后者通过 Cordis
-`internal/config` hook 在原生权限 entry 激活前追加 Worktree preset，不替换
-`permission.config`、不复制内置表、不修改官方 Auto review 注册。`--dump-config`
-展示保留的原始权限配置与注入门禁；追加项在运行时 config 中生效。验证权限集成时，应同时
-检查自定义 presets/defaultPreset 保留、Auto review 共存、热重载不重复和卸载撤销。
-
 使用绝对路径将构建出的插件包注册至 DSH 的 web profile 中：
 
 ```bash
@@ -256,48 +239,7 @@ pnpm dsh web
 
 > **提示：** 若修改了 `package.json`、`cordis.patch.yml` 或 profile bundle 成员，需重新执行一次 `pnpm dsh plugin --profile web add ...`。
 
-Host 的可选权限服务通过调用时 Context getter 读取。权限 provider 迟挂载、撤销或替换
-不要求重启 Worktree Host；服务恢复后重试仍需经过原有绑定检查与显式确认。普通
-fiber restart / Entry.update 测试不等于文件 watcher/module-graph HMR。
-
-权限生命周期定向回归（先构建本包）：
-
-```bash
-node --test test/host-permission-lifecycle.test.mjs test/permission-preset-append.test.mjs
-```
-
-可选真实 HMR 接缝实验需要现有、兼容的 Cordis/Loader/Timer/HMR node_modules 图与
-支持 `--expose-internals` 的 Node（已用 Node 24 验证）：
-
-```bash
-node --expose-internals test/manual/permission-preset-hmr.mjs /absolute/path/to/existing/node_modules
-```
-
-该实验只读取所指定的已安装模块，写入并清理自己创建的临时 fixture 包及链接；不启动
-DSH/GUI，不修改任何现有安装链接或 profile。它使用本包真实子入口 export、贡献实现、
-实际 HMR watcher 和 Node module cache，并连接真实 Host 构造函数与确认 controller；
-native permission/Auto 和外围 I/O 仍是 fixture。实验同时支持旧版
-`@deepseek-ai/cordis-plugin-hmr` 与 Desktop 的 `@deepseek-ai/dsh-hmr`，并检查包名子入口
-与绝对 file URL 的模块身份一致。已验证旧图 Cordis 4.0.2 / Loader 1.0.3 / HMR 1.0.17，
-以及实际 Desktop Electron Node 24.18.1 / Cordis 4.0.4 / Loader 1.0.5 / DSH HMR 0.2.0-rc.2
-的 10 轮贡献与 native fixture 重载、服务替换及卸载；不代表生产完整 profile 或 DOM
-验证。无匹配 watcher、没有重建或生产安装指向另一工作区时，本分支 build 不会更新
-当前 GUI。历史证据见 [权限生命周期计划](plans/2026-10-07-permission-lifecycle.md)。
-
-热安装问题的三条独立诊断命令（先构建本包）如下。这些是**故意红色**的可选 repro，
-不属于默认单元测试：
-
-```bash
-node test/manual/permission-preset-market.mjs /absolute/path/to/dshmarket/lib/hot.js
-node test/manual/permission-preset-late-install.mjs
-node --expose-internals test/manual/permission-preset-native.mjs /absolute/path/to/existing/node_modules
-```
-
-最后一条使用真实 native permission provider/schema，但外围 Session/projection/I/O 是
-隔离端口；它反证直接 `fiber.update(raw, true)` 在已有 Auto Session 时的重配安全性。
-Desktop ASAR 图需以对应 Electron 可执行文件的 `ELECTRON_RUN_AS_NODE=1` 模式运行。
-实际命令、结果、修复阻塞及所需原生扩展接缝见
-[Desktop 热安装诊断](plans/2026-10-10-permission-presets-hot-install-diagnosis.md)。
+插件仅装载 Host，不再提供权限子入口或修改原生 permission 配置。升级本地安装后重新执行上述 plugin add，重启测试服务并刷新 Client，使已安装 bundle 移除旧贡献。历史 Session 的原生策略不迁移。
 
 ### 3.4 卸载本地插件
 
@@ -352,10 +294,10 @@ pnpm dsh web --dump-config | grep -A 10 clutch-dsh-worktree
 
 ### 5.2 Sidecar 存储与跨进程锁排查
 
-插件在本地维护的外部状态位于用户主目录的 DSH Home 下：
+Sidecar、偏好与锁仍位于用户主目录的 DSH Home；新 checkout 放在原 Workspace 范围以沿用默认权限：
 
 - **工作区 Sidecar JSON**：`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`
-- **新建 Worktree 根目录**：`$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/`
+- **新建 Worktree 根目录**：`<workspace>/.agents/clutch-worktrees/wt_<hex>/`（子目录 Workspace 也在其自身范围内）；历史 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
 - **跨进程文件锁**：`$dshHome/clutch-dsh-worktree/locks/`
 
 在开发调试过程中，若遇到并发异常或需要重置本地测试数据：
@@ -493,3 +435,20 @@ description:
 独立配置文件、并发冲突与损坏文件保护。`node --test test/tool-settings.test.mjs test/worktree-tools.test.mjs`
 可定向运行；两处 UI 使用同一 browser-safe 配置接口，不读本地文件。配置修改无需重启，Host 更新通用
 命令注册，Agent 在执行前按当前绑定读取 Local/Main 或 Worktree 配置；已加载工具保留至 Agent 结束。
+
+## 原生 Session 目录能力验证
+
+已有类型与 legacy 测试的最低 graph 仍保留原版本；新建 Worktree Session 额外要求
+原生 workingDirectory 服务，以及 Session 创建的 workspaceId 输入。不能仅按 semver 推断
+该 capability 已加载；缺失时新创建流程显式失败，不自动更改权限或 header cwd。
+
+新增 test/native-session-flow.test.mjs 覆盖原始归属、子目录 Workspace、目录/绑定失败、
+冷投影释放、原生权限保留、清理和请求去重。独立 Cordis fiber 回归覆盖可选目录服务的注入边界。真实上游目录服务验证：
+
+```bash
+DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/native-session-flow.test.mjs
+```
+
+该测试只创建临时 Git 仓库和内存 Session，调用真实 WorkingDirectory/Projection/SandboxPolicy，
+验证原 header 与权限不变、原生目录事件先发布、取消不改目录。未设置 DSH_NATIVE_SOURCE
+时仅该真实 graph 用例跳过，主要契约回归仍执行。历史 preset smoke 继续只验证 legacy Session。

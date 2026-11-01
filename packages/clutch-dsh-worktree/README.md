@@ -20,20 +20,7 @@ its Workspace-root HEAD history with an optional comparison branch; the plugin d
 After installing into a running DSH instance, restart DSH Desktop, or restart the DSH Web
 server and refresh the page, if the plugin Host has not loaded. Finish
 active tasks before restarting. If the Client loads while the Host is still unavailable, a
-native toast reminds you once per Client load. If a Worktree Session permission check reports
-that **Worktree Full Access** is unavailable and falls back to `workspace-write`, a separate
-once-per-load toast gives the same restart guidance for a recent install or update. The
-permission recovery message retains this guidance after the toast closes. Network failures,
-Workspace errors, unverified permissions, and explicit user restrictions do not trigger the
-missing-preset reminder. The reminder does not reload services or grant Full Access; if the
-preset remains unavailable after restarting, check the DSH plugin and permission configuration.
-
-Once the Host is available, a missing named preset alone no longer requires a restart on
-supported DSH profiles. The existing Full Access confirmation still requires acknowledgement;
-after confirmation, Worktree applies and verifies native per-Session file access and `ask`
-approval. The native menu may display **Custom** until the named preset loads. This changes
-neither the native preset catalog nor its defaults or Auto review integration. Unsupported
-profiles retain the fallback/recovery guidance above.
+native toast reminds you once per Client load.
 
 ### Install from npm
 
@@ -74,7 +61,7 @@ dsh plugin --profile desktop add /absolute/path/to/clutch-dsh/packages/clutch-ds
 
 Reopen Desktop after installation. Keep the local checkout and its installed `node_modules`
 available while it is linked; copying only `lib/` or removing the checkout's dependencies can
-cause the Host and permission-preset entries to fail to import. Client implementation dependencies
+cause the Host entry to fail to import. Client implementation dependencies
 are bundled during the build, so Desktop does not need separate Zustand or Immer modules.
 
 ### Install from GitHub source (optional)
@@ -100,6 +87,33 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
+
+Opening a newly created or reused Worktree Session waits for its Worktree grouping to be ready,
+so it appears directly under that Worktree without briefly appearing in Local. If the grouping
+cannot be refreshed, the current view stays visible and the action reports an error for retry.
+Overlapping creation and notification refreshes share the latest result instead of reporting a
+binding repair error just because an earlier read was superseded.
+Once the destination grouping is ready, opening does not wait for the previous Session's
+context refresh; that refresh continues in the background.
+Worktree status reads run with bounded parallelism to reduce waiting in Workspaces with multiple Worktrees.
+With an existing ready grouping, creation and reuse read only the target Worktree and merge the
+confirmed bindings before opening. An unrelated change, reconnect, or stale result falls back to
+an authoritative Workspace refresh while keeping the current view visible.
+Local's **+** excludes Worktree-bound blanks (including detached bindings) when choosing a reusable
+Session. You can switch from an untouched Worktree blank to a separate Local blank without sending a message.
+Local also checks the native execution directory before reuse and opening, excluding unbound
+Sessions left in a Worktree after a binding failure. Directory read failures keep the current view visible.
+
+Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
+subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.
+Temporary failures before Session creation can be retried. After recovery opens a blank Session,
+the next new-Session action creates a fresh Session once that Session is no longer blank.
+This includes manual binding recovery. New Sessions in historical subdirectory Worktrees receive
+the same shared instructions; moving outside the bound directory still disables those instructions.
+
+New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
+
+Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 
 ### Open Worktree mode
 
@@ -362,7 +376,7 @@ that first request discards the initial routing override. Native Session model c
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
-preset and permission defaults; it does not automatically grant Worktree Full Access. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
+preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
 No extra command arguments are accepted. All discovery, reports and follow-ups are restricted
 to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
 are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
@@ -447,11 +461,7 @@ requires confirming that all tasks using them have stopped. Buttons show eligibl
 confirmation includes only those targets, while ineligible items stay selected. Archive before
 cleanup or removal from management. Results appear per Worktree; successful items are deselected and failures
 remain selected for explicit retry. Main itself is never a batch target.
-Permission recovery failures after disk cleanup remain separate for each Workspace/Worktree in
-**Settings → Worktree → Errors & recovery**, with an independent Retry action. Retry restores
-permissions only; it never repeats disk cleanup. Another target's success does not clear the failure.
-Closing Dashboard stops remaining queued items; the submitted item's follow-up still completes
-while the Worktree view remains active.
+
 
 **Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
 this checkout's current local branch. Overview previews five entries; the tab shows all matches,
@@ -677,9 +687,11 @@ text, actions and diagnostic details follow the font size selected in **Settings
   immutable acquisition `baseCommit` remains separate and is not rewritten by that edit. The index is
   kept in the DSH host plugin data directory, not in a project directory or DSH's raw data store. It
   does not store Session content or a copy of the Workspace root.
-- Runtime `cwd` is derived for each execution. No binding, Main, or detached binding uses the
-  Workspace root; an active Worktree binding uses that Worktree path. The cwd is never persisted
-  into DSH Session metadata.
+- New Sessions retain the original Workspace and immutable header directory. DSH owns the effective
+  working-directory projection and its change events; the plugin never rewrites Session metadata.
+  An active binding must match the effective directory. Leaving, detaching or cleaning a Worktree
+  never redirects a running Session to Main; DSH may recover a missing directory on the next native operation.
+  Old injected adapters without native directory facts retain their derived cwd compatibility behavior.
 - One Session can have at most one active Worktree binding, while a Worktree can have many Sessions.
   Removing or cleaning a Worktree never deletes a DSH Session. A broken active binding reports a
   repair state instead of silently falling back to another Worktree.
@@ -712,20 +724,8 @@ text, actions and diagnostic details follow the font size selected in **Settings
   remains a separate leading indicator. Visual Session ordering initially follows the newest `updatedAt` values and
   remains browser-local; Main remains fixed first, Worktree drag updates only this local order projection,
   and Main drag updates native Workspace order only after DSH accepts it.
-- Active Worktree Sessions may request the named `worktree-full-access` preset after an explicit
-  confirmation. The plugin appends this preset while preserving DSH's existing presets, default
-  selection, and official Auto review integration. It combines DSH `danger-full-access` with `ask`,
-  keeps approval prompts enabled, and does not change network or process policy. If neither the preset nor native Session policy writes are available, the plugin falls back to
-  `workspace-write + ask` when possible or reports an unverified, retryable state. Permission
-  services may mount late or be replaced: retry uses the currently available capabilities without
-  restarting the Worktree Host. A temporarily missing service never grants Full Access, and an
-  explicit user restriction is preserved. It cannot exceed the sandbox imposed by the host running DSH.
-- If the named preset is missing but native Session policy services are available, the same
-  confirmation applies `danger-full-access + ask` through native permission events instead.
-  Both effective values are verified before success is reported; the native menu may show
-  **Custom**. No synthetic preset identity is stored. Duplicate pending confirmations for the
-  same Workspace, Worktree, Session and path share one dialog; different targets remain separate.
-- Session-to-Worktree bindings and permission checks compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
+- Session creation, reuse, archive, cleanup and removal preserve native DSH permissions. The plugin provides no dedicated access preset, confirmation or permission recovery. Historical Session permissions remain unchanged; use DSH native controls when ordinary approval is needed.
+- Session-to-Worktree bindings compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
 - Git must be installed and available on `PATH`. A missing Git executable shows install guidance
   and no command block; the plugin does not run setup or installation commands.
 - If a Workspace root directory is missing, the Worktree view still renders the indexed Worktrees,

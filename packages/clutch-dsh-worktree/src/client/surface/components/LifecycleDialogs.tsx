@@ -16,7 +16,7 @@ import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 export type LifecycleDialogInput = {
   props: Pick<
     WorktreeSurfaceProps,
-    't' | 'manager' | 'permission' | 'onPermissionNotice' | 'onWorktreeForgotten'
+    't' | 'manager' | 'onWorktreeForgotten'
   >;
   lifecycleState: Pick<
     ReturnType<typeof useLifecycleState>,

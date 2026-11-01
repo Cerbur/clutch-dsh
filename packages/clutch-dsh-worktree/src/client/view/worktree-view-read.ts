@@ -4,6 +4,7 @@ import type {
   WorktreeManager,
   WorktreeRecord,
   WorkspaceCheckout,
+  WorktreeSessionState,
 } from '../../contract/index.js';
 import { toWorktreeViewError, type WorktreeViewError } from './worktree-view-errors.js';
 
@@ -31,6 +32,9 @@ export interface WorktreeWorkspaceView extends WorktreeViewData {
 }
 
 export interface WorktreeViewReader {
+  /** Correlate one admission with its notification; false requests an authoritative fallback. */
+  beginSessionChange?(workspaceId: string, changeId: string):
+    (state?: WorktreeSessionState, minimumRevision?: string) => boolean;
   /** Begin a new notification replay boundary without clearing ready Workspace caches. */
   resetChangeIds(): void;
 
@@ -55,6 +59,8 @@ interface WorktreeViewReaderEntry {
   readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
+  sessionRevision?: string;
+  sessionChanges?: Map<string, { generation: number; base?: WorktreeWorkspaceView }>;
   inFlight?: {
     generation: number;
     promise: Promise<WorktreeWorkspaceView>;
@@ -251,11 +257,47 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
   };
 
   return {
+    beginSessionChange(workspaceId, changeId) {
+      const entry = entryFor(workspaceId);
+      const ticket = { generation: entry.generation, base: entry.stale ? undefined : entry.view };
+      (entry.sessionChanges ??= new Map()).set(changeId, ticket);
+      return (state, minimumRevision = '0') => {
+        if (disposed || entry.sessionChanges?.get(changeId) !== ticket) return false;
+        entry.sessionChanges.delete(changeId);
+        if (!state || !ticket.base || state.workspaceId !== workspaceId ||
+            entry.generation !== ticket.generation || !/^\d+$/u.test(state.revision) ||
+            BigInt(state.revision) < BigInt(minimumRevision) ||
+            BigInt(state.revision) < BigInt(entry.sessionRevision ?? '0')) {
+          // An uncertain write or an unrelated notification must never leave a
+          // suppressed notification's pre-commit cache authoritative.
+          entry.generation += 1;
+          entry.stale = true;
+          entry.view = undefined;
+          return false;
+        }
+        entry.generation += 1; // Retire reads started before the commit.
+        entry.sessionRevision = state.revision;
+        entry.changeIds.add(changeId);
+        if (entry.changeIds.size > 128) entry.changeIds.delete(entry.changeIds.values().next().value!);
+        const target = state.target;
+        entry.view = { ...ticket.base, bindings: state.bindings,
+          worktrees: target === undefined ? ticket.base.worktrees : [
+            ...ticket.base.worktrees.filter((record) => record.worktreeId !== target.worktreeId), target,
+          ] };
+        // Preserve existing Worktree ordering when replacing its projection.
+        if (target && ticket.base.worktrees.some((record) => record.worktreeId === target.worktreeId)) {
+          entry.view = { ...entry.view, worktrees: ticket.base.worktrees.map((record) =>
+            record.worktreeId === target.worktreeId ? target : record) };
+        }
+        entry.stale = false;
+        return true;
+      };
+    },
     resetChangeIds(): void {
       if (disposed) return;
       // Admission identities deduplicate only within one connection. Replayed
       // changes must retire even completed reads from before the reconnect.
-      for (const entry of entries.values()) entry.changeIds.clear();
+      for (const entry of entries.values()) { entry.changeIds.clear(); entry.sessionChanges?.clear(); }
     },
     invalidate(workspaceId, options): void {
       if (disposed) return;
@@ -263,6 +305,7 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
       // Interleaved notifications/completions may reuse a newer mutation's read.
       // Bound identities per Workspace to the Host's admission capacity.
       const changeId = options?.changeId;
+      if (changeId !== undefined && entry.sessionChanges?.has(changeId)) return;
       if (changeId !== undefined && entry.changeIds.has(changeId)) return;
       // Read-only menu opens may share a current read. Mutations must retire it.
       if (options?.reuseInFlight && entry.inFlight?.generation === entry.generation) return;

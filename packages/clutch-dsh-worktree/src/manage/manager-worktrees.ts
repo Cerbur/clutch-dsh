@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { prepareWorktreePool } from '../provider/generated-path.js';
 import { gitWorktreeRoot, isWorktreeGitCommit } from '../contract/index.js';
 import { projectWorktreePath, workspacePathInWorktree, worktreeWorkspaceAvailable } from '../provider/worktree-path.js';
 import { assertGeneratedNameAvailable, GeneratedWorktreeNameCollision } from '../provider/generated-name.js';
@@ -58,11 +59,13 @@ function projectRuntimeRecord(
 /** Return the sidecar Worktree projection with runtime Git health attached. */
 export async function listWorktrees(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId },
+  input: { readonly workspaceId: WorkspaceId; readonly worktreeId?: string },
+  suppliedSnapshot?: SidecarSnapshot,
 ): Promise<readonly WorktreeRecord[]> {
   const workspace = await requireWorkspaceForRead(context, input.workspaceId);
-  const snapshot = await context.sidecar.read(input.workspaceId);
-  const records = snapshot.worktrees;
+  const snapshot = suppliedSnapshot ?? await context.sidecar.read(input.workspaceId);
+  const records = input.worktreeId === undefined ? snapshot.worktrees
+    : snapshot.worktrees.filter((record) => record.worktreeId === input.worktreeId);
   const recoveryNeeded = snapshot.pendingOperation !== undefined || (snapshot.recoveryIssues?.length ?? 0) > 0;
   if (recoveryNeeded && records.length === 0) {
     throw providerError('WORKTREE_RECOVERY_REQUIRED', `Workspace Worktree state needs recovery: ${input.workspaceId}`, {
@@ -90,16 +93,29 @@ export async function listWorktrees(
   let gitWorktrees: readonly GitWorktreeInfo[] | undefined;
   let gitRoot: string | undefined;
   try {
-    gitRoot = context.git.resolveRepositoryRoot
-      ? await context.git.resolveRepositoryRoot(workspace.rootPath)
-      : workspace.rootPath;
-    gitWorktrees = await context.git.listWorktrees(gitRoot);
+    if (input.worktreeId !== undefined) {
+      // `git worktree list` accepts a Workspace subdirectory as cwd. Its
+      // repository-wide result does not depend on discovering the checkout root.
+      // Settle both reads before projecting; either failure still fails closed.
+      const [root, checkouts] = await Promise.allSettled([
+        context.git.resolveRepositoryRoot?.(workspace.rootPath) ?? Promise.resolve(workspace.rootPath),
+        context.git.listWorktrees(workspace.rootPath),
+      ]);
+      if (root.status === 'rejected') throw root.reason;
+      gitRoot = root.value;
+      if (checkouts.status === 'rejected') throw checkouts.reason;
+      gitWorktrees = checkouts.value;
+    } else {
+      gitRoot = context.git.resolveRepositoryRoot
+        ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+        : workspace.rootPath;
+      gitWorktrees = await context.git.listWorktrees(gitRoot);
+    }
   } catch {
     gitWorktrees = undefined;
   }
 
-  const nextRecords: WorktreeRecord[] = [];
-  for (const storedRecord of records) {
+  const projectRecord = async (storedRecord: WorktreeRecord): Promise<WorktreeRecord> => {
     let record = storedRecord;
     let workspaceAvailable = true;
     if (gitRoot !== undefined) {
@@ -120,20 +136,16 @@ export async function listWorktrees(
       ) === true;
 
     if (record.diskCleanup === 'completed') {
-      nextRecords.push(projectRuntimeRecord(snapshot, record, recordRecoveryNeeded ? 'recovery-needed' : 'cleaned', activity));
-      continue;
+      return projectRuntimeRecord(snapshot, record, recordRecoveryNeeded ? 'recovery-needed' : 'cleaned', activity);
     }
 
     if (gitWorktrees === undefined) {
-      nextRecords.push(
-        projectRuntimeRecord(
-          snapshot,
-          record,
-          recordRecoveryNeeded ? 'recovery-needed' : 'repair',
-          activity,
-        ),
+      return projectRuntimeRecord(
+        snapshot,
+        record,
+        recordRecoveryNeeded ? 'recovery-needed' : 'repair',
+        activity,
       );
-      continue;
     }
     let ready = false;
     let currentBranch: string | null | undefined;
@@ -159,7 +171,7 @@ export async function listWorktrees(
         break;
       }
     }
-    nextRecords.push({
+    return {
       ...projectRuntimeRecord(
         snapshot,
         record,
@@ -168,7 +180,13 @@ export async function listWorktrees(
       ),
       ...(currentBranch === undefined ? {} : { currentBranch }),
       ...(currentHead === undefined ? {} : { currentHead }),
-    });
+    };
+  };
+  const nextRecords: WorktreeRecord[] = [];
+  // Each record is a read-only projection of the same snapshot. Bound the Git/DSH
+  // fan-out while avoiding a serial round trip per Worktree on Session opening.
+  for (let index = 0; index < records.length; index += 4) {
+    nextRecords.push(...await Promise.all(records.slice(index, index + 4).map(projectRecord)));
   }
   const storedById = new Map(records.map((record) => [record.worktreeId, record]));
   return nextRecords.map((record) => ({
@@ -389,10 +407,9 @@ async function createWorktreeAttempt(
     }
   }
 
-  const targetPath = path.resolve(context.dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId);
+  const targetPath = path.resolve(workspace.rootPath, '.agents', 'clutch-worktrees', worktreeId);
 
-  // 创建前同时检查词法和物理目录边界，阻止配置、ID 或 symlink 将目标引回 Workspace 或带出插件根目录。
-  // Check lexical and physical directory boundaries before creation so configuration, IDs, or symlinks cannot redirect the target into the Workspace or outside the plugin root.
+  // Validate the dedicated Workspace pool and its physical ancestors before creation.
   validateGeneratedPath(context, workspace.rootPath, targetPath, worktreeId);
   await validatePhysicalGeneratedPath(context, workspace.rootPath, targetPath);
 
@@ -420,7 +437,8 @@ async function createWorktreeAttempt(
     await context.git.listWorktrees(workspace.rootPath),
   );
 
-  // Git is the first external side effect; the sidecar mutation below is the relation commit point.
+  await prepareWorktreePool(context.dshHome, workspace.rootPath, targetPath);
+  // Git precedes the sidecar relation commit point.
   try {
     await context.git.createWorktree(workspace.rootPath, targetPath, newBranch === undefined ? targetBranch : baseRef, newBranch);
   } catch (error) {

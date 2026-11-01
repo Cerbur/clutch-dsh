@@ -30,7 +30,6 @@ test('exports the approved stable error codes', () => {
     'WORKTREE_STATE_CONFLICT',
     'WORKTREE_RECOVERY_REQUIRED',
     'WORKTREE_IDENTITY_CHANGED',
-    'WORKTREE_PERMISSION_BINDING_REQUIRED',
     'WORKTREE_SESSION_BUSY',
     'WORKTREE_ACTIVITY_UNAVAILABLE',
   ]);
@@ -96,6 +95,9 @@ test('represents only Worktree, Branch, and Session relation metadata', () => {
 
 test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
+    'canReuseLocalSession',
+    'createWorktreeSession',
+    'readWorktreeSessionState',
     'syncWorktreeBaseline',
     'getWorkspaceGitState',
     'getToolSettings',
@@ -123,7 +125,5 @@ test('exposes the approved Manager and Remote methods', () => {
     'insertWorktreeBefore',
     'listBindings',
     'bindSession',
-    'ensureWorktreePermission',
-    'normalizeDetachedWorktreePermissions',
   ]);
 });

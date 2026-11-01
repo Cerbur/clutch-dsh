@@ -1,26 +1,18 @@
 import { useRef } from 'react';
 import { type SessionListLike } from '../session/session-view.js';
-import type { WorktreeFullAccessConfirmationInput } from '../permission/worktree-permission.js';
 import type { WorktreeForkRecovery, WorktreeForkRecoveryStore } from '../session/worktree-session-fork.js';
 import {
   stableWorkspaceIds,
   toWorktreeViewError,
   type WorktreeViewError,
 } from '../view/worktree-view.js';
-import type { ReadState, WorkspaceLike, WorktreePermissionNotice } from './types.js';
+import type { ReadState, WorkspaceLike } from './types.js';
 export function toNativeWorktreeViewError(error: unknown): WorktreeViewError {
   const viewError = toWorktreeViewError(error);
   if (typeof error === 'object' && error !== null) return viewError;
   return { ...viewError, message: String(error) };
 }
 export const EMPTY_READ_STATE: ReadState = { status: 'idle', views: [] };
-export const EMPTY_PERMISSION_NOTICE: readonly WorktreePermissionNotice[] = [];
-export const EMPTY_PERMISSION_NOTICE_SUBSCRIBE = (): (() => void) => () => {};
-export const EMPTY_PERMISSION_NOTICE_SNAPSHOT = (): readonly WorktreePermissionNotice[] =>
-  EMPTY_PERMISSION_NOTICE;
-export const EMPTY_FULL_ACCESS_CONFIRMATION_SUBSCRIBE = (): (() => void) => () => {};
-export const EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT = ():
-  WorktreeFullAccessConfirmationInput | undefined => undefined;
 export const EMPTY_FORK_RECOVERY_SNAPSHOT = {
   revision: 0,
   pending: [],

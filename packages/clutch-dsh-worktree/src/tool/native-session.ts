@@ -1,5 +1,6 @@
 import type { CallingAgent } from './types.js';
 import type { Context } from '@deepseek-ai/cordis';
+import { samePhysicalPath } from '../provider/path-identity.js';
 import { createAgentRelaySender, type AgentRelayInput, type RelayAgent } from './agent-relay.js';
 
 export interface ToolModel {
@@ -43,7 +44,10 @@ export interface ToolSessionSnapshot {
 export interface WorktreeToolSessionPort {
   resolveAgent(sessionId: string, signal: AbortSignal): Promise<CallingAgent>;
   sendAgentMessage(input: AgentRelayInput, signal: AbortSignal): Promise<{ accepted: true }>;
-  create(input: { cwd: string }): Promise<{ sessionId: string }>;
+  create(input: { cwd: string; workspaceId?: string }): Promise<{ sessionId: string }>;
+  /** Native directory publication; optional only for legacy injected adapters. */
+  enterWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
+  assertWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
   prompt(
     input: {
       sessionId: string;
@@ -73,7 +77,7 @@ interface NativeAgent extends RelayAgent {
 }
 
 interface NativeSessionController {
-  create: WorktreeToolSessionPort['create'];
+  create(input: { cwd?: string; workspaceId?: string }): Promise<{ sessionId: string }>;
   prompt: WorktreeToolSessionPort['prompt'];
   rename: WorktreeToolSessionPort['rename'];
   modelCatalog: WorktreeToolSessionPort['modelCatalog'];
@@ -92,6 +96,49 @@ interface NativeContext {
     observeSession(id: string, options: { signal: AbortSignal }): Promise<NativeObservation>;
   };
   readonly llm: { resolveCallConfig(model: ToolModel, signal: AbortSignal): Promise<ToolModel> };
+}
+
+/** Only thrown by capability preflight, before invoking native Session creation. */
+export class NativeSessionCreationPreflightError extends Error {}
+
+/** Minimal native Session creation/directory seam; browser creation needs no commands, tools or model provider. */
+export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<WorktreeToolSessionPort,
+  'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory'> {
+  const native = ctx as unknown as NativeContext;
+  const controller = ctx.get('sessionController') as NativeSessionController;
+  return {
+    create: (input) => {
+      if (input.workspaceId === undefined) return controller.create({ cwd: input.cwd });
+      const directories = ctx.get('workingDirectory') as { set?: unknown } | undefined;
+      if (typeof directories?.set !== 'function') throw new NativeSessionCreationPreflightError('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
+      return controller.create({ workspaceId: input.workspaceId });
+    },
+    enterWorkingDirectory: async (sessionId, cwd, signal) => {
+      signal.throwIfAborted();
+      const directories = ctx.get('workingDirectory') as {
+        set(agent: NativeAgent, path: string, signal: AbortSignal): Promise<string>;
+      } | undefined;
+      if (typeof directories?.set !== 'function') throw new Error('Native workingDirectory service is unavailable');
+      const result = await controller.resolveAgent(sessionId);
+      if ('error' in result) throw result.error;
+      signal.throwIfAborted();
+      if (result.agent.session.id !== sessionId || native.agents.get(sessionId) !== result.agent)
+        throw new Error('Native Session identity changed before directory entry');
+      await directories.set(result.agent, cwd, signal);
+      signal.throwIfAborted();
+    },
+    assertWorkingDirectory: async (sessionId, cwd, signal) => {
+      signal.throwIfAborted();
+      const directories = ctx.get('workingDirectory') as { get(session: NativeAgent['session']): string } | undefined;
+      const agent = native.agents.get(sessionId);
+      if (!directories || !agent) throw new Error('Native Session directory is unavailable');
+      const actual = directories.get(agent.session);
+      if (!(await samePhysicalPath(actual, cwd))) throw new Error('Native working directory changed before input admission');
+      signal.throwIfAborted();
+      if (native.agents.get(sessionId) !== agent || directories.get(agent.session) !== actual)
+        throw new Error('Native Session directory changed during validation');
+    },
+  };
 }
 
 /** Native reads stay cold; model routing is installed only on a newly created Agent. */
@@ -189,7 +236,7 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
       signal.throwIfAborted();
       return result.agent;
     },
-    create: (input) => controller.create(input),
+    ...createNativeWorktreeSessionDirectoryPort(ctx),
     prompt: (input, signal) => controller.prompt(input, signal),
     sendAgentMessage: (input, signal) => relay.send(input, signal),
     rename: (input) => controller.rename(input),

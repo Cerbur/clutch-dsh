@@ -1,7 +1,6 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
 import type { WorktreeLocaleKey } from '../locales.js';
 import type { WorktreeErrorCode } from '../../contract/index.js';
-import type { WorktreePermissionResult } from '../../contract/index.js';
 import type { WorktreeViewError } from './worktree-view.js';
 import { WORKTREE_NS } from '../locales.js';
 
@@ -35,7 +34,6 @@ const DOMAIN_ERROR_COPY = {
   WORKTREE_STATE_CONFLICT: 'error.worktreeStateConflict',
   WORKTREE_RECOVERY_REQUIRED: 'error.worktreeRecoveryRequired',
   WORKTREE_IDENTITY_CHANGED: 'error.worktreeIdentityChanged',
-  WORKTREE_PERMISSION_BINDING_REQUIRED: 'error.permissionBindingRequired',
   WORKTREE_SESSION_BUSY: 'error.worktreeSessionBusy',
   WORKTREE_ACTIVITY_UNAVAILABLE: 'error.worktreeActivityUnavailable',
 } as const satisfies Record<WorktreeErrorCode, WorktreeLocaleKey>;
@@ -71,22 +69,6 @@ function gitErrorCopy(error: WorktreeViewError): WorktreeLocaleKey {
   if (/not a valid branch name|invalid branch name|not a valid ref/i.test(diagnostic))
     return 'error.gitInvalidBranch';
   return 'error.gitOperationFailed';
-}
-
-export function formatWorktreePermissionNotice(
-  result: WorktreePermissionResult,
-  t: WorktreeTranslate,
-): string {
-  switch (result.status) {
-    case 'fallback-workspace-write':
-      return t('permission.fallbackWorkspaceWrite');
-    case 'user-restricted':
-      return t('permission.userRestricted');
-    case 'unverified':
-      return t('permission.unverified');
-    default:
-      return t('permission.unavailable');
-  }
 }
 
 export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTranslate): string {
@@ -151,10 +133,6 @@ export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTra
       });
     case 'SESSION_ALREADY_BOUND':
       return t('error.sessionAlreadyBound');
-    case 'WORKTREE_PERMISSION_CONFIRMATION_REQUIRED':
-      return t('error.worktreePermissionConfirmationRequired');
-    case 'WORKTREE_PERMISSION_FAILED':
-      return t('error.worktreePermissionFailed');
     case 'SESSION_LIST_NOT_READY':
       return t('error.sessionListNotReady');
     case 'SESSION_FACTS_INCOMPLETE':

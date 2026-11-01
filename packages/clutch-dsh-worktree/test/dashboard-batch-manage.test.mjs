@@ -12,7 +12,6 @@ import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
 import { en, zh } from '../lib/client/locales.js';
 import { createWorktreeRefreshGuard } from '../lib/client/view/worktree-view-read.js';
-import { loadClientEntry } from './client-fixture.mjs';
 import * as view from '../lib/client/view/worktree-view.js';
 
 const record = { workspaceId: 'repo', worktreeId: 'one', branch: 'feat/one', absolutePath: '/repo/one',
@@ -164,7 +163,7 @@ test(`closing batch UI after ${action} submission completes Surface follow-ups o
   if (action === 'clean') {
     assert.equal(state.current.views[0].worktrees[0].diskCleanup, 'completed');
     assert.equal(state.current.views[0].bindings[0].status, 'detached');
-    for (const name of ['normalize', 'notice']) assert.equal(calls.filter(([kind]) => kind === name).length, 1, name);
+    for (const name of ['normalize', 'notice']) assert.equal(calls.filter(([kind]) => kind === name).length, 0, name);
   }
   if (action === 'forget') {
     assert.deepEqual(state.current.views[0].worktrees.map((item) => item.worktreeId), ['two']);
@@ -239,107 +238,6 @@ test('reader replacement resets the live Surface busy state without old RPC call
   }
 });
 
-async function permissionRecoveryFixture(props, input, state) {
-  const actions = await compile('../src/client/surface/actions/useLifecycleActions.tsx', {
-    '../../view/worktree-view.js': view,
-  });
-  const surface = await compile('../src/client/surface/components/SurfaceContent.tsx', {
-    'react/jsx-runtime': jsx,
-    '../../view/worktree-error-copy.js': { formatWorktreePermissionNotice: (result) => result.status },
-    '../../worktree.css': { default: {} }, '../shared.js': {},
-    './WorkspaceTree.js': { WorkspaceTree: 'tree' }, './OverlayScrollbar.js': { OverlayScrollbar: 'scrollbar' },
-    './NotificationToasts.js': { NotificationToasts: 'notifications' }, '../notification-queue.js': {},
-  });
-  const permissionRetryPending = { current: false };
-  return () => {
-    const source = { mode: 'worktree', permissionNoticeSnapshot: props.permissionNotice.getSnapshot(),
-      workspaces: { items: [] }, sessions: { byId: {} }, forkRecoverySnapshot: { pending: [] } };
-    const read = { ...input.read, readState: state.current,
-      viewByWorkspace: new Map(state.current.views.map((item) => [item.workspaceId, item])) };
-    const lifecycle = actions.useLifecycleActions({ read, source,
-      props: { ...props, permission: input.props.permission }, mutation: input.mutation,
-      lifecycleState: { ...input.lifecycleState, permissionRetryPending } });
-    const element = surface.SurfaceContent({ source, props: { ...props, t: (key) => key }, read,
-      lifecycle, mutation: input.mutation, session: { ...input.session, pendingSessionBinding: undefined }, expansion: {} });
-    const findNotices = (node) => {
-      if (node?.type === 'notifications') return node.props.notices;
-      for (const child of React.Children.toArray(node?.props?.children)) {
-        const found = findNotices(child);
-        if (found) return found;
-      }
-    };
-    return findNotices(element);
-  };
-}
-
-for (const bothFail of [false, true]) {
-  test(`batch cleanup retains scoped permission failures when ${bothFail ? 'both items fail' : 'A fails and B succeeds'}`, async () => {
-    const client = await loadClientEntry();
-    try {
-      const props = client.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
-      const { execute, input, state, calls } = await operationsFixture();
-      state.current.views[0].worktrees = [archived, archivedSecond];
-      input.props.onPermissionNotice = props.onPermissionNotice;
-      const normalizations = [];
-      input.props.permission.normalizeDetachedWorktreePermissions = async (target) => {
-        normalizations.push({ workspaceId: target.workspaceId, worktreeId: target.worktreeId });
-        if (target.worktreeId === 'one') throw new Error('permission unavailable');
-        if (bothFail) return { status: 'unverified', retryable: true };
-        return { status: 'normalized-workspace-write', retryable: false };
-      };
-      const results = [];
-      await batch.runWorktreeBatch('clean', [archived, archivedSecond], execute, () => true, (result) => results.push(result));
-      assert.ok(results.every((result) => !result.error), 'permission follow-up cannot undo committed cleanup');
-      assert.deepEqual(normalizations.map((target) => target.worktreeId), ['one', 'two']);
-      const notices = props.permissionNotice.getSnapshot();
-      assert.deepEqual(notices.map((notice) => [notice.workspaceId, notice.worktreeId]),
-        bothFail ? [['repo', 'one'], ['repo', 'two']] : [['repo', 'one']]);
-      assert.ok(notices.every((notice) => notice.result.retryable));
-      const renderRecovery = await permissionRecoveryFixture(props, input, state);
-      let recovery = renderRecovery();
-      assert.equal(recovery.length, bothFail ? 2 : 1);
-      assert.equal(new Set(recovery.map((notice) => notice.key)).size, recovery.length);
-      assert.ok(recovery.every((notice) => notice.actions.length === 1));
-      input.props.permission.normalizeDetachedWorktreePermissions = async (target) => {
-        normalizations.push(target);
-        return { status: 'normalized-workspace-write', retryable: false };
-      };
-      await recovery[0].actions[0].onClick();
-      assert.deepEqual(normalizations[2], { workspaceId: 'repo', worktreeId: 'one' });
-      assert.deepEqual(props.permissionNotice.getSnapshot(), bothFail ? [notices[1]] : []);
-      if (bothFail) {
-        recovery = renderRecovery();
-        await recovery[0].actions[0].onClick();
-        assert.deepEqual(normalizations[3], { workspaceId: 'repo', worktreeId: 'two' });
-        assert.deepEqual(props.permissionNotice.getSnapshot(), []);
-      }
-      assert.deepEqual(calls.filter(([action]) => action === 'clean'), [['clean', 'one'], ['clean', 'two']]);
-    } finally {
-      for (const dispose of client.disposers.toReversed()) dispose();
-    }
-  });
-}
-
-test('permission successes and forgetting clear only notices in their Workspace/Worktree scope', async () => {
-  const client = await loadClientEntry();
-  try {
-    const props = client.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
-    const scopes = [{ workspaceId: 'A', worktreeId: 'same' }, { workspaceId: 'B', worktreeId: 'same' },
-      { workspaceId: 'A', worktreeId: 'other' }];
-    const failure = { status: 'unverified', retryable: true };
-    for (const scope of scopes) props.onPermissionNotice(scope, failure);
-    props.onPermissionNotice(scopes[1], { status: 'normalized-workspace-write', retryable: false });
-    assert.deepEqual(props.permissionNotice.getSnapshot().map(({ workspaceId, worktreeId }) => ({ workspaceId, worktreeId })),
-      [scopes[0], scopes[2]]);
-    props.onPermissionNotice(scopes[1], failure);
-    props.onWorktreeForgotten({ ...scopes[0], sessionIds: [] });
-    assert.deepEqual(props.permissionNotice.getSnapshot().map(({ workspaceId, worktreeId }) => ({ workspaceId, worktreeId })),
-      [scopes[2], scopes[1]]);
-  } finally {
-    for (const dispose of client.disposers.toReversed()) dispose();
-  }
-});
-
 test('production batch actions refresh tokens between items and preserve unrelated ready views', async () => {
   const { execute, calls, state } = await operationsFixture();
   const unrelated = state.current.views[1];
@@ -378,15 +276,15 @@ test('a failed Git cleanup refreshes rollback revisions before continuing the ba
     options.scope.workspaceId === 'repo' && options.preserveCurrent));
 });
 
-test('production cleanup detaches bindings and normalizes permissions; forget preserves native Sessions', async () => {
+test('production cleanup detaches bindings without changing permissions; forget preserves native Sessions', async () => {
   const { execute, input, calls, state } = await operationsFixture();
   const unrelated = state.current.views[1];
   state.current.views[0].worktrees = [archived, archivedSecond];
   await execute('clean', archived);
   assert.equal(state.current.views[0].worktrees[0].health, 'cleaned');
   assert.equal(state.current.views[0].bindings[0].status, 'detached');
-  assert.ok(calls.some(([action]) => action === 'normalize'));
-  assert.ok(calls.some(([action]) => action === 'notice'));
+  assert.equal(calls.some(([action]) => action === 'normalize'), false);
+  assert.equal(calls.some(([action]) => action === 'notice'), false);
   await execute('forget', state.current.views[0].worktrees[0]);
   assert.deepEqual(state.current.views[0].worktrees.map((item) => item.worktreeId), ['two']);
   assert.equal(state.current.views[0].bindings.length, 0);

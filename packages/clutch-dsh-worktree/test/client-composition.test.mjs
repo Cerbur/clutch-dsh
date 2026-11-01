@@ -408,6 +408,14 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
     rpc: {
       call(_channel, endpoint, payload) {
         const input = payload.args.input;
+        if (endpoint === 'worktreeManager/readWorktreeSessionState') {
+          bindingRequests.push(input.workspaceId);
+          return Promise.resolve({ ok: true, value: { ok: true, value: {
+            workspaceId: input.workspaceId, revision: '1', bindings: [],
+            target: { workspaceId: input.workspaceId, worktreeId: 'worktree-target',
+              absolutePath: '/tmp/worktree-target', status: 'active', health: 'ready' },
+          } } });
+        }
         if (endpoint === 'worktreeManager/listWorktrees') {
           return Promise.resolve({
             ok: true,
@@ -429,6 +437,11 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
             ok: true,
             value: { ok: true, value: [] },
           });
+        }
+        if (endpoint === 'worktreeManager/createWorktreeSession') {
+          assert.equal(input.workspaceId, 'workspace-two');
+          assert.equal(input.worktreeId, 'worktree-target');
+          return Promise.resolve({ ok: true, value: { ok: true, value: { sessionId: 'session-created', bound: true } } });
         }
         if (endpoint === 'worktreeManager/bindSession') {
           return Promise.resolve({
@@ -452,7 +465,7 @@ test('keeps Worktree Session preflight in the requested Workspace', async () => 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
 
-test('does not globally rescan Fork bindings while creating an unconfirmed Worktree Session', async () => {
+test('does not globally rescan Fork bindings while waiting for native Worktree Session creation', async () => {
   const previousDocument = globalThis.document;
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
@@ -474,6 +487,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
   let fixture;
   try {
     const bindingRequests = [];
+    const creation = deferred();
     const initialSessionSnapshot = {
       phase: 'ready',
       ids: ['parent-session', 'child-session'],
@@ -495,6 +509,14 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
       rpc: {
         call(_channel, endpoint, payload) {
           const input = payload.args.input;
+          if (endpoint === 'worktreeManager/readWorktreeSessionState') {
+            bindingRequests.push(input.workspaceId);
+            return Promise.resolve({ ok: true, value: { ok: true, value: {
+              workspaceId: input.workspaceId, revision: '1', bindings: [],
+              target: { workspaceId: input.workspaceId, worktreeId: 'worktree-one',
+                absolutePath: '/tmp/worktree-one', status: 'active', health: 'ready' },
+            } } });
+          }
           if (endpoint === 'worktreeManager/listWorktrees') {
             return Promise.resolve({
               ok: true,
@@ -517,27 +539,14 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
               value: { ok: true, value: [] },
             });
           }
+          if (endpoint === 'worktreeManager/createWorktreeSession') {
+            assert.equal(input.workspaceId, 'workspace-one');
+            return creation.promise;
+          }
           if (endpoint === 'worktreeManager/bindSession') {
             return Promise.resolve({
               ok: true,
               value: { ok: true, value: { ...input, status: 'active' } },
-            });
-          }
-          if (endpoint === 'worktreeManager/ensureWorktreePermission') {
-            return Promise.resolve({
-              ok: true,
-              value: {
-                ok: true,
-                value: input.confirmed === true
-                  ? {
-                      status: 'full-applied',
-                      preset: 'worktree-full-access',
-                      sandboxMode: 'danger-full-access',
-                      approvalPolicy: 'ask',
-                      retryable: false,
-                    }
-                  : { status: 'confirmation-required', retryable: false },
-              },
             });
           }
           return Promise.resolve({ ok: true, value: { ok: true, value: [] } });
@@ -560,12 +569,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
       cwd: '/tmp/worktree-one',
     });
     await flush();
-    assert.deepEqual(overlay.fullAccessConfirmation.getSnapshot(), {
-      workspaceId: 'workspace-one',
-      worktreeId: 'worktree-one',
-      sessionId: 'session-created',
-      cwd: '/tmp/worktree-one',
-    });
+    assert.equal(overlay.fullAccessConfirmation, undefined);
 
     fixture.setSessionListSnapshot({
       ...initialSessionSnapshot,
@@ -586,7 +590,7 @@ test('does not globally rescan Fork bindings while creating an unconfirmed Workt
     });
     await flush();
 
-    overlay.fullAccessConfirmation.resolve(true);
+    creation.resolve({ ok: true, value: { ok: true, value: { sessionId: 'session-created', bound: true } } });
     assert.equal(await createPromise, 'session-created');
     assert.deepEqual(bindingRequests.slice(initialBindingRequestCount), ['workspace-one']);
   } finally {
@@ -922,7 +926,7 @@ test('shares an overlapping direct Fork lookup with notification reconciliation'
 test('routes Worktree Session creation through the browser Session connector', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /createWorktreeSessionConnector/);
-  assert.match(source, /worktreeSessionConnector\.create\(input\)/);
+  assert.match(source, /worktreeSessionConnector\.create\(input, beforeOpen\)/);
   assert.match(source, /worktreeSessionConnector\.dispose\(\)/);
   assert.doesNotMatch(source, /createSessionForWorktree\(\{/);
 });
@@ -930,7 +934,8 @@ test('routes Worktree Session creation through the browser Session connector', a
 test('routes native Workspace creation through uiWorkspace and workspaces commands', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
   assert.match(source, /ctx\.uiWorkspace\.pickDirectory\(\)/);
-  assert.match(source, /ctx\.uiWorkspace\.startSession\(/);
+  assert.match(source, /createMainSession:.*localSessionConnector\.create\(workspaceId\)/);
+  assert.match(source, /createLocalSessionConnector\(/);
   assert.doesNotMatch(source, /ctx\.workspaces\.pickDirectory/);
   assert.doesNotMatch(source, /ctx\.workspaces\.startSession/);
 

@@ -15,10 +15,12 @@ import type {
   WorktreeGitHistory,
   WorktreeGitHistoryRequest,
   WorktreeRecord,
+  WorktreeSessionState,
   WorkspaceId,
   WorkspaceCheckout,
 } from '../contract/index.js';
 import { LocalGitAdapter } from '../provider/git/adapter.js';
+import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { WorktreeMutationTransaction } from '../provider/transaction/index.js';
 import { providerError } from '../provider/types.js';
@@ -51,7 +53,7 @@ import {
   updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
-import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
+import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, resolveWorktreeWorkspaceRecord, samePhysicalPath } from './manager-support.js';
 
 function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
   // `main` is retained for legacy browser callers; the canonical synthetic ID is
@@ -214,9 +216,20 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
         );
         if (binding) {
           const record = snapshot.worktrees.find((item) => item.worktreeId === binding.worktreeId);
+          let matches = true;
+          if (record && record.diskCleanup !== 'completed' && session?.originalCwd !== undefined) {
+            matches = await boundSessionCwdMatchesWorktree(session.cwd, record);
+            if (!matches && record.gitRootPath === undefined) {
+              const workspace = await this.context.dsh.getWorkspace(workspaceId);
+              if (workspace) matches = await boundSessionCwdMatchesWorktree(session.cwd,
+                await resolveWorktreeWorkspaceRecord(this.context, workspace, record));
+            }
+          }
           return {
             snapshot,
-            instructions: !record || record.diskCleanup === 'completed' ? '' : record.instructions ?? '',
+            instructions: !record || record.diskCleanup === 'completed' ||
+              !matches
+              ? '' : record.instructions ?? '',
           };
         }
         return { snapshot };
@@ -227,7 +240,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       if (session?.workspaceId !== undefined) {
         const workspace = await this.context.dsh.getWorkspace(session.workspaceId);
         const result = await readWorkspace(session.workspaceId);
-        if (workspace !== undefined) return result.instructions ?? result.snapshot.mainInstructions ?? '';
+        if (workspace !== undefined) {
+          if (result.instructions !== undefined) return result.instructions;
+          if (session.originalCwd !== undefined && !(await samePhysicalPath(session.cwd, workspace.rootPath))) return '';
+          return result.snapshot.mainInstructions ?? '';
+        }
         // A stale Session may retain a Workspace id after DSH removes that
         // Workspace. An active binding can still identify Worktree guidance,
         // but an orphaned shard must never supply Main instructions by guess.
@@ -248,6 +265,16 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
 
   listWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]> {
     return this.afterRecovery(() => listWorktrees(this.context, input));
+  }
+
+  readWorktreeSessionState(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeSessionState> {
+    return this.afterRecovery(async () => {
+      await requireWorkspaceForRead(this.context, input.workspaceId);
+      const snapshot = await this.context.sidecar.read(input.workspaceId);
+      const [target] = await listWorktrees(this.context, input, snapshot);
+      return { workspaceId: input.workspaceId, revision: snapshot.revision, bindings: snapshot.bindings,
+        ...(target === undefined ? {} : { target }) };
+    });
   }
 
   getWorkspaceGitState(input: { readonly workspaceId: WorkspaceId }) {

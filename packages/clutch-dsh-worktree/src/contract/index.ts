@@ -1,9 +1,6 @@
-import type {
-  WorktreePermissionNormalizationRequest,
-  WorktreePermissionRequest,
-  WorktreePermissionResult,
-} from './worktree-permission.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from './baseline-sync.js';
+import type { WorktreeSessionState } from './session-flow.js';
+export type { WorktreeSessionState } from './session-flow.js';
 export type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult, WorktreeSyncStrategy, WorktreeBaselineSyncManager } from './baseline-sync.js';
 
 /**
@@ -40,7 +37,6 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_STATE_CONFLICT',
   'WORKTREE_RECOVERY_REQUIRED',
   'WORKTREE_IDENTITY_CHANGED',
-  'WORKTREE_PERMISSION_BINDING_REQUIRED',
   'WORKTREE_SESSION_BUSY',
   'WORKTREE_ACTIVITY_UNAVAILABLE',
 ] as const);
@@ -203,7 +199,7 @@ export interface WorktreeGitFileDiff {
   readonly segments?: readonly WorktreeGitDiffSegment[];
 }
 
-export * from './worktree-permission.js';
+export * from './session-flow.js';
 export * from './worktree-tool-changes.js';
 export * from './tool-settings.js';
 export * from './windows-path.js';
@@ -386,6 +382,7 @@ export interface WorktreeManager {
    * Returns every recorded Worktree for the Workspace, including removed records retained for detached relations.
    */
   listWorktrees(input: { workspaceId: WorkspaceId }): Promise<readonly WorktreeRecord[]>;
+  readWorktreeSessionState?(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeSessionState>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorkspaceGitState>;
 
   listWorktreeCommits(input: WorktreeGitHistoryRequest): Promise<WorktreeGitHistory>;
@@ -488,6 +485,9 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'canReuseLocalSession',
+  'createWorktreeSession',
+  'readWorktreeSessionState',
   'syncWorktreeBaseline',
   'getWorkspaceGitState',
   'getToolSettings',
@@ -515,8 +515,6 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'insertWorktreeBefore',
   'listBindings',
   'bindSession',
-  'ensureWorktreePermission',
-  'normalizeDetachedWorktreePermissions',
 ] as const);
 
 export type WorktreeRemoteMethod = (typeof WORKTREE_REMOTE_METHODS)[number];
@@ -554,6 +552,7 @@ export interface WorktreeRemoteManager {
   listWorktrees(input: {
     workspaceId: WorkspaceId;
   }): Promise<WorktreeRemoteResult<readonly WorktreeRecord[]>>;
+  readWorktreeSessionState(input: { workspaceId: string; worktreeId: string }): Promise<WorktreeRemoteResult<WorktreeSessionState>>;
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>>;
 
   listWorktreeCommits(input: {
@@ -623,11 +622,4 @@ export interface WorktreeRemoteManager {
     sessionId: SessionId;
   }): Promise<WorktreeRemoteResult<SessionBinding>>;
 
-  ensureWorktreePermission(
-    input: WorktreePermissionRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
-
-  normalizeDetachedWorktreePermissions(
-    input: WorktreePermissionNormalizationRequest,
-  ): Promise<WorktreeRemoteResult<WorktreePermissionResult>>;
 }

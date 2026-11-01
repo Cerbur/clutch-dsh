@@ -13,7 +13,7 @@ export function createLifecycleCommands({
   read,
   session,
 }: LifecycleDialogInput) {
-  const { manager, permission, onPermissionNotice, onWorktreeForgotten } = props;
+  const { manager, onWorktreeForgotten } = props;
   const {
     worktreeBranchAdoption,
     setWorktreeBranchAdoption,
@@ -155,37 +155,6 @@ export function createLifecycleCommands({
           scope: { kind: 'workspace', workspaceId: target.workspaceId },
           preserveCurrent: true,
         });
-      },
-      normalize: async () => {
-        if (permission?.normalizeDetachedWorktreePermissions === undefined) return;
-        try {
-          const result = await permission.normalizeDetachedWorktreePermissions({
-            workspaceId: target.workspaceId,
-            worktreeId: target.worktreeId,
-          });
-          if (result !== undefined && isCurrent()) {
-            onPermissionNotice?.(
-              {
-                workspaceId: target.workspaceId,
-                worktreeId: target.worktreeId,
-              },
-              result,
-            );
-          }
-        } catch {
-          if (isCurrent()) {
-            onPermissionNotice?.(
-              {
-                workspaceId: target.workspaceId,
-                worktreeId: target.worktreeId,
-              },
-              {
-                status: 'unverified',
-                retryable: true,
-              },
-            );
-          }
-        }
       },
       isCurrent,
       onFollowUpError: () => {

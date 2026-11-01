@@ -7,6 +7,15 @@ The requested DeepSeek Harness checkout is at
 
 ## Feasibility and upstream seams
 
+2026-10-31 native-directory amendment: the packaged Host now creates delegated Sessions with
+`sessionController.create({ workspaceId })`, publishes their Worktree directory through the native
+`workingDirectory` service, then binds before admitting task input. Original Workspace membership
+and header cwd remain unchanged. Effective-directory reads authorize follow-ups and reports;
+leaving the bound directory fails closed. Model/report setup is followed by another cwd check
+immediately before initial input admission. Default native permissions are preserved.
+Old injected Session ports retain their cwd creation contract; the real Host fails before creation
+when native directory capability is absent. See `ARCHITECTURE.md` for storage and historical limits.
+
 This feature uses existing plugin extension points without DSH core changes.
 Relevant source files under the requested DSH checkout:
 

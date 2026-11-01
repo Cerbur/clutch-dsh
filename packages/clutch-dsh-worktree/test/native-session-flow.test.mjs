@@ -1,0 +1,476 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { Context } from '@deepseek-ai/cordis';
+import { createRequire } from 'node:module';
+import process from 'node:process';
+import { pathToFileURL } from 'node:url';
+import { createWorktreeManager } from '../lib/manage/index.js';
+import { WorktreeRemoteService } from '../lib/host/service.js';
+import { DshHostReadAdapter } from '../lib/host/dsh-read-adapter.js';
+import { createWorktreeSessionCreation } from '../lib/host/session-creation.js';
+import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
+import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
+import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/generated-path.js';
+import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
+import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
+const { AbortController } = globalThis;
+
+async function fixture(t, nested = false) {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'native-session-flow-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repo = path.join(root, 'repo');
+  const home = path.join(root, 'home');
+  await mkdir(repo); await mkdir(home);
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  git('init', '-b', 'main');
+  const workspace = nested ? path.join(repo, 'packages', 'app') : repo;
+  await mkdir(workspace, { recursive: true });
+  await writeFile(path.join(workspace, 'tracked.txt'), 'initial\n');
+  git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'initial');
+  const actors = new Map();
+  const workspaceView = { id: 'ws', path: workspace, sessionIds: [] };
+  const native = {
+    workspaceRegistry: { get: () => workspaceView, list: () => [workspaceView] },
+    sessions: { get: (id) => actors.get(id), list: () => [...actors.values()] },
+    sessionPersistence: { list: async () => [] },
+    workingDirectory: { get: (session) => session.effectiveCwd ?? session.header.cwd },
+  };
+  const dsh = new DshHostReadAdapter(native);
+  const manager = createWorktreeManager({ dsh, dshHome: home });
+  t.after(() => manager.close());
+  const record = await manager.createWorktree({ workspaceId: 'ws', branch: 'main', newBranch: 'feature' });
+  const calls = [];
+  const sessions = {
+    async create(input) {
+      calls.push(['create', input]);
+      const sessionId = 'child';
+      actors.set(sessionId, { id: sessionId, header: { id: sessionId, cwd: workspace } });
+      workspaceView.sessionIds.push(sessionId);
+      return { sessionId };
+    },
+    async enterWorkingDirectory(id, cwd, signal) { signal.throwIfAborted(); calls.push(['enter', cwd]); actors.get(id).effectiveCwd = cwd; },
+    async configureModel() { calls.push(['model']); },
+    async prompt() { calls.push(['prompt']); return { accepted: true }; },
+  };
+  return { root, home, repo, workspace, git, dsh, native, actors, manager, record, sessions, calls };
+}
+
+for (const nested of [false, true]) test(`target Session reads preserve full projection from a Workspace cwd (nested: ${nested})`, async (t) => {
+  const f = await fixture(t, nested);
+  for (const detached of [false, true]) {
+    if (detached) execFileSync('git', ['switch', '--detach'], { cwd: f.record.gitRootPath ?? f.record.absolutePath });
+    const [full] = await f.manager.listWorktrees({ workspaceId: 'ws' });
+    const state = await f.manager.readWorktreeSessionState({ workspaceId: 'ws', worktreeId: f.record.worktreeId });
+    assert.deepEqual(state.target, full);
+    assert.equal(state.target.health, detached ? 'branch-drift' : 'ready');
+  }
+});
+
+test('mounted Cordis Host creates and binds a Workspace-owned Session with native directory reads', async (t) => {
+  const f = await fixture(t);
+  const ctx = new Context();
+  t.after(() => ctx.fiber.dispose());
+  for (const name of ['workspaceRegistry', 'sessions', 'sessionPersistence']) ctx.provide(name, f.native[name]);
+  const agent = { session: { id: 'child' } };
+  ctx.provide('agents', { get: () => agent });
+  ctx.provide('sessionController', {
+    create: (input) => f.sessions.create(input),
+    resolveAgent: async () => ({ agent }),
+  });
+  await ctx.plugin((directoryCtx) => directoryCtx.provide('workingDirectory', {
+    get: f.native.workingDirectory.get,
+    set: async (_agent, cwd, signal) => f.sessions.enterWorkingDirectory('child', cwd, signal),
+  }));
+  await ctx.plugin(WorktreeRemoteService, { dshHome: f.home });
+  const service = ctx.get('worktreeManager');
+  await f.sessions.create({ workspaceId: 'ws' });
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'child' }), { ok: true, value: true });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'child' }), { ok: true, value: false });
+  assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'missing' }), { ok: true, value: false });
+  assert.equal(service.ensureWorktreePermission, undefined);
+  assert.equal(service.normalizeDetachedWorktreePermissions, undefined);
+  const result = await service.createWorktreeSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'mounted' }, new AbortController().signal);
+  assert.equal(result.ok, true);
+  const { state, ...created } = result.value;
+  assert.deepEqual(created, { sessionId: 'child', bound: true });
+  assert.deepEqual(state, await f.manager.readWorktreeSessionState({ workspaceId: 'ws', worktreeId: f.record.worktreeId }));
+  assert.equal((await f.dsh.getSession('child')).cwd, f.record.absolutePath);
+  assert.equal(f.actors.get('child').header.cwd, f.workspace);
+  assert.deepEqual((await f.manager.listBindings({ workspaceId: 'ws' })).map((b) => b.sessionId), ['child']);
+});
+
+for (const nested of [false, true]) test(
+  `Workspace-owned execution and cleanup preserve native policy (nested=${nested})`,
+  async (t) => {
+    const f = await fixture(t, nested);
+    const signal = new AbortController().signal;
+    const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions: f.sessions,
+      model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', signal, check: () => signal.throwIfAborted() });
+    assert.equal(result.status, 'dispatched');
+    assert.deepEqual(f.calls.map(([kind]) => kind), ['create', 'enter', 'model', 'prompt']);
+    const session = await f.dsh.getSession('child');
+    assert.equal(session.workspaceId, 'ws');
+    assert.equal(session.originalCwd, f.workspace);
+    assert.equal(session.cwd, f.record.absolutePath);
+    assert.equal(f.actors.get('child').header.cwd, f.workspace);
+    assert.ok(f.record.absolutePath.startsWith(f.workspace + path.sep));
+    assert.equal(f.git('status', '--porcelain'), '', 'pool contents are ignored without changing tracked files');
+    assert.equal(await readFile(path.join(f.workspace, '.agents', 'clutch-worktrees', '.gitignore'), 'utf8'), '*\n');
+    assert.equal(await f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'child' }), f.record.baseCommit);
+    await f.manager.updateWorktreeInstructions({ workspaceId: 'ws', worktreeId: f.record.worktreeId, instructions: 'Worktree guidance', expectedInstructions: '' });
+    assert.equal(await f.manager.resolveSessionInstructions('child'), 'Worktree guidance');
+    f.actors.get('child').effectiveCwd = f.workspace;
+    assert.equal(await f.manager.resolveSessionInstructions('child'), '');
+    await assert.rejects(f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'child' }), { code: 'SESSION_CWD_MISMATCH' });
+    const lifecycle = async (name) => f.manager[name]({ workspaceId: 'ws', worktreeId: f.record.worktreeId,
+      mutationToken: (await f.manager.listWorktrees({ workspaceId: 'ws' }))[0].mutationToken });
+    await lifecycle('removeWorktree'); await lifecycle('cleanWorktree');
+    assert.equal(f.actors.get('child').header.cwd, f.workspace);
+  });
+
+test('reusing an active binding revalidates native cwd and preserves the relation on mismatch', async (t) => {
+  const f = await fixture(t);
+  const signal = new AbortController().signal;
+  const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions: f.sessions,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', signal, check() {} });
+  assert.equal(result.status, 'dispatched');
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' };
+  const before = await f.manager.listBindings({ workspaceId: 'ws' });
+  assert.deepEqual(await f.manager.bindSession(input), before[0], 'valid retries remain idempotent');
+  f.actors.get('child').effectiveCwd = f.workspace;
+  await assert.rejects(f.manager.bindSession(input), { code: 'SESSION_CWD_MISMATCH' });
+  assert.deepEqual(await f.manager.listBindings({ workspaceId: 'ws' }), before);
+});
+
+for (const failed of ['enter', 'bind']) test(`partial ${failed} failure preserves Session and never admits input`, async (t) => {
+  const f = await fixture(t);
+  const sessions = { ...f.sessions, ...(failed === 'enter' ? { enterWorkingDirectory: async () => { throw new Error('directory unavailable'); } } : {}) };
+  const manager = failed === 'bind' ? { bindSession: async () => { throw new Error('Sidecar unavailable'); } } : f.manager;
+  const signal = new AbortController().signal;
+  const result = await dispatchWorktreeSession({ record: f.record, manager, sessions,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', signal, check() {} });
+  assert.equal(result.status, 'binding-failed');
+  assert.equal(result.sessionId, 'child');
+  assert.ok(f.actors.has('child'));
+  assert.equal(f.calls.some(([kind]) => kind === 'prompt' || kind === 'model'), false);
+});
+
+test('directory changes during model configuration stop input without deleting the Session', async (t) => {
+  const f = await fixture(t);
+  const signal = new AbortController().signal;
+  const sessions = { ...f.sessions,
+    configureModel: async () => { f.actors.get('child').effectiveCwd = f.workspace; },
+    assertWorkingDirectory: async (id, cwd) => {
+      if (f.actors.get(id).effectiveCwd !== cwd) throw new Error('directory changed');
+    },
+  };
+  const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', signal, check() {} });
+  assert.equal(result.status, 'prompt-failed');
+  assert.equal(result.sessionId, 'child');
+  assert.equal(f.calls.some(([kind]) => kind === 'prompt'), false);
+});
+
+test('an unbound native directory outside the Workspace cannot capture another checkout HEAD', async (t) => {
+  const f = await fixture(t);
+  f.actors.set('unbound', { id: 'unbound', header: { id: 'unbound', cwd: f.workspace }, effectiveCwd: f.home });
+  f.native.workspaceRegistry.get().sessionIds.push('unbound');
+  await assert.rejects(f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'unbound' }), { code: 'SESSION_CWD_MISMATCH' });
+});
+
+test('cold effective-directory observations are authoritative and always released', async () => {
+  let disposed = 0;
+  let value = '/repo/.agents/clutch-worktrees/wt';
+  const native = {
+    workspaceRegistry: { list: () => [{ id: 'ws', path: '/repo', sessionIds: ['cold'] }] },
+    sessions: { get: () => undefined, list: () => [] },
+    sessionPersistence: { list: async () => [{ id: 'cold', cwd: '/repo' }] },
+    workingDirectory: { get: () => assert.fail('cold reads must not activate an Agent') },
+    sessionQuery: { observeSession: async () => ({ projections: { values: { workingDirectory: value } }, [Symbol.dispose]() { disposed++; } }) },
+  };
+  const dsh = new DshHostReadAdapter(native);
+  assert.deepEqual(await dsh.getSession('cold'), { sessionId: 'cold', workspaceId: 'ws', originalCwd: '/repo', cwd: value });
+  assert.equal(disposed, 1);
+  value = 123;
+  await assert.rejects(dsh.getSession('cold'), /Invalid native working-directory/);
+  assert.equal(disposed, 2);
+  assert.deepEqual(await dsh.listSessions(), [{ sessionId: 'cold', workspaceId: 'ws', originalCwd: '/repo', cwd: '' }]);
+  value = undefined;
+  await assert.rejects(dsh.getSession('cold'), /Invalid native working-directory/);
+});
+
+test('native creation uses workspaceId exclusively and missing directory capability fails before creation', async (t) => {
+  const ctx = new Context(); t.after(() => ctx.fiber.dispose());
+  const calls = [];
+  ctx.provide('agents', { get() {} });
+  assert.equal(ctx.get('tools'), undefined);
+  assert.equal(ctx.get('llm'), undefined);
+  ctx.provide('sessionController', { create: async (input) => { calls.push(input); return { sessionId: 'child' }; } });
+  const port = createNativeWorktreeSessionDirectoryPort(ctx);
+  assert.throws(() => port.create({ workspaceId: 'ws', cwd: '/worktree' }), /workingDirectory/);
+  assert.deepEqual(calls, []);
+  ctx.provide('workingDirectory', { set() {} });
+  assert.deepEqual(await port.create({ workspaceId: 'ws', cwd: '/worktree' }), { sessionId: 'child' });
+  assert.deepEqual(calls, [{ workspaceId: 'ws' }]);
+});
+
+test('native capability preflight failure retries after service recovery with the same request', async (t) => {
+  const ctx = new Context(); t.after(() => ctx.fiber.dispose());
+  let creates = 0;
+  const agent = { session: { id: 'child' } };
+  ctx.provide('agents', { get: () => agent });
+  ctx.provide('sessionController', {
+    create: async () => { creates++; return { sessionId: 'child' }; },
+    resolveAgent: async () => ({ agent }),
+  });
+  const creation = createWorktreeSessionCreation({
+    manager: {
+      listWorktrees: async () => [{ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' }],
+      bindSession: async () => {},
+    },
+    sessions: createNativeWorktreeSessionDirectoryPort(ctx), changed() {},
+  });
+  t.after(() => creation.dispose());
+  const input = { workspaceId: 'ws', worktreeId: 'wt', requestId: 'preflight' };
+  const signal = new AbortController().signal;
+  await assert.rejects(creation.create(input, signal), /workingDirectory/);
+  assert.equal(creates, 0);
+  ctx.provide('workingDirectory', { set: async () => '/wt' });
+  assert.deepEqual(await creation.create(input, signal), { sessionId: 'child', bound: true });
+  assert.equal(creates, 1);
+});
+
+test('browser native creation coalesces identities, keeps partial Session and rejects changed targets', async (t) => {
+  const f = await fixture(t);
+  const creation = createWorktreeSessionCreation({ manager: f.manager, sessions: f.sessions, changed() {} });
+  t.after(() => creation.dispose());
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'browser-1' };
+  const signal = new AbortController().signal;
+  const first = creation.create(input, signal);
+  assert.equal(creation.create(input, signal), first);
+  const { state, ...created } = await first;
+  assert.deepEqual(created, { sessionId: 'child', bound: true });
+  assert.deepEqual(state, await f.manager.readWorktreeSessionState(input));
+  assert.equal(creation.create(input, signal), first);
+  await assert.rejects(creation.create({ ...input, worktreeId: 'other' }, signal), { code: 'WORKTREE_STATE_CONFLICT' });
+  assert.equal(f.calls.filter(([kind]) => kind === 'create').length, 1);
+});
+
+test('browser uncertain retries retain native creation identity and never request Full Access', async () => {
+  const requests = [];
+  const opened = [];
+  const target = { workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo/.agents/clutch-worktrees/wt', status: 'active', health: 'ready' };
+  const connector = createWorktreeSessionConnector({
+    manager: { listWorktrees: async () => [target], listBindings: async () => [], bindSession: () => assert.fail('Host owns binding') },
+    sessions: { getSnapshot: () => ({ phase: 'ready', ids: [], byId: {} }) },
+    archivedSessionIds: () => [],
+    createSession: () => assert.fail('Native browser creation must not use cwd-header fallback'),
+    createBoundSession: async (input) => {
+      requests.push(input.requestId);
+      if (requests.length === 1) throw new Error('transport result uncertain');
+      return { sessionId: 'child', bound: true };
+    },
+    ensureSessionWorkspace: () => assert.fail('Do not project before a binding refresh'),
+    permission: { ensureWorktreePermission: () => assert.fail('No special permission flow') },
+    confirmFullAccess: () => assert.fail('No Full Access confirmation'),
+    openSession: (id) => opened.push(id),
+  });
+  const input = { workspaceId: 'ws', worktreeId: 'wt', cwd: target.absolutePath };
+  await assert.rejects(connector.create(input), /uncertain/);
+  assert.equal(await connector.create(input), 'child');
+  assert.equal(requests[0], requests[1]);
+  assert.deepEqual(opened, ['child']);
+  connector.dispose();
+});
+
+test('existing nested Git-root binding remains reusable without relaxing new binding checks', async (t) => {
+  const f = await fixture(t, true);
+  const actor = { id: 'legacy', header: { id: 'legacy', cwd: f.record.absolutePath } };
+  f.actors.set('legacy', actor);
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'legacy' };
+  await f.manager.bindSession(input);
+  actor.header.cwd = f.record.gitRootPath;
+  const before = await f.manager.listBindings({ workspaceId: 'ws' });
+  assert.deepEqual(await f.manager.bindSession(input), before[0]);
+  assert.deepEqual(await f.manager.listBindings({ workspaceId: 'ws' }), before);
+  f.actors.set('unbound-root', { id: 'unbound-root', header: { id: 'unbound-root', cwd: f.record.gitRootPath } });
+  await assert.rejects(f.manager.bindSession({ ...input, sessionId: 'unbound-root' }), { code: 'SESSION_CWD_MISMATCH' });
+  assert.equal(await f.manager.resolveRuntimeCwd(input), f.record.gitRootPath);
+  assert.equal(await f.manager.readSessionHead(input), f.record.baseCommit);
+  actor.effectiveCwd = f.repo;
+  await assert.rejects(f.manager.bindSession(input), { code: 'SESSION_CWD_MISMATCH' });
+});
+
+test('legacy active binding supplies missing membership for runtime cwd and HEAD only', async (t) => {
+  const f = await fixture(t);
+  f.actors.set('legacy', { id: 'legacy', header: { id: 'legacy', cwd: f.record.absolutePath } });
+  const input = { workspaceId: 'ws', sessionId: 'legacy' };
+  await f.manager.bindSession({ ...input, worktreeId: f.record.worktreeId });
+  assert.equal((await f.dsh.getSession('legacy')).workspaceId, undefined);
+  assert.equal(await f.manager.resolveRuntimeCwd(input), f.record.absolutePath);
+  assert.equal(await f.manager.readSessionHead(input), f.record.baseCommit);
+  f.actors.get('legacy').effectiveCwd = f.workspace;
+  await assert.rejects(f.manager.resolveRuntimeCwd(input), { code: 'SESSION_CWD_MISMATCH' });
+  f.actors.get('legacy').effectiveCwd = f.record.absolutePath;
+  const other = { id: 'other', path: f.home, sessionIds: ['legacy'] };
+  f.native.workspaceRegistry.list = () => [f.native.workspaceRegistry.get(), other];
+  await assert.rejects(f.manager.resolveRuntimeCwd(input), { code: 'SESSION_CWD_MISMATCH' });
+  await assert.rejects(f.manager.readSessionHead(input), { code: 'SESSION_CWD_MISMATCH' });
+  await assert.rejects(f.manager.bindSession({ ...input, worktreeId: f.record.worktreeId }), { code: 'SESSION_CWD_MISMATCH' });
+});
+
+test('pre-creation read failure can retry the same request identity', async () => {
+  let reads = 0;
+  let creates = 0;
+  const creation = createWorktreeSessionCreation({
+    manager: {
+      listWorktrees: async () => {
+        if (++reads === 1) throw new Error('temporarily unavailable');
+        return [{ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' }];
+      },
+      bindSession: async () => {},
+    },
+    sessions: { create: async () => { creates++; return { sessionId: 'child' }; } },
+    changed() {},
+  });
+  const input = { workspaceId: 'ws', worktreeId: 'wt', requestId: 'retry' };
+  const signal = new AbortController().signal;
+  await assert.rejects(creation.create(input, signal), /temporarily unavailable/);
+  assert.deepEqual(await creation.create(input, signal), { sessionId: 'child', bound: true });
+  assert.equal(reads, 2);
+  assert.equal(creates, 1);
+  creation.dispose();
+});
+
+test('uncertain native creation failure retains identity and never creates twice', async () => {
+  let creates = 0;
+  const creation = createWorktreeSessionCreation({
+    manager: {
+      listWorktrees: async () => [{ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' }],
+      bindSession: async () => {},
+    },
+    sessions: { create: async () => { creates++; throw new Error('native result unknown'); } },
+    changed() {},
+  });
+  const input = { workspaceId: 'ws', worktreeId: 'wt', requestId: 'uncertain' };
+  const signal = new AbortController().signal;
+  const first = creation.create(input, signal);
+  await assert.rejects(first, /native result unknown/);
+  assert.equal(creation.create(input, signal), first);
+  await assert.rejects(creation.create(input, signal), /native result unknown/);
+  assert.equal(creates, 1);
+  creation.dispose();
+});
+
+for (const recovery of ['open-bound', 'bind-existing', 'manual']) test(`successful ${recovery} recovery retires creation identity`, async () => {
+  const target = { workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' };
+  const requests = [];
+  let bindings = [];
+  let byId = {};
+  const connector = createWorktreeSessionConnector({
+    manager: {
+      listWorktrees: async () => [target], listBindings: async () => bindings,
+      bindSession: async () => { bindings = [{ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'first', status: 'active' }]; },
+    },
+    sessions: { getSnapshot: () => ({ phase: 'ready', ids: Object.keys(byId), byId }) },
+    archivedSessionIds: () => [], createSession: () => assert.fail('Host owns creation'),
+    createBoundSession: async ({ requestId }) => {
+      requests.push(requestId);
+      if (requests.length === 1) {
+        if (recovery === 'manual') return { sessionId: 'first', bound: false, error: 'bind failed' };
+        throw new Error('response lost');
+      }
+      return { sessionId: requestId === requests[0] ? 'first' : 'second', bound: true };
+    },
+    ensureSessionWorkspace() {}, openSession() {},
+  });
+  const input = { workspaceId: 'ws', worktreeId: 'wt', cwd: '/wt' };
+  await assert.rejects(connector.create(input), recovery === 'manual' ? /bind failed/ : /response lost/);
+  byId = { first: { cwd: '/wt', blank: true } };
+  if (recovery === 'open-bound') bindings = [{ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'first', status: 'active' }];
+  if (recovery === 'manual') {
+    await retryWorktreeSessionBinding({
+      manager: { bindSession: async () => { bindings = [{ ...input, sessionId: 'first', status: 'active' }]; } },
+      pending: { ...input, sessionId: 'first' }, archived: false,
+      ensureSessionWorkspace() {}, openSession() {},
+    });
+  } else assert.equal(await connector.create(input), 'first');
+  byId.first.blank = false;
+  assert.equal(await connector.create(input), 'second');
+  assert.notEqual(requests[0], requests[1]);
+  connector.dispose();
+});
+
+test('historical subdirectory checkout supplies instructions to newly bound native Sessions', async (t) => {
+  const f = await fixture(t, true);
+  const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: f.home });
+  const shard = sidecar.getShardPath('ws');
+  const snapshot = JSON.parse(await readFile(shard, 'utf8'));
+  const record = snapshot.worktrees[0];
+  record.absolutePath = f.record.gitRootPath;
+  delete record.gitRootPath;
+  record.instructions = 'historical guidance';
+  await writeFile(shard, JSON.stringify(snapshot));
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  await f.manager.bindSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' });
+  assert.equal(await f.manager.resolveSessionInstructions('child'), 'historical guidance');
+  f.actors.get('child').effectiveCwd = f.workspace;
+  assert.equal(await f.manager.resolveSessionInstructions('child'), '');
+});
+
+test('contained pools reject replaced ancestors and never overwrite an existing ignore file', async (t) => {
+  const f = await fixture(t);
+  const pool = path.join(f.workspace, '.agents', 'clutch-worktrees');
+  await writeFile(path.join(pool, '.gitignore'), 'user data\n');
+  await assert.rejects(prepareWorktreePool(f.home, f.workspace, path.join(pool, 'new')), { code: 'WORKTREE_STATE_CONFLICT' });
+  assert.equal(await readFile(path.join(pool, '.gitignore'), 'utf8'), 'user data\n');
+  const replacement = path.join(f.root, 'replacement'); await mkdir(replacement);
+  const alias = path.join(f.workspace, '.agents', 'other'); await symlink(replacement, alias, 'dir');
+  await assert.rejects(assertGeneratedPath(f.home, f.workspace, path.join(alias, 'wt')), { code: 'WORKTREE_IDENTITY_CHANGED' });
+});
+
+test('deployed native directory service preserves original sandbox and commits directory before input', async (t) => {
+  const source = process.env.DSH_NATIVE_SOURCE;
+  if (!source) return t.skip('Set DSH_NATIVE_SOURCE to verify the deployed native directory service.');
+  const installed = createRequire(path.join(source, 'packages/experimental/worktree/package.json'));
+  const load = (name) => import(pathToFileURL(installed.resolve(name)).href);
+  const [{ Context: NativeContext }, { default: Projections }, { default: Prompt },
+    { default: LocalFs }, { default: WorkingDirectory }, { default: SandboxPolicy },
+    { Session, SessionId, SESSION_FORMAT_VERSION }] = await Promise.all([
+    load('@deepseek-ai/cordis'), load('@deepseek-ai/dsh-session-projection'), load('@deepseek-ai/dsh-system-prompt'),
+    load('@deepseek-ai/dsh-fs-local'), load('@deepseek-ai/dsh-working-directory'), load('@deepseek-ai/dsh-sandbox-policy'),
+    load('@deepseek-ai/dsh-session'),
+  ]);
+  const f = await fixture(t);
+  const ctx = new NativeContext(); t.after(() => ctx.fiber.dispose());
+  await ctx.plugin(Projections); await ctx.plugin(Prompt);
+  await ctx.plugin(LocalFs, { cwd: f.workspace });
+  await ctx.plugin(SandboxPolicy, { mode: 'workspace-write', workspaceRoot: f.workspace });
+  await ctx.plugin(WorkingDirectory);
+  const id = SessionId('native');
+  const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd: f.workspace });
+  const notices = [];
+  const agent = { session, ctx, inject: (message) => notices.push(message) };
+  ctx.provide('agents', { get: (sessionId) => sessionId === id ? agent : undefined });
+  ctx.provide('sessionQuery', {}); ctx.provide('llm', {});
+  ctx.provide('sessionController', { resolveAgent: async () => ({ agent }) });
+  const port = createWorktreeToolSessionPort(ctx);
+  const before = ctx.sandboxPolicy.resolve({ session });
+  await port.enterWorkingDirectory(id, f.record.absolutePath, new AbortController().signal);
+  assert.equal(ctx.workingDirectory.get(session), f.record.absolutePath);
+  assert.equal(session.header.cwd, f.workspace);
+  assert.deepEqual(ctx.sandboxPolicy.resolve({ session }), before);
+  assert.equal(notices.length, 1);
+  assert.ok(session.snapshotEvents().some((event) => event.type === 'working-directory/change'));
+  assert.equal(session.snapshotEvents().some((event) => event.type === 'sandbox/mode' || event.type === 'approval/policy'), false);
+  const aborted = new AbortController(); aborted.abort();
+  await assert.rejects(port.enterWorkingDirectory(id, f.workspace, aborted.signal));
+  assert.equal(ctx.workingDirectory.get(session), f.record.absolutePath);
+});

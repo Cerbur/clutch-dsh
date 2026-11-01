@@ -1,12 +1,4 @@
-- id: permission
-  name: '@deepseek-ai/dsh-permission-presets'
-  # Gate native activation on the config contribution; never replace its config.
-  inject:
-    - clutchWorktreePermissionPresets
-
 - insert:
-    - id: clutch-dsh-worktree-permission-presets
-      name: '@cerbur/clutch-dsh-worktree/permission-presets'
     - id: clutch-dsh-worktree-host
       name: '@cerbur/clutch-dsh-worktree'
       config:

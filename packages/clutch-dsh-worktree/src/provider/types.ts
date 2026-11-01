@@ -114,6 +114,8 @@ export interface DshSessionSummary {
   readonly workspaceId?: WorkspaceId;
   readonly projectId?: string;
   readonly cwd: string;
+  /** Immutable header directory, when the native effective-directory capability is present. */
+  readonly originalCwd?: string;
 }
 
 /**

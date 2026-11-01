@@ -4,12 +4,11 @@ import type {
   BranchRecord,
   WorktreeError,
   WorktreeManager,
-  WorktreePermissionManager,
-  WorktreePermissionNormalizationRequest,
   WorktreeRemoteMethod,
   WorktreeRemoteResult,
   WorktreeToolChangeBatch,
   WorktreeToolSettingsManager,
+  WorktreeSessionCreationManager,
 } from '../contract/index.js';
 
 /** The one logical channel shared by the DSH Connection and Typert Gateway. */
@@ -20,6 +19,9 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  * the browser call surface auditable without making React know wire names.
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
+  canReuseLocalSession: 'worktreeManager/canReuseLocalSession',
+  createWorktreeSession: 'worktreeManager/createWorktreeSession',
+  readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   getToolSettings: 'worktreeManager/getToolSettings',
@@ -47,8 +49,6 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   updateWorktreeBaseBranch: 'worktreeManager/updateWorktreeBaseBranch',
   listBindings: 'worktreeManager/listBindings',
   bindSession: 'worktreeManager/bindSession',
-  ensureWorktreePermission: 'worktreeManager/ensureWorktreePermission',
-  normalizeDetachedWorktreePermissions: 'worktreeManager/normalizeDetachedWorktreePermissions',
 }) satisfies Readonly<Record<WorktreeRemoteMethod, string>>;
 
 /** Deliberately narrow transport seam: the adapter only needs `call`. */
@@ -77,7 +77,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreePermissionManager, WorktreeToolSettingsManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
   watchToolChanges(afterRevision: number, signal: AbortSignal): Promise<WorktreeToolChangeBatch>;
   /** Check Host composition without requiring a user Workspace or reading its projection. */
   probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
@@ -273,9 +273,9 @@ export function createWorktreeConnectionAdapter(
     },
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
-    ensureWorktreePermission: (input) => invoke('ensureWorktreePermission', input),
-    normalizeDetachedWorktreePermissions: (input: WorktreePermissionNormalizationRequest) =>
-      invoke('normalizeDetachedWorktreePermissions', input),
+    canReuseLocalSession: (input) => invoke('canReuseLocalSession', input),
+    createWorktreeSession: (input) => invoke('createWorktreeSession', input),
+    readWorktreeSessionState: (input) => invoke('readWorktreeSessionState', input),
     dispose(): void {
       if (disposed) return;
       disposed = true;
