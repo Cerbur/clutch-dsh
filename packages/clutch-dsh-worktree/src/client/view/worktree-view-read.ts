@@ -58,6 +58,7 @@ export interface WorktreeViewReader {
 
 interface WorktreeViewReaderEntry {
   generation: number;
+  knownSessionIds?: readonly string[];
   readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
@@ -225,7 +226,10 @@ function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefi
 /** Share complete Workspace reads without allowing stale generations to repopulate the cache. */
 export function createWorktreeViewReader(
   manager: WorktreeManager,
-  sessionIdsForWorkspace?: (workspaceId: string) => readonly string[],
+  sessionIdsForWorkspace?: (workspaceId: string) => readonly string[] | {
+    readonly sessionIds: readonly string[];
+    readonly pending: boolean;
+  },
 ): WorktreeViewReader {
   const entries = new Map<string, WorktreeViewReaderEntry>();
   let disposed = false;
@@ -264,7 +268,16 @@ export function createWorktreeViewReader(
     let knownSessionIds: readonly string[] | undefined;
     const promise = schedule(() => {
       if (disposed) return Promise.reject(new Error('Worktree view reader disposed'));
-      knownSessionIds = sessionIdsForWorkspace?.(workspaceId).slice();
+      const membership = sessionIdsForWorkspace?.(workspaceId);
+      if (membership !== undefined) {
+        if ('sessionIds' in membership) {
+          // Incomplete native replay cannot retract previously verified coverage.
+          // Capture only members present before this binding read starts.
+          knownSessionIds = membership.pending
+            ? [...new Set([...(entry.knownSessionIds ?? []), ...membership.sessionIds])]
+            : membership.sessionIds.slice();
+        } else knownSessionIds = membership.slice();
+      }
       return loadWorktreeView(manager, workspaceId);
     })
       .then((data) => {
@@ -272,6 +285,7 @@ export function createWorktreeViewReader(
           ...(knownSessionIds === undefined ? {} : { knownSessionIds }) };
         if (!disposed && entries.get(workspaceId) === entry && entry.generation === generation) {
           entry.view = view;
+          entry.knownSessionIds = knownSessionIds;
           entry.stale = false;
         }
         return view;

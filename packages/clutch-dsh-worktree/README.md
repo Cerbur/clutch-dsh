@@ -95,6 +95,7 @@ hide other ready Workspaces. Returning to Worktree mode immediately keeps the pr
 visible while checking for external Git changes. Unloaded bindings are never shown as Local
 Sessions; a failed Workspace can be retried in **Errors & Repair**.
 Sessions appearing after a cached read stay unclassified until their bindings are checked.
+Refreshing during an incomplete native list replay keeps previously verified Local Sessions visible.
 Each Workspace keeps its own failure details. Older Hosts without the navigation endpoint
 use the previous read path; reload the updated Host to benefit from the reduced Git probes.
 

@@ -114,6 +114,76 @@ test('a new native Session is not classified as Main by retained bindings', () =
     [{ workspaceId: 'ws', sessionIds: ['old', 'new'] }], [view]), undefined);
 });
 
+test('pending replay refresh preserves verified Main coverage without admitting later members', async () => {
+  let native = { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: ['old'] }] };
+  let retained = native;
+  let gate;
+  const reader = readerModule.createWorktreeViewReader({ readWorkspaceNavigation: () => {
+    gate = deferred();
+    return gate.promise;
+  } }, (id) => ({ sessionIds: native.items.find((item) => item.workspaceId === id)?.sessionIds ?? [],
+    pending: selectors.isPendingListPhase(native.phase) }));
+  const read = reader.read('ws');
+  gate.resolve(snapshot());
+  await read;
+  for (const items of [[], [{ workspaceId: 'ws', sessionIds: [] }]]) {
+    native = { phase: 'pending', items };
+    retained = selectors.retainPendingWorkspaces(retained, native);
+    reader.invalidate('ws');
+    const refresh = reader.read('ws');
+    native = { phase: 'pending', items: [{ workspaceId: 'ws', sessionIds: ['new'] }] };
+    retained = selectors.retainPendingWorkspaces(retained, native);
+    gate.resolve(snapshot());
+    const view = await refresh;
+    assert.deepEqual(view.knownSessionIds, ['old']);
+    assert.equal(selectors.resolveCurrentSessionLocation('old', retained.items, [view]).kind, 'main');
+    assert.equal(selectors.resolveCurrentSessionLocation('new', retained.items, [view]), undefined);
+  }
+  native = { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: ['new'] }] };
+  reader.invalidate('ws');
+  const confirmed = reader.read('ws');
+  gate.resolve(snapshot());
+  assert.deepEqual((await confirmed).knownSessionIds, ['new'], 'complete evidence prunes old coverage');
+  reader.dispose();
+});
+
+for (const scoped of [true, false]) test(`opening synchronizes all authoritative memberships (${scoped ? 'scoped' : 'legacy'})`, async (t) => {
+  const dom = new JSDOM('<div id="root"></div>');
+  const before = { window: globalThis.window, document: globalThis.document, act: globalThis.IS_REACT_ACT_ENVIRONMENT };
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const root = createRoot(dom.window.document.getElementById('root'));
+  const binding = (id) => ({ workspaceId: 'ws', worktreeId: 'wt', sessionId: id, status: 'active' });
+  let value = { ...snapshot(), worktrees: [{ workspaceId: 'ws', worktreeId: 'wt', status: 'active' }],
+    bindings: [binding('removed')] };
+  const manager = { readWorkspaceNavigation: async () => value };
+  const reader = readerModule.createWorktreeViewReader(manager);
+  const syncs = [];
+  const props = { manager, viewReader: reader, ...(scoped
+    ? { syncWorkspaceSessions: (id, bindings) => { assert.equal(id, 'ws'); syncs.push(bindings); } }
+    : { syncSessionWorkspaces: (bindings) => syncs.push(bindings) }) };
+  const source = { mode: 'worktree', workspaceIds: ['ws'], workspaceIdsRef: { current: ['ws'] },
+    workspaces: { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: [] }] },
+    expandSnapshot: { collapsedWorkspaceIds: {} }, forkRecoverySnapshot: { revision: 0 }, sessionPresentations: {} };
+  const registrationState = { modalReadViewRef: {}, setModalReadError() {}, setModalReadLoading() {},
+    setWorktreeModalWorkspaceId() {}, modalReadLoader: { current: { invalidate() {} } } };
+  let state;
+  function Surface() { state = useSurfaceRefresh({ source, props, registrationState }); return null; }
+  t.after(async () => {
+    await React.act(async () => root.unmount()); reader.dispose(); dom.window.close();
+    globalThis.window = before.window; globalThis.document = before.document; globalThis.IS_REACT_ACT_ENVIRONMENT = before.act;
+  });
+  await React.act(async () => { root.render(React.createElement(Surface)); await tick(); });
+  assert.deepEqual(syncs.at(-1).map((item) => item.sessionId), ['removed']);
+  value = { ...value, bindings: [binding('new'), binding('other')] };
+  await React.act(async () => {
+    await state.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' },
+      openingSession: { sessionId: 'new', worktreeId: 'wt' } });
+    assert.deepEqual(syncs.at(-1).map((item) => item.sessionId), ['new', 'other'],
+      'opening must sync added and removed memberships without another render');
+  });
+});
+
 test('progressive surface, bounded reads, re-entry, additions and mutation race', async (t) => {
   const dom = new JSDOM('<div id="root"></div>');
   const oldWindow = globalThis.window;

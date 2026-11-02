@@ -150,6 +150,9 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             if (!guard.isCurrent(request.generation)) return;
             if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
+            // flushSync may run membership effects before this request's finally.
+            // The authoritative result is settled before publishing its ready view.
+            request.pending = false;
             const publish = () => setReadState((current) => {
               const targetErrors = { ...current.targetErrors };
               delete targetErrors[workspaceId];

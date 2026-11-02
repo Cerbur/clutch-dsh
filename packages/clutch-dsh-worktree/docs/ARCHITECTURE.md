@@ -586,11 +586,15 @@ retry 仍推进代次。退出不清空 ready 投影，旧代回调不得覆盖�
 未到达的 Workspace 只显示局部 loading/error，不投影 Main Session。reader 在实际请求
 启动时捕获原生 Session ID 覆盖范围；后来的调用方不能扩大共享预读的覆盖。尚未覆盖的
 新成员不进入 Main、定位、排序或 Dashboard，后续目标读取确认后再呈现。
+pending 重放期间的读取合并此前成功读取验证的覆盖范围；只有当前代成功读取才更新
+保留范围，ready 原生快照则替换范围，不能在读取完成时纳入后来出现的成员。
 原生 Session 到达会退休先前代次；Surface 与 modal 的 current 读取追随新代，
 Workspace 移除也退休 guard 与 reader，避免同 ID 重现接受旧回调。
 局部错误按 Workspace 保存，重试和恢复动作只使用所属错误的详情。
-虚拟关系按完成读取的 Workspace 同步，保留其他 Workspace 的关系；旧全量注入接口、
-展开状态及排序清理仍需已确认的完整快照。pending 原生列表在 browser projection 中保留
+虚拟关系按完成读取的 Workspace 同步，保留其他 Workspace 的关系。
+同步打开 Session 的 ready 提交前先结束该请求的 pending 标记，确保 flushSync 内执行的
+effect 能同步全部新增和移除关系，而不依赖下一次渲染。
+旧全量注入接口、展开状态及排序清理仍需已确认的完整快照。pending 原生列表在 browser projection 中保留
 已有 Workspace/Session 行及 pending 标记，不修改原始列表。此实现更新历史计划的整批
 首屏读取方式，历史计划保持只读。
 冷启动全局 recovery gate 与路径物理身份算法本次不变，不能将稳态读取计数视为冷启动总成本。

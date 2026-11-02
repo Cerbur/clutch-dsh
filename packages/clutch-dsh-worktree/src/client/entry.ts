@@ -200,8 +200,13 @@ export function apply(ctx: Context): void {
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
-  const viewReader = createWorktreeViewReader(manager, (workspaceId) =>
-    ctx.workspaces.list.getSnapshot().items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? []);
+  const viewReader = createWorktreeViewReader(manager, (workspaceId) => {
+    const snapshot = ctx.workspaces.list.getSnapshot();
+    return {
+      sessionIds: snapshot.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [],
+      pending: snapshot.phase !== undefined && snapshot.phase !== 'ready',
+    };
+  });
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const sessions = ctx.sessions;
