@@ -18,6 +18,8 @@ Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并�
 
 Windows 导航读阶段的可复现 benchmark、原始样本与验证限制见
 [2026-11-03 Windows navigation benchmark](benchmarks/2026-11-03-windows-navigation.md)。
+同一脚本在 Apple Silicon 上的测量、平台对比与验证结果见
+[2026-11-03 macOS navigation benchmark](benchmarks/2026-11-03-macos-navigation.md)。
 构建后运行 `node scripts/benchmark-navigation.mjs --samples 30 --warmups 3 --output <new-json-path>`；
 该脚本使用真实 Git 与父提交 reader，不包含 DSH 启动恢复、HTTP transport 或浏览器绘制。
 
