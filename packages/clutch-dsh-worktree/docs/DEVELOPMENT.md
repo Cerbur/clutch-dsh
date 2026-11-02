@@ -16,6 +16,11 @@ Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并�
 真实临时 Git 仓库的调用计数，以及 React 层的延迟、失败、重进、新增项和 mutation 交错。
 后者使用 jsdom 与可控 Promise，不是 Windows DSH 浏览器性能实测。
 
+Windows 导航读阶段的可复现 benchmark、原始样本与验证限制见
+[2026-11-03 Windows navigation benchmark](benchmarks/2026-11-03-windows-navigation.md)。
+构建后运行 `node scripts/benchmark-navigation.mjs --samples 30 --warmups 3 --output <new-json-path>`；
+该脚本使用真实 Git 与父提交 reader，不包含 DSH 启动恢复、HTTP transport 或浏览器绘制。
+
 Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
 Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs
 test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。
