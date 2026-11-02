@@ -106,6 +106,10 @@ export interface WorktreeSurfaceInjected {
   readonly syncSessionWorkspaces?: (
     bindings: readonly { workspaceId: string; sessionId: string }[],
   ) => void;
+  readonly syncWorkspaceSessions?: (
+    workspaceId: string,
+    bindings: readonly { workspaceId: string; sessionId: string }[],
+  ) => void;
   readonly openSession: (sessionId: string) => void;
   readonly onWorktreeForgotten?: (input: ForgottenWorktree) => void;
 }
@@ -136,7 +140,7 @@ export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly views: readonly WorktreeWorkspaceView[];
   readonly error?: WorktreeViewError;
-  readonly targetError?: TargetedWorktreeReadError;
+  readonly targetErrors?: Readonly<Record<string, WorktreeViewError>>;
 }
 
 export type WorktreeRefreshScope =
@@ -144,12 +148,10 @@ export type WorktreeRefreshScope =
   | { readonly kind: 'workspace'; readonly workspaceId: string }
   | { readonly kind: 'workspaces'; readonly workspaceIds: readonly string[] };
 
-export interface TargetedWorktreeReadError {
-  readonly workspaceIds: readonly string[];
-  readonly error: WorktreeViewError;
-}
 
 export interface RefreshOptions {
+  /** Ensure a newly observed Workspace is loaded without retiring an equivalent read. */
+  readonly ensureLoaded?: boolean;
   /** Navigation must wait for this confirmed binding to be committed to the tree. */
   readonly openingSession?: { readonly sessionId: string; readonly worktreeId: string };
   /** A Host tool notification already retired the shared reader generation. */

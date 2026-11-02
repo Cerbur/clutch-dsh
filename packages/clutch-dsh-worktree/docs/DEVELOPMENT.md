@@ -10,6 +10,12 @@
 
 ## 1. 环境前置要求
 
+Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
+共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
+`node --test test/navigation-loading.test.mjs test/navigation-surface.test.mjs` 在构建后验证
+真实临时 Git 仓库的调用计数，以及 React 层的延迟、失败、重进、新增项和 mutation 交错。
+后者使用 jsdom 与可控 Promise，不是 Windows DSH 浏览器性能实测。
+
 Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
 Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs
 test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。

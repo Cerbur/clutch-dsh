@@ -2,6 +2,7 @@ import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/cli
 
 import type {
   BranchRecord,
+  WorkspaceNavigation,
   WorktreeError,
   WorktreeManager,
   WorktreeRemoteMethod,
@@ -24,6 +25,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
+  readWorkspaceNavigation: 'worktreeManager/readWorkspaceNavigation',
   getToolSettings: 'worktreeManager/getToolSettings',
   updateToolSettings: 'worktreeManager/updateToolSettings',
   watchToolChanges: 'worktreeManager/watchToolChanges',
@@ -228,6 +230,22 @@ export function createWorktreeConnectionAdapter(
     probeHost: (signal) => call('listBindings', { workspaceId: '' }, signal),
     listWorktrees: (input) => invoke('listWorktrees', input),
     getWorkspaceGitState: (input) => invoke('getWorkspaceGitState', input),
+    async readWorkspaceNavigation(input) {
+      try {
+        return await invoke<WorkspaceNavigation>('readWorkspaceNavigation', input);
+      } catch (error) {
+        // The installed DSH HTTP carrier reports an unclaimed endpoint with this
+        // exact transport error. Never downgrade 500, auth, domain or Gateway errors.
+        const endpoint = WORKTREE_CONNECTION_ENDPOINTS.readWorkspaceNavigation;
+        if (error instanceof WorktreeConnectionError && error.code === 'CONNECTION_CALL_FAILED' &&
+            error.cause instanceof Error &&
+            error.cause.message === `transport failure for ${WORKTREE_CONNECTION_CHANNEL}/${endpoint}: HTTP 404`) {
+          throw new WorktreeConnectionError({ code: 'WORKTREE_NAVIGATION_UNSUPPORTED',
+            message: '', details: { endpoint }, retryable: false });
+        }
+        throw error;
+      }
+    },
     listWorktreeCommits: (input) => invoke('listWorktreeCommits', input),
     listWorktreeCommitFiles: (input) => invoke('listWorktreeCommitFiles', input),
     getWorktreeCommitFileDiff: (input) => invoke('getWorktreeCommitFileDiff', input),

@@ -200,7 +200,8 @@ export function apply(ctx: Context): void {
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
-  const viewReader = createWorktreeViewReader(manager);
+  const viewReader = createWorktreeViewReader(manager, (workspaceId) =>
+    ctx.workspaces.list.getSnapshot().items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? []);
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const sessions = ctx.sessions;
@@ -299,6 +300,9 @@ export function apply(ctx: Context): void {
   };
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
+  };
+  const syncWorkspaceSessions = (workspaceId: string, bindings: readonly VirtualWorkspaceBinding[]): void => {
+    virtualWorkspaceMembership.syncWorkspace(workspaceId, bindings);
   };
 
   const forkableSessions = ctx.sessions as unknown as ForkableSessions;
@@ -638,6 +642,7 @@ export function apply(ctx: Context): void {
             ),
           ensureSessionWorkspace,
           syncSessionWorkspaces,
+          syncWorkspaceSessions,
           forkRecovery: forkCoordinator?.recovery,
           retryForkSession: forkCoordinator === undefined
             ? undefined

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { getWorkspaceCheckout, readWorkspaceNavigation } from './manager-navigation.js';
 import path from 'node:path';
-import { realpath } from 'node:fs/promises';
 
 import type {
   AdoptWorktreeBranchInput,
@@ -53,7 +53,7 @@ import {
   updateWorktreeBaseBranch,
 } from './manager-git-history.js';
 import type { WorktreeManagerOptions, WorktreeManagerService } from './types.js';
-import { requireWorkspace, requireWorkspaceForRead, requireWorkspaceRoot, resolveWorktreeWorkspaceRecord, samePhysicalPath } from './manager-support.js';
+import { requireWorkspace, requireWorkspaceForRead, resolveWorktreeWorkspaceRecord, samePhysicalPath } from './manager-support.js';
 
 function isMainWorktreeId(worktreeId: string, workspaceId: string): boolean {
   // `main` is retained for legacy browser callers; the canonical synthetic ID is
@@ -308,37 +308,11 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
   }
 
   getWorkspaceCheckout(input: { workspaceId: WorkspaceId }): Promise<WorkspaceCheckout> {
-    return this.afterRecovery(async () => {
-      const workspace = await requireWorkspaceForRead(this.context, input.workspaceId);
-      await requireWorkspaceRoot(workspace);
-      const options = { signal: this.context.signal };
-      await this.context.git.validateRepository(workspace.rootPath, options);
-      const gitRootPath = this.context.git.resolveRepositoryRoot
-        ? await this.context.git.resolveRepositoryRoot(workspace.rootPath, options)
-        : workspace.rootPath;
-      const worktrees = await this.context.git.listWorktrees(gitRootPath, options);
-      const workspacePath = await realpath(workspace.rootPath);
-      for (const worktree of worktrees) {
-        if (await samePhysicalPath(worktree.absolutePath, gitRootPath)) {
-          let currentHead = worktree.currentHead;
-          try {
-            currentHead = this.context.git.resolveCheckoutHead
-              ? await this.context.git.resolveCheckoutHead(gitRootPath, worktree, options)
-              : currentHead ?? (worktree.headCommit && worktree.branch && !worktree.detached
-                ? { kind: 'branch', name: worktree.branch, commit: worktree.headCommit }
-                : undefined);
-          } catch {
-            currentHead = undefined;
-          }
-          return {
-            gitRootPath,
-            workspacePath,
-            ...(currentHead === undefined ? {} : { currentHead }),
-          };
-        }
-      }
-      return { gitRootPath, workspacePath };
-    });
+    return this.afterRecovery(() => getWorkspaceCheckout(this.context, input));
+  }
+
+  readWorkspaceNavigation(input: { workspaceId: WorkspaceId }) {
+    return this.afterRecovery(() => readWorkspaceNavigation(this.context, input));
   }
 
   createWorktree(input: {

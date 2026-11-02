@@ -11,6 +11,7 @@ import {
   useStableWorkspaceIds,
 } from '../shared.js';
 import type { WorkspaceListLike, WorktreeSurfaceProps } from '../types.js';
+import { retainPendingWorkspaces } from '../selectors.js';
 
 type Input = {
   props: Pick<
@@ -44,7 +45,13 @@ export function useSurfaceSources({ props }: Input) {
   const sessions = useSessions((state) => state) as SessionListLike;
   // Root hook is absent on legacy clients; do not create a second unread owner.
   const sessionStatuses = useSessionStatus?.((state) => state);
-  const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const nativeWorkspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const retainedWorkspaces = useRef<WorkspaceListLike>();
+  const workspaces = useMemo(() => {
+    const next = retainPendingWorkspaces(retainedWorkspaces.current, nativeWorkspaces);
+    retainedWorkspaces.current = next;
+    return next;
+  }, [nativeWorkspaces]);
   const forkRecoveryStore = forkRecovery ?? EMPTY_FORK_RECOVERY_STORE;
   const forkRecoverySnapshot = useSyncExternalStore(
     forkRecoveryStore.subscribe,

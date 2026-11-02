@@ -8,7 +8,7 @@ import {
   toWorktreeViewError,
   type WorktreeWorkspaceView,
 } from '../../view/worktree-view.js';
-import { worktreeActivityRefreshWorkspaceIds } from '../selectors.js';
+import { worktreeActivityRefreshWorkspaceIds, isCompleteWorktreeWorkspaceSnapshot, isPendingListPhase } from '../selectors.js';
 import { EMPTY_READ_STATE } from '../shared.js';
 import type { ReadState, RefreshOptions, WorktreeSurfaceProps } from '../types.js';
 import type { useRegistrationState } from './useRegistrationState.js';
@@ -18,10 +18,11 @@ type Input = {
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
     'forkRecoverySnapshot' | 'workspaceIdsRef' | 'mode' | 'workspaceIds' | 'sessionPresentations'
+    | 'currentSessionId' | 'workspaces' | 'expandSnapshot'
   >;
   props: Pick<
     WorktreeSurfaceProps,
-    'manager' | 'viewReader' | 'invalidateWorktreeContext' | 'syncSessionWorkspaces' | 'subscribeToolChanges'
+    'manager' | 'viewReader' | 'invalidateWorktreeContext' | 'syncSessionWorkspaces' | 'syncWorkspaceSessions' | 'subscribeToolChanges'
   >;
   registrationState: Pick<
     ReturnType<typeof useRegistrationState>,
@@ -34,9 +35,15 @@ type Input = {
 };
 
 export function useSurfaceRefresh({ source, props, registrationState }: Input) {
-  const { forkRecoverySnapshot, workspaceIdsRef, mode, workspaceIds, sessionPresentations } =
+  const { forkRecoverySnapshot, mode, workspaceIds, sessionPresentations } =
     source;
+  const workspaceIdsRef = useRef(workspaceIds);
+  workspaceIdsRef.current = isPendingListPhase(source.workspaces.phase)
+    ? [...new Set([...workspaceIdsRef.current, ...workspaceIds])] : workspaceIds;
+  const workspacesRef = useRef(source.workspaces);
+  workspacesRef.current = source.workspaces;
   const { manager, viewReader, invalidateWorktreeContext, syncSessionWorkspaces } = props;
+  const syncedMembershipViews = useRef(new Map<string, WorktreeWorkspaceView>());
   const {
     modalReadViewRef,
     setModalReadError,
@@ -47,6 +54,14 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
+  const priorityIdsRef = useRef(workspaceIds);
+  const currentWorkspaceId = source.workspaces.items.find((workspace) =>
+    workspace.sessionIds.includes(source.currentSessionId ?? ''))?.workspaceId;
+  priorityIdsRef.current = [...workspaceIds].sort((a, b) => {
+    const priority = (id: string) => id === currentWorkspaceId ? 0
+      : source.expandSnapshot.collapsedWorkspaceIds[id] ? 2 : 1;
+    return priority(a) - priority(b);
+  });
   const refreshGuard = useRef(createWorktreeRefreshGuard());
   const targetRefreshGuards = useRef(
     new Map<string, ReturnType<typeof createWorktreeRefreshGuard>>(),
@@ -54,6 +69,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   const targetReads = useRef(new Map<string, {
     generation: number;
     promise: Promise<WorktreeWorkspaceView>;
+    sessionIds: readonly string[];
+    pending: boolean;
   }>());
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
   const guardFor = (workspaceId: string) => {
@@ -74,54 +91,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         return;
       }
       const scope = options.scope ?? { kind: 'global' as const };
-      const preserveCurrent = options.preserveCurrent === true;
       const currentWorkspaceIds = workspaceIdsRef.current;
-
-      if (scope.kind === 'global') {
-        if (!preserveCurrent) {
-          setReadState({ status: 'loading', views: [] });
-        }
-        const selectedWorkspaceIds = [...currentWorkspaceIds];
-        for (const workspaceId of selectedWorkspaceIds) {
-          viewReader.invalidate(workspaceId);
-        }
-        const contextRefresh =
-          options.invalidateContext === false ? undefined
-            : invalidateWorktreeContext?.(undefined, { alreadyInvalidated: true });
-        await refreshGuard.current.run(
-          async () => {
-            const [views] = await Promise.all([
-              viewReader.readMany(selectedWorkspaceIds),
-              contextRefresh ?? Promise.resolve(),
-            ]);
-            return views;
-          },
-          (views) => {
-            setReadState((current) => {
-              const merged = mergeWorktreeViews(current.views, workspaceIdsRef.current, views);
-              return {
-                status: 'ready',
-                views:
-                  modalReadViewRef.current === undefined
-                    ? merged
-                    : mergeWorktreeView(merged, modalReadViewRef.current),
-              };
-            });
-          },
-          (error) => {
-            if (preserveCurrent) throw error;
-            setReadState({
-              status: 'error',
-              views: modalReadViewRef.current === undefined ? [] : [modalReadViewRef.current],
-              error: toWorktreeViewError(error),
-            });
-          },
-        );
-        return;
-      }
-
-      const requestedWorkspaceIds =
-        scope.kind === 'workspace' ? [scope.workspaceId] : scope.workspaceIds;
+      // Publish each completed Workspace; the shared reader bounds RPC fan-out.
+      if (scope.kind === 'global') setReadState((current) => ({ ...current, status: 'ready' }));
+      const requestedWorkspaceIds = scope.kind === 'global' ? priorityIdsRef.current
+        : scope.kind === 'workspace' ? [scope.workspaceId] : scope.workspaceIds;
       const selectedWorkspaceIds = [...new Set(requestedWorkspaceIds)].filter((workspaceId) =>
         currentWorkspaceIds.includes(workspaceId),
       );
@@ -133,7 +107,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       const results = await Promise.allSettled(
         selectedWorkspaceIds.map(async (workspaceId) => {
           const guard = guardFor(workspaceId);
-          if (!options.alreadyInvalidated) {
+          if (!options.alreadyInvalidated && !options.ensureLoaded) {
             viewReader.invalidate(workspaceId, {
               reuseInFlight: options.reuseInFlight, changeId: options.changeId,
             });
@@ -143,7 +117,9 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               ? undefined
               : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true })
                 ?.catch(() => undefined);
-          let request = { generation: guard.begin(), promise: viewReader.read(workspaceId) };
+          let request = { generation: guard.begin(), promise: viewReader.read(workspaceId, { current: true }),
+            pending: true,
+            sessionIds: workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [] };
           targetReads.current.set(workspaceId, request);
           try {
             let view: WorktreeWorkspaceView | undefined;
@@ -164,6 +140,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               request = latest;
             }
             if (!view) throw new WorktreeSessionActionError('WORKTREE_VIEW_FAILED', 'workspace projection unavailable', true);
+            view = view.knownSessionIds === undefined ? { ...view, knownSessionIds: request.sessionIds } : view;
             if (opening && (!workspaceIdsRef.current.includes(workspaceId) ||
               !view.worktrees.some((record) => record.worktreeId === opening.worktreeId) ||
               !view.bindings.some((binding) => binding.sessionId === opening.sessionId &&
@@ -171,30 +148,14 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'binding projection not ready', true);
             }
             if (!guard.isCurrent(request.generation)) return;
+            if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
             const publish = () => setReadState((current) => {
-              const remainingTargetError =
-                current.targetError?.workspaceIds.filter(
-                  (candidate) => candidate !== workspaceId,
-                ) ?? [];
-              const next = {
-                ...current,
-                status: 'ready' as const,
+              const targetErrors = { ...current.targetErrors };
+              delete targetErrors[workspaceId];
+              return { ...current, status: 'ready' as const,
                 views: mergeWorktreeViews(current.views, workspaceIdsRef.current, [view]),
-                error: undefined,
-              };
-              if (remainingTargetError.length === 0) {
-                const withoutTargetError = { ...next };
-                delete withoutTargetError.targetError;
-                return withoutTargetError;
-              }
-              return {
-                ...next,
-                targetError: {
-                  workspaceIds: remainingTargetError,
-                  error: current.targetError!.error,
-                },
-              };
+                error: undefined, targetErrors };
             });
             // Native navigation updates an external store synchronously. Commit its
             // destination first so that the newly current blank row cannot enter Local.
@@ -203,28 +164,24 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           } catch (error) {
             if (options.openingSession) throw error;
             if (!guard.isCurrent(request.generation)) return;
+            if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
             setReadState((current) => {
-              const previousIds = current.targetError?.workspaceIds ?? [];
               return {
                 ...current,
                 status: 'ready',
                 views: mergeWorktreeViews(current.views, workspaceIdsRef.current, []),
                 error: undefined,
-                targetError: {
-                  workspaceIds: [...new Set([...previousIds, workspaceId])],
-                  error: {
-                    ...toWorktreeViewError(error),
-                    retryable: true,
-                  },
+                targetErrors: { ...current.targetErrors,
+                  [workspaceId]: { ...toWorktreeViewError(error), retryable: true },
                 },
               };
             });
           } finally {
-            // Opening requires the destination grouping, not completion of the old
-            // Session's context refresh (which may follow further invalidations).
-            // Keep refreshing in the background, including when reusing a Session.
-            if (!options.openingSession) await contextRefresh;
+            request.pending = false;
+            // Context follows its own identity and generation. Never hold a ready
+            // Workspace behind the current Session's independent projection.
+            void contextRefresh;
           }
         }),
       );
@@ -257,9 +214,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         });
         return;
       }
+      const sessionIds = workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [];
       void modalReadLoader.current.load(
         workspaceId,
-        (view) => {
+        (data) => {
+          const view = data.knownSessionIds === undefined ? { ...data, knownSessionIds: sessionIds } : data;
           modalReadViewRef.current = view;
           setModalReadLoading(false);
           setReadState((current) => ({
@@ -275,9 +234,45 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     },
     [manager, viewReader],
   );
+  const previousNativeSessions = useRef(new Map(source.workspaces.items.map((item) =>
+    [item.workspaceId, item.sessionIds])));
+  useEffect(() => {
+    if (isPendingListPhase(source.workspaces.phase)) return;
+    const previous = previousNativeSessions.current;
+    previousNativeSessions.current = new Map(source.workspaces.items.map((item) =>
+      [item.workspaceId, item.sessionIds]));
+    for (const workspace of source.workspaces.items) {
+      const ids = previous.get(workspace.workspaceId);
+      if (!ids) continue; // Workspace entry/addition owns its initial read.
+      const view = readStateRef.current.views.find((item) => item.workspaceId === workspace.workspaceId);
+      if (!workspace.sessionIds.some((id) => !ids.includes(id) &&
+          !view?.bindings.some((binding) => binding.sessionId === id))) continue;
+      // A new native member is not evidence of an absent binding. Retire reads
+      // that started before its arrival, even while native mode is active.
+      viewReader.invalidate(workspace.workspaceId);
+      guardFor(workspace.workspaceId).invalidate();
+      if (mode === 'worktree') void refresh({
+        scope: { kind: 'workspace', workspaceId: workspace.workspaceId }, alreadyInvalidated: true,
+      });
+    }
+  }, [source.workspaces.items, source.workspaces.phase, mode, refresh, viewReader]);
+  useEffect(() => {
+    if (mode !== 'worktree' || isPendingListPhase(source.workspaces.phase)) return;
+    for (const view of readState.views) {
+      if (view.knownSessionIds === undefined || readState.targetErrors?.[view.workspaceId]) continue;
+      const ids = source.workspaces.items.find((item) => item.workspaceId === view.workspaceId)?.sessionIds ?? [];
+      const unknown = ids.filter((id) => !view.knownSessionIds!.includes(id) &&
+        !view.bindings.some((binding) => binding.sessionId === id));
+      const pending = targetReads.current.get(view.workspaceId);
+      if (!unknown.length || (pending?.pending && unknown.every((id) => pending.sessionIds.includes(id)))) continue;
+      // A shared Context read may predate the Surface's first native snapshot.
+      // Keep unknown members hidden and validate them with a new generation.
+      void refresh({ scope: { kind: 'workspace', workspaceId: view.workspaceId } });
+    }
+  }, [readState.views, readState.targetErrors, source.workspaces.items, source.workspaces.phase, mode, refresh]);
   useEffect(() => {
     if (mode === 'worktree') {
-      void refresh({ preserveCurrent: readStateRef.current.status === 'ready' });
+      void refresh({ preserveCurrent: true, reuseInFlight: true });
     } else {
       refreshGuard.current.invalidate();
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
@@ -287,14 +282,14 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       setWorktreeModalWorkspaceId(undefined);
       setModalReadError(undefined);
       setModalReadLoading(false);
-      setReadState(EMPTY_READ_STATE);
+      // Keep ready content for immediate reuse on re-entry.
     }
   }, [mode, refresh]);
   const previousWorkspaceIdsRef = useRef<readonly string[]>(workspaceIds);
   useEffect(() => {
+    if (isPendingListPhase(source.workspaces.phase)) return;
     const previousWorkspaceIds = previousWorkspaceIdsRef.current;
     previousWorkspaceIdsRef.current = workspaceIds;
-    if (mode !== 'worktree') return;
 
     const addedWorkspaceIds = workspaceIds.filter(
       (workspaceId) => !previousWorkspaceIds.includes(workspaceId),
@@ -303,38 +298,30 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       (workspaceId) => !workspaceIds.includes(workspaceId),
     );
     for (const workspaceId of removedWorkspaceIds) {
+      targetRefreshGuards.current.get(workspaceId)?.invalidate();
       targetRefreshGuards.current.delete(workspaceId);
       targetReads.current.delete(workspaceId);
+      viewReader.invalidate(workspaceId);
+      syncedMembershipViews.current.delete(workspaceId);
+      props.syncWorkspaceSessions?.(workspaceId, []);
     }
     setReadState((current) => {
       const views = mergeWorktreeViews(current.views, workspaceIds, []);
-      const remainingTargetError =
-        current.targetError?.workspaceIds.filter((workspaceId) =>
-          workspaceIds.includes(workspaceId),
-        ) ?? [];
-      const next = { ...current, views };
-      if (remainingTargetError.length === 0) {
-        const withoutTargetError = { ...next };
-        delete withoutTargetError.targetError;
-        return withoutTargetError;
-      }
-      return {
-        ...next,
-        targetError: {
-          workspaceIds: remainingTargetError,
-          error: current.targetError!.error,
-        },
-      };
+      const targetErrors = Object.fromEntries(Object.entries(current.targetErrors ?? {})
+        .filter(([workspaceId]) => workspaceIds.includes(workspaceId)));
+      return { ...current, views, targetErrors };
     });
+    if (mode !== 'worktree') return;
     for (const workspaceId of addedWorkspaceIds) {
       void refresh({
         scope: { kind: 'workspace', workspaceId },
         preserveCurrent: true,
+        ensureLoaded: true,
       }).catch(() => {
         // The target error remains visible and can be retried explicitly.
       });
     }
-  }, [mode, refresh, workspaceIds]);
+  }, [mode, refresh, workspaceIds, source.workspaces.phase, viewReader]);
   useEffect(() => {
     if (forkRecoveryRevisionRef.current === forkRecoverySnapshot.revision) return;
     forkRecoveryRevisionRef.current = forkRecoverySnapshot.revision;
@@ -357,7 +344,20 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     refresh,
   ]);
   useEffect(() => {
-    if (readState.status !== 'ready' || syncSessionWorkspaces === undefined) return;
+    if (readState.status !== 'ready' || isPendingListPhase(source.workspaces.phase)) return;
+    if (props.syncWorkspaceSessions) {
+      for (const view of readState.views) {
+        if (syncedMembershipViews.current.get(view.workspaceId) === view ||
+            targetReads.current.get(view.workspaceId)?.pending) continue;
+        syncedMembershipViews.current.set(view.workspaceId, view);
+        props.syncWorkspaceSessions(view.workspaceId, view.bindings);
+      }
+      return;
+    }
+    // Legacy injected surfaces have only a full-snapshot synchronization port.
+    if (syncSessionWorkspaces === undefined ||
+        [...targetReads.current.values()].some((request) => request.pending) ||
+        !isCompleteWorktreeWorkspaceSnapshot(workspaceIds, readState.views)) return;
     syncSessionWorkspaces(
       readState.views.flatMap((view) =>
         view.bindings.map((binding) => ({
@@ -366,7 +366,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         })),
       ),
     );
-  }, [readState.status, readState.views, syncSessionWorkspaces]);
+  }, [readState.status, readState.views, syncSessionWorkspaces, props.syncWorkspaceSessions, workspaceIds, source.workspaces.phase]);
   const viewByWorkspace = useMemo(
     () => new Map(readState.views.map((view) => [view.workspaceId, view])),
     [readState.views],

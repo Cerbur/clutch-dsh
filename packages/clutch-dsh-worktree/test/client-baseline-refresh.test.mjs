@@ -5,6 +5,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
 import * as view from '../lib/client/view/worktree-view.js';
+import * as selectors from '../lib/client/surface/selectors.js';
 import { WorktreeToolChanges } from '../lib/host/worktree-tool-changes.js';
 import { createWorktreeToolChangeMonitor } from '../lib/client/worktree-tool-changes.js';
 import { createWorktreeContextProjection } from '../lib/client/context/worktree-context-store.js';
@@ -87,7 +88,7 @@ function refreshHarness(input) {
   const exports = {};
   new Function('require', 'exports', refreshCode)((name) => ({
     react, '../../view/worktree-view.js': view,
-    '../selectors.js': { worktreeActivityRefreshWorkspaceIds: () => [] },
+    '../selectors.js': selectors,
     '../shared.js': { EMPTY_READ_STATE: { status: 'loading', views: [] } },
   })[name] ?? {}, exports);
   return {
@@ -149,6 +150,7 @@ test('connection reset replays a completed request in the same Client and active
   const workspaceIds = ['target', 'unrelated'];
   const h = refreshHarness({
     source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+      workspaces: { items: [] }, expandSnapshot: { collapsedWorkspaceIds: {} },
       sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
     props: { manager, viewReader: reader, subscribeToolChanges: monitor.subscribe,
       invalidateWorktreeContext: makeInvalidate(context) },
@@ -173,6 +175,7 @@ test('connection reset replays a completed request in the same Client and active
     calls.length = 0;
 
     // No identity, fiber, reader or Surface replacement; only underlying checkout facts change.
+    const unrelatedCached = await reader.read('unrelated');
     branch = 'after-reconnect';
     pending = deferred();
     reset(); // Revision zero replays the retained Host notification with the same requestId.
@@ -185,7 +188,7 @@ test('connection reset replays a completed request in the same Client and active
     assert.equal(h.render().readState.views, ready.views);
     assert.equal(context.store.getSnapshot().status, 'ready');
     assert.equal(context.store.getSnapshot().value, readyContext.value);
-    assert.equal(await reader.read('unrelated'), ready.views[1]);
+    assert.equal(await reader.read('unrelated'), unrelatedCached);
 
     // Completion and notification still deduplicate inside the recovered connection.
     reader.invalidate('target', { changeId: 'same-request' });
@@ -195,7 +198,8 @@ test('connection reset replays a completed request in the same Client and active
     await setImmediate();
     const refreshed = h.render().readState;
     assert.equal(recovered.checkout.currentHead.name, branch);
-    assert.equal(refreshed.views[0], recovered);
+    assert.deepEqual(refreshed.views[0], { ...recovered, knownSessionIds: [] });
+    assert.equal(refreshed.views[0].bindings, recovered.bindings);
     assert.equal(refreshed.views[0].worktrees[0].currentHead.name, branch);
     assert.equal(refreshed.views[1], ready.views[1]);
     assert.equal(context.store.getSnapshot().value.label, branch);
@@ -248,6 +252,7 @@ for (const order of ['notification-first', 'completion-first', 'no-notification'
     };
     const h = refreshHarness({
       source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+        workspaces: { items: [] }, expandSnapshot: { collapsedWorkspaceIds: {} },
         sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
       props,
       registrationState: {

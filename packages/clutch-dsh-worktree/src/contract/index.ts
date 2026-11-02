@@ -353,6 +353,8 @@ export function createWorktreeError(
  * Stable Manage-layer domain contract; it coordinates read-only DSH data, Git worktrees, and the external sidecar without owning DSH data.
  */
 export interface WorktreeManager {
+  /** One read-only navigation request; older injected managers use individual reads. */
+  readWorkspaceNavigation?(input: { workspaceId: WorkspaceId }): Promise<WorkspaceNavigation>;
   /** Optional Host task capability; Manage never executes the requested merge/rebase. */
   syncWorktreeBaseline?(input: WorktreeBaselineSyncRequest): Promise<WorktreeSessionDispatchResult>;
   /** Read plugin-owned instructions for a managed Worktree or synthetic browser Main projection backed by sidecar guidance. */
@@ -485,6 +487,7 @@ export interface WorktreeManager {
  * Allowlist of Browser Remote methods; runtime cwd resolution is intentionally excluded from this boundary.
  */
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
+  'readWorkspaceNavigation',
   'canReuseLocalSession',
   'createWorktreeSession',
   'readWorktreeSessionState',
@@ -519,6 +522,14 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
 
 export type WorktreeRemoteMethod = (typeof WORKTREE_REMOTE_METHODS)[number];
 
+export interface WorkspaceNavigation {
+  readonly worktrees: readonly WorktreeRecord[];
+  readonly bindings: readonly SessionBinding[];
+  readonly mainInstructions: string;
+  readonly gitState: WorktreeRemoteResult<WorkspaceGitState>;
+  readonly checkout?: WorkspaceCheckout;
+}
+
 /**
  * Remote 的可辨识结果：已知领域失败作为数据返回，未知或未分类异常仍由 Host 抛出。
  * Discriminated Remote result: recognized domain failures travel as data, while unknown or unclassified exceptions still escape the Host.
@@ -532,6 +543,7 @@ export type WorktreeRemoteResult<Value> =
  * Browser-safe Host projection containing only domain values and serializable results, never Provider objects.
  */
 export interface WorktreeRemoteManager {
+  readWorkspaceNavigation(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceNavigation>>;
   getWorkspaceCheckout(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceCheckout>>;
   getWorktreeInstructions(input: {
     workspaceId: WorkspaceId;

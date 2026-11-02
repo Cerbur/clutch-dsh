@@ -168,6 +168,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         workspace === undefined
           ? []
           : workspaceSessionIds(source.workspaces, workspace.workspaceId, source.sessions.ids),
+        view?.knownSessionIds ?? [],
       );
       const navigation = prepareDashboardNavigation(
         record,
@@ -404,9 +405,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             t={t}
             error={
               read.readState.error ??
-              (read.readState.targetError?.workspaceIds.includes(dashboard.workspaceId)
-                ? read.readState.targetError.error
-                : undefined)
+              read.readState.targetErrors?.[dashboard.workspaceId]
             }
             onClose={closeDashboard}
             onRetry={() => {
@@ -496,6 +495,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                   dashboardWorkspace.workspaceId,
                   source.sessions.ids,
                 ),
+            dashboardView?.knownSessionIds ?? [],
           )}
           actionPending={mutation.actionPending}
           onSyncBaseline={props.manager?.syncWorktreeBaseline !== undefined && dashboardManagedRecord !== undefined &&

@@ -12,6 +12,7 @@ export function dashboardSessionIds(
   archivedSessionIds: readonly string[],
   orderedIds: readonly string[] = [],
   workspaceSessionIds: readonly string[] = [],
+  knownSessionIds?: readonly string[],
 ): readonly string[] {
   if (isMainWorktreeId(record.worktreeId)) {
     const boundSessionIds = new Set(
@@ -24,7 +25,8 @@ export function dashboardSessionIds(
     );
     const visible = filterVisibleSessionIds(
       filterArchivedSessionIds(
-        workspaceSessionIds.filter((sessionId) => !boundSessionIds.has(sessionId)),
+        workspaceSessionIds.filter((sessionId) => !boundSessionIds.has(sessionId) &&
+          (knownSessionIds === undefined || knownSessionIds.includes(sessionId))),
         archivedSessionIds,
       ),
       sessions,
