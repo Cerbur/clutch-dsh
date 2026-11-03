@@ -26,6 +26,55 @@ export function effectiveActivityWindow(value: unknown): ActivityWindowId {
   return isActivityWindowId(value) ? value : DEFAULT_ACTIVITY_WINDOW;
 }
 
+/** The selector shows every range until the user narrows it. */
+export const DEFAULT_ACTIVITY_WINDOWS: readonly ActivityWindowId[] = ACTIVITY_WINDOWS;
+
+/**
+ * Guard the persisted visible-range list: unknown and duplicate entries are
+ * dropped, the canonical selector order is restored, and an empty result falls
+ * back to every range so the selector can never become unreachable.
+ */
+export function effectiveActivityWindows(value: unknown): readonly ActivityWindowId[] {
+  const values = Array.isArray(value) ? value.filter(isActivityWindowId) : [];
+  const selected = new Set(values);
+  const visible = ACTIVITY_WINDOWS.filter((window) => selected.has(window));
+  return visible.length > 0 ? visible : DEFAULT_ACTIVITY_WINDOWS;
+}
+
+/**
+ * Apply one visibility checkbox without producing an empty selector.
+ * Re-showing a range inserts it back into the canonical order.
+ */
+export function toggleActivityWindow(
+  current: readonly ActivityWindowId[],
+  window: ActivityWindowId,
+  visible: boolean,
+): readonly ActivityWindowId[] {
+  const enabled = new Set(current);
+  const wasVisible = enabled.has(window);
+  if (visible === wasVisible) return current;
+  if (visible) enabled.add(window);
+  else enabled.delete(window);
+  if (enabled.size === 0) return current;
+  return ACTIVITY_WINDOWS.filter((candidate) => enabled.has(candidate));
+}
+
+/**
+ * Pick the tab that takes over when the selected range is hidden: the next
+ * visible range in selector order, wrapping to the first one at the end.
+ */
+export function nextActivityWindow(
+  hidden: ActivityWindowId,
+  visible: readonly ActivityWindowId[],
+): ActivityWindowId {
+  const start = ACTIVITY_WINDOWS.indexOf(hidden);
+  for (let step = 1; step <= ACTIVITY_WINDOWS.length; step += 1) {
+    const candidate = ACTIVITY_WINDOWS[(start + step) % ACTIVITY_WINDOWS.length];
+    if (candidate !== undefined && visible.includes(candidate)) return candidate;
+  }
+  return visible[0] ?? DEFAULT_ACTIVITY_WINDOW;
+}
+
 /** Local calendar-day start: DSH presents Session times in the local time zone. */
 export function startOfLocalDay(now: number): number {
   const date = new Date(now);
@@ -126,6 +175,14 @@ export interface ActivityFilterView {
   readonly active: boolean;
   readonly now: number;
   readonly setWindow: (window: ActivityWindowId) => void;
+  /** Ranges the selector shows, in canonical order; never empty. */
+  readonly visibleWindows: readonly ActivityWindowId[];
+  readonly isWindowVisible: (window: ActivityWindowId) => boolean;
+  /** Show or hide one selector tab; hiding the last tab is ignored. */
+  readonly setWindowVisible: (window: ActivityWindowId, visible: boolean) => void;
+  /** Ephemeral dropdown state for the visible-range checkboxes. */
+  readonly menuOpen: boolean;
+  readonly setMenuOpen: (open: boolean) => void;
   readonly isActive: (sessionId: string) => boolean;
   /** Narrow a list to the range; `all` returns the input unchanged. */
   readonly scopeSessionIds: (sessionIds: readonly string[]) => readonly string[];

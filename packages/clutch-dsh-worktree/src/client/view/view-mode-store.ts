@@ -1,5 +1,13 @@
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store';
-import { DEFAULT_ACTIVITY_WINDOW, type ActivityWindowId } from './activity-filter.js';
+import {
+  DEFAULT_ACTIVITY_WINDOW,
+  DEFAULT_ACTIVITY_WINDOWS,
+  effectiveActivityWindow,
+  effectiveActivityWindows,
+  nextActivityWindow,
+  toggleActivityWindow,
+  type ActivityWindowId,
+} from './activity-filter.js';
 import {
   WORKTREE_VIEW_MODE_STORAGE_KEY,
   type WorktreeViewActions,
@@ -15,6 +23,7 @@ export function createWorktreeViewStore(): EngineStoreHandle<
     init: (): WorktreeViewState => ({
       viewMode: 'workspace-session',
       activityWindow: DEFAULT_ACTIVITY_WINDOW,
+      activityWindows: [...DEFAULT_ACTIVITY_WINDOWS],
     }),
     persist: WORKTREE_VIEW_MODE_STORAGE_KEY,
     actions: {
@@ -22,7 +31,22 @@ export function createWorktreeViewStore(): EngineStoreHandle<
         draft.viewMode = mode;
       },
       setActivityWindow: (draft, window: ActivityWindowId) => {
+        // Normalize an older persisted payload that predates the visible set.
+        draft.activityWindows = effectiveActivityWindows(draft.activityWindows);
         draft.activityWindow = window;
+      },
+      setActivityWindowVisible: (
+        draft,
+        window: ActivityWindowId,
+        visible: boolean,
+      ) => {
+        const current = effectiveActivityWindows(draft.activityWindows);
+        const next = toggleActivityWindow(current, window, visible);
+        if (next === current) return;
+        draft.activityWindows = next;
+        // Hiding the selected tab hands the selection to the next visible tab.
+        const selected = effectiveActivityWindow(draft.activityWindow);
+        if (!next.includes(selected)) draft.activityWindow = nextActivityWindow(selected, next);
       },
     },
   });

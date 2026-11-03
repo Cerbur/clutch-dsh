@@ -202,7 +202,13 @@ export function WorkspaceTree({
             <p className={styles.empty}>
               {activity.active ? t('filter.empty') : t('workspace.noMatches')}
             </p>
-            {activity.active && <p className={styles.emptyHint}>{t('filter.emptyHint')}</p>}
+            {activity.active && (
+              <p className={styles.emptyHint}>
+                {t(
+                  activity.isWindowVisible('all') ? 'filter.emptyHint' : 'filter.emptyHintMenu',
+                )}
+              </p>
+            )}
           </>
         ) : (
           visibleWorkspaces.map((workspace) => {
@@ -447,11 +453,6 @@ export function WorkspaceTree({
                       />
                     )}
 
-                    {!activity.active &&
-                      activeWorktrees.length === 0 &&
-                      archivedWorktrees.length === 0 && (
-                        <p className={styles.emptyNested}>{t('worktree.noWorktrees')}</p>
-                      )}
                     {visibleActiveWorktrees.map((record) => (
                       <ActiveWorktree
                         key={record.worktreeId}

@@ -13,6 +13,11 @@ export interface WorktreeViewState {
   viewMode: WorktreeViewMode;
   /** Bounded activity window; guard persisted values with `effectiveActivityWindow`. */
   activityWindow: ActivityWindowId;
+  /**
+   * Ranges the selector shows, in canonical order; guard persisted values with
+   * `effectiveActivityWindows`. The list is never empty.
+   */
+  activityWindows: readonly ActivityWindowId[];
 }
 
 /** A browser-local Worktree → DSH Workspace membership projection. */
@@ -25,6 +30,11 @@ export interface VirtualWorkspaceBinding {
 export type WorktreeViewActions = ActionsDecl<WorktreeViewState> & {
   setViewMode: (draft: WorktreeViewState, mode: WorktreeViewMode) => void;
   setActivityWindow: (draft: WorktreeViewState, window: ActivityWindowId) => void;
+  setActivityWindowVisible: (
+    draft: WorktreeViewState,
+    window: ActivityWindowId,
+    visible: boolean,
+  ) => void;
 };
 
 /** Guard persisted values before they become a visible mode. */

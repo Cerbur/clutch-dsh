@@ -1559,12 +1559,18 @@ test('matches native Workspace interaction, typography, and action rail', async 
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onMenuOpenChange/,
   );
-  assert.match(styles, /\.workspaceRow \.workspaceDisclosure\s*\{[\s\S]*display: none;/);
+  // The disclosure stays in flow invisibly and reveals on hover or keyboard focus,
+  // matching the Worktree row contract asserted below.
   assert.match(
     styles,
-    /\.workspaceRow:hover \.workspaceDisclosure\s*,[\s\S]*display: inline-flex;/,
+    /\.workspaceRow \.workspaceDisclosure,\s*\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
   );
-  assert.match(styles, /\.workspaceRow:hover \.workspaceIcon\s*,[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /@media \(hover: hover\)[\s\S]*\.workspaceRow:hover \.workspaceDisclosure[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
+  );
+  assert.match(styles, /\.workspaceRow:hover \.workspaceIcon[\s\S]*visibility: hidden;/);
+  assert.match(styles, /\.workspaceRow:focus-within \.workspaceDisclosure/);
 
   assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-size: 14px;/);
   assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-weight: 400;/);

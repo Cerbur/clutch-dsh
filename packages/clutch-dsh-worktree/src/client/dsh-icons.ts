@@ -25,4 +25,5 @@ export const IconProjectAddOutline16 = createDshIconAlias(exports, 'IconProjectA
 export const IconRefreshOutline16 = createDshIconAlias(exports, 'IconRefreshOutline16', 'IconRefreshOutlineRegular');
 export const IconRightUpOutline16 = createDshIconAlias(exports, 'IconRightUpOutline16', 'IconRightUpOutlineRegular');
 export const IconSearchOutline16 = createDshIconAlias(exports, 'IconSearchOutline16', 'IconSearchOutlineRegular');
+export const IconSlidersTwoOutline16 = createDshIconAlias(exports, 'IconSlidersTwoOutline16', 'IconSlidersTwoOutlineRegular');
 export const IconTrashOutline16 = createDshIconAlias(exports, 'IconTrashOutline16', 'IconTrashOutlineRegular');

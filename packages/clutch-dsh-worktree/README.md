@@ -159,7 +159,12 @@ adds no Git read and no new DSH request.
 - Each range shows how many Sessions it contains. The selected range is a browser-local
   preference: it survives reopening the panel and reloading the page, and it is never written to
   the plugin index or to DSH.
-- When nothing matches, the tree reports the empty range and points back to **All**.
+- The button at the right edge of the range bar opens a checklist of the four ranges. Only checked
+  ranges appear as tabs, at least one always stays checked, and hiding the selected range moves the
+  selection to the next visible tab. The visible set is a browser-local preference like the range
+  itself.
+- When nothing matches, the tree reports the empty range and points back to **All**, or to the range
+  menu when **All** is hidden.
 
 ### Active sessions
 

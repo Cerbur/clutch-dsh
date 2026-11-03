@@ -199,8 +199,8 @@
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 
-/* Activity range selector. It scrolls horizontally instead of clipping labels,
-   so four ranges stay readable in a narrow or collapsed-wide Sidebar. */
+/* Activity range selector. Its tabs scroll horizontally instead of clipping
+   labels, while the visible-range menu stays pinned at the right edge. */
 .activityBar {
   display: flex;
   align-items: center;
@@ -208,13 +208,115 @@
   flex: none;
   padding: 0 10px 8px;
   box-sizing: border-box;
-  overflow-x: auto;
-  scrollbar-width: none;
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
 }
 
-.activityBar::-webkit-scrollbar {
+.activityTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.activityTabs::-webkit-scrollbar {
   display: none;
+}
+
+/* Compact pinned trigger: it never widens the bar or competes with the active
+   range pill, and it keeps the tabs as the only horizontally scrolling row. */
+.activityConfig {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.activityConfig:hover,
+.activityConfig[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.activityConfig:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-l3);
+  outline-offset: 1px;
+}
+
+/* Checkbox rows in the pinned menu. They keep the menu open while toggling so
+   several ranges can be shown or hidden in one visit. */
+.activityOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.activityOption:hover:not(:disabled),
+.activityOption:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.activityOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.activityOptionLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityOption[data-checked='true'] .activityOptionLabel {
+  font-weight: 500;
+}
+
+.activityOptionCount {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.activityOptionCheck {
+  display: inline-flex;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-primary);
+}
+
+.activityOptionCheck svg {
+  width: 14px;
+  height: 14px;
 }
 
 .activitySegment {
@@ -1517,13 +1619,6 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 13px;
   line-height: 20px;
-}
-
-.emptyNested {
-  margin: 0;
-  padding: 4px 8px 5px 28px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
 }
 
 .archivedGroup {

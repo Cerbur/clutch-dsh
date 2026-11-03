@@ -8,15 +8,20 @@ import ts from 'typescript';
 import {
   ACTIVITY_WINDOWS,
   DEFAULT_ACTIVITY_WINDOW,
+  DEFAULT_ACTIVITY_WINDOWS,
   activityCandidateSessionIds,
   activityWindowSince,
   countSessionsInWindow,
   effectiveActivityWindow,
+  effectiveActivityWindows,
   filterSessionIdsByActivity,
   isActivityWindowId,
   isSessionActiveInWindow,
+  nextActivityWindow,
   startOfLocalDay,
+  toggleActivityWindow,
 } from '../lib/client/view/activity-filter.js';
+import { createWorktreeViewStore } from '../lib/client/view/view-mode-store.js';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -76,6 +81,64 @@ test('persisted values are guarded before they scope a visible tree', () => {
   assert.equal(effectiveActivityWindow('yesterday'), 'all');
   assert.equal(effectiveActivityWindow(7), 'all');
   assert.equal(effectiveActivityWindow(null), 'all');
+});
+
+test('the visible-range preference guards corruption and never becomes empty', () => {
+  assert.deepEqual(DEFAULT_ACTIVITY_WINDOWS, ACTIVITY_WINDOWS);
+  // Fresh profiles and older persisted payloads without the field show every tab.
+  assert.deepEqual(effectiveActivityWindows(undefined), ACTIVITY_WINDOWS);
+  assert.deepEqual(effectiveActivityWindows(null), ACTIVITY_WINDOWS);
+  assert.deepEqual(effectiveActivityWindows([]), ACTIVITY_WINDOWS);
+  assert.deepEqual(effectiveActivityWindows(['yesterday', 7]), ACTIVITY_WINDOWS);
+  // Valid entries are de-duplicated and restored to selector order.
+  assert.deepEqual(effectiveActivityWindows(['all', 'today', 'today']), ['today', 'all']);
+  assert.deepEqual(effectiveActivityWindows(['last7d']), ['last7d']);
+});
+
+test('toggling a range keeps the remaining tabs ordered and refuses an empty set', () => {
+  assert.deepEqual(toggleActivityWindow(ACTIVITY_WINDOWS, 'last24h', false), [
+    'today',
+    'last7d',
+    'all',
+  ]);
+  assert.deepEqual(toggleActivityWindow(['today', 'all'], 'last7d', true), [
+    'today',
+    'last7d',
+    'all',
+  ]);
+  // Re-showing an already visible range and hiding the last one are no-ops.
+  assert.equal(toggleActivityWindow(ACTIVITY_WINDOWS, 'today', true), ACTIVITY_WINDOWS);
+  assert.deepEqual(toggleActivityWindow(['all'], 'all', false), ['all']);
+});
+
+test('hiding the selected range hands over to the next visible tab', () => {
+  assert.equal(nextActivityWindow('today', ['last24h', 'last7d']), 'last24h');
+  assert.equal(nextActivityWindow('last24h', ['today', 'all']), 'all');
+  // Wrapping at the end keeps a bounded choice instead of forcing All.
+  assert.equal(nextActivityWindow('all', ['today', 'last7d']), 'today');
+  assert.equal(nextActivityWindow('last7d', ['all']), 'all');
+});
+
+test('the store updates visibility and selection atomically and never empties the bar', () => {
+  const instance = createWorktreeViewStore().create();
+  const snapshot = () => instance.getSnapshot();
+  assert.deepEqual(snapshot().activityWindows, ACTIVITY_WINDOWS);
+
+  instance.actions.setActivityWindow('today');
+  instance.actions.setActivityWindowVisible('today', false);
+  assert.deepEqual(snapshot().activityWindows, ['last24h', 'last7d', 'all']);
+  // Hiding the selected tab hands the selection to the next visible range.
+  assert.equal(snapshot().activityWindow, 'last24h');
+
+  instance.actions.setActivityWindowVisible('last24h', false);
+  instance.actions.setActivityWindowVisible('last7d', false);
+  assert.deepEqual(snapshot().activityWindows, ['all']);
+  assert.equal(snapshot().activityWindow, 'all');
+
+  // The final range stays visible even if its checkbox is forced off.
+  instance.actions.setActivityWindowVisible('all', false);
+  assert.deepEqual(snapshot().activityWindows, ['all']);
+  assert.equal(snapshot().activityWindow, 'all');
 });
 
 test('all keeps every Session, including rows without activity facts', () => {
@@ -205,6 +268,15 @@ async function loadFilterBar() {
   const styles = new Proxy({}, { get: (_target, name) => String(name) });
   const dependencies = {
     'react/jsx-runtime': jsxRuntime,
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Menu: function Menu() {
+        return null;
+      },
+    },
+    '../../dsh-icons.js': {
+      IconCheckOutline16: () => null,
+      IconSlidersTwoOutline16: () => null,
+    },
     '../../worktree.css': { default: styles },
     '../shared.js': { cx: (...names) => names.filter(Boolean).join(' ') },
   };
@@ -213,7 +285,9 @@ async function loadFilterBar() {
   return exports.ActivityFilterBar;
 }
 
-function barProps(window, counts, setWindow) {
+function barProps(window, counts, setWindow, options = {}) {
+  const visible = options.visible ?? ACTIVITY_WINDOWS;
+  const visibility = [];
   return {
     t: (key, params) => (params === undefined ? key : key + JSON.stringify(params)),
     activity: {
@@ -221,11 +295,21 @@ function barProps(window, counts, setWindow) {
       active: window !== 'all',
       now: 0,
       setWindow,
-      isActive: () => true,
+      visibleWindows: visible,
+      isWindowVisible: (candidate) => visible.includes(candidate),
+      setWindowVisible: (candidate, next) => {
+        visibility.push([candidate, next]);
+        options.setWindowVisible?.(candidate, next);
+      },
+      menuOpen: options.menuOpen ?? false,
+      setMenuOpen: (open) => {
+        options.setMenuOpen?.(open);
+      },      isActive: () => true,
       scopeSessionIds: (sessionIds) => sessionIds,
       hasActiveSession: (sessionIds) => sessionIds.length > 0,
       count: (candidate) => counts[candidate] ?? 0,
     },
+    visibility,
   };
 }
 
@@ -233,13 +317,14 @@ test('the range bar exposes one pressed segment per range and routes the choice'
   const ActivityFilterBar = await loadFilterBar();
   const chosen = [];
   const counts = { today: 2, last24h: 4, last7d: 6, all: 9 };
-  const element = ActivityFilterBar(
-    barProps('last24h', counts, (window) => chosen.push(window)),
-  );
+  const props = barProps('last24h', counts, (window) => chosen.push(window));
+  const element = ActivityFilterBar(props);
 
   assert.equal(element.type, 'div');
-  assert.equal(element.props.role, 'group');
-  const segments = element.props.children;
+  const tabs = element.props.children[0];
+  assert.equal(tabs.type, 'div');
+  assert.equal(tabs.props.role, 'group');
+  const segments = tabs.props.children;
   assert.deepEqual(
     segments.map((segment) => segment.props['data-activity-window']),
     ['today', 'last24h', 'last7d', 'all'],
@@ -262,7 +347,7 @@ test('an empty range renders no count badge but keeps the segment operable', asy
   const ActivityFilterBar = await loadFilterBar();
   const chosen = [];
   const element = ActivityFilterBar(barProps('today', { today: 0, all: 0 }, (w) => chosen.push(w)));
-  const segments = element.props.children;
+  const segments = element.props.children[0].props.children;
 
   for (const segment of segments) {
     // A zero count renders nothing (JSX keeps a `false` child), never an empty badge.
@@ -272,5 +357,82 @@ test('an empty range renders no count badge but keeps the segment operable', asy
   }
   segments[0].props.onClick();
   assert.deepEqual(chosen, ['today']);
+});
+
+test('only checked ranges render as tabs', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const counts = { today: 2, last24h: 4, last7d: 6, all: 9 };
+  const element = ActivityFilterBar(
+    barProps('all', counts, () => {}, { visible: ['today', 'all'] }),
+  );
+  const segments = element.props.children[0].props.children;
+  assert.deepEqual(
+    segments.map((segment) => segment.props['data-activity-window']),
+    ['today', 'all'],
+  );
+});
+
+test('the right-edge menu toggles visible ranges and keeps the last one checked', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const counts = { today: 2, last24h: 4, last7d: 6, all: 9 };
+  const menuState = [];
+  const props = barProps('today', counts, () => {}, {
+    visible: ['today', 'all'],
+    setMenuOpen: (open) => menuState.push(open),
+  });
+  const element = ActivityFilterBar(props);
+  const menu = element.props.children[1];
+  const trigger = menu.props.anchor;
+
+  assert.deepEqual(menu.props.items, [
+    { type: 'label', id: 'visible-filters', text: 'filter.visible' },
+  ]);
+  assert.equal(trigger.props['data-activity-config'], true);
+  assert.equal(trigger.props['aria-haspopup'], 'menu');
+  assert.equal(trigger.props['aria-expanded'], false);
+  assert.equal(trigger.props['aria-label'], 'filter.choose');
+  trigger.props.onClick();
+  assert.deepEqual(menuState, [true]);
+
+  const options = menu.props.children;
+  assert.deepEqual(
+    options.map((option) => option.props['data-activity-option']),
+    ['today', 'last24h', 'last7d', 'all'],
+  );
+  assert.deepEqual(
+    options.map((option) => option.props['aria-checked']),
+    [true, false, false, true],
+  );
+  // Rows outside the visible set stay actionable so they can be re-shown.
+  assert.deepEqual(
+    options.map((option) => option.props.disabled),
+    [false, false, false, false],
+  );
+  assert.equal(
+    options[0].props['aria-label'],
+    'filter.count{"label":"filter.today","count":2}',
+  );
+
+  options[1].props.onClick();
+  options[0].props.onClick();
+  assert.deepEqual(props.visibility, [
+    ['last24h', true],
+    ['today', false],
+  ]);
+});
+
+test('the only remaining range cannot be unchecked', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const element = ActivityFilterBar(
+    barProps('today', { today: 1, last24h: 0, last7d: 0, all: 1 }, () => {}, {
+      visible: ['today'],
+    }),
+  );
+  const options = element.props.children[1].props.children;
+  assert.deepEqual(
+    options.map((option) => option.props.disabled),
+    [true, false, false, false],
+  );
+  assert.equal(options[0].props.title, 'filter.keepOne');
 });
 

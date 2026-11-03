@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ACTIVITY_WINDOWS,
+  DEFAULT_ACTIVITY_WINDOW,
   activityCandidateSessionIds,
   countSessionsInWindow,
   effectiveActivityWindow,
+  effectiveActivityWindows,
   isSessionActiveInWindow,
   type ActivityFilterView,
   type ActivitySessionScope,
@@ -38,8 +40,19 @@ type Input = {
  */
 export function useActivityFilter({ props, source, enabled }: Input): ActivityFilterView {
   const preferred = props.useStore((state) => state.activityWindow);
-  const window = effectiveActivityWindow(preferred);
+  const preferredWindows = props.useStore((state) => state.activityWindows);
+  const visibleWindows = useMemo(
+    () => effectiveActivityWindows(preferredWindows),
+    [preferredWindows],
+  );
+  // A persisted selection outside the visible set resolves to the first visible
+  // tab instead of filtering the tree with an unreachable range.
+  const preferredWindow = effectiveActivityWindow(preferred);
+  const window = visibleWindows.includes(preferredWindow)
+    ? preferredWindow
+    : (visibleWindows[0] ?? DEFAULT_ACTIVITY_WINDOW);
   const [now, setNow] = useState(() => Date.now());
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -89,6 +102,16 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     },
     [props.actions],
   );
+  const isWindowVisible = useCallback(
+    (candidate: ActivityWindowId) => visibleWindows.includes(candidate),
+    [visibleWindows],
+  );
+  const setWindowVisible = useCallback(
+    (candidate: ActivityWindowId, visible: boolean) => {
+      props.actions.setActivityWindowVisible(candidate, visible);
+    },
+    [props.actions],
+  );
   const count = useCallback(
     (candidate: ActivityWindowId) => counts[effectiveActivityWindow(candidate)] ?? 0,
     [counts],
@@ -99,6 +122,11 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     active: window !== 'all',
     now,
     setWindow,
+    visibleWindows,
+    isWindowVisible,
+    setWindowVisible,
+    menuOpen,
+    setMenuOpen,
     isActive,
     scopeSessionIds,
     hasActiveSession,
