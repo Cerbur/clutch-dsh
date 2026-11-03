@@ -46,7 +46,7 @@ test -z "$(git -C "$FEATURE_WORKTREE" status --porcelain=v1 --untracked-files=al
 test -z "$(git -C "$RELEASE_WORKTREE" status --porcelain=v1 --untracked-files=all)"
 ```
 
-任一检查有输出都必须停止，先把改动整理进对应 worktree 的 scoped commit 并重新验证；不能用
+任一检查有输出都必须停止，先把改动整理进对应 worktree 的一个或多个 scoped commits 并重新验证；不能用
 stash 或忽略输出代替门禁。本流程只定义顺序和门禁，不自动授权 commit、push、publish 或其他
 外部系统变更，这些操作仍须获得明确授权。
 
@@ -94,7 +94,8 @@ git worktree add /path/to/wt-<release-name>/feat-<feature> \
 worktree 不递增 package version，也不写入带版本号的 release log 条目；这些在选定目标 release
 后统一在 release worktree 中处理。
 
-运行与改动匹配的检查，然后把全部改动整理为单个 scoped commit：
+运行与改动匹配的检查，然后把全部改动整理为一个或多个 scoped commits；合并回 release 前
+不要求 squash 成单个 commit。历史计划中的单 commit 要求以此规则为准：
 
 ```bash
 cd /path/to/wt-<release-name>/feat-<feature>
@@ -103,7 +104,7 @@ git diff --check
 git commit -m "<type>(<scope>): <summary>"
 ```
 
-commit message 必须说明改动范围；提交后 feature worktree 必须保持干净。
+每个 commit message 必须说明改动范围；提交后 feature worktree 必须保持干净。
 
 ### 2. 从 `main` 创建 release worktree
 
@@ -129,7 +130,7 @@ git merge --no-ff origin/main -m "merge: sync main into wt-<release-name>-<versi
 ### 3. 按 clean/rebase/merge 门禁合并选定的 feature
 
 确认两个 worktree 干净后，将 feature branch rebase 到目标 release branch，再在 release
-worktree 中以 `--no-ff` 合并单个 scoped commit：
+worktree 中以 `--no-ff` 合并该 feature branch，保留其一个或多个 scoped commits：
 
 ```bash
 FEATURE_WORKTREE=/path/to/wt-<release-name>/feat-<feature>
