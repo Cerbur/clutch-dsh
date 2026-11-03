@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import process from 'node:process';
+import { clearTimeout, setTimeout } from 'node:timers';
 
 // Separate command and cleanup deadlines: execFile's timeout alone waits for
 // close, which a surviving descendant holding stdout open can prevent forever.
