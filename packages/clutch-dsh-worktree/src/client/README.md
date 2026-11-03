@@ -833,7 +833,17 @@ Dropdown reads start after the loading shell paint; ready rows and search/filter
 keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
 branch reads by Workspace but never caches settled results. Git comparison uses its controller's
 forced branch read, retaining ready state and avoiding history/file/diff refreshes.
-Workspace view reads use `getWorkspaceGitState` for readiness and the root checkout's current branch,
+Workspace navigation uses `readWorkspaceNavigation` to share Git and Sidecar facts within one
+Host request. The reader captures native Session membership when the request starts; Surface
+and modal consumers cannot widen an older prefetch's coverage. Uncovered members wait for a new
+binding read before entering Main, location, ordering or Dashboard projections. Native pending
+list replay preserves ready rows while retaining its pending phase. Membership synchronization
+replaces only the completed Workspace; errors and recovery actions are also Workspace-local.
+Current reads follow invalidated generations, including obsolete errors, and removed Workspace
+owners cannot publish after the same ID returns.
+Only the DSH carrier's exact HTTP 404 for the navigation endpoint enables an older Host fallback;
+transport, permission, Gateway and domain errors remain errors. Older injected managers use
+`getWorkspaceGitState` for readiness and the root checkout's current branch,
 without listing refs. Creation's modal loader reads only this projection; an empty branch array means
 the catalog has not been requested, not that Git has no branches. Defaults use the known current branch
 or HEAD and known names; final collision checks remain in Host. Git tab mount and explicit refresh

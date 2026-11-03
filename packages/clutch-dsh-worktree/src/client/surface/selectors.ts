@@ -6,7 +6,23 @@ import {
   type SessionPresentation,
 } from '../session/session-view.js';
 import type { WorktreeWorkspaceView } from '../view/worktree-view.js';
-import type { WorkspaceLike, WorktreeTranslate } from './types.js';
+import type { WorkspaceLike, WorkspaceListLike, WorktreeTranslate } from './types.js';
+
+/** Pending native replay is incomplete evidence, not removal of ready rows. */
+export function retainPendingWorkspaces(
+  previous: WorkspaceListLike | undefined,
+  next: WorkspaceListLike,
+): WorkspaceListLike {
+  if (!previous || !isPendingListPhase(next.phase)) return next;
+  const updates = new Map(next.items.map((item) => [item.workspaceId, item]));
+  const items = previous.items.map((item) => {
+    const update = updates.get(item.workspaceId);
+    updates.delete(item.workspaceId);
+    return update ? { ...update, sessionIds: [...new Set([...item.sessionIds, ...update.sessionIds])] } : item;
+  });
+  return { ...next, items: [...items, ...updates.values()],
+    archivedSessionIds: [...new Set([...(previous.archivedSessionIds ?? []), ...(next.archivedSessionIds ?? [])])] };
+}
 
 /** Native activity changes invalidate only the archived Worktrees' owning reads. */
 export function worktreeActivityRefreshWorkspaceIds(
@@ -131,6 +147,7 @@ export function resolveCurrentSessionLocation(
   if (view === undefined) return undefined;
   const binding = view.bindings.find((candidate) => candidate.sessionId === currentSessionId);
   if (binding === undefined) {
+    if (view.knownSessionIds !== undefined && !view.knownSessionIds.includes(currentSessionId)) return undefined;
     return {
       sessionId: currentSessionId,
       workspaceId: workspace.workspaceId,

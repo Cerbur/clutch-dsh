@@ -231,8 +231,8 @@ export function SurfaceContent({
       ],
     });
   }
-  if (readState.targetError !== undefined) {
-    const { error, workspaceIds } = readState.targetError;
+  for (const [workspaceId, error] of Object.entries(readState.targetErrors ?? {})) {
+    const workspaceIds = [workspaceId];
     notices.push({
       key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
       error, text: formatWorktreeViewError(error, t),

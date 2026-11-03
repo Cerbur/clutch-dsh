@@ -247,10 +247,9 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   const refreshSource = coordinator.slice(refreshStart, refreshEnd);
 
   assert.match(types, /type WorktreeRefreshScope/);
-  assert.match(types, /TargetedWorktreeReadError/);
-  assert.match(types, /targetError\?: TargetedWorktreeReadError/);
+  assert.match(types, /targetErrors\?: Readonly<Record<string, WorktreeViewError>>/);
   assert.match(coordinator, /viewReader/);
-  assert.match(refreshSource, /viewReader\.readMany\(/);
+  assert.doesNotMatch(refreshSource, /viewReader\.readMany\(/);
   assert.match(refreshSource, /viewReader\.read\(/);
   assert.match(refreshSource, /targetRefreshGuards/);
   assert.doesNotMatch(refreshSource, /loadWorktreeViews\(/);
@@ -298,8 +297,8 @@ test('invalidates superseded Worktree refresh results', async () => {
   assert.notEqual(refreshStart, -1);
   assert.notEqual(refreshEnd, -1);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  assert.match(refreshSource, /await refreshGuard\.current\.run\(/);
-  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
+  assert.match(refreshSource, /guard\.isCurrent\(request\.generation\)/);
+  assert.match(refreshSource, /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[\]\)/);
 
   const modeEffectStart = source.indexOf("useEffect(() => {\n    if (mode === 'worktree')");
   const modeEffectEnd = source.indexOf('  useEffect(() => {', modeEffectStart + 1);
@@ -511,7 +510,7 @@ test('preserves a ready Worktree projection during automatic refreshes', async (
   const effectSource = source.slice(effectStart, effectEnd);
   assert.match(
     effectSource,
-    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
+    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
   );
 });
 
@@ -1265,12 +1264,9 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  assert.match(refreshSource, /preserveCurrent/);
-  assert.match(
-    refreshSource,
-    /if \(!preserveCurrent\) \{[\s\S]*?setReadState\(\{ status: 'loading', views: \[\] \}\)/,
-  );
-  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
+  assert.match(refreshSource, /mergeWorktreeViews/);
+  assert.doesNotMatch(refreshSource, /views: \[\]/);
+  assert.match(refreshSource, /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[\]\)/);
   assert.match(
     commitSource,
     /if \(activeDrag\.workspaceId !== workspaceId\) return;[\s\S]*?insertWorktreeBefore\(/,
@@ -1320,7 +1316,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
   const initialReadSource = await readSurfaceSource(['state/useSurfaceRefresh.tsx']);
   assert.match(
     initialReadSource,
-    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
+    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
   );
 
   const actionRetryStart = source.indexOf('...(error.retryable ?');
@@ -1344,7 +1340,7 @@ test('keeps targeted refresh errors local and retryable', async () => {
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  const targetErrorStart = source.indexOf('if (readState.targetError !== undefined)');
+  const targetErrorStart = source.indexOf('Object.entries(readState.targetErrors ?? {})');
   const targetErrorEnd = source.indexOf("{readState.status === 'loading'", targetErrorStart);
 
   assert.match(
@@ -1420,7 +1416,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   );
   assert.match(
     coordinator,
-    /modalReadViewRef\.current === undefined[\s\S]*mergeWorktreeView\(merged, modalReadViewRef\.current\)/,
+    /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[view\]\)/,
   );
   assert.match(
     coordinator,

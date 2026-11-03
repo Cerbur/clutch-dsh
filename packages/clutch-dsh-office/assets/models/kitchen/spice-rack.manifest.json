@@ -20,45 +20,19 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.3700000047683716,
-      0,
-      0
-    ],
-    "max": [
-      0.3700000047683716,
-      0.7034568786621094,
-      0.26950603723526
-    ]
+    "min": [-0.3700000047683716, 0, 0],
+    "max": [0.3700000047683716, 0.7034568786621094, 0.26950603723526]
   },
   "dimensions": {
     "width": 0.7400000095367432,
     "height": 0.7034568786621094,
     "depth": 0.26950603723526
   },
-  "requiredNodes": [
-    "spice-rack",
-    "spice_rack_mesh",
-    "wall_anchor",
-    "front_anchor",
-    "hang_anchor"
-  ],
+  "requiredNodes": ["spice-rack", "spice_rack_mesh", "wall_anchor", "front_anchor", "hang_anchor"],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.3517284393310547,
-      0.2745060324668884
-    ],
-    "hang_anchor": [
-      0,
-      0.7034568786621094,
-      0
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0.3517284393310547, 0.2745060324668884],
+    "hang_anchor": [0, 0.7034568786621094, 0]
   },
   "budgets": {
     "triangles": 25000,
@@ -98,18 +72,12 @@
     "surfaceRegions": {
       "wood-support": {
         "pixels": 270708,
-        "roughnessRange": [
-          0.5598823428153992,
-          0.5642745494842529
-        ],
+        "roughnessRange": [0.5598823428153992, 0.5642745494842529],
         "metallic": 0
       },
       "bottles-and-ceramic": {
         "pixels": 348035,
-        "roughnessRange": [
-          0.35333332419395447,
-          0.35960784554481506
-        ],
+        "roughnessRange": [0.35333332419395447, 0.35960784554481506],
         "metallic": 0
       }
     },

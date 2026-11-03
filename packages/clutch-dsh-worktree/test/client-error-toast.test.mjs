@@ -265,9 +265,8 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
       readState: {
         status: 'ready',
         views: [{ workspaceId: 'unrelated' }],
-        targetError: {
-          workspaceIds: ['affected'],
-          error: { code: 'CONNECTION_CALL_FAILED', message: '', retryable: true },
+        targetErrors: {
+          affected: { code: 'CONNECTION_CALL_FAILED', message: '', retryable: true },
         },
       },
     },

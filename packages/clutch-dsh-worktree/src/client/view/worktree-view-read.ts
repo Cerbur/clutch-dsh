@@ -29,6 +29,8 @@ export interface WorktreeViewData {
 
 export interface WorktreeWorkspaceView extends WorktreeViewData {
   readonly workspaceId: string;
+  /** Browser-only membership covered when this Surface read started. */
+  readonly knownSessionIds?: readonly string[];
 }
 
 export interface WorktreeViewReader {
@@ -45,7 +47,7 @@ export interface WorktreeViewReader {
   }): void;
 
   /** Return one complete Workspace view, sharing its current generation. */
-  read(workspaceId: string): Promise<WorktreeWorkspaceView>;
+  read(workspaceId: string, options?: { readonly current?: boolean }): Promise<WorktreeWorkspaceView>;
 
   /** Read exactly this ordered set; duplicate IDs share one read. */
   readMany(workspaceIds: readonly string[]): Promise<readonly WorktreeWorkspaceView[]>;
@@ -56,6 +58,7 @@ export interface WorktreeViewReader {
 
 interface WorktreeViewReaderEntry {
   generation: number;
+  knownSessionIds?: readonly string[];
   readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
@@ -221,9 +224,31 @@ function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefi
 }
 
 /** Share complete Workspace reads without allowing stale generations to repopulate the cache. */
-export function createWorktreeViewReader(manager: WorktreeManager): WorktreeViewReader {
+export function createWorktreeViewReader(
+  manager: WorktreeManager,
+  sessionIdsForWorkspace?: (workspaceId: string) => readonly string[] | {
+    readonly sessionIds: readonly string[];
+    readonly pending: boolean;
+  },
+): WorktreeViewReader {
   const entries = new Map<string, WorktreeViewReaderEntry>();
   let disposed = false;
+  let active = 0;
+  const queue: Array<() => void> = [];
+  const schedule = <T>(operation: () => Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+    const start = () => {
+      active += 1;
+      let result: Promise<T>;
+      try { result = operation(); }
+      catch (error) { result = Promise.reject(error); }
+      result.then(resolve, reject).finally(() => {
+        active -= 1;
+        queue.shift()?.();
+      });
+    };
+    if (active < 3) start();
+    else queue.push(start);
+  });
 
   const entryFor = (workspaceId: string): WorktreeViewReaderEntry => {
     const current = entries.get(workspaceId);
@@ -240,11 +265,27 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
     if (entry.inFlight?.generation === entry.generation) return entry.inFlight.promise;
 
     const generation = entry.generation;
-    const promise = loadWorktreeView(manager, workspaceId)
+    let knownSessionIds: readonly string[] | undefined;
+    const promise = schedule(() => {
+      if (disposed) return Promise.reject(new Error('Worktree view reader disposed'));
+      const membership = sessionIdsForWorkspace?.(workspaceId);
+      if (membership !== undefined) {
+        if ('sessionIds' in membership) {
+          // Incomplete native replay cannot retract previously verified coverage.
+          // Capture only members present before this binding read starts.
+          knownSessionIds = membership.pending
+            ? [...new Set([...(entry.knownSessionIds ?? []), ...membership.sessionIds])]
+            : membership.sessionIds.slice();
+        } else knownSessionIds = membership.slice();
+      }
+      return loadWorktreeView(manager, workspaceId);
+    })
       .then((data) => {
-        const view: WorktreeWorkspaceView = { workspaceId, ...data };
+        const view: WorktreeWorkspaceView = { workspaceId, ...data,
+          ...(knownSessionIds === undefined ? {} : { knownSessionIds }) };
         if (!disposed && entries.get(workspaceId) === entry && entry.generation === generation) {
           entry.view = view;
+          entry.knownSessionIds = knownSessionIds;
           entry.stale = false;
         }
         return view;
@@ -320,7 +361,26 @@ export function createWorktreeViewReader(manager: WorktreeManager): WorktreeView
       entry.stale = true;
       entry.view = undefined;
     },
-    read,
+    read(workspaceId, options) {
+      if (!options?.current) return read(workspaceId);
+      const followCurrent = async (): Promise<WorktreeWorkspaceView> => {
+        for (;;) {
+          if (disposed) throw new Error('Worktree view reader disposed');
+          const entry = entryFor(workspaceId);
+          const generation = entry.generation;
+          let view: WorktreeWorkspaceView;
+          try {
+            view = await read(workspaceId);
+          } catch (error) {
+            if (disposed || generation === entry.generation) throw error;
+            continue;
+          }
+          if (disposed) throw new Error('Worktree view reader disposed');
+          if (!entry.stale && entry.view === view) return view;
+        }
+      };
+      return followCurrent();
+    },
     readMany(workspaceIds): Promise<readonly WorktreeWorkspaceView[]> {
       const uniqueIds = [...new Set(workspaceIds)];
       return Promise.all(uniqueIds.map((workspaceId) => read(workspaceId)));
@@ -338,6 +398,27 @@ export async function loadWorktreeView(
   manager: WorktreeManager,
   workspaceId: string,
 ): Promise<WorktreeViewData> {
+  if (manager.readWorkspaceNavigation) {
+    let navigation;
+    let unsupported = false;
+    try {
+      navigation = await manager.readWorkspaceNavigation({ workspaceId });
+    } catch (error) {
+      if (toWorktreeViewError(error).code !== 'WORKTREE_NAVIGATION_UNSUPPORTED') throw error;
+      unsupported = true;
+    }
+    if (!unsupported) {
+      const { gitState, ...snapshot } = navigation!;
+      if (!gitState.ok) {
+        const readiness = readinessFromBranchError(gitState.error);
+        if (!readiness) throw gitState.error;
+        return { ...snapshot, branches: [], readiness };
+      }
+      return { ...snapshot, branches: [], currentBranch: gitState.value.currentBranch,
+        readiness: snapshot.checkout?.currentHead === undefined
+          ? { status: 'noLocalBranch' } : { status: 'ready' } };
+    }
+  }
   const [worktreesResult, branchesResult, bindingsResult, mainInstructionsResult, checkoutResult] =
     await Promise.allSettled([
       manager.listWorktrees({ workspaceId }),
@@ -394,7 +475,7 @@ export function createWorktreeModalViewLoader(
     invalidate: guard.invalidate,
     load(workspaceId, onSuccess, onError) {
       return guard.run(
-        () => reader.read(workspaceId),
+        () => reader.read(workspaceId, { current: true }),
         onSuccess,
         (error) => onError(toWorktreeViewError(error)),
       );

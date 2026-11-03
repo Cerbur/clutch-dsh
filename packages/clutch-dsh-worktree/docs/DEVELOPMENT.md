@@ -10,6 +10,23 @@
 
 ## 1. 环境前置要求
 
+Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
+共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
+`node --test test/navigation-loading.test.mjs test/navigation-surface.test.mjs` 在构建后验证
+真实临时 Git 仓库的调用计数，以及 React 层的延迟、失败、重进、新增项和 mutation 交错。
+后者使用 jsdom 与可控 Promise，不是 Windows DSH 浏览器性能实测。
+
+Windows 导航读阶段的可复现 benchmark、原始样本与验证限制见
+[2026-11-03 Windows navigation benchmark](benchmarks/2026-11-03-windows-navigation.md)。
+同一脚本在 Apple Silicon 上的测量、平台对比与验证结果见
+[2026-11-03 macOS navigation benchmark](benchmarks/2026-11-03-macos-navigation.md)。
+构建后运行 `node scripts/benchmark-navigation.mjs --samples 30 --warmups 3 --output <new-json-path>`；
+该脚本使用真实 Git 与父提交 reader，不包含 DSH 启动恢复、HTTP transport 或浏览器绘制。
+脚本的 fixture/provenance Git helper 使用 30 秒命令期限与独立的 5 秒清理期限；
+超时后终止 POSIX 进程组或 Windows 进程树，清理期限到达仍未关闭时显式报错并释放管道。
+`node --test test/benchmark-git.test.mjs` 验证真实 Git 结果、超时和无法关闭的进程树；
+Windows 分支的模拟测试不替代 Windows 宿主验证。历史 benchmark 数据保持原样。
+
 Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
 Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs
 test/client-dashboard.test.mjs test/worktree-tools.test.mjs` 验证共享原生 Session 派发与 UI 接收流程。

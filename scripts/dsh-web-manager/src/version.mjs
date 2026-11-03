@@ -262,8 +262,7 @@ export async function switchDshVersion(targetVersion, options = {}) {
         success: false,
         step: 'pnpm install',
         error:
-          installRes.error?.message ||
-          `pnpm install failed with exit code ${installRes.exitCode}`,
+          installRes.error?.message || `pnpm install failed with exit code ${installRes.exitCode}`,
       };
     }
   }
@@ -278,8 +277,7 @@ export async function switchDshVersion(targetVersion, options = {}) {
         success: false,
         step: 'pnpm run build',
         error:
-          buildRes.error?.message ||
-          `pnpm run build failed with exit code ${buildRes.exitCode}`,
+          buildRes.error?.message || `pnpm run build failed with exit code ${buildRes.exitCode}`,
       };
     }
   }

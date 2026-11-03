@@ -1,5 +1,41 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
+
+test('old Host navigation falls back only on the canonical missing endpoint response', async () => {
+  const calls = [];
+  const adapter = createWorktreeConnectionAdapter({ async call(channel, endpoint) {
+    calls.push(endpoint);
+    if (endpoint.endsWith('/readWorkspaceNavigation')) {
+      throw new Error('transport failure for ' + channel + '/' + endpoint + ': HTTP 404');
+    }
+    const value = endpoint.endsWith('/getWorkspaceGitState') ? { currentBranch: 'main' }
+      : endpoint.endsWith('/getWorkspaceCheckout') ? { currentHead: { kind: 'branch', name: 'main', commit: 'a'.repeat(40) } }
+      : endpoint.endsWith('/getWorktreeInstructions') ? '' : [];
+    return { ok: true, value: { ok: true, value } };
+  } });
+  assert.equal((await loadWorktreeView(adapter, 'ws')).readiness.status, 'ready');
+  assert.equal(calls.length, 6);
+  adapter.dispose();
+});
+
+test('navigation does not mask transport, Gateway, or domain failures as compatibility fallback', async () => {
+  for (const failure of [
+    new Error('transport failure for /api/worktreeManager/readWorkspaceNavigation: HTTP 500'),
+    { ok: false, error: { code: 'gateway/service-unavailable', message: 'offline', details: {} } },
+    { ok: true, value: { ok: false, error: { code: 'SIDECAR_CORRUPTED', message: 'bad data', details: {} } } },
+  ]) {
+    let calls = 0;
+    const adapter = createWorktreeConnectionAdapter({ async call() {
+      calls += 1;
+      if (failure instanceof Error) throw failure;
+      return failure;
+    } });
+    await assert.rejects(loadWorktreeView(adapter, 'ws'));
+    assert.equal(calls, 1);
+    adapter.dispose();
+  }
+});
 
 import {
   WORKTREE_CONNECTION_ENDPOINTS,
@@ -13,6 +49,8 @@ const METHODS = [
   ['readWorktreeSessionState', { workspaceId: 'ws1', worktreeId: 'wt1' }, { workspaceId: 'ws1', revision: '2', bindings: [] }],
   ['syncWorktreeBaseline', { workspaceId: 'ws1', worktreeId: 'wt1', baseBranch: 'main', strategy: 'merge', requestId: 'req1' }, { sessionId: 's1', status: 'dispatched' }],
   ['getWorkspaceGitState', { workspaceId: 'ws1' }, { currentBranch: 'main' }],
+  ['readWorkspaceNavigation', { workspaceId: 'ws1' }, { worktrees: [], bindings: [],
+    mainInstructions: '', gitState: { ok: true, value: { currentBranch: 'main' } } }],
   ['getToolSettings', { scope: { kind: 'general' } }, { enabled: false, tools: [] }],
   ['updateToolSettings', { scope: { kind: 'general' }, selection: { enabled: true, tools: [] }, expected: { enabled: false, tools: [] } }, { enabled: false, tools: [] }],
   ['getWorktreeInstructions', { workspaceId: 'ws1', worktreeId: 'wt1' }, 'Use tests'],
@@ -102,6 +140,7 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/readWorktreeSessionState',
     'worktreeManager/syncWorktreeBaseline',
     'worktreeManager/getWorkspaceGitState',
+    'worktreeManager/readWorkspaceNavigation',
     'worktreeManager/getToolSettings',
     'worktreeManager/updateToolSettings',
     'worktreeManager/watchToolChanges',

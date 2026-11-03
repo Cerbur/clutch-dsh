@@ -10,6 +10,7 @@ import * as jsx from 'react/jsx-runtime';
 import ts from 'typescript';
 import * as sessionView from '../lib/client/session/session-view.js';
 import * as selection from '../lib/client/session/session-selection.js';
+import * as surfaceSelectors from '../lib/client/surface/selectors.js';
 import * as labels from '../lib/client/session/session-labels.js';
 import * as dashboardSelection from '../lib/client/dashboard/dashboard-selection.js';
 import * as acquisition from '../lib/client/dashboard/worktree-acquisition-facts.js';
@@ -167,6 +168,7 @@ export async function nativeStatusFixture(
   const workspace = store.createSnapshotStore({ items: [] });
   const { useSurfaceSources } = await source('surface/state/useSurfaceSources.tsx', {
     react: h.react,
+    '../selectors.js': surfaceSelectors,
     '../../session/session-view.js': sessionView,
     '../../session/session-selection.js': selection,
     '../../view/view-mode.js': { effectiveViewMode },

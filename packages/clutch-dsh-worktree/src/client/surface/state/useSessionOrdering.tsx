@@ -58,7 +58,8 @@ export function useSessionOrdering({ read, source, props }: Input) {
       const bindings = view.bindings;
       const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
       const mainSessionIds = filterVisibleSessionIds(
-        unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
+        unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]).filter((id) =>
+          view.knownSessionIds === undefined || view.knownSessionIds.includes(id)),
         sessions,
       );
       inputs.push({

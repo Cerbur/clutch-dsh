@@ -266,21 +266,24 @@ test('cli module', async (t) => {
     }
   });
 
-  await t.test('runCli(["upgrade", "--help"]) and ["help", "upgrade"] show upgrade help', async () => {
-    captureLogs();
-    try {
-      const code1 = await runCli(['upgrade', '--help']);
-      assert.equal(code1, 0);
-      assert.ok(loggedLines.some((l) => l.includes('dwm upgrade')));
+  await t.test(
+    'runCli(["upgrade", "--help"]) and ["help", "upgrade"] show upgrade help',
+    async () => {
+      captureLogs();
+      try {
+        const code1 = await runCli(['upgrade', '--help']);
+        assert.equal(code1, 0);
+        assert.ok(loggedLines.some((l) => l.includes('dwm upgrade')));
 
-      loggedLines = [];
-      const code2 = await runCli(['help', 'upgrade']);
-      assert.equal(code2, 0);
-      assert.ok(loggedLines.some((l) => l.includes('dwm upgrade')));
-    } finally {
-      restoreLogs();
-    }
-  });
+        loggedLines = [];
+        const code2 = await runCli(['help', 'upgrade']);
+        assert.equal(code2, 0);
+        assert.ok(loggedLines.some((l) => l.includes('dwm upgrade')));
+      } finally {
+        restoreLogs();
+      }
+    },
+  );
 
   await t.test('runCli(["help", "version"]) shows version help', async () => {
     captureLogs();

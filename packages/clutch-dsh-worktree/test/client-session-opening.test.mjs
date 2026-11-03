@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { setImmediate as flush } from 'node:timers/promises';
 import * as sessionHelpers from '../lib/client/session/worktree-session.js';
 import * as viewHelpers from '../lib/client/view/worktree-view.js';
+import * as selectors from '../lib/client/surface/selectors.js';
 const { createWorktreeSessionConnector } = sessionHelpers;
 
 test('native Worktree Session is never opened in Local while its binding projection is pending', async () => {
@@ -61,6 +62,7 @@ for (const outcome of ['ready', 'slow-context', 'failed', 'missing-binding', 'su
     };
     const dependencies = {
       react, 'react-dom': { flushSync(fn) { calls.push('commit'); fn(); } },
+      '../selectors.js': selectors,
       '../../view/worktree-view.js': viewHelpers,
       '../../session/worktree-session.js': sessionHelpers,
       '../shared.js': { EMPTY_READ_STATE: { status: 'idle', views: [] } },
@@ -69,6 +71,7 @@ for (const outcome of ['ready', 'slow-context', 'failed', 'missing-binding', 'su
     const { useSessionActions } = await loadHook('actions/useSessionActions', dependencies);
     const read = useSurfaceRefresh({
       source: { forkRecoverySnapshot: { revision: 0 }, workspaceIdsRef: { current: ['ws', 'other'] },
+        workspaces: { items: [] }, expandSnapshot: { collapsedWorkspaceIds: {} },
         mode: 'worktree', workspaceIds: ['ws', 'other'], sessionPresentations: {} },
       props: { manager: {}, invalidateWorktreeContext: outcome === 'slow-context'
         ? () => new Promise(() => {}) : undefined, viewReader: {

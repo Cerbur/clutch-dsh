@@ -24,23 +24,11 @@
   },
   "drawCalls": 4,
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ]
+    "wall_anchor": [0, 0, 0]
   },
   "bounds": {
-    "min": [
-      -0.5031164884567261,
-      -0.6698795823614542,
-      0.0002189923106925562
-    ],
-    "max": [
-      0.5031125545501709,
-      0.07850854843854904,
-      0.22042995245273234
-    ]
+    "min": [-0.5031164884567261, -0.6698795823614542, 0.0002189923106925562],
+    "max": [0.5031125545501709, 0.07850854843854904, 0.22042995245273234]
   },
   "dimensions": {
     "width": 1.006229043006897,
@@ -53,58 +41,31 @@
     "bytes": 1048576,
     "scope": "This wall-mounted utensil-rail revision only; does not alter refrigerator, table, storage, sink, pendant or wall budgets."
   },
-  "requiredNodes": [
-    "UtensilRail",
-    "挂钩杆",
-    "锅铲",
-    "汤勺",
-    "漏勺",
-    "wall_anchor"
-  ],
+  "requiredNodes": ["UtensilRail", "挂钩杆", "锅铲", "汤勺", "漏勺", "wall_anchor"],
   "nodePivots": [
     {
       "node": "挂钩杆",
-      "translation": [
-        0,
-        0,
-        0
-      ],
+      "translation": [0, 0, 0],
       "role": "static rail and hooks"
     },
     {
       "node": "锅铲",
-      "translation": [
-        -0.2474604994058609,
-        -0.06791051907944123,
-        0.13092601225788714
-      ],
+      "translation": [-0.2474604994058609, -0.06791051907944123, 0.13092601225788714],
       "role": "left hanging utensil; swing around local X only"
     },
     {
       "node": "汤勺",
-      "translation": [
-        -0.010099492967128754,
-        -0.06820651574539582,
-        0.1340120092135203
-      ],
+      "translation": [-0.010099492967128754, -0.06820651574539582, 0.1340120092135203],
       "role": "middle hanging utensil; swing around local X only"
     },
     {
       "node": "漏勺",
-      "translation": [
-        0.25101950764656067,
-        -0.0679975418608133,
-        0.1443570137124789
-      ],
+      "translation": [0.25101950764656067, -0.0679975418608133, 0.1443570137124789],
       "role": "right hanging utensil; swing around local X only"
     },
     {
       "node": "wall_anchor",
-      "translation": [
-        0,
-        0,
-        0
-      ],
+      "translation": [0, 0, 0],
       "role": "placement/orientation marker"
     }
   ],

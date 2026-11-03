@@ -23,39 +23,18 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.31999561190605164,
-      -0.3197260797023773,
-      0.000014481469406746328
-    ],
-    "max": [
-      0.319981187582016,
-      0.31977415084838867,
-      0.09389878809452057
-    ]
+    "min": [-0.31999561190605164, -0.3197260797023773, 0.000014481469406746328],
+    "max": [0.319981187582016, 0.31977415084838867, 0.09389878809452057]
   },
   "dimensions": {
     "width": 0.6399767994880676,
     "height": 0.639500230550766,
     "depth": 0.09388430662511382
   },
-  "requiredNodes": [
-    "鲸鱼挂画",
-    "画框与鲸鱼浮雕",
-    "wall_anchor",
-    "front_anchor"
-  ],
+  "requiredNodes": ["鲸鱼挂画", "画框与鲸鱼浮雕", "wall_anchor", "front_anchor"],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0,
-      0.10000000149011612
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0, 0.10000000149011612]
   },
   "drawCalls": 1,
   "budgets": {
@@ -73,9 +52,7 @@
     "inputSha256": "bdcf1d393ab7f7b9e4235556dccc6259368472946e60a8e73a3be5a1576ac03c",
     "parentRevision": "2026-10-27-r1",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/wall-art/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
-    ],
+    "pipeline": ["kitchen/wall-art/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"],
     "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/wall-art build|review|finalize 2026-10-28-candy-r1"
   },
   "references": [
@@ -112,28 +89,19 @@
   "textures": [
     {
       "name": "挂画_normal",
-      "size": [
-        1024,
-        1024
-      ],
+      "size": [1024, 1024],
       "bytes": 498999,
       "sha256": "e87ab6973f2689254a4e9feecda907f35cda7ec135a736c5cc89167d30caaa31"
     },
     {
       "name": "挂画_basecolor",
-      "size": [
-        1024,
-        1024
-      ],
+      "size": [1024, 1024],
       "bytes": 731426,
       "sha256": "9018117d730cfc6e2d337c5a587bb11764e3fe1b89fad592e59950ced2a6f037"
     },
     {
       "name": "挂画_ORM",
-      "size": [
-        1024,
-        1024
-      ],
+      "size": [1024, 1024],
       "bytes": 50608,
       "sha256": "b67a8e7f1c83e2c42f69dad2369bfd0ee826cbed3a1a2d2776db0bb1c006bbff"
     }
@@ -147,11 +115,7 @@
   },
   "placement": {
     "scale": 1,
-    "initialPosition": [
-      1.4,
-      2.95,
-      -1.888
-    ],
+    "initialPosition": [1.4, 2.95, -1.888],
     "rotationYRadians": 0,
     "sceneOwnsFinalPlacement": true,
     "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",

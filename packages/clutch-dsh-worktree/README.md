@@ -89,6 +89,16 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Usage
 
+Worktree view loads Workspaces independently, prioritizing the current Session's Workspace
+and expanded Workspaces with bounded background reads. A slow or failed Workspace does not
+hide other ready Workspaces. Returning to Worktree mode immediately keeps the previous content
+visible while checking for external Git changes. Unloaded bindings are never shown as Local
+Sessions; a failed Workspace can be retried in **Errors & Repair**.
+Sessions appearing after a cached read stay unclassified until their bindings are checked.
+Refreshing during an incomplete native list replay keeps previously verified Local Sessions visible.
+Each Workspace keeps its own failure details. Older Hosts without the navigation endpoint
+use the previous read path; reload the updated Host to benefit from the reduced Git probes.
+
 Opening a newly created or reused Worktree Session waits for its Worktree grouping to be ready,
 so it appears directly under that Worktree without briefly appearing in Local. If the grouping
 cannot be refreshed, the current view stays visible and the action reports an error for retry.

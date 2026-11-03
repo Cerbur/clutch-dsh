@@ -21,6 +21,7 @@ import type {
   WorktreeImportCandidate,
   WorkspaceId,
   WorkspaceGitState,
+  WorkspaceNavigation,
   WorktreeRemoteManager,
   WorktreeRemoteResult,
 } from '../contract/index.js';
@@ -273,6 +274,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
   @Remote
   getWorkspaceGitState(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceGitState>> {
     return this.remote.getWorkspaceGitState(input);
+  }
+
+  @Remote
+  readWorkspaceNavigation(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceNavigation>> {
+    return this.remote.readWorkspaceNavigation(input);
   }
 
   @Remote

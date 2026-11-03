@@ -1,0 +1,480 @@
+Windows validation baseline: optimization commit 7ba63943bf610519261c15e660c63749546bb196
+Initial full run: Node 24.9.0, pnpm 12.6.0; 1323 tests, 1284 pass, 27 fail, 12 skip.
+No benchmark/runtime changes were present when this run started.
+Repeated with pnpm 10.32.1: identical 1323 total / 1284 pass / 27 fail / 12 skip, 118019.3943 ms.
+Paths redacted for portability; error messages/assertions preserved.
+
+✖ failing tests:
+
+test at test\client-build.test.mjs:52:1
+✖ Client build bundles the published snapshot-store dependencies without Desktop module seeds (367.2865ms)
+  Error: EPERM: operation not permitted, symlink '<checkout>\node_modules\.pnpm\tsdown@0.22.2_typescript@6.0.3\node_modules\tsdown' -> '<temp>\worktree-client-build-1z3ZZY\node_modules\tsdown'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async fixture (file:///<package>/test/client-build.test.mjs:38:5)
+      at async TestContext.<anonymous> (file:///<package>/test/client-build.test.mjs:53:21)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<checkout>\\node_modules\\.pnpm\\tsdown@0.22.2_typescript@6.0.3\\node_modules\\tsdown',
+    dest: '<temp>\\worktree-client-build-1z3ZZY\\node_modules\\tsdown'
+  }
+
+test at test\client-build.test.mjs:66:1
+✖ Client build rejects unresolved private dependencies instead of emitting unusable require calls (120.3877ms)
+  Error: EPERM: operation not permitted, symlink '<checkout>\node_modules\.pnpm\tsdown@0.22.2_typescript@6.0.3\node_modules\tsdown' -> '<temp>\worktree-client-build-iKTxW4\node_modules\tsdown'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async fixture (file:///<package>/test/client-build.test.mjs:38:5)
+      at async TestContext.<anonymous> (file:///<package>/test/client-build.test.mjs:67:21)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<checkout>\\node_modules\\.pnpm\\tsdown@0.22.2_typescript@6.0.3\\node_modules\\tsdown',
+    dest: '<temp>\\worktree-client-build-iKTxW4\\node_modules\\tsdown'
+  }
+
+test at test\client-git-theme.test.mjs:218:1
+✖ changed-file lists scroll long names without ellipsis (0.9662ms)
+  AssertionError [ERR_ASSERTION]: missing CSS selector: .gitChangedFileList button {
+    display: flex;
+      at cssBlock (file:///<package>/test/client-git-theme.test.mjs:53:10)
+      at TestContext.<anonymous> (file:///<package>/test/client-git-theme.test.mjs:222:22)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\client-git-theme.test.mjs:296:1
+✖ Git dividers close both edges of the panes they separate (0.8985ms)
+  AssertionError [ERR_ASSERTION]: missing CSS selector: .gitColumns > [data-dashboard-git-splitter='rows'] {
+    box-sizing: border-box;
+      at cssBlock (file:///<package>/test/client-git-theme.test.mjs:53:10)
+      at TestContext.<anonymous> (file:///<package>/test/client-git-theme.test.mjs:299:16)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\client-surface.test.mjs:262:1
+✖ records the minimum-scope refresh invariant in package instructions (5.8216ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(agents.includes(invariant))
+
+      at TestContext.<anonymous> (file:///<package>/test/client-surface.test.mjs:279:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\client-surface.test.mjs:282:1
+✖ invalidates superseded Worktree refresh results (5.809ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: -1
+      at TestContext.<anonymous> (file:///<package>/test/client-surface.test.mjs:305:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\client-surface.test.mjs:502:1
+✖ preserves a ready Worktree projection during automatic refreshes (12.6693ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: -1
+      at TestContext.<anonymous> (file:///<package>/test/client-surface.test.mjs:508:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\client-surface.test.mjs:1531:1
+✖ matches native Workspace interaction, typography, and action rail (11.937ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: -1
+      at TestContext.<anonymous> (file:///<package>/test/client-surface.test.mjs:1537:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\generated-name.test.mjs:44:1
+✖ rerolls files, dangling symlinks and prunable registrations before any Git create (370.9021ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\short-worktree-8BqLkJ\absent' -> '<temp>\short-worktree-8BqLkJ\repo\.agents\clutch-worktrees\wt_link'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async TestContext.<anonymous> (file:///<package>/test/generated-name.test.mjs:47:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\short-worktree-8BqLkJ\\absent',
+    dest: '<temp>\\short-worktree-8BqLkJ\\repo\\.agents\\clutch-worktrees\\wt_link'
+  }
+
+test at test\generated-name.test.mjs:157:1
+✖ retained sidecar paths through a parent alias are skipped even with a different ID (153.6794ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\short-worktree-2YVfxd\repo\.agents\clutch-worktrees' -> '<temp>\short-worktree-2YVfxd\managed-alias'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async TestContext.<anonymous> (file:///<package>/test/generated-name.test.mjs:160:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\short-worktree-2YVfxd\\repo\\.agents\\clutch-worktrees',
+    dest: '<temp>\\short-worktree-2YVfxd\\managed-alias'
+  }
+
+test at test\main-checkout.test.mjs:28:1
+✖ real nested checkout projects branch, exact tags and detached commits without persisting HEAD (3511.2116ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+  +   '<temp>/main-checkout-ZjbF2H/repo'
+  -   '<temp>\\main-checkout-ZjbF2H\\repo'
+    ]
+
+      at TestContext.<anonymous> (file:///<package>/test/main-checkout.test.mjs:87:12)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ '<temp>/main-checkout-ZjbF2H/repo' ],
+    expected: [ '<temp>\\main-checkout-ZjbF2H\\repo' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\main-checkout.test.mjs:145:1
+✖ Main resolves the owning linked checkout through a nested Workspace path alias (2061.9143ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + '// linked\r\n'
+  - '// linked\n'
+               ^
+
+      at TestContext.<anonymous> (file:///<package>/test/main-checkout.test.mjs:187:12)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '// linked\r\n',
+    expected: '// linked\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\manage.test.mjs:172:1
+✖ wraps non-ENOENT Workspace root stat failures with Workspace error details (382.545ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection (assertWorkspaceNotFound).
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///<package>/test/manage.test.mjs:191:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:173:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test\manage.test.mjs:718:1
+✖ does not finalize a pending create through a replaced managed-path symlink (574.6942ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-2y9rL5\dsh-home\clutch-dsh-worktree\worktree\wt_recover_replaced_path-replacement' -> '<temp>\clutch-dsh-worktree-manage-2y9rL5\dsh-home\clutch-dsh-worktree\worktree\wt_recover_replaced_path'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:728:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:719:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-2y9rL5\\dsh-home\\clutch-dsh-worktree\\worktree\\wt_recover_replaced_path-replacement',
+    dest: '<temp>\\clutch-dsh-worktree-manage-2y9rL5\\dsh-home\\clutch-dsh-worktree\\worktree\\wt_recover_replaced_path'
+  }
+
+test at test\manage.test.mjs:962:1
+✖ serializes sidecar mutations across independent Node processes without lost updates (364.6076ms)
+  Error: Command failed: <node.exe> --input-type=module -e
+      import { writeFile } from 'node:fs/promises';
+      import path from 'node:path';
+      import { setTimeout as delay } from 'node:timers/promises';
+      import { WorkspaceShardedSidecarRepository } from "<checkout>\\packages\\clutch-dsh-worktree\\lib\\index.js";
+
+      const [dshHome, worktreeId, readyFile, delayMs] = process.argv.slice(1);
+      const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });
+      await sidecar.mutate('ws_one', async (snapshot) => {
+        if (readyFile) await writeFile(readyFile, 'ready\n');
+        await delay(Number(delayMs));
+        const record = {
+          worktreeId,
+          workspaceId: 'ws_one',
+          absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId),
+          branch: 'feature/' + worktreeId,
+          source: 'plugin',
+          status: 'active',
+        };
+        return { result: record, snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, record] } };
+      });
+     <temp>\clutch-dsh-worktree-manage-lDbgn7\dsh-home wt_child_one <temp>\clutch-dsh-worktree-manage-lDbgn7\first-child-ready 250
+  node:internal/modules/esm/load:183
+      throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);
+            ^
+
+  Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. On Windows, absolute paths must be valid file:// URLs. Received protocol 'e:'
+      at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:183:11)
+      at defaultLoad (node:internal/modules/esm/load:78:3)
+      at ModuleLoader.load (node:internal/modules/esm/loader:839:12)
+      at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:610:31)
+      at #createModuleJob (node:internal/modules/esm/loader:641:36)
+      at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
+      at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:318:41) {
+    code: 'ERR_UNSUPPORTED_ESM_URL_SCHEME'
+  }
+
+  Node.js v24.9.0
+
+      at genericNodeError (node:internal/errors:985:15)
+      at wrappedFn (node:internal/errors:539:14)
+      at ChildProcess.exithandler (node:child_process:417:12)
+      at ChildProcess.emit (node:events:508:28)
+      at maybeClose (node:internal/child_process:1101:16)
+      at ChildProcess._handle.onexit (node:internal/child_process:305:5) {
+    code: 1,
+    killed: false,
+    signal: null,
+    cmd: `<node.exe> --input-type=module -e \n    import { writeFile } from 'node:fs/promises';\n    import path from 'node:path';\n    import { setTimeout as delay } from 'node:timers/promises';\n    import { WorkspaceShardedSidecarRepository } from "E:\\\\Code\\\\clutch-dsh\\\\packages\\\\clutch-dsh-worktree\\\\.agents\\\\clutch-worktrees\\\\wt_87ba72a501fb\\\\packages\\\\clutch-dsh-worktree\\\\lib\\\\index.js";\n\n    const [dshHome, worktreeId, readyFile, delayMs] = process.argv.slice(1);\n    const sidecar = new WorkspaceShardedSidecarRepository({ dshHome });\n    await sidecar.mutate('ws_one', async (snapshot) => {\n      if (readyFile) await writeFile(readyFile, 'ready\\n');\n      await delay(Number(delayMs));\n      const record = {\n        worktreeId,\n        workspaceId: 'ws_one',\n        absolutePath: path.join(dshHome, 'clutch-dsh-worktree', 'worktree', worktreeId),\n        branch: 'feature/' + worktreeId,\n        source: 'plugin',\n        status: 'active',\n      };\n      return { result: record, snapshot: { ...snapshot, worktrees: [...snapshot.worktrees, record] } };\n    });\n   <temp>\\clutch-dsh-worktree-manage-lDbgn7\\dsh-home wt_child_one <temp>\\clutch-dsh-worktree-manage-lDbgn7\\first-child-ready 250`,
+    stdout: '',
+    stderr: "node:internal/modules/esm/load:183\r\n    throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);\r\n          ^\r\n\r\nError [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. On Windows, absolute paths must be valid file:// URLs. Received protocol 'e:'\r\n    at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:183:11)\r\n    at defaultLoad (node:internal/modules/esm/load:78:3)\r\n    at ModuleLoader.load (node:internal/modules/esm/loader:839:12)\r\n    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:610:31)\r\n    at #createModuleJob (node:internal/modules/esm/loader:641:36)\r\n    at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)\r\n    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:318:41) {\r\n  code: 'ERR_UNSUPPORTED_ESM_URL_SCHEME'\r\n}\r\n\r\nNode.js v24.9.0\r\n"
+  }
+
+test at test\manage.test.mjs:1549:1
+✖ maps imported and legacy Worktrees to a symlinked nested Workspace without rewriting DSH or legacy paths (446.4425ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-IdTYzm\workspace\packages\nested' -> '<temp>\clutch-dsh-worktree-manage-IdTYzm\workspace-alias'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:1557:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:1550:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-IdTYzm\\workspace\\packages\\nested',
+    dest: '<temp>\\clutch-dsh-worktree-manage-IdTYzm\\workspace-alias'
+  }
+
+test at test\manage.test.mjs:1585:1
+✖ rejects a missing or escaping nested cwd without falling back to the checkout root (827.5893ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-EvNumF\outside' -> '<temp>\clutch-dsh-worktree-manage-EvNumF\workspace\packages\nested\.agents\clutch-worktrees\wt_1d10d76a653f\packages\nested'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:1601:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:1586:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-EvNumF\\outside',
+    dest: '<temp>\\clutch-dsh-worktree-manage-EvNumF\\workspace\\packages\\nested\\.agents\\clutch-worktrees\\wt_1d10d76a653f\\packages\\nested'
+  }
+
+test at test\manage.test.mjs:1869:1
+✖ rejects a symlinked DSH Home before creating a Worktree (294.2044ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-c8tCT9\dsh-home' -> '<temp>\clutch-dsh-worktree-manage-c8tCT9\dsh-home-link'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:1873:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:1870:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-c8tCT9\\dsh-home',
+    dest: '<temp>\\clutch-dsh-worktree-manage-c8tCT9\\dsh-home-link'
+  }
+
+test at test\manage.test.mjs:2015:1
+✖ refuses to remove a Worktree after its registered path is replaced (742.2879ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-IgkilT\replacement-directory' -> '<temp>\clutch-dsh-worktree-manage-IgkilT\workspace\.agents\clutch-worktrees\wt_f2baa68582d3'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:2022:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:2016:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-IgkilT\\replacement-directory',
+    dest: '<temp>\\clutch-dsh-worktree-manage-IgkilT\\workspace\\.agents\\clutch-worktrees\\wt_f2baa68582d3'
+  }
+
+test at test\manage.test.mjs:2228:1
+✖ imports an external Worktree through a physical-path alias and stores its canonical path (354.2003ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-n5iSef\feature-external' -> '<temp>\clutch-dsh-worktree-manage-n5iSef\external-alias'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:2232:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:2229:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-n5iSef\\feature-external',
+    dest: '<temp>\\clutch-dsh-worktree-manage-n5iSef\\external-alias'
+  }
+
+test at test\manage.test.mjs:2600:1
+✖ binds a Session when Worktree and DSH use physical path aliases (550.7806ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-UYZVjK\feature-bind-alias' -> '<temp>\clutch-dsh-worktree-manage-UYZVjK\wt-bind-alias'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:2605:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:2601:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-UYZVjK\\feature-bind-alias',
+    dest: '<temp>\\clutch-dsh-worktree-manage-UYZVjK\\wt-bind-alias'
+  }
+
+test at test\manage.test.mjs:3728:1
+✖ clean does not classify a dangling .git symlink as missing metadata (763.3393ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\clutch-dsh-worktree-manage-cawZKa\absent-git-metadata' -> '<temp>\clutch-dsh-worktree-manage-cawZKa\workspace\.agents\clutch-worktrees\wt_8c8d2d5c6a8a\.git'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async file:///<package>/test/manage.test.mjs:3734:5
+      at async withGitFixture (file:///<package>/test/manage.test.mjs:440:5)
+      at async TestContext.<anonymous> (file:///<package>/test/manage.test.mjs:3729:3)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\clutch-dsh-worktree-manage-cawZKa\\absent-git-metadata',
+    dest: '<temp>\\clutch-dsh-worktree-manage-cawZKa\\workspace\\.agents\\clutch-worktrees\\wt_8c8d2d5c6a8a\\.git'
+  }
+
+test at test\native-session-flow.test.mjs:428:1
+✖ contained pools reject replaced ancestors and never overwrite an existing ignore file (857.9558ms)
+  Error: EPERM: operation not permitted, symlink '<temp>\native-session-flow-3o5IX7\replacement' -> '<temp>\native-session-flow-3o5IX7\repo\.agents\other'
+      at async symlink (node:internal/fs/promises:1009:10)
+      at async TestContext.<anonymous> (file:///<package>/test/native-session-flow.test.mjs:435:61)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'symlink',
+    path: '<temp>\\native-session-flow-3o5IX7\\replacement',
+    dest: '<temp>\\native-session-flow-3o5IX7\\repo\\.agents\\other'
+  }
+
+test at test\windows-compatibility.test.mjs:92:1
+✖ does not turn non-missing path errors into lexical matches (3.0514ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///<package>/test/windows-compatibility.test.mjs:98:5)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test\worktree-branch-drift.test.mjs:146:1
+✖ a proven drift releases the old branch without adopting or changing its record (1492.8051ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(git(repo, 'worktree', 'list').includes(created.absolutePath))
+
+      at file:///<package>/test/worktree-branch-drift.test.mjs:159:12
+      at async fixture (file:///<package>/test/worktree-branch-drift.test.mjs:66:5)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\worktree-runtime-status.test.mjs:8:1
+✖ runtime status keeps Git availability separate from lifecycle and locks (27.8205ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'missing'
+  - 'unavailable'
+
+      at TestContext.<anonymous> (file:///<package>/test/worktree-runtime-status.test.mjs:25:12)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'missing',
+    expected: 'unavailable',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\worktree-tools.test.mjs:1475:1
+✖ real Git and Sidecar create, instruction resolution and dispatch preserve the original Project (4053.2984ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'committed task\r\n'
+  - 'committed task\n'
+                    ^
+
+      at TestContext.<anonymous> (file:///<package>/test/worktree-tools.test.mjs:1642:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'committed task\r\n',
+    expected: 'committed task\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

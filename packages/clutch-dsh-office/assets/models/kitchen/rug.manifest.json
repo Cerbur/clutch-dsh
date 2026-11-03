@@ -23,33 +23,17 @@
     "images": 2
   },
   "bounds": {
-    "min": [
-      -0.800000011920929,
-      0,
-      -0.47026658058166504
-    ],
-    "max": [
-      0.800000011920929,
-      0.026000000536441803,
-      0.47026658058166504
-    ]
+    "min": [-0.800000011920929, 0, -0.47026658058166504],
+    "max": [0.800000011920929, 0.026000000536441803, 0.47026658058166504]
   },
   "dimensions": {
     "width": 1.600000023841858,
     "height": 0.026000000536441803,
     "depth": 0.9405331611633301
   },
-  "requiredNodes": [
-    "鲸鱼地毯",
-    "地毯本体",
-    "rug_surface"
-  ],
+  "requiredNodes": ["鲸鱼地毯", "地毯本体", "rug_surface"],
   "anchors": {
-    "rug_surface": [
-      0,
-      0.026000000536441803,
-      0
-    ]
+    "rug_surface": [0, 0.026000000536441803, 0]
   },
   "drawCalls": 1,
   "budgets": {
@@ -66,9 +50,7 @@
     "input": "kitchen/rug/lookdev/2026-10-28-candy-r1/inputs/rug.glb",
     "inputSha256": "8fe26d0aa137f095a0f52a4d0388fedf9f2bb84a92d5456d6c294f9ca87dc235",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/rug/work/2026-10-28-candy-r1/build_candy_material.py"
-    ]
+    "pipeline": ["kitchen/rug/work/2026-10-28-candy-r1/build_candy_material.py"]
   },
   "references": [
     {
@@ -134,11 +116,7 @@
   },
   "placement": {
     "scale": 1,
-    "initialPosition": [
-      -0.55,
-      0.033,
-      0.64
-    ],
+    "initialPosition": [-0.55, 0.033, 0.64],
     "rotationYRadians": 0,
     "sceneOwnsFinalPlacement": true,
     "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",

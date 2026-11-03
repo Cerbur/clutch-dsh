@@ -23,16 +23,8 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.21451812982559204,
-      0,
-      0
-    ],
-    "max": [
-      0.21451812982559204,
-      0.5,
-      0.19986964762210846
-    ]
+    "min": [-0.21451812982559204, 0, 0],
+    "max": [0.21451812982559204, 0.5, 0.19986964762210846]
   },
   "dimensions": {
     "width": 0.4290362596511841,
@@ -47,21 +39,9 @@
     "hang_anchor"
   ],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.25,
-      0.20086964964866638
-    ],
-    "hang_anchor": [
-      0,
-      0.5,
-      0
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0.25, 0.20086964964866638],
+    "hang_anchor": [0, 0.5, 0]
   },
   "drawCalls": 1,
   "budgets": {
@@ -81,9 +61,7 @@
     "originalBytes": 31209296,
     "originalTriangles": 16632,
     "project": "kitchen/board-cloth/work/2026-10-28-r1/木质小砧板与抹布挂件.blend",
-    "pipeline": [
-      "kitchen/board-cloth/work/2026-10-28-r1/prepare_accessory.py"
-    ],
+    "pipeline": ["kitchen/board-cloth/work/2026-10-28-r1/prepare_accessory.py"],
     "uniformScale": 0.3333332803514353,
     "method": "Uniform normalization including the entire hanger, UV-preserving small decimation only if above 15000 triangles; original color atlas downsampled, no repaint."
   },
@@ -129,51 +107,28 @@
     "images": [
       {
         "name": "basecolor-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "sRGB",
         "decodedFinite": true
       },
       {
         "name": "normal-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "Non-Color",
         "decodedFinite": true
       },
       {
         "name": "surface-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "Non-Color",
         "decodedFinite": true
       }
     ],
     "bounds": {
-      "min": [
-        -0.21451812982559204,
-        0,
-        0
-      ],
-      "max": [
-        0.21451812982559204,
-        0.5,
-        0.19986964762210846
-      ]
+      "min": [-0.21451812982559204, 0, 0],
+      "max": [0.21451812982559204, 0.5, 0.19986964762210846]
     },
-    "nodes": [
-      "board_cloth_mesh",
-      "front_anchor",
-      "hang_anchor",
-      "wall_anchor",
-      "board-cloth"
-    ],
+    "nodes": ["board_cloth_mesh", "front_anchor", "hang_anchor", "wall_anchor", "board-cloth"],
     "finiteGeometry": true,
     "patternAndFrontBackReviewed": true,
     "noExternalTextures": true,
