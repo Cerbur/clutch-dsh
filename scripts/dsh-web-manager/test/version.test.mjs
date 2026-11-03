@@ -5,11 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import {
-  listDshVersions,
-  resolveGitVersionRef,
-  switchDshVersion,
-} from '../src/version.mjs';
+import { listDshVersions, resolveGitVersionRef, switchDshVersion } from '../src/version.mjs';
 import { setDshHome } from '../src/config.mjs';
 
 test('version module', async (t) => {
@@ -88,7 +84,11 @@ test('version module', async (t) => {
   });
 
   await t.test('listDshVersions reports error when dshHome is invalid', async () => {
-    const res = await listDshVersions({ home: '/non/existent/path', skipFetch: true, silent: true });
+    const res = await listDshVersions({
+      home: '/non/existent/path',
+      skipFetch: true,
+      silent: true,
+    });
     assert.equal(res.success, false);
     assert.ok(res.error);
   });

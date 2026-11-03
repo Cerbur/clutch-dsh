@@ -23,39 +23,18 @@
     "images": 2
   },
   "bounds": {
-    "min": [
-      -0.675000011920929,
-      0,
-      -0.38499999046325684
-    ],
-    "max": [
-      0.675000011920929,
-      0.017999999225139618,
-      0.38499999046325684
-    ]
+    "min": [-0.675000011920929, 0, -0.38499999046325684],
+    "max": [0.675000011920929, 0.017999999225139618, 0.38499999046325684]
   },
   "dimensions": {
     "width": 1.350000023841858,
     "height": 0.017999999225139618,
     "depth": 0.7699999809265137
   },
-  "requiredNodes": [
-    "floor-mat",
-    "floor_mat_mesh",
-    "floor_contact_anchor",
-    "mat_surface"
-  ],
+  "requiredNodes": ["floor-mat", "floor_mat_mesh", "floor_contact_anchor", "mat_surface"],
   "anchors": {
-    "floor_contact_anchor": [
-      0,
-      0,
-      0
-    ],
-    "mat_surface": [
-      0,
-      0.01640000008046627,
-      0
-    ]
+    "floor_contact_anchor": [0, 0, 0],
+    "mat_surface": [0, 0.01640000008046627, 0]
   },
   "drawCalls": 1,
   "budgets": {
@@ -109,10 +88,7 @@
       "cream": 3,
       "direction": "longitudinal/local X"
     },
-    "textureSize": [
-      1024,
-      1024
-    ],
+    "textureSize": [1024, 1024],
     "notes": [
       "Clean authored sRGB albedo; no camera highlights, ambient shadow or source baked lighting copied.",
       "Towel-loop microstructure is normal-only. Piping is native geometry."
@@ -143,11 +119,7 @@
     "scale": 1,
     "sceneOwnsFinalPlacement": true,
     "sourceOfTruth": "Office plugin src/office/kitchen-layout.ts",
-    "provisionalPosition": [
-      1.4,
-      0.0255,
-      -0.37
-    ],
+    "provisionalPosition": [1.4, 0.0255, -0.37],
     "rotationYRadians": 0,
     "runtimeAccepted": false,
     "notes": [

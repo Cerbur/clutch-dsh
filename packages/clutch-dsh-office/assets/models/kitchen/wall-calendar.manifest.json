@@ -23,16 +23,8 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.14385154843330383,
-      0,
-      0
-    ],
-    "max": [
-      0.14385154843330383,
-      0.47999998927116394,
-      0.08650869876146317
-    ]
+    "min": [-0.14385154843330383, 0, 0],
+    "max": [0.14385154843330383, 0.47999998927116394, 0.08650869876146317]
   },
   "dimensions": {
     "width": 0.28770309686660767,
@@ -47,21 +39,9 @@
     "hang_anchor"
   ],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.23999999463558197,
-      0.08750870078802109
-    ],
-    "hang_anchor": [
-      0,
-      0.47999998927116394,
-      0
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0.23999999463558197, 0.08750870078802109],
+    "hang_anchor": [0, 0.47999998927116394, 0]
   },
   "drawCalls": 1,
   "budgets": {
@@ -81,9 +61,7 @@
     "originalBytes": 23792268,
     "originalTriangles": 5912,
     "project": "kitchen/wall-calendar/work/2026-10-28-r1/鲸鱼造型厨房挂历.blend",
-    "pipeline": [
-      "kitchen/wall-calendar/work/2026-10-28-r1/prepare_accessory.py"
-    ],
+    "pipeline": ["kitchen/wall-calendar/work/2026-10-28-r1/prepare_accessory.py"],
     "uniformScale": 0.25309978564789415,
     "method": "Uniform normalization including the entire hanger, UV-preserving small decimation only if above 15000 triangles; original color atlas downsampled, no repaint."
   },
@@ -130,51 +108,28 @@
     "images": [
       {
         "name": "basecolor-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "sRGB",
         "decodedFinite": true
       },
       {
         "name": "normal-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "Non-Color",
         "decodedFinite": true
       },
       {
         "name": "surface-1024",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "colorSpace": "Non-Color",
         "decodedFinite": true
       }
     ],
     "bounds": {
-      "min": [
-        -0.14385154843330383,
-        0,
-        0
-      ],
-      "max": [
-        0.14385154843330383,
-        0.47999998927116394,
-        0.08650869876146317
-      ]
+      "min": [-0.14385154843330383, 0, 0],
+      "max": [0.14385154843330383, 0.47999998927116394, 0.08650869876146317]
     },
-    "nodes": [
-      "front_anchor",
-      "hang_anchor",
-      "wall_anchor",
-      "wall_calendar_mesh",
-      "wall-calendar"
-    ],
+    "nodes": ["front_anchor", "hang_anchor", "wall_anchor", "wall_calendar_mesh", "wall-calendar"],
     "finiteGeometry": true,
     "patternAndFrontBackReviewed": true,
     "noExternalTextures": true,

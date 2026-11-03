@@ -11,7 +11,9 @@ test('cel shading composes with room shadow hooks and preserves skinned/morph ge
   const mesh = new T.SkinnedMesh(new T.BufferGeometry(), material);
   mesh.morphTargetInfluences = [0, 0, 0, 0];
   group.add(mesh);
-  const map = material.map, geometry = mesh.geometry, morphs = mesh.morphTargetInfluences;
+  const map = material.map,
+    geometry = mesh.geometry,
+    morphs = mesh.morphTargetInfluences;
   configureKitchenMaterial(material);
   const previousKey = material.customProgramCacheKey();
   applyCharacterToon(group);
@@ -24,7 +26,10 @@ test('cel shading composes with room shadow hooks and preserves skinned/morph ge
   assert.equal(shader.vertexShader, T.ShaderLib.physical.vertexShader);
   assert.match(shader.fragmentShader, /kitchenAreaVisibility/);
   assert.equal(shader.fragmentShader.split('// office-character-cel-v1').length, 2);
-  assert.ok(shader.fragmentShader.indexOf('vec3 celKey') < shader.fragmentShader.indexOf('#include <tonemapping_fragment>'));
+  assert.ok(
+    shader.fragmentShader.indexOf('vec3 celKey') <
+      shader.fragmentShader.indexOf('#include <tonemapping_fragment>'),
+  );
   assert.equal(mesh.geometry, geometry);
   assert.equal(mesh.morphTargetInfluences, morphs);
   assert.equal(material.map, map);

@@ -18,30 +18,12 @@
     "metal": "#A3AFB5"
   },
   "roughness": {
-    "enamel": [
-      0.4,
-      0.5
-    ],
-    "wood": [
-      0.5,
-      0.65
-    ],
-    "terracotta": [
-      0.5,
-      0.65
-    ],
-    "leafFabric": [
-      0.48,
-      0.7
-    ],
-    "metal": [
-      0.35,
-      0.48
-    ],
-    "hood": [
-      0.43,
-      0.52
-    ]
+    "enamel": [0.4, 0.5],
+    "wood": [0.5, 0.65],
+    "terracotta": [0.5, 0.65],
+    "leafFabric": [0.48, 0.7],
+    "metal": [0.35, 0.48],
+    "hood": [0.43, 0.52]
   },
   "constraints": {
     "layoutChange": false,
@@ -66,21 +48,12 @@
   },
   "kitchenCandyStage2b": {
     "revision": "2026-10-28-stage2b",
-    "enamelRoughness": [
-      0.3,
-      0.34
-    ],
-    "hoodPaintRoughness": [
-      0.333,
-      0.357
-    ],
+    "enamelRoughness": [0.3, 0.34],
+    "hoodPaintRoughness": [0.333, 0.357],
     "paintNormalXYMultiplier": 0.55,
     "maskedClearcoatMax": 0.12,
     "fridgeSample": {
-      "roughness": [
-        0.27,
-        0.3
-      ],
+      "roughness": [0.27, 0.3],
       "clearcoatMax": 0.15
     },
     "preserved": {
@@ -90,16 +63,7 @@
     },
     "woodCountertop": 0.55,
     "windowWood": 0.54,
-    "protected": [
-      "metal",
-      "skin",
-      "eyes",
-      "textile",
-      "leaf",
-      "pot",
-      "food",
-      "graphics"
-    ],
+    "protected": ["metal", "skin", "eyes", "textile", "leaf", "pot", "food", "graphics"],
     "sourceColorsAndGeometryUnchanged": true,
     "stage3GeometryCorrections": false
   }

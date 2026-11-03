@@ -23,16 +23,8 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.27642714977264404,
-      0,
-      -0.2783290445804596
-    ],
-    "max": [
-      0.2764319181442261,
-      0.6200493574142456,
-      0.27836382389068604
-    ]
+    "min": [-0.27642714977264404, 0, -0.2783290445804596],
+    "max": [0.2764319181442261, 0.6200493574142456, 0.27836382389068604]
   },
   "dimensions": {
     "width": 0.5528590679168701,
@@ -40,17 +32,9 @@
     "depth": 0.5566928684711456,
     "seatHeight": 0.6200493574142456
   },
-  "requiredNodes": [
-    "chair",
-    "chair_mesh",
-    "seat_surface"
-  ],
+  "requiredNodes": ["chair", "chair_mesh", "seat_surface"],
   "anchors": {
-    "seat_surface": [
-      0,
-      0.6200493574142456,
-      0
-    ]
+    "seat_surface": [0, 0.6200493574142456, 0]
   },
   "budget": {
     "scope": "this-chair-revision",
@@ -65,9 +49,7 @@
     "input": "kitchen/chair/lookdev/2026-10-28-candy-r1/inputs/chair.glb",
     "inputSha256": "83d888fd628ecd16cb6268bc2b33ce335002b59dfb1cd1bf5ad45e346ebfac46",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/chair/work/2026-10-28-candy-r1/build_candy_material.py"
-    ]
+    "pipeline": ["kitchen/chair/work/2026-10-28-candy-r1/build_candy_material.py"]
   },
   "references": [
     {

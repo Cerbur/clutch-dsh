@@ -20,45 +20,19 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.10999999940395355,
-      0,
-      0
-    ],
-    "max": [
-      0.10999999940395355,
-      0.7373799085617065,
-      0.15779326856136322
-    ]
+    "min": [-0.10999999940395355, 0, 0],
+    "max": [0.10999999940395355, 0.7373799085617065, 0.15779326856136322]
   },
   "dimensions": {
     "width": 0.2199999988079071,
     "height": 0.7373799085617065,
     "depth": 0.15779326856136322
   },
-  "requiredNodes": [
-    "open-cubby",
-    "open_cubby_mesh",
-    "wall_anchor",
-    "front_anchor",
-    "hang_anchor"
-  ],
+  "requiredNodes": ["open-cubby", "open_cubby_mesh", "wall_anchor", "front_anchor", "hang_anchor"],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.36868995428085327,
-      0.16279326379299164
-    ],
-    "hang_anchor": [
-      0,
-      0.7373799085617065,
-      0
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0.36868995428085327, 0.16279326379299164],
+    "hang_anchor": [0, 0.7373799085617065, 0]
   },
   "budgets": {
     "triangles": 10000,
@@ -98,34 +72,22 @@
     "surfaceRegions": {
       "wood-frame-shelves-and-back": {
         "pixels": 577773,
-        "roughnessRange": [
-          0.5560392141342163,
-          0.5730588436126709
-        ],
+        "roughnessRange": [0.5560392141342163, 0.5730588436126709],
         "metallic": 0
       },
       "painted-bottle-and-bowl": {
         "pixels": 16431,
-        "roughnessRange": [
-          0.3279999792575836,
-          0.33858823776245117
-        ],
+        "roughnessRange": [0.3279999792575836, 0.33858823776245117],
         "metallic": 0
       },
       "cream-ceramic-and-label": {
         "pixels": 36945,
-        "roughnessRange": [
-          0.40799999237060547,
-          0.4188235402107239
-        ],
+        "roughnessRange": [0.40799999237060547, 0.4188235402107239],
         "metallic": 0
       },
       "remaining-ceramic-spice-containers": {
         "pixels": 137135,
-        "roughnessRange": [
-          0.38909804821014404,
-          0.405098021030426
-        ],
+        "roughnessRange": [0.38909804821014404, 0.405098021030426],
         "metallic": 0
       }
     },

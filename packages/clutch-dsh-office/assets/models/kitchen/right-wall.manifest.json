@@ -20,33 +20,17 @@
     "images": 0
   },
   "bounds": {
-    "min": [
-      -2.591445207595825,
-      0,
-      -0.2250867784023285
-    ],
-    "max": [
-      2.5,
-      3.5,
-      0.060086775571107864
-    ]
+    "min": [-2.591445207595825, 0, -0.2250867784023285],
+    "max": [2.5, 3.5, 0.060086775571107864]
   },
   "dimensions": {
     "width": 5.091445207595825,
     "height": 3.5,
     "depth": 0.28517355397343636
   },
-  "requiredNodes": [
-    "right-wall",
-    "wall_panel",
-    "front_anchor"
-  ],
+  "requiredNodes": ["right-wall", "wall_panel", "front_anchor"],
   "anchors": {
-    "front_anchor": [
-      0,
-      1.75,
-      0.05999999865889549
-    ]
+    "front_anchor": [0, 1.75, 0.05999999865889549]
   },
   "budgets": {
     "triangles": 10000,
@@ -92,17 +76,9 @@
     "outerEnvelopeWidth": 5.1
   },
   "placementHint": {
-    "position": [
-      0,
-      0,
-      -1.875
-    ],
+    "position": [0, 0, -1.875],
     "rotationYRadians": 0,
-    "scale": [
-      1,
-      1,
-      1
-    ]
+    "scale": [1, 1, 1]
   },
   "capabilities": {
     "static": true,

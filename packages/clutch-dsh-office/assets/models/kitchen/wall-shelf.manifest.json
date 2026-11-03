@@ -24,16 +24,8 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.881907045841217,
-      1.2739999294281006,
-      0
-    ],
-    "max": [
-      0.7277258038520813,
-      2.6839187145233154,
-      0.5557773113250732
-    ]
+    "min": [-0.881907045841217, 1.2739999294281006, 0],
+    "max": [0.7277258038520813, 2.6839187145233154, 0.5557773113250732]
   },
   "dimensions": {
     "width": 1.6096328496932983,
@@ -56,21 +48,9 @@
     "lower_shelf_surface"
   ],
   "anchors": {
-    "wall_anchor": [
-      0,
-      2.299999952316284,
-      0
-    ],
-    "top_shelf_surface": [
-      0,
-      2.299999952316284,
-      0.25
-    ],
-    "lower_shelf_surface": [
-      0,
-      1.8592000007629395,
-      0.25
-    ]
+    "wall_anchor": [0, 2.299999952316284, 0],
+    "top_shelf_surface": [0, 2.299999952316284, 0.25],
+    "lower_shelf_surface": [0, 1.8592000007629395, 0.25]
   },
   "source": {
     "library": "office",
@@ -79,9 +59,7 @@
     "inputSha256": "e4b88d8392922a577ff9ec2832889faf54aa172f68232aa8f66afc90aa55ea86",
     "parentRevision": "2026-10-27-r3",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/wall-shelf/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"
-    ],
+    "pipeline": ["kitchen/wall-shelf/lookdev/2026-10-28-candy-r1/scripts/build_candy_material.py"],
     "reproduce": "Blender -b -t 3 --python build_candy_material.py -- kitchen/wall-shelf build|review|finalize 2026-10-28-candy-r1"
   },
   "references": [
@@ -119,11 +97,7 @@
   },
   "placementHint": {
     "scale": 1,
-    "initialPosition": [
-      0.3,
-      0,
-      -1.888
-    ],
+    "initialPosition": [0.3, 0, -1.888],
     "rotationYRadians": 0,
     "upperSurfaceHeightMeters": 2.3,
     "lowerSurfaceHeightMeters": 1.8592,
