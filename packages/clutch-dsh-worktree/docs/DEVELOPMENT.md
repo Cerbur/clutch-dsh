@@ -22,6 +22,10 @@ Windows 导航读阶段的可复现 benchmark、原始样本与验证限制见
 [2026-11-03 macOS navigation benchmark](benchmarks/2026-11-03-macos-navigation.md)。
 构建后运行 `node scripts/benchmark-navigation.mjs --samples 30 --warmups 3 --output <new-json-path>`；
 该脚本使用真实 Git 与父提交 reader，不包含 DSH 启动恢复、HTTP transport 或浏览器绘制。
+脚本的 fixture/provenance Git helper 使用 30 秒命令期限与独立的 5 秒清理期限；
+超时后终止 POSIX 进程组或 Windows 进程树，清理期限到达仍未关闭时显式报错并释放管道。
+`node --test test/benchmark-git.test.mjs` 验证真实 Git 结果、超时和无法关闭的进程树；
+Windows 分支的模拟测试不替代 Windows 宿主验证。历史 benchmark 数据保持原样。
 
 Dashboard 同步基线新增 `syncWorktreeBaseline` Remote；联调时构建插件后重启或重载 Host，再刷新
 Client，单独刷新页面无法给旧 Host 增加端点。`node --test test/baseline-sync.test.mjs

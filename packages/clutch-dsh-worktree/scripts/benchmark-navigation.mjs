@@ -8,7 +8,6 @@
  */
 import assert from 'node:assert/strict';
 import console from 'node:console';
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import os from 'node:os';
@@ -16,7 +15,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL, URL } from 'node:url';
-import { promisify } from 'node:util';
+import { runBenchmarkGit } from './benchmark-git.mjs';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const options = { samples: 30, warmups: 3, output: path.resolve('navigation-benchmark.json') };
@@ -34,10 +33,9 @@ for (let i = 2; i < process.argv.length; i += 1) {
 }
 assert.ok(Number.isSafeInteger(options.samples) && options.samples >= 30, '--samples must be >=30');
 assert.ok(Number.isSafeInteger(options.warmups) && options.warmups >= 3, '--warmups must be >=3');
-const exec = promisify(execFile);
-const gitLimits = { timeout: 30000, maxBuffer: 16 * 1024 * 1024, shell: false, windowsHide: true, encoding: 'utf8' };
+const gitLimits = { timeoutMs: 30000, cleanupTimeoutMs: 5000, maxOutputBytes: 16 * 1024 * 1024 };
 async function git(args, cwd = packageRoot) {
-  return (await exec('git', args, { ...gitLimits, cwd })).stdout;
+  return runBenchmarkGit(args, cwd, gitLimits);
 }
 const prefix = 'packages/clutch-dsh-worktree/';
 const target = (await git(['rev-parse', '7ba6394^{commit}'])).trim();
@@ -144,7 +142,7 @@ try {
     }
     let metrics;
     let activeGit = 0;
-    const adapter = new LocalGitAdapter({ timeoutMs: 30000, maxOutputBytes: gitLimits.maxBuffer,
+    const adapter = new LocalGitAdapter({ timeoutMs: 30000, maxOutputBytes: gitLimits.maxOutputBytes,
       cleanupTimeoutMs: 5000 });
     // Instrument the actual adapter runner; it uses bounded execFile with shell:false
     // when no DSH subprocess service is supplied. Do not replace Git facts with mocks.
