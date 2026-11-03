@@ -1620,16 +1620,30 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     /\.disclosureButton\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;/,
   );
   assert.match(styles, /\.disclosureButton > svg\s*\{[\s\S]*display: block;/);
-  assert.match(styles, /\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*display: none;/);
+  // The disclosure overlays the type icon's own cell instead of being toggled in and
+  // out of flow, so revealing it never moves the label.
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeDisclosure\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeDisclosure[\s\S]*display: inline-flex;/,
+    /\.workspaceRow \.workspaceDisclosure,\s*\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeIcon[\s\S]*display: none;/,
+    /@media \(hover: hover\)[\s\S]*\.worktreeRow:hover \.worktreeDisclosure[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
   );
-  assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeIcon[\s\S]*visibility: hidden;/,
+  );
+  // Keyboard users keep the same reveal without hover.
+  assert.match(styles, /\.worktreeRow:focus-within \.worktreeDisclosure/);
+  // One indent step for the whole tree, owned by the rows instead of the containers.
+  assert.match(styles, /--wt-step: 12px;/);
+  assert.match(styles, /--wt-lead: 20px;/);
+  assert.match(
+    styles,
+    /\.treeChildren\s*\{[\s\S]*margin-inline-start: 0;[\s\S]*border-inline-start: 0;/,
+  );
+  assert.doesNotMatch(styles, /padding: 2px 0 5px 12px;/);
 });
 
 test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
@@ -1662,14 +1676,17 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
   );
   assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
+  // The activity lane is reserved by the row and the rail is anchored out of flow, so
+  // revealing actions can never reflow the label (design standard: no hover reflow).
   assert.match(
     styles,
-    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*min-width: 0;[\s\S]*flex: 0 0 0;[\s\S]*width: 0;[\s\S]*gap: 4px;/,
+    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*position: absolute;[\s\S]*inset-inline-end: var\(--wt-row-inset\);/,
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.treeActionSlot,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.treeActionSlot,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot[\s\S]*flex: 0 0 auto;[\s\S]*width: auto;/,
+    /\.worktreeRow\s*\{[\s\S]*padding-inline-end: calc\(var\(--wt-row-inset\) \+ 32px\);/,
   );
+  assert.doesNotMatch(styles, /\.worktreeRow:hover \.treeActionSlot\s*\{/);
   assert.match(
     styles,
     /\.worktreeRow \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.menuAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
@@ -1818,31 +1835,43 @@ test('separates collapsed running activity from native pointer-only title scroll
   assert.match(rowSource, /onPointerLeave=\{marquee\.leave\}/);
   assert.doesNotMatch(rowSource, /syncWorktreeLabelScroll|worktreeLabelPointerInsideRef/);
 
-  const activityRailStart = styles.indexOf(
-    ".worktreeRow[data-group-activity='true'] .treeActionSlot {",
-  );
-  const activityRailEnd = styles.indexOf('}', activityRailStart);
-  assert.notEqual(activityRailStart, -1);
+  // The lane is constant: a collapsed group with activity shows its dot in the same
+  // reserved 32px lane, so activity never changes the label width either.
   assert.match(
-    styles.slice(activityRailStart, activityRailEnd + 1),
-    /flex: 0 0 32px;[\s\S]*width: 32px;/,
+    styles,
+    /\.worktreeRow\s*\{[\s\S]*padding-inline-end: calc\(var\(--wt-row-inset\) \+ 32px\);/,
   );
+  assert.match(styles, /\.groupActivity\s*\{[\s\S]*width: 28px;[\s\S]*height: 28px;/);
+  assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.treeActionSlot \{/);
   assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.worktreeLabel/);
-  const hoverRailStart = styles.indexOf('.worktreeRow:hover .treeActionSlot');
-  assert.ok(hoverRailStart > activityRailStart);
+  assert.match(styles, /\.worktreeRow\.dropAfter::after|\.worktreeRow\.dropBefore::before/);
 });
 
-test('reduces the left offset before the nested tree line', async () => {
+test('advances one indent step per level instead of stacking container offsets', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeChildren {');
   const ruleEnd = styles.indexOf('}', ruleStart);
   assert.notEqual(ruleStart, -1);
   assert.notEqual(ruleEnd, -1);
 
-  assert.match(styles.slice(ruleStart, ruleEnd + 1), /margin-left: 16px;/);
+  // Containers no longer carry horizontal offsets or an ad-hoc guide rail; the rows own
+  // indentation so every level is exactly one --wt-step deeper (design standard: one axis).
+  const containerRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(containerRule, /margin-inline-start: 0;/);
+  assert.match(containerRule, /border-inline-start: 0;/);
+  assert.doesNotMatch(containerRule, /margin-left: 16px;/);
+  assert.doesNotMatch(containerRule, /padding: 2px 0 5px 12px;/);
+
+  assert.match(
+    styles,
+    /\.workspaceRow,\s*\.worktreeRow\s*\{[\s\S]*padding-inline: calc\(var\(--wt-row-inset\) \+ var\(--wt-depth, 0\) \* var\(--wt-step\)\)[\s\S]*var\(--wt-row-inset\);/,
+  );
+  for (const depth of [1, 2, 3]) {
+    assert.match(styles, new RegExp(`--wt-depth: ${depth};`));
+  }
 });
 
-test('indents Session tabs by the Worktree icon width', async () => {
+test('aligns Session labels to their group label column at full row width', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeSessionRow {');
   const ruleEnd = styles.indexOf('}', ruleStart);
@@ -1850,8 +1879,22 @@ test('indents Session tabs by the Worktree icon width', async () => {
   assert.notEqual(ruleEnd, -1);
 
   const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
-  assert.match(sessionRule, /margin-left: 20px;/);
-  assert.match(sessionRule, /width: calc\(100% - 20px\);/);
+  // Full-width rows keep hover fills and drop markers on the group row's right edge.
+  assert.match(sessionRule, /width: 100%;/);
+  assert.match(sessionRule, /margin-inline-start: 0;/);
+  assert.doesNotMatch(sessionRule, /width: calc\(100% - 20px\);/);
+  // The label starts exactly one leading cell past its group's own inset, i.e. on the
+  // group label column rather than hanging to its left.
+  assert.match(
+    sessionRule,
+    /padding-inline-start: calc\([\s\S]*var\(--wt-depth, 0\) \* var\(--wt-step\) \+ var\(--wt-lead\) \+[\s\S]*var\(--wt-label-pad\)[\s\S]*\);/,
+  );
+  assert.match(sessionRule, /border-radius: var\(--dsw-radius-md\);/);
+
+  const contentStart = styles.indexOf('\n.treeSessionContent {');
+  const contentEnd = styles.indexOf('}', contentStart);
+  assert.notEqual(contentStart, -1);
+  assert.match(styles.slice(contentStart, contentEnd + 1), /padding: 4px 0;/);
 });
 
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
@@ -1961,13 +2004,17 @@ test('polishes Main and Worktree row hover presentation', async () => {
   assert.match(source, /repairGuidance !== undefined/);
   assert.match(source, /<p className=\{styles\.worktreeHoverTitle\}>\{repairGuidance\}<\/p>/);
 
+  // One leading cell for every level keeps the 16px glyphs and the 14px twisty on one
+  // vertical axis per depth.
   assert.match(
     styles,
-    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 20px;/,
+    /\.workspaceIcon,\s*\.worktreeIcon\s*\{[\s\S]*width: var\(--wt-lead\);/,
   );
+  assert.match(styles, /\.disclosureButton\s*\{[\s\S]*width: var\(--wt-lead\);/);
+  // Design standard: emphasis stays at weight 500, never 600+.
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 500;/,
   );
   assert.doesNotMatch(
     styles,
@@ -2033,7 +2080,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 500;/,
   );
   assert.doesNotMatch(
     styles,
@@ -2122,7 +2169,7 @@ test('keeps current Session highlight without a leading inset frame', async () =
   assert.doesNotMatch(currentRule, /box-shadow/);
   assert.match(
     styles,
-    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 600;/,
+    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 500;/,
   );
 });
 

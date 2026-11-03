@@ -37,6 +37,7 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   reminder. The toast uses a separate shell overlay and preserves ready views.
 - Session permissions remain owned by DSH. There is no plugin-specific preset, confirmation, permission RPC, icon decoration or cleanup normalization. Historical saved policies remain unchanged.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
+- `view/activity-filter.ts` owns the browser-only activity-range predicate shared by the header selector and the rows. It reads native Session facts only (running, pending interaction, `updatedAt`), adds no RPC, Git read, Sidecar field or DSH membership change, and hides rows without unbinding or archiving them. `surface/state/useActivityFilter.ts` adds the shared view-store preference, the one-minute clock and the per-range counts.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 - `command-activity.ts` registers a private native Conversation activity target for
   `command/run` records named `cluworktree`. Ordinary native Chat command nodes do not

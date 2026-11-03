@@ -27,6 +27,7 @@ type Input = {
     | 'currentSessionId'
     | 'expandSnapshot'
     | 'sessionPresentations'
+    | 'activity'
   >;
   expansion: Pick<
     ArchivedWorktreesInput['expansion'],
@@ -80,7 +81,7 @@ export function ArchivedWorktree({
   workspaceMatchesQuery,
   workspace,
 }: Input) {
-  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations } =
+  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations, activity } =
     source;
   const {
     query,
@@ -100,14 +101,19 @@ export function ArchivedWorktree({
   const { openWorkspaceSession } = session;
   const { openSessionRename, archiveWorktreeSession } = native;
   const worktreeSessionIds = filterVisibleSessionIds(
-    filterArchivedSessionIds(
-      bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-        sessions.ids.includes(sessionId),
+    activity.scopeSessionIds(
+      filterArchivedSessionIds(
+        bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+          sessions.ids.includes(sessionId),
+        ),
+        archivedSessionIds,
       ),
-      archivedSessionIds,
     ),
     sessions,
   );
+  // Archived Worktrees follow the same range as active ones: hide the row when no
+  // Session inside the range belongs to it, and keep the record itself intact.
+  if (activity.active && worktreeSessionIds.length === 0) return null;
   const worktreeMatchesQuery =
     workspaceMatchesQuery ||
     includesText(record.branch, query) ||

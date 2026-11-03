@@ -32,6 +32,43 @@ The dedicated action below chrome remains the measured start on Web and desktop,
 with shortcut text. A missing dedicated action yields zero coverage instead of consuming
 native chrome. This requires no Web-specific hard-coded height or DSH source change.
 
+## Tree rhythm and alignment
+
+Aligned with the DSH UI/UX standard (`dsh-ui-ux-design-standard.md` §1 axis alignment,
+§7 radius by component role, §8 hairline dividers and weight ceiling, §10 spacing review).
+
+One ruler drives the whole tree, declared once on `.workspaceList`:
+
+```text
+--wt-step       12px   indent per level
+--wt-lead       20px   leading cell (the disclosure overlays the type icon here)
+--wt-label-pad   6px   gap between the leading cell and its label
+--wt-row-inset   4px   row inset from the content edge
+```
+
+- Depth comes from explicit nesting selectors (`.treeChildren`,
+  `.treeChildren .treeChildren`, …) rather than a self-referencing custom property:
+  `--d: calc(var(--d) + 1)` is a cycle and resolves to invalid, which would silently
+  flatten the tree.
+- Containers carry no horizontal offset and no guide rail. Rows own their inline padding,
+  so every level is exactly one `--wt-step` deeper and rows stay full width — hover fills
+  and drop markers share the group row's right edge instead of stopping 20px short.
+- Labels share one column per depth: `4px + depth × 12px + 20px + 6px`, i.e. 30 / 42 / 54.
+  A Session label lands on its group label's column instead of 6px to its left.
+- Every leading cell is 20px, so the 16px folder/branch glyphs and the 14px twisty share
+  one vertical axis per depth. The disclosure sits over the icon's own cell and swaps with
+  opacity, so revealing it never moves the label, and it stays keyboard reachable while
+  invisible (`:focus-visible` / `:focus-within`).
+- Rows sit in the standard control band (34 / 32 / 30px) and share `--dsw-radius-md`.
+  The activity lane is reserved by the row (`padding-inline-end: calc(inset + 32px)`) and
+  the action rail is anchored out of flow, so hover reveals no longer reflow the label.
+- Emphasis stays at weight 500 (functional CSS carries no 600+); new dividers use 0.5px.
+
+Known gap (follow-up): the pre-existing mixed `:hover` / `[data-menu-open]` /
+`:focus-within` action-reveal groups still live outside `@media (hover: hover)`. Splitting
+them needs paired CSS and test updates, so it is tracked separately instead of being
+half-applied here.
+
 ## Native-style tree motion
 
 `AnimatedTree` uses React pre-commit snapshots and the Web Animations API. Workspace,

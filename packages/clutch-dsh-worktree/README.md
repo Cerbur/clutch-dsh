@@ -143,6 +143,24 @@ visible rather than covering its controls. It retries when the layout changes.
 Worktree navigation and Dashboard support AppFrame layouts with extra titlebar or shell controls
 before, between, or after the native columns, while keeping those controls accessible.
 
+### Filter Sessions by activity
+
+The range selector below the Worktree header scopes the whole tree to today, the last 24 hours,
+the last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
+adds no Git read and no new DSH request.
+
+- A Session is active when it is running, waiting for interaction, or was last updated inside the
+  range. Running and waiting Sessions stay visible even with an older update.
+- **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
+  the current time.
+- The Session you are viewing stays visible in every range, so navigation never hides it.
+- Workspaces, Worktrees, and archived Worktrees stay visible only while they contain a Session in
+  the range. Their records, directories, and bindings are untouched.
+- Each range shows how many Sessions it contains. The selected range is a browser-local
+  preference: it survives reopening the panel and reloading the page, and it is never written to
+  the plugin index or to DSH.
+- When nothing matches, the tree reports the empty range and points back to **All**.
+
 ### Active sessions
 
 The bell between Search and Collapse All opens a compact list of running Sessions, Sessions
@@ -378,7 +396,11 @@ that first request discards the initial routing override. Native Session model c
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
 preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
-No extra command arguments are accepted. All discovery, reports and follow-ups are restricted
+`/cluworktree create <name> [baseBranch]` creates a managed Worktree and branch from the calling
+Session's healthy Worktree HEAD or the Workspace-root HEAD; the name is required and no Session is created.
+Lifecycle subcommands act on the calling Session's active Worktree binding: `/cluworktree list`,
+`archive`, `clean --yes`, `forget`, and `unarchive`. They accept no Worktree id; the Main Workspace has no binding and is rejected.
+All discovery, reports and follow-ups are restricted
 to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
 are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
 Detached bindings must be repaired before sending or reporting through these tools.
@@ -703,6 +725,8 @@ text, actions and diagnostic details follow the font size selected in **Settings
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
 - Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse. **Collapse All** collapses unrelated nodes while keeping the current Session's Workspace and Worktree expanded.
+- The activity range is a presentation filter over native Session facts. It hides rows only: it never archives, unbinds, or deletes anything, and it adds no Git or Host read. A hidden Workspace or Worktree remains in the plugin index with its Sessions and bindings intact.
+- Range counts and range boundaries are recomputed at most once a minute while the panel is open, so a Session can remain listed for up to a minute after it leaves a rolling window.
 - When the current Session is outside the visible tree, the matching row is highlighted and temporarily revealed; positioning keeps the navigation scroll unchanged when the row is already visible and moves only enough to expose it otherwise. This does not change persisted expansion choices.
 - Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
   not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File

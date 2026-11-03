@@ -1,5 +1,6 @@
 import type { ActionsDecl } from '@deepseek-ai/dsh-client-ui-slots';
 import { currentSessionIdFromList } from '../session/session-selection.js';
+import type { ActivityWindowId } from './activity-filter.js';
 
 /** Peer navigation modes owned by this browser Consumer. */
 export type WorktreeViewMode = 'workspace-session' | 'worktree';
@@ -7,9 +8,11 @@ export type WorktreeViewMode = 'workspace-session' | 'worktree';
 /** Browser-local storage key; it is never sent to DSH or the sidecar. */
 export const WORKTREE_VIEW_MODE_STORAGE_KEY = 'clutch-dsh-worktree.view-mode';
 
-/** The only durable Client preference introduced by Phase 4. */
+/** Durable Client preferences: the peer mode plus its activity range. */
 export interface WorktreeViewState {
   viewMode: WorktreeViewMode;
+  /** Bounded activity window; guard persisted values with `effectiveActivityWindow`. */
+  activityWindow: ActivityWindowId;
 }
 
 /** A browser-local Worktree → DSH Workspace membership projection. */
@@ -21,6 +24,7 @@ export interface VirtualWorkspaceBinding {
 /** The complete mutation face for the view-mode store. */
 export type WorktreeViewActions = ActionsDecl<WorktreeViewState> & {
   setViewMode: (draft: WorktreeViewState, mode: WorktreeViewMode) => void;
+  setActivityWindow: (draft: WorktreeViewState, window: ActivityWindowId) => void;
 };
 
 /** Guard persisted values before they become a visible mode. */

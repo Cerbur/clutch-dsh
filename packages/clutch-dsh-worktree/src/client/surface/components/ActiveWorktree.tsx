@@ -23,6 +23,7 @@ type Input = {
     | 'currentSessionId'
     | 'expandSnapshot'
     | 'sessionPresentations'
+    | 'activity'
   >;
   expansion: Pick<
     WorkspaceTreeInput['expansion'],
@@ -85,7 +86,7 @@ export function ActiveWorktree({
   sameWorkspaceWorktreeDrag,
   activeWorktrees,
 }: Input) {
-  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations } =
+  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations, activity } =
     source;
   const {
     query,
@@ -115,14 +116,19 @@ export function ActiveWorktree({
   } = drag;
   const { openSessionRename, archiveWorktreeSession } = native;
   const worktreeSessionIds = filterVisibleSessionIds(
-    filterArchivedSessionIds(
-      bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-        sessions.ids.includes(sessionId),
+    activity.scopeSessionIds(
+      filterArchivedSessionIds(
+        bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+          sessions.ids.includes(sessionId),
+        ),
+        archivedSessionIds,
       ),
-      archivedSessionIds,
     ),
     sessions,
   );
+  // A Worktree with no Session inside the range is omitted from the tree, never
+  // from the index: the record, its bindings and its directory stay untouched.
+  if (activity.active && worktreeSessionIds.length === 0) return null;
   const worktreeMatchesQuery =
     workspaceMatchesQuery ||
     includesText(record.branch, query) ||

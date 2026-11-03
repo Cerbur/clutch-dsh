@@ -27,6 +27,7 @@ type Input = {
     | 'archivedSessionIds'
     | 'sessionPresentations'
     | 'currentSessionId'
+    | 'activity'
   >;
   props: Pick<
     WorktreeSurfaceProps,

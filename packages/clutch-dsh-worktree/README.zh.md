@@ -132,6 +132,20 @@ Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可�
 Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入额外标题栏或壳层控件的 AppFrame
 布局，并保持这些控件可用。
 
+### 按活跃时间筛选会话
+
+Worktree 标题栏下方的范围选择器把整棵树收窄到**今日**、**最近 24 小时**、**最近 7 天**或**全部**。
+它只读取树上已经展示的 Session 事实，不追加 Git 读取，也不发起新的 DSH 请求。
+
+- Session 处于**运行中**、**等待交互**，或**最近更新时间落在范围内**时视为活跃。运行中与等待
+  交互的 Session 即使更新时间较早也会保留。
+- **今日**从本地时间零点开始；**24 小时**与**7 天**是从当前时间向前滚动的窗口。
+- 当前正在查看的 Session 在所有范围内都保持可见，导航不会把它藏起来。
+- Workspace、Worktree 与已归档 Worktree 只在其包含范围内 Session 时保留；记录、目录与绑定不变。
+- 每个范围显示其中的 Session 数量。所选范围是浏览器本地偏好：重新打开面板或刷新页面后保留，
+  绝不写入插件索引或 DSH。
+- 没有匹配项时，树会说明该范围为空，并提示切回**全部**。
+
 ### 活跃会话
 
 搜索与全部折叠之间的铃铛可展开跨 Workspace 的活跃列表，包含运行中、等待交互以及完成未读的
@@ -328,7 +342,9 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
 权限由 DSH 原生设置管理。
-Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。指令不接受额外参数。
+Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。
+`/cluworktree create <name> [baseBranch]` 从当前 Session 的健康 Worktree HEAD 或 Workspace 根 HEAD 创建受管 Worktree 和分支；名称必填，不创建 Session。
+生命周期子命令只作用于当前 Session 绑定的 Worktree：`list`、`archive`、`clean --yes`、`forget`、`unarchive`；不接受 Worktree id，主工作区没有绑定，会被拒绝。
 所有发现、回报和补充投递仅限调用方 Workspace；传入其他 `workspaceId` 不会获得额外访问权。
 这些 Session 是普通原生 Session，不是原生 subagent 子会话，也没有持久化的委派任务目录。
 Detached 绑定需要先修复，再通过这些工具发送消息或回报。
@@ -592,6 +608,8 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
 - 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
+- 活跃范围是对原生 Session 事实的展示层过滤，只隐藏行：不归档、不解绑、不删除，也不追加 Git 或 Host 读取。被隐藏的 Workspace 或 Worktree 仍留在插件索引中，Session 与绑定保持不变。
+- 面板打开时，范围计数与范围边界最多每分钟重算一次，因此 Session 离开滚动窗口后最多还会显示一分钟。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
 - Git Dashboard 的读取由 Host 通过 DSH 现有 `/api` transport 执行。浏览器不会执行 Git、读取
   sidecar 文件或 `.git`，也不会暴露修改 working tree 的控制项。文件 diff 会禁用外部 diff 与

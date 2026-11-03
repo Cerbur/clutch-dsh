@@ -1,4 +1,5 @@
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store';
+import { DEFAULT_ACTIVITY_WINDOW, type ActivityWindowId } from './activity-filter.js';
 import {
   WORKTREE_VIEW_MODE_STORAGE_KEY,
   type WorktreeViewActions,
@@ -11,11 +12,17 @@ export function createWorktreeViewStore(): EngineStoreHandle<
   WorktreeViewActions
 > {
   return defineStore({
-    init: (): WorktreeViewState => ({ viewMode: 'workspace-session' }),
+    init: (): WorktreeViewState => ({
+      viewMode: 'workspace-session',
+      activityWindow: DEFAULT_ACTIVITY_WINDOW,
+    }),
     persist: WORKTREE_VIEW_MODE_STORAGE_KEY,
     actions: {
       setViewMode: (draft, mode: WorktreeViewState['viewMode']) => {
         draft.viewMode = mode;
+      },
+      setActivityWindow: (draft, window: ActivityWindowId) => {
+        draft.activityWindow = window;
       },
     },
   });

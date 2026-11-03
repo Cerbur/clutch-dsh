@@ -32,6 +32,7 @@ export type ArchivedWorktreesInput = {
     | 'sessionPresentations'
     | 'currentSessionId'
     | 'expandSnapshot'
+    | 'activity'
   >;
   ordering: Pick<WorkspaceTreeInput['ordering'], 'orderedSessionIdsByAccount'>;
   lifecycle: Pick<WorkspaceTreeInput['lifecycle'], 'branchLabel' | 'branchActions'>;
@@ -77,7 +78,7 @@ export function ArchivedWorktrees({
 }: Input) {
   const { isCurrentSessionReveal, expandedArchivedWorkspaces, toggleArchivedWorkspace } = expansion;
   const { t } = props;
-  const { sessions, archivedSessionIds, sessionPresentations } = source;
+  const { sessions, archivedSessionIds, sessionPresentations, activity } = source;
 
   const archivedKey = 'archived:' + workspace.workspaceId;
   const isArchivedAutoExpanded = isCurrentSessionReveal(archivedKey);
@@ -91,13 +92,15 @@ export function ArchivedWorktrees({
         label={`${t('worktree.archivedGroup')} (${archivedWorktrees.length})`}
         expanded={isArchivedExpanded}
         groupActivityStatus={aggregateSessionStatus(
-          filterArchivedSessionIds(
-            archivedWorktrees.flatMap((record) =>
-              bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-                sessions.ids.includes(sessionId),
+          activity.scopeSessionIds(
+            filterArchivedSessionIds(
+              archivedWorktrees.flatMap((record) =>
+                bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+                  sessions.ids.includes(sessionId),
+                ),
               ),
+              archivedSessionIds,
             ),
-            archivedSessionIds,
           ),
           sessionPresentations,
         )}

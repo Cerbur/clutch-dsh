@@ -199,6 +199,73 @@
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 
+/* Activity range selector. It scrolls horizontally instead of clipping labels,
+   so four ranges stay readable in a narrow or collapsed-wide Sidebar. */
+.activityBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 0 10px 8px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.activityBar::-webkit-scrollbar {
+  display: none;
+}
+
+.activitySegment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 0;
+  /* Explicit pill: the shared standard requires corner-shape with a full circle. */
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.activitySegment:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.activitySegment:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-l3);
+  outline-offset: 1px;
+}
+
+.activitySegmentActive,
+.activitySegmentActive:hover {
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.activityLabel {
+  white-space: nowrap;
+}
+
+.activityCount {
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.activitySegmentActive .activityCount {
+  color: var(--dsw-alias-label-secondary);
+}
+
 .title {
   min-width: 0;
   flex: 1;
@@ -412,6 +479,14 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
+}
+
+.emptyHint {
+  margin: 0;
+  padding: 0 4px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .gitReadiness {
@@ -771,12 +846,19 @@
   white-space: nowrap;
 }
 
+/* One indent rhythm for the whole tree: each level advances by --wt-step and every
+   label starts after one --wt-lead cell, so a Session label shares the exact column
+   of its group label (one axis per depth, no per-level ad-hoc offsets). */
 .workspaceList {
+  --wt-step: 12px;
+  --wt-lead: 20px;
+  --wt-label-pad: 6px;
+  --wt-row-inset: 4px;
   position: relative;
   min-width: 0;
   min-height: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   overflow-x: hidden;
 }
 
@@ -784,60 +866,83 @@
   min-width: 0;
 }
 
+/* Navigation rows sit in the standard control band (H32-40) and share one radius. */
 .workspaceRow,
 .worktreeRow {
   position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 36px;
   box-sizing: border-box;
-  border-radius: 8px;
-  padding: 3px 4px;
+  border-radius: var(--dsw-radius-md);
+  padding-block: 3px;
+  padding-inline: calc(var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step))
+    var(--wt-row-inset);
 }
 
-.workspaceRow:hover,
-.worktreeRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.workspaceRow {
+  min-height: 34px;
 }
 
-.workspaceRow .workspaceDisclosure {
-  display: none;
+@media (hover: hover) {
+  .workspaceRow:hover,
+  .worktreeRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
-.workspaceRow:hover .workspaceDisclosure,
-.workspaceRow[data-menu-open='true'] .workspaceDisclosure {
-  display: inline-flex;
-}
-
-.workspaceRow:hover .workspaceIcon,
-.workspaceRow[data-menu-open='true'] .workspaceIcon {
-  display: none;
-}
-
+/* The disclosure overlays the type icon's own cell: one 20px axis, no reflow, and
+   it stays keyboard reachable while invisible. Hover reveal is pointer-only. */
+.workspaceRow .workspaceDisclosure,
 .worktreeRow .worktreeDisclosure {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.worktreeRow:hover .worktreeDisclosure,
-.worktreeRow[data-menu-open='true'] .worktreeDisclosure {
-  display: inline-flex;
+.workspaceRow:focus-within .workspaceDisclosure,
+.worktreeRow:focus-within .worktreeDisclosure,
+.workspaceRow .workspaceDisclosure:focus-visible,
+.worktreeRow .worktreeDisclosure:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.worktreeRow:hover .worktreeIcon,
-.worktreeRow[data-menu-open='true'] .worktreeIcon {
-  display: none;
+.workspaceRow:focus-within .workspaceIcon,
+.worktreeRow:focus-within .worktreeIcon {
+  visibility: hidden;
 }
 
+@media (hover: hover) {
+  .workspaceRow:hover .workspaceDisclosure,
+  .workspaceRow[data-menu-open='true'] .workspaceDisclosure,
+  .worktreeRow:hover .worktreeDisclosure,
+  .worktreeRow[data-menu-open='true'] .worktreeDisclosure {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .workspaceRow:hover .workspaceIcon,
+  .workspaceRow[data-menu-open='true'] .workspaceIcon,
+  .worktreeRow:hover .worktreeIcon,
+  .worktreeRow[data-menu-open='true'] .worktreeIcon {
+    visibility: hidden;
+  }
+}
+
+/* Absolute so the reveal never moves the label; the parent row owns the cell. */
 .disclosureButton {
+  position: absolute;
+  inset-inline-start: calc(var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step));
+  top: 50%;
+  transform: translateY(-50%);
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: var(--wt-lead);
   height: 28px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   padding: 0;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
@@ -845,6 +950,11 @@
   font: inherit;
   font-size: 17px;
   line-height: 1;
+}
+
+.disclosureButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-l3);
+  outline-offset: 1px;
 }
 
 .disclosureButton > svg {
@@ -874,12 +984,13 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* One leading cell for every level keeps all 16px glyphs and the 14px twisty on
+   the same vertical axis per depth. */
 .workspaceIcon,
 .worktreeIcon {
   flex: none;
-  width: 24px;
+  width: var(--wt-lead);
   color: var(--dsw-alias-label-secondary);
-  font-size: 20px;
   line-height: 1;
   text-align: center;
 }
@@ -929,8 +1040,9 @@
   line-height: 20px;
 }
 
+/* Emphasis stays at weight 500 (design standard: no 600+ in functional CSS). */
 .worktreeRow[data-main-group='true'] .worktreeLabel {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* Native title reveal: the span clips its own text and scrolls only while
@@ -1015,25 +1127,17 @@
   width: 64px;
 }
 
-/* Group actions do not reserve space until their row needs to show them. */
+/* Group actions live in the reserved lane and are anchored to the row's right edge,
+   so revealing them never changes the label's width (no hover reflow). */
 .worktreeRow .treeActionSlot {
+  position: absolute;
+  inset-inline-end: var(--wt-row-inset);
+  top: 50%;
+  transform: translateY(-50%);
   min-width: 0;
-  flex: 0 0 0;
-  width: 0;
-  gap: 4px;
-}
-
-/* Keep the 28px activity indicator plus a 4px label gap while collapsed. */
-.worktreeRow[data-group-activity='true'] .treeActionSlot {
-  flex: 0 0 32px;
-  width: 32px;
-}
-
-.worktreeRow:hover .treeActionSlot,
-.worktreeRow[data-menu-open='true'] .treeActionSlot,
-.worktreeRow:focus-within .treeActionSlot {
   flex: 0 0 auto;
   width: auto;
+  gap: 4px;
 }
 
 .workspaceActions > .menuAction {
@@ -1181,10 +1285,32 @@
   bottom: -1px;
 }
 
+/* Depth comes from explicit nesting selectors rather than a self-referencing custom
+   property (`--d: calc(var(--d) + 1)` is a cycle and resolves to invalid). Rows own
+   their inline padding, so nesting never accumulates margins, and rows stay full
+   width so hover fills and drop markers share one edge. */
 .treeChildren {
-  margin-left: 16px;
-  padding: 2px 0 5px 12px;
-  border-left: 1px solid var(--dsw-alias-border-l1);
+  margin-inline-start: 0;
+  padding: 2px 0 5px;
+  border-inline-start: 0;
+}
+
+.treeChildren .worktreeRow,
+.treeChildren .treeSessionRow,
+.treeChildren .sessionOverflowButton {
+  --wt-depth: 1;
+}
+
+.treeChildren .treeChildren .worktreeRow,
+.treeChildren .treeChildren .treeSessionRow,
+.treeChildren .treeChildren .sessionOverflowButton {
+  --wt-depth: 2;
+}
+
+.treeChildren .treeChildren .treeChildren .worktreeRow,
+.treeChildren .treeChildren .treeChildren .treeSessionRow,
+.treeChildren .treeChildren .treeChildren .sessionOverflowButton {
+  --wt-depth: 3;
 }
 
 .groupLabel {
@@ -1208,29 +1334,32 @@
 }
 
 .worktreeGroup {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .worktreeRow {
-  min-height: 34px;
+  min-height: 32px;
+  /* Reserve the activity lane so a hover reveal never reflows the label. */
+  padding-inline-end: calc(var(--wt-row-inset) + 32px);
 }
 
-/* Compact the Worktree leading slots to make room for its third action. */
-.worktreeRow .worktreeIcon,
-.worktreeRow .disclosureButton {
-  width: 20px;
-}
-
+/* Session rows indent to their group's label column, not one step past the row
+   start: the label reads as a child of that group without hanging to its left. */
 .treeSessionRow {
   position: relative;
   display: flex;
   align-items: center;
-  width: calc(100% - 20px);
-  margin-left: 20px;
+  width: 100%;
+  margin-inline-start: 0;
+  padding-inline-start: calc(
+    var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step) + var(--wt-lead) +
+      var(--wt-label-pad)
+  );
+  padding-inline-end: var(--wt-row-inset);
   min-width: 0;
-  min-height: 31px;
+  min-height: 30px;
   box-sizing: border-box;
-  border-radius: 7px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .treeSessionRow:hover,
@@ -1243,7 +1372,7 @@
 }
 
 .treeSessionRow[data-session-current='true'] .treeSessionContent {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .treeSessionRow.dropBefore::before,
@@ -1271,11 +1400,11 @@
   flex: 1;
   width: 0;
   min-width: 0;
-  min-height: 31px;
+  min-height: 30px;
   box-sizing: border-box;
   border: 0;
-  border-radius: 7px;
-  padding: 4px 4px;
+  border-radius: var(--dsw-radius-md);
+  padding: 4px 0;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
@@ -1284,6 +1413,11 @@
   font-weight: 400;
   line-height: 20px;
   text-align: left;
+}
+
+.treeSessionContent:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-l3);
+  outline-offset: 1px;
 }
 
 .treeSessionContent:hover {
@@ -1334,11 +1468,15 @@
 
 .sessionOverflowButton {
   display: block;
-  width: calc(100% - 24px);
-  margin: 2px 0 4px 24px;
+  width: auto;
+  margin: 2px var(--wt-row-inset) 4px
+    calc(
+      var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step) + var(--wt-lead) +
+        var(--wt-label-pad)
+    );
   padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;

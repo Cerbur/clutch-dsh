@@ -10,12 +10,14 @@ import {
   EMPTY_FORK_RECOVERY_STORE,
   useStableWorkspaceIds,
 } from '../shared.js';
+import { useActivityFilter } from './useActivityFilter.js';
 import type { WorkspaceListLike, WorktreeSurfaceProps } from '../types.js';
 
 type Input = {
   props: Pick<
     WorktreeSurfaceProps,
     | 'useStore'
+    | 'actions'
     | 'available'
     | 'manager'
     | 'useSessions'
@@ -73,6 +75,16 @@ export function useSurfaceSources({ props }: Input) {
     mode === 'worktree',
   );
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
+  const activity = useActivityFilter({
+    props,
+    enabled: mode === 'worktree',
+    source: {
+      sessions,
+      sessionPresentations,
+      currentSessionId,
+      archivedSessionIds,
+    },
+  });
   return {
     preferredMode,
     mode,
@@ -86,6 +98,7 @@ export function useSurfaceSources({ props }: Input) {
     expandSnapshot,
     sessionOrderSnapshot,
     sessionPresentations,
+    activity,
     ref,
     width,
     bounds,

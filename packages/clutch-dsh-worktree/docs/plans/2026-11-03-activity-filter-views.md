@@ -1,0 +1,81 @@
+# 活跃范围筛选视图（今日 / 24 小时 / 7 天 / 全部）
+
+日期：2026-11-03
+范围：`packages/clutch-dsh-worktree` 客户端侧栏导航（`shell.overlay`）
+状态：已实现
+
+## 背景与目标
+
+Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Worktree 与 Session 数量增长，
+"我今天在哪些地方工作过"无法在树中直接回答。本次在侧栏顶部（标题栏之下）增加活跃范围选择器，
+把整棵树收窄到：
+
+| 范围 | 语义 |
+| --- | --- |
+| 今日 `today` | 本地日历零点之后有活动 |
+| 24 小时 `last24h` | 从当前时间向前 24 小时滚动窗口 |
+| 7 天 `last7d` | 从当前时间向前 7 天滚动窗口 |
+| 全部 `all` | 不过滤（默认值，保持升级前的完整树） |
+
+"活跃"只使用客户端已经持有的原生 Session 事实，因此该视图不需要新的 Host 能力。
+
+## 语义定义
+
+一条 Session 在所选范围内视为活跃，当且仅当满足任一条件：
+
+1. 正在运行（`SessionPresentation.ongoing`，包含运行中的子代理）；
+2. 等待交互（`SessionPresentation.status.state === 'warning'`：审批、计划审核、回答）；
+3. 最近更新时间 `updatedAt` 落在范围内（含下界）。
+
+派生规则：
+
+- **当前 Session 永远可见**。否则用户切到"今日"时可能看不到自己正在用的会话，导航会变成陷阱。
+- **Workspace** 仅在其包含范围内 Session（原生成员 + 插件绑定 + 虚拟成员）时渲染。
+- **受管 Worktree / 已归档 Worktree** 仅在其绑定的范围内 Session 存在时渲染；`绑定` 先按
+  `archivedSessionIds` 与 `sessions.ids` 收敛，与叶子行使用同一管道，避免"分组可见但内容为空"。
+- 搜索与范围为独立维度，同时满足才渲染。
+- 计数与过滤共用同一谓词，标签数字不会与树内容不一致。
+
+## 实现分解
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/client/view/activity-filter.ts` | 纯逻辑：窗口下界、活跃谓词、候选会话集合、范围计数、持久化值守卫、`ActivityFilterView` 读面 |
+| `src/client/surface/state/useActivityFilter.ts` | 共享偏好读取、60 秒时钟、`isActive`/`hasActiveSession`/`count` 与写回 |
+| `src/client/surface/components/ActivityFilterBar.tsx` | 顶部范围选择器（`role="group"` + `aria-pressed` + `aria-label` 带计数） |
+| `src/client/surface/components/WorkspaceTree.tsx` | Workspace / Worktree 记录级门禁、Main 行过滤、空状态与 `resetKey` |
+| `src/client/surface/components/ActiveWorktree.tsx`、`ArchivedWorktree.tsx` | 叶子 Session 行过滤与分组状态聚合 |
+| `src/client/surface/components/ArchivedWorktrees.tsx` | 归档分组计数与聚合状态按范围收敛 |
+| `src/client/view/view-mode.ts`、`view-mode-store.ts` | `activityWindow` 持久偏好 + `setActivityWindow` action |
+| `src/client/worktree.css`、`locales.ts` | 顶部选择器样式与中英文文案（`activity.*`、`filter.*`） |
+
+## 保持的不变量
+
+- **数据所有权**：不新增 Sidecar 字段、不写 DSH Session/Workspace、不读取或修改业务目录。
+- **最小刷新作用域**：筛选不触发任何读取；切换范围只重渲染，不推进 reader 代次、不刷新其他 Workspace。
+- **保持 ready 内容**：范围切换不清空投影，不产生 loading 或白屏。
+- **Git 与破坏性操作**：与筛选无关；被隐藏的记录不改变任何门禁。
+- **浏览器本地偏好**：与 `viewMode` 共用 `clutch-dsh-worktree.view-mode` 键；非法持久化值回退 `all`。
+
+## 验证
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree test
+node --test test/readme-parity.test.mjs
+```
+
+新增 `test/client-activity-filter.test.mjs` 覆盖：窗口下界与本地零点、非法时钟、持久化值守卫、
+运行中/等待交互的活跃语义、下界含等号、当前 Session 恒可见、`updatedAt` 回退来源、
+顺序保持、归档与空白排除、四个范围的计数一致性。
+
+## 遗留与后续
+
+- **截图与 Features 表**：本次未新增 `assets/screenshots/` 图片，因此没有向两份 README 的
+  Features 表新增行；已在实际运行的 DSH 中完成视觉验证后再补截图与表格行，并同步 `screenshots.json`。
+- **Worktree 级独立活跃信号**：当前"活跃"完全由 Session 派生。若后续需要"今天创建的 Worktree
+  即使还没有 Session 也显示"，可以引入 `createdAt`/`importedAt`（获取事实，已在 Sidecar 中）作为
+  补充条件；这会改变语义，需要人类确认。
+- **长期活动的低成本刷新**：目前 60 秒重算一次计数与边界。若树规模显著增长，可改为只在范围切换、
+  Session 列表变化或文档可见性恢复时重算。
