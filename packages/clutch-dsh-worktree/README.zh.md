@@ -78,7 +78,7 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 | 功能                    | 预览                                                                                                                                 | 作用                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
+| **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画；关闭的 tab 显示运行转圈、审批黄点或完成绿点。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
 | **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
 | **同步基线** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="提供 Rebase 与 Merge baseline 选项的同步基线弹窗"> | 选择 Rebase 或 Merge baseline，在当前 Worktree 创建原生 Agent 任务会话。 |
@@ -112,12 +112,16 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 ### 打开 Worktree 模式
 
 Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
-三角标与 DSH 原生一致。包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
-Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
-滚动到末尾；移出后恢复起点。启用减少动态效果时会直接显示末尾。
+三角标与 DSH 原生一致。Workspace 以左侧纵向 tab 呈现：同一时间只有一个 tab 打开并承载
+Local/Main、Worktree 与 Session 树。选择其他 tab 会关闭前一个；再次选择当前 tab 会关闭树。
+关闭的 tab 在操作区显示一个聚合状态指示：Session 运行中时使用原生转圈，等待审批（或其他交互）
+时为黄色圆点，未读完成时为绿色圆点，便于在不打开该 Workspace 的情况下提示切换。包含当前
+Session 且已打开的 Workspace 使用原生蓝色文件夹，其他 Workspace 文件夹使用原生灰色。悬浮在
+过长的 Session 标题或 Worktree 名称上时，文字以原生速度滚动到末尾；移出后恢复起点。启用减少
+动态效果时会直接显示末尾。
 
 1. 启动 DSH Web，在 DSH Sidebar 底部选择 **Worktree**。
-2. 在 Worktree 树中搜索或展开 Workspace。
+2. 在 Worktree 树中搜索或选择 Workspace tab。
 3. 选择 Local/Main 或某个 Worktree 浏览其 Session。这个视角是附加的，DSH 原生的 Workspace
    和 Session 导航仍然可用。每组初始显示五行，可使用**展开更多**和**收起**查看其余内容。
 4. 使用 header 中的 **Collapse All** 折叠其他无关的 Workspace 和 Worktree，当前 Session 所在的
@@ -610,7 +614,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   recovery-needed 状态会保持可见并支持重试。
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
-- 将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
+- 将当前打开的 Workspace tab 以及 Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。**Collapse All** 会折叠其他无关节点并保留当前 Session 所在的 Workspace 与 Worktree 展开。
 - 活跃范围是对原生 Session 事实的展示层过滤，只隐藏行：不归档、不解绑、不删除，也不追加 Git 或 Host 读取。被隐藏的 Workspace 或 Worktree 仍留在插件索引中，Session 与绑定保持不变。
 - 面板打开时，范围计数与范围边界最多每分钟重算一次，因此 Session 离开滚动窗口后最多还会显示一分钟。
 - 当前 Session 不在可见树中时，会高亮匹配行并临时展开定位；如果行已在可见区域内，不会移动导航滚动位置，否则只移动足够显示它的位置。且不改变已保存的展开选择。
@@ -625,8 +629,10 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   graph lanes 或 syntax highlighting。
 - Session 行和 Dashboard 卡片使用 DSH 原生的状态和相对时间展示。绿色完成 dot 是 DSH 对非当前
   主视图中停止的 Session 的未读提醒；打开该 Session 或再次运行时清除。冷启动时的 idle Session
-  不视为已完成。提醒仍由 DSH 拥有，插件不会持久化该状态。折叠的 Workspace、Main 和 Worktree 分组会
-  从完整且符合原生空白/归档可见性条件的成员中选择一个聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
+  不视为已完成。提醒仍由 DSH 拥有，插件不会持久化该状态。关闭的 Workspace tab 保持原生状态
+  指示：运行中使用转圈，等待审批（以及其他 pending interaction warning）使用黄色 dot，未读
+  完成使用绿色 dot，因此 tab 本身就能提示需要切换。关闭的
+  Main 与 Worktree 分组继续使用原生聚合 `StateDot`：等待审批（以及其他 pending interaction warning）
   优先于运行中，运行中优先于已完成。Idle Session 不会贡献分组 dot；Worktree 健康状态仍
   使用独立的前置指示器。视觉上的 Session 排序初始按最新的 `updatedAt` 值排列并只保存在浏览器本地；Main 固定为首行，Worktree 拖拽只
   更新这个本地排序投影，Main 拖拽只有在 DSH 接受后才更新原生 Workspace 顺序。

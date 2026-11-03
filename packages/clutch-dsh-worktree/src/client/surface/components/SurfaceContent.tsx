@@ -67,6 +67,7 @@ type Input = {
     ReturnType<typeof useSessionExpansion>,
     | 'contentRef'
     | 'isCurrentSessionReveal'
+    | 'isWorkspaceOpen'
     | 'query'
     | 'expandedSessionGroups'
     | 'toggleWorkspace'

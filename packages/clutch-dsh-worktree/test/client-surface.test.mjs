@@ -47,20 +47,32 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(clientReadme, /browser-local.*expansion|浏览器本地.*展开/i);
   assert.ok(
     readme.includes(
-      'Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
+      'Persist the open Workspace tab plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
     ),
   );
   assert.ok(
     readmeZh.includes(
-      '将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
+      '将当前打开的 Workspace tab 以及 Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
     ),
   );
+  assert.match(readme, /Workspaces behave as vertical tabs/i);
+  assert.match(readme, /only one\s+tab is open/i);
+  assert.match(readmeZh, /Workspace 以左侧纵向 tab 呈现/);
+  assert.match(readmeZh, /同一时间只有一个 tab 打开/);
+  assert.match(readme, /native running spinner while a Session is running/i);
+  assert.match(readme, /yellow dot\s+while waiting for approval|yellow dot while waiting for approval/i);
+  assert.match(readmeZh, /运行中时使用原生转圈/);
+  assert.match(readmeZh, /等待审批[\s\S]*黄色圆点/);
   assert.ok(clientReadme.includes('clutch-dsh-worktree.expand-state'));
-  assert.match(clientReadme, /Missing IDs are\s+expanded by default\./);
+  assert.match(clientReadme, /Missing Main or Worktree IDs are\s+expanded by default\./);
+  assert.match(clientReadme, /Workspaces are vertical tabs/i);
+  assert.match(clientReadme, /openWorkspaceExclusive/);
   assert.ok(/The five-row Session overflow control remains transient,/.test(clientReadme));
-  assert.ok(/and parent collapse clears its affected temporary group state\./.test(clientReadme));
   assert.ok(
-    /Storage failure\s+falls back to in-memory behavior and does not change DSH or sidecar data\./.test(
+    /and parent collapse clears its\s+affected temporary group state\./.test(clientReadme),
+  );
+  assert.ok(
+    /Storage failure\s+falls back to in-memory behavior and does not change\s+DSH or sidecar data\./.test(
       clientReadme,
     ),
   );
@@ -2016,7 +2028,11 @@ test('polishes Main and Worktree row hover presentation', async () => {
     styles,
     /\.workspaceIcon,\s*\.worktreeIcon\s*\{[\s\S]*width: var\(--wt-lead\);/,
   );
-  assert.match(styles, /\.disclosureButton\s*\{[\s\S]*width: var\(--wt-lead\);/);
+  assert.match(
+    styles,
+    /\.disclosureButton\s*\{[\s\S]*width: 24px;[\s\S]*height: 24px;/,
+  );
+  assert.match(styles, /inset-inline-start: calc\([\s\S]*? - 2px[\s\S]*?\);/);
   // Design standard: emphasis stays at weight 500, never 600+.
   assert.match(
     styles,
@@ -2186,12 +2202,19 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /currentSessionReveal/);
   assert.match(source, /currentSessionRevealKeys/);
   assert.match(source, /setSearchQuery\(''\)/);
-  assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(
+    source,
+    /resolveOpenWorkspaceId\(\s*expandSnapshot,\s*workspaceIds,\s*revealedWorkspaceId,?\s*\)/,
+  );
+  assert.match(source, /const isWorkspaceOpen =/);
+  assert.match(source, /appliedRevealRef/);
+  assert.match(source, /openWorkspaceExclusive/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
   assert.match(source, /isSessionGroupAutoExpanded\(\s*sessionIds,\s*currentSessionId,/);
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
+  assert.match(source, /expandState\.actions\.openWorkspaceExclusive/);
   assert.match(source, /expandState\.actions\.toggleMain/);
   assert.match(source, /expandState\.actions\.toggleWorktree/);
   assert.doesNotMatch(source, /currentSessionReveal.*localStorage/);

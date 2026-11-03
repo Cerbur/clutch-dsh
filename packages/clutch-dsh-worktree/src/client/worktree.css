@@ -980,10 +980,23 @@
   padding-block: 3px;
   padding-inline: calc(var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step))
     var(--wt-row-inset);
+  cursor: pointer;
+  user-select: none;
 }
 
 .workspaceRow {
   min-height: 34px;
+}
+
+/* Workspaces read as vertical tabs: the open tab owns the tree body, and every
+   closed tab carries its aggregated activity indicator at the action edge. The
+   open state reuses the native hover fill instead of adding a custom accent bar. */
+.workspaceRow[data-workspace-tab='open'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.workspaceRow[data-workspace-tab='open'] .workspaceTitle {
+  font-weight: 500;
 }
 
 @media (hover: hover) {
@@ -1031,18 +1044,36 @@
   }
 }
 
-/* Absolute so the reveal never moves the label; the parent row owns the cell. */
+/* Touch and stylus have no hover phase: keep the expand/collapse affordance
+   visible so the tab switch never depends on a pointer hover. */
+@media (hover: none) {
+  .workspaceRow .workspaceDisclosure,
+  .worktreeRow .worktreeDisclosure {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .workspaceRow .workspaceIcon,
+  .worktreeRow .worktreeIcon {
+    visibility: hidden;
+  }
+}
+
+/* Absolute so the reveal never moves the label; the parent row owns the cell.
+   The 24px hit target stays centered on the 20px leading cell. */
 .disclosureButton {
   position: absolute;
-  inset-inline-start: calc(var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step));
+  inset-inline-start: calc(
+    var(--wt-row-inset) + var(--wt-depth, 0) * var(--wt-step) - 2px
+  );
   top: 50%;
   transform: translateY(-50%);
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--wt-lead);
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   padding: 0;
@@ -1050,13 +1081,18 @@
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font: inherit;
-  font-size: 17px;
-  line-height: 1;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .disclosureButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-l3);
-  outline-offset: 1px;
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.disclosureButton:active {
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .disclosureButton > svg {
@@ -1064,7 +1100,7 @@
 }
 
 .disclosureArrow {
-  transition: transform 150ms var(--ds-ease-in-out);
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
 }
 
 .disclosureButton[aria-expanded='true'] .disclosureArrow {
@@ -1082,8 +1118,10 @@
   }
 }
 
-.disclosureButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .disclosureButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* One leading cell for every level keeps all 16px glyphs and the 14px twisty on
@@ -1179,7 +1217,7 @@
 
 .worktreeHoverTitle {
   color: var(--dsw-static-neutral-bluish-00);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
   overflow-wrap: anywhere;
 }
@@ -1193,7 +1231,7 @@
 
 .sessionHoverTitle {
   color: #FFFFFF;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
   overflow-wrap: break-word;
 }

@@ -95,17 +95,20 @@ test('rows stay full width so hover fills and drop markers share one right edge'
 });
 
 test('navigation rows share the control-band radius token', () => {
-  assert.match(
-    rule(tree, '.workspaceRow,\n.worktreeRow {'),
-    /border-radius: var\(--dsw-radius-md\);/,
-  );
+  const row = rule(tree, '.workspaceRow,\n.worktreeRow {');
+  assert.match(row, /border-radius: var\(--dsw-radius-md\);/);
+  assert.match(row, /cursor: pointer;/);
+  assert.match(row, /user-select: none;/);
   assert.match(rule(tree, '.treeSessionRow {'), /border-radius: var\(--dsw-radius-md\);/);
 });
 
 test('the disclosure overlays its icon cell instead of toggling layout', () => {
   const disclosure = rule(tree, '.disclosureButton {');
   assert.match(disclosure, /position: absolute;/);
-  assert.match(disclosure, /width: var\(--wt-lead\);/);
+  // A 24px hit target remains centered on the 20px leading cell.
+  assert.match(disclosure, /width: 24px;/);
+  assert.match(disclosure, /height: 24px;/);
+  assert.match(disclosure, /- 2px/);
 
   // The reveal must not switch display, or the label would shift on hover.
   const revealRegion = tree.slice(
@@ -123,7 +126,39 @@ test('the disclosure overlays its icon cell instead of toggling layout', () => {
     /@media \(hover: hover\)\s*\{[\s\S]*\.worktreeRow:hover \.worktreeDisclosure/,
   );
   assert.match(tree, /\.worktreeRow:focus-within \.worktreeDisclosure/);
-  assert.match(tree, /\.disclosureButton:focus-visible \{[\s\S]*outline: 2px solid/);
+  assert.match(
+    tree,
+    /\.disclosureButton:focus-visible \{[\s\S]*outline: var\(--dsw-focus-ring-width\) solid[\s\S]*--dsw-focus-ring-color/,
+  );
+  assert.match(tree, /\.disclosureButton:focus-visible \{[\s\S]*outline-offset: 2px;/);
+});
+
+test('the disclosure follows the shared motion, press, and touch rules', () => {
+  const disclosure = rule(tree, '.disclosureButton {');
+  assert.match(disclosure, /font-size: 13px;/);
+  assert.match(disclosure, /line-height: 20px;/);
+
+  const arrow = rule(tree, '.disclosureArrow {');
+  assert.match(
+    arrow,
+    /transition: transform var\(--ds-transition-duration\) var\(--ds-ease-in-out\);/,
+  );
+
+  assert.match(
+    tree,
+    /\.disclosureButton:active \{\s*background: var\(--dsw-alias-interactive-bg-active\);/,
+  );
+  assert.match(
+    tree,
+    /@media \(prefers-reduced-motion: reduce\) \{\s*\.disclosureArrow \{\s*transition: none;/,
+  );
+
+  // Hover feedback is pointer-only; touch keeps the switch affordance visible.
+  assert.match(tree, /@media \(hover: hover\) \{\s*\.disclosureButton:hover \{/);
+  assert.match(
+    tree,
+    /@media \(hover: none\) \{\s*\.workspaceRow \.workspaceDisclosure,[\s\S]*?opacity: 1;[\s\S]*?pointer-events: auto;/,
+  );
 });
 
 test('the activity lane is reserved so hover never reflows the label', () => {

@@ -93,7 +93,7 @@ export class AnimatedTree extends Component<Props> {
       overlay.append(clone);
       const animation = clone.animate([{ opacity: row.opacity }, { opacity: 0 }], {
         duration: 100,
-        easing: 'ease-out',
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
         fill: 'forwards',
       });
       this.removed.set(key, { element: clone, animation });
@@ -124,7 +124,7 @@ export class AnimatedTree extends Component<Props> {
   }
 
   private move(element: HTMLElement, frames: Keyframe[], duration: number): void {
-    const animation = element.animate(frames, { duration, easing: 'ease-out' });
+    const animation = element.animate(frames, { duration, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' });
     this.movements.set(element, animation);
     animation.onfinish = () => {
       this.movements.delete(element);

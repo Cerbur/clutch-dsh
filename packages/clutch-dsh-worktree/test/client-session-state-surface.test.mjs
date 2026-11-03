@@ -28,9 +28,12 @@ test('renders every visible Session status in the right-side rail', async () => 
   assert.match(rows, /session\.status\.subagentsRunning/);
   assert.match(sessionView, /aggregateSessionStatus/);
   assert.match(rows, /groupActivityStatus.state/);
+  assert.doesNotMatch(rows, /groupActivityDotState/);
+  assert.match(rows, /data-workspace-tab=/);
   assert.match(rows, /data-group-activity/);
   assert.match(rows, /groupActivity/);
   assert.match(rows, /!expanded/);
+  assert.match(css, /\.workspaceRow\[data-workspace-tab='open'\]/);
   assert.match(surface, /sessionPresentations/);
   assert.match(surface, /groupActivityStatus=\{workspaceGroupActivityStatus\}/);
   assert.match(surface, /groupActivityStatus=\{aggregateSessionStatus\(/);
@@ -72,6 +75,7 @@ test('renders one aggregate status dot per collapsed row from complete eligible 
     1,
   );
   assert.match(workspaceSource, /const groupActivityVisible = !expanded && groupActivityStatus !== undefined/);
+  assert.match(workspaceSource, /<StateDot state=\{groupActivityStatus\.state\} \/>/);
   assert.match(groupSource, /const groupActivityVisible = !expanded && groupActivityStatus !== undefined/);
   assert.match(
     surface,

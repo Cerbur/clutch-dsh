@@ -611,12 +611,15 @@ and runtime cycles inside the new implementation directories.
 
 ### Browser-local expansion state
 
-The Client persists Workspace, Main, and Worktree expansion exceptions under
-clutch-dsh-worktree.expand-state in browser-local storage. Missing IDs are
-expanded by default. The five-row Session overflow control remains transient,
-and parent collapse clears its affected temporary group state. The header's
-Collapse All action targets every Workspace, Main group, and Worktree except the Workspace
-and Worktree containing the current Session, which remain expanded. Storage failure
+The Client persists the open Workspace tab plus Main and Worktree expansion exceptions under
+clutch-dsh-worktree.expand-state in browser-local storage. Workspaces are vertical tabs:
+openWorkspaceExclusive removes the selected ID and collapses every other known Workspace,
+so only one tab owns the tree body. Missing Main or Worktree IDs are expanded by default.
+The first uncollapsed Workspace is the open tab when no current-Session reveal applies.
+The five-row Session overflow control remains transient,
+and parent collapse clears its affected temporary group state. The header's Collapse All
+action targets every Workspace, Main group, and Worktree except the Workspace and Worktree
+containing the current Session, which remain expanded. Storage failure
 falls back to in-memory behavior and does not change DSH or sidecar data. Stored choices are
 pruned only after a refresh confirms the complete Workspace list and every Workspace
 projection; a ready read that is still empty or partial means nothing has arrived yet, so it
@@ -678,11 +681,11 @@ The Worktree surface is additive:
 - no separate Workspace/Worktree mode Tab is added;
 - the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable. `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
   Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
-- Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 150ms, 90-degree rotation; reduced motion disables the transition. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
+- Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 200ms `--ds-transition-duration` / `--ds-ease-in-out` rotation; reduced motion disables the transition. The 24×24 hit target stays centered on the 20px leading cell, uses the shared `--dsw-focus-ring-*` tokens, and is always visible without hover. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
 - Session titles and Worktree names share `useTitleMarquee`, adapted from DSH `ui-workspace/src/client/rows/Rows.tsx` because that hook is private upstream. It ignores overflow of at most 8px, moves at 30px/s with 12px edge fades, holds the tail until pointer leave, then resets immediately. Reduced motion jumps to the tail. Frames are cancelled on pointer leave and unmount; the existing HoverCards still reveal complete values;
 - until both anchors exist, the surface has zero coverage; `ResizeObserver` and `MutationObserver` recalculate bounds across resize and collapse transitions;
 - semantic `data-sidebar-collapsed` and zero-width measurements hide the surface on desktop as well as Web; zero never retains the last expanded width;
-- `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
+- `AnimatedTree` snapshots keyed rows before React commits and animates membership/order changes after commit: new/removed rows fade for 100ms and displaced rows move for 200ms with the shared `--ds-ease-in-out` curve. Motion arms only after pointer/keyboard input; initial loading, search, drag and reduced motion settle immediately. Metadata-only updates do not restart motion, exit clones are inert and aria-hidden, and all animations are cancelled on disposal;
 - Workspace rename, delete and drag ordering use native DSH Workspace APIs;
 - Session menus retain Rename/Fork/Archive and Copy session ID for ordinary Sessions. A provisional blank Session is visible only while it is the current DSH Session, uses the localized `New Session` label, and has no Session action menu; the binding remains browser/sidecar-owned even when the row is hidden. Session drag ordering is restricted to the current visual Main or Worktree group;
 - the Worktree dialog keeps Create as the default and exposes Import as a horizontal tab; Import candidates are branch-attached, non-root, unmanaged records supplied by the Host and selected through a standard dropdown, and imported records follow the same Session, binding, membership projection, opening, refresh, and recovery lifecycle as plugin-created records;
@@ -716,15 +719,16 @@ The Worktree surface is additive:
 - Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
   complete title, relative time, and current status; the card is suppressed while the Session menu
   is open or a row is being dragged.
-- Collapsed Workspace, Main, and Worktree rows receive one aggregate Session status from complete
-  eligible membership (after native blank/archive filtering) before search filtering and the five-row
-  limit are applied. At most one native `StateDot` is rendered in the trailing action rail; pending
-  interaction warnings (including waiting approval) take priority over running, and running takes
-  priority over completed. Idle Sessions do not contribute a group dot. The activity rail reserves
-  28px for the indicator plus a 4px label gap. Activity alone leaves long labels at rest;
-  pointer hover uses the shared native title marquee. Expansion, hover/focus, and menu-open state yield
-  the rail to its existing actions. Main and Worktree share
-  the same parameterized group-row path.
+- Collapsed Workspace tabs receive one aggregate Session status from complete eligible membership
+  (after native blank/archive filtering) before search filtering and the five-row limit are applied.
+  Running renders the native spinner, a pending-interaction warning renders the warning-colored
+  (yellow) dot, and an unread completion renders the success-colored (green) dot. The tab supplies the
+  localized status label and reserves the same 28px action rail. Collapsed Main and Worktree rows use
+  the same native mapping: pending interaction warnings (including waiting approval) take priority
+  over running, running takes priority over completed, and idle Sessions do not contribute a group
+  dot. Activity alone leaves long labels at rest; pointer hover uses the shared native title marquee.
+  Expansion, hover/focus, and menu-open state yield the rail to its existing actions. Main and
+  Worktree share the same parameterized group-row path.
 - The initial and newly observed Session order uses descending `updatedAt`; a newer user-message
   `updatedAt` then promotes that Session to the head of its current visual Main or Worktree group.
   The order store is browser-local and persists only group keys, Session IDs, and observed numeric

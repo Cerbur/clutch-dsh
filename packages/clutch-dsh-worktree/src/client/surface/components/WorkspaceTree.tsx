@@ -6,7 +6,7 @@ import {
   sessionMatchesQuery,
 } from '../../session/session-view.js';
 import { unboundSessionIds, workspaceSessionIds } from '../../view/view-mode.js';
-import { isMainExpanded, isWorkspaceExpanded } from '../../view/worktree-expand-state.js';
+import { isMainExpanded } from '../../view/worktree-expand-state.js';
 import { createNumberedWorktreeName, filterArchivedSessionIds } from '../../view/worktree-view.js';
 import { createMainWorktreeRecord } from '../../dashboard/dashboard-selection.js';
 import styles from '../../worktree.css';
@@ -55,6 +55,7 @@ export type WorkspaceTreeInput = {
   expansion: Pick<
     ReturnType<typeof useSessionExpansion>,
     | 'isCurrentSessionReveal'
+    | 'isWorkspaceOpen'
     | 'query'
     | 'expandedSessionGroups'
     | 'toggleWorkspace'
@@ -135,6 +136,7 @@ export function WorkspaceTree({
   } = source;
   const {
     isCurrentSessionReveal,
+    isWorkspaceOpen,
     query,
     expandedSessionGroups,
     toggleWorkspace,
@@ -221,9 +223,7 @@ export function WorkspaceTree({
               mainRef === undefined
                 ? t('worktree.main')
                 : t('worktree.mainWithBranch', { branch: mainRef });
-            const expanded =
-              isWorkspaceExpanded(expandSnapshot, workspace.workspaceId) ||
-              isCurrentSessionReveal('workspace:' + workspace.workspaceId);
+            const expanded = isWorkspaceOpen(workspace.workspaceId);
             const workspaceMatchesQuery = includesText(workspace.title, query);
             const workspaceMembershipSessionIds = filterArchivedSessionIds(
               workspaceSessionIds(workspaces, workspace.workspaceId, sessions.ids),
