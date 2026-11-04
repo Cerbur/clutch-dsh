@@ -21,7 +21,7 @@ function indexOfAny(source, patterns) {
 test('keeps English and Chinese plugin READMEs structurally aligned', async () => {
   assert.deepEqual(headingShape(readme), headingShape(readmeZh));
   assert.match(readme, /assets\/screenshots\/screenshots-en\.png/);
-  assert.match(readmeZh, /assets\/screenshots\/screenshots-en\.png/);
+  assert.match(readmeZh, /assets\/screenshots\/screenshots-zh\.png/);
   assert.match(readme, /assets\/screenshots\/screenshots-import\.png/);
   assert.match(readmeZh, /assets\/screenshots\/screenshots-import\.png/);
   assert.match(readme, /assets\/screenshots\/screenshots-dashboard\.png/);
