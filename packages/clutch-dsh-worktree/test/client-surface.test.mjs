@@ -1691,15 +1691,15 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
   );
   assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
-  // The activity lane is reserved by the row and the rail is anchored out of flow, so
-  // revealing actions can never reflow the label (design standard: no hover reflow).
+  // Actions own an intrinsic grid column; the title viewport stops before it
+  // when revealed, keeping the marquee endpoint clear of the first button.
   assert.match(
     styles,
-    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*position: absolute;[\s\S]*inset-inline-end: var\(--wt-row-inset\);/,
+    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*grid-area: 1 \/ 3;/,
   );
   assert.match(
     styles,
-    /\.worktreeRow\s*\{[\s\S]*padding-inline-end: calc\(var\(--wt-row-inset\) \+ 32px\);/,
+    /\.worktreeRow > \.worktreeLabel\s*\{[\s\S]*margin-inline-end: 32px;/,
   );
   assert.doesNotMatch(styles, /\.worktreeRow:hover \.treeActionSlot\s*\{/);
   assert.match(
@@ -1850,11 +1850,11 @@ test('separates collapsed running activity from native pointer-only title scroll
   assert.match(rowSource, /onPointerLeave=\{marquee\.leave\}/);
   assert.doesNotMatch(rowSource, /syncWorktreeLabelScroll|worktreeLabelPointerInsideRef/);
 
-  // The lane is constant: a collapsed group with activity shows its dot in the same
-  // reserved 32px lane, so activity never changes the label width either.
+  // At rest the title spans the action column except for the reserved 32px
+  // activity lane; activity alone never changes the title viewport.
   assert.match(
     styles,
-    /\.worktreeRow\s*\{[\s\S]*padding-inline-end: calc\(var\(--wt-row-inset\) \+ 32px\);/,
+    /\.worktreeRow > \.worktreeLabel\s*\{[\s\S]*margin-inline-end: 32px;/,
   );
   assert.match(styles, /\.groupActivity\s*\{[\s\S]*width: 28px;[\s\S]*height: 28px;/);
   assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.treeActionSlot \{/);

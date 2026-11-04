@@ -161,14 +161,17 @@ test('the disclosure follows the shared motion, press, and touch rules', () => {
   );
 });
 
-test('the activity lane is reserved so hover never reflows the label', () => {
-  // The shared `.workspaceRow, .worktreeRow` selector also ends with that text, so anchor
-  // on the standalone rule's first declaration.
+test('the action column sets the title viewport without moving the leading or action cells', () => {
   const row = rule(tree, '.worktreeRow {\n  min-height: 32px;');
-  assert.match(row, /padding-inline-end: calc\(var\(--wt-row-inset\) \+ 32px\);/);
+  assert.match(row, /grid-template-columns: var\(--wt-lead\) minmax\(0, 1fr\) max-content;/);
+  const label = rule(tree, '.worktreeRow > .worktreeLabel {');
+  assert.match(label, /grid-area: 1 \/ 2 \/ 2 \/ 4;/);
+  assert.match(label, /margin-inline-end: 32px;/);
+  const reveal = rule(tree, '.worktreeRow:hover .worktreeLabel,\n.worktreeRow[data-menu-open=');
+  assert.match(reveal, /grid-column-end: 3;/);
+  assert.match(reveal, /margin-inline-end: 4px;/);
   const rail = rule(tree, '.worktreeRow .treeActionSlot {');
-  assert.match(rail, /position: absolute;/);
-  assert.match(rail, /inset-inline-end: var\(--wt-row-inset\);/);
+  assert.match(rail, /grid-area: 1 \/ 3;/);
   assert.doesNotMatch(tree, /\.worktreeRow:hover \.treeActionSlot \{/);
 });
 

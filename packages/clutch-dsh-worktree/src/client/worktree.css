@@ -1260,15 +1260,29 @@
   width: 64px;
 }
 
-/* Group actions live in the reserved lane and are anchored to the row's right edge,
-   so revealing them never changes the label's width (no hover reflow). */
+/* The intrinsic action column owns the title's visible end. At rest the title
+   spans it, leaving only the activity lane; revealed controls narrow the actual
+   scroll viewport so the marquee tail and fade stop beside the first button.
+   The leading icon, title start and action positions remain fixed. */
+.worktreeRow > .worktreeIcon {
+  grid-area: 1 / 1;
+}
+
+.worktreeRow > .worktreeLabel {
+  grid-area: 1 / 2 / 2 / 4;
+  margin-inline-end: 32px;
+}
+
+.worktreeRow:hover .worktreeLabel,
+.worktreeRow[data-menu-open='true'] .worktreeLabel,
+.worktreeRow:focus-within .worktreeLabel {
+  grid-column-end: 3;
+  margin-inline-end: 4px;
+}
+
 .worktreeRow .treeActionSlot {
-  position: absolute;
-  inset-inline-end: var(--wt-row-inset);
-  top: 50%;
-  transform: translateY(-50%);
+  grid-area: 1 / 3;
   min-width: 0;
-  flex: 0 0 auto;
   width: auto;
   gap: 4px;
 }
@@ -1472,8 +1486,9 @@
 
 .worktreeRow {
   min-height: 32px;
-  /* Reserve the activity lane so a hover reveal never reflows the label. */
-  padding-inline-end: calc(var(--wt-row-inset) + 32px);
+  padding-block: 2px;
+  display: grid;
+  grid-template-columns: var(--wt-lead) minmax(0, 1fr) max-content;
 }
 
 /* Session rows indent to their group's label column, not one step past the row
