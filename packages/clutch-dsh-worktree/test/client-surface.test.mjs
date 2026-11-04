@@ -1626,7 +1626,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     styles,
     /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeIcon[\s\S]*display: none;/,
   );
-  assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
+  assert.match(styles, /\.treeChildren\s*\{[^}]*padding: 2px 0 5px 6px;/);
 });
 
 test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
@@ -1960,8 +1960,9 @@ test('polishes Main and Worktree row hover presentation', async () => {
 
   assert.match(
     styles,
-    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 20px;/,
+    /\.workspaceIcon,\s*\.worktreeIcon\s*\{[^}]*width: 20px;/,
   );
+  assert.match(styles, /\.disclosureButton\s*\{[^}]*width: 20px;/);
   assert.match(
     styles,
     /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
@@ -2119,8 +2120,9 @@ test('keeps current Session highlight without a leading inset frame', async () =
   assert.doesNotMatch(currentRule, /box-shadow/);
   assert.match(
     styles,
-    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 600;/,
+    /\.treeSessionContent\s*\{[^}]*font-weight: 400;/,
   );
+  assert.doesNotMatch(styles, /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[^}]*font-weight: 600;/);
 });
 
 test('temporarily reveals the current Session path without persisting it', async () => {

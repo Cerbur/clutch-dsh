@@ -121,7 +121,10 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 ### 打开 Worktree 模式
 
 Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
-三角标与 DSH 原生一致。包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
+三角标与 DSH 原生一致，并与原生 Workspace 列表对齐。Worktree 标题采用原生 Workspace 标题的字体和间距。
+Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
+Session 标题保持常规字重，选中的 Session 也不加粗。
+包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
 Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
 滚动到末尾；移出后恢复起点。启用减少动态效果时会直接显示末尾。
 

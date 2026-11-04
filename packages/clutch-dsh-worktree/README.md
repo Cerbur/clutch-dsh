@@ -129,7 +129,11 @@ Historical and imported external Worktrees stay in place. Historical Sessions an
 ### Open Worktree mode
 
 The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
-and rotating disclosure triangles match native DSH. An expanded Workspace containing the current
+and rotating disclosure triangles match native DSH and align with its Workspace list.
+The Worktree heading follows the native Workspace heading's typography and spacing.
+Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
+Session titles retain regular weight, including the selected Session.
+An expanded Workspace containing the current
 Session uses the native blue folder; other Workspace folders use the native gray. Hover over a long
 Session title or Worktree
 name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
