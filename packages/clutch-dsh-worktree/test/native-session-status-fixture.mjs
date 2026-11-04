@@ -172,7 +172,7 @@ export async function nativeStatusFixture(
     '../../session/session-view.js': sessionView,
     '../../session/session-selection.js': selection,
     '../../view/view-mode.js': { effectiveViewMode },
-    '../../overlay/sidebar-overlay-geometry.js': { useSidebarOverlayGeometry: () => ({}) },
+    '../../view/workspace-region-geometry.js': { useWorkspaceRegionGeometry: () => ({}) },
     '../shared.js': {
       EMPTY_FORK_RECOVERY_STORE: empty,
       EMPTY_FULL_ACCESS_CONFIRMATION_SNAPSHOT: () => undefined,

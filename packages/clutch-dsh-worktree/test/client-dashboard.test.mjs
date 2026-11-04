@@ -1623,6 +1623,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   const jsx = (type, props) => ({ type, props });
   const exports = {};
   new Function('require', 'exports', compiled)((name) => {
+    if (name === 'react-dom') return { createPortal: (node) => node };
     if (name === 'react')
       return {
         useState: () => [
@@ -1704,6 +1705,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     },
   };
   const surfaceInput = {
+    sidebarSeat: { element: {}, wide: true },
     t: (key) => en[key],
     manager: { updateWorktreeInstructions: async (input) => { calls.push(['saveInstructions', input]); return input.instructions; } },
     createSessionForWorktree() {},

@@ -10,6 +10,13 @@
 
 ## 1. 环境前置要求
 
+侧栏导航通过正式 `sidebar.workspaces` 插槽挂载，沿用现有 footer 入口。
+`node --test test/sidebar-workspace-slot.test.mjs` 使用安装依赖中的真实 DSH SlotRegistry、
+React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建、卸载清理，以及主对话和
+共享 Surface owner 的身份保持。原生列表 renderer 的 owner props 由测试提供；它不替代
+真实 Desktop 的玻璃材质、滚动和动画联调。`test/sidebar-glass.test.mjs` 检查生产 bundle
+不再包含侧栏遮蔽实现。Host API 与最低 DSH 依赖基线保持不变。
+
 Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
 共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
 `node --test test/navigation-loading.test.mjs test/navigation-surface.test.mjs` 在构建后验证

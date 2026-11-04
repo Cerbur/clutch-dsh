@@ -1051,7 +1051,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
   assert.doesNotMatch(surfaceSource, /Search Workspaces and Sessions/);
   assert.doesNotMatch(surfaceSource, /Retry Binding/);
   assert.doesNotMatch(surfaceSource, /No matching Workspaces/);
-  assert.match(surfaceSource, /sidebar-overlay-geometry/);
+  assert.match(surfaceSource, /workspace-region-geometry/);
 });
 
 test('formats Worktree view errors at render time and leaves plugin literals out of state', async () => {
@@ -1098,10 +1098,10 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /clearButton/);
 });
 
-test('bounds the surface to live native sidebar anchors', async () => {
+test('lays out the surface inside the semantic workspace seat without native DOM discovery', async () => {
   const source = await readSurfaceSource();
   const geometrySource = await readFile(
-    new URL('../src/client/overlay/sidebar-overlay-geometry.ts', import.meta.url),
+    new URL('../src/client/view/workspace-region-geometry.ts', import.meta.url),
     'utf8',
   );
   const styleSource = await readFile(
@@ -1109,13 +1109,14 @@ test('bounds the surface to live native sidebar anchors', async () => {
     'utf8',
   );
 
-  assert.match(source, /useSidebarOverlayGeometry/);
+  assert.match(source, /useWorkspaceRegionGeometry/);
+  assert.match(source, /createPortal/);
+  assert.match(source, /props.sidebarSeat.element/);
   assert.match(geometrySource, /ResizeObserver/);
-  assert.match(geometrySource, /MutationObserver/);
-  assert.match(geometrySource, /requestAnimationFrame/);
-  assert.match(geometrySource, /cancelAnimationFrame/);
+  assert.match(geometrySource, /observer\?\.disconnect/);
+  assert.doesNotMatch(geometrySource, /querySelector|closest|children\[|MutationObserver/);
   assert.doesNotMatch(styleSource, /\.surface \{[\s\S]*inset: 0 auto 0 0;/);
-  assert.match(styleSource, /\.surface \{[\s\S]*top: 0;/);
+  assert.match(styleSource, /\.surface \{\s*position: relative;/);
   assert.match(
     styleSource,
     /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.surface[\s\S]*transition: none;/,
