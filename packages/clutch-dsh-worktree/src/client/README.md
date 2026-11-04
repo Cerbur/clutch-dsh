@@ -6,7 +6,20 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 
 ## Runtime boundary
 
-- `layout/app-frame.ts` is the shared browser-only layout seam for Sidebar, Dashboard and future
+- Sidebar navigation mounts exclusively in DSH's `sidebar.workspaces` single slot, at priority
+  -10 while Worktree mode is active. The existing footer action toggles the shared mode store;
+  exit/disposal releases the registration so the native occupant wins again. Native registrations
+  and their child declarations remain owned by DSH. No DOM row order, array index, text label,
+  private class, or measured coordinate selects the navigation mount point.
+  `view/sidebar-workspace-slot.tsx` publishes the plugin-owned seat and the owner's `wide` state.
+  `WorktreeSurface` portals only its navigation into that seat; the persistent shell-overlay
+  owner retains data/actions, Hero and Dashboard across seat changes. CSS supplies normal flow
+  sizing and the native sidebar supplies material. `view/workspace-region-geometry.ts` observes
+  only that seat for activity-popover readiness, never to position or conceal native content.
+  This supersedes the historical sidebar overlay placement; the old geometry
+  helpers remain regression fixtures and are excluded from the production Client bundle.
+
+- `layout/app-frame.ts` is the browser-only layout seam for Dashboard and future
   Worktree overlays. Resolve the triggering surface's closest `[data-shell-overlay]`, then trace
   `[data-worktree-mode-action]` (or `[data-pane="sidebar"]`) to a direct frame child for the Sidebar.
   Resolve the optional right column with `[data-rightbar-col]`; `data-rightbar-collapsed` excludes it
@@ -14,9 +27,7 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   and accept only one remaining child whose finite rectangle spans the content track to the overlay
   bottom, leaving caption bands and resize handles intact. No first/last child or sibling adjacency
   is part of the contract, and no private shell classes are consulted.
-  The Sidebar root is the lowest measurable common ancestor of New Session and the footer action;
-  footer placement requires that action, never an unmarked trailing child. Missing, ambiguous or
-  invalid anchors restore native content. Both consumers re-resolve after layout mutations, track
+  Missing, ambiguous or invalid anchors restore native content. The Dashboard re-resolves after layout mutations, tracks
   replacement anchors, retain invalid geometry candidates for resize recovery, and disconnect on
   disposal. These rules supersede positional anchor assumptions in historical layout plans.
 - `worktree-connection.ts` is the only owner of the existing `/api` Connection calls, all
@@ -27,7 +38,10 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   existing history, committed-summary, and working-tree-file reads for one compact status projection when a
   valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
   not add a Git-specific endpoint or branch-list read.
-- `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with the fiber. It supplies the same manager to `sidebar.footer.action` and `shell.overlay`. `sidebar-overlay-geometry.ts` conceals only the native direct children covered between New Session and the footer, restoring visibility, opacity, inert and aria-hidden on collapse, anchor replacement, mode exit or disposal. Parent opacity also suppresses descendants that explicitly opt into visible presentation. On macOS, `worktree.css` makes the covered Worktree surface transparent so AppFrame's existing tint and native window vibrancy supply one continuous material. Other platforms and an unrecognized native structure retain the theme fill; reduced transparency uses a stronger fill.
+- `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with
+  the fiber. `shell.overlay` retains the shared view owner; `sidebar.footer.action` retains the
+  existing mode entry. Navigation inherits the native sidebar background on all platforms,
+  including its reduced-transparency behavior, without modifying native DOM presentation.
 - On Client load and `connection/reset`, a non-blocking, five-second Host probe uses the adapter's
   existing `listBindings` endpoint with an empty Workspace identity. An outer Gateway success,
   including an inner `WORKSPACE_NOT_FOUND`, proves Host composition without selecting user data.
@@ -207,22 +221,9 @@ both candidate reads and import mutations and releases the membership projection
 
 ## Conversation context
 
-The Sidebar overlay's New Session anchor excludes buttons inside native
-`data-window-drag` rows. On Web, the clickable brand and the dedicated action share
-the same aria-label, while shortcut glyphs can change the dedicated action's textContent.
-Using the brand would cover and conceal the whole logo/toggle row. The exclusion uses
-native chrome semantics rather than a platform flag, fixed inset or generated class name;
-if only the brand shortcut remains, the overlay has no anchor and yields zero coverage.
-
-Footer resolution prefers the plugin-owned `data-worktree-mode-action` marker rendered in
-`sidebar.footer.action` and walks to its direct child under the current native Sidebar root.
-When the marker is absent, the legacy last child is only a candidate: both paths require
-DOM order after the New Session content child, finite positive-height geometry below the
-New Session button, and containment within the root's vertical bounds. A misplaced or invalid
-marked footer fails closed rather than switching to a positional guess. Missing or invalid
-anchors yield zero coverage and restore native content; they never extend coverage to the root
-bottom. Mutation and resize observation retry resolution when the live layout recovers.
-This intentionally replaces the earlier unconditional last-child/root-bottom fallback.
+Sidebar navigation uses the workspace slot described above. Hero context and Dashboard stay
+in the shell overlay; navigation mount, fold, or declaration changes do not relocate them into
+the sidebar. The footer's plugin-owned marker remains available to Dashboard's frame resolver.
 
 ### Worktree dashboard
 

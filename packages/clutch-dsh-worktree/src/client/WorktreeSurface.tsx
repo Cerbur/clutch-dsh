@@ -20,6 +20,7 @@ import { useSurfaceSources } from './surface/state/useSurfaceSources.js';
 import { useWorktreeRegistration } from './surface/actions/useWorktreeRegistration.js';
 import type { WorktreeSurfaceProps } from './surface/types.js';
 import styles from './worktree.css';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { WorktreeDashboard } from './dashboard/WorktreeDashboard.js';
 import { DashboardRequest } from './dashboard/DashboardRequest.js';
@@ -41,7 +42,7 @@ import { buildSessionFileAddress, GitFileAddressError } from './dashboard/git/fi
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
-/** Composes independent surface state/action domains into the sidebar overlay. */
+/** Retains shared state/actions and portals navigation into the workspace slot. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
   const pendingDashboard = useRef<PendingDashboardNavigation>();
@@ -328,24 +329,16 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     ],
   );
   if (source.mode !== 'worktree') return null;
-  const { ref, width, bounds, collapsed } = source;
+  const { collapsed } = source;
   const { t } = props;
   return (
     <NotificationProvider t={t} openSettings={props.openErrorSettings}>
-      <aside
-        ref={ref}
+      {props.sidebarSeat && createPortal(<aside
         className={styles.surface}
         data-worktree-surface
         data-collapsed={collapsed || undefined}
-        data-native-sidebar-covered={source.nativeCovered || undefined}
         aria-hidden={collapsed || undefined}
         aria-label={t('mode.navigation')}
-        style={{
-          width: `${width}px`,
-          ...(bounds.ready
-            ? { top: `${bounds.top}px`, height: `${bounds.height}px` }
-            : { height: '0px', visibility: 'hidden' }),
-        }}
       >
         <div className={styles.wideContent}>
           <SurfaceHeader
@@ -394,7 +387,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           session={session}
         />
 
-      </aside>
+      </aside>, props.sidebarSeat.element)}
       {dashboard !== undefined &&
         dashboardRecord === undefined &&
         dashboard.sessionId === source.currentSessionId &&

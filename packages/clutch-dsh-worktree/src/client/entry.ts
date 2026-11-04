@@ -31,6 +31,8 @@ import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
+import type { WorktreeSurfaceInjected } from './surface/types.js';
+import { workspaceSidebarMount } from './view/sidebar-workspace-slot.js';
 import { WorktreeSettings } from './settings/WorktreeSettings.js';
 import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
 import { installWorktreeCommandActivity } from './command-activity.js';
@@ -211,6 +213,7 @@ export function apply(ctx: Context): void {
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  const mountWorkspaceSidebar = workspaceSidebarMount(slots);
   slots.inject('conversation.input.dock', () => slots.register({
     name: 'conversation.input.dock',
     id: 'clutch-dsh-worktree-steer',
@@ -549,7 +552,11 @@ export function apply(ctx: Context): void {
         id: 'clutch-dsh-worktree-navigation',
         store: viewStore,
         locale: WORKTREE_NS,
-        inject: () => ({
+        inject: (): WorktreeSurfaceInjected & {
+          mountWorkspaceSidebar: typeof mountWorkspaceSidebar;
+          hooks: { worktreeContext: typeof contextProjection.store };
+        } => ({
+          mountWorkspaceSidebar,
           available: true,
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {

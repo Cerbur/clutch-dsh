@@ -3,7 +3,7 @@ import {
   deriveSessionPresentationIndex,
   type SessionListLike,
 } from '../../session/session-view.js';
-import { useSidebarOverlayGeometry } from '../../overlay/sidebar-overlay-geometry.js';
+import { useWorkspaceRegionGeometry } from '../../view/workspace-region-geometry.js';
 import { effectiveViewMode } from '../../view/view-mode.js';
 import { currentSessionIdFromList } from '../../session/session-selection.js';
 import {
@@ -25,6 +25,7 @@ type Input = {
     | 'forkRecovery'
     | 'expandState'
     | 'sessionOrder'
+    | 'sidebarSeat'
   >;
 };
 
@@ -76,9 +77,7 @@ export function useSurfaceSources({ props }: Input) {
     () => deriveSessionPresentationIndex(sessions, sessionStatuses),
     [sessions.byId, sessionStatuses],
   );
-  const { ref, width, bounds, collapsed, nativeCovered } = useSidebarOverlayGeometry(
-    mode === 'worktree',
-  );
+  const { bounds, collapsed } = useWorkspaceRegionGeometry(props.sidebarSeat);
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
   return {
     preferredMode,
@@ -93,11 +92,8 @@ export function useSurfaceSources({ props }: Input) {
     expandSnapshot,
     sessionOrderSnapshot,
     sessionPresentations,
-    ref,
-    width,
     bounds,
     collapsed,
-    nativeCovered,
     archivedSessionIds,
   };
 }

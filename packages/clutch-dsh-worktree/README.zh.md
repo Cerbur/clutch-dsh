@@ -78,9 +78,10 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 | 功能                    | 预览                                                                                                                                 | 作用                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Worktree 导航**       | <img src="assets/screenshots/screenshots-en.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 在 DSH 原生 Sidebar 中增加 Worktree 模式。macOS desktop 下，面板共享 DSH 原生玻璃材质，避免叠加第二层底色或透出重复导航。其他平台保留主题底色；降低透明度时使用更强的底色。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
+| **Worktree 导航**       | <img src="assets/screenshots/screenshots-zh.png" width="420" alt="包含 Workspace、Main、Worktree 和 Session 行的 DSH Worktree 导航"> | 现有底部入口仅将原生 Workspace 浏览区域切换为 Worktree 模式。新会话、插件菜单和当前对话保持原位。面板继承原生 Sidebar 材质和透明度偏好。Workspace 展开与新 Session 行使用原生节奏的淡入和位移动画。每个 Workspace 下可以浏览 Local/Main 和 Git Worktree，再打开对应行绑定的 Session。 |
 | **创建和导入 Worktree** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree 创建与导入弹窗">                                      | 从本地或已获取的远端 branch 创建 Worktree，或原地登记已有的 branch-attached Worktree。导入不会移动、复制或编辑已有目录。                                                                                                                                                                                                               |
-| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示 Session 和 Worktree 操作的 Worktree Dashboard 预览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
+| **Worktree Dashboard**  | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="显示操作、指令和状态的 Worktree Dashboard 概览">   | 预览版 Dashboard 显示 Worktree 身份、路径、Session、Worktree/Main 指令、已连接操作、由 Host 提供的在应用中打开入口，以及受管理 Worktree 或 Main 的只读 Git 与变更视图。派生 Worktree 显示直接基线匹配项、路径、可用状态并支持打开对应 Dashboard；同步基线支持选择 Rebase 或 Merge baseline，并创建 Agent 任务会话。                                                                                         |
+| **Git 与变更** | <img src="assets/screenshots/screenshots-git-reviewer.png" width="420" alt="显示提交、变更文件和差异的 Git 与变更视图"> | 在只读视图中查看基线对比、提交、变更文件和差异。 |
 | **同步基线** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="提供 Rebase 与 Merge baseline 选项的同步基线弹窗"> | 选择 Rebase 或 Merge baseline，在当前 Worktree 创建原生 Agent 任务会话。 |
 | **Agent steer 提示** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="输入框上方的 Agent steer 接收记录，包含发送方与内容"> | 在接收方会话查看待处理与已接收的 steer 消息，接收不代表任务完成。 |
 | **Agent 工具设置（实验性）** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree 工具设置预览"> | 在通用设置中选择 `/cluworktree` 启用的能力，在 Local/Main 与各受管 Worktree 的 Dashboard 中独立配置自动注入。委派创建的 Session 默认仅获得结果回报。 |
@@ -121,7 +122,10 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 ### 打开 Worktree 模式
 
 Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
-三角标与 DSH 原生一致。包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
+三角标与 DSH 原生一致，并与原生 Workspace 列表对齐。Worktree 标题采用原生 Workspace 标题的字体和间距。
+Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
+Session 标题保持常规字重，选中的 Session 也不加粗。
+包含当前 Session 且已展开的 Workspace 使用原生蓝色文件夹，其他
 Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度
 滚动到末尾；移出后恢复起点。启用减少动态效果时会直接显示末尾。
 
@@ -135,11 +139,11 @@ Workspace 文件夹使用原生灰色。悬浮在过长的 Session 标题或 Wor
 收起原生 Sidebar 时，Web 和 desktop 的 Worktree 面板都会同步隐藏。macOS desktop 不保留
 收起后的窄栏，请使用原生标题栏控件重新展开。行动画遵循减少动态效果偏好，并在搜索、
 拖拽和首次加载时直接完成布局。
-Web 的 Worktree 导航从原生 DSH 品牌栏下方开始，保留可见且可点击的 Sidebar 按钮；
-新会话按钮显示快捷键时也不会遮挡顶部栏。
-如果无法安全识别原生 Sidebar 布局，插件会保留原生导航，不覆盖其控件；布局变化后会重新尝试定位。
-Worktree 导航与 Dashboard 支持在原生栏目之前、之间或之后插入额外标题栏或壳层控件的 AppFrame
-布局，并保持这些控件可用。
+Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览区域。
+品牌、新会话按钮、插件菜单、底部入口和当前对话保持原位。
+再次点击同一个底部入口即可恢复原生 Workspace 浏览器。侧栏挂载和折叠遵循 DSH 插槽契约，
+不通过文字、DOM 顺序或坐标定位原生行。
+导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 
 ### 活跃会话
 

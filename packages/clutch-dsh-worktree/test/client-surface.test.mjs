@@ -1051,7 +1051,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
   assert.doesNotMatch(surfaceSource, /Search Workspaces and Sessions/);
   assert.doesNotMatch(surfaceSource, /Retry Binding/);
   assert.doesNotMatch(surfaceSource, /No matching Workspaces/);
-  assert.match(surfaceSource, /sidebar-overlay-geometry/);
+  assert.match(surfaceSource, /workspace-region-geometry/);
 });
 
 test('formats Worktree view errors at render time and leaves plugin literals out of state', async () => {
@@ -1098,10 +1098,10 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /clearButton/);
 });
 
-test('bounds the surface to live native sidebar anchors', async () => {
+test('lays out the surface inside the semantic workspace seat without native DOM discovery', async () => {
   const source = await readSurfaceSource();
   const geometrySource = await readFile(
-    new URL('../src/client/overlay/sidebar-overlay-geometry.ts', import.meta.url),
+    new URL('../src/client/view/workspace-region-geometry.ts', import.meta.url),
     'utf8',
   );
   const styleSource = await readFile(
@@ -1109,13 +1109,14 @@ test('bounds the surface to live native sidebar anchors', async () => {
     'utf8',
   );
 
-  assert.match(source, /useSidebarOverlayGeometry/);
+  assert.match(source, /useWorkspaceRegionGeometry/);
+  assert.match(source, /createPortal/);
+  assert.match(source, /props.sidebarSeat.element/);
   assert.match(geometrySource, /ResizeObserver/);
-  assert.match(geometrySource, /MutationObserver/);
-  assert.match(geometrySource, /requestAnimationFrame/);
-  assert.match(geometrySource, /cancelAnimationFrame/);
+  assert.match(geometrySource, /observer\?\.disconnect/);
+  assert.doesNotMatch(geometrySource, /querySelector|closest|children\[|MutationObserver/);
   assert.doesNotMatch(styleSource, /\.surface \{[\s\S]*inset: 0 auto 0 0;/);
-  assert.match(styleSource, /\.surface \{[\s\S]*top: 0;/);
+  assert.match(styleSource, /\.surface \{\s*position: relative;/);
   assert.match(
     styleSource,
     /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.surface[\s\S]*transition: none;/,
@@ -1625,7 +1626,7 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     styles,
     /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeIcon[\s\S]*display: none;/,
   );
-  assert.match(styles, /\.treeChildren\s*\{[\s\S]*padding: 2px 0 5px 12px;/);
+  assert.match(styles, /\.treeChildren\s*\{[^}]*padding: 2px 0 5px 6px;/);
 });
 
 test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
@@ -1959,8 +1960,9 @@ test('polishes Main and Worktree row hover presentation', async () => {
 
   assert.match(
     styles,
-    /\.worktreeRow \.worktreeIcon,[\s\S]*\.worktreeRow \.disclosureButton\s*\{[\s\S]*width: 20px;/,
+    /\.workspaceIcon,\s*\.worktreeIcon\s*\{[^}]*width: 20px;/,
   );
+  assert.match(styles, /\.disclosureButton\s*\{[^}]*width: 20px;/);
   assert.match(
     styles,
     /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
@@ -2118,8 +2120,9 @@ test('keeps current Session highlight without a leading inset frame', async () =
   assert.doesNotMatch(currentRule, /box-shadow/);
   assert.match(
     styles,
-    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 600;/,
+    /\.treeSessionContent\s*\{[^}]*font-weight: 400;/,
   );
+  assert.doesNotMatch(styles, /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[^}]*font-weight: 600;/);
 });
 
 test('temporarily reveals the current Session path without persisting it', async () => {

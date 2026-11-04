@@ -32,6 +32,7 @@ import type { WorktreeExpandStateStore } from '../view/worktree-expand-state.js'
 import type { ForgottenWorktree, WorktreeForkRecoveryStore } from '../session/worktree-session-fork.js';
 import type { WorktreeSessionOrderStore } from '../session/worktree-session-order.js';
 import type { WorktreeViewReader } from '../view/worktree-view-read.js';
+import type { WorkspaceSeat } from '../view/sidebar-workspace-slot.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -57,6 +58,7 @@ export interface WorkspaceListLike {
 
 /** Apply-time facts and DSH navigation callbacks used by the surface. */
 export interface WorktreeSurfaceInjected {
+  readonly sidebarSeat?: WorkspaceSeat;
   readonly available: boolean;
   readonly openErrorSettings?: () => boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
