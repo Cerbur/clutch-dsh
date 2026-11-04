@@ -151,6 +151,7 @@ ESLint 是提交前独立必过的门禁，覆盖源码和测试文件；测试�
 - **开发指引**：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（环境准备、本地安装、联调、调试与贡献者门禁）
 - **发布指南**：[`docs/RELEASING.md`](docs/RELEASING.md)（包版本参数与发布前提）
 - **客户端规范**：[`src/client/README.md`](src/client/README.md)（Browser Consumer、Overlay 与 Connection 契约）
+- **截图标注规范**：[`docs/SCREENSHOT-ANNOTATION-SOP.md`](docs/SCREENSHOT-ANNOTATION-SOP.md)（框线、直接标签、对比图布局与制图流程）
 - **更新历史**：[`RELEASE-LOG.md`](RELEASE-LOG.md)（面向用户的双语版本更新日志）
 - **历史记录**：[`docs/superpowers/`](docs/superpowers/)、[`docs/issue-*`](docs/)（历史设计方案、实现计划与问题追踪，只读）
 
