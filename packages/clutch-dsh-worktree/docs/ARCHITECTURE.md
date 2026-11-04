@@ -639,9 +639,9 @@ Client 在准入前登记变更 ticket。仅当有 ready 基础投影、读取�
 （`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的
 完整读取之上做破坏性收敛：
 
-- Workspace 以左侧纵向 tab 呈现，同一时间最多一个 tab 打开。`openWorkspaceExclusive` 在同一个
+- Workspace 树同一时间只展开一个 Workspace。`openWorkspaceExclusive` 在同一个
   draft 中清除目标 ID 并折叠其余已知 Workspace；当前 Session 的临时 reveal 优先于持久选择，
-  随后由 layout effect 收敛到同一个 tab，避免导航瞬间出现两个打开的分组；
+  随后由 layout effect 收敛到同一个打开的 Workspace，避免导航瞬间出现两个打开的分组；
 - DSH 的 Session/Workspace 列表带单调的 `pending → ready` 到达相位；相位未 ready 时列表为空
   表示“尚未到达”，不表示“不存在”，此时不得据此推导 account 顺序或清理记录；
 - 只有 `readState.status === 'ready'`、Workspace 列表已确认且每个 Workspace 的 projection 都已
@@ -686,8 +686,8 @@ Refresh scope is determined by the smallest affected identity.
 - `subagentCatalog` 由原生 Controller 投影成包含 catalog-only children 的 `byId` lineage，
   插件复用既有关系并优先从 status 读取 child running，不新建 catalog 请求或完成状态 owner。
 - 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核、问题与完成未读等状态；
-- 关闭的 Workspace tab 从完整成员中聚合一个状态指示：运行中使用原生转圈，pending interaction warning
-  使用黄色 dot，未读完成使用绿色 dot，因此 tab 本身即可提示切换；打开 tab 或交互时该指示器让位；
+- 收起的 Workspace 行从完整成员中聚合一个状态指示：运行中使用原生转圈，pending interaction warning
+  使用黄色 dot，未读完成使用绿色 dot，因此该行本身即可提示切换；打开该 Workspace 或交互时该指示器让位；
 - 当 Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他
   pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。
   展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。

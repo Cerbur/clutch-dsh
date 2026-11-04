@@ -6,7 +6,7 @@ import type {
 /** Browser-local storage identity; never sent to DSH or the plugin sidecar. */
 export const WORKTREE_EXPAND_STATE_STORAGE_KEY = 'clutch-dsh-worktree.expand-state';
 
-/** Persisted structural exceptions; absent IDs are expanded, with at most one Workspace tab open. */
+/** Persisted structural exceptions; absent IDs are expanded, with at most one Workspace open. */
 export interface WorktreeExpandState {
   collapsedWorkspaceIds: Record<string, true>;
   collapsedMainWorkspaceIds: Record<string, true>;
@@ -16,7 +16,7 @@ export interface WorktreeExpandState {
 /** The browser-facing mutation set for the expand-state store. */
 export interface WorktreeExpandStateActions {
   toggleWorkspace: (workspaceId: string) => void;
-  /** Open one Workspace tab and collapse every other known Workspace. */
+  /** Open one Workspace and collapse every other known Workspace. */
   openWorkspaceExclusive: (workspaceId: string, workspaceIds: readonly string[]) => void;
   toggleMain: (workspaceId: string) => void;
   toggleWorktree: (worktreeId: string) => void;
@@ -74,11 +74,11 @@ export function isWorkspaceExpanded(state: WorktreeExpandState, workspaceId: str
 }
 
 /**
- * The one Workspace tab that owns the tree body.
+ * The one open Workspace that owns the tree body.
  *
  * A temporary current-Session reveal wins over the persisted choice so navigation
  * never waits for the store write. Otherwise the first uncollapsed Workspace is the
- * open tab; legacy records with several uncollapsed IDs render one tab and are
+ * open one; legacy records with several uncollapsed IDs render one Workspace and are
  * normalized by the caller.
  */
 export function resolveOpenWorkspaceId(

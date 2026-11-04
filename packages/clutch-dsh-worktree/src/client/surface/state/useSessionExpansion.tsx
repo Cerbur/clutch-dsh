@@ -101,7 +101,7 @@ export function useSessionExpansion({ read, source, props }: Input) {
     activeReveal.sessionId === currentSessionId &&
     currentRevealKeys.has(key) &&
     activeReveal.suppressedKeys[key] !== true;
-  // Workspaces behave as vertical tabs: exactly one owns the tree body. A temporary
+  // Only one Workspace is open at a time: exactly one owns the tree body. A temporary
   // current-Session reveal is the immediate choice; the store write below settles it.
   const revealedWorkspaceId =
     currentSessionLocation?.workspaceId !== undefined &&

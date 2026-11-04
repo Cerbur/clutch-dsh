@@ -981,14 +981,14 @@
   min-height: 34px;
 }
 
-/* Workspaces read as vertical tabs: the open tab owns the tree body, and every
-   closed tab carries its aggregated activity indicator at the action edge. The
+/* One Workspace is open at a time: the open row owns the tree body, and every
+   collapsed row carries its aggregated activity indicator at the action edge. The
    open state reuses the native hover fill instead of adding a custom accent bar. */
-.workspaceRow[data-workspace-tab='open'] {
+.workspaceRow[data-workspace-open='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.workspaceRow[data-workspace-tab='open'] .workspaceTitle {
+.workspaceRow[data-workspace-open='true'] .workspaceTitle {
   font-weight: 500;
 }
 

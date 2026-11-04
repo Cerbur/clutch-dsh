@@ -82,22 +82,23 @@ cancels all animations and removes clones.
 The plugin implements this behavior itself because DSH's AnimatedRows is an internal
 module rather than a public plugin export. It does not import that file or write DSH code.
 
-## Vertical Workspace tabs
+## One open Workspace
 
-Workspaces are the tree's top-level navigation, so they read as a left-hand vertical tab
-list rather than several simultaneously open sections. `openWorkspaceExclusive` writes one
-draft that clears the selected Workspace from `collapsedWorkspaceIds` and marks every other
-known Workspace collapsed. The open tab owns the Main/Worktree/Session body; activating
-another tab replaces it, and activating the open tab closes the body. A current-Session
-reveal wins for the first render and the follow-up layout effect persists that single tab,
-so navigating between Sessions never paints two open Workspaces.
+Workspaces are the tree's top-level navigation. To keep the sidebar focused, only one
+Workspace is expanded at a time instead of several sections staying open simultaneously.
+`openWorkspaceExclusive` writes one draft that clears the selected Workspace from
+`collapsedWorkspaceIds` and marks every other known Workspace collapsed. The open Workspace
+owns the Main/Worktree/Session body; activating another Workspace replaces it, and activating
+the open Workspace collapses the body. A current-Session reveal wins for the first render and
+the follow-up layout effect persists that single open Workspace, so navigating between Sessions
+never paints two open Workspaces.
 
-The active tab keeps the native row radius and reuses the native hover fill; the label stays
-at weight 500. No custom accent bar is drawn, so the open state composes from the same
-`interactive-bg-*` and label tokens as native DSH rows. Closed tabs reserve the existing
-28px action rail for one aggregated `StateDot` with the native state mapping: running renders
-the spinner, a pending-interaction state renders the warning (yellow) dot, and an unread
-completion renders the success (green) dot. The localized status label stays on the tab for
+The open Workspace row keeps the native row radius and reuses the native hover fill; the label
+stays at weight 500. No custom accent bar is drawn, so the open state composes from the same
+`interactive-bg-*` and label tokens as native DSH rows. Collapsed Workspace rows reserve the
+existing 28px action rail for one aggregated `StateDot` with the native state mapping: running
+renders the spinner, a pending-interaction state renders the warning (yellow) dot, and an unread
+completion renders the success (green) dot. The localized status label stays on the row for
 assistive technology and hover. Worktree health remains a separate leading indicator, and
 Main/Worktree group rows use the same native aggregate mapping.
 

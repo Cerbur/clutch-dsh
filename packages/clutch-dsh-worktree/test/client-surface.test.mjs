@@ -47,25 +47,25 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(clientReadme, /browser-local.*expansion|浏览器本地.*展开/i);
   assert.ok(
     readme.includes(
-      'Persist the open Workspace tab plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
+      'Persist the open Workspace plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
     ),
   );
   assert.ok(
     readmeZh.includes(
-      '将当前打开的 Workspace tab 以及 Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
+      '将当前打开的 Workspace 以及 Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
     ),
   );
-  assert.match(readme, /Workspaces behave as vertical tabs/i);
-  assert.match(readme, /only one\s+tab is open/i);
-  assert.match(readmeZh, /Workspace 以左侧纵向 tab 呈现/);
-  assert.match(readmeZh, /同一时间只有一个 tab 打开/);
-  assert.match(readme, /native running spinner while a Session is running/i);
+  assert.match(readme, /only one Workspace is expanded at a time/i);
+  assert.match(readme, /selecting another Workspace collapses the previous one/i);
+  assert.match(readmeZh, /同一时间只展开一个 Workspace/);
+  assert.match(readmeZh, /选择其他 Workspace 会收起前一个/);
+  assert.match(readme, /native running spinner while a Session\s+is\s+running/i);
   assert.match(readme, /yellow dot\s+while waiting for approval|yellow dot while waiting for approval/i);
   assert.match(readmeZh, /运行中时使用原生转圈/);
-  assert.match(readmeZh, /等待审批[\s\S]*黄色圆点/);
+  assert.match(readmeZh, /等待审批[\s\S]*黄色\s*圆点/);
   assert.ok(clientReadme.includes('clutch-dsh-worktree.expand-state'));
-  assert.match(clientReadme, /Missing Main or Worktree IDs are\s+expanded by default\./);
-  assert.match(clientReadme, /Workspaces are vertical tabs/i);
+  assert.match(clientReadme, /Missing Main or Worktree IDs\s+are\s+expanded by default\./);
+  assert.match(clientReadme, /Only one Workspace is open at a\s+time/i);
   assert.match(clientReadme, /openWorkspaceExclusive/);
   assert.ok(/The five-row Session overflow control remains transient,/.test(clientReadme));
   assert.ok(

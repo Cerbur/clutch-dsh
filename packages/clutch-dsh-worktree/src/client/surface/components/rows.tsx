@@ -186,7 +186,7 @@ export function WorktreeWorkspaceRow({
       className={`${styles.workspaceRow} ${markerClass}`}
       data-worktree-motion-key={`workspace:${workspace.workspaceId}`}
       data-workspace-drag={drag.active ? 'active' : undefined}
-      data-workspace-tab={expanded ? 'open' : 'closed'}
+      data-workspace-open={expanded ? 'true' : undefined}
       data-group-activity={groupActivityVisible ? 'true' : undefined}
       data-menu-open={menuOpen || undefined}
       draggable

@@ -29,11 +29,11 @@ test('renders every visible Session status in the right-side rail', async () => 
   assert.match(sessionView, /aggregateSessionStatus/);
   assert.match(rows, /groupActivityStatus.state/);
   assert.doesNotMatch(rows, /groupActivityDotState/);
-  assert.match(rows, /data-workspace-tab=/);
+  assert.match(rows, /data-workspace-open=/);
   assert.match(rows, /data-group-activity/);
   assert.match(rows, /groupActivity/);
   assert.match(rows, /!expanded/);
-  assert.match(css, /\.workspaceRow\[data-workspace-tab='open'\]/);
+  assert.match(css, /\.workspaceRow\[data-workspace-open='true'\]/);
   assert.match(surface, /sessionPresentations/);
   assert.match(surface, /groupActivityStatus=\{workspaceGroupActivityStatus\}/);
   assert.match(surface, /groupActivityStatus=\{aggregateSessionStatus\(/);

@@ -98,7 +98,7 @@ test('defaults Workspace, Main, and Worktree rows to expanded', () => {
   assert.equal(isWorktreeExpanded(store.getSnapshot(), 'wt-one'), true);
 });
 
-test('resolves one open Workspace tab with current-Session reveal precedence', () => {
+test('resolves one open Workspace with current-Session reveal precedence', () => {
   const state = (collapsed) => ({
     collapsedWorkspaceIds: collapsed,
     collapsedMainWorkspaceIds: {},
@@ -125,7 +125,7 @@ test('resolves one open Workspace tab with current-Session reveal precedence', (
   );
 });
 
-test('opens exactly one Workspace tab and persists the exclusive choice', () => {
+test('opens exactly one Workspace and persists the exclusive choice', () => {
   storage.clear();
   const store = createWorktreeExpandStateStore(createSnapshotStore);
 

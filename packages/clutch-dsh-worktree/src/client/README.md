@@ -612,11 +612,12 @@ and runtime cycles inside the new implementation directories.
 
 ### Browser-local expansion state
 
-The Client persists the open Workspace tab plus Main and Worktree expansion exceptions under
-clutch-dsh-worktree.expand-state in browser-local storage. Workspaces are vertical tabs:
-openWorkspaceExclusive removes the selected ID and collapses every other known Workspace,
-so only one tab owns the tree body. Missing Main or Worktree IDs are expanded by default.
-The first uncollapsed Workspace is the open tab when no current-Session reveal applies.
+The Client persists the open Workspace plus Main and Worktree expansion exceptions under
+clutch-dsh-worktree.expand-state in browser-local storage. Only one Workspace is open at a
+time: openWorkspaceExclusive removes the selected ID and collapses every other known Workspace,
+so one Workspace owns the tree body and the sidebar stays focused. Missing Main or Worktree IDs
+are expanded by default. The first uncollapsed Workspace is the open one when no current-Session
+reveal applies.
 The five-row Session overflow control remains transient,
 and parent collapse clears its affected temporary group state. The header's Collapse All
 action targets every Workspace, Main group, and Worktree except the Workspace and Worktree
@@ -720,10 +721,10 @@ The Worktree surface is additive:
 - Worktree Session rows use the native `HoverCard` after the standard 500 ms delay to show the
   complete title, relative time, and current status; the card is suppressed while the Session menu
   is open or a row is being dragged.
-- Collapsed Workspace tabs receive one aggregate Session status from complete eligible membership
+- Collapsed Workspace rows receive one aggregate Session status from complete eligible membership
   (after native blank/archive filtering) before search filtering and the five-row limit are applied.
   Running renders the native spinner, a pending-interaction warning renders the warning-colored
-  (yellow) dot, and an unread completion renders the success-colored (green) dot. The tab supplies the
+  (yellow) dot, and an unread completion renders the success-colored (green) dot. The row supplies the
   localized status label and reserves the same 28px action rail. Collapsed Main and Worktree rows use
   the same native mapping: pending interaction warnings (including waiting approval) take priority
   over running, running takes priority over completed, and idle Sessions do not contribute a group
