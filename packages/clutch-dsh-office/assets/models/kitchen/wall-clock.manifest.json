@@ -20,39 +20,18 @@
     "images": 3
   },
   "bounds": {
-    "min": [
-      -0.2199999988079071,
-      0,
-      0
-    ],
-    "max": [
-      0.2199999988079071,
-      0.42625004053115845,
-      0.08793535828590393
-    ]
+    "min": [-0.2199999988079071, 0, 0],
+    "max": [0.2199999988079071, 0.42625004053115845, 0.08793535828590393]
   },
   "dimensions": {
     "width": 0.4399999976158142,
     "height": 0.42625004053115845,
     "depth": 0.08793535828590393
   },
-  "requiredNodes": [
-    "鲸鱼木质壁钟",
-    "鲸鱼壁钟静态总成",
-    "wall_anchor",
-    "front_anchor"
-  ],
+  "requiredNodes": ["鲸鱼木质壁钟", "鲸鱼壁钟静态总成", "wall_anchor", "front_anchor"],
   "anchors": {
-    "wall_anchor": [
-      0,
-      0,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.21312502026557922,
-      0.08793535828590393
-    ]
+    "wall_anchor": [0, 0, 0],
+    "front_anchor": [0, 0.21312502026557922, 0.08793535828590393]
   },
   "budgets": {
     "triangles": 10000,
@@ -76,11 +55,7 @@
     "inputSha256": "fa612074667269fcd58e02f94089f00bcb97e81475614643421c2580acc8425f",
     "inputBytes": 21297836,
     "uniformScale": 0.44,
-    "sourceDimensions": [
-      1,
-      0.9687501192092896,
-      0.1998530924320221
-    ],
+    "sourceDimensions": [1, 0.9687501192092896, 0.1998530924320221],
     "script": "kitchen/wall-clock/work/2026-10-28-r1/scripts/build.py",
     "blender": "5.2.3 LTS"
   },
@@ -92,26 +67,17 @@
     "surfaceRegions": {
       "wood": {
         "pixels": 757474,
-        "roughnessRange": [
-          0.5428235530853271,
-          0.5703529715538025
-        ],
+        "roughnessRange": [0.5428235530853271, 0.5703529715538025],
         "metallic": 0
       },
       "whale-paint": {
         "pixels": 80881,
-        "roughnessRange": [
-          0.3231372535228729,
-          0.34431371092796326
-        ],
+        "roughnessRange": [0.3231372535228729, 0.34431371092796326],
         "metallic": 0
       },
       "cream-face": {
         "pixels": 197380,
-        "roughnessRange": [
-          0.5617254972457886,
-          0.5888627767562866
-        ],
+        "roughnessRange": [0.5617254972457886, 0.5888627767562866],
         "metallic": 0
       }
     },

@@ -24,10 +24,7 @@ export async function upgradeDwm(options = {}) {
     env.DWM_REF = options.ref;
   }
 
-  const scriptPath =
-    options.scriptPath ||
-    process.env.DWM_UPGRADE_SCRIPT_PATH ||
-    null;
+  const scriptPath = options.scriptPath || process.env.DWM_UPGRADE_SCRIPT_PATH || null;
 
   if (scriptPath && existsSync(scriptPath)) {
     if (!options.silent) {
@@ -56,24 +53,17 @@ export async function upgradeDwm(options = {}) {
     });
   }
 
-  const upgradeUrl =
-    options.scriptUrl ||
-    process.env.DWM_UPGRADE_URL ||
-    DEFAULT_UPGRADE_URL;
+  const upgradeUrl = options.scriptUrl || process.env.DWM_UPGRADE_URL || DEFAULT_UPGRADE_URL;
 
   if (!options.silent) {
     console.log(`[DWM] Fetching and executing upgrade script from GitHub: ${upgradeUrl}...`);
   }
 
   return new Promise((resolve) => {
-    const child = spawn(
-      'bash',
-      ['-c', 'curl -fsSL "$0" | bash', upgradeUrl],
-      {
-        stdio,
-        env,
-      },
-    );
+    const child = spawn('bash', ['-c', 'curl -fsSL "$0" | bash', upgradeUrl], {
+      stdio,
+      env,
+    });
 
     child.on('error', (err) => {
       resolve({ success: false, error: err.message });

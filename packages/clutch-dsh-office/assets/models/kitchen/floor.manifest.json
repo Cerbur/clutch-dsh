@@ -21,16 +21,8 @@
     "images": 5
   },
   "bounds": {
-    "min": [
-      -2.5999999046325684,
-      -0.25999999046325684,
-      -2.5999999046325684
-    ],
-    "max": [
-      2.5999999046325684,
-      0.02500000037252903,
-      2.5999999046325684
-    ]
+    "min": [-2.5999999046325684, -0.25999999046325684, -2.5999999046325684],
+    "max": [2.5999999046325684, 0.02500000037252903, 2.5999999046325684]
   },
   "dimensions": {
     "width": 5.199999809265137,
@@ -44,24 +36,10 @@
     "materials": 2,
     "primitives": 2
   },
-  "requiredNodes": [
-    "厨房底板",
-    "圆角木框",
-    "瓷砖地面",
-    "floor_surface",
-    "front_anchor"
-  ],
+  "requiredNodes": ["厨房底板", "圆角木框", "瓷砖地面", "floor_surface", "front_anchor"],
   "anchors": {
-    "floor_surface": [
-      0,
-      0.02500000037252903,
-      0
-    ],
-    "front_anchor": [
-      0,
-      0.02500000037252903,
-      2.5
-    ]
+    "floor_surface": [0, 0.02500000037252903, 0],
+    "front_anchor": [0, 0.02500000037252903, 2.5]
   },
   "source": {
     "library": "office",
@@ -140,17 +118,9 @@
     "collisionDisplacement": false
   },
   "placementHint": {
-    "position": [
-      0,
-      0,
-      0.5
-    ],
+    "position": [0, 0, 0.5],
     "rotationYRadians": 0,
-    "scale": [
-      1,
-      1,
-      1
-    ],
+    "scale": [1, 1, 1],
     "topY": 0.025
   },
   "validation": {
@@ -162,46 +132,31 @@
     "images": [
       {
         "name": "木框_底色",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "packed": true,
         "hasData": true
       },
       {
         "name": "木框_法线",
-        "size": [
-          1024,
-          1024
-        ],
+        "size": [1024, 1024],
         "packed": true,
         "hasData": true
       },
       {
         "name": "瓷砖_底色",
-        "size": [
-          2048,
-          2048
-        ],
+        "size": [2048, 2048],
         "packed": true,
         "hasData": true
       },
       {
         "name": "瓷砖_法线",
-        "size": [
-          2048,
-          2048
-        ],
+        "size": [2048, 2048],
         "packed": true,
         "hasData": true
       },
       {
         "name": "瓷砖_粗糙度",
-        "size": [
-          2048,
-          2048
-        ],
+        "size": [2048, 2048],
         "packed": true,
         "hasData": true
       }

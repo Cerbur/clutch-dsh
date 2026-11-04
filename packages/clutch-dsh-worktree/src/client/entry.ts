@@ -31,6 +31,8 @@ import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
+import type { WorktreeSurfaceInjected } from './surface/types.js';
+import { workspaceSidebarMount } from './view/sidebar-workspace-slot.js';
 import { WorktreeSettings } from './settings/WorktreeSettings.js';
 import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
 import { installWorktreeCommandActivity } from './command-activity.js';
@@ -200,11 +202,18 @@ export function apply(ctx: Context): void {
     'clutch-dsh-worktree: locale dictionaries',
   );
   const manager = createWorktreeConnectionAdapter(ctx.connection.rpc);
-  const viewReader = createWorktreeViewReader(manager);
+  const viewReader = createWorktreeViewReader(manager, (workspaceId) => {
+    const snapshot = ctx.workspaces.list.getSnapshot();
+    return {
+      sessionIds: snapshot.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [],
+      pending: snapshot.phase !== undefined && snapshot.phase !== 'ready',
+    };
+  });
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
+  const mountWorkspaceSidebar = workspaceSidebarMount(slots);
   slots.inject('conversation.input.dock', () => slots.register({
     name: 'conversation.input.dock',
     id: 'clutch-dsh-worktree-steer',
@@ -299,6 +308,9 @@ export function apply(ctx: Context): void {
   };
   const syncSessionWorkspaces = (bindings: readonly VirtualWorkspaceBinding[]): void => {
     virtualWorkspaceMembership.sync(bindings);
+  };
+  const syncWorkspaceSessions = (workspaceId: string, bindings: readonly VirtualWorkspaceBinding[]): void => {
+    virtualWorkspaceMembership.syncWorkspace(workspaceId, bindings);
   };
 
   const forkableSessions = ctx.sessions as unknown as ForkableSessions;
@@ -540,7 +552,11 @@ export function apply(ctx: Context): void {
         id: 'clutch-dsh-worktree-navigation',
         store: viewStore,
         locale: WORKTREE_NS,
-        inject: () => ({
+        inject: (): WorktreeSurfaceInjected & {
+          mountWorkspaceSidebar: typeof mountWorkspaceSidebar;
+          hooks: { worktreeContext: typeof contextProjection.store };
+        } => ({
+          mountWorkspaceSidebar,
           available: true,
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
@@ -638,6 +654,7 @@ export function apply(ctx: Context): void {
             ),
           ensureSessionWorkspace,
           syncSessionWorkspaces,
+          syncWorkspaceSessions,
           forkRecovery: forkCoordinator?.recovery,
           retryForkSession: forkCoordinator === undefined
             ? undefined

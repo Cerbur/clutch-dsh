@@ -1,5 +1,45 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.24 — 2026-11-04
+
+### 中文
+
+#### 优化
+
+- Worktree 导航接入原生 Workspace 侧栏区域，保留新建会话、插件菜单与当前对话，并沿用原生侧栏材质和透明度设置。
+- 对齐原生侧栏字体并收紧导航间距，让 Workspace、Worktree 与 Session 列表更紧凑。
+- 更新中英文使用文档中的界面截图，展示当前导航、Dashboard 与 Git 变更视图。
+
+### English
+
+#### Improved
+
+- Integrate Worktree navigation into the native Workspace sidebar region, preserving New Session, plugin menus, and the current conversation while inheriting native sidebar material and transparency preferences.
+- Align typography with the native sidebar and tighten navigation spacing for more compact Workspace, Worktree, and Session lists.
+- Refresh UI screenshots in the English and Chinese guides to show the current navigation, Dashboard, and Git changes views.
+
+## 0.1.23 — 2026-11-04
+
+### 中文
+
+#### 优化
+
+- 共享导航读取并保留渐进式加载，改善 Worktree 导航体验。
+
+#### 修复
+
+- 修复列表投影重放时 Local 会话可能丢失的问题。
+
+### English
+
+#### Improved
+
+- Share navigation reads while preserving progressive loading to improve Worktree navigation.
+
+#### Fixed
+
+- Preserve Local sessions when list projections are replayed.
+
 ## 0.1.22 — 2026-11-02
 
 ### 中文
@@ -383,7 +423,6 @@
 #### Improved
 
 - Raise the minimum DSH compatibility floor to `dsh-v0.1.5-rc.1` and update all `@deepseek-ai/dsh-*` peerDependencies to `>=0.1.5-rc.1` to resolve prerelease dependency resolution in modern DSH environments.
-
 
 ## 0.1.11 — 2026-09-14
 

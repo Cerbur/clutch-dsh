@@ -67,7 +67,7 @@ export function SurfaceHeader({ expansion, props, source, read, mutation, onOpen
   return (
     <>
       <header className={styles.header}>
-        <span className={cx(styles.title, searchExpanded && styles.titleHidden)}>
+        <span className={cx(styles.sidebarTitle, searchExpanded && styles.titleHidden)}>
           {t('worktree.title')}
         </span>
         <div className={cx(styles.searchSlot, searchExpanded && styles.searchSlotExpanded)}>

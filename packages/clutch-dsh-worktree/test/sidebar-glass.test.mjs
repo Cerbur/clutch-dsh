@@ -9,32 +9,21 @@ const stylesheet = await readFile(
 );
 const bundledClient = await readFile(path.resolve(import.meta.dirname, '../lib/client.js'), 'utf8');
 
-test('glass material belongs to the visible Worktree overlay', () => {
+test('workspace seat inherits the native sidebar material without another background layer', () => {
   assert.ok(stylesheet.includes('.surface {'));
-  assert.ok(
-    stylesheet.includes("[data-platform='darwin'] .surface[data-native-sidebar-covered='true']"),
-  );
-  assert.ok(stylesheet.includes('[data-sidebar-collapsed] [data-shell-overlay] .surface,'));
-  assert.ok(stylesheet.includes('background: var(--dsw-specific-sidebar-fill)'));
-  assert.ok(stylesheet.includes('background: transparent'));
-  assert.ok(
-    stylesheet.includes('color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent)'),
-  );
+  assert.match(stylesheet, /\.surface \{[^}]*background: transparent;/);
+  assert.ok(stylesheet.includes(".surface[data-collapsed='true']"));
+  assert.ok(!stylesheet.includes('data-native-sidebar-covered'));
   assert.equal(
     stylesheet.includes('backdrop-filter:'),
     false,
     'native vibrancy supplies the only glass material',
   );
-  assert.ok(stylesheet.includes('prefers-reduced-transparency: reduce'));
-  assert.ok(stylesheet.includes('background: var(--dsw-specific-sidebar-fill)'));
 });
 
-test('client bundling preserves the plugin surface glass material', () => {
-  assert.ok(
-    bundledClient.includes(
-      '[data-sidebar-collapsed] [data-shell-overlay] .-cerbur-clutch-dsh-worktree-surface',
-    ),
-  );
-  assert.ok(bundledClient.includes('data-native-sidebar-covered'));
-  assert.ok(bundledClient.includes('coveredSidebarChildren'));
+test('client bundle uses the workspace slot and excludes the retired sidebar concealment', () => {
+  assert.ok(bundledClient.includes('data-worktree-workspace-seat'));
+  assert.ok(bundledClient.includes('sidebar.workspaces'));
+  assert.ok(!bundledClient.includes('data-native-sidebar-covered'));
+  assert.ok(!bundledClient.includes('coveredSidebarChildren'));
 });

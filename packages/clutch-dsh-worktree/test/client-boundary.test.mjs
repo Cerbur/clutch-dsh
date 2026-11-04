@@ -27,7 +27,7 @@ test('browser Client modules do not import Host, Manage, Provider, or Node runti
   }
 });
 
-test('Client registers the two additive extension points without replacing sidebar.workspaces', async () => {
+test('Client retains footer and shell entries and mounts navigation through the workspace slot', async () => {
   const sources = await Promise.all(
     (await sourceFiles(clientRoot)).map((file) => readFile(file, 'utf8')),
   );
@@ -36,7 +36,10 @@ test('Client registers the two additive extension points without replacing sideb
   assert.match(source, /shell\.overlay/);
   assert.match(source, /ResizeObserver/);
   assert.match(source, /data-shell-overlay/);
-  assert.doesNotMatch(source, /name:\s*['"]sidebar\.workspaces['"]/);
+  const seat = await readFile(path.join(clientRoot, 'view/sidebar-workspace-slot.tsx'), 'utf8');
+  assert.match(seat, /name:\s*['"]sidebar\.workspaces['"]/);
+  assert.match(seat, /priority: -10/);
+  assert.doesNotMatch(seat, /querySelector|closest|children\[|getBoundingClientRect/);
 });
 
 test('keeps Connection RPC wire details inside the browser adapter', async () => {

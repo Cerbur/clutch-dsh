@@ -56,6 +56,10 @@ export function createWorktreeRemoteProjection(
   manager: WorktreeManager,
 ): WorktreeRemoteManager {
   return {
+    readWorkspaceNavigation: (input) => project(() => {
+      if (!manager.readWorkspaceNavigation) throw new Error('Workspace navigation read unavailable');
+      return manager.readWorkspaceNavigation(input);
+    }),
     readWorktreeSessionState: (input) => project(() => {
       if (!manager.readWorktreeSessionState) throw new Error('Session state read unavailable');
       return manager.readWorktreeSessionState(input);

@@ -3,7 +3,7 @@ import {
   deriveSessionPresentationIndex,
   type SessionListLike,
 } from '../../session/session-view.js';
-import { useSidebarOverlayGeometry } from '../../overlay/sidebar-overlay-geometry.js';
+import { useWorkspaceRegionGeometry } from '../../view/workspace-region-geometry.js';
 import { effectiveViewMode } from '../../view/view-mode.js';
 import { currentSessionIdFromList } from '../../session/session-selection.js';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../shared.js';
 import { useActivityFilter } from './useActivityFilter.js';
 import type { WorkspaceListLike, WorktreeSurfaceProps } from '../types.js';
+import { retainPendingWorkspaces } from '../selectors.js';
 
 type Input = {
   props: Pick<
@@ -26,6 +27,7 @@ type Input = {
     | 'forkRecovery'
     | 'expandState'
     | 'sessionOrder'
+    | 'sidebarSeat'
   >;
 };
 
@@ -46,7 +48,13 @@ export function useSurfaceSources({ props }: Input) {
   const sessions = useSessions((state) => state) as SessionListLike;
   // Root hook is absent on legacy clients; do not create a second unread owner.
   const sessionStatuses = useSessionStatus?.((state) => state);
-  const workspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const nativeWorkspaces = useWorkspaces((state) => state) as WorkspaceListLike;
+  const retainedWorkspaces = useRef<WorkspaceListLike>();
+  const workspaces = useMemo(() => {
+    const next = retainPendingWorkspaces(retainedWorkspaces.current, nativeWorkspaces);
+    retainedWorkspaces.current = next;
+    return next;
+  }, [nativeWorkspaces]);
   const forkRecoveryStore = forkRecovery ?? EMPTY_FORK_RECOVERY_STORE;
   const forkRecoverySnapshot = useSyncExternalStore(
     forkRecoveryStore.subscribe,
@@ -71,9 +79,7 @@ export function useSurfaceSources({ props }: Input) {
     () => deriveSessionPresentationIndex(sessions, sessionStatuses),
     [sessions.byId, sessionStatuses],
   );
-  const { ref, width, bounds, collapsed, nativeCovered } = useSidebarOverlayGeometry(
-    mode === 'worktree',
-  );
+  const { bounds, collapsed } = useWorkspaceRegionGeometry(props.sidebarSeat);
   const archivedSessionIds = workspaces.archivedSessionIds ?? [];
   const activity = useActivityFilter({
     props,
@@ -99,11 +105,8 @@ export function useSurfaceSources({ props }: Input) {
     sessionOrderSnapshot,
     sessionPresentations,
     activity,
-    ref,
-    width,
     bounds,
     collapsed,
-    nativeCovered,
     archivedSessionIds,
   };
 }

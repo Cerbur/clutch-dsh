@@ -21,58 +21,29 @@
     "images": 0
   },
   "bounds": {
-    "min": [
-      -0.26722100377082825,
-      0.00003897653368767351,
-      -0.32642749560230766
-    ],
-    "max": [
-      0.26720699667930603,
-      0.9633151650428772,
-      0.326427493516922
-    ]
+    "min": [-0.26722100377082825, 0.00003897653368767351, -0.32642749560230766],
+    "max": [0.26720699667930603, 0.9633151650428772, 0.326427493516922]
   },
   "dimensions": {
     "width": 0.5344280004501343,
     "height": 0.9632761885091895,
     "depth": 0.6528549891192297
   },
-  "requiredNodes": [
-    "垃圾桶",
-    "桶身",
-    "桶盖",
-    "踏板"
-  ],
+  "requiredNodes": ["垃圾桶", "桶身", "桶盖", "踏板"],
   "anchors": {
-    "桶盖": [
-      0,
-      0.85,
-      -0.326427
-    ],
-    "踏板": [
-      0,
-      0.128472,
-      0.242167
-    ]
+    "桶盖": [0, 0.85, -0.326427],
+    "踏板": [0, 0.128472, 0.242167]
   },
   "pivots": {
     "桶盖": {
-      "position": [
-        0,
-        0.85,
-        -0.326427
-      ],
+      "position": [0, 0.85, -0.326427],
       "axis": "local-X",
       "side": "rear",
       "openRotationDirection": "negative-X",
       "maxRecommendedOpenAngleDegrees": 70
     },
     "踏板": {
-      "position": [
-        0,
-        0.128472,
-        0.242167
-      ],
+      "position": [0, 0.128472, 0.242167],
       "axis": "local-X",
       "side": "rear",
       "pressRotationDirection": "positive-X",
@@ -90,9 +61,7 @@
     "input": "kitchen/trash-can/lookdev/2026-10-28-candy-r1/inputs/trash-can.glb",
     "inputSha256": "5e564460e4fab56449e2b2a1daf3c83872d9574baddae71393081d351150f83d",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/trash-can/work/2026-10-28-candy-r1/build_candy_material.py"
-    ]
+    "pipeline": ["kitchen/trash-can/work/2026-10-28-candy-r1/build_candy_material.py"]
   },
   "references": [
     {

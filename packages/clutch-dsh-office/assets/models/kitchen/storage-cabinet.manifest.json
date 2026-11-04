@@ -21,16 +21,8 @@
   },
   "drawCalls": 1,
   "bounds": {
-    "min": [
-      -0.524876594543457,
-      0.0005007862928323448,
-      -0.3528710901737213
-    ],
-    "max": [
-      0.5251103639602661,
-      1.4133415222167969,
-      0.3531339466571808
-    ]
+    "min": [-0.524876594543457, 0.0005007862928323448, -0.3528710901737213],
+    "max": [0.5251103639602661, 1.4133415222167969, 0.3531339466571808]
   },
   "dimensions": {
     "width": 1.0499869585037231,
@@ -42,10 +34,7 @@
     "bytes": 8388608,
     "scope": "storage-cabinet"
   },
-  "requiredNodes": [
-    "置物柜",
-    "置物柜_用户原件静态总成"
-  ],
+  "requiredNodes": ["置物柜", "置物柜_用户原件静态总成"],
   "references": [
     {
       "referenceId": "kitchen/main",
@@ -60,9 +49,7 @@
     "input": "kitchen/storage-cabinet/lookdev/2026-10-28-candy-r1/inputs/storage-cabinet.glb",
     "inputSha256": "0eeb04aabea9d090ffc0dab2279c55027ae72cc54611335493f962496ef86e55",
     "blender": "5.2.3 LTS",
-    "pipeline": [
-      "kitchen/storage-cabinet/work/2026-10-28-candy-r1/build_candy_material.py"
-    ]
+    "pipeline": ["kitchen/storage-cabinet/work/2026-10-28-candy-r1/build_candy_material.py"]
   },
   "style": {
     "id": "office-soft-toy-v1",

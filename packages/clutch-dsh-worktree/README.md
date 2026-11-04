@@ -80,14 +80,25 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 | Feature                         | Preview                                                                                                                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | Adds a Worktree mode to the native DSH Sidebar. On macOS desktop, the panel shares DSH's native glass material without a second background layer or duplicate navigation showing through. Other platforms retain the theme fill; reduced transparency uses a stronger fill. Workspace tab switching and new Session rows use native-style fades and movement; a closed tab shows the running spinner, approval dot, or completion dot. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
+| **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | The existing footer entry switches only the native Workspace browsing region to Worktree mode. New Session, plugin menus, and the current conversation remain in place. The panel inherits the native Sidebar material and transparency preferences; on macOS desktop it shares DSH's native glass material without a second background layer or duplicate navigation showing through, while other platforms keep the theme fill. Workspace tab switching and new Session rows use native-style fades and movement; a closed tab shows the running spinner, approval dot, or completion dot at its action edge. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
-| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard preview with Sessions and Worktree actions">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
+| **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard overview with actions, instructions, and status">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
+| **Git & Changes** | <img src="assets/screenshots/screenshots-git-reviewer.png" width="420" alt="Git and Changes view with commits, changed files, and diff"> | Review baseline comparisons, commits, changed files, and diffs in a read-only view. |
 | **Baseline synchronization** | <img src="assets/screenshots/screenshots-baseline-sync.png" width="420" alt="Sync with Base dialog with Rebase and Merge baseline choices"> | Choose Rebase or Merge baseline and create a native Agent task Session in the current Worktree. |
 | **Agent steer feedback** | <img src="assets/screenshots/screenshots-agent-steer.jpg" width="420" alt="Agent steer receipt above the input box, with sender and content"> | Inspect pending and received steer messages in the recipient Session without treating receipt as task completion. |
 | **Agent tool settings (Experimental)** | <img src="assets/screenshots/screenshots-worktree-tool.png" width="420" alt="Worktree tool settings preview">                               | Choose capabilities for `/cluworktree` in General, and independently configure automatic injection in Local/Main and managed Worktree Dashboards. Delegated Sessions receive result reporting only by default. |
 
 ## Usage
+
+Worktree view loads Workspaces independently, prioritizing the current Session's Workspace
+and expanded Workspaces with bounded background reads. A slow or failed Workspace does not
+hide other ready Workspaces. Returning to Worktree mode immediately keeps the previous content
+visible while checking for external Git changes. Unloaded bindings are never shown as Local
+Sessions; a failed Workspace can be retried in **Errors & Repair**.
+Sessions appearing after a cached read stay unclassified until their bindings are checked.
+Refreshing during an incomplete native list replay keeps previously verified Local Sessions visible.
+Each Workspace keeps its own failure details. Older Hosts without the navigation endpoint
+use the previous read path; reload the updated Host to benefit from the reduced Git probes.
 
 Opening a newly created or reused Worktree Session waits for its Worktree grouping to be ready,
 so it appears directly under that Worktree without briefly appearing in Local. If the grouping
@@ -119,16 +130,19 @@ Historical and imported external Worktrees stay in place. Historical Sessions an
 ### Open Worktree mode
 
 The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
-and rotating disclosure triangles match native DSH. Workspaces behave as vertical tabs: only one
-tab is open and owns the Local/Main, Worktree, and Session tree. Selecting another tab closes the
-previous one; selecting the open tab closes the tree. A closed tab carries one aggregated status
-indicator at its action edge: the native running spinner while a Session is running, a yellow dot
-while waiting for approval or another interaction, and a green dot for an unread completion, so
-another Workspace can pull attention without opening it.
+and rotating disclosure triangles match native DSH and align with its Workspace list.
+The Worktree heading follows the native Workspace heading's typography and spacing.
+Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
+Workspaces behave as vertical tabs: only one tab is open and owns the Local/Main, Worktree,
+and Session tree. Selecting another tab closes the previous one; selecting the open tab
+closes the tree. A closed tab carries one aggregated status indicator at its action edge: the
+native running spinner while a Session is running, a yellow dot while waiting for approval or
+another interaction, and a green dot for an unread completion, so another Workspace can pull
+attention without opening it.
+Session titles retain regular weight; the current Session keeps a subtle weight-500 emphasis.
 An open Workspace containing the current Session uses the native blue folder; other Workspace
-folders use the native gray. Hover over a long Session title or Worktree
-name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
-tail immediately.
+folders use the native gray. Hover over a long Session title or Worktree name to reveal its
+tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
 
 1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
 2. Search or select a Workspace tab in the Worktree tree.
@@ -141,12 +155,12 @@ tail immediately.
 Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
 keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
 reduced motion and settles immediately during search, drag, and initial loading.
-On Web, Worktree navigation starts below the native DSH brand row, leaving its Sidebar toggle
-visible and clickable even when the New Session action displays keyboard shortcuts.
-If the native Sidebar layout cannot be safely recognized, the plugin leaves native navigation
-visible rather than covering its controls. It retries when the layout changes.
-Worktree navigation and Dashboard support AppFrame layouts with extra titlebar or shell controls
-before, between, or after the native columns, while keeping those controls accessible.
+Worktree replaces only the Workspace browsing region through DSH's `sidebar.workspaces` slot.
+The brand, New Session button, plugin menus, footer, and current conversation stay in place.
+Select the same footer entry again to restore the native Workspace browser. Sidebar placement
+and folding follow DSH's slot contract, without locating native rows by text, DOM order, or coordinates.
+The navigation inherits the native Sidebar material and transparency preferences. Dashboard
+remains an independent overlay opened explicitly from its existing actions.
 
 ### Filter Sessions by activity
 

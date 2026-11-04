@@ -3,9 +3,7 @@
   "assetId": "character/deepseek",
   "assetType": "character",
   "displayName": "DeepSeek",
-  "compatibleScenes": [
-    "kitchen"
-  ],
+  "compatibleScenes": ["kitchen"],
   "revision": "2026-10-29-face-blink-r2",
   "status": "ready",
   "file": "deepseek.glb",
@@ -29,16 +27,8 @@
     "morphTargets": 4
   },
   "bounds": {
-    "min": [
-      -0.540632426738739,
-      0,
-      -0.5822924971580505
-    ],
-    "max": [
-      0.5951660871505737,
-      1.5,
-      0.2688155770301819
-    ]
+    "min": [-0.540632426738739, 0, -0.5822924971580505],
+    "max": [0.5951660871505737, 1.5, 0.2688155770301819]
   },
   "dimensions": {
     "width": 1.1357985138893127,
@@ -101,21 +91,9 @@
     "deepseek": null
   },
   "anchors": {
-    "nameplate_anchor": [
-      0,
-      1.6200000047683716,
-      0
-    ],
-    "look_anchor": [
-      0,
-      1.1799999475479126,
-      0.12999999523162842
-    ],
-    "forward_anchor": [
-      0,
-      0,
-      0.5
-    ]
+    "nameplate_anchor": [0, 1.6200000047683716, 0],
+    "look_anchor": [0, 1.1799999475479126, 0.12999999523162842],
+    "forward_anchor": [0, 0, 0.5]
   },
   "budget": {
     "scope": "this-character-face-blink-revision; two added PBR materials for clean face and transferred eye artwork, not a global asset-budget change",
@@ -129,10 +107,7 @@
     "rigged": true,
     "skinned": true,
     "morphTargets": true,
-    "animationClips": [
-      "Walk_InPlace",
-      "Blink"
-    ],
+    "animationClips": ["Walk_InPlace", "Blink"],
     "wholeBodyTranslation": true,
     "wholeBodyRotation": true,
     "bodyOffset": true,
@@ -143,11 +118,7 @@
     "independentLeftRightEyelids": true
   },
   "placement": {
-    "runtimeScale": [
-      1,
-      1,
-      1
-    ],
+    "runtimeScale": [1, 1, 1],
     "groundOffsetBaked": false,
     "rearExtent": 0.5822924971580505,
     "frontExtent": 0.2688155770301819,
@@ -156,20 +127,9 @@
     "feetSupportBandMeters": 0.015,
     "feetSupportBounds": {
       "heightMeters": 0.015,
-      "min": [
-        -0.14860597252845764,
-        0,
-        -0.10648868978023529
-      ],
-      "max": [
-        0.14860597252845764,
-        0.014827911742031574,
-        0.10648868978023529
-      ],
-      "centerXZ": [
-        0,
-        0
-      ],
+      "min": [-0.14860597252845764, 0, -0.10648868978023529],
+      "max": [0.14860597252845764, 0.014827911742031574, 0.10648868978023529],
+      "centerXZ": [0, 0],
       "leftSoleMinY": 0,
       "rightSoleMinY": 0.000045167023927206174
     },
@@ -332,10 +292,7 @@
       "durationSeconds": 1,
       "loop": true,
       "sampleRate": 30,
-      "blenderFrames": [
-        1,
-        31
-      ],
+      "blenderFrames": [1, 31],
       "rootMotion": false,
       "nominalTravelSpeedMetersPerSecond": 0.32,
       "distancePerCycleMeters": 0.32,
@@ -349,14 +306,9 @@
       "loop": false,
       "sampleRate": 30,
       "rootMotion": false,
-      "channels": [
-        "weights"
-      ],
+      "channels": ["weights"],
       "independentOfLocomotion": true,
-      "suggestedIntervalSeconds": [
-        3,
-        6
-      ],
+      "suggestedIntervalSeconds": [3, 6],
       "runtimeScheduler": "runtime/auto-blink.mjs",
       "note": "GLB is not a timer. Attach the scheduler to each character update loop, or independently trigger the one-shot clip."
     }
@@ -365,35 +317,19 @@
     "clip": "Walk_InPlace",
     "coordinateSpace": "glTF local meters Y-up +Z-front",
     "sampledFrames": 31,
-    "min": [
-      -0.5515954494476318,
-      -0.000003878321876982227,
-      -0.5889501571655273
-    ],
-    "max": [
-      0.6167557835578918,
-      1.480024814605713,
-      0.26884201169013977
-    ],
+    "min": [-0.5515954494476318, -0.000003878321876982227, -0.5889501571655273],
+    "max": [0.6167557835578918, 1.480024814605713, 0.26884201169013977],
     "note": "Sampled sweep only, no scene furniture or inter-character clearance verification."
   },
   "expressions": {
-    "controls": [
-      "Blink_L",
-      "Blink_R"
-    ],
+    "controls": ["Blink_L", "Blink_R"],
     "open": 0,
     "closed": 1,
     "internalCorrectives": {
       "BlinkCurve_L": "4*Blink_L*(1-Blink_L)",
       "BlinkCurve_R": "4*Blink_R*(1-Blink_R)"
     },
-    "defaultWeights": [
-      0,
-      0,
-      0,
-      0
-    ],
+    "defaultWeights": [0, 0, 0, 0],
     "skinBinding": "new face and eyelids weighted 1.0 to existing head joint",
     "mechanism": "upper-lid occlusion of stationary round eye artwork; no iris squash"
   },

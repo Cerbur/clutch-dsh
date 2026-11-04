@@ -75,10 +75,10 @@ main
   feature branch 继续迭代或暂不发布。feature branch 不因目标 release 的版本变化而改名。
 - 不属于某个 package 的 root/workspace change 使用 `base/feat-<feature-name>`，同样从 `main`
   创建并直接合并回 `main`，例如 `base/feat-xxxx`。
-- 每个 worktree 独立运行与改动匹配的检查，并在交接前整理为一个 scoped commit；commit
-  message 必须明确说明改动范围。
+- 每个 worktree 独立运行与改动匹配的检查，并在交接前整理为一个或多个 scoped commits；每个
+  commit message 必须明确说明改动范围。feature 合并回 release 不要求 squash 成单个 commit。
 - 合并 feature 到某个 release 前，必须先将其 rebase 到该 release worktree 的最新基线，再在
-  release worktree 中合并该 worktree 的单个 scoped commit。发生冲突时先解决并重新验证，
+  release worktree 中合并该 feature branch，允许保留多个 scoped commits。发生冲突时先解决并重新验证，
   不能跳过 rebase gate。
 - `feature worktree → release worktree → main` 的每次回合并都有干净工作区门禁：源 feature
   worktree 和目标 release worktree 在合并前都必须没有 staged、unstaged 或 untracked 改动；
@@ -93,7 +93,7 @@ main
   ```
 
   feature rebase 完成后必须再次检查 feature worktree；任一检查有输出都必须停止，先将改动
-  整理进 feature 的 scoped commit 并重新验证，不能用 stash 或忽略输出代替该门禁。合并完成
+  整理进 feature 的一个或多个 scoped commits 并重新验证，不能用 stash 或忽略输出代替该门禁。合并完成
   后还要检查 release worktree 干净，再进入下一阶段。
 
 - feature worktree 只用于编写、验证和提交 scoped change；`npm pack`、`npm publish` 和最终
@@ -103,6 +103,8 @@ main
   worktree 不绑定版本，这两项在选定目标 release 后于 release worktree 中完成。
 - 本流程只定义 worktree、基线和验证顺序，不自动授权 commit、push、publish 或其他外部系统变更；
   这些操作仍须获得明确授权。
+- 历史计划中要求 feature 在交接或合并回 release 前 squash 成单个 commit 的约定，由上述
+  允许多个 scoped commits 的规则取代。
 - 每个可发布 plugin package 的完整发布生命周期（release log 规则、版本递增、clean/rebase/merge
   门禁、npm pack/publish 验证顺序）统一记录在 docs/RELEASING.md。所有可发布 package 遵循同一套
   流程；package 自己的 docs/RELEASING.md 只记录包参数、安装来源和该包特有的约束，不复制通用流程。

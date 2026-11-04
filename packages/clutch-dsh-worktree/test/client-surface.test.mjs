@@ -259,10 +259,9 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   const refreshSource = coordinator.slice(refreshStart, refreshEnd);
 
   assert.match(types, /type WorktreeRefreshScope/);
-  assert.match(types, /TargetedWorktreeReadError/);
-  assert.match(types, /targetError\?: TargetedWorktreeReadError/);
+  assert.match(types, /targetErrors\?: Readonly<Record<string, WorktreeViewError>>/);
   assert.match(coordinator, /viewReader/);
-  assert.match(refreshSource, /viewReader\.readMany\(/);
+  assert.doesNotMatch(refreshSource, /viewReader\.readMany\(/);
   assert.match(refreshSource, /viewReader\.read\(/);
   assert.match(refreshSource, /targetRefreshGuards/);
   assert.doesNotMatch(refreshSource, /loadWorktreeViews\(/);
@@ -310,8 +309,8 @@ test('invalidates superseded Worktree refresh results', async () => {
   assert.notEqual(refreshStart, -1);
   assert.notEqual(refreshEnd, -1);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  assert.match(refreshSource, /await refreshGuard\.current\.run\(/);
-  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
+  assert.match(refreshSource, /guard\.isCurrent\(request\.generation\)/);
+  assert.match(refreshSource, /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[\]\)/);
 
   const modeEffectStart = source.indexOf("useEffect(() => {\n    if (mode === 'worktree')");
   const modeEffectEnd = source.indexOf('  useEffect(() => {', modeEffectStart + 1);
@@ -523,7 +522,7 @@ test('preserves a ready Worktree projection during automatic refreshes', async (
   const effectSource = source.slice(effectStart, effectEnd);
   assert.match(
     effectSource,
-    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
+    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
   );
 });
 
@@ -1064,7 +1063,7 @@ test('declares the Worktree locale seat and routes visible copy through t', asyn
   assert.doesNotMatch(surfaceSource, /Search Workspaces and Sessions/);
   assert.doesNotMatch(surfaceSource, /Retry Binding/);
   assert.doesNotMatch(surfaceSource, /No matching Workspaces/);
-  assert.match(surfaceSource, /sidebar-overlay-geometry/);
+  assert.match(surfaceSource, /workspace-region-geometry/);
 });
 
 test('formats Worktree view errors at render time and leaves plugin literals out of state', async () => {
@@ -1111,10 +1110,10 @@ test('renders the Worktree hierarchy with search and nested creation affordances
   assert.match(source, /clearButton/);
 });
 
-test('bounds the surface to live native sidebar anchors', async () => {
+test('lays out the surface inside the semantic workspace seat without native DOM discovery', async () => {
   const source = await readSurfaceSource();
   const geometrySource = await readFile(
-    new URL('../src/client/overlay/sidebar-overlay-geometry.ts', import.meta.url),
+    new URL('../src/client/view/workspace-region-geometry.ts', import.meta.url),
     'utf8',
   );
   const styleSource = await readFile(
@@ -1122,13 +1121,14 @@ test('bounds the surface to live native sidebar anchors', async () => {
     'utf8',
   );
 
-  assert.match(source, /useSidebarOverlayGeometry/);
+  assert.match(source, /useWorkspaceRegionGeometry/);
+  assert.match(source, /createPortal/);
+  assert.match(source, /props.sidebarSeat.element/);
   assert.match(geometrySource, /ResizeObserver/);
-  assert.match(geometrySource, /MutationObserver/);
-  assert.match(geometrySource, /requestAnimationFrame/);
-  assert.match(geometrySource, /cancelAnimationFrame/);
+  assert.match(geometrySource, /observer\?\.disconnect/);
+  assert.doesNotMatch(geometrySource, /querySelector|closest|children\[|MutationObserver/);
   assert.doesNotMatch(styleSource, /\.surface \{[\s\S]*inset: 0 auto 0 0;/);
-  assert.match(styleSource, /\.surface \{[\s\S]*top: 0;/);
+  assert.match(styleSource, /\.surface \{\s*position: relative;/);
   assert.match(
     styleSource,
     /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.surface[\s\S]*transition: none;/,
@@ -1277,12 +1277,9 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  assert.match(refreshSource, /preserveCurrent/);
-  assert.match(
-    refreshSource,
-    /if \(!preserveCurrent\) \{[\s\S]*?setReadState\(\{ status: 'loading', views: \[\] \}\)/,
-  );
-  assert.match(refreshSource, /if \(preserveCurrent\) throw error/);
+  assert.match(refreshSource, /mergeWorktreeViews/);
+  assert.doesNotMatch(refreshSource, /views: \[\]/);
+  assert.match(refreshSource, /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[\]\)/);
   assert.match(
     commitSource,
     /if \(activeDrag\.workspaceId !== workspaceId\) return;[\s\S]*?insertWorktreeBefore\(/,
@@ -1332,7 +1329,7 @@ test('preserves the Worktree projection for action refreshes', async () => {
   const initialReadSource = await readSurfaceSource(['state/useSurfaceRefresh.tsx']);
   assert.match(
     initialReadSource,
-    /void refresh\(\{ preserveCurrent: readStateRef\.current\.status === 'ready' \}\);/,
+    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
   );
 
   const actionRetryStart = source.indexOf('...(error.retryable ?');
@@ -1356,7 +1353,7 @@ test('keeps targeted refresh errors local and retryable', async () => {
   const refreshStart = source.indexOf('const refresh = useCallback');
   const refreshEnd = source.indexOf('  useEffect(() => {', refreshStart);
   const refreshSource = source.slice(refreshStart, refreshEnd);
-  const targetErrorStart = source.indexOf('if (readState.targetError !== undefined)');
+  const targetErrorStart = source.indexOf('Object.entries(readState.targetErrors ?? {})');
   const targetErrorEnd = source.indexOf("{readState.status === 'loading'", targetErrorStart);
 
   assert.match(
@@ -1432,7 +1429,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   );
   assert.match(
     coordinator,
-    /modalReadViewRef\.current === undefined[\s\S]*mergeWorktreeView\(merged, modalReadViewRef\.current\)/,
+    /views: mergeWorktreeViews\(current\.views, workspaceIdsRef\.current, \[view\]\)/,
   );
   assert.match(
     coordinator,
@@ -2193,6 +2190,8 @@ test('keeps current Session highlight without a leading inset frame', async () =
     styles,
     /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 500;/,
   );
+  assert.match(styles, /\.treeSessionContent\s*\{[^}]*font-weight: 400;/);
+  assert.doesNotMatch(styles, /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[^}]*font-weight: 600;/);
 });
 
 test('temporarily reveals the current Session path without persisting it', async () => {

@@ -14,6 +14,7 @@ export interface WorkspaceSnapshotSource<
 export interface VirtualWorkspaceMembership {
   ensure(binding: VirtualWorkspaceBinding): void;
   sync(bindings: readonly VirtualWorkspaceBinding[]): void;
+  syncWorkspace(workspaceId: string, bindings: readonly VirtualWorkspaceBinding[]): void;
   removeSession(sessionId: string): void;
   dispose(): void;
 }
@@ -161,6 +162,10 @@ export function createVirtualWorkspaceMembership<
       sync([...bindings.filter((current) => current.sessionId !== binding.sessionId), binding]);
     },
     sync,
+    syncWorkspace(workspaceId, nextBindings) {
+      sync([...bindings.filter((binding) => binding.workspaceId !== workspaceId),
+        ...nextBindings.filter((binding) => binding.workspaceId === workspaceId)]);
+    },
     removeSession(sessionId) {
       sync(bindings.filter((binding) => binding.sessionId !== sessionId));
     },

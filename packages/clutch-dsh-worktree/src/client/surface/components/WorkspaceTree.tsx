@@ -41,7 +41,7 @@ export type WorkspaceTreeInput = {
     | 'archiveSession'
     | 'manager'
   >;
-  read: Pick<ReturnType<typeof useSurfaceRefresh>, 'viewByWorkspace' | 'refresh'>;
+  read: Pick<ReturnType<typeof useSurfaceRefresh>, 'viewByWorkspace' | 'refresh' | 'readState'>;
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
     | 'expandSnapshot'
@@ -241,7 +241,8 @@ export function WorkspaceTree({
             const bindings = view?.bindings ?? [];
             const boundSessionIds = new Set(bindings.map((binding) => binding.sessionId));
             const mainSessionIds = filterVisibleSessionIds(
-              unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]),
+              unboundSessionIds(allWorkspaceSessionIds, [...boundSessionIds]).filter((id) =>
+                view?.knownSessionIds === undefined || view.knownSessionIds.includes(id)),
               sessions,
             );
             const mainGroupKey = `main:${workspace.workspaceId}`;
@@ -354,7 +355,13 @@ export function WorkspaceTree({
                   }}
                 />
 
-                {expanded && (
+                {expanded && view === undefined && (
+                  <p className={styles.message} data-workspace-read={workspace.workspaceId}>
+                    {read.readState.targetErrors?.[workspace.workspaceId]
+                      ? t('status.workspaceFailed') : t('status.loading')}
+                  </p>
+                )}
+                {expanded && view !== undefined && (
                   <div className={styles.treeChildren}>
                     <WorktreeGroupRow
                       t={t}

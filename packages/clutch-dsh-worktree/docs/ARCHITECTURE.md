@@ -567,6 +567,38 @@ reconcile 会把用户刚移动的 Session 当作“有更新活动”再次提�
 
 ### 浏览器本地视图状态刷新不变量 (Browser-local View State Refresh Invariant)
 
+导航读取通过 `readWorkspaceNavigation` 返回一个 Workspace 的 records、bindings、
+Main instructions、Git readiness 与 checkout。Manage 在请求内共享 Git 校验、root、
+porcelain list 和 checkout HEAD 的 Promise（包括失败），Sidecar 只读一次。
+普通 attached checkout 为 4 次 Git 调用；detached HEAD 仍可追加 describe。
+请求结束即释放事实，不使用 TTL，不跨刷新保存 Git 身份，也不把该上下文传给 mutation。
+旧注入 Manager 缺少此可选接口时沿用独立读取；新 Connection 与 Host 使用完整 RPC。
+旧 Host 仅在 DSH carrier 明确返回该新 endpoint 的 HTTP 404 时回退旧读取路径；
+500、权限、Gateway 和领域错误不得触发兼容回退。共享 Git 调用统一传入 lifecycle signal，
+即使先发调用未显式提供 options，也不能丢失注入 adapter 的取消语义。
+Git 就绪错误作为局部状态返回，Sidecar 和未知错误保持失败，checkout 显示失败保持既有语义。
+
+Surface 全局入口与局部刷新共用逐 Workspace 的发布路径；共享 reader 最多并行 3 个
+Workspace，当前 Session 所属 Workspace 优先，其次展开项，显示顺序保持原生顺序。
+Context 预读、模式进入与新增项共享同代在途请求，Context 完成不阻塞树的提交。
+新增项使用 ensure-loaded，重进使用可复用在途请求的后台校验；mutation、重连和显式
+retry 仍推进代次。退出不清空 ready 投影，旧代回调不得覆盖更新结果。
+未到达的 Workspace 只显示局部 loading/error，不投影 Main Session。reader 在实际请求
+启动时捕获原生 Session ID 覆盖范围；后来的调用方不能扩大共享预读的覆盖。尚未覆盖的
+新成员不进入 Main、定位、排序或 Dashboard，后续目标读取确认后再呈现。
+pending 重放期间的读取合并此前成功读取验证的覆盖范围；只有当前代成功读取才更新
+保留范围，ready 原生快照则替换范围，不能在读取完成时纳入后来出现的成员。
+原生 Session 到达会退休先前代次；Surface 与 modal 的 current 读取追随新代，
+Workspace 移除也退休 guard 与 reader，避免同 ID 重现接受旧回调。
+局部错误按 Workspace 保存，重试和恢复动作只使用所属错误的详情。
+虚拟关系按完成读取的 Workspace 同步，保留其他 Workspace 的关系。
+同步打开 Session 的 ready 提交前先结束该请求的 pending 标记，确保 flushSync 内执行的
+effect 能同步全部新增和移除关系，而不依赖下一次渲染。
+旧全量注入接口、展开状态及排序清理仍需已确认的完整快照。pending 原生列表在 browser projection 中保留
+已有 Workspace/Session 行及 pending 标记，不修改原始列表。此实现更新历史计划的整批
+首屏读取方式，历史计划保持只读。
+冷启动全局 recovery gate 与路径物理身份算法本次不变，不能将稳态读取计数视为冷启动总成本。
+
 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
 权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、
 原始 cwd 匹配根目录、未归档且无任何 Worktree 关系（含 detached）。不得直接使用按
@@ -580,7 +612,8 @@ Worktree 新建、导入后的 Session 打开、空白 Session 复用与绑定�
 打开流程追随并复用最新在途读取，不把读取代次替换误判为绑定损坏，也不额外发起 RPC。
 打开门禁只等待目标分组，不等待旧 Session 的 context invalidation 完成；后者可能追随
 后续 invalidation，因而不应延长导航等待。上下文刷新仍在后台运行并立即捕获拒绝，
-原生身份切换后由 context store 的订阅与代次校验更新目标上下文；普通刷新保持原等待语义。
+原生身份切换后由 context store 的订阅与代次校验更新目标上下文；普通导航刷新同样独立发布，
+不再等待 Context 完成。
 只有最新读取失败、绑定缺失或生命周期取消时才保留原视图并阻止打开，允许重试；
 不新增持久状态、不猜测绑定，也不刷新无关 Workspace。
 
@@ -693,16 +726,23 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 浮窗可见性同时依赖 Sidebar 的 `bounds.ready`：锚点丢失或几何失效时，即使 `collapsed=false`
 也关闭 portal 并释放计时和键盘监听；几何恢复不自动重开，等待用户再次点击铃铛。
 
-- Sidebar 与 Dashboard 共用 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
+- Worktree 侧栏只通过 DSH `sidebar.workspaces` 插槽替换浏览区域。现有 footer 入口控制模式；
+  Worktree 模式注册 `priority: -10` 的 seat，退出时释放注册，由 DSH 恢复原生 occupant。
+  不注销原生注册、不重复声明其子插槽、不按 DOM 顺序、数组下标、文字或坐标寻找挂载点。
+  Slot owner 的 `wide` 决定折叠状态；CSS 正常布局决定尺寸。仅测量插件自己的 seat 判断铃铛
+  portal 是否可见，ResizeObserver 不负责定位，不修改原生节点的 style、inert 或 aria-hidden。
+  列表通过 React portal 渲染到 seat；数据、操作、Hero 和 Dashboard owner 保持在持久的
+  `shell.overlay` 中，模式切换或 slot 重新声明不重建 reader/controller。原生列表组件可随
+  occupant 切换卸载，原生注册、Controller 和 Session 数据仍由 DSH 持有。导航透明背景继承
+  原生侧栏材质。此方案取代历史计划的 New Session/footer 覆盖定位与侧栏遮蔽逻辑。
+- Dashboard 保留 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
   `[data-shell-overlay]`，再从插件 footer action 或公开 Sidebar pane 回溯 frame 直属侧栏；
   右栏只按 `[data-rightbar-col]` 和 `data-rightbar-collapsed` 定位，不要求物理相邻。Center
   无公开 marker，通过排除已知栏目及插槽、验证唯一覆盖内容轨道并延伸至 overlay 底部的有限矩形定位，
-  不遮蔽标题栏和 resize handle。Sidebar root 由 New Session 与 footer action 的共同祖先确定，
-  footer 必须有功能插槽锚点；不再猜测首尾子节点。合法的额外壳层节点与栏目 DOM 排序不影响定位。
+  不遮蔽标题栏和 resize handle。侧栏列通过 footer action 或公开 pane 锚点定位，
+  不猜测首尾子节点。合法的额外壳层节点与栏目 DOM 排序不影响定位。
   布局变动重新解析锚点，替换时释放旧遮蔽及观察；暂时无尺寸的候选保持观察以支持 resize 恢复。
   缺失、歧义或无效几何均恢复原生内容。此规则取代历史计划中的位置推断，不改变数据所有权和刷新作用域。
-- Worktree 导航浮层随原生 `data-sidebar-collapsed` 状态同步隐藏，0px 是 desktop 的有效收起宽度，不能回退到旧展开宽度。当前 Sidebar root 与 New Session/footer 锚点动态重测；锚点丢失时浮层零覆盖并恢复原生内容。
-- 展开时，只对原生 New Session 到 footer 之间被浮层完整覆盖的 direct children 做可恢复的 visibility/opacity/inert/aria-hidden 遮蔽；opacity 同时阻止显式 visible 子元素重影。保留品牌、标题栏和 footer。macOS 浮层透明以复用 AppFrame 已有染色与 OS vibrancy，其他平台或无法识别的结构保留主题底色。模式退出、收起、DOM 替换和销毁均恢复原生状态，不卸载原生 React 列表或写入原始数据。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
 - Local/Main Dashboard 独有的“管理 worktree”页签复用所属 Workspace 的 ready records，包含归档和清理记录，不包含 Main。选择、确认目标与逐项结果仅存在于浏览器；批量串行调用现有归档、磁盘清理和移出管理 RPC。每项执行前比对已确认的路径、分支与生命周期事实，并使用前一项局部刷新后的最新 mutation token，以适配 Sidecar revision 变化。清理需额外确认任务已停止，保留 binding detached 流程与原生权限；移出管理只移除插件关系。刷新始终限于所属 Workspace，成功项不因后续读取失败而重放，取消或 owner 卸载不再调度剩余项；不新增 Host API、持久化字段或全局刷新。

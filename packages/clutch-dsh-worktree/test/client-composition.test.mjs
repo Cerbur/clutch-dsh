@@ -1139,15 +1139,14 @@ test('shares one Worktree view reader between Context and Surface for one Client
   assert.equal(typeof reader.readMany, 'function');
   assert.deepEqual(calls, [
     'worktreeManager/listBindings', // Host readiness probe; no Workspace projection is read.
-    'worktreeManager/listWorktrees',
-    'worktreeManager/getWorkspaceGitState',
-    'worktreeManager/listBindings',
-    'worktreeManager/getWorktreeInstructions',
-    'worktreeManager/getWorkspaceCheckout',
+    'worktreeManager/readWorkspaceNavigation',
   ]);
 
   for (const dispose of fixture.disposers.reverse()) dispose();
-  pending.resolve({ ok: true, value: { ok: true, value: [] } });
+  pending.resolve({ ok: true, value: { ok: true, value: {
+    worktrees: [], bindings: [], mainInstructions: '',
+    gitState: { ok: true, value: { currentBranch: null } },
+  } } });
   await surfaceRead;
   await assert.rejects(reader.read('workspace-one'), /reader disposed/);
 
