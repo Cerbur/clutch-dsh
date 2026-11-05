@@ -180,6 +180,12 @@ export interface ActivityFilterView {
   readonly isWindowVisible: (window: ActivityWindowId) => boolean;
   /** Show or hide one selector tab; hiding the last tab is ignored. */
   readonly setWindowVisible: (window: ActivityWindowId, visible: boolean) => void;
+  /**
+   * Keep Workspaces/Worktrees with no Session in the range. Defaults to false:
+   * a bounded range hides inactive structure and leaves only active rows.
+   */
+  readonly showInactiveStructure: boolean;
+  readonly setShowInactiveStructure: (show: boolean) => void;
   /** Ephemeral dropdown state for the visible-range checkboxes. */
   readonly menuOpen: boolean;
   readonly setMenuOpen: (open: boolean) => void;

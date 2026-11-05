@@ -123,6 +123,25 @@ export function ActivityFilterBar({ t, activity }: ActivityFilterBarProps) {
             </button>
           );
         })}
+        <span className={styles.activityMenuSeparator} role="separator" aria-hidden="true" />
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={activity.showInactiveStructure}
+          aria-label={t('filter.keepInactive')}
+          className={styles.activityOption}
+          data-activity-keep-inactive
+          data-checked={activity.showInactiveStructure || undefined}
+          title={t('filter.keepInactiveHint')}
+          onClick={() => {
+            activity.setShowInactiveStructure(!activity.showInactiveStructure);
+          }}
+        >
+          <span className={styles.activityOptionLabel}>{t('filter.keepInactive')}</span>
+          <span className={styles.activityOptionCheck} aria-hidden="true">
+            {activity.showInactiveStructure && <IconCheckOutline16 />}
+          </span>
+        </button>
       </Menu>
     </div>
   );

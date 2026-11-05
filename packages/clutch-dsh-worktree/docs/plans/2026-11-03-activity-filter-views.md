@@ -30,11 +30,14 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 派生规则：
 
 - **当前 Session 永远可见**。否则用户切到"今日"时可能看不到自己正在用的会话，导航会变成陷阱。
-- **Workspace 与 Worktree 结构始终渲染**（搜索没有匹配项时除外）。范围只隐藏 Session 行；
-  分类、空分组与管理入口保留，记录、目录与绑定不变。
+- **默认隐藏不活跃结构**：有界范围内没有活跃 Session 的 Workspace / Worktree / 已归档 Worktree
+  从树上移除，让侧栏只留下当下需要关注的部分；`全部` 恢复完整树。记录、目录与绑定不变。
+- **可选保留结构**：范围菜单的「显示无活跃 Workspace」偏好打开后，Workspace / Worktree 行始终
+  保留（含空分组与管理入口），只过滤 Session 行。该偏好默认关闭并保存到浏览器本地。
 - **Session 行**先按 `archivedSessionIds` 与 `sessions.ids` 收敛，再由范围谓词过滤；空白 Session
   只在它是当前 Session 时可见。
-- 搜索与范围为独立维度：搜索收窄 Workspace/Worktree 结构，范围只收窄其下的 Session 行。
+- 搜索与范围为独立维度：搜索始终收窄 Workspace/Worktree 结构；范围在其上决定结构是否保留以及
+  哪些 Session 行可见。
 - 计数与过滤共用同一谓词，标签数字不会与树内容不一致。
 
 ## 筛选器可见性（2026-11-04）
@@ -45,9 +48,10 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 | --- | --- |
 | 勾选 | 该范围重新出现在标签栏，并插回固定顺序（今日 → 24 小时 → 7 天 → 全部） |
 | 取消勾选 | 该标签从范围栏移除；筛选谓词、计数与树内容不变 |
-| 隐藏当前范围 | 选择自动移到顺序上的下一个可见标签（末尾回绕）；Session 行按新范围收窄，Workspace/Worktree 结构不变 |
+| 隐藏当前范围 | 选择自动移到顺序上的下一个可见标签（末尾回绕）；结构是否保留由「显示无活跃 Workspace」决定 |
 | 仅剩一个范围 | 该范围的复选框禁用，提示"至少保留一个筛选"，避免范围栏失去全部标签 |
-| 范围无 Session | 结构保持可见，范围计数显示 0；搜索无匹配时仍由 `workspace.noMatches` 单独提示 |
+| 显示无活跃 Workspace | 默认关闭：隐藏没有活跃 Session 的结构并显示范围空提示；开启后保留结构，只过滤 Session 行 |
+| 范围无 Session | 默认显示空提示并指向「全部」；开启「显示无活跃 Workspace」后结构保留、范围计数为 0 |
 | 持久化 | 可见范围集合与 `activityWindow` 共用 `clutch-dsh-worktree.view-mode`；旧版本载荷缺少该字段时回退为四个范围全部可见，非法项与重复项被过滤 |
 | 菜单状态 | 展开状态只存在于当前渲染，不持久化；菜单复用 DSH `Menu`，支持 Esc/点击外部关闭与方向键行走 |
 
@@ -66,11 +70,11 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 | --- | --- |
 | `src/client/view/activity-filter.ts` | 纯逻辑：窗口下界、活跃谓词、候选会话集合、范围计数、可见集合守卫/切换/交接、`ActivityFilterView` 读面 |
 | `src/client/surface/state/useActivityFilter.ts` | 共享偏好读取、60 秒时钟、可见范围、菜单状态、`isActive`/`hasActiveSession`/`count` 与写回 |
-| `src/client/surface/components/ActivityFilterBar.tsx` | 顶部范围标签 + 右侧可见范围勾选菜单（`role="group"`、`aria-pressed`、`menuitemcheckbox`） |
-| `src/client/surface/components/WorkspaceTree.tsx` | Workspace / Worktree 结构保留、Session 行过滤与 `resetKey` |
-| `src/client/surface/components/ActiveWorktree.tsx`、`ArchivedWorktree.tsx` | 保留 Worktree 行，仅过滤叶子 Session 行与分组状态聚合 |
+| `src/client/surface/components/ActivityFilterBar.tsx` | 顶部范围标签 + 右侧可见范围/结构偏好菜单（`role="group"`、`aria-pressed`、`menuitemcheckbox`） |
+| `src/client/surface/components/WorkspaceTree.tsx` | 默认隐藏不活跃结构、可选保留结构、Session 行过滤与 `resetKey` |
+| `src/client/surface/components/ActiveWorktree.tsx`、`ArchivedWorktree.tsx` | 默认隐藏无活跃 Session 的 Worktree 行，可选保留；始终过滤叶子 Session 行与聚合状态 |
 | `src/client/surface/components/ArchivedWorktrees.tsx` | 归档分组计数与聚合状态按范围收敛 |
-| `src/client/view/view-mode.ts`、`view-mode-store.ts` | `activityWindow` + `activityWindows` 持久偏好与 `setActivityWindowVisible` action |
+| `src/client/view/view-mode.ts`、`view-mode-store.ts` | `activityWindow` + `activityWindows` + `showInactiveStructure` 持久偏好与对应 action |
 | `src/client/worktree.css`、`locales.ts` | 顶部标签栏、右侧按钮与勾选行样式，中英文文案（`activity.*`、`filter.*`） |
 
 ## 保持的不变量
@@ -101,11 +105,11 @@ node --test test/readme-parity.test.mjs
 - **移除 Worktree 级空文案**（2026-11-04）：Main 行下方原先在"全部"范围显示"暂无 Worktree"，
   但 Main 行本身已代表 Workspace 的本地 checkout，且其他范围都没有这一行，显得多余且不一致。
   现已删除该空状态及其 `worktree.noWorktrees` 文案与 `.emptyNested` 样式。
-- **范围只过滤 Session 行**（2026-11-05）：原先范围会连 Workspace、Worktree 与已归档 Worktree
-  一起隐藏，导致用户无法判断结构是否存在，也找不到创建/导入、Dashboard、归档与清理入口。
-  现在 Workspace / Worktree 行始终保留（搜索仍可收窄结构），范围只过滤叶子 Session 行与
-  分组状态聚合；`filter.empty` / `filter.emptyHint` / `filter.emptyHintMenu` 与 `.emptyHint`
-  不再需要，已删除。
+- **默认隐藏 + 可选保留结构**（2026-11-05）：过滤的本意是减少侧栏噪音，因此默认行为恢复为
+  “只留下周期内活跃的 Workspace 和 Session”，`全部` 查看完整树；同时新增浏览器本地偏好
+  「显示无活跃 Workspace」，需要结构和管理入口时保留所有 Workspace / Worktree 行，只过滤
+  Session 行。范围空提示与 `filter.empty` / `filter.emptyHint` / `filter.emptyHintMenu` 在
+  默认隐藏结构时恢复使用。
 
 ## 遗留与后续
 

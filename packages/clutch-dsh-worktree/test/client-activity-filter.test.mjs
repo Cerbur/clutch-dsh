@@ -139,6 +139,13 @@ test('the store updates visibility and selection atomically and never empties th
   instance.actions.setActivityWindowVisible('all', false);
   assert.deepEqual(snapshot().activityWindows, ['all']);
   assert.equal(snapshot().activityWindow, 'all');
+
+  // Inactive structure is hidden by default and can be kept on request.
+  assert.equal(snapshot().showInactiveStructure, false);
+  instance.actions.setShowInactiveStructure(true);
+  assert.equal(snapshot().showInactiveStructure, true);
+  instance.actions.setShowInactiveStructure(false);
+  assert.equal(snapshot().showInactiveStructure, false);
 });
 
 test('all keeps every Session, including rows without activity facts', () => {
@@ -304,7 +311,12 @@ function barProps(window, counts, setWindow, options = {}) {
       menuOpen: options.menuOpen ?? false,
       setMenuOpen: (open) => {
         options.setMenuOpen?.(open);
-      },      isActive: () => true,
+      },
+      showInactiveStructure: options.showInactiveStructure ?? false,
+      setShowInactiveStructure: (next) => {
+        options.setShowInactiveStructure?.(next);
+      },
+      isActive: () => true,
       scopeSessionIds: (sessionIds) => sessionIds,
       hasActiveSession: (sessionIds) => sessionIds.length > 0,
       count: (candidate) => counts[candidate] ?? 0,
@@ -394,7 +406,9 @@ test('the right-edge menu toggles visible ranges and keeps the last one checked'
   trigger.props.onClick();
   assert.deepEqual(menuState, [true]);
 
-  const options = menu.props.children;
+  const options = menu.props.children
+    .flat()
+    .filter((option) => option.props['data-activity-option'] !== undefined);
   assert.deepEqual(
     options.map((option) => option.props['data-activity-option']),
     ['today', 'last24h', 'last7d', 'all'],
@@ -428,7 +442,9 @@ test('the only remaining range cannot be unchecked', async () => {
       visible: ['today'],
     }),
   );
-  const options = element.props.children[1].props.children;
+  const options = element.props.children[1].props.children
+    .flat()
+    .filter((option) => option.props['data-activity-option'] !== undefined);
   assert.deepEqual(
     options.map((option) => option.props.disabled),
     [true, false, false, false],
@@ -437,22 +453,45 @@ test('the only remaining range cannot be unchecked', async () => {
 });
 
 
-test('the range filters Session rows without hiding Workspace or Worktree structure', async () => {
+test('the range hides inactive structure by default but can keep it on request', async () => {
   const readSurface = (file) =>
     readFile(new URL(`../src/client/surface/components/${file}`, import.meta.url), 'utf8');
   const tree = await readSurface('WorkspaceTree.tsx');
 
-  // The tree keeps every Workspace and Worktree row; only Session rows are scoped.
-  assert.doesNotMatch(tree, /worktreeSurvivesWindow|activity\.hasActiveSession/);
-  assert.doesNotMatch(tree, /filter\.empty/);
+  // The default gate hides a Workspace/Worktree with no in-range Session, while the
+  // showInactiveStructure preference keeps the structure and its management actions.
+  assert.match(tree, /activity\.showInactiveStructure/);
+  assert.match(tree, /worktreeSurvivesWindow/);
+  assert.match(tree, /activity\.hasActiveSession/);
+  assert.match(tree, /filter\.empty/);
   assert.match(tree, /activity\.scopeSessionIds/);
-  assert.match(tree, /activeWorktrees\.map/);
-  assert.match(tree, /archivedWorktrees\.length/);
 
   for (const file of ['ActiveWorktree.tsx', 'ArchivedWorktree.tsx']) {
     const source = await readSurface(file);
-    // A Worktree row with no Session in the range stays visible and manageable.
-    assert.doesNotMatch(source, /activity\.active\s*&&\s*worktreeSessionIds\.length === 0/);
+    assert.match(
+      source,
+      /activity\.active\s*&&\s*!activity\.showInactiveStructure\s*&&\s*worktreeSessionIds\.length === 0/,
+    );
     assert.match(source, /activity\.scopeSessionIds/);
   }
+});
+
+test('the range menu can keep inactive Workspace structure', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const changes = [];
+  const element = ActivityFilterBar(
+    barProps('today', { today: 1, last24h: 0, last7d: 0, all: 1 }, () => {}, {
+      showInactiveStructure: true,
+      setShowInactiveStructure: (next) => changes.push(next),
+    }),
+  );
+  const toggle = element.props.children[1].props.children
+    .flat()
+    .find((child) => child.props['data-activity-keep-inactive'] !== undefined);
+
+  assert.equal(toggle.props['aria-checked'], true);
+  assert.equal(toggle.props['aria-label'], 'filter.keepInactive');
+  assert.equal(toggle.props.title, 'filter.keepInactiveHint');
+  toggle.props.onClick();
+  assert.deepEqual(changes, [false]);
 });

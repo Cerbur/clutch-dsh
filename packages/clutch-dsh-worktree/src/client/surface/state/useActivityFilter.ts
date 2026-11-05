@@ -41,6 +41,9 @@ type Input = {
 export function useActivityFilter({ props, source, enabled }: Input): ActivityFilterView {
   const preferred = props.useStore((state) => state.activityWindow);
   const preferredWindows = props.useStore((state) => state.activityWindows);
+  const showInactiveStructure = props.useStore(
+    (state) => state.showInactiveStructure === true,
+  );
   const visibleWindows = useMemo(
     () => effectiveActivityWindows(preferredWindows),
     [preferredWindows],
@@ -112,6 +115,12 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     },
     [props.actions],
   );
+  const setShowInactiveStructure = useCallback(
+    (show: boolean) => {
+      props.actions.setShowInactiveStructure(show === true);
+    },
+    [props.actions],
+  );
   const count = useCallback(
     (candidate: ActivityWindowId) => counts[effectiveActivityWindow(candidate)] ?? 0,
     [counts],
@@ -125,6 +134,8 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     visibleWindows,
     isWindowVisible,
     setWindowVisible,
+    showInactiveStructure,
+    setShowInactiveStructure,
     menuOpen,
     setMenuOpen,
     isActive,

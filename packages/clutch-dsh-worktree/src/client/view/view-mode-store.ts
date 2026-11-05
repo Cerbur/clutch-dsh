@@ -24,6 +24,7 @@ export function createWorktreeViewStore(): EngineStoreHandle<
       viewMode: 'workspace-session',
       activityWindow: DEFAULT_ACTIVITY_WINDOW,
       activityWindows: [...DEFAULT_ACTIVITY_WINDOWS],
+      showInactiveStructure: false,
     }),
     persist: WORKTREE_VIEW_MODE_STORAGE_KEY,
     actions: {
@@ -34,6 +35,9 @@ export function createWorktreeViewStore(): EngineStoreHandle<
         // Normalize an older persisted payload that predates the visible set.
         draft.activityWindows = effectiveActivityWindows(draft.activityWindows);
         draft.activityWindow = window;
+      },
+      setShowInactiveStructure: (draft, show: boolean) => {
+        draft.showInactiveStructure = show === true;
       },
       setActivityWindowVisible: (
         draft,

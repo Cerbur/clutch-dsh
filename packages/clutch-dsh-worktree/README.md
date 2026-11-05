@@ -164,18 +164,21 @@ remains an independent overlay opened explicitly from its existing actions.
 
 ### Filter Sessions by activity
 
-The range selector below the Worktree header filters the Session rows to today, the last 24
-hours, the last 7 days, or every Session. It reads only the Session facts the tree already
-shows, so it adds no Git read and no new DSH request.
+The range selector below the Worktree header filters the tree to today, the last 24 hours, the
+last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
+adds no Git read and no new DSH request.
 
 - A Session is active when it is running, waiting for interaction, or was last updated inside the
   range. Running and waiting Sessions stay visible even with an older update.
 - **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
   the current time.
 - The Session you are viewing stays visible in every range, so navigation never hides it.
-- The range filters Session rows only. Workspaces and Worktrees, including archived ones, stay
-  visible with their empty groups and management actions; their records, directories, and bindings
-  are untouched.
+- By default, a bounded range hides the inactive part of the tree: a Workspace or Worktree with no
+  active Session in the range is removed from view, **All** restores the full tree, and search is
+  unchanged. Records, directories, and bindings are untouched.
+- The range menu's **Show inactive Workspaces** option keeps Workspaces, Worktrees, and archived
+  Worktrees visible with their empty groups and management actions even when the range contains
+  none of their Sessions. The option is browser-local and off by default.
 - Each range shows how many Sessions it contains. The selected range is a browser-local
   preference: it survives reopening the panel and reloading the page, and it is never written to
   the plugin index or to DSH.
@@ -183,8 +186,8 @@ shows, so it adds no Git read and no new DSH request.
   ranges appear as tabs, at least one always stays checked, and hiding the selected range moves the
   selection to the next visible tab. The visible set is a browser-local preference like the range
   itself.
-- When the range contains no Sessions, the structure stays in place and the range count shows 0;
-  search still reports when no Workspace matches the query.
+- When the range contains no Sessions and inactive structure is hidden, the tree reports the empty
+  range and points back to **All**, or to the range menu when **All** is hidden.
 
 ### Active sessions
 

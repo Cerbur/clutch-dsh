@@ -576,6 +576,20 @@
   line-height: 18px;
 }
 
+.emptyHint {
+  margin: 0;
+  padding: 0 4px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.activityMenuSeparator {
+  height: 0.5px;
+  margin: 4px 2px;
+  background: var(--dsw-alias-border-l2);
+}
+
 .gitReadiness {
   display: grid;
   gap: 4px;

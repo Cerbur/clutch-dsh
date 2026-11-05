@@ -695,8 +695,8 @@ Refresh scope is determined by the smallest affected identity.
 ### 活跃范围筛选 (Activity Range Filter, 2026-11-03)
 
 Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / 最近 24 小时 / 最近 7 天 / 全部），
-只筛选 Session 行。它是纯展示投影：不新增 RPC、不读取 Git、不写 Sidecar，也不改变 DSH
-的 Workspace/Session 成员关系。
+默认只保留范围内活跃的 Workspace / Worktree / Session，减少侧栏注意力负担；`全部` 恢复完整树。
+它是纯展示投影：不新增 RPC、不读取 Git、不写 Sidecar，也不改变 DSH 的 Workspace/Session 成员关系。
 
 - 判定只使用代码已经持有的原生事实：`SessionPresentation.ongoing`（含运行中的子代理）、
   `status.state === 'warning'`（等待审批、计划审核或回答）以及 `updatedAt`。运行中与等待交互的
@@ -704,13 +704,18 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 - 「今日」使用本地日历零点；「24 小时」与「7 天」是从当前时间向前滚动的窗口。窗口边界与范围
   计数最多每 60 秒重算一次，并且只在侧栏挂载期间运行。
 - 当前 Session 在所有范围内保持可见，导航不会把它隐藏；这是可用性约束，不是数据规则。
-- Workspace、受管 Worktree 与已归档 Worktree 结构始终渲染（搜索没有匹配项时除外），即使范围内
-  没有它们的 Session。分类、空分组与管理入口因此保持可达；记录、绑定、生命周期状态与磁盘目录
-  不变，范围也不构成解绑、归档或清理，不放宽任何写入门禁。
-- 搜索与活跃范围是两个独立维度：搜索收窄 Workspace/Worktree 结构，范围只收窄其下的 Session 行；
-  范围切换与搜索一样按 `AnimatedTree` resetKey 立即完成布局，不改变已保存的展开或顺序偏好。
-- 选中范围属于浏览器本地偏好，与 `viewMode` 共用 `clutch-dsh-worktree.view-mode` 键；持久化值
-  先经 `effectiveActivityWindow` 校验，空值或未知值回退 `all`，保持升级前用户看到完整树。
+- 默认隐藏不活跃结构：范围内没有活跃 Session 的 Workspace、受管 Worktree 与已归档 Worktree
+  从树上移除，范围空提示指向「全部」。记录、绑定、生命周期状态与磁盘目录不变，范围也不构成
+  解绑、归档或清理，不放宽任何写入门禁。
+- 浏览器本地偏好 `showInactiveStructure`（默认 `false`）打开后，Workspace / Worktree 结构始终
+  保留（搜索没有匹配项时除外），即使范围内没有它们的 Session；分类、空分组与管理入口保持可达，
+  此时只过滤 Session 行。两种模式下 Session 行都由范围谓词过滤。
+- 搜索与活跃范围是两个独立维度：搜索始终收窄 Workspace/Worktree 结构；范围决定结构是否保留以及
+  其下哪些 Session 行可见。范围切换与搜索一样按 `AnimatedTree` resetKey 立即完成布局，不改变
+  已保存的展开或顺序偏好。
+- 选中范围、可见范围集合与 `showInactiveStructure` 属于浏览器本地偏好，与 `viewMode` 共用
+  `clutch-dsh-worktree.view-mode` 键；持久化值分别经 `effectiveActivityWindow`、
+  `effectiveActivityWindows` 与布尔守卫校验，旧载荷缺少字段时回退 `all` / 四个范围 / 隐藏不活跃结构。
 - 范围计数与 Session 行过滤共用同一谓词（`src/client/view/activity-filter.ts`），避免标签与树内容
   不一致；`surface/state/useActivityFilter.ts` 只负责共享偏好、时钟与计数。
 

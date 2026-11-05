@@ -18,6 +18,12 @@ export interface WorktreeViewState {
    * `effectiveActivityWindows`. The list is never empty.
    */
   activityWindows: readonly ActivityWindowId[];
+  /**
+   * Keep Workspaces and Worktrees whose Sessions are all outside the selected
+   * range. Defaults to false so a bounded range hides inactive structure and
+   * keeps only the active part of the tree in view.
+   */
+  showInactiveStructure: boolean;
 }
 
 /** A browser-local Worktree → DSH Workspace membership projection. */
@@ -30,6 +36,7 @@ export interface VirtualWorkspaceBinding {
 export type WorktreeViewActions = ActionsDecl<WorktreeViewState> & {
   setViewMode: (draft: WorktreeViewState, mode: WorktreeViewMode) => void;
   setActivityWindow: (draft: WorktreeViewState, window: ActivityWindowId) => void;
+  setShowInactiveStructure: (draft: WorktreeViewState, show: boolean) => void;
   setActivityWindowVisible: (
     draft: WorktreeViewState,
     window: ActivityWindowId,
