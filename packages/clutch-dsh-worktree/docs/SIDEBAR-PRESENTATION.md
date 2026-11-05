@@ -62,7 +62,8 @@ One ruler drives the whole tree, declared once on `.workspaceList`:
 - Rows sit in the standard control band (34 / 32 / 30px) and share `--dsw-radius-md`.
   The activity lane is reserved by the row (`padding-inline-end: calc(inset + 32px)`) and
   the action rail is anchored out of flow, so hover reveals no longer reflow the label.
-- Emphasis stays at weight 500 (functional CSS carries no 600+); new dividers use 0.5px.
+- Workspace and Session labels stay at weight 400 even when open/current; Main emphasis stays at
+  weight 500. New dividers use 0.5px.
 
 Known gap (follow-up): the pre-existing mixed `:hover` / `[data-menu-open]` /
 `:focus-within` action-reveal groups still live outside `@media (hover: hover)`. The
@@ -94,7 +95,7 @@ the follow-up layout effect persists that single open Workspace, so navigating b
 never paints two open Workspaces.
 
 The open Workspace row keeps the native row radius and reuses the native hover fill; the label
-stays at weight 500. No custom accent bar is drawn, so the open state composes from the same
+stays at weight 400. No custom accent bar is drawn, so the open state composes from the same
 `interactive-bg-*` and label tokens as native DSH rows. Collapsed Workspace rows reserve the
 existing 28px action rail for one aggregated `StateDot` with the native state mapping: running
 renders the spinner, a pending-interaction state renders the warning (yellow) dot, and an unread

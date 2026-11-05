@@ -2188,7 +2188,7 @@ test('keeps current Session highlight without a leading inset frame', async () =
   assert.doesNotMatch(currentRule, /box-shadow/);
   assert.match(
     styles,
-    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 500;/,
+    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 400;/,
   );
   assert.match(styles, /\.treeSessionContent\s*\{[^}]*font-weight: 400;/);
   assert.doesNotMatch(styles, /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[^}]*font-weight: 600;/);

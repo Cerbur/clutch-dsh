@@ -20,8 +20,8 @@ export interface WorktreeViewState {
   activityWindows: readonly ActivityWindowId[];
   /**
    * Keep Workspaces and Worktrees whose Sessions are all outside the selected
-   * range. Defaults to false so a bounded range hides inactive structure and
-   * keeps only the active part of the tree in view.
+   * range. Defaults to true so structure and management actions stay visible;
+   * an explicit false scopes the structure to the activity range.
    */
   showInactiveStructure: boolean;
 }

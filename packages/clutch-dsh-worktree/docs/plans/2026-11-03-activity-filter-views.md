@@ -30,15 +30,16 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 派生规则：
 
 - **当前 Session 永远可见**。否则用户切到"今日"时可能看不到自己正在用的会话，导航会变成陷阱。
-- **默认隐藏不活跃结构**：有界范围内没有活跃 Session 的 Workspace / Worktree / 已归档 Worktree
-  从树上移除，让侧栏只留下当下需要关注的部分；`全部` 恢复完整树。记录、目录与绑定不变。
-- **可选保留结构**：范围菜单的「显示无活跃 Workspace」偏好打开后，Workspace / Worktree 行始终
-  保留（含空分组与管理入口），只过滤 Session 行。该偏好默认关闭并保存到浏览器本地。
+- **默认保留结构**：范围菜单的「显示无活跃 Workspace」默认勾选，Workspace / Worktree 行始终
+  保留（含空分组与管理入口），只过滤 Session 行。该偏好保存到浏览器本地；缺少该字段时默认开启，
+  已保存的显式关闭保留。
+- **可选隐藏不活跃结构**：取消勾选后，按现有候选 Session 的活跃状态筛选 Workspace / Worktree /
+  已归档 Worktree；`全部` 恢复完整树。记录、目录与绑定不变。
 - **Session 行**先按 `archivedSessionIds` 与 `sessions.ids` 收敛，再由范围谓词过滤；空白 Session
   只在它是当前 Session 时可见。
 - 搜索与范围为独立维度：搜索始终收窄 Workspace/Worktree 结构；范围在其上决定结构是否保留以及
   哪些 Session 行可见。
-- 计数与过滤共用同一谓词，标签数字不会与树内容不一致。
+- 计数与过滤共用活动谓词，但候选集合保持现状：计数排除所有空白 Session，当前空白 Session 仍可显示。
 
 ## 筛选器可见性（2026-11-04）
 
@@ -50,8 +51,8 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 | 取消勾选 | 该标签从范围栏移除；筛选谓词、计数与树内容不变 |
 | 隐藏当前范围 | 选择自动移到顺序上的下一个可见标签（末尾回绕）；结构是否保留由「显示无活跃 Workspace」决定 |
 | 仅剩一个范围 | 该范围的复选框禁用，提示"至少保留一个筛选"，避免范围栏失去全部标签 |
-| 显示无活跃 Workspace | 默认关闭：隐藏没有活跃 Session 的结构并显示范围空提示；开启后保留结构，只过滤 Session 行 |
-| 范围无 Session | 默认显示空提示并指向「全部」；开启「显示无活跃 Workspace」后结构保留、范围计数为 0 |
+| 显示无活跃 Workspace | 默认开启：保留结构，只过滤 Session 行；关闭后按候选 Session 的活跃状态筛选结构 |
+| 范围无 Session | 默认保留结构、范围计数为 0；关闭「显示无活跃 Workspace」后，无匹配结构时显示空提示并指向「全部」 |
 | 持久化 | 可见范围集合与 `activityWindow` 共用 `clutch-dsh-worktree.view-mode`；旧版本载荷缺少该字段时回退为四个范围全部可见，非法项与重复项被过滤 |
 | 菜单状态 | 展开状态只存在于当前渲染，不持久化；菜单复用 DSH `Menu`，支持 Esc/点击外部关闭与方向键行走 |
 
@@ -71,8 +72,8 @@ Worktree 侧栏此前只有搜索这一个收窄维度。随着 Workspace、Work
 | `src/client/view/activity-filter.ts` | 纯逻辑：窗口下界、活跃谓词、候选会话集合、范围计数、可见集合守卫/切换/交接、`ActivityFilterView` 读面 |
 | `src/client/surface/state/useActivityFilter.ts` | 共享偏好读取、60 秒时钟、可见范围、菜单状态、`isActive`/`hasActiveSession`/`count` 与写回 |
 | `src/client/surface/components/ActivityFilterBar.tsx` | 顶部范围标签 + 右侧可见范围/结构偏好菜单（`role="group"`、`aria-pressed`、`menuitemcheckbox`） |
-| `src/client/surface/components/WorkspaceTree.tsx` | 默认隐藏不活跃结构、可选保留结构、Session 行过滤与 `resetKey` |
-| `src/client/surface/components/ActiveWorktree.tsx`、`ArchivedWorktree.tsx` | 默认隐藏无活跃 Session 的 Worktree 行，可选保留；始终过滤叶子 Session 行与聚合状态 |
+| `src/client/surface/components/WorkspaceTree.tsx` | 默认保留结构、可选隐藏不活跃结构、Session 行过滤与 `resetKey` |
+| `src/client/surface/components/ActiveWorktree.tsx`、`ArchivedWorktree.tsx` | 默认保留 Worktree 行，可选隐藏；始终过滤叶子 Session 行与聚合状态 |
 | `src/client/surface/components/ArchivedWorktrees.tsx` | 归档分组计数与聚合状态按范围收敛 |
 | `src/client/view/view-mode.ts`、`view-mode-store.ts` | `activityWindow` + `activityWindows` + `showInactiveStructure` 持久偏好与对应 action |
 | `src/client/worktree.css`、`locales.ts` | 顶部标签栏、右侧按钮与勾选行样式，中英文文案（`activity.*`、`filter.*`） |
@@ -112,6 +113,10 @@ node --test test/readme-parity.test.mjs
   默认隐藏结构时恢复使用。
 
 ## 遗留与后续
+
+- **2026-11-05 评审决定**：人类暂时接受现有筛选与计数逻辑，包括关闭结构保留时，近期非当前空白 /
+  归档 Session 可能保留空 Workspace，以及当前空白 Session 可见但不计数。默认值改为勾选
+  「显示无活跃 Workspace」，覆盖上方此前的默认隐藏决定；不修改候选集合或计数算法。
 
 - **截图与 Features 表**：本次未新增 `assets/screenshots/` 图片，因此没有向两份 README 的
   Features 表新增行；已在实际运行的 DSH 中完成视觉验证后再补截图与表格行，并同步 `screenshots.json`。

@@ -181,8 +181,8 @@ export interface ActivityFilterView {
   /** Show or hide one selector tab; hiding the last tab is ignored. */
   readonly setWindowVisible: (window: ActivityWindowId, visible: boolean) => void;
   /**
-   * Keep Workspaces/Worktrees with no Session in the range. Defaults to false:
-   * a bounded range hides inactive structure and leaves only active rows.
+   * Keep Workspaces/Worktrees with no Session in the range. Defaults to true;
+   * users can turn it off to scope structure to the activity range.
    */
   readonly showInactiveStructure: boolean;
   readonly setShowInactiveStructure: (show: boolean) => void;

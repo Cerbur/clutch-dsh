@@ -24,7 +24,7 @@ export function createWorktreeViewStore(): EngineStoreHandle<
       viewMode: 'workspace-session',
       activityWindow: DEFAULT_ACTIVITY_WINDOW,
       activityWindows: [...DEFAULT_ACTIVITY_WINDOWS],
-      showInactiveStructure: false,
+      showInactiveStructure: true,
     }),
     persist: WORKTREE_VIEW_MODE_STORAGE_KEY,
     actions: {

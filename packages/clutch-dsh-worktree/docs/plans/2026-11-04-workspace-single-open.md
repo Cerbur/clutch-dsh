@@ -55,7 +55,7 @@ Main 与 Worktree 分组保持同一套原生映射：运行中为 spinner，审
 | `src/client/surface/state/useSessionExpansion.tsx` | 唯一展开的 Workspace、当前 Session reveal 收敛、抑制显式选择冲突、清除前一个 Workspace 的临时分组 |
 | `src/client/surface/components/WorkspaceTree.tsx` | 用 `isWorkspaceOpen` 派生 `expanded`，继续复用 Main/Worktree/Session 过滤与门禁 |
 | `src/client/surface/components/rows.tsx` | Workspace 行 `data-workspace-open`，沿用 `StateDot` 原生状态映射（ongoing 转圈、warning 黄点、done 绿点） |
-| `src/client/worktree.css` | 展开的 Workspace 复用原生 `interactive-bg-hover` 填充、weight 500 标签；disclosure 的 24×24 命中区、焦点环、按下态与 hover/touch 媒体查询 |
+| `src/client/worktree.css` | 展开的 Workspace 复用原生 `interactive-bg-hover` 填充；Workspace 与 Session 标签保持 weight 400；disclosure 的 24×24 命中区、焦点环、按下态与 hover/touch 媒体查询 |
 | `src/client/surface/components/AnimatedTree.tsx` | 折叠/展开位移与淡出统一为 `ease-in-out`，保持 100/200ms |
 | `src/client/README.md`、`docs/ARCHITECTURE.md`、`docs/SIDEBAR-PRESENTATION.md` | 契约与呈现说明 |
 | `README.md`、`README.zh.md` | 双语用户文档同步 |
@@ -69,7 +69,7 @@ Main 与 Worktree 分组保持同一套原生映射：运行中为 spinner，审
 | 规范条款 | 落地 |
 | --- | --- |
 | 只用 DSH 语义别名，不新增色板 | 展开的 Workspace 复用 `--dsw-alias-interactive-bg-hover`，不再画 2px 色条；焦点使用 `--dsw-focus-ring-color` |
-| 字号 12 / 13 / 14，行高 20，字重 ≤500 | Workspace 标题 14/20/500；disclosure 13/20 |
+| 字号 12 / 13 / 14，行高 20，字重 ≤500 | Workspace 标题 14/20/400；当前 Session 同样保持常规字重；disclosure 13/20 |
 | 图标按钮 24×24 | disclosure 命中区 24×24，视觉中心仍落在 20px leading cell |
 | 动效 100 / 200ms，只动 opacity / transform，`--ds-ease-in-out` | disclosure 使用 `--ds-transition-duration` 旋转；`AnimatedTree` 使用 100/200ms + `--ds-ease-in-out` 曲线 |
 | hover 只在支持 hover 的设备启用 | disclosure hover 收进 `@media (hover: hover)`；`@media (hover: none)` 常显 disclosure |
@@ -108,6 +108,9 @@ cd packages/clutch-dsh-worktree && node --test test/readme-parity.test.mjs
 - 既有 Session reveal、Collapse All、活动筛选与状态聚合测试保持通过。
 
 ## 后续观察
+
+- 2026-11-05 人类评审要求 Workspace 与 Session 稳定状态不加粗；展开 / 当前状态均保持 400，
+  继续使用背景高亮与图标表示状态。
 
 - 如果 Workspace 数量继续增长，可在 Workspace 行上增加搜索命中/活动范围计数，但本次不改变过滤语义。
 - 当前没有独立的“Workspace 列表”滚动容器；Workspace 行仍与树共用侧栏滚动。若展开的树很长，

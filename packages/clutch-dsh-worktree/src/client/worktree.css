@@ -995,7 +995,7 @@
 }
 
 .workspaceRow[data-workspace-open='true'] .workspaceTitle {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 @media (hover: hover) {
@@ -1526,7 +1526,7 @@
 }
 
 .treeSessionRow[data-session-current='true'] .treeSessionContent {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .treeSessionRow.dropBefore::before,

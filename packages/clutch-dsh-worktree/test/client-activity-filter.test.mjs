@@ -140,12 +140,12 @@ test('the store updates visibility and selection atomically and never empties th
   assert.deepEqual(snapshot().activityWindows, ['all']);
   assert.equal(snapshot().activityWindow, 'all');
 
-  // Inactive structure is hidden by default and can be kept on request.
-  assert.equal(snapshot().showInactiveStructure, false);
-  instance.actions.setShowInactiveStructure(true);
+  // Inactive structure is kept by default and can be hidden on request.
   assert.equal(snapshot().showInactiveStructure, true);
   instance.actions.setShowInactiveStructure(false);
   assert.equal(snapshot().showInactiveStructure, false);
+  instance.actions.setShowInactiveStructure(true);
+  assert.equal(snapshot().showInactiveStructure, true);
 });
 
 test('all keeps every Session, including rows without activity facts', () => {
@@ -312,7 +312,7 @@ function barProps(window, counts, setWindow, options = {}) {
       setMenuOpen: (open) => {
         options.setMenuOpen?.(open);
       },
-      showInactiveStructure: options.showInactiveStructure ?? false,
+      showInactiveStructure: options.showInactiveStructure ?? true,
       setShowInactiveStructure: (next) => {
         options.setShowInactiveStructure?.(next);
       },
@@ -453,13 +453,13 @@ test('the only remaining range cannot be unchecked', async () => {
 });
 
 
-test('the range hides inactive structure by default but can keep it on request', async () => {
+test('the range can hide inactive structure when its default preference is turned off', async () => {
   const readSurface = (file) =>
     readFile(new URL(`../src/client/surface/components/${file}`, import.meta.url), 'utf8');
   const tree = await readSurface('WorkspaceTree.tsx');
 
-  // The default gate hides a Workspace/Worktree with no in-range Session, while the
-  // showInactiveStructure preference keeps the structure and its management actions.
+  // Turning off showInactiveStructure hides a Workspace/Worktree with no in-range
+  // Session; the default keeps structure and management actions.
   assert.match(tree, /activity\.showInactiveStructure/);
   assert.match(tree, /worktreeSurvivesWindow/);
   assert.match(tree, /activity\.hasActiveSession/);

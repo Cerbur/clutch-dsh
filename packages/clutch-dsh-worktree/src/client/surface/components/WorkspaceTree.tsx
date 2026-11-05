@@ -161,9 +161,9 @@ export function WorkspaceTree({
   const { openWorkspaceRename, openWorkspaceDelete, openSessionRename, archiveWorktreeSession } =
     native;
 
-  // A bounded range keeps only the active part of the tree by default. The
-  // optional "show inactive structure" preference keeps every Workspace and
-  // Worktree row instead, so structure and management actions stay reachable;
+  // The default "show inactive structure" preference keeps every Workspace and
+  // Worktree row, so structure and management actions stay reachable. Turning
+  // it off scopes structure to the activity range;
   // either way only Session rows are filtered by the range.
   const workspaceCandidateSessionIds = (workspaceId: string): readonly string[] => {
     const candidates = new Set(workspaceSessionIds(workspaces, workspaceId, sessions.ids));

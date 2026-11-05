@@ -111,8 +111,8 @@ export function ArchivedWorktree({
     ),
     sessions,
   );
-  // Archived Worktrees follow the same default: hide the row when no Session in
-  // the range belongs to it, unless the show-inactive preference keeps structure.
+  // Archived Worktrees keep their structure by default; turning off show-inactive
+  // hides the row when no Session in the range belongs to it.
   if (activity.active && !activity.showInactiveStructure && worktreeSessionIds.length === 0) {
     return null;
   }

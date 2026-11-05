@@ -42,7 +42,7 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
   const preferred = props.useStore((state) => state.activityWindow);
   const preferredWindows = props.useStore((state) => state.activityWindows);
   const showInactiveStructure = props.useStore(
-    (state) => state.showInactiveStructure === true,
+    (state) => state.showInactiveStructure !== false,
   );
   const visibleWindows = useMemo(
     () => effectiveActivityWindows(preferredWindows),

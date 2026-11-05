@@ -175,7 +175,7 @@ test('the action column sets the title viewport without moving the leading or ac
   assert.doesNotMatch(tree, /\.worktreeRow:hover \.treeActionSlot \{/);
 });
 
-test('emphasis stays at weight 500 in the tree rows', () => {
+test('Workspace and Session selection keep regular weight while Main stays emphasized', () => {
   const mainLabel = rule(tree, ".worktreeRow[data-main-group='true'] .worktreeLabel {");
   assert.match(mainLabel, /font-weight: 500;/);
   assert.doesNotMatch(mainLabel, /font-weight: 600;/);
@@ -183,6 +183,8 @@ test('emphasis stays at weight 500 in the tree rows', () => {
     tree,
     ".treeSessionRow[data-session-current='true'] .treeSessionContent {",
   );
-  assert.match(currentSession, /font-weight: 500;/);
+  assert.match(currentSession, /font-weight: 400;/);
   assert.doesNotMatch(currentSession, /font-weight: 600;/);
+  const openWorkspace = rule(tree, ".workspaceRow[data-workspace-open='true'] .workspaceTitle {");
+  assert.match(openWorkspace, /font-weight: 400;/);
 });

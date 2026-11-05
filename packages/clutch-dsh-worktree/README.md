@@ -139,7 +139,8 @@ selecting the open Workspace collapses its tree. A collapsed Workspace row carri
 aggregated status indicator at its action edge: the native running spinner while a Session is
 running, a yellow dot while waiting for approval or another interaction, and a green dot for
 an unread completion, so another Workspace can pull attention without opening it.
-Session titles retain regular weight; the current Session keeps a subtle weight-500 emphasis.
+Workspace and Session titles retain regular weight, including the open Workspace and current
+Session; background highlighting continues to indicate selection.
 An open Workspace containing the current Session uses the native blue folder; other Workspace
 folders use the native gray. Hover over a long Session title or Worktree name to reveal its
 tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
@@ -173,13 +174,15 @@ adds no Git read and no new DSH request.
 - **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
   the current time.
 - The Session you are viewing stays visible in every range, so navigation never hides it.
-- By default, a bounded range hides the inactive part of the tree: a Workspace or Worktree with no
-  active Session in the range is removed from view, **All** restores the full tree, and search is
-  unchanged. Records, directories, and bindings are untouched.
-- The range menu's **Show inactive Workspaces** option keeps Workspaces, Worktrees, and archived
+- By default, a bounded range filters Session rows while keeping Workspace and Worktree structure.
+  **All** restores all Session rows, and search is unchanged. Records, directories, and bindings
+  are untouched.
+- The range menu's **Show inactive Workspaces** option is on by default and keeps Workspaces, Worktrees, and archived
   Worktrees visible with their empty groups and management actions even when the range contains
-  none of their Sessions. The option is browser-local and off by default.
-- Each range shows how many Sessions it contains. The selected range is a browser-local
+  none of their Sessions. Turn it off to filter inactive structure too. The option is browser-local;
+  an existing saved choice is preserved.
+- Each range counts non-blank, non-archived Sessions; a visible current blank Session is not counted.
+  The selected range is a browser-local
   preference: it survives reopening the panel and reloading the page, and it is never written to
   the plugin index or to DSH.
 - The button at the right edge of the range bar opens a checklist of the four ranges. Only checked

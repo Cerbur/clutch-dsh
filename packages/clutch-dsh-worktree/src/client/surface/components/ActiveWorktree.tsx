@@ -126,9 +126,9 @@ export function ActiveWorktree({
     ),
     sessions,
   );
-  // By default a Worktree with no Session inside a bounded range is omitted from
-  // the tree, never from the index: its record, bindings and directory stay
-  // untouched. The show-inactive preference keeps the row (and its actions).
+  // Turning off show-inactive omits a Worktree with no Session inside a bounded
+  // range from the tree, never from the index: its record, bindings and directory
+  // stay untouched. The default keeps the row and its actions.
   if (activity.active && !activity.showInactiveStructure && worktreeSessionIds.length === 0) {
     return null;
   }
