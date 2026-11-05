@@ -126,9 +126,9 @@ export function ActiveWorktree({
     ),
     sessions,
   );
-  // A Worktree with no Session inside the range is omitted from the tree, never
-  // from the index: the record, its bindings and its directory stay untouched.
-  if (activity.active && worktreeSessionIds.length === 0) return null;
+  // The range filters Session rows only. The Worktree row stays visible so its
+  // identity, actions and management entries remain reachable when no Session in
+  // the range belongs to it; the record and bindings stay untouched.
   const worktreeMatchesQuery =
     workspaceMatchesQuery ||
     includesText(record.branch, query) ||

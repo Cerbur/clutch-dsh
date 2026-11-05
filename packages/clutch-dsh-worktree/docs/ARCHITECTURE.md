@@ -695,7 +695,7 @@ Refresh scope is determined by the smallest affected identity.
 ### 活跃范围筛选 (Activity Range Filter, 2026-11-03)
 
 Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / 最近 24 小时 / 最近 7 天 / 全部），
-把整棵树收窄到所选范围。它是纯展示投影：不新增 RPC、不读取 Git、不写 Sidecar，也不改变 DSH
+只筛选 Session 行。它是纯展示投影：不新增 RPC、不读取 Git、不写 Sidecar，也不改变 DSH
 的 Workspace/Session 成员关系。
 
 - 判定只使用代码已经持有的原生事实：`SessionPresentation.ongoing`（含运行中的子代理）、
@@ -704,15 +704,15 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 - 「今日」使用本地日历零点；「24 小时」与「7 天」是从当前时间向前滚动的窗口。窗口边界与范围
   计数最多每 60 秒重算一次，并且只在侧栏挂载期间运行。
 - 当前 Session 在所有范围内保持可见，导航不会把它隐藏；这是可用性约束，不是数据规则。
-- Workspace、受管 Worktree 与已归档 Worktree 仅在其包含范围内 Session 时渲染；被隐藏的记录仍在
-  Sidecar 与既有 ready 投影中，绑定、生命周期状态与磁盘目录保持不变。隐藏不构成解绑、归档或清理，
-  也不放宽任何写入门禁。
-- 搜索与活跃范围是两个独立维度：一条 Session 必须同时满足两者才会渲染。范围切换与搜索一样按
-  `AnimatedTree` resetKey 立即完成布局，不改变已保存的展开或顺序偏好。
+- Workspace、受管 Worktree 与已归档 Worktree 结构始终渲染（搜索没有匹配项时除外），即使范围内
+  没有它们的 Session。分类、空分组与管理入口因此保持可达；记录、绑定、生命周期状态与磁盘目录
+  不变，范围也不构成解绑、归档或清理，不放宽任何写入门禁。
+- 搜索与活跃范围是两个独立维度：搜索收窄 Workspace/Worktree 结构，范围只收窄其下的 Session 行；
+  范围切换与搜索一样按 `AnimatedTree` resetKey 立即完成布局，不改变已保存的展开或顺序偏好。
 - 选中范围属于浏览器本地偏好，与 `viewMode` 共用 `clutch-dsh-worktree.view-mode` 键；持久化值
   先经 `effectiveActivityWindow` 校验，空值或未知值回退 `all`，保持升级前用户看到完整树。
-- 范围计数与行过滤共用同一谓词（`src/client/view/activity-filter.ts`），避免标签与树内容不一致；
-  `surface/state/useActivityFilter.ts` 只负责共享偏好、时钟与计数。
+- 范围计数与 Session 行过滤共用同一谓词（`src/client/view/activity-filter.ts`），避免标签与树内容
+  不一致；`surface/state/useActivityFilter.ts` 只负责共享偏好、时钟与计数。
 
 ### Shell Overlay 呈现
 

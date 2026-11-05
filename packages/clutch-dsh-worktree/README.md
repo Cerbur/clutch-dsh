@@ -164,17 +164,18 @@ remains an independent overlay opened explicitly from its existing actions.
 
 ### Filter Sessions by activity
 
-The range selector below the Worktree header scopes the whole tree to today, the last 24 hours,
-the last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
-adds no Git read and no new DSH request.
+The range selector below the Worktree header filters the Session rows to today, the last 24
+hours, the last 7 days, or every Session. It reads only the Session facts the tree already
+shows, so it adds no Git read and no new DSH request.
 
 - A Session is active when it is running, waiting for interaction, or was last updated inside the
   range. Running and waiting Sessions stay visible even with an older update.
 - **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
   the current time.
 - The Session you are viewing stays visible in every range, so navigation never hides it.
-- Workspaces, Worktrees, and archived Worktrees stay visible only while they contain a Session in
-  the range. Their records, directories, and bindings are untouched.
+- The range filters Session rows only. Workspaces and Worktrees, including archived ones, stay
+  visible with their empty groups and management actions; their records, directories, and bindings
+  are untouched.
 - Each range shows how many Sessions it contains. The selected range is a browser-local
   preference: it survives reopening the panel and reloading the page, and it is never written to
   the plugin index or to DSH.
@@ -182,8 +183,8 @@ adds no Git read and no new DSH request.
   ranges appear as tabs, at least one always stays checked, and hiding the selected range moves the
   selection to the next visible tab. The visible set is a browser-local preference like the range
   itself.
-- When nothing matches, the tree reports the empty range and points back to **All**, or to the range
-  menu when **All** is hidden.
+- When the range contains no Sessions, the structure stays in place and the range count shows 0;
+  search still reports when no Workspace matches the query.
 
 ### Active sessions
 

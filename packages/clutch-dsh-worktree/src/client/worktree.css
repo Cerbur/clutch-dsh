@@ -576,14 +576,6 @@
   line-height: 18px;
 }
 
-.emptyHint {
-  margin: 0;
-  padding: 0 4px 8px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
-}
-
 .gitReadiness {
   display: grid;
   gap: 4px;

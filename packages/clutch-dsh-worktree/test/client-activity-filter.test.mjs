@@ -436,3 +436,23 @@ test('the only remaining range cannot be unchecked', async () => {
   assert.equal(options[0].props.title, 'filter.keepOne');
 });
 
+
+test('the range filters Session rows without hiding Workspace or Worktree structure', async () => {
+  const readSurface = (file) =>
+    readFile(new URL(`../src/client/surface/components/${file}`, import.meta.url), 'utf8');
+  const tree = await readSurface('WorkspaceTree.tsx');
+
+  // The tree keeps every Workspace and Worktree row; only Session rows are scoped.
+  assert.doesNotMatch(tree, /worktreeSurvivesWindow|activity\.hasActiveSession/);
+  assert.doesNotMatch(tree, /filter\.empty/);
+  assert.match(tree, /activity\.scopeSessionIds/);
+  assert.match(tree, /activeWorktrees\.map/);
+  assert.match(tree, /archivedWorktrees\.length/);
+
+  for (const file of ['ActiveWorktree.tsx', 'ArchivedWorktree.tsx']) {
+    const source = await readSurface(file);
+    // A Worktree row with no Session in the range stays visible and manageable.
+    assert.doesNotMatch(source, /activity\.active\s*&&\s*worktreeSessionIds\.length === 0/);
+    assert.match(source, /activity\.scopeSessionIds/);
+  }
+});

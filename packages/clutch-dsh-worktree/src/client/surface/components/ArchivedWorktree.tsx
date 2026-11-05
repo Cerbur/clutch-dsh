@@ -111,9 +111,8 @@ export function ArchivedWorktree({
     ),
     sessions,
   );
-  // Archived Worktrees follow the same range as active ones: hide the row when no
-  // Session inside the range belongs to it, and keep the record itself intact.
-  if (activity.active && worktreeSessionIds.length === 0) return null;
+  // Archived Worktrees keep their row for the same reason: the range hides Session
+  // rows, never the archived structure or its lifecycle actions.
   const worktreeMatchesQuery =
     workspaceMatchesQuery ||
     includesText(record.branch, query) ||
