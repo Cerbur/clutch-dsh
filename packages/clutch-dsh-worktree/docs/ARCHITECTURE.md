@@ -639,6 +639,9 @@ Client 在准入前登记变更 ticket。仅当有 ready 基础投影、读取�
 （`clutch-dsh-worktree.session-order`）都是 browser-local preference，并且都只在可确认的
 完整读取之上做破坏性收敛：
 
+- Workspace 树同一时间只展开一个 Workspace。`openWorkspaceExclusive` 在同一个
+  draft 中清除目标 ID 并折叠其余已知 Workspace；当前 Session 的临时 reveal 优先于持久选择，
+  随后由 layout effect 收敛到同一个打开的 Workspace，避免导航瞬间出现两个打开的分组；
 - DSH 的 Session/Workspace 列表带单调的 `pending → ready` 到达相位；相位未 ready 时列表为空
   表示“尚未到达”，不表示“不存在”，此时不得据此推导 account 顺序或清理记录；
 - 只有 `readState.status === 'ready'`、Workspace 列表已确认且每个 Workspace 的 projection 都已
@@ -683,7 +686,41 @@ Refresh scope is determined by the smallest affected identity.
 - `subagentCatalog` 由原生 Controller 投影成包含 catalog-only children 的 `byId` lineage，
   插件复用既有关系并优先从 status 读取 child running，不新建 catalog 请求或完成状态 owner。
 - 复用 DSH 原生 `StateDot` 呈现 Session 运行、子代理运行、等待审批、计划审核、问题与完成未读等状态；
-- 当 Workspace、Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他 pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。
+- 收起的 Workspace 行从完整成员中聚合一个状态指示：运行中使用原生转圈，pending interaction warning
+  使用黄色 dot，未读完成使用绿色 dot，因此该行本身即可提示切换；打开该 Workspace 或交互时该指示器让位；
+- 当 Main 或 Worktree 折叠时，从完整成员中选择最多一个聚合 Session 状态 dot：等待审批及其他
+  pending interaction warning 优先于运行中，运行中优先于已完成；Idle Session 不贡献分组 dot。
+  展开或交互时该指示器平滑让位，Worktree 健康 dot 仍是独立的前置指示器。
+
+### 活跃范围筛选 (Activity Range Filter, 2026-11-03)
+
+Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / 最近 24 小时 / 最近 7 天 / 全部），
+默认保留 Workspace / Worktree 结构，只筛选 Session 行；`全部` 恢复所有 Session 行。
+它是纯展示投影：不新增 RPC、不读取 Git、不写 Sidecar，也不改变 DSH 的 Workspace/Session 成员关系。
+
+- 判定只使用代码已经持有的原生事实：`SessionPresentation.ongoing`（含运行中的子代理）、
+  `status.state === 'warning'`（等待审批、计划审核或回答）以及 `updatedAt`。运行中与等待交互的
+  Session 不受更新时间限制，因为它们此刻确实活跃。
+- 「今日」使用本地日历零点；「24 小时」与「7 天」是从当前时间向前滚动的窗口。窗口边界与范围
+  计数最多每 60 秒重算一次，并且只在侧栏挂载期间运行。
+- 当前 Session 在所有范围内保持可见，导航不会把它隐藏；这是可用性约束，不是数据规则。
+- 取消「显示无活跃 Workspace」后隐藏不活跃结构：范围内没有活跃 Session 的 Workspace、受管 Worktree 与已归档 Worktree
+  从树上移除，范围空提示指向「全部」。记录、绑定、生命周期状态与磁盘目录不变，范围也不构成
+  解绑、归档或清理，不放宽任何写入门禁。
+- 浏览器本地偏好 `showInactiveStructure`（默认 `true`）打开后，Workspace / Worktree 结构始终
+  保留（搜索没有匹配项时除外），即使范围内没有它们的 Session；分类、空分组与管理入口保持可达，
+  此时只过滤 Session 行。两种模式下 Session 行都由范围谓词过滤。
+- 搜索与活跃范围是两个独立维度：搜索始终收窄 Workspace/Worktree 结构；范围决定结构是否保留以及
+  其下哪些 Session 行可见。范围切换与搜索一样按 `AnimatedTree` resetKey 立即完成布局，不改变
+  已保存的展开或顺序偏好。
+- 选中范围、可见范围集合与 `showInactiveStructure` 属于浏览器本地偏好，与 `viewMode` 共用
+  `clutch-dsh-worktree.view-mode` 键；持久化值分别经 `effectiveActivityWindow`、
+  `effectiveActivityWindows` 与布尔守卫校验，旧载荷缺少字段时回退 `all` / 四个范围 / 保留不活跃结构；
+  已保存的显式 `false` 保留。
+- 范围计数与 Session 行过滤共用活动谓词（`src/client/view/activity-filter.ts`），但计数排除所有
+  空白与归档 Session，当前空白 Session 仍可显示。`surface/state/useActivityFilter.ts` 负责共享偏好、时钟与计数。
+- 2026-11-05 人类评审暂时接受现有候选集合差异：关闭保留结构时，近期的非当前空白或归档 Session
+  仍可能使 Workspace 结构保留，但它们不显示为 Session 行。本次不调整这些筛选与计数逻辑。
 
 ### Shell Overlay 呈现
 

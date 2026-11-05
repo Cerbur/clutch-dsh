@@ -1388,6 +1388,7 @@ test('injects a separate structural expand-state store alongside view mode', asy
   assert.equal(typeof injected.expandState.getSnapshot, 'function');
   assert.equal(typeof injected.expandState.subscribe, 'function');
   assert.equal(typeof injected.expandState.actions.toggleWorkspace, 'function');
+  assert.equal(typeof injected.expandState.actions.openWorkspaceExclusive, 'function');
   assert.equal(typeof injected.expandState.actions.toggleMain, 'function');
   assert.equal(typeof injected.expandState.actions.toggleWorktree, 'function');
   assert.equal(typeof injected.expandState.actions.retain, 'function');

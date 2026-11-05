@@ -3,6 +3,7 @@ import {
   isMainExpanded,
   isWorkspaceExpanded,
   isWorktreeExpanded,
+  resolveOpenWorkspaceId,
 } from '../../view/worktree-expand-state.js';
 import { scrollCurrentSessionIntoView } from '../../session/worktree-session-position.js';
 import {
@@ -38,6 +39,9 @@ export function useSessionExpansion({ read, source, props }: Input) {
   const [currentSessionReveal, setCurrentSessionReveal] = useState<CurrentSessionRevealState>();
   const revealSessionIdRef = useRef<string | undefined>(Symbol('initial') as unknown as string);
   const revealModeRef = useRef<typeof mode | undefined>(Symbol('initial') as unknown as typeof mode);
+  // The Workspace already forced open for the current Session. It prevents the reveal
+  // from overriding a newer explicit tab click before suppression state commits.
+  const appliedRevealRef = useRef<{ sessionId: string | undefined; workspaceId: string }>();
 
   let activeReveal = currentSessionReveal;
   if (currentSessionId !== revealSessionIdRef.current || mode !== revealModeRef.current) {
@@ -52,6 +56,9 @@ export function useSessionExpansion({ read, source, props }: Input) {
 
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
+  useEffect(() => {
+    if (mode !== 'worktree') appliedRevealRef.current = undefined;
+  }, [mode]);
   useEffect(() => {
     if (!searchExpanded) return;
     const onClick = (event: MouseEvent): void => {
@@ -94,6 +101,20 @@ export function useSessionExpansion({ read, source, props }: Input) {
     activeReveal.sessionId === currentSessionId &&
     currentRevealKeys.has(key) &&
     activeReveal.suppressedKeys[key] !== true;
+  // Only one Workspace is open at a time: exactly one owns the tree body. A temporary
+  // current-Session reveal is the immediate choice; the store write below settles it.
+  const revealedWorkspaceId =
+    currentSessionLocation?.workspaceId !== undefined &&
+    workspaceIds.includes(currentSessionLocation.workspaceId) &&
+    isCurrentSessionReveal('workspace:' + currentSessionLocation.workspaceId)
+      ? currentSessionLocation.workspaceId
+      : undefined;
+  const openWorkspaceId = resolveOpenWorkspaceId(
+    expandSnapshot,
+    workspaceIds,
+    revealedWorkspaceId,
+  );
+  const isWorkspaceOpen = (workspaceId: string): boolean => workspaceId === openWorkspaceId;
   useLayoutEffect(() => {
     locateGenerationRef.current += 1;
     positionedLocateGenerationRef.current = undefined;
@@ -135,6 +156,49 @@ export function useSessionExpansion({ read, source, props }: Input) {
     query,
     readState.status,
   ]);
+  // Keep the tab choice as one persisted value. A revealed current-Session Workspace
+  // wins immediately; legacy multi-open records settle on the first open choice.
+  useLayoutEffect(() => {
+    if (
+      mode !== 'worktree' ||
+      readState.status !== 'ready' ||
+      isPendingListPhase(workspaces.phase) ||
+      workspaceIds.length === 0
+    ) {
+      return;
+    }
+    const expandedIds = workspaceIds.filter((workspaceId) =>
+      isWorkspaceExpanded(expandSnapshot, workspaceId),
+    );
+    if (revealedWorkspaceId !== undefined) {
+      const applied = appliedRevealRef.current;
+      if (
+        applied !== undefined &&
+        applied.sessionId === currentSessionId &&
+        applied.workspaceId === revealedWorkspaceId
+      ) {
+        return;
+      }
+      expandState.actions.openWorkspaceExclusive(revealedWorkspaceId, workspaceIds);
+      appliedRevealRef.current = {
+        sessionId: currentSessionId,
+        workspaceId: revealedWorkspaceId,
+      };
+      return;
+    }
+    if (expandedIds.length > 1 && openWorkspaceId !== undefined) {
+      expandState.actions.openWorkspaceExclusive(openWorkspaceId, workspaceIds);
+    }
+  }, [
+    mode,
+    readState.status,
+    workspaces.phase,
+    workspaceIds,
+    expandSnapshot,
+    revealedWorkspaceId,
+    openWorkspaceId,
+    expandState,
+  ]);
   useEffect(() => {
     // Pruning is destructive: require a confirmed Workspace list whose projections all
     // arrived. A pending or partial read means "nothing arrived yet", not "nothing exists".
@@ -164,31 +228,31 @@ export function useSessionExpansion({ read, source, props }: Input) {
     });
     return true;
   };
+  const workspaceGroupKeys = (workspaceId: string): string[] => [
+    'main:' + workspaceId,
+    ...(viewByWorkspace.get(workspaceId)?.worktrees.map((record) => record.worktreeId) ?? []).map(
+      (worktreeId) => 'worktree:' + worktreeId,
+    ),
+  ];
   const toggleWorkspace = (workspaceId: string): void => {
-    const persistedExpanded = isWorkspaceExpanded(expandSnapshot, workspaceId);
-    const autoExpanded = isCurrentSessionReveal('workspace:' + workspaceId);
-    const visuallyExpanded = persistedExpanded || autoExpanded;
-    if (visuallyExpanded && autoExpanded) {
+    // The active tab closes on a second activation; an inactive tab replaces the
+    // active one, so the tree body never shows two Workspaces at once.
+    if (openWorkspaceId === workspaceId) {
       suppressCurrentSessionReveal('workspace:' + workspaceId);
-    }
-    if (visuallyExpanded && !persistedExpanded) {
-      clearSessionGroups([
-        'main:' + workspaceId,
-        ...(
-          viewByWorkspace.get(workspaceId)?.worktrees.map((record) => record.worktreeId) ?? []
-        ).map((worktreeId) => 'worktree:' + worktreeId),
-      ]);
+      if (isWorkspaceExpanded(expandSnapshot, workspaceId)) {
+        expandState.actions.toggleWorkspace(workspaceId);
+      }
+      clearSessionGroups(workspaceGroupKeys(workspaceId));
       return;
     }
-    expandState.actions.toggleWorkspace(workspaceId);
-    if (visuallyExpanded) {
-      clearSessionGroups([
-        'main:' + workspaceId,
-        ...(
-          viewByWorkspace.get(workspaceId)?.worktrees.map((record) => record.worktreeId) ?? []
-        ).map((worktreeId) => 'worktree:' + worktreeId),
-      ]);
+    const currentWorkspaceId = currentSessionLocation?.workspaceId;
+    if (currentWorkspaceId !== undefined && currentWorkspaceId !== workspaceId) {
+      // Explicit tab selection outranks the automatic reveal of the Workspace that
+      // owns the current Session until navigation changes.
+      suppressCurrentSessionReveal('workspace:' + currentWorkspaceId);
     }
+    if (openWorkspaceId !== undefined) clearSessionGroups(workspaceGroupKeys(openWorkspaceId));
+    expandState.actions.openWorkspaceExclusive(workspaceId, workspaceIds);
   };
   const toggleMain = (workspaceId: string): void => {
     const persistedExpanded = isMainExpanded(expandSnapshot, workspaceId);
@@ -268,6 +332,8 @@ export function useSessionExpansion({ read, source, props }: Input) {
     currentSessionLocation,
     currentRevealKeys,
     isCurrentSessionReveal,
+    openWorkspaceId,
+    isWorkspaceOpen,
     clearSessionGroups,
     suppressCurrentSessionReveal,
     toggleWorkspace,

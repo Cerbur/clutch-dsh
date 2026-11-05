@@ -80,7 +80,7 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 | Feature                         | Preview                                                                                                                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | The existing footer entry switches only the native Workspace browsing region to Worktree mode. New Session, plugin menus, and the current conversation remain in place. The panel inherits the native Sidebar material and transparency preferences. Workspace expansion and new Session rows use native-style fades and movement. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
+| **Worktree navigation**         | <img src="assets/screenshots/screenshots-en.png" width="420" alt="DSH Worktree navigation with Workspace, Main, Worktree, and Session rows"> | The existing footer entry switches only the native Workspace browsing region to Worktree mode. New Session, plugin menus, and the current conversation remain in place. The panel inherits the native Sidebar material and transparency preferences; on macOS desktop it shares DSH's native glass material without a second background layer or duplicate navigation showing through, while other platforms keep the theme fill. Workspace switching and new Session rows use native-style fades and movement; a collapsed Workspace row shows the running spinner, approval dot, or completion dot at its action edge. Browse each Workspace through Local/Main and Git Worktree rows, then open the Sessions bound to each row. |
 | **Create and import Worktrees** | <img src="assets/screenshots/screenshots-import.png" width="420" alt="Worktree create and import dialog">                                    | Create a Worktree from a local or fetched remote branch, or register an existing branch-attached Worktree in place. Import does not move, copy, or edit the existing directory.                                                                                                                                                                                                                                                                                                       |
 | **Worktree Dashboard**          | <img src="assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard overview with actions, instructions, and status">     | The preview Dashboard shows Worktree identity, path, Sessions, Worktree/Main instructions, connected actions, the host-provided Open In action, and the read-only Git & Changes view for managed Worktrees or Main. Derived Worktrees lists direct saved-baseline matches with paths, availability, and Dashboard navigation. Sync with Base creates an Agent task Session using Rebase or Merge baseline.                                                                                                                                                                 |
 | **Git & Changes** | <img src="assets/screenshots/screenshots-git-reviewer.png" width="420" alt="Git and Changes view with commits, changed files, and diff"> | Review baseline comparisons, commits, changed files, and diffs in a read-only view. |
@@ -133,15 +133,20 @@ The Sidebar scrollbar floats over the edge without shifting row spacing. Workspa
 and rotating disclosure triangles match native DSH and align with its Workspace list.
 The Worktree heading follows the native Workspace heading's typography and spacing.
 Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
-Session titles retain regular weight, including the selected Session.
-An expanded Workspace containing the current
-Session uses the native blue folder; other Workspace folders use the native gray. Hover over a long
-Session title or Worktree
-name to reveal its tail at native speed; leaving restores the start. Reduced motion reveals the
-tail immediately.
+Only one Workspace is expanded at a time, and it owns the Local/Main, Worktree, and Session
+tree so the sidebar stays focused. Selecting another Workspace collapses the previous one;
+selecting the open Workspace collapses its tree. A collapsed Workspace row carries one
+aggregated status indicator at its action edge: the native running spinner while a Session is
+running, a yellow dot while waiting for approval or another interaction, and a green dot for
+an unread completion, so another Workspace can pull attention without opening it.
+Workspace and Session titles retain regular weight, including the open Workspace and current
+Session; background highlighting continues to indicate selection.
+An open Workspace containing the current Session uses the native blue folder; other Workspace
+folders use the native gray. Hover over a long Session title or Worktree name to reveal its
+tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
 
 1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
-2. Search or expand a Workspace in the Worktree tree.
+2. Search or select a Workspace in the Worktree tree.
 3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native
    Workspace and Session navigation remains available. Each group initially shows five rows;
    use **Expand more** and **Collapse** for additional rows.
@@ -157,6 +162,35 @@ Select the same footer entry again to restore the native Workspace browser. Side
 and folding follow DSH's slot contract, without locating native rows by text, DOM order, or coordinates.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
+
+### Filter Sessions by activity
+
+The range selector below the Worktree header filters the tree to today, the last 24 hours, the
+last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
+adds no Git read and no new DSH request.
+
+- A Session is active when it is running, waiting for interaction, or was last updated inside the
+  range. Running and waiting Sessions stay visible even with an older update.
+- **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
+  the current time.
+- The Session you are viewing stays visible in every range, so navigation never hides it.
+- By default, a bounded range filters Session rows while keeping Workspace and Worktree structure.
+  **All** restores all Session rows, and search is unchanged. Records, directories, and bindings
+  are untouched.
+- The range menu's **Show inactive Workspaces** option is on by default and keeps Workspaces, Worktrees, and archived
+  Worktrees visible with their empty groups and management actions even when the range contains
+  none of their Sessions. Turn it off to filter inactive structure too. The option is browser-local;
+  an existing saved choice is preserved.
+- Each range counts non-blank, non-archived Sessions; a visible current blank Session is not counted.
+  The selected range is a browser-local
+  preference: it survives reopening the panel and reloading the page, and it is never written to
+  the plugin index or to DSH.
+- The button at the right edge of the range bar opens a checklist of the four ranges. Only checked
+  ranges appear as tabs, at least one always stays checked, and hiding the selected range moves the
+  selection to the next visible tab. The visible set is a browser-local preference like the range
+  itself.
+- When the range contains no Sessions and inactive structure is hidden, the tree reports the empty
+  range and points back to **All**, or to the range menu when **All** is hidden.
 
 ### Active sessions
 
@@ -393,7 +427,11 @@ that first request discards the initial routing override. Native Session model c
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
 preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
-No extra command arguments are accepted. All discovery, reports and follow-ups are restricted
+`/cluworktree create <name> [baseBranch]` creates a managed Worktree and branch from the calling
+Session's healthy Worktree HEAD or the Workspace-root HEAD; the name is required and no Session is created.
+Lifecycle subcommands act on the calling Session's active Worktree binding: `/cluworktree list`,
+`archive`, `clean --yes`, `forget`, and `unarchive`. They accept no Worktree id; the Main Workspace has no binding and is rejected.
+All discovery, reports and follow-ups are restricted
 to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
 are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
 Detached bindings must be repaired before sending or reporting through these tools.
@@ -717,7 +755,9 @@ text, actions and diagnostic details follow the font size selected in **Settings
   recovery-needed states remain visible and retryable.
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
-- Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse. **Collapse All** collapses unrelated nodes while keeping the current Session's Workspace and Worktree expanded.
+- Persist the open Workspace plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse. **Collapse All** collapses unrelated nodes while keeping the current Session's Workspace and Worktree expanded.
+- The activity range is a presentation filter over native Session facts. It hides rows only: it never archives, unbinds, or deletes anything, and it adds no Git or Host read. A hidden Workspace or Worktree remains in the plugin index with its Sessions and bindings intact.
+- Range counts and range boundaries are recomputed at most once a minute while the panel is open, so a Session can remain listed for up to a minute after it leaves a rolling window.
 - When the current Session is outside the visible tree, the matching row is highlighted and temporarily revealed; positioning keeps the navigation scroll unchanged when the row is already visible and moves only enough to expose it otherwise. This does not change persisted expansion choices.
 - Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
   not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File
@@ -733,8 +773,10 @@ text, actions and diagnostic details follow the font size selected in **Settings
   completion dot is DSH's unread reminder for a Session that stops outside the current main view;
   opening that Session or running it again clears the reminder. A cold-start idle Session does not
   count as completed. The reminder remains DSH-owned and is not persisted by this plugin.
-  Collapsed Workspace, Main,
-  and Worktree groups derive one aggregate `StateDot` from their complete eligible membership (after native blank/archive filtering): waiting
+  Collapsed Workspace rows keep the native status indicator: running uses the spinner, a
+  pending-interaction warning uses the yellow dot, and an unread completion uses the green dot,
+  so the row itself signals that switching may be needed. Collapsed
+  Main and Worktree groups use the same native aggregate `StateDot`, where waiting
   approval (and other pending-interaction warnings) takes priority over running, and running
   takes priority over completed. Idle Sessions do not contribute a group dot; Worktree health
   remains a separate leading indicator. Visual Session ordering initially follows the newest `updatedAt` values and

@@ -6,7 +6,7 @@ import type {
 /** Browser-local storage identity; never sent to DSH or the plugin sidecar. */
 export const WORKTREE_EXPAND_STATE_STORAGE_KEY = 'clutch-dsh-worktree.expand-state';
 
-/** Persisted structural exceptions; absent IDs are expanded. */
+/** Persisted structural exceptions; absent IDs are expanded, with at most one Workspace open. */
 export interface WorktreeExpandState {
   collapsedWorkspaceIds: Record<string, true>;
   collapsedMainWorkspaceIds: Record<string, true>;
@@ -16,6 +16,8 @@ export interface WorktreeExpandState {
 /** The browser-facing mutation set for the expand-state store. */
 export interface WorktreeExpandStateActions {
   toggleWorkspace: (workspaceId: string) => void;
+  /** Open one Workspace and collapse every other known Workspace. */
+  openWorkspaceExclusive: (workspaceId: string, workspaceIds: readonly string[]) => void;
   toggleMain: (workspaceId: string) => void;
   toggleWorktree: (worktreeId: string) => void;
   collapseAll: (
@@ -71,6 +73,25 @@ export function isWorkspaceExpanded(state: WorktreeExpandState, workspaceId: str
   return state.collapsedWorkspaceIds[workspaceId] !== true;
 }
 
+/**
+ * The one open Workspace that owns the tree body.
+ *
+ * A temporary current-Session reveal wins over the persisted choice so navigation
+ * never waits for the store write. Otherwise the first uncollapsed Workspace is the
+ * open one; legacy records with several uncollapsed IDs render one Workspace and are
+ * normalized by the caller.
+ */
+export function resolveOpenWorkspaceId(
+  state: WorktreeExpandState,
+  workspaceIds: readonly string[],
+  revealedWorkspaceId?: string,
+): string | undefined {
+  if (revealedWorkspaceId !== undefined && workspaceIds.includes(revealedWorkspaceId)) {
+    return revealedWorkspaceId;
+  }
+  return workspaceIds.find((workspaceId) => isWorkspaceExpanded(state, workspaceId));
+}
+
 export function isMainExpanded(state: WorktreeExpandState, workspaceId: string): boolean {
   return state.collapsedMainWorkspaceIds[workspaceId] !== true;
 }
@@ -111,6 +132,15 @@ export function createWorktreeExpandStateStore(
   const actions: WorktreeExpandStateActions = {
     toggleWorkspace: (workspaceId) => {
       store.update((draft) => { toggle(draft.collapsedWorkspaceIds, workspaceId); });
+    },
+    openWorkspaceExclusive: (workspaceId, workspaceIds) => {
+      if (!workspaceIds.includes(workspaceId)) return;
+      store.update((draft) => {
+        for (const id of workspaceIds) {
+          if (id === workspaceId) delete draft.collapsedWorkspaceIds[id];
+          else draft.collapsedWorkspaceIds[id] = true;
+        }
+      });
     },
     toggleMain: (workspaceId) => {
       store.update((draft) => { toggle(draft.collapsedMainWorkspaceIds, workspaceId); });

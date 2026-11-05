@@ -2,6 +2,7 @@ import { LifecycleDialogs } from './surface/components/LifecycleDialogs.js';
 import { NativeDialogs } from './surface/components/NativeDialogs.js';
 import { RegistrationDialog } from './surface/components/RegistrationDialog.js';
 import { SurfaceContent } from './surface/components/SurfaceContent.js';
+import { ActivityFilterBar } from './surface/components/ActivityFilterBar.js';
 import { NotificationProvider } from './surface/components/NotificationToasts.js';
 import { SurfaceHeader } from './surface/components/SurfaceHeader.js';
 import { useDragActions } from './surface/actions/useDragActions.js';
@@ -349,6 +350,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             read={read}
             mutation={mutation}
           />
+
+          <ActivityFilterBar t={t} activity={source.activity} />
 
           <SurfaceContent
             source={source}

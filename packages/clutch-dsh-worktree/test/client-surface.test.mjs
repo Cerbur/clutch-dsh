@@ -47,20 +47,32 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(clientReadme, /browser-local.*expansion|浏览器本地.*展开/i);
   assert.ok(
     readme.includes(
-      'Persist Workspace, Main, and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
+      'Persist the open Workspace plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse.',
     ),
   );
   assert.ok(
     readmeZh.includes(
-      '将 Workspace、Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
+      '将当前打开的 Workspace 以及 Main 和 Worktree 的展开选择保存到浏览器本地存储；Session 五行溢出展开保持临时状态，并在刷新或父级折叠后重置。',
     ),
   );
+  assert.match(readme, /only one Workspace is expanded at a time/i);
+  assert.match(readme, /selecting another Workspace collapses the previous one/i);
+  assert.match(readmeZh, /同一时间只展开一个 Workspace/);
+  assert.match(readmeZh, /选择其他 Workspace 会收起前一个/);
+  assert.match(readme, /native running spinner while a Session\s+is\s+running/i);
+  assert.match(readme, /yellow dot\s+while waiting for approval|yellow dot while waiting for approval/i);
+  assert.match(readmeZh, /运行中时使用原生转圈/);
+  assert.match(readmeZh, /等待审批[\s\S]*黄色\s*圆点/);
   assert.ok(clientReadme.includes('clutch-dsh-worktree.expand-state'));
-  assert.match(clientReadme, /Missing IDs are\s+expanded by default\./);
+  assert.match(clientReadme, /Missing Main or Worktree IDs\s+are\s+expanded by default\./);
+  assert.match(clientReadme, /Only one Workspace is open at a\s+time/i);
+  assert.match(clientReadme, /openWorkspaceExclusive/);
   assert.ok(/The five-row Session overflow control remains transient,/.test(clientReadme));
-  assert.ok(/and parent collapse clears its affected temporary group state\./.test(clientReadme));
   assert.ok(
-    /Storage failure\s+falls back to in-memory behavior and does not change DSH or sidecar data\./.test(
+    /and parent collapse clears its\s+affected temporary group state\./.test(clientReadme),
+  );
+  assert.ok(
+    /Storage failure\s+falls back to in-memory behavior and does not change\s+DSH or sidecar data\./.test(
       clientReadme,
     ),
   );
@@ -1556,12 +1568,18 @@ test('matches native Workspace interaction, typography, and action rail', async 
     rowSource,
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*onMenuOpenChange/,
   );
-  assert.match(styles, /\.workspaceRow \.workspaceDisclosure\s*\{[\s\S]*display: none;/);
+  // The disclosure stays in flow invisibly and reveals on hover or keyboard focus,
+  // matching the Worktree row contract asserted below.
   assert.match(
     styles,
-    /\.workspaceRow:hover \.workspaceDisclosure\s*,[\s\S]*display: inline-flex;/,
+    /\.workspaceRow \.workspaceDisclosure,\s*\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
   );
-  assert.match(styles, /\.workspaceRow:hover \.workspaceIcon\s*,[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /@media \(hover: hover\)[\s\S]*\.workspaceRow:hover \.workspaceDisclosure[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
+  );
+  assert.match(styles, /\.workspaceRow:hover \.workspaceIcon[\s\S]*visibility: hidden;/);
+  assert.match(styles, /\.workspaceRow:focus-within \.workspaceDisclosure/);
 
   assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-size: 14px;/);
   assert.match(styles, /\.workspaceTitle,[\s\S]*\.worktreeLabel[\s\S]*font-weight: 400;/);
@@ -1617,16 +1635,30 @@ test('matches shared Worktree row disclosure and aligned action geometry', async
     /\.disclosureButton\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;/,
   );
   assert.match(styles, /\.disclosureButton > svg\s*\{[\s\S]*display: block;/);
-  assert.match(styles, /\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*display: none;/);
+  // The disclosure overlays the type icon's own cell instead of being toggled in and
+  // out of flow, so revealing it never moves the label.
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeDisclosure\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeDisclosure[\s\S]*display: inline-flex;/,
+    /\.workspaceRow \.workspaceDisclosure,\s*\.worktreeRow \.worktreeDisclosure\s*\{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.worktreeIcon\s*,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.worktreeIcon[\s\S]*display: none;/,
+    /@media \(hover: hover\)[\s\S]*\.worktreeRow:hover \.worktreeDisclosure[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/,
   );
-  assert.match(styles, /\.treeChildren\s*\{[^}]*padding: 2px 0 5px 6px;/);
+  assert.match(
+    styles,
+    /\.worktreeRow:hover \.worktreeIcon[\s\S]*visibility: hidden;/,
+  );
+  // Keyboard users keep the same reveal without hover.
+  assert.match(styles, /\.worktreeRow:focus-within \.worktreeDisclosure/);
+  // One indent step for the whole tree, owned by the rows instead of the containers.
+  assert.match(styles, /--wt-step: 12px;/);
+  assert.match(styles, /--wt-lead: 20px;/);
+  assert.match(
+    styles,
+    /\.treeChildren\s*\{[\s\S]*margin-inline-start: 0;[\s\S]*border-inline-start: 0;/,
+  );
+  assert.doesNotMatch(styles, /padding: 2px 0 5px 12px;/);
 });
 
 test('keeps group actions hover-only and auto-scrolls long Worktree labels', async () => {
@@ -1659,14 +1691,17 @@ test('keeps group actions hover-only and auto-scrolls long Worktree labels', asy
     /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);[\s\S]*menu\.onDashboard\?\.\(\);/,
   );
   assert.match(rowSource, /id: 'dashboard',[\s\S]*t\('dashboard\.title'\)/);
+  // Actions own an intrinsic grid column; the title viewport stops before it
+  // when revealed, keeping the marquee endpoint clear of the first button.
   assert.match(
     styles,
-    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*min-width: 0;[\s\S]*flex: 0 0 0;[\s\S]*width: 0;[\s\S]*gap: 4px;/,
+    /\.worktreeRow \.treeActionSlot\s*\{[\s\S]*grid-area: 1 \/ 3;/,
   );
   assert.match(
     styles,
-    /\.worktreeRow:hover \.treeActionSlot,[\s\S]*\.worktreeRow\[data-menu-open='true'\] \.treeActionSlot,[\s\S]*\.worktreeRow:focus-within \.treeActionSlot[\s\S]*flex: 0 0 auto;[\s\S]*width: auto;/,
+    /\.worktreeRow > \.worktreeLabel\s*\{[\s\S]*margin-inline-end: 32px;/,
   );
+  assert.doesNotMatch(styles, /\.worktreeRow:hover \.treeActionSlot\s*\{/);
   assert.match(
     styles,
     /\.worktreeRow \.treeActionSlot > \.dashboardAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.menuAction,[\s\S]*\.worktreeRow \.treeActionSlot > \.iconButton:last-child[\s\S]*opacity: 0;[\s\S]*pointer-events: none;/,
@@ -1815,31 +1850,43 @@ test('separates collapsed running activity from native pointer-only title scroll
   assert.match(rowSource, /onPointerLeave=\{marquee\.leave\}/);
   assert.doesNotMatch(rowSource, /syncWorktreeLabelScroll|worktreeLabelPointerInsideRef/);
 
-  const activityRailStart = styles.indexOf(
-    ".worktreeRow[data-group-activity='true'] .treeActionSlot {",
-  );
-  const activityRailEnd = styles.indexOf('}', activityRailStart);
-  assert.notEqual(activityRailStart, -1);
+  // At rest the title spans the action column except for the reserved 32px
+  // activity lane; activity alone never changes the title viewport.
   assert.match(
-    styles.slice(activityRailStart, activityRailEnd + 1),
-    /flex: 0 0 32px;[\s\S]*width: 32px;/,
+    styles,
+    /\.worktreeRow > \.worktreeLabel\s*\{[\s\S]*margin-inline-end: 32px;/,
   );
+  assert.match(styles, /\.groupActivity\s*\{[\s\S]*width: 28px;[\s\S]*height: 28px;/);
+  assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.treeActionSlot \{/);
   assert.doesNotMatch(styles, /\.worktreeRow\[data-group-activity='true'\] \.worktreeLabel/);
-  const hoverRailStart = styles.indexOf('.worktreeRow:hover .treeActionSlot');
-  assert.ok(hoverRailStart > activityRailStart);
+  assert.match(styles, /\.worktreeRow\.dropAfter::after|\.worktreeRow\.dropBefore::before/);
 });
 
-test('reduces the left offset before the nested tree line', async () => {
+test('advances one indent step per level instead of stacking container offsets', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeChildren {');
   const ruleEnd = styles.indexOf('}', ruleStart);
   assert.notEqual(ruleStart, -1);
   assert.notEqual(ruleEnd, -1);
 
-  assert.match(styles.slice(ruleStart, ruleEnd + 1), /margin-left: 16px;/);
+  // Containers no longer carry horizontal offsets or an ad-hoc guide rail; the rows own
+  // indentation so every level is exactly one --wt-step deeper (design standard: one axis).
+  const containerRule = styles.slice(ruleStart, ruleEnd + 1);
+  assert.match(containerRule, /margin-inline-start: 0;/);
+  assert.match(containerRule, /border-inline-start: 0;/);
+  assert.doesNotMatch(containerRule, /margin-left: 16px;/);
+  assert.doesNotMatch(containerRule, /padding: 2px 0 5px 12px;/);
+
+  assert.match(
+    styles,
+    /\.workspaceRow,\s*\.worktreeRow\s*\{[\s\S]*padding-inline: calc\(var\(--wt-row-inset\) \+ var\(--wt-depth, 0\) \* var\(--wt-step\)\)[\s\S]*var\(--wt-row-inset\);/,
+  );
+  for (const depth of [1, 2, 3]) {
+    assert.match(styles, new RegExp(`--wt-depth: ${depth};`));
+  }
 });
 
-test('indents Session tabs by the Worktree icon width', async () => {
+test('aligns Session labels to their group label column at full row width', async () => {
   const styles = await readFile(new URL('../src/client/worktree.css', import.meta.url), 'utf8');
   const ruleStart = styles.indexOf('.treeSessionRow {');
   const ruleEnd = styles.indexOf('}', ruleStart);
@@ -1847,8 +1894,22 @@ test('indents Session tabs by the Worktree icon width', async () => {
   assert.notEqual(ruleEnd, -1);
 
   const sessionRule = styles.slice(ruleStart, ruleEnd + 1);
-  assert.match(sessionRule, /margin-left: 20px;/);
-  assert.match(sessionRule, /width: calc\(100% - 20px\);/);
+  // Full-width rows keep hover fills and drop markers on the group row's right edge.
+  assert.match(sessionRule, /width: 100%;/);
+  assert.match(sessionRule, /margin-inline-start: 0;/);
+  assert.doesNotMatch(sessionRule, /width: calc\(100% - 20px\);/);
+  // The label starts exactly one leading cell past its group's own inset, i.e. on the
+  // group label column rather than hanging to its left.
+  assert.match(
+    sessionRule,
+    /padding-inline-start: calc\([\s\S]*var\(--wt-depth, 0\) \* var\(--wt-step\) \+ var\(--wt-lead\) \+[\s\S]*var\(--wt-label-pad\)[\s\S]*\);/,
+  );
+  assert.match(sessionRule, /border-radius: var\(--dsw-radius-md\);/);
+
+  const contentStart = styles.indexOf('\n.treeSessionContent {');
+  const contentEnd = styles.indexOf('}', contentStart);
+  assert.notEqual(contentStart, -1);
+  assert.match(styles.slice(contentStart, contentEnd + 1), /padding: 4px 0;/);
 });
 
 test('shares one parameterized group row while gating removal UI by row configuration', async () => {
@@ -1958,14 +2019,21 @@ test('polishes Main and Worktree row hover presentation', async () => {
   assert.match(source, /repairGuidance !== undefined/);
   assert.match(source, /<p className=\{styles\.worktreeHoverTitle\}>\{repairGuidance\}<\/p>/);
 
+  // One leading cell for every level keeps the 16px glyphs and the 14px twisty on one
+  // vertical axis per depth.
   assert.match(
     styles,
-    /\.workspaceIcon,\s*\.worktreeIcon\s*\{[^}]*width: 20px;/,
+    /\.workspaceIcon,\s*\.worktreeIcon\s*\{[\s\S]*width: var\(--wt-lead\);/,
   );
-  assert.match(styles, /\.disclosureButton\s*\{[^}]*width: 20px;/);
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
+    /\.disclosureButton\s*\{[\s\S]*width: 24px;[\s\S]*height: 24px;/,
+  );
+  assert.match(styles, /inset-inline-start: calc\([\s\S]*? - 2px[\s\S]*?\);/);
+  // Design standard: emphasis stays at weight 500, never 600+.
+  assert.match(
+    styles,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 500;/,
   );
   assert.doesNotMatch(
     styles,
@@ -2031,7 +2099,7 @@ test('renders a localized Main label with the current branch and a fallback', as
   assert.doesNotMatch(source, /label=\{t\('worktree\.main'\)\}/);
   assert.match(
     styles,
-    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 600;/,
+    /\.worktreeRow\[data-main-group='true'\] \.worktreeLabel\s*\{[^}]*font-weight: 500;/,
   );
   assert.doesNotMatch(
     styles,
@@ -2120,8 +2188,9 @@ test('keeps current Session highlight without a leading inset frame', async () =
   assert.doesNotMatch(currentRule, /box-shadow/);
   assert.match(
     styles,
-    /\.treeSessionContent\s*\{[^}]*font-weight: 400;/,
+    /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[\s\S]*font-weight: 400;/,
   );
+  assert.match(styles, /\.treeSessionContent\s*\{[^}]*font-weight: 400;/);
   assert.doesNotMatch(styles, /\.treeSessionRow\[data-session-current='true'\] \.treeSessionContent\s*\{[^}]*font-weight: 600;/);
 });
 
@@ -2132,12 +2201,19 @@ test('temporarily reveals the current Session path without persisting it', async
   assert.match(source, /currentSessionReveal/);
   assert.match(source, /currentSessionRevealKeys/);
   assert.match(source, /setSearchQuery\(''\)/);
-  assert.match(source, /isWorkspaceExpanded\(expandSnapshot,[\s\S]*\|\|/);
+  assert.match(
+    source,
+    /resolveOpenWorkspaceId\(\s*expandSnapshot,\s*workspaceIds,\s*revealedWorkspaceId,?\s*\)/,
+  );
+  assert.match(source, /const isWorkspaceOpen =/);
+  assert.match(source, /appliedRevealRef/);
+  assert.match(source, /openWorkspaceExclusive/);
   assert.match(source, /isMainExpanded\(expandSnapshot,[\s\S]*\|\|/);
   assert.match(source, /isWorktreeExpanded\([\s\S]*\|\|/);
   assert.match(source, /isSessionGroupAutoExpanded\(\s*sessionIds,\s*currentSessionId,/);
   assert.match(source, /suppressedKeys/);
   assert.match(source, /expandState\.actions\.toggleWorkspace/);
+  assert.match(source, /expandState\.actions\.openWorkspaceExclusive/);
   assert.match(source, /expandState\.actions\.toggleMain/);
   assert.match(source, /expandState\.actions\.toggleWorktree/);
   assert.doesNotMatch(source, /currentSessionReveal.*localStorage/);

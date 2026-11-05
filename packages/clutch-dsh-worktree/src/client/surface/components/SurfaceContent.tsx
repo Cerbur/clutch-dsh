@@ -27,6 +27,7 @@ type Input = {
     | 'archivedSessionIds'
     | 'sessionPresentations'
     | 'currentSessionId'
+    | 'activity'
   >;
   props: Pick<
     WorktreeSurfaceProps,
@@ -66,6 +67,7 @@ type Input = {
     ReturnType<typeof useSessionExpansion>,
     | 'contentRef'
     | 'isCurrentSessionReveal'
+    | 'isWorkspaceOpen'
     | 'query'
     | 'expandedSessionGroups'
     | 'toggleWorkspace'

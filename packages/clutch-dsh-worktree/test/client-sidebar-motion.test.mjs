@@ -123,6 +123,10 @@ test('Workspace reveal and Session insertion use native fades and keyed movement
       ['session:tail', 200],
     ],
   );
+  assert.deepEqual(
+    calls.map(({ options }) => options.easing),
+    ['cubic-bezier(0.4, 0, 0.2, 1)', 'cubic-bezier(0.4, 0, 0.2, 1)'],
+  );
   assert.equal(calls[1].frames[0].transform, 'translate(0px, -40px)');
   const metadata = tree.getSnapshotBeforeUpdate(props);
   tree.componentDidUpdate(props, undefined, metadata);
