@@ -1,5 +1,37 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.25 — 2026-11-05
+
+### 中文
+
+#### 新增
+
+- 新增今日、最近 24 小时、最近 7 天和全部会话的活跃时间筛选，支持自选可见范围标签并记住浏览器本地偏好，运行中、等待交互与当前会话始终保留。
+- 新增“显示无活跃 Workspace”选项，默认保留 Workspace、Worktree 与已归档 Worktree 结构及管理入口，也可关闭以隐藏范围内没有活跃会话的结构。
+
+#### 优化
+
+- 同一时间只展开一个 Workspace，收起的 Workspace 显示运行、等待交互或未读完成状态，并对齐原生侧栏的展开控件与交互节奏。
+
+#### 修复
+
+- 修复过长标题滚动与行内操作控件的对齐问题。
+
+### English
+
+#### Added
+
+- Add activity filtering for today, the last 24 hours, the last 7 days, or all Sessions, with customizable visible range tabs and browser-local preferences, while keeping running, waiting, and current Sessions visible.
+- Add a “Show inactive Workspaces” option that preserves Workspace, Worktree, and archived Worktree structure and management actions by default, with the option to hide structure without active Sessions in the selected range.
+
+#### Improved
+
+- Keep only one Workspace expanded at a time, show running, waiting, or unread completion status on collapsed Workspaces, and align disclosure controls and interaction timing with the native sidebar.
+
+#### Fixed
+
+- Fix alignment between scrolling long titles and inline action controls.
+
 ## 0.1.24 — 2026-11-04
 
 ### 中文
