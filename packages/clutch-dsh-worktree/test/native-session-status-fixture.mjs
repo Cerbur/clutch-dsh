@@ -17,6 +17,20 @@ import * as acquisition from '../lib/client/dashboard/worktree-acquisition-facts
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { effectiveViewMode } from '../lib/client/view/view-mode.js';
 
+/**
+ * Status assertions observe every Session, so the range selector stays at "All".
+ * Its own predicate is covered by test/client-activity-filter.test.mjs.
+ */
+const ALL_ACTIVITY = {
+  window: 'all',
+  active: false,
+  now: 0,
+  setWindow: () => {},
+  isActive: () => true,
+  hasActiveSession: (sessionIds) => sessionIds.length > 0,
+  count: () => 0,
+};
+
 async function handoff(specifier) {
   const code = await readFile(new URL(import.meta.resolve(specifier)), 'utf8');
   const entries = [];
@@ -181,6 +195,7 @@ export async function nativeStatusFixture(
       EMPTY_PERMISSION_NOTICE_SUBSCRIBE: () => () => {},
       useStableWorkspaceIds: () => [],
     },
+    './useActivityFilter.js': { useActivityFilter: () => ALL_ACTIVITY },
   });
   const selector = (observable) => (select) =>
     select(h.react.useSyncExternalStore(observable.subscribe, observable.getSnapshot));

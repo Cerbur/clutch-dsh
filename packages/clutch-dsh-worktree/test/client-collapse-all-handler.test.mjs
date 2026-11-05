@@ -4,6 +4,20 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
 
+import {
+  isMainExpanded,
+  isWorkspaceExpanded,
+  isWorktreeExpanded,
+  resolveOpenWorkspaceId,
+} from '../lib/client/view/worktree-expand-state.js';
+
+const expandStateModule = {
+  isMainExpanded,
+  isWorkspaceExpanded,
+  isWorktreeExpanded,
+  resolveOpenWorkspaceId,
+};
+
 // Execute production source without rebuilding the browser's live lib/ directory.
 async function loadSource(path, dependencies = {}) {
   const source = await readFile(new URL('../src/client/' + path, import.meta.url), 'utf8');
@@ -67,6 +81,7 @@ for (const kind of ['main', 'active', 'archived']) {
     const { useSessionExpansion } = await loadSource('surface/state/useSessionExpansion.tsx', {
       react,
       '../selectors.js': selectors,
+      '../../view/worktree-expand-state.js': expandStateModule,
     });
     const worktrees =
       kind === 'main'

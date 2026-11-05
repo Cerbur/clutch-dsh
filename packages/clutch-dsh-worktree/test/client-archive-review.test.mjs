@@ -48,6 +48,7 @@ test('Archived group ignores native archived activity but retains hidden live ac
     aggregateSessionStatus,
     bindingIdsFor,
     filterArchivedSessionIds,
+    activity: { active: false, scopeSessionIds: (sessionIds) => sessionIds },
     archivedWorktrees: [{ worktreeId: 'wt' }],
     bindings: [{ worktreeId: 'wt', sessionId: 's', status: 'active' }],
     sessions: { ids: ['s'] },
@@ -62,6 +63,16 @@ test('Archived group ignores native archived activity but retains hidden live ac
   };
   assert.equal(evaluate(`return ${expression.getText(ast)};`, context), undefined);
   context.archivedSessionIds = [];
+  assert.deepEqual(evaluate(`return ${expression.getText(ast)};`, context), {
+    state: 'ongoing',
+    labelKey: 'running',
+    runningSubagentCount: 0,
+  });
+  // The active range hides out-of-range Sessions from the group aggregate too, so a
+  // collapsed archived group never advertises activity its rows do not show.
+  context.activity = { active: true, scopeSessionIds: () => [] };
+  assert.equal(evaluate(`return ${expression.getText(ast)};`, context), undefined);
+  context.activity = { active: true, scopeSessionIds: (sessionIds) => sessionIds };
   assert.deepEqual(evaluate(`return ${expression.getText(ast)};`, context), {
     state: 'ongoing',
     labelKey: 'running',

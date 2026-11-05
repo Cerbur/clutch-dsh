@@ -23,6 +23,7 @@ type Input = {
     | 'currentSessionId'
     | 'expandSnapshot'
     | 'sessionPresentations'
+    | 'activity'
   >;
   expansion: Pick<
     WorkspaceTreeInput['expansion'],
@@ -85,7 +86,7 @@ export function ActiveWorktree({
   sameWorkspaceWorktreeDrag,
   activeWorktrees,
 }: Input) {
-  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations } =
+  const { sessions, archivedSessionIds, currentSessionId, expandSnapshot, sessionPresentations, activity } =
     source;
   const {
     query,
@@ -115,14 +116,22 @@ export function ActiveWorktree({
   } = drag;
   const { openSessionRename, archiveWorktreeSession } = native;
   const worktreeSessionIds = filterVisibleSessionIds(
-    filterArchivedSessionIds(
-      bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
-        sessions.ids.includes(sessionId),
+    activity.scopeSessionIds(
+      filterArchivedSessionIds(
+        bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+          sessions.ids.includes(sessionId),
+        ),
+        archivedSessionIds,
       ),
-      archivedSessionIds,
     ),
     sessions,
   );
+  // Turning off show-inactive omits a Worktree with no Session inside a bounded
+  // range from the tree, never from the index: its record, bindings and directory
+  // stay untouched. The default keeps the row and its actions.
+  if (activity.active && !activity.showInactiveStructure && worktreeSessionIds.length === 0) {
+    return null;
+  }
   const worktreeMatchesQuery =
     workspaceMatchesQuery ||
     includesText(record.branch, query) ||

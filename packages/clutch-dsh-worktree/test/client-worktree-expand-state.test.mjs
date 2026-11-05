@@ -7,6 +7,7 @@ import {
   isMainExpanded,
   isWorktreeExpanded,
   isWorkspaceExpanded,
+  resolveOpenWorkspaceId,
 } from '../lib/client/view/worktree-expand-state.js';
 
 class MemoryStorage {
@@ -95,6 +96,52 @@ test('defaults Workspace, Main, and Worktree rows to expanded', () => {
   assert.equal(isWorkspaceExpanded(store.getSnapshot(), 'ws-one'), true);
   assert.equal(isMainExpanded(store.getSnapshot(), 'ws-one'), true);
   assert.equal(isWorktreeExpanded(store.getSnapshot(), 'wt-one'), true);
+});
+
+test('resolves one open Workspace with current-Session reveal precedence', () => {
+  const state = (collapsed) => ({
+    collapsedWorkspaceIds: collapsed,
+    collapsedMainWorkspaceIds: {},
+    collapsedWorktreeIds: {},
+  });
+
+  assert.equal(resolveOpenWorkspaceId(state({}), ['ws-one', 'ws-two']), 'ws-one');
+  assert.equal(resolveOpenWorkspaceId(state({ 'ws-one': true }), ['ws-one', 'ws-two']), 'ws-two');
+  assert.equal(
+    resolveOpenWorkspaceId(state({ 'ws-one': true, 'ws-two': true }), ['ws-one', 'ws-two']),
+    undefined,
+  );
+  assert.equal(
+    resolveOpenWorkspaceId(
+      state({ 'ws-one': true, 'ws-two': true }),
+      ['ws-one', 'ws-two'],
+      'ws-two',
+    ),
+    'ws-two',
+  );
+  assert.equal(
+    resolveOpenWorkspaceId(state({ 'ws-one': true }), ['ws-one', 'ws-two'], 'unknown'),
+    'ws-two',
+  );
+});
+
+test('opens exactly one Workspace and persists the exclusive choice', () => {
+  storage.clear();
+  const store = createWorktreeExpandStateStore(createSnapshotStore);
+
+  store.actions.openWorkspaceExclusive('ws-two', ['ws-one', 'ws-two', 'ws-three']);
+
+  assert.equal(isWorkspaceExpanded(store.getSnapshot(), 'ws-one'), false);
+  assert.equal(isWorkspaceExpanded(store.getSnapshot(), 'ws-two'), true);
+  assert.equal(isWorkspaceExpanded(store.getSnapshot(), 'ws-three'), false);
+  assert.deepEqual(
+    JSON.parse(storage.getItem(WORKTREE_EXPAND_STATE_STORAGE_KEY)).collapsedWorkspaceIds,
+    { 'ws-one': true, 'ws-three': true },
+  );
+
+  const before = store.getSnapshot();
+  store.actions.openWorkspaceExclusive('unknown', ['ws-one', 'ws-two']);
+  assert.deepEqual(store.getSnapshot(), before);
 });
 
 test('toggles only the selected structural IDs and persists the exception records', () => {
