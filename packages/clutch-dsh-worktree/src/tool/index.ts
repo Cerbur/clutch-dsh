@@ -1,6 +1,6 @@
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand';
 import { WORKTREE_TOOL_IDS, type WorktreeToolId, type WorktreeToolSettingsScope } from '../contract/tool-settings.js';
-import { authorize, available } from './context.js';
+import { authorize, available, ToolAuthorizationError } from './context.js';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { z } from 'zod';
 import type { CallingAgent, Execution, ToolDefinition, Options } from './types.js';
@@ -17,6 +17,7 @@ import { actionableError } from './errors.js';
 import { normalizeOptionalNulls, toolParameters } from './schema.js';
 import { DelegationControl } from './delegation.js';
 import { nullableToolParameters } from './wire-schema.js';
+import { isWorktreeProviderError } from '../provider/types.js';
 const jsonProjection = (value: unknown): Record<string, unknown> =>
   JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 export { createWorktreeToolSessionPort } from './native-session.js';
@@ -24,6 +25,11 @@ export { readToolSession } from './history.js';
 export type { Options } from './types.js';
 /** Registrations and reporting destinations are runtime-only and Agent-scoped. */
 export async function registerWorktreeTools(ctx: Context, options: Options): Promise<void> {
+  // New DSH snapshots admission before prompt assembly. Older registries have
+  // no resolve() and retain the assembly-time compatibility path below.
+  const stepAdmission = typeof (ctx.get('tools') as { resolve?: unknown }).resolve === 'function';
+  type Activation = { agent: CallingAgent; signal: AbortSignal };
+  const activations = new WeakMap<Activation, Promise<number>>();
   type State = {
     fiber: Fiber;
     names: Set<string>;
@@ -62,12 +68,13 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     signal: AbortSignal,
     names: readonly string[],
     parentSessionId?: string,
+    prepare = false,
   ): Promise<number> => {
     signal.throwIfAborted();
     delegation.assertAlive(agent);
     if (lifetime.signal.aborted || options.isDisposed())
       throw new Error('Worktree plugin is disposed');
-    await toolWorkspace(agent.session.id, options);
+    if (!prepare) await toolWorkspace(agent.session.id, options);
     signal.throwIfAborted();
     delegation.assertAlive(agent);
     const existing = enabled.get(agent);
@@ -85,7 +92,9 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         () => () => scopeLifetime.abort(new Error('Calling Agent is disposed')),
         'clutch-dsh-worktree: scoped cancellation',
       );
-      const registry = scoped.get('tools') as { register(definition: ToolDefinition): () => void };
+      const registry = scoped.get('tools') as {
+        register(definition: ToolDefinition, options?: { when(context: Activation): Promise<boolean> }): () => void;
+      };
       const check = (exec: Execution) => {
         exec.signal.throwIfAborted();
         if (lifetime.signal.aborted || scopeLifetime.signal.aborted || options.isDisposed())
@@ -116,13 +125,24 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
             };
             try {
               check(execution);
+              if (stepAdmission && !state.names.has(name)) throw new Error('This Worktree capability is not enabled for the calling Session');
               return jsonProjection(await execute(schema.parse(normalizeOptionalNulls(args, parameters)), execution));
             } catch (cause) {
               execution.signal.throwIfAborted();
               throw actionableError(name, cause);
             }
           },
-        });
+        }, stepAdmission ? { when: async (activation) => {
+          if (activation.agent !== agent || lifetime.signal.aborted || scopeLifetime.signal.aborted || options.isDisposed()) return false;
+          let pending = activations.get(activation);
+          if (!pending) {
+            pending = autoEnable(agent, activation.signal);
+            activations.set(activation, pending);
+          }
+          await pending;
+          activation.signal.throwIfAborted();
+          return state.names.has(name);
+        } } : undefined);
         transaction.push(dispose);
         state.validators.set(name, schema);
         return dispose;
@@ -174,7 +194,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         const previousParent = state.parentSessionId;
         try {
           if (parent !== undefined) state.parentSessionId = parent;
-          for (const name of missing) {
+          for (const name of stepAdmission ? [] : missing) {
             if (name === 'clutch_report_result') registerReportResult(context);
             else registrations[name as WorktreeToolId](context);
           }
@@ -187,6 +207,12 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
           throw error;
         }
       };
+      // Conditions only choose among existing registrations; they never mutate
+      // the registry during resolve(). Disabled capabilities cannot execute.
+      if (stepAdmission) {
+        for (const register of Object.values(registrations)) register(context);
+        registerReportResult(context);
+      }
     });
     state.fiber = fiber;
     enabled.set(agent, state);
@@ -204,36 +230,59 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
       throw error;
     }
   };
-  /** Bindings may follow agent creation; resolve preferences at prompt assembly. */
-  const autoEnable = async (agent: CallingAgent, signal: AbortSignal): Promise<number> => {
-    if (!options.settings) return 0;
+  /** Read-only discovery; failures must not take native Session execution down. */
+  const automaticTools = async (agent: CallingAgent): Promise<readonly string[]> => {
+    if (!options.settings) return [];
     const workspaceId = await toolWorkspace(agent.session.id, options);
     const bindings = (await options.manager.listBindings({ workspaceId })).filter(
       (binding) => binding.sessionId === agent.session.id,
     );
-    if (bindings.length > 1) return 0;
+    if (bindings.length > 1) return [];
     const binding = bindings[0];
     let scope: WorktreeToolSettingsScope;
     if (binding) {
-      if (binding.status !== 'active') return 0;
-      const record = (await options.manager.listWorktrees({ workspaceId })).find(
-        (item) => item.worktreeId === binding.worktreeId,
-      );
-      if (!record || !available(record)) return 0;
-      scope = { kind: 'worktree', workspaceId, worktreeId: record.worktreeId };
+      if (binding.status !== 'active') return [];
+      scope = { kind: 'worktree', workspaceId, worktreeId: binding.worktreeId };
     } else {
       scope = { kind: 'local', workspaceId };
     }
-    let selection;
+    const selection = await options.settings.read(scope);
+    if (!selection.enabled) return [];
+    if (binding) {
+      const record = (await options.manager.listWorktrees({ workspaceId })).find(
+        (item) => item.worktreeId === binding.worktreeId,
+      );
+      if (!record || !available(record)) return [];
+    }
+    await authorize(agent.session.id, workspaceId, options, true);
+    return selection.tools;
+  };
+  /** Bindings may follow creation. Probe at admission (legacy: prompt assembly). */
+  const autoEnable = async (agent: CallingAgent, signal: AbortSignal): Promise<number> => {
+    const assertAlive = () => {
+      signal.throwIfAborted();
+      lifetime.signal.throwIfAborted();
+      delegation.assertAlive(agent);
+      if (options.isDisposed()) throw new Error('Worktree plugin is disposed');
+    };
+    assertAlive();
+    let names: readonly string[];
     try {
-      selection = await options.settings.read(scope);
-    } catch {
-      // Damaged preferences must not block ordinary native Session execution.
+      names = await automaticTools(agent);
+    } catch (error) {
+      // No new capabilities on unavailable probe data. Existing
+      // registrations (including reporting) retain their lifetime, but their
+      // actual executors still validate scope, cwd, writes and report tokens.
+      assertAlive();
+      // A confirmed authorization denial retains its existing fail-closed
+      // contract; only failure to obtain probe data is optional.
+      if (error instanceof ToolAuthorizationError ||
+        (isWorktreeProviderError(error) && error.code === 'SESSION_CWD_MISMATCH')) throw error;
       return 0;
     }
-    if (!selection.enabled) return 0;
-    await authorize(agent.session.id, workspaceId, options, true);
-    return enable(agent, signal, selection.tools);
+    assertAlive();
+    // Registration and explicit operations are outside the recovery boundary.
+    return names.length ? enable(agent, signal, names, undefined, true) : 0;
   };
   const freshAssembly = Symbol('clutch-worktree: fresh prompt assembly');
   type AssemblyContext = {
@@ -255,7 +304,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
       ): unknown;
     }
   ).on('system-prompt/assemble', async (_assembly, context, next) => {
-    if (context[freshAssembly] || !options.settings ||
+    if (stepAdmission || context[freshAssembly] || !options.settings ||
       lifetime.signal.aborted || options.isDisposed()) return next();
     const candidate = context.agent ?? context.scope;
     if (candidate === null || typeof candidate !== 'object' ||
@@ -263,13 +312,6 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
       context.scope !== candidate) return next();
     const agent = candidate as CallingAgent;
     const before = enabled.get(agent)?.names.size ?? 0;
-    let workspaceId: string | undefined;
-    try {
-      workspaceId = await toolWorkspace(agent.session.id, options);
-    } catch {
-      /* Global and unowned Agent assemblies retain their native catalog. */
-    }
-    if (workspaceId === undefined) return next();
     const added = await autoEnable(agent, context.signal ?? lifetime.signal);
     if (!added && (enabled.get(agent)?.names.size ?? 0) === before) return next();
     // DSH collects registered providers before this waterfall, and pre-step runs
@@ -281,7 +323,7 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     return prompt.assemble({ ...context, [freshAssembly]: true });
   }, { prepend: true });
   const nullableProviders = new Set(options.nullableToolProviders ?? []);
-  if (nullableProviders.size) {
+  if (nullableProviders.size && !stepAdmission) {
     (ctx as unknown as {
       on(name: string, listener: (assembly: unknown, context: AssemblyContext, next: () => Promise<{
         tools: { name: string; parameters: unknown }[];
@@ -308,6 +350,19 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
         return { ...tool, parameters };
       }) };
     }, { prepend: true });
+  }
+  if (stepAdmission) {
+    const events = ctx as unknown as {
+      on(name: string, listener: (...args: never[]) => unknown, options: { global: true }): unknown;
+    };
+    events.on('agent/created', (async ({ agent, signal }: Activation) => {
+      await enable(agent, signal ?? lifetime.signal, [], undefined, true);
+    }) as (...args: never[]) => unknown, { global: true });
+    const agents = ctx.get('agents') as { list?(): CallingAgent[] } | undefined;
+    for (const agent of agents?.list?.() ?? []) await enable(agent, lifetime.signal, [], undefined, true);
+    // Current DSH owns declarations at the tool provider and freezes loop
+    // requests. Its provider adapters own strict wire conversion. The legacy
+    // nullable option must neither rewrite that request nor replace an executor.
   }
   const commands = ctx.get('commands') as {
     register(command: {
