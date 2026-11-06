@@ -1,16 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
+import { installModelSelection } from 'clutch-test-dsh-agent-legacy';
 import { createWorktreeToolSessionPort } from '../lib/tool/native-session.js';
-
-const requireSession = createRequire(
-  import.meta.resolve('@deepseek-ai/dsh-api-session-controller'),
-);
-const { installModelSelection } = await import(
-  pathToFileURL(requireSession.resolve('@deepseek-ai/dsh-agent')).href
-);
 
 async function fixture(t) {
   const ctx = new Context();

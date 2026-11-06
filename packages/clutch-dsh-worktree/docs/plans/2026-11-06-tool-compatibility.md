@@ -1,6 +1,6 @@
 # Worktree tool compatibility verification — 2026-11-06
 
-## Scope and baseline
+## Initial scope and baseline
 
 - Branch: `wt-worktree/feat-tool-optimization`; no version bump, commit, push or publish.
 - Upstream source located through `dwm home`: DSH `0.2.2-rc.1`, commit `66491b05e3`.
@@ -132,3 +132,33 @@ Fault injection used isolated in-memory test fixtures, not corruption of the liv
 this follow-up adds deterministic degradation verification. A confirmed identity/cwd
 denial still stops admission by the existing contract; only unavailable probe data
 is optional.
+
+## Approved minimum-version upgrade
+
+The user subsequently approved raising the minimum supported DSH version to
+`0.2.2-rc.1`. This supersedes the initial unchanged-floor decision above.
+All production DSH peer ranges are now `>=0.2.2-rc.1`; DSH development pins and
+the workspace-path runtime dependency use `0.2.2-rc.1`. Cordis uses peer
+`^4.1.0` and dev `4.1.0`, with Loader `1.1.0`. Worktree's own package version
+is unchanged. Public requirements now also reflect upstream Node `>=24.9.0`.
+
+The retired, unused direct dsh-invariants development dependency was removed.
+Test-only legacy aliases preserve the old registry, SDK and model-waterfall
+regressions; they do not lower the supported Host version. Current schema
+projection uses the separate PTC executor. Composition fixtures now install
+the real RemoteAccess service and pass an explicit owner Peer to the Gateway.
+Client fixtures supply the new dependencies and resolve the Modal CSS binding
+from its bundle rather than assuming a generated numeric suffix. Existing
+behavioral and security assertions remain intact.
+
+Validation after the upgrade:
+
+- Frozen-lockfile installation succeeds; unrelated workspace importers are unchanged.
+- Workspace shape, Cordis patches, package lint, typecheck and build pass.
+- Full tests with both `DSH_NATIVE_SOURCE` and `DSH_SCHEMA_ADAPTER_ANCHOR`:
+  **1385 passed, 0 failed, 0 skipped** (`/tmp/clutch-baseline-final-test.log`).
+- Bilingual README parity passes. Version-floor assertions reject
+  `0.2.0-rc.1`, `0.2.1-rc.1`, `0.2.1` and `0.2.2-rc.0`.
+
+The browser results above already used DSH `0.2.2-rc.1`; this dependency-only
+follow-up did not rerun the browser scenarios or change production implementation.

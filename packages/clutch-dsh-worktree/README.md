@@ -742,10 +742,10 @@ text, actions and diagnostic details follow the font size selected in **Settings
 
 | Component       | Requirement                                                                                                                                                                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH Client      | `>=0.2.0-rc.1`, including the Session and Workspace Controllers and Client Store                                                                                                    |
-| DSH Host        | `>=0.2.0-rc.1`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
+| DSH Client      | `>=0.2.2-rc.1`, including the Session and Workspace Controllers and Client Store                                                                                                    |
+| DSH Host        | `>=0.2.2-rc.1`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
 | Git             | `>=2.20.0`, installed and available on `PATH`                                                                                                                                       |
-| Node.js         | `>=20.0.0` for the plugin; DSH `dsh-v0.2.0-rc.1` requires `^22.19.0                                                                                                                 |     | >=24.0.0` |
+| Node.js         | `>=24.9.0`, matching the minimum supported DSH version |
 | Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
 
 ## Behavior and limitations

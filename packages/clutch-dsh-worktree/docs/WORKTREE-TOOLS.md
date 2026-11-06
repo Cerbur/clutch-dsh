@@ -5,6 +5,10 @@ The requested DeepSeek Harness checkout is at
 `4878cdabd87d4041bdaff61d04c966883b9fd07a`; its package graph is
 `0.2.0-rc.1`. The plugin version stays unchanged for release aggregation.
 
+2026-11-06 compatibility floor: DSH `>=0.2.2-rc.1`, with development dependencies
+pinned to that graph. The earlier version above records the original research;
+it is retained only in explicit legacy test fixtures.
+
 ## Feasibility and upstream seams
 
 2026-10-31 native-directory amendment: the packaged Host now creates delegated Sessions with

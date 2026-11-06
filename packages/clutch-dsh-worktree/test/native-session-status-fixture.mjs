@@ -157,6 +157,8 @@ export async function nativeStatusFixture(
     ),
   });
   const events = new Map();
+  // Status-only fixture: access hooks are not rendered by these tests.
+  ctx.provide('remoteAccess', {});
   ctx.provide('sessions', {
     list,
     binding: () => undefined,

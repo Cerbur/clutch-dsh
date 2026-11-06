@@ -55,9 +55,12 @@ OpenAI-compatible gateway is not the DeepSeek official API.
    min/max lengths in descriptions, and rejects unsupported constructs rather
    than silently losing fields. This low-level projector retains historical DSH
    disjoint-union support; that capability is **not permission** to register unions.
-3. **DSH native/PTC:** real dsh-tools registry schemas/sdkSchemas, supported-schema
-   validation, jsonSchemaToTs and renderToolsSdk are exercised. The pinned
-   0.2.0-rc.1 graph accepts more than this package profile, including oneOf, but
+3. **DSH native/PTC:** current tool admission and separate native/PTC executors
+   are exercised against DSH 0.2.2-rc.1. Schema validation comes from dsh-tools;
+   jsonSchemaToTs now comes from dsh-tool-executor-ptc. Explicit legacy aliases
+   retain registry schemas/sdkSchemas and renderToolsSdk regressions without
+   declaring support for old Hosts. The native schema vocabulary accepts more
+   than this package profile, including oneOf, but
    rejects such things as anyOf, type arrays, regex/length constraints. SDK
    acceptance alone does not prove provider acceptance.
 4. **Provider wire adaptation:** inspected DSH source from dwm home at

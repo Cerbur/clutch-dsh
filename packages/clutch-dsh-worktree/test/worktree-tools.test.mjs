@@ -9,13 +9,15 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
-import Commands from '@deepseek-ai/dsh-commands';
+// Preserve the real legacy registry/SDK regression fixture explicitly. The
+// current graph is exercised by native-tool-activation/native-worktree-tool-lifecycle.
+import Commands from 'clutch-test-dsh-commands-legacy';
 import Tools, {
   assertSupportedJsonSchema,
   jsonSchemaToTs,
   renderToolsSdk,
   validateJsonSchemaValue,
-} from '@deepseek-ai/dsh-tools';
+} from 'clutch-test-dsh-tools-legacy';
 import { registerWorktreeTools } from '../lib/tool/index.js';
 import { createWorktreeManager } from '../lib/manage/index.js';
 import { samePhysicalPath } from '../lib/provider/path-identity.js';
@@ -27,10 +29,8 @@ import { providerError } from '../lib/provider/types.js';
 import { agentRelayMessage, relayMessageId } from '../lib/tool/agent-relay.js';
 import { assertPortableTool, discoverToolDeclarations } from './helpers/tool-contract.mjs';
 
-const requireTools = createRequire(import.meta.resolve('@deepseek-ai/dsh-tools'));
-const { default: SystemPrompt } = await import(
-  pathToFileURL(requireTools.resolve('@deepseek-ai/dsh-system-prompt')).href
-);
+const requireTools = createRequire(import.meta.resolve('clutch-test-dsh-tools-legacy'));
+const { default: SystemPrompt } = await import('clutch-test-dsh-system-prompt-legacy');
 const { createScope } = await import(
   pathToFileURL(requireTools.resolve('@deepseek-ai/dsh-scope')).href
 );
