@@ -394,6 +394,32 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 运行测试、构建或 typecheck 不能替代该检查。例如，Node 测试使用 `URL` 时须从 `node:url`
 显式导入，即使 Node 运行时也提供同名全局变量。
 
+### 归档与未决清理恢复回归
+
+在 monorepo 根构建后，从 package 根运行。所有 fixture 仓库、Sidecar、锁与日志必须位于
+唯一任务目录；只给子命令设置 DSH_HOME/TMPDIR，不覆盖 HOME 或现有 DSH 实例：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree build
+cd packages/clutch-dsh-worktree
+archiveTestRoot=$(mktemp -d "$HOME/.dsh-test/archive-recovery-XXXXXX")
+mkdir -p "$archiveTestRoot/tmp" "$archiveTestRoot/home"
+TMPDIR="$archiveTestRoot/tmp" DSH_HOME="$archiveTestRoot/home" \
+  node --test test/archive-recovery.test.mjs test/client-branch-drift.test.mjs \
+  > "$archiveTestRoot/recovery.log" 2>&1
+```
+
+`archive-recovery.test.mjs` 使用真实 Manager、LocalGitAdapter 与磁盘 Sidecar，复现
+目录残留/Git 无登记的 `WORKTREE_IDENTITY_CHANGED` 和无关新建的
+`WORKTREE_RECOVERY_REQUIRED`；验证明确取消、备份 fsync、原子发布失败、重启、幂等、
+跨进程、批量部分失败及路径权限/I/O 不确定性。Git 使用显式 cwd、结构化 argv、10 秒超时
+和 1 MiB 输出限额；并发采用调度屏障，测试具有 15–20 秒截止时间。fixture 保留在任务
+TMPDIR 下供取证，测试不会使用生产路径。全量门禁也须继承同样的隔离环境。
+
+既有现场备份只作只读取证，复现应重新生成路径/仓库指纹；不可把生产路径直接回放到清理
+入口。无需启动或替换用户 GUI；Client 回归执行生产恢复动作与范围刷新约束。
+新增恢复参数随 Host Remote 构建生成；仅本地构建不表示现有 GUI 已加载此实现。
+
 ### Session 完成提醒回归
 
 完成提醒测试必须跨越真实原生状态 owner，不能只给旧 summary 填 `completed=true`。

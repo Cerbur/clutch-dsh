@@ -449,7 +449,7 @@ export interface WorktreeManager {
   cleanWorktree(input: WorktreeLifecycleInput): Promise<void>;
 
   adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<void>;
-  recoverWorktrees(input: { workspaceId: WorkspaceId }): Promise<void>;
+  recoverWorktrees(input: { workspaceId: WorkspaceId; quarantineOperationId?: string }): Promise<void>;
 
   /** Removes plugin index entries only; preserves disk and native Sessions without activity checks. */
   forgetWorktree(input: WorktreeLifecycleInput): Promise<void>;
@@ -614,7 +614,7 @@ export interface WorktreeRemoteManager {
   cleanWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 
   adoptWorktreeBranch(input: AdoptWorktreeBranchInput): Promise<WorktreeRemoteResult<null>>;
-  recoverWorktrees(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<null>>;
+  recoverWorktrees(input: { workspaceId: WorkspaceId; quarantineOperationId?: string }): Promise<WorktreeRemoteResult<null>>;
 
   forgetWorktree(input: WorktreeLifecycleInput): Promise<WorktreeRemoteResult<null>>;
 

@@ -74,11 +74,13 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       typeof workspaceId !== 'string'
     )
       return null;
+    const quarantineOperationId = error.details?.quarantineOperationId;
+    const canQuarantine = typeof quarantineOperationId === 'string' && quarantineOperationId.length > 0;
     return {
-      label: t('worktree.retryRecovery'),
+      label: t(canQuarantine ? 'worktree.cancelPendingCleanup' : 'worktree.retryRecovery'),
       disabled: actionPending,
       onClick: () => {
-          void runMutation(() => manager.recoverWorktrees({ workspaceId }), {
+          void runMutation(() => manager.recoverWorktrees({ workspaceId, ...(canQuarantine ? { quarantineOperationId } : {}) }), {
             scope: { kind: 'workspace', workspaceId },
             preserveCurrent: true,
           });

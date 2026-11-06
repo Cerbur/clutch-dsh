@@ -726,6 +726,21 @@ stays in the creation dialog. Matching Git failures share one toast while keepin
 The Worktree settings section uses DSH's native tabs, status tags and compact controls. Its
 text, actions and diagnostic details follow the font size selected in **Settings → General**.
 
+An unresolved disk cleanup can block archive, batch management, and creation throughout its
+Workspace with `WORKTREE_RECOVERY_REQUIRED`. Choose **Retry recovery** first (also available
+on the affected Worktree menu). If cleanup cannot be reconciled—for example, the directory
+still exists but Git no longer registers it—the recovery error offers **Keep files and cancel
+pending cleanup** in **Errors & recovery**. This explicitly cancels that one cleanup request
+after saving a complete plugin-index backup in
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/`. It preserves all Worktree records,
+bindings, files, and native Sessions; it does not mark disk cleanup completed. Repeating the
+same cancellation is safe. Unrelated pending operations or repository conflicts remain blocked.
+
+After cancellation, retry the other selected items. For the affected checkout, repair its Git
+registration yourself, or use **Remove from Management** to retain its files without managing
+it. Any later disk cleanup still requires the normal confirmation and identity checks.
+If the backup cannot be written, cancellation fails and the original journal stays intact.
+
 ### Archive or remove a Worktree
 
 - **Archive Worktree** is non-destructive. It keeps the directory, bindings, instructions, and

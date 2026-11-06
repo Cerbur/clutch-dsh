@@ -322,6 +322,30 @@ for (const outcome of [
   });
 }
 
+test('recovery notification offers exact cleanup cancellation only after Host supplies the capability', async () => {
+  const calls = [];
+  const recoveryAction = evaluate(
+    `${declaration('recoveryAction')} return recoveryAction;`,
+    {
+      manager: { recoverWorktrees: async (input) => calls.push(input) },
+      t: (key) => key,
+      actionPending: false,
+      runMutation: async (operation, options) => { calls.push(options); await operation(); },
+    },
+  );
+  const error = { code: 'WORKTREE_IDENTITY_CHANGED', details: { workspaceId: 'ws1' } };
+  assert.equal(recoveryAction(error).label, 'worktree.retryRecovery');
+  error.details.quarantineOperationId = 'exact-operation';
+  const action = recoveryAction(error);
+  assert.equal(action.label, 'worktree.cancelPendingCleanup');
+  action.onClick();
+  await Promise.resolve();
+  assert.deepEqual(calls, [
+    { scope: { kind: 'workspace', workspaceId: 'ws1' }, preserveCurrent: true },
+    { workspaceId: 'ws1', quarantineOperationId: 'exact-operation' },
+  ]);
+});
+
 test('production branch menu selects confirmation, displays detached HEAD, and targets recovery', async () => {
   let selected;
   let recovery;

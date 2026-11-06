@@ -35,6 +35,8 @@ export interface ImportWorktreeTransactionInput {
 
 export interface RecoverWorktreesInput {
   readonly workspaceId: string;
+  /** Explicitly abandon only this pending cleanup, preserving disk and a durable backup. */
+  readonly quarantineOperationId?: string;
   readonly workspaceRoot: string;
 }
 

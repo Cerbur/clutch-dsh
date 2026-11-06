@@ -70,7 +70,7 @@ export interface WorktreeManagerService extends WorktreeManager {
   }): Promise<WorktreeRecord>;
 
   /** Reconcile durable Git/sidecar operation markers for one Workspace. */
-  recoverWorktrees(input: { workspaceId: string }): Promise<void>;
+  recoverWorktrees(input: { workspaceId: string; quarantineOperationId?: string }): Promise<void>;
 
   /** Abort new work and wait for in-flight provider work before Host disposal completes. */
   close(): Promise<void>;

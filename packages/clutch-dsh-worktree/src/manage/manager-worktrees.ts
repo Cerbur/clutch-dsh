@@ -687,11 +687,12 @@ export {
 /** Reconcile one Workspace's durable Git/sidecar operation marker. */
 export async function recoverWorktrees(
   context: WorktreeManagerContext,
-  input: { readonly workspaceId: WorkspaceId },
+  input: { readonly workspaceId: WorkspaceId; readonly quarantineOperationId?: string },
 ): Promise<void> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   await context.transaction.recover({
     workspaceId: input.workspaceId,
+    ...(input.quarantineOperationId === undefined ? {} : { quarantineOperationId: input.quarantineOperationId }),
     workspaceRoot: workspace.rootPath,
   });
 }
