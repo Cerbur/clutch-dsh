@@ -5,6 +5,21 @@ package, including conditional result reporting. Public tool names stay stable.
 This is a conservative **author/native portability profile**, not a claim that all
 providers implement the same JSON Schema dialect or that live E2E has passed.
 
+**2026-11-06 host boundary update:** DSH `0.2.2-rc.1` (`66491b05e3`) owns tool
+declarations before its presentation waterfall and deep-freezes loop requests.
+On hosts with `tools.resolve`, `nullableToolProviders` is a legacy-only option:
+the plugin preserves provider-owned declarations and leaves strict wire conversion
+to the native adapter. It does not mutate frozen requests or replace executors.
+The legacy projection described below remains active and tested on older graphs.
+Author/native schemas, optional-null execution normalization, validation and all
+report/retry safety contracts remain unchanged. Current-graph tests additionally
+exercise the real step admission and provider-declaration boundary.
+
+Live current-graph verification found that Magpie Responses normalizes omitted `strict`
+into required strings. Its native route now sets `compat.supportsStrictMode: true`, which
+emits `strict: false` for ordinary tools and preserves optionality. This adapter setting
+does not enable strict sampling or change runtime report/retry validation.
+
 ## Official sources and scope of evidence
 
 All four requested pages were read from their official HTTPS hosts. The harness
@@ -40,9 +55,12 @@ OpenAI-compatible gateway is not the DeepSeek official API.
    min/max lengths in descriptions, and rejects unsupported constructs rather
    than silently losing fields. This low-level projector retains historical DSH
    disjoint-union support; that capability is **not permission** to register unions.
-3. **DSH native/PTC:** real dsh-tools registry schemas/sdkSchemas, supported-schema
-   validation, jsonSchemaToTs and renderToolsSdk are exercised. The pinned
-   0.2.0-rc.1 graph accepts more than this package profile, including oneOf, but
+3. **DSH native/PTC:** current tool admission and separate native/PTC executors
+   are exercised against DSH 0.2.2-rc.1. Schema validation comes from dsh-tools;
+   jsonSchemaToTs now comes from dsh-tool-executor-ptc. Explicit legacy aliases
+   retain registry schemas/sdkSchemas and renderToolsSdk regressions without
+   declaring support for old Hosts. The native schema vocabulary accepts more
+   than this package profile, including oneOf, but
    rejects such things as anyOf, type arrays, regex/length constraints. SDK
    acceptance alone does not prove provider acceptance.
 4. **Provider wire adaptation:** inspected DSH source from dwm home at

@@ -67,6 +67,10 @@ export interface WorktreeToolSessionPort {
 }
 
 interface NativeAgent extends RelayAgent {
+  readonly model?: {
+    current(): Readonly<ToolModel> | undefined;
+    select(model: Readonly<ToolModel>): void;
+  };
   readonly session: {
     readonly id: string;
     requestHeader():
@@ -243,9 +247,16 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
     modelCatalog: () => controller.modelCatalog(),
     snapshot,
     currentModel: async (sessionId, signal) => {
+      signal.throwIfAborted();
+      const live = native.agents.get(sessionId)?.model?.current();
+      if (live) return { ...live };
       const value = await snapshot(sessionId, signal);
-      const selection = value.values.modelSelection as { next?: ToolModel | null } | undefined;
+      const selection = value.values.modelSelection as {
+        next?: ToolModel | null; pending?: ToolModel | null; lastUsed?: ToolModel | null;
+      } | undefined;
+      if (selection?.pending) return { ...selection.pending };
       if (selection?.next) return { ...selection.next };
+      if (selection?.lastUsed) return { ...selection.lastUsed };
       const header = native.agents.get(sessionId)?.session.requestHeader();
       if (header) {
         const { reasoningEffort, ...route } = header.config;
@@ -291,6 +302,14 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
       signal.throwIfAborted();
       const { agent } = result;
       hooks.get(sessionId)?.();
+      // Current DSH freezes the route before resolving this step's tools.
+      // Use its Session-local owner, never the deployment-default selector.
+      if (agent.model?.select) {
+        if (agent.session.id !== sessionId || native.agents.get(sessionId) !== agent)
+          throw new Error('Native Session identity changed before model selection');
+        agent.model.select({ ...model });
+        return;
+      }
       // Prepend makes these outer waterfalls: the native model listeners run
       // first, then this creation-only route wins consistently on both surfaces.
       // DSH records the resulting request/header and restores it on cold resume.

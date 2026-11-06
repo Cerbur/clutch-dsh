@@ -25,6 +25,8 @@ dsh web
 You do not need to install every plugin. See the package README for each plugin's behavior,
 requirements, and usage.
 
+Worktree requires DSH `>=0.2.2-rc.1`; see each other plugin's README for its minimum version.
+
 Office is an unreleased whitebox MVP; use its local checkout instructions until its first npm release.
 
 ### Install from a local checkout

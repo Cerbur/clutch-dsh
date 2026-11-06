@@ -1,5 +1,31 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.26 — 2026-11-06
+
+### 中文
+
+#### 修复
+
+- 修复当前 DSH 工具准入机制下自动注入工具在首轮原生调用或 PTC 执行中缺失的问题，并保持手动启用幂等。
+- 修复委派 Session 的模型与推理配置在首次请求中未生效的问题，支持继承已有选择或显式指定配置。
+- 修复自动工具探测读取失败阻断普通 Agent 请求的问题，同时保留身份、执行目录校验与消息回报授权。
+
+#### 兼容性
+
+- 最低支持版本提升至 DSH `0.2.2-rc.1` 与 Node.js `>=24.9.0`，并同步更新依赖与双语兼容说明。
+
+### English
+
+#### Fixed
+
+- Fix missing automatically injected tools on the first native call or PTC execution under current DSH tool admission, while keeping manual activation idempotent.
+- Fix delegated Session model and reasoning settings not taking effect on the first request, supporting inherited selections and explicit configuration.
+- Prevent unavailable automatic tool probe data from blocking ordinary Agent requests while preserving identity, working directory, and report authorization checks.
+
+#### Compatibility
+
+- Raise the minimum supported versions to DSH `0.2.2-rc.1` and Node.js `>=24.9.0`, and align dependencies and bilingual compatibility guidance.
+
 ## 0.1.25 — 2026-11-05
 
 ### 中文

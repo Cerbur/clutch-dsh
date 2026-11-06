@@ -24,6 +24,8 @@ dsh web
 
 不需要安装全部 plugin。每个 package 的 README 都说明了对应的行为、要求和使用方法。
 
+Worktree 要求 DSH `>=0.2.2-rc.1`；其他 plugin 的最低版本请参阅各自的 README。
+
 Office 是尚未发布的白模 MVP，首次 npm 发布前请使用其本地 checkout 安装说明。
 
 ### 从本地 checkout 安装

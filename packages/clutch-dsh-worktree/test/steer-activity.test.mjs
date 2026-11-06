@@ -81,7 +81,7 @@ new Function('window', await readFile(new URL(import.meta.resolve('@deepseek-ai/
   __ModuleLoader__: { load: handoff => handoffs.push(handoff) },
 });
 const modules = new Map(await Promise.all([
-  '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime',
+  '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime', 'zod',
 ].map(async id => [id, await import(id)])));
 modules.set('@deepseek-ai/dsh-client-ui-primitives', {});
 modules.set('react-dom', { createPortal: node => node });

@@ -39,7 +39,7 @@ const nativeModal = new Function('React', 'ReactDOM', 'jsxRuntime', `
   const { useRef, useLayoutEffect } = React;
   const { createPortal } = ReactDOM;
   const { jsx, jsxs, Fragment } = jsxRuntime;
-  const css$17 = {};
+  ${[...new Set(declarations.get('Modal').match(/\bcss\$\d+\b/g))].map((name) => `const ${name} = {};`).join('\n')}
   const clsx = (...values) => values.filter(Boolean).join(' ');
   const IconCloseOutlineRegular = () => null;
   ${names.map((name) => declarations.get(name)).join('\n')}
