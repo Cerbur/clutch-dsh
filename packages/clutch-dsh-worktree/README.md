@@ -734,7 +734,8 @@ pending cleanup** in **Errors & recovery**. This explicitly cancels that one cle
 after saving a complete plugin-index backup in
 `$dshHome/clutch-dsh-worktree/cleanup-quarantine/`. It preserves all Worktree records,
 bindings, files, and native Sessions; it does not mark disk cleanup completed. Repeating the
-same cancellation is safe. Unrelated pending operations or repository conflicts remain blocked.
+same cancellation is safe. When the Host offers cancellation, Git failures do not hide this
+action. Unrelated pending operations or repository conflicts remain blocked.
 
 After cancellation, retry the other selected items. For the affected checkout, repair its Git
 registration yourself, or use **Remove from Management** to retain its files without managing

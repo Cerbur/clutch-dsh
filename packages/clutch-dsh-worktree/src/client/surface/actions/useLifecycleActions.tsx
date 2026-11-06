@@ -63,19 +63,18 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
     error: WorktreeViewError | undefined,
   ): NonNullable<WorktreeNotification['actions']>[number] | null => {
     const workspaceId = error?.details?.workspaceId;
+    if (!manager || error === undefined || typeof workspaceId !== 'string') return null;
+    const quarantineOperationId = error.details?.quarantineOperationId;
+    const canQuarantine = typeof quarantineOperationId === 'string' && quarantineOperationId.length > 0;
     if (
-      !manager ||
-      error === undefined ||
+      !canQuarantine &&
       ![
         'WORKTREE_RECOVERY_REQUIRED',
         'SIDECAR_SYNC_REQUIRED',
         'WORKTREE_IDENTITY_CHANGED',
-      ].includes(error.code) ||
-      typeof workspaceId !== 'string'
+      ].includes(error.code)
     )
       return null;
-    const quarantineOperationId = error.details?.quarantineOperationId;
-    const canQuarantine = typeof quarantineOperationId === 'string' && quarantineOperationId.length > 0;
     return {
       label: t(canQuarantine ? 'worktree.cancelPendingCleanup' : 'worktree.retryRecovery'),
       disabled: actionPending,
