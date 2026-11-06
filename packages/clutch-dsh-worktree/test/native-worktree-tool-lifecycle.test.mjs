@@ -6,6 +6,14 @@ import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { registerWorktreeTools, createWorktreeToolSessionPort } from '../lib/tool/index.js';
 
+// DSH split registry and execution into separate plugins. Preserve the same
+// real-loop assertions while mounting the native executor on the new graph.
+async function installNativeExecutor(ctx, root) {
+  if (typeof ctx.tools.setExecutor !== 'function') return;
+  const requireExecutor = createRequire(path.join(root, 'packages/core/tool-executor-native/package.json'));
+  await ctx.plugin(await import(pathToFileURL(requireExecutor.resolve('@deepseek-ai/dsh-tool-executor-native')).href));
+}
+
 for (const mode of ['queue', 'steer']) for (const boundary of ['system-prompt/assemble', 'agent/request'])
 test(`real native loop does not execute an identical relay retry twice while claimed before ${boundary} (${mode})`, { timeout: 10000 }, async (t) => {
   const root = process.env.DSH_NATIVE_SOURCE;
@@ -23,6 +31,7 @@ test(`real native loop does not execute an identical relay retry twice while cla
   const { promise: gate, resolve: release } = Promise.withResolvers();
   t.after(async () => { release(); await ctx.fiber.dispose(); });
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin);
+  await installNativeExecutor(ctx, root);
   await ctx.plugin(Loop, { agents: [] });
   const requests = [];
   class Adapter extends LlmAdapter {
@@ -76,7 +85,6 @@ for (const { providers, uncertain } of [
   { providers: ['mock'], uncertain: false },
   { providers: ['mock'], uncertain: true },
 ]) test(`real native loop retains reporting across first completion and a parent queue follow-up (nullable providers: ${providers.join(',') || 'none'}; uncertain: ${uncertain})`, async (t) => {
-  const nullableWire = providers.includes('mock');
   const root = process.env.DSH_NATIVE_SOURCE;
   if (!root) return t.skip('Set DSH_NATIVE_SOURCE to exercise the deployed native Agent loop.');
   const installed = createRequire(path.join(root, 'packages/core/agent-loop/package.json'));
@@ -91,6 +99,9 @@ for (const { providers, uncertain } of [
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin);
+  await installNativeExecutor(ctx, root);
+  const stepAdmission = typeof ctx.tools.resolve === 'function';
+  const nullableWire = providers.includes('mock') && !stepAdmission;
   const unrelatedParameters = { type: 'object', properties: { note: { type: 'string' } }, additionalProperties: false };
   ctx.tools.register({
     name: 'unrelated_fixture', description: 'Unrelated fixture tool', parameters: unrelatedParameters,
@@ -102,13 +113,15 @@ for (const { providers, uncertain } of [
   ctx.provide('commands', { register(value) { command = value; return () => {}; } });
   const requests = [];
   let retryId;
+  const nativeErrors = [];
+  ctx.on('agent/error', ({ error }) => nativeErrors.push(error), { global: true });
   let injectFailure = uncertain;
   class Adapter extends LlmAdapter {
     async *stream(request) {
       requests.push(request);
       const last = request.messages.at(-1);
       if (request.sessionId === 'child' && (last?.role !== 'tool' || retryId)) {
-        const args = JSON.stringify({ status: 'completed', summary: 'Native task complete', ...(nullableWire ? { evidence: null, requestId: retryId ?? null } : {}) });
+        const args = JSON.stringify({ status: 'completed', summary: 'Native task complete', ...(nullableWire ? { evidence: null, requestId: retryId ?? null } : retryId ? { requestId: retryId } : {}) });
         const id = 'report-' + requests.length;
         yield { type: 'block-start', index: 0, blockType: 'tool-call' };
         yield { type: 'tool-call-delta', index: 0, id, name: 'clutch_report_result', argumentsDelta: args };
@@ -169,7 +182,15 @@ for (const { providers, uncertain } of [
   parent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Start native QA' }] }));
   await parent.whenIdle();
   const run = async (name, args) => {
-    const result = await ctx.tools.execute({ name, arguments: args, agent: parent, callId: 'native-' + requests.length, signal });
+    let result;
+    if (typeof ctx.tools.resolve === 'function') {
+      const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: parent.model.current(), signal });
+      try {
+        const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: 'native-' + requests.length, name, arguments: JSON.stringify(args) }], agent: parent, signal, toolSet });
+        assert.equal(batch.results.length, 1);
+        result = batch.results[0].result;
+      } finally { toolSet.dispose(); }
+    } else result = await ctx.tools.execute({ name, arguments: args, agent: parent, callId: 'native-' + requests.length, signal });
     assert.equal(result.isError, false, JSON.stringify(result.content));
     return JSON.parse(result.content[0].text);
   };
@@ -178,6 +199,7 @@ for (const { providers, uncertain } of [
   await child.whenIdle();
   await parent.whenIdle();
   const first = requests.filter((r) => r.sessionId === 'child');
+  assert.deepEqual(nativeErrors, [], 'native preparation/streaming must not fail');
   assert.ok(first.length >= 2, 'first native report and final response must run');
   assert.ok(first[0].tools.some((tool) => tool.name === 'clutch_report_result'));
   const report = first[0].tools.find((tool) => tool.name === 'clutch_report_result');
@@ -192,8 +214,12 @@ for (const { providers, uncertain } of [
   } else assert.deepEqual(report.parameters, native);
   if (uncertain) {
     const retry = first[1].tools.find((tool) => tool.name === 'clutch_report_result');
-    assert.equal(retry.parameters.properties.requestId.anyOf[0].type, 'string', 'an uncertain attempt must restore the real retry id in the wire schema');
-    assert.equal(retry.parameters.properties.requestId.anyOf[1].type, 'null');
+    if (stepAdmission) {
+      assert.deepEqual(retry.parameters, native, 'current DSH provider owns wire conversion; plugin must preserve declarations');
+    } else {
+      assert.equal(retry.parameters.properties.requestId.anyOf[0].type, 'string', 'an uncertain attempt must restore the real retry id in the wire schema');
+      assert.equal(retry.parameters.properties.requestId.anyOf[1].type, 'null');
+    }
     assert.ok(first.length >= 3, 'uncertain admission must run the identical retry and then finish');
   }
   assert.ok(ctx.tools.get('clutch_report_result', child), 'report registration must survive task completion');

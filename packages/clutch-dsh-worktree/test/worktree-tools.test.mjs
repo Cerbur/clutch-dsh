@@ -23,6 +23,7 @@ import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repos
 import { readToolSession } from '../lib/tool/index.js';
 import { WorktreeToolSettings } from '../lib/host/tool-settings.js';
 import { WORKTREE_TOOL_IDS } from '../lib/contract/tool-settings.js';
+import { providerError } from '../lib/provider/types.js';
 import { agentRelayMessage, relayMessageId } from '../lib/tool/agent-relay.js';
 import { assertPortableTool, discoverToolDeclarations } from './helpers/tool-contract.mjs';
 
@@ -377,6 +378,13 @@ test('actual DSH pi-ai strict adaptation preserves every registered tool and exe
   for (const key of Object.keys(span.parameters.properties)) if (!(key in args)) args[key] = null;
   assert.equal((await f.run(span.name, args)).status, 'dispatched');
   assert.deepEqual(convertResponsesTools(schemas, { strict: false }).map((tool) => tool.parameters), schemas.map((tool) => tool.parameters));
+  const explicitNonStrict = convertResponsesTools(schemas, { supportsStrictMode: true });
+  assert.ok(explicitNonStrict.every((tool) => tool.strict === false));
+  assert.deepEqual(explicitNonStrict.map((tool) => tool.parameters), schemas.map((tool) => tool.parameters));
+  const report = explicitNonStrict.find((tool) => tool.name === 'clutch_report_result');
+  assert.ok(!report.parameters.required.includes('requestId'), 'native Responses compat preserves first-report omission');
+  const omittedStrict = convertResponsesTools(schemas, { supportsStrictMode: false });
+  assert.ok(omittedStrict.every((tool) => !Object.hasOwn(tool, 'strict')), 'unsupported endpoints receive no strict flag');
 });
 
 test('a legacy history observation failure does not hide healthy Sessions', async (t) => {
@@ -699,6 +707,98 @@ test('assembly refresh runs downstream transformations once and honors invocatio
     /Cancelled initial assembly/,
   );
   assert.equal(transformed, 1);
+});
+
+for (const toolMode of ['native', 'ptc'])
+test(`legacy ${toolMode} assembly isolates automatic data probes and preserves cancellation`, async (t) => {
+  let failure;
+  let active = false;
+  let cancel;
+  const fail = (stage) => {
+    if (failure !== stage) return;
+    cancel?.abort(new Error('Cancelled degraded assembly'));
+    throw new Error('WORKTREE_STORE_CORRUPT at ' + stage);
+  };
+  const f = await fixture(t, {
+    toolMode,
+    settings: {
+      read: async () => { fail('settings'); return { enabled: active, tools: WORKTREE_TOOL_IDS }; },
+      subscribe: () => () => {},
+    },
+    manager: {
+      listBindings: async () => { fail('listBindings'); return [{ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'caller', status: 'active' }]; },
+      listWorktrees: async () => { fail('listWorktrees'); return [{ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/worktree', status: 'active' }]; },
+      resolveRuntimeCwd: async () => { fail('authorize'); return '/worktree'; },
+    },
+  });
+  f.headers.set('caller', { sessionId: 'caller', workspaceId: 'ws', cwd: '/worktree' });
+  f.ctx.tools.register({
+    name: 'ordinary_native_tool', description: 'Ordinary tool',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+    execute: async () => ({ ok: true }),
+  });
+  for (active of [false, true]) for (failure of ['listBindings', 'settings', 'listWorktrees', 'authorize']) {
+    const assembled = await f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: f.signal });
+    assert.deepEqual(f.ctx.tools.schemas(f.agent).map((tool) => tool.name).sort(),
+      toolMode === 'native' ? ['ordinary_native_tool'] : ['ordinary_native_tool', 'run_code']);
+    if (toolMode === 'native') assert.deepEqual(assembled.tools.map((tool) => tool.name), ['ordinary_native_tool']);
+    else {
+      assert.deepEqual(assembled.tools.map((tool) => tool.name), ['run_code']);
+      const sdk = assembled.sections.find((section) => section.name === 'tools:sdk').text;
+      assert.match(sdk, /ordinary_native_tool/);
+      assert.doesNotMatch(sdk, /clutch_/);
+    }
+  }
+  for (failure of ['listBindings', 'settings', 'listWorktrees', 'authorize']) {
+    cancel = new globalThis.AbortController();
+    await assert.rejects(f.ctx.systemPrompt.assemble({ agent: f.agent, scope: f.agent, signal: cancel.signal }), /Cancelled degraded assembly/);
+  }
+});
+
+for (const toolMode of ['native', 'ptc'])
+test(`legacy ${toolMode} admission preserves native Manager identity denials`, async (t) => {
+  const denial = providerError('SESSION_CWD_MISMATCH', 'Native directory identity rejected');
+  const f = await fixture(t, {
+    toolMode,
+    settings: { read: async () => ({ enabled: true, tools: WORKTREE_TOOL_IDS }), subscribe: () => () => {} },
+    manager: { resolveRuntimeCwd: async () => { throw denial; } },
+  });
+  await assert.rejects(f.step(), (error) => error === denial);
+  assert.equal(f.ctx.tools.schemas(f.agent).some((tool) => tool.name.startsWith('clutch_')), false);
+});
+
+for (const toolMode of ['native', 'ptc'])
+test(`legacy ${toolMode} degraded probes retain reporting but do not bypass actual authorization or consume tokens`, async (t) => {
+  let degraded = false;
+  const f = await delegatedFixture(t, {
+    toolMode,
+    settings: {
+      read: async (scope) => ({ enabled: scope.kind === 'general' || degraded, tools: WORKTREE_TOOL_IDS }),
+      subscribe: () => () => {},
+    },
+    manager: {
+      resolveRuntimeCwd: async () => {
+        if (degraded) throw new Error('WORKTREE_STORE_CORRUPT');
+        return '/worktree';
+      },
+    },
+  });
+  degraded = true;
+  const before = f.calls.length;
+  const assembled = await f.ctx.systemPrompt.assemble({ agent: f.child, scope: f.child, signal: f.signal });
+  assert.deepEqual(f.ctx.tools.schemas(f.child).map((tool) => tool.name).sort(),
+    toolMode === 'native' ? ['clutch_report_result'] : ['clutch_report_result', 'run_code']);
+  assert.match(JSON.stringify(assembled), /clutch_report_result/);
+  const report = { status: 'completed', summary: 'Recovery verified' };
+  await assert.rejects(f.reportTool.execute(report, { agent: f.child, signal: f.signal }), /WORKTREE_STORE_CORRUPT/);
+  await assert.rejects(f.ctx.tools.get('clutch_send_message', f.agent).execute(
+    { sessionId: 'child', prompt: 'Blocked follow-up', mode: 'queue' }, { agent: f.agent, signal: f.signal },
+  ), /WORKTREE_STORE_CORRUPT/);
+  assert.equal(f.calls.length, before, 'no report or follow-up can be delivered while authorization is unavailable');
+  degraded = false;
+  assert.equal((await f.run('clutch_report_result', report, f.child)).status, 'admitted', 'failed probe/operation preserves the original token');
+  await assert.rejects(f.reportTool.execute(report, { agent: f.child, signal: f.signal }), /REPORT_TASK_CLOSED/);
 });
 
 test('create-and-fix guidance delegates implementation and prefers enabled plugin tools', async (t) => {

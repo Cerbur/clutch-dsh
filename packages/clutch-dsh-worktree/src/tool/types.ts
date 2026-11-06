@@ -16,7 +16,7 @@ export interface Execution {
   signal: AbortSignal;
 }
 export interface Options {
-  /** Explicit routes using required+nullable transport input, never catalog/SDK types. */
+  /** Legacy-host wire projection only; current DSH owns provider schema conversion. */
   nullableToolProviders?: readonly string[];
   settings?: {
     read(scope: WorktreeToolSettingsScope): Promise<WorktreeToolSelection>;

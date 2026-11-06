@@ -257,8 +257,14 @@ Git-root Session 保留原有预览范围。
 开启 **自动注入 Worktree 工具**并选择能力。Local/Main 配置仅适用于此 Workspace 根目录中
 未绑定 Worktree 的会话；Worktree 配置仅适用于绑定到该 Worktree 的会话，各自独立保存。
 所选工具在首个模型请求组装前启用，Agent 重启后也按对应配置恢复；普通提示词 preset 同时包含委派指导，PTC 模式下也包含 SDK。
+当前 DSH 在每一步工具准入前解析自动选择，已打开会话的首个请求也会生效。
+关闭自动选择时，不触发 Git 可用性探测。
 此选择与通用设置独立：通用选择 1、2、3，自动注入选择 2、3、4 时，输入 `/cluworktree`
 只补齐能力 1。已经启用的工具保留到当前 Agent 结束；配置修改影响后续注入。
+
+自动探测若无法读取插件数据或检查可用性，不增加工具，普通 native/PTC 请求仍可继续。
+已有工具（含结果回报）保留到 Agent 结束；实际调用仍执行全部数据、身份、目录和回报授权校验。
+取消和已确认的身份或目录不匹配仍会报错，不会被当作可忽略的探测故障。
 
 设置中的 Worktree 入口与侧边栏使用相同的分支图标。
 两处设置均使用分组卡片，总开关位于顶部。开启后在分割线下展开工具选择与说明；
@@ -340,7 +346,8 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 首次回报若自造 id 而被拒绝，错误会说明如何纠正，且不消耗回报 token。
 投递结果不确定时，重试必须保留返回的 id 和完全相同的内容。
 
-原生 schema 保留真正可选字段。若路由会生成可选字段空值，可在 Host 配置中按准确 provider id 启用：
+原生 schema 保留真正可选字段。当前 DSH 拥有工具声明及 provider wire 转换，插件不会改写冻结的模型请求。
+仅在旧版 DSH Host 上，若路由会生成可选字段空值，可按准确 provider id 启用：
 
 ```yaml
 - id: clutch-dsh-worktree-host
@@ -349,7 +356,8 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
     nullableToolProviders: [ocx]
 ```
 
-默认列表为空。对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
+默认列表为空；在具有逐步工具准入能力的当前 Host 上，此选项不生效。
+在旧 Host 上，对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
 用可空值表达原本可选的字段，封闭嵌套对象并保留长度限制。
 首次回报的 wire requestId 只允许 null；存在不确定投递时恢复重试 id 字段。
 原生目录、PTC SDK、其他插件和执行校验保留既有契约。
@@ -357,13 +365,20 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 适配和真实 ocx/Luna 路由；其他路由需单独验证。
 官方来源、验证分层与限制见[工具 Schema 规范](docs/TOOL-SCHEMA-STANDARD.md)。
 
+对于当前 DSH pi-ai 的 `openai-responses` 路由，若端点接受 `strict` 字段，
+在该原生 provider 路由设置 `compat: { supportsStrictMode: true }`。
+这样适配器会为普通工具明确发送 `strict: false`，保留可选字段，
+避免端点自动将它们规范化为必填字符串。已在 Magpie Responses / GPT-6.1-Sol 验证；
+这不会启用严格采样。不接受该字段的端点需单独配置适配器兼容行为。
+
 `model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
 有效模型与推理强度，该默认路径无需查询模型列表。
 用户指定其他模型或要求按任务选模型时，若已启用 `clutch_list_models`，先发现可用路由再显式传入所选对象。
 未知路由需查询或向用户确认，不猜测模型 id，也不回退到部署默认模型。
 模型或推理强度不可用时，在创建 Session 前失败。初始模型路由不会保存部署
-默认模型。在 DSH 记录首个 request header 前，该覆盖仅存在于运行时；之后由 DSH 根据
-自己的历史恢复模型。首个请求前重启会丢失初始路由覆盖。原生 Session 模型切换优先。
+默认模型。当前 DSH 在首步前通过新 Session 的原生模型 owner 记录选择，
+即使首个请求前重启也能恢复。旧 Host 在首个 request header 前仍使用运行时覆盖，
+这些旧 Host 若在首个请求前重启会丢失覆盖。原生 Session 模型切换优先。
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；

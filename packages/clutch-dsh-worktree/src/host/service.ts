@@ -51,7 +51,7 @@ import { WorktreeToolSettings } from './tool-settings.js';
 export interface WorktreeHostConfig {
   /** DSH 解析后的绝对数据根目录。 / Absolute DSH data root resolved by the Host. */
   readonly dshHome: string;
-  /** Provider ids whose wire tools require explicit nullable default fields. */
+  /** Legacy-host nullable wire projection; current DSH owns provider conversion. */
   readonly nullableToolProviders?: readonly string[];
 }
 

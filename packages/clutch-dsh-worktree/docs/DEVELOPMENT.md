@@ -10,6 +10,22 @@
 
 ## 1. 环境前置要求
 
+2026-11-06 tool 兼容验证基线为 `dwm home` 定位的 DSH `0.2.2-rc.1`
+（`66491b05e3`）。最低依赖图保持原 pin；通过 capability detection 使用新的
+step tool admission、独立 native/PTC executor 和 `agent.model` owner。
+除默认全量测试外，设置 `DSH_NATIVE_SOURCE` 和 `DSH_SCHEMA_ADAPTER_ANCHOR`
+运行真实源码接缝；`test/native-tool-activation.test.mjs` 要求当前逐步准入图，
+覆盖 Local/Worktree 首轮 native/PTC、已存在/新建 Agent、偏好读取去重、禁用、取消与卸载。
+`native-agent-relay` 的 fixture 同时支持旧 projection owner 和新 state reader，
+消息来源、队列修改、重放与不可重复投递断言保持不变。
+
+当前 DSH 的 `nullableToolProviders` 不再改写 wire；provider adapter 拥有转换，
+测试 profile 的 Magpie Responses 路由需设置 `compat.supportsStrictMode: true`，
+让 pi-ai 明确发送 `strict: false`，避免网关将可选 requestId 强制变为字符串。
+这不是启用 strict sampling。旧图继续验证旧 projection，不能把两种
+接缝混同为同一套请求可变性保证。浏览器验收使用独立 `DSH_HOME=~/.dsh-test`
+服务和临时 Git Workspace；不向业务仓库写入测试任务。
+
 侧栏导航通过正式 `sidebar.workspaces` 插槽挂载，沿用现有 footer 入口。
 `node --test test/sidebar-workspace-slot.test.mjs` 使用安装依赖中的真实 DSH SlotRegistry、
 React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建、卸载清理，以及主对话和

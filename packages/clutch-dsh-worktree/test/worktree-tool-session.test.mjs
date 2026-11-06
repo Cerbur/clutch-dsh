@@ -327,6 +327,31 @@ for (const terminal of ['request/header', 'model/selection', 'agent/disposed', '
   });
 }
 
+test('current DSH uses the live Agent model owner and never changes deployment defaults or request hooks', async (t) => {
+  const f = await fixture(t);
+  const child = await f.makeAgent('child');
+  let selected = { provider: 'p', model: 'default', reasoningEffort: 'low' };
+  child.model = { current: () => selected, select: (value) => { selected = value; } };
+  const model = { provider: 'p', model: 'worker' };
+  await f.port.configureModel('child', model, f.signal);
+  assert.deepEqual(selected, model, 'omitted effort must not inherit the previous model effort');
+  assert.notEqual(selected, model, 'native owner receives a detached selection');
+  assert.deepEqual(await f.port.currentModel('child', f.signal), model);
+  assert.deepEqual(await child.ctx.waterfall('agent/request', { agent: child }, async () => ({ temperature: 0.2 })), { temperature: 0.2 });
+  assert.deepEqual(f.catalog.default, f.originalModel);
+  assert.equal(f.calls.some(([kind]) => kind === 'observe'), false, 'live selection needs no cold-history read');
+});
+
+test('cold current model reads current raw pending/lastUsed projections', async (t) => {
+  const f = await fixture(t);
+  const previous = { provider: 'p', model: 'default' };
+  const pending = { provider: 'p', model: 'worker', reasoningEffort: 'high' };
+  f.cuts.set('cold', { values: { modelSelection: { pending, lastUsed: previous } } });
+  assert.deepEqual(await f.port.currentModel('cold', f.signal), pending);
+  f.cuts.set('cold', { values: { modelSelection: { pending: null, lastUsed: previous } } });
+  assert.deepEqual(await f.port.currentModel('cold', f.signal), previous);
+});
+
 test('omitted reasoning effort clears native default effort from the initial request', async (t) => {
   const f = await fixture(t);
   const child = await f.makeAgent('child');

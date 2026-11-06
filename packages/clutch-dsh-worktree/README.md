@@ -289,11 +289,19 @@ capabilities under **Automatically inject Worktree tools**. Local/Main settings 
 Sessions in that Workspace root; Worktree settings apply only to Sessions bound to that Worktree.
 Each configuration is stored separately. Selected tools are assembled before the first model request,
 including after an Agent restart; ordinary prompt presets also include delegation guidance and,
-in PTC mode, their SDK.
+in PTC mode, their SDK. Current DSH resolves automatic selection before each step's tool
+admission, including the first request of an already-open Session. Disabled automatic selections
+do not trigger Git availability probes.
 These selections are independent of General:
 if General selects capabilities 1, 2, 3 and automatic injection selects 2, 3, 4, running
 `/cluworktree` adds only capability 1. Already enabled tools remain until that Agent ends; changing
 preferences affects future injection.
+
+If automatic discovery cannot read plugin data or check availability, it adds no tools
+and ordinary native/PTC requests can continue. Previously enabled tools, including reporting,
+retain their Agent lifetime; their actual calls still enforce all data, identity, directory
+and report-authorization checks. Cancellation and confirmed identity/directory mismatches
+remain errors rather than being treated as optional discovery failures.
 
 The Worktree entry in Settings uses the same branch icon as the sidebar.
 Both settings use a card with the main switch at the top. Turning it on reveals tool selections
@@ -396,8 +404,9 @@ must omit `requestId` or use JSON `null`: the Host generates it. A rejected firs
 with an invented id explains how to correct it without consuming the report token.
 After uncertain admission, preserve the returned id and identical content for retry.
 
-Native schemas keep genuinely optional fields. For routes that otherwise generate empty optional
-values, opt in by exact provider id in the Host configuration:
+Native schemas keep genuinely optional fields. Current DSH owns tool declarations and provider
+wire conversion; the plugin does not rewrite frozen model requests. On older DSH hosts only,
+routes that otherwise generate empty optional values can opt in by exact provider id:
 
 ```yaml
 - id: clutch-dsh-worktree-host
@@ -406,7 +415,8 @@ values, opt in by exact provider id in the Host configuration:
     nullableToolProviders: [ocx]
 ```
 
-This defaults to an empty list. For these providers, plugin tools in native model requests use
+This defaults to an empty list and has no effect on current hosts with step tool admission.
+On older hosts, for these providers, plugin tools in native model requests use
 required properties with nullable optional values and closed nested objects, retaining length bounds.
 A first report accepts only null for its wire requestId; an uncertain attempt restores the retry id
 field. The native catalog, PTC SDK, other plugins and execution validation keep their existing contracts.
@@ -414,15 +424,23 @@ This does not enable a provider's strict mode or promise support across gateways
 adapter and a real ocx/Luna route have been checked; other routes need their own verification. See the
 [tool schema standard](docs/TOOL-SCHEMA-STANDARD.md) for official sources, tested layers and limits.
 
+For current DSH pi-ai `openai-responses` routes whose endpoint accepts the `strict` field,
+set `compat: { supportsStrictMode: true }` on that native provider route. This makes the
+adapter send `strict: false` explicitly for ordinary tools, preserving optional fields
+instead of allowing the endpoint to normalize them into required strings. This was verified
+with Magpie Responses / GPT-6.1-Sol; it does not enable strict sampling. Endpoints that reject
+the field need their own adapter compatibility configuration.
+
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection, including reasoning effort; no catalog lookup is required for that default.
 When the user specifies a different model or asks to choose one for the task, discover supported
 routes with `clutch_list_models` if enabled and pass the selected object explicitly.
 Unknown routes require discovery or user clarification, never invented ids or a deployment-default fallback.
 An unavailable model or effort fails before creating a Session. Initial
-model routing does not save the deployment default. It is runtime-only until DSH records the
-first request header; after that, DSH restores the model from its own history. Restarting before
-that first request discards the initial routing override. Native Session model changes take precedence.
+model routing does not save the deployment default. Current DSH records the selection through
+the new Session's native model owner before the first step, so it survives restart even before
+the first request. Older hosts retain the runtime-only override until the first request header;
+restarting those hosts before that request discards the override. Native Session model changes take precedence.
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session

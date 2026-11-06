@@ -96,6 +96,21 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ### Agent Worktree 工具接缝
 
+**2026-11-06 当前 DSH 接缝：** 以 `tools.resolve` 检测逐步工具准入能力。
+新图在 `agent/created` 注册 Agent-scoped 条件工具，插件重载时也覆盖已存在的 Agent；
+注册阶段不依赖尚未建立的 Workspace 归属或 Worktree binding。每轮 `when` 通过
+同一 activation 对象共享一次偏好/身份解析，只更新运行时启用集合，不修改注册目录。
+因此原生 toolSet、native declarations、PTC SDK 与指导在首轮同步可用；未启用工具
+不能执行，已启用工具仍保留至 Agent 结束。关闭偏好先于 Git 可用性读取。
+新图不递归 assemble、不替换 executor、不改写冻结请求；`nullableToolProviders`
+仅对旧图生效，当前图由原生 provider 负责 wire 转换。可选 null 归一化、参数约束、
+固定回报目标、token 与精确重试门禁在两条路径上保持一致。
+
+新 Session 的模型由 `agent.model.select` 在工具准入前记录；继承优先读取 live
+`agent.model.current`，冷读取兼容 raw `pending/lastUsed` 与旧 wire `next`。
+这些选择通过 DSH owner 写入原生事件，不由插件直接 append，也不修改部署默认值。
+仅缺少该能力的旧图使用下述请求 waterfall/首个 header 清理路径。
+
 Host 的可选 `commands/tools/sessionController/sessionQuery/agents/llm/systemPrompt` composition
 提供 `/cluworktree`，通用工具开关开启时注册指令，并在调用 Agent 的独立作用域按用户选择注册
 创建、Worktree/Session/模型发现、指派和继续投递能力，通过原生 `systemPrompt.section` 注入对应指导。
@@ -117,7 +132,7 @@ Local/Main 与 Worktree 的独立配置可在执行前自动注入所选能力�
 浏览器 `createWorktreeSession`、Agent 派发与 Dashboard 同步复用同一个创建 module，
 不直接修改 Session header、事件或权限；只有旧注入 adapter 保留 cwd 创建兼容 seam。
 模型省略时继承调用 Session 的有效 provider/model/effort，显式模型通过原生目录和 LLM
-resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
+resolver 验证。旧图中 Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
 外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
@@ -842,6 +857,18 @@ Sessions at the Workspace root use Local/Main preferences; an active binding use
 preferences and requires healthy availability. Detached or ambiguous bindings never use Local preferences.
 Delegated Sessions default to result reporting only; other tools follow explicit preferences or
 command activation. Reporting guidance remains independent of delegation guidance.
+
+Automatic discovery is a read-only optional boundary in both current step admission and
+legacy prompt assembly. Unavailable Sidecar/settings/Workspace or Git probe data adds no
+capabilities and does not block ordinary native/PTC requests. Existing enabled capabilities
+and report registrations remain Agent-scoped; actual operations still run their normal
+authorization and report-token checks, and failures do not become successful mutations.
+Cancellation, lifetime disposal and registration failures remain outside recovery.
+`ToolAuthorizationError` distinguishes confirmed identity/cwd denials from unavailable
+probe data without matching error-message strings; confirmed denials preserve the existing
+fail-closed assembly/admission contract. The Manager's structured `SESSION_CWD_MISMATCH`
+provider error also propagates unchanged. Detached/ambiguous preliminary candidates continue
+to be skipped as before. Recovery never creates report tokens or expands a failed selection.
 
 ### Task-scoped reporting and callback control (2026-10-10)
 
