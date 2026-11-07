@@ -1,0 +1,143 @@
+{
+  "environment": {
+    "node": "v26.3.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro"
+  },
+  "scope": "CPU animation update only; four template clones; no GPU/FPS/VRAM/network claim; 7 x 300 frames after 120 warmup frames",
+  "asset": {
+    "revision": "2026-10-29-face-blink-r2",
+    "bytes": 7172924,
+    "sha256": "eea3bc03f99ea735948a8e33c108b3ae5eb2bbb860651d4bc217421a604bc003",
+    "meshes": 1,
+    "primitives": 3,
+    "triangles": 57002,
+    "materials": 3,
+    "textures": 4,
+    "skins": 1,
+    "bones": 31,
+    "morphTargets": 4,
+    "animations": [
+      {
+        "name": "Walk_InPlace",
+        "channels": 93
+      },
+      {
+        "name": "Blink",
+        "channels": 1
+      }
+    ],
+    "images": [
+      {
+        "bytes": 436816,
+        "width": 1024,
+        "height": 1024,
+        "format": "png"
+      },
+      {
+        "bytes": 1050899,
+        "width": 2048,
+        "height": 2048,
+        "format": "jpeg"
+      },
+      {
+        "bytes": 158887,
+        "width": 1024,
+        "height": 1024,
+        "format": "png"
+      },
+      {
+        "bytes": 847621,
+        "width": 1024,
+        "height": 1024,
+        "format": "png"
+      }
+    ]
+  },
+  "before": {
+    "idle": {
+      "medianMsPerFourActorUpdate": 0.36164416666666666,
+      "samples": [
+        0.3607765266666665, 0.35024138999999993, 0.35293860999999954, 0.36164416666666666,
+        0.39074055666666707, 0.44505472000000057, 0.39304972333333277
+      ]
+    },
+    "walk": {
+      "medianMsPerFourActorUpdate": 0.3742391666666678,
+      "samples": [
+        0.37539777999999996, 0.37669694666666675, 0.37417611, 0.37190861333333336,
+        0.36952333333333326, 0.3742391666666678, 0.3776793066666672
+      ]
+    },
+    "search": {
+      "medianMsPerFourActorUpdate": 0.36053472333333353,
+      "samples": [
+        0.36290611333333195, 0.36053472333333353, 0.5625438900000003, 0.3617009733333331,
+        0.3581990300000007, 0.35879777666666696, 0.3583958333333324
+      ]
+    },
+    "reducedMotion": {
+      "medianMsPerFourActorUpdate": 0.01089291666666668,
+      "samples": [
+        0.011050973333332574, 0.01089291666666668, 0.010665416666665806, 0.011030276666667001,
+        0.010489999999999782, 0.010567636666666354, 0.010996526666667705
+      ]
+    },
+    "initializationVertexProbesFourActors": 782244,
+    "vertexProbesPerFourActorUpdate": {
+      "idle": 2844,
+      "walk": 2844,
+      "search": 2844,
+      "reducedMotion": 0
+    }
+  },
+  "after": {
+    "idle": {
+      "medianMsPerFourActorUpdate": 0.0003350000000000364,
+      "samples": [
+        0.0013779166666669576, 0.0008544433333327106, 0.0003308333333340367, 0.0003318066666664284,
+        0.0003115300000005542, 0.0003350000000000364, 0.0003738900000007561
+      ]
+    },
+    "walk": {
+      "medianMsPerFourActorUpdate": 0.15076125000000049,
+      "samples": [
+        0.15214319333333454, 0.15109749999999925, 0.1479897200000005, 0.15060416666666698,
+        0.15123041666666723, 0.14970666666666754, 0.15076125000000049
+      ]
+    },
+    "search": {
+      "medianMsPerFourActorUpdate": 0.14060291666666824,
+      "samples": [
+        0.14132777999999993, 0.14157458333333275, 0.1402505533333336, 0.14108430333333216,
+        0.13998236333333353, 0.14060291666666824, 0.13844777666666838
+      ]
+    },
+    "reducedMotion": {
+      "medianMsPerFourActorUpdate": 0.01082180666666621,
+      "samples": [
+        0.011051666666668705, 0.01087277666666523, 0.010940136666667967, 0.010804303333334247,
+        0.01081694333333265, 0.01082180666666621, 0.010791806666669193
+      ]
+    },
+    "initializationVertexProbesFourActors": 242468,
+    "vertexProbesPerFourActorUpdate": {
+      "idle": 0,
+      "walk": 948,
+      "search": 948,
+      "reducedMotion": 0
+    }
+  },
+  "equivalence": {
+    "framesPerActor": 960,
+    "actors": 4,
+    "valuesCompared": 5763840,
+    "maxError": 0,
+    "tolerance": 1e-10
+  },
+  "baselineCommit": "f5480eb",
+  "date": "2026-11-07",
+  "assetBytesChanged": false,
+  "publicBehaviorChanged": false
+}

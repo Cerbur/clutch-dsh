@@ -1,5 +1,13 @@
 # Kitchen geometry and surface revision · 2026-10-31
 
+## Character runtime follow-up · 2026-11-07
+
+The adopted face-blink-r2 GLB and manifest remain byte-identical. Character support
+probes now visit only vertices referenced by each primitive, and stable idle keeps
+the blink timer without repeating skeletal/grounding work. This is a CPU runtime
+optimization, not character decimation or a new art revision. Reproducible metrics,
+pose equivalence and validation are in [the character audit](CHARACTER-OPTIMIZATION.md).
+
 ## Lossless transport and runtime budgets
 
 The geometry selection below remains medium. Production builds additionally select
