@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.client.json",
+  "compilerOptions": { "rootDir": "..", "noEmit": true },
+  "include": ["character-turn-fixture.ts", "../src/client/assets.d.ts"]
+}

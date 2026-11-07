@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer';
+import { URL } from 'node:url';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -5,6 +8,8 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { configureKitchenMaterial } from '../lib/client/scene/area-shadow.js';
 import { Models } from '../lib/client/scene/models.js';
+
+const { queueMicrotask } = globalThis;
 
 test('packed candy surface loads as physical PBR and shares three image sources through disposal', async (t) => {
   const bytes = await readFile(

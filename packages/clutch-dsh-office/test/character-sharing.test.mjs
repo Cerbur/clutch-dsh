@@ -1,8 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
 import * as T from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Models } from '../lib/client/scene/models.js';
 import { createCharacterTemplate } from '../lib/client/scene/character/template.js';
+import { createCharacterAnimation } from '../lib/client/scene/character/animation.js';
+import { geometryOnlyGlb } from '../scripts/export-lighting-geometry.mjs';
 
 test('concurrent characters share GPU assets but never skeletons or morph state; teardown is safe', async () => {
   const room = new Models();
@@ -83,4 +88,65 @@ test('late template delivery releases resources and never attaches to a disposed
   finish({ scene, animations: [] });
   assert.equal(await pending, undefined);
   assert.equal(released, 1);
+});
+
+test('four delivered whale girls isolate real rigs, blinks and mixers and release each rig once', async (t) => {
+  const room = new Models();
+  const owners = Array.from({ length: 4 }, () => new Models(() => {}, true));
+  t.after(() => {
+    owners.forEach((owner) => owner.dispose());
+    room.dispose();
+  });
+  let parses = 0;
+  const template = createCharacterTemplate(room, async () => {
+    parses++;
+    const bytes = geometryOnlyGlb(
+      await readFile(new URL('../assets/models/character/deepseek.glb', import.meta.url)),
+    );
+    return new GLTFLoader().parseAsync(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      '',
+    );
+  });
+  const actors = await Promise.all(
+    owners.map(async (owner, seat) => {
+      const { scene, animations } = await template.instantiate(owner);
+      const meshes = [];
+      scene.traverse((o) => {
+        if (o.isSkinnedMesh) meshes.push(o);
+      });
+      const animation = createCharacterAnimation(scene, animations, () => seat / 3);
+      owner.onDispose(() => animation.dispose());
+      return { meshes, animation };
+    }),
+  );
+  assert.equal(parses, 1);
+  assert.equal(new Set(actors.map((a) => a.meshes[0].skeleton)).size, 4);
+  const releases = [0, 0, 0, 0];
+  actors.forEach((a, seat) => {
+    assert.equal(a.meshes.length, 3);
+    assert.equal(new Set(a.meshes.map((m) => m.skeleton)).size, 1);
+    const skeleton = a.meshes[0].skeleton;
+    skeleton.computeBoneTexture();
+    skeleton.boneTexture.addEventListener('dispose', () => releases[seat]++);
+    a.meshes.forEach((m, part) => assert.equal(m.geometry, actors[0].meshes[part].geometry));
+  });
+  const pose = (a) => a.meshes[0].skeleton.bones.flatMap((b) => b.quaternion.toArray());
+  const resting = pose(actors[1]);
+  let independentBlink = false;
+  for (let frame = 0; frame < 110; frame++) {
+    actors.forEach((a, seat) => a.animation.update(1 / 30, seat === 0 ? 0.48 : 0, false));
+    const weights = actors.map((a) => a.meshes[0].morphTargetInfluences[0]);
+    independentBlink ||= weights[0] > 0.99 && weights.slice(1).every((w) => w === 0);
+    assert.deepEqual(pose(actors[1]), resting);
+  }
+  assert.ok(independentBlink);
+  assert.notDeepEqual(pose(actors[0]), resting);
+  owners[0].dispose();
+  assert.deepEqual(releases, [1, 0, 0, 0]);
+  actors[1].animation.update(1 / 30, 0.48, false);
+  assert.notDeepEqual(pose(actors[1]), resting);
+  owners.forEach((owner) => owner.dispose());
+  room.dispose();
+  assert.deepEqual(releases, [1, 1, 1, 1]);
 });

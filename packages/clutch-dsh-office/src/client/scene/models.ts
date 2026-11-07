@@ -178,7 +178,13 @@ export interface CharacterAppearance {
 
 export interface CharacterAnimation {
   readonly walkSpeed: number;
-  update(delta: number, speed: number, reducedMotion: boolean, searching?: boolean): void;
+  update(
+    delta: number,
+    speed: number,
+    reducedMotion: boolean,
+    searching?: boolean,
+    angularVelocity?: number,
+  ): void;
   pause(): void;
   dispose(): void;
 }
