@@ -1,6 +1,7 @@
 import * as T from 'three';
 import type { CharacterAnimation } from '../models.js';
 import { searchClipData } from './search-clip.js';
+import { createTurnPose } from './turn.js';
 
 interface Eyelids {
   readonly weights: number[];
@@ -101,6 +102,7 @@ export function createCharacterAnimation(
     track.setInterpolation(T.InterpolateLinear);
   }
   walkClip.resetDuration();
+  const turnPose = createTurnPose(root);
   // Quaternion interpolation can dip the authored sole between baked frames.
   // Track only the rest-pose sole band, keeping the scene-owned floor offset external.
   const baseY = root.position.y;
@@ -150,6 +152,11 @@ export function createCharacterAnimation(
   };
   const walk = mixer.clipAction(walkClip);
   walk.play().setEffectiveWeight(0);
+  // A separate low-amplitude copy of the authored in-place gait supplies pivot
+  // steps without advancing the walking action or moving the character root.
+  const turnClip = new T.AnimationClip('Turn_Steps', walkClip.duration, walkClip.tracks);
+  const turn = mixer.clipAction(turnClip);
+  turn.play().setEffectiveWeight(0);
   const search = mixer.clipAction(
     new T.AnimationClip(
       searchClipData.name,
@@ -168,7 +175,14 @@ export function createCharacterAnimation(
   let weight = 0;
   let disposed = false;
   let poseDirty = true;
+  let turnAmount = 0;
+  let turnRate = 0;
   const stopPose = () => {
+    turnPose.restore();
+    turnAmount = 0;
+    turnRate = 0;
+    turn.setEffectiveWeight(0);
+    turn.time = 0;
     searchWeight = 0;
     wasSearching = false;
     search.setEffectiveWeight(0);
@@ -183,7 +197,7 @@ export function createCharacterAnimation(
   return {
     // Small authored steps: 1.5 cycles/sec; turning and the route stay unchanged.
     walkSpeed: 0.48,
-    update(delta, speed, reducedMotion, searching = false) {
+    update(delta, speed, reducedMotion, searching = false, angularVelocity = 0) {
       if (disposed) return;
       blink.setEnabled(!reducedMotion);
       if (reducedMotion) {
@@ -191,10 +205,21 @@ export function createCharacterAnimation(
         return;
       }
       const moving = Math.abs(speed) > 1e-4;
+      const turning = Number.isFinite(angularVelocity) && Math.abs(angularVelocity) > 1e-4;
+      const wasTurning = turnAmount !== 0;
+      turnPose.restore();
+      const turnTarget = turning ? T.MathUtils.clamp(angularVelocity / 2.2, -1, 1) : 0;
+      const turnFade = Math.max(0, delta) / 0.16;
+      turnAmount += T.MathUtils.clamp(turnTarget - turnAmount, -turnFade, turnFade);
+      if (turning) {
+        if (!wasTurning) turn.time = angularVelocity > 0 ? 0 : turnClip.duration / 2;
+        turnRate = Math.min(2.2, Math.abs(angularVelocity) / (Math.PI / 2));
+      }
       // Include the previous weights so the final fade frame still restores bind
       // pose. Stable idle needs only the independent blink timer, not skin probes.
-      const updatePose = poseDirty || weight > 0 || searchWeight > 0 || moving || searching;
-      const activeSearch = searching && !moving;
+      const updatePose =
+        poseDirty || weight > 0 || searchWeight > 0 || moving || searching || wasTurning || turning;
+      const activeSearch = searching && !moving && !turning;
       if (activeSearch && !wasSearching && searchWeight === 0) search.time = 0;
       wasSearching = activeSearch;
       const searchFade = Math.max(0, delta) / 0.3;
@@ -210,10 +235,14 @@ export function createCharacterAnimation(
       weight += T.MathUtils.clamp(target - weight, -fade, fade);
       walk.setEffectiveWeight(weight);
       walk.setEffectiveTimeScale(moving ? speed / 0.32 : 0);
+      turn.setEffectiveWeight(Math.abs(turnAmount) * 0.45 * (1 - weight) * (1 - searchWeight));
+      turn.setEffectiveTimeScale(turnAmount !== 0 ? turnRate : 0);
       if (updatePose) mixer.update(delta);
+      if (turnAmount === 0) turn.time = 0;
       if (searchWeight === 0) search.time = 0;
       if (!moving && weight === 0) walk.time = 0;
       blink.update(delta);
+      turnPose.apply(turnAmount * (1 - searchWeight));
       if (updatePose || soleHasMorph) ground();
       poseDirty = false;
     },
@@ -224,6 +253,7 @@ export function createCharacterAnimation(
     },
     dispose() {
       if (disposed) return;
+      turnPose.restore();
       blink.dispose();
       mixer.stopAllAction();
       mixer.uncacheRoot(root);

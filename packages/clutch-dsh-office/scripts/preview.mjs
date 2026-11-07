@@ -1,5 +1,6 @@
 import { build } from 'tsdown';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,9 +10,10 @@ import { inlineAssets } from './inline-assets.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const outDir = await mkdtemp(join(tmpdir(), 'office-preview-'));
+const characterTurn = process.argv.includes('--character-turn');
 await build({
   cwd: root,
-  entry: { preview: 'test/browser-fixture.tsx' },
+  entry: { preview: characterTurn ? 'test/character-turn-fixture.ts' : 'test/browser-fixture.tsx' },
   outDir,
   format: 'esm',
   platform: 'browser',
@@ -23,6 +25,19 @@ await build({
 });
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
+  if (characterTurn && path === '/capture' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk;
+      if (body.length > 8_000_000) {
+        res.writeHead(413).end();
+        return;
+      }
+    }
+    await writeFile(join(tmpdir(), 'office-turn-review.png'), Buffer.from(body, 'base64'));
+    res.writeHead(204).end();
+    return;
+  }
   if (path === '/favicon.ico') {
     res.writeHead(204).end();
     return;

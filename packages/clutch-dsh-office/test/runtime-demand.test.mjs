@@ -205,6 +205,11 @@ test('skeletal actor updates use actual ground speed with no legacy body bob and
   assert.equal(model.root.position.y, 0.025, 'shoe origin uses the actual floor surface');
   assert.ok(updates.some(([, speed]) => Math.abs(speed) > 0.47));
   assert.ok(updates.every(([, speed]) => Math.abs(speed) <= 0.48000001));
+  assert.ok(
+    updates.some(([, speed, , , angular]) => speed === 0 && Math.abs(angular) > 1),
+    'stationary direction changes reach the skeletal turn action',
+  );
+  assert.ok(updates.every(([, , , , angular]) => Math.abs(angular) <= 3.50000001));
   h.document.hidden = true;
   h.document.dispatchEvent(new Event('visibilitychange'));
   assert.ok(pauses > 0);
@@ -213,6 +218,7 @@ test('skeletal actor updates use actual ground speed with no legacy body bob and
   h.document.dispatchEvent(new Event('visibilitychange'));
   h.tick(20_000);
   assert.equal(updates.at(-1)[0], 0, 'resume does not catch up hidden animation time');
+  assert.equal(updates.at(-1)[4], 0, 'resume cannot invent an angular speed');
   h.reduced.matches = true;
   h.reduced.dispatchEvent(new Event('change'));
   h.tick(20_100);
