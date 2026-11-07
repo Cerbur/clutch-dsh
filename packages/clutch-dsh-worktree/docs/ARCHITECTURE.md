@@ -373,7 +373,31 @@ Git 页只刷新历史，Fetch 返回列表直接更新其分支状态。Client 
 
 ### 安全恢复（recoverWorktrees）
 
-独立的 Remote 恢复重试入口，仅重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。旧版无事务分支观察标记会在获取 Sidecar 锁后自动淘汰，普通 checkout 漂移不需要手动编辑 JSON。
+独立的 Remote 恢复重试入口。默认只重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。旧版无事务分支观察标记会在获取 Sidecar 锁后自动淘汰，普通 checkout 漂移不需要手动编辑 JSON。
+
+`clean-worktree` 在 `recovery-needed` 状态下无法确认结果时，普通恢复错误携带
+`details.quarantineOperationId`。Client 在报错与修复中提供「保留文件并取消未决清理」，
+显式调用 `recoverWorktrees({ workspaceId, quarantineOperationId })`。能力来自同一 Shard
+锁周期内的 journal；提交时重新校验精确 operation ID、类型、阶段及尚未完成清理的 archived 记录。
+旧请求不能取消后来的操作；create/remove journal 不适用此出口。
+
+隔离仅持 Workspace Shard 跨进程锁，不获取 Repository 锁、不执行 Git 或探测目标路径，
+因为它只撤销清理意图，不确认 checkout 身份或完成清理。没有新增锁或改变原有锁顺序。
+`SidecarPersistence` 先把完整原始 shard 写入
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/<sha256([workspaceId, operationId])>.json`，
+临时文件模式 0600，可写句柄 fsync 成功后 rename 发布；目录 fsync 维持 best effort。
+随后经既有原子写入协议仅移除指定 pending 与同时匹配 operationId/worktreeId 的 recoveryIssue，
+revision 加一；所有其他记录、binding、仓库指纹、指令和 DSH 数据保持不变。
+不新增 Sidecar schema 字段，不写 `diskCleanup=completed`，不删除或重定向未知目录。
+
+备份失败不退休 journal；备份成功后 shard 写入失败，重试复用并校验原始备份；
+成功取消后的重复请求（包括重启及跨进程）为无写入幂等结果。损坏备份、符号链接存储边界
+或不匹配的旧操作均 fail closed。普通恢复仍保留「路径缺失不等于清理已完成」的证据门禁。
+Workspace 本身的仓库身份冲突和无关 recoveryIssue 不被此操作清除。
+
+2026-11 诊断修正了历史生命周期计划中「只能反复重试安全恢复」的不足：目录残留而 Git
+登记消失时，永久阻断来自单一 pending journal 的 Workspace 准入门禁，不能通过放宽物理身份
+校验解决。现在提供保留数据的显式取消出口；自动恢复不自动隔离，批量动作仍逐项提交和报告。
 
 ---
 

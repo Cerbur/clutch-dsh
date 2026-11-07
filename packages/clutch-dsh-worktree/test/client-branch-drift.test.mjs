@@ -322,6 +322,77 @@ for (const outcome of [
   });
 }
 
+for (const code of [
+  'WORKTREE_RECOVERY_REQUIRED',
+  'SIDECAR_SYNC_REQUIRED',
+  'WORKTREE_IDENTITY_CHANGED',
+  'WORKSPACE_NOT_GIT_REPOSITORY',
+  'GIT_OPERATION_FAILED',
+]) {
+  test(`recovery notification offers exact cleanup cancellation for ${code} only after Host supplies the capability`, async () => {
+    const calls = [];
+    const recoveryAction = evaluate(
+      `${declaration('recoveryAction')} return recoveryAction;`,
+      {
+        manager: { recoverWorktrees: async (input) => calls.push(input) },
+        t: (key) => key,
+        actionPending: false,
+        runMutation: async (operation, options) => { calls.push(options); await operation(); },
+      },
+    );
+    const error = { code, details: { workspaceId: 'ws1' } };
+    const canRetry = ['WORKTREE_RECOVERY_REQUIRED', 'SIDECAR_SYNC_REQUIRED', 'WORKTREE_IDENTITY_CHANGED'].includes(code);
+    for (const quarantineOperationId of [undefined, '']) {
+      error.details.quarantineOperationId = quarantineOperationId;
+      const action = recoveryAction(error);
+      if (canRetry) {
+        assert.equal(action.label, 'worktree.retryRecovery');
+        action.onClick();
+        await Promise.resolve();
+        assert.deepEqual(calls.splice(0), [
+          { scope: { kind: 'workspace', workspaceId: 'ws1' }, preserveCurrent: true },
+          { workspaceId: 'ws1' },
+        ]);
+      } else {
+        assert.equal(action, null);
+      }
+    }
+    error.details.quarantineOperationId = 'exact-operation';
+    const action = recoveryAction(error);
+    assert.equal(action.label, 'worktree.cancelPendingCleanup');
+    action.onClick();
+    await Promise.resolve();
+    assert.deepEqual(calls, [
+      { scope: { kind: 'workspace', workspaceId: 'ws1' }, preserveCurrent: true },
+      { workspaceId: 'ws1', quarantineOperationId: 'exact-operation' },
+    ]);
+  });
+}
+
+test('cleanup cancellation requires a manager and workspace and stays disabled during a mutation', () => {
+  for (const manager of [undefined, {}]) {
+    for (const actionPending of [false, true]) {
+      const recoveryAction = evaluate(
+        `${declaration('recoveryAction')} return recoveryAction;`,
+        { manager, actionPending, t: (key) => key },
+      );
+      assert.equal(recoveryAction(undefined), null);
+      assert.equal(recoveryAction({ code: 'GIT_OPERATION_FAILED' }), null);
+      assert.equal(recoveryAction({ code: 'GIT_OPERATION_FAILED', details: { quarantineOperationId: 'exact-operation' } }), null);
+      const action = recoveryAction({
+        code: 'GIT_OPERATION_FAILED',
+        details: { workspaceId: 'ws1', quarantineOperationId: 'exact-operation' },
+      });
+      if (manager) {
+        assert.equal(action.label, 'worktree.cancelPendingCleanup');
+        assert.equal(action.disabled, actionPending);
+      } else {
+        assert.equal(action, null);
+      }
+    }
+  }
+});
+
 test('production branch menu selects confirmation, displays detached HEAD, and targets recovery', async () => {
   let selected;
   let recovery;

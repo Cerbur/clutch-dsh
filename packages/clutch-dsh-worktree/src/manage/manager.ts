@@ -425,7 +425,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     return this.afterRecovery(() => resolveRuntimeCwd(this.context, input));
   }
 
-  recoverWorktrees(input: { readonly workspaceId: WorkspaceId }): Promise<void> {
+  recoverWorktrees(input: { readonly workspaceId: WorkspaceId; readonly quarantineOperationId?: string }): Promise<void> {
     return this.afterRecovery(() => recoverWorktrees(this.context, input));
   }
 

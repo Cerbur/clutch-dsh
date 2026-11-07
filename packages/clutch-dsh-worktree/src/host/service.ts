@@ -386,7 +386,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  recoverWorktrees(input: { workspaceId: string }): Promise<WorktreeRemoteResult<null>> {
+  recoverWorktrees(input: { workspaceId: string; quarantineOperationId?: string }): Promise<WorktreeRemoteResult<null>> {
     return this.remote.recoverWorktrees(input);
   }
 

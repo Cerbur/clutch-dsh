@@ -645,7 +645,12 @@ Active and archived rows display the accepted-to-live transition (including deta
 Their menus refresh only the owning Workspace with preserveCurrent. `adoptWorktreeBranch`
 requires a confirmation containing the observed branch and the captured mutation token;
 it preserves bindings and native Session data. `recoverWorktrees` retries journal recovery
-separately. Successful actions refresh the owning Workspace without clearing ready content;
+separately. When the Host supplies `details.quarantineOperationId` for an unresolved cleanup,
+the error notification offers **Keep files and cancel pending cleanup**, submitting that exact
+ID to `recoverWorktrees` regardless of the error code, including Git failures. Without that
+capability, only the supported recovery error codes offer a retry. This is an explicit, non-destructive cancellation backed by a durable
+Host backup; the Client never clears journals or infers cleanup completion. Stale IDs are rejected.
+Successful actions refresh the owning Workspace without clearing ready content;
 failures retain the existing projection and remain visible. Clean is disabled for drift until
 a branch is adopted, while forget and archive retain their existing lifecycle semantics.
 
