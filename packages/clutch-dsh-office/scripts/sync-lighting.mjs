@@ -1,3 +1,5 @@
+import { URL, fileURLToPath } from 'node:url';
+
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -5,7 +7,6 @@ import { runtimeModelPath } from './runtime-models.mjs';
 import { basename, dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { isDeepStrictEqual } from 'node:util';
-import { fileURLToPath } from 'node:url';
 import {
   KITCHEN_PLACEMENT,
   KITCHEN_ROTATION,

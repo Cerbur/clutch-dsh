@@ -1,3 +1,5 @@
+import { URL } from 'node:url';
+
 import { Buffer } from 'node:buffer';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +15,8 @@ import {
   KITCHEN_INSTANCE_GROUPS,
   kitchenAssetName,
 } from '../lib/office/kitchen-layout.js';
+
+const { structuredClone } = globalThis;
 
 const ids = [
   'whale-mitt',

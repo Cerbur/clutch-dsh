@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
-    "lint": "eslint src",
+    "lint": "eslint src scripts test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.client.json",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "preview": "node scripts/preview.mjs",

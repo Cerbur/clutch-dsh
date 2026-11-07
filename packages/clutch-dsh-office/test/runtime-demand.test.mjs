@@ -1,9 +1,14 @@
+import { URL } from 'node:url';
+import console from 'node:console';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as T from 'three';
+
+const { Event, EventTarget } = globalThis;
 
 // Load the actual runtime/motion/guard sources without a client bundle or GLB
 // parsing. Only DOM, GPU and asynchronous asset delivery are replaced.
@@ -15,9 +20,9 @@ async function harness(t, reducedMotion = false) {
     shadowUpdates = [],
     cacheInvalidations = [],
     failures = [];
+  const renderers = [];
   let nextFrame = 0,
     now = 0,
-    renderer,
     resize;
   const document = new EventTarget();
   document.hidden = false;
@@ -53,7 +58,7 @@ async function harness(t, reducedMotion = false) {
   });
   class Renderer {
     constructor() {
-      renderer = this;
+      renderers.push(this);
       this.debug = { checkShaderErrors: false, onShaderError: null };
       this.shadowMap = { needsUpdate: true, autoUpdate: false };
       this.domElement = canvas;
@@ -143,7 +148,7 @@ async function harness(t, reducedMotion = false) {
   t.after(() => runtime.dispose());
   return {
     runtime,
-    renderer,
+    renderer: renderers[0],
     owners,
     appearances,
     renders,

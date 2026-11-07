@@ -1,3 +1,6 @@
+import console from 'node:console';
+import process from 'node:process';
+
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 

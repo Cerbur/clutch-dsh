@@ -1,9 +1,10 @@
+import { URL, fileURLToPath } from 'node:url';
+
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';

@@ -1,3 +1,5 @@
+import { TextDecoder, parseArgs } from 'node:util';
+
 import { NodeIO, Logger } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { simplify, reorder, getBounds, cloneDocument } from '@gltf-transform/functions';
@@ -6,7 +8,6 @@ import validator from 'gltf-validator';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 

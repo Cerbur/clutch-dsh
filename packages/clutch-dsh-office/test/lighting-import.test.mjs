@@ -14,6 +14,8 @@ import {
   validateLighting,
 } from '../scripts/sync-lighting.mjs';
 
+const { structuredClone } = globalThis;
+
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const clone = (value) => structuredClone(value);
 const ids = Object.keys(CURRENT_LIGHTING_LAYOUT.positions);

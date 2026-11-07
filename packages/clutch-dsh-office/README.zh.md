@@ -73,6 +73,7 @@ pnpm dsh web
 
 ```bash
 pnpm --filter @cerbur/clutch-dsh-office typecheck
+pnpm --filter @cerbur/clutch-dsh-office lint
 pnpm --filter @cerbur/clutch-dsh-office build
 pnpm --filter @cerbur/clutch-dsh-office test
 ```
