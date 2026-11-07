@@ -1,5 +1,29 @@
 # @cerbur/clutch-dsh-office Release Log
 
+## 0.1.1 — 2026-11-07
+
+### 中文
+
+#### 优化
+
+- 优化鲸鱼娘骨骼与脚底支撑计算，减少行走开销，并在稳定站立时跳过重复计算，保留独立眨眼和现有模型外观。
+- 鲸鱼娘改变方向时增加可与行走、站立平滑衔接的小步转身，以及头胸先行和尾部跟随动作，减少动态效果时恢复中立姿态。
+
+#### 修复
+
+- 修复开发脚本和回归测试中的 lint 错误，并将它们纳入包级 lint 检查。
+
+### English
+
+#### Improved
+
+- Optimize whale-girl skeletal and sole-support calculations to reduce walking work and skip repeated stable-idle evaluation while preserving independent blinking and the existing model appearance.
+- Add small stepping turns with head-and-chest anticipation and tail follow-through, blending smoothly into walking and standing and restoring the neutral pose with reduced motion.
+
+#### Fixed
+
+- Fix lint errors in development scripts and regression tests and include them in package-level lint checks.
+
 ## 0.1.0 — 2026-11-01
 
 ### 中文
