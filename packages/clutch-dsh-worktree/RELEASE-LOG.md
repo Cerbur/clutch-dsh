@@ -6,13 +6,18 @@
 
 #### 新增/优化/修复
 
-- [待填]
+- 集成归档死锁恢复逻辑。
+- 修复在 Git 错误下保持清理取消可用性的问题。
+- 修复工作区被待处理清理任务阻塞的问题。
 
 ### English
 
 #### Added/Improved/Fixed
 
-- [To be filled]
+- Integrate archive deadlock recovery.
+- Keep cleanup cancellation available on Git errors.
+- Recover workspace blocked by pending cleanup.
+
 
 
 
