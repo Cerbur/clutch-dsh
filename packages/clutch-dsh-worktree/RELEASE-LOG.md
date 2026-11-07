@@ -1,5 +1,21 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.27 — 2026-11-07
+
+### 中文
+
+#### 新增/优化/修复
+
+- [待填]
+
+### English
+
+#### Added/Improved/Fixed
+
+- [To be filled]
+
+
+
 ## 0.1.26 — 2026-11-06
 
 ### 中文
