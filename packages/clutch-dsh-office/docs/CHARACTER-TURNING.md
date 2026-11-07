@@ -101,9 +101,41 @@ Final commands and results on the feature worktree:
 
 Test logs and captures are local review evidence under `/tmp/office-turn-*`, not
 tracked deliverables. Browser reduced motion was simulated in the fixture; the OS
-preference was not manually toggled. No profile was installed or deployed. Visual
-approval remains with the user; the local turn preview is available on port 4188.
+preference was not manually toggled. These implementation checks preceded profile
+deployment. Visual approval remains with the user.
 
 The first standalone fixture typecheck exposed input element narrowing in callbacks;
 explicit `HTMLInputElement` guards fixed it, without type assertions or disabled
 rules. The final fixture check uses the real client TypeScript configuration.
+
+## Authorized test-profile deployment · 2026-11-07
+
+Implementation commit: `897090e` (`feat(office): add blended skeletal stepping turns`).
+After explicit user authorization, lint, typecheck and build passed again, and
+the standard DSH local-source installation linked this feature package into
+`DSH_HOME=/Users/yuancheng/.dsh-test`, profile `web`. Only the Office dependency
+changed in the profile manifest; other manifest fields remained identical. The
+previous profile manifest, lockfile and workspace config were backed up under
+`/tmp/office-turn-deploy-backup/`.
+
+Commands from the read-only Harness checkout:
+
+```bash
+DSH_HOME=/Users/yuancheng/.dsh-test pnpm dsh plugin --profile web add /Users/yuancheng/Documents/Code/clutch-dsh/packages/clutch-dsh-office/.agents/clutch-worktrees/wt_bfb4549f9787/packages/clutch-dsh-office
+DSH_HOME=/Users/yuancheng/.dsh-test pnpm dsh web --port 3088 --no-open
+```
+
+Installation passed with pnpm's linked-package peer-dependency warning. Actual
+browser loading succeeded at `http://127.0.0.1:3088/`: Office opened, the version
+tag's local preview rendered four roaming characters, one canvas and zero alerts;
+captured browser warning/error logs were empty. The page remains in simulated
+four-character preview for review, without creating or running native Sessions.
+An existing Worktree plugin notification about an unavailable old directory was
+observed separately and was not changed by this deployment.
+
+Deployed `lib/client.js` SHA-256:
+`913d698a56d6521aa60e6ea12bdf97b0f6d92475d2c6f903b769b56bc3955af4`.
+Local evidence: `/tmp/office-turn-dsh-test.png`,
+`/tmp/office-turn-deploy-install.log`, `/tmp/office-turn-deploy-build.log`.
+Harness source remained clean; no production profile, version, push, merge or
+publication changes were made. Final visual approval remains pending.
