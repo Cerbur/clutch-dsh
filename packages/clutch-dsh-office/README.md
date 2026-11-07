@@ -10,8 +10,6 @@ while the list below keeps every Session needing attention within reach.
 
 ### Install from npm
 
-The first npm release is pending. After publication:
-
 ```bash
 dsh plugin --profile web add @cerbur/clutch-dsh-office
 dsh web
@@ -41,7 +39,7 @@ assets. No Harness source changes are needed.
 | Shared kitchen                | <img src="assets/screenshots/office-session-board.jpg" width="600" alt="Local preview: four simulated Session characters in Kitchen Chaos">                 | Up to four whale girls represent running, pending-interaction or unread-completed Sessions. The counter and list include overflow; idle Sessions are hidden.                                            |
 | Clickable Session bubbles     | Same view above                                                                                                                                             | Persistent title, workspace and status bubbles open the corresponding native Session. Tooltips and the list keep long titles accessible.                                                                |
 | Active Session list           | <img src="assets/screenshots/office-session-list.jpg" width="600" alt="Local preview: four active Session states, with no idle rows">                       | Newest updates first, with title and workspace. Running rows show elapsed time, unread completions show completion time, and pending interactions retain their status. The list is not limited to four. |
-| Whale girls and local preview | <img src="assets/screenshots/office-character-soft-fill.jpg" width="600" alt="Local preview: four simulated whale girls with soft, bright shading">         | Independent walking and automatic blinking, with soft character lighting. Preview one to four simulated characters without changing real Sessions.                                                      |
+| Whale girls and local preview | <img src="assets/screenshots/office-character-soft-fill.jpg" width="600" alt="Local preview: four simulated whale girls with soft, bright shading">         | Independent walking, small stepping turns and automatic blinking, with soft character lighting. Preview one to four simulated characters without changing real Sessions.                                |
 | Cozy kitchen                  | <img src="assets/screenshots/office-optimized-kitchen.jpg" width="600" alt="Kitchen with warm window light, a coated range hood and a wooden platform rim"> | A detailed kitchen with gentle warm lighting and soft surfaces.                                                                                                                                         |
 
 The Session and character screenshots use the labeled local preview; their four
@@ -73,7 +71,7 @@ entries are simulated.
 - Disconnection clears stale characters and list rows until reconnection. Displayed
   times are estimates based on native updates and observed transitions, not execution
   logs; missing times are shown explicitly.
-- Reduced motion stops wandering and blinking. Hidden scenes pause; offscreen scenes
+- Reduced motion stops wandering, turning gestures and blinking. Hidden scenes pause; offscreen scenes
   release rendering resources and rebuild on return. Animation is capped at 30 FPS; performance depends on
   your device, and close zooms may reveal reduced texture or shadow detail.
 
@@ -83,6 +81,7 @@ From the repository root:
 
 ```bash
 pnpm --filter @cerbur/clutch-dsh-office typecheck
+pnpm --filter @cerbur/clutch-dsh-office lint
 pnpm --filter @cerbur/clutch-dsh-office build
 pnpm --filter @cerbur/clutch-dsh-office test
 ```

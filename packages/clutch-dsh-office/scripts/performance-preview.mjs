@@ -1,8 +1,10 @@
 import { createRequire } from 'node:module';
+import { Buffer } from 'node:buffer';
+import console from 'node:console';
 import { readFile, mkdtemp, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { pathToFileURL, fileURLToPath, URL } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const samples = [];
@@ -12,6 +14,19 @@ const { inlineAssets } = await import(pathToFileURL(join(root, 'scripts/inline-a
 const out = await mkdtemp('/tmp/office-performance-build-');
 
 function installProbe(renderer, scene, renderFrame) {
+  // This function is serialized into the browser bundle below.
+  const {
+    URLSearchParams,
+    location,
+    document,
+    fetch,
+    performance,
+    navigator,
+    setInterval,
+    setTimeout,
+    clearInterval,
+    clearTimeout,
+  } = globalThis;
   const sampleMs = Math.max(
     8000,
     Math.min(120000, Number(new URLSearchParams(location.search).get('sampleSeconds') || 8) * 1000),

@@ -1,5 +1,9 @@
 # Whale-girl kitchen animation · 2026-10-30
 
+Current runtime follow-up: [2026-11-07 character optimization](CHARACTER-OPTIMIZATION.md).
+Characters now share one parsed room template with independent rigs/morphs/mixers;
+the per-actor parsing description and counts below are historical.
+
 Working-tree integration in `wt-office-0.1.0/release`; no commit, push or publication.
 The immutable source is `office/character/deepseek/deliveries/2026-10-29-face-blink-r2`.
 

@@ -1,3 +1,5 @@
+import { URL } from 'node:url';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
@@ -15,6 +17,8 @@ import {
   KITCHEN_SCALE,
   kitchenAssetName,
 } from '../lib/office/kitchen-layout.js';
+
+const { structuredClone } = globalThis;
 
 // Pins belong to the four user-supplied originals, not generated delivery bytes.
 const components = [
