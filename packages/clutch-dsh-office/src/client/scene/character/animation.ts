@@ -105,16 +105,35 @@ export function createCharacterAnimation(
   // Track only the rest-pose sole band, keeping the scene-owned floor offset external.
   const baseY = root.position.y;
   const sole: { mesh: T.SkinnedMesh; index: number }[] = [];
+  let soleHasMorph = false;
   const point = new T.Vector3();
   const inverse = new T.Matrix4();
   root.updateMatrixWorld(true);
   inverse.copy(root.matrixWorld).invert();
   root.traverse((object) => {
     if (!(object instanceof T.SkinnedMesh)) return;
-    const count = object.geometry.getAttribute('position').count;
-    for (let index = 0; index < count; index++) {
+    const geometry: T.BufferGeometry = object.geometry;
+    const positions = geometry.getAttribute('position');
+    const indices = geometry.index;
+    const visited = new Set<number>();
+    // GLTF primitives can share a full vertex buffer. Only the vertices used by
+    // this primitive are visible; face primitives must not probe the body's feet.
+    const count = indices?.count ?? positions.count;
+    for (let offset = 0; offset < count; offset++) {
+      const index = indices ? indices.getX(offset) : offset;
+      if (visited.has(index)) continue;
+      visited.add(index);
       object.getVertexPosition(index, point).applyMatrix4(object.matrixWorld).applyMatrix4(inverse);
-      if (point.y < 0.015) sole.push({ mesh: object, index });
+      if (point.y >= 0.015) continue;
+      sole.push({ mesh: object, index });
+      // The adopted eyelids never move a sole vertex. Retain idle grounding for
+      // other valid rigs whose expressions do affect the support band.
+      soleHasMorph ||= (geometry.morphAttributes.position ?? []).some(
+        (morph) =>
+          morph.getX(index) !== (geometry.morphTargetsRelative ? 0 : positions.getX(index)) ||
+          morph.getY(index) !== (geometry.morphTargetsRelative ? 0 : positions.getY(index)) ||
+          morph.getZ(index) !== (geometry.morphTargetsRelative ? 0 : positions.getZ(index)),
+      );
     }
   });
   const ground = () => {
@@ -148,6 +167,7 @@ export function createCharacterAnimation(
   let wasSearching = false;
   let weight = 0;
   let disposed = false;
+  let poseDirty = true;
   const stopPose = () => {
     searchWeight = 0;
     wasSearching = false;
@@ -158,6 +178,7 @@ export function createCharacterAnimation(
     mixer.update(0);
     walk.time = 0;
     root.position.y = baseY;
+    poseDirty = true;
   };
   return {
     // Small authored steps: 1.5 cycles/sec; turning and the route stay unchanged.
@@ -170,6 +191,9 @@ export function createCharacterAnimation(
         return;
       }
       const moving = Math.abs(speed) > 1e-4;
+      // Include the previous weights so the final fade frame still restores bind
+      // pose. Stable idle needs only the independent blink timer, not skin probes.
+      const updatePose = poseDirty || weight > 0 || searchWeight > 0 || moving || searching;
       const activeSearch = searching && !moving;
       if (activeSearch && !wasSearching && searchWeight === 0) search.time = 0;
       wasSearching = activeSearch;
@@ -186,11 +210,12 @@ export function createCharacterAnimation(
       weight += T.MathUtils.clamp(target - weight, -fade, fade);
       walk.setEffectiveWeight(weight);
       walk.setEffectiveTimeScale(moving ? speed / 0.32 : 0);
-      mixer.update(delta);
+      if (updatePose) mixer.update(delta);
       if (searchWeight === 0) search.time = 0;
       if (!moving && weight === 0) walk.time = 0;
       blink.update(delta);
-      ground();
+      if (updatePose || soleHasMorph) ground();
+      poseDirty = false;
     },
     pause() {
       if (disposed) return;

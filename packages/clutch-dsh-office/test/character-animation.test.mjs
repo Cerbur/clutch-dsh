@@ -42,13 +42,14 @@ function geometryOnly() {
     for (const mesh of doc.meshes) for (const p of mesh.primitives) delete p.material;
   });
 }
-async function actor(random = () => 0) {
+async function actor(random = () => 0, prepare = () => {}) {
   const buffer = geometryOnly();
   const gltf = await new GLTFLoader().parseAsync(
     buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
     '',
   );
   const owner = new Models();
+  prepare(gltf.scene);
   owner.ownObject(gltf.scene);
   const animation = createCharacterAnimation(gltf.scene, gltf.animations, random);
   assert.ok(animation);
@@ -107,6 +108,70 @@ test('actual delivered skin blinks while standing, without activating a locomoti
   for (const mesh of a.meshes)
     assert.equal(mesh.morphTargetInfluences[mesh.morphTargetDictionary.Blink_R], 0);
   a.owner.dispose();
+});
+
+test('stable idle does no skin probes; walk/stop/search/pause still update actual support vertices', async (t) => {
+  const a = await actor();
+  t.after(() => a.owner.dispose());
+  let probes = 0;
+  for (const mesh of a.meshes) {
+    const used = new Set(mesh.geometry.index.array);
+    const original = mesh.getVertexPosition;
+    mesh.getVertexPosition = function (index, point) {
+      probes++;
+      assert.ok(used.has(index), 'never ground using a vertex outside this primitive');
+      return original.call(this, index, point);
+    };
+  }
+  a.animation.update(1 / 30, 0, false);
+  probes = 0;
+  let peak = 0;
+  for (let i = 0; i < 120; i++) {
+    a.animation.update(1 / 30, 0, false);
+    peak = Math.max(peak, blinkWeight(a));
+  }
+  assert.ok(peak > 0.99, 'idle optimization does not freeze automatic blinking');
+  assert.equal(probes, 0);
+  for (const searching of [false, true]) {
+    probes = 0;
+    a.animation.update(1 / 30, searching ? 0 : 0.48, false, searching);
+    assert.ok(probes > 0, 'active poses still ground');
+    for (let i = 0; i < 15; i++) a.animation.update(1 / 30, 0, false);
+    probes = 0;
+    a.animation.update(1 / 30, 0, false);
+    assert.equal(probes, 0, 'final fade settles before idle optimization');
+  }
+  a.animation.pause();
+  probes = 0;
+  a.animation.update(1 / 30, 0.48, false);
+  assert.ok(probes > 0, 'resume restores grounding');
+});
+
+test('an expression that moves a support vertex retains grounding even while stationary', async (t) => {
+  const a = await actor(
+    () => 0,
+    (scene) => {
+      scene.traverse((mesh) => {
+        if (!mesh.isSkinnedMesh) return;
+        const positions = mesh.geometry.attributes.position;
+        const index = [...new Set(mesh.geometry.index.array)].find(
+          (i) => Math.abs(positions.getY(i)) < 1e-7,
+        );
+        if (index === undefined) return;
+        const morph = mesh.geometry.morphAttributes.position[0].clone();
+        morph.setY(index, -0.02);
+        mesh.geometry.morphAttributes.position[0] = morph;
+      });
+    },
+  );
+  t.after(() => a.owner.dispose());
+  let lift = 0;
+  for (let i = 0; i < 120; i++) {
+    a.animation.update(1 / 30, 0, false);
+    lift = Math.max(lift, a.scene.position.y);
+  }
+  assert.ok(lift > 0.019, 'a future foot morph must not sink through the floor');
+  assert.ok(Math.abs(a.scene.position.y) < 1e-6);
 });
 
 test('two real actors keep independent skeletons, expressions and gait; stop/reduced motion restore the bind pose', async () => {
