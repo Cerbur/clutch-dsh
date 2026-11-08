@@ -448,6 +448,10 @@ Dashboard 右上角会保留原生的右侧栏按钮；右侧栏打开后，该�
 macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收起时，
 红绿灯旁显示 DSH 原生展开按钮。Windows 保留原生窗口标题栏。
 
+选择插件、自动化任务、Office 或其他原生主页面时，会自动关闭 Dashboard，并取消等待中的
+Dashboard 导航。返回对话不会自动重新打开它；需要再次点击 Dashboard 入口。
+Dashboard 继续使用覆盖层和原生右侧栏。
+
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
 包括查看 Overview 和 Sessions、新建 Session 或 Worktree、归档 Worktree、编辑指令、复制路径、在 VS Code

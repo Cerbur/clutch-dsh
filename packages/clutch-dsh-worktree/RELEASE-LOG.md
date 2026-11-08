@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.28 — 2026-11-08
+
+### 中文
+
+#### 修复
+
+- 切换到插件、自动化任务、Office 等原生主页面时自动关闭 Dashboard 并取消等待中的导航，返回对话后不再自动重新打开。
+
+### English
+
+#### Fixed
+
+- Automatically close Dashboard and cancel pending navigation when switching to native main pages such as Plugins, Scheduled Tasks, or Office, without reopening it when returning to the conversation.
+
 ## 0.1.27 — 2026-11-07
 
 ### 中文

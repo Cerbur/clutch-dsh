@@ -1279,6 +1279,10 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     startSession() {},
     pickDirectory: async () => null,
   });
+  ctx.provide('layout', {
+    panelInfo: { getSnapshot: () => ({ activePanelId: null }), subscribe: () => () => {} },
+    selectPanel() {},
+  });
   const slotsFiber = ctx.plugin(SlotRegistry);
   await slotsFiber.await();
   const rootDisposer = ctx.slots.register(
@@ -1313,6 +1317,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     const overlay = ctx.slots.entries('shell.overlay').find((entry) =>
       entry.options.id === 'clutch-dsh-worktree-navigation');
     const injected = overlay.inject();
+    assert.strictEqual(injected.dashboardLayout, ctx.layout);
     assert.equal(injected.isRightSidebarExpanded(), true);
     injected.closeRightSidebar();
     assert.equal(rightExpanded, false);
