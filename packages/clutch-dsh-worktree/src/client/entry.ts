@@ -182,7 +182,7 @@ function workspaceMembershipSignature(
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation', 'layout'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
@@ -558,6 +558,7 @@ export function apply(ctx: Context): void {
         } => ({
           mountWorkspaceSidebar,
           available: true,
+          dashboardLayout: ctx.layout,
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);

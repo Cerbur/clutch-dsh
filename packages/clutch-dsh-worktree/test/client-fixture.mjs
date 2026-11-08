@@ -253,6 +253,10 @@ export async function loadClientEntry({
     },
     get(name) { return name === 'sidebarRight' ? sidebarRight : undefined; },
     connection: { rpc: connectionRpc },
+    layout: {
+      panelInfo: { getSnapshot: () => ({ activePanelId: null }), subscribe: () => () => {} },
+      selectPanel() {},
+    },
     locale,
     localeRegistrations,
     remote,
