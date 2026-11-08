@@ -292,6 +292,14 @@ native layer closes only the sync dialog; its `closeSync` busy guard retains bot
 admission. Closing the modal restores ordinary Dashboard Escape handling, and native menu capture
 still takes priority.
 
+The Surface subscribes to native `layout.panelInfo` for its mounted lifetime. Selecting any
+non-null main panel closes both the ready/loading Dashboard and pending Session/list navigation,
+so late results cannot restore the overlay over Plugins, Scheduled Tasks, Office, or other panels.
+Conversation selection and rightbar-only changes do not dismiss Dashboard. An explicit Dashboard
+entry from a global panel first calls `layout.selectPanel(null)` without changing Session identity;
+this makes subsequent selection of that same global panel observable again. Disposal releases
+the subscription. This updates the historical overlay navigation plan without replacing the overlay.
+
 The dashboard uses `shell.overlay` without registering over the occupied `conversation` slot. It
 occupies the AppFrame center area to the right of the Sidebar and stops at the live rightbar boundary, so an
 already-open native right sidebar remains visible for a Session-bound Dashboard. The AppFrame column order

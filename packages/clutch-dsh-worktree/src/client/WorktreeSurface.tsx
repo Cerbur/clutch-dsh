@@ -71,6 +71,18 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     pendingDashboardRecord.current = undefined;
     setDashboard(undefined);
   }, [setDashboard]);
+  useEffect(() => {
+    const layout = inputProps.dashboardLayout;
+    if (layout === undefined) return;
+    // Subscribe at the navigation boundary so a late Session/list update cannot
+    // settle a pending Dashboard after a native global panel has taken over.
+    const sync = () => {
+      if (layout.panelInfo.getSnapshot().activePanelId !== null) closeDashboard();
+    };
+    const unsubscribe = layout.panelInfo.subscribe(sync);
+    sync();
+    return unsubscribe;
+  }, [inputProps.dashboardLayout, closeDashboard]);
   const source = useSurfaceSources({ props: inputProps });
   useEffect(() => {
     if (source.mode !== 'worktree') closeDashboard();
@@ -155,6 +167,10 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const ordering = useSessionOrdering({ read, source, props });
   const openDashboard = useCallback(
     (record: DashboardRecord) => {
+      const layout = inputProps.dashboardLayout;
+      if (layout !== undefined && layout.panelInfo.getSnapshot().activePanelId !== null) {
+        layout.selectPanel(null);
+      }
       const workspace = source.workspaces.items.find(
         (candidate) => candidate.workspaceId === record.workspaceId,
       );
@@ -197,6 +213,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       setDashboard(navigation.selection);
     },
     [
+      inputProps.dashboardLayout,
       inputProps.closeRightSidebar,
       inputProps.openSession,
       ordering.orderedSessionIdsByAccount,

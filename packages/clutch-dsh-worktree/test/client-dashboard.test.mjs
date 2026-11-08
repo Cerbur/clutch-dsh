@@ -1600,6 +1600,22 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   const { buildSessionFileAddress, GitFileAddressError } = await import('../lib/client/dashboard/git/file-address.js');
   const calls = [];
   const refs = [];
+  const effectCleanups = [];
+  const panelListeners = new Set();
+  let activePanelId = null;
+  const dashboardLayout = {
+    panelInfo: {
+      getSnapshot: () => ({ activePanelId }),
+      subscribe: (listener) => {
+        panelListeners.add(listener);
+        return () => panelListeners.delete(listener);
+      },
+    },
+    selectPanel: (id) => {
+      activePanelId = id;
+      for (const listener of panelListeners) listener();
+    },
+  };
   let refCursor = 0;
   let selected = selection;
   let target = record;
@@ -1634,7 +1650,10 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
         ],
         useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
         useCallback: (fn) => fn,
-        useEffect: (effect) => effect(),
+        useEffect: (effect) => {
+          const cleanup = effect();
+          if (typeof cleanup === 'function') effectCleanups.push(cleanup);
+        },
         useRef: (initial) => {
           const index = refCursor++;
           refs[index] ??= { current: initial };
@@ -1714,6 +1733,7 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
     openResource: (...args) => calls.push(['resource', ...args]),
     openRightSidebar: () => calls.push(['openRightSidebar']),
     dashboardStore: undefined,
+    dashboardLayout,
   };
   const renderTree = (resetSelected = true) => {
     if (resetSelected) selected = selection;
@@ -1964,6 +1984,56 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   props.onCreateWorktree();
   props.onArchiveWorktree();
   assert.deepEqual(calls, []);
+
+  // Native global-panel navigation must dismiss ready and sessionless overlays,
+  // including a repeat visit after explicitly opening Dashboard from that panel.
+  mutation.actionPending = false;
+  for (const panel of ['plugins', 'schedule', 'clutch-dsh-office', 'another-plugin']) {
+    for (const sessionId of ['current', undefined]) {
+      dashboardLayout.selectPanel(null);
+      selected = { ...selection, sessionId };
+      renderTree(false);
+      calls.splice(0);
+      dashboardLayout.selectPanel(panel);
+      assert.equal(selected, undefined, `Dashboard must yield to ${panel}`);
+      assert.deepEqual(calls, [], 'dismissal must not navigate Sessions or mutate the rightbar');
+      dashboardLayout.selectPanel(null);
+      assert.equal(findAll(renderTree(false), item => item.type === 'Dashboard').length, 0);
+    }
+    dashboardLayout.selectPanel(panel);
+    surfaceContentProps(renderTree(false)).openDashboard(record);
+    assert.equal(activePanelId, null, 'explicit Dashboard entry returns to the Conversation layout');
+    assert.ok(selected);
+    dashboardLayout.selectPanel(panel);
+    assert.equal(selected, undefined);
+  }
+
+  // Cancel a Dashboard waiting for the native list before it can open a Session.
+  sourceState.sessions.phase = 'pending';
+  surfaceContentProps(renderTree(false)).openDashboard(record);
+  dashboardLayout.selectPanel('plugins');
+  calls.splice(0);
+  sourceState.sessions.phase = 'ready';
+  renderTree(false);
+  assert.equal(selected, undefined);
+  assert.deepEqual(calls, []);
+
+  // A late target-Session settlement must not resurrect a dismissed Dashboard.
+  sourceState.currentSessionId = 'unrelated';
+  surfaceContentProps(renderTree(false)).openDashboard(record);
+  dashboardLayout.selectPanel('clutch-dsh-office');
+  sourceState.currentSessionId = 'current';
+  renderTree(false);
+  assert.equal(selected, undefined);
+
+  surfaceInput.dashboardStore = dashboardStore;
+  dashboardLayout.selectPanel(null);
+  dashboardStore.snapshot = selection;
+  renderTree(false);
+  dashboardLayout.selectPanel('schedule');
+  assert.equal(dashboardStore.snapshot, undefined);
+  for (const cleanup of effectCleanups.reverse()) cleanup();
+  assert.equal(panelListeners.size, 0);
 });
 
 test('Main Tag projection renders a local status and omits derived acquisition and baseline facts', () => {

@@ -516,6 +516,10 @@ The top bar shows **{workspace}/{worktreeName}** and groups **Open in ...**, **B
 On macOS desktop, its blank space drags the window, and a collapsed left Sidebar exposes
 DSH's native reopen button beside the traffic lights. Windows retains its native caption bar.
 
+Selecting Plugins, Scheduled Tasks, Office, or another native main page automatically closes
+Dashboard and cancels pending Dashboard navigation. Returning to the conversation does not reopen it;
+use a Dashboard entry to open it again. Dashboard continues to use the overlay and native right sidebar.
+
 Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
 can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
