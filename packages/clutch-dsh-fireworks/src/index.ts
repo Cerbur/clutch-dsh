@@ -26,7 +26,7 @@ export { happyFireworksTool } from './fireworks-tool.js';
 
 export const name = 'clutch-dsh-fireworks';
 export const inject = ['tools'];
-export const Config = z.object({
+export const Config: z<{ animation: unknown }> = z.object({
   animation: z.any().default(DEFAULT_STORED_ANIMATION_PREFERENCES).volatile(),
 });
 
