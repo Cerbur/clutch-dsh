@@ -33,7 +33,7 @@ test('generated title Remote mounts on the native Gateway and withdraws retained
     });
     await assembly;
     const retained = ctx.remote.titleStats.getStats;
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     assert.deepEqual(await retained(controller.signal), { ok: true, value: stats });
     assert.equal(calls[0][0], '/api');
     assert.equal(calls[0][1], 'titleStats/getStats');
