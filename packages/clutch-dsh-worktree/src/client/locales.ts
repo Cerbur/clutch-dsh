@@ -453,6 +453,10 @@ export const zh = {
   'error.worktreeCreatedSessionUnavailable':
     'Worktree 已创建，但 Session 创建不可用，请重新连接后重试。',
   'error.sessionCreationUnavailable': 'Session 创建不可用，请重新连接后重试。',
+  'error.forgeStarting': '正在启用官方 Forge，请稍后重试新建会话。',
+  'error.forgeRestartRequired': '官方 Forge 已启用，请重启 DSH 后再新建 Worktree 会话。',
+  'error.forgeActivationFailed': '自动启用官方 Forge 失败。请在插件页面启用 Forge 及其 Worktree 组件后重试。',
+  'error.forgeUnavailable': '官方 Forge 尚未就绪。请在插件页面安装或启用 Forge 及其 Worktree 组件后重试。',
   'error.worktreeRecordMissing': "未能确认 Worktree 登记结果。请先刷新列表检查是否已创建或导入，避免重复操作；若未出现，再重试。",
   'error.worktreeImportInvalid': "所选目录无法导入。请从导入列表选择同一 Git 仓库中有分支、尚未登记且不是主目录的 Worktree，然后重试。",
   'error.worktreeAlreadyManaged': "这个 Worktree 已在管理列表中。请刷新列表并打开已有项，无需重复导入。",
@@ -968,6 +972,10 @@ export const en = {
   'error.worktreeCreatedSessionUnavailable':
     'Worktree created, but Session creation is unavailable; retry after reconnecting.',
   'error.sessionCreationUnavailable': 'Session creation is unavailable; retry after reconnecting.',
+  'error.forgeStarting': 'Enabling official Forge. Retry creating the Session after it finishes loading.',
+  'error.forgeRestartRequired': 'Official Forge is enabled. Restart DSH before creating a Worktree Session.',
+  'error.forgeActivationFailed': 'Automatic Forge activation failed. Enable Forge and its Worktree components in Plugins, then retry.',
+  'error.forgeUnavailable': 'Official Forge is not ready. Install or enable Forge and its Worktree components in Plugins, then retry.',
   'error.worktreeRecordMissing': "The Worktree registration result could not be confirmed. Refresh the list to check whether creation or import succeeded before repeating the operation. Retry if it is absent.",
   'error.worktreeImportInvalid': "This directory cannot be imported. Select a branch-attached, unmanaged Worktree from the import list in the same Git repository, excluding the main directory, then retry.",
   'error.worktreeAlreadyManaged': "This Worktree is already managed. Refresh the list and open its existing entry instead of importing it again.",

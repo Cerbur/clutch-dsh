@@ -39,6 +39,7 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_IDENTITY_CHANGED',
   'WORKTREE_SESSION_BUSY',
   'WORKTREE_ACTIVITY_UNAVAILABLE',
+  'WORKTREE_FORGE_UNAVAILABLE',
 ] as const);
 
 export type WorktreeErrorCode = (typeof WORKTREE_ERROR_CODES)[number];

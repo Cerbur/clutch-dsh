@@ -1151,3 +1151,23 @@ checkout 内；Continue in Project 返回源 Git 根后标签消失。官方恢�
 默认池为源 Git 根的 .agents/worktrees；旧池/外部导入路径可带标签并回到项目，但不承诺磁盘恢复。
 官方组件停用时记录仍保留，显示与恢复需重新启用官方组件。多 Session 共用一个 checkout；
 已在等待恢复的 Session 仍需逐个触发原生恢复。未提交文件不在恢复范围。
+
+### 独立 Forge 自动启用与准入
+
+Host 通过可选 pluginManager 注入，在初始化完成后的定时回调中调用
+setBundleEnabled('@deepseek-ai/dsh-experimental-forge-bundle', true)。不能在构造阶段等待
+profile 变更，否则 HMR 的重载与 profile 锁可能互相等待。Forge 由 DSH profile 独立拥有，
+不是 Worktree 的子插件；Worktree dispose 只停止自己的观察与回调，不停用或卸载 Forge。
+
+每个 profile 的首次尝试由 Home/clutch-dsh-worktree/forge-activation/
+sha256(profileContext.dir).json 记录（version 与 bundle），独立于 Workspace 关系索引。
+排他创建、写入并 fsync 后才请求启用，避免 HMR 重复启用；已有损坏文件保留且显式失败。
+已启用、缺失或不兼容的 bundle 也记为已尝试；不自动下载安装。后续手动关闭跨进程生效，
+恢复需用户在插件页启用。失败或需要重启只影响新 Session 准入，不阻止旧列表读取。
+
+新建前、初始化前、绑定前和派发输入前异步检查官方运行状态：bundle 独立选中且无错误，
+forge-panel 与 forge-worktree 对应官方模块 enabled 且 fiberPhase=active，并存在 forgePanel。
+必须使用 pluginManager 的 listBundles/listPlugins，不能从 forgePanel.ctx 获取 worktrees：
+Cordis 代理会重绑调用者上下文，可能把全局 backend 误认为官方隔离 backend 已就绪。
+失败使用 WORKTREE_FORGE_UNAVAILABLE 和 NativeSessionCreationPreflightError，创建前失败
+不留 Session，恢复后同一 requestId 可重试。停止后的迟到检查不得放行。

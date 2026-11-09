@@ -172,6 +172,8 @@ Sessions and does not claim cleanup succeeded. Error history clears on page refr
 
 ## Behavior and limitations
 
+Worktree enables the installed Forge plugin once per profile. If you disable Forge later, re-enable it in Plugins before creating a Worktree Session.
+
 With official Forge enabled, new Sessions keep native Worktree records after removal from management or uninstall. Forge can restore missing checkouts inside its configured pool or let you **Continue in Project**. Restoration cannot recover uncommitted files.
 
 - DSH remains the source of truth for Workspaces, Sessions, and conversation history. Removing

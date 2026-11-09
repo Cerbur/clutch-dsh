@@ -215,6 +215,14 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
     runMaintenance: (work) => work(new AbortController().signal),
   };
   f.native.sessions.flush = async () => true;
+  ctx.provide('forgePanel', { ctx: { get: () => ({}) } });
+  ctx.provide('pluginManager', {
+    listBundles: async () => [{ name: '@deepseek-ai/dsh-experimental-forge-bundle', enabled: true, availability: 'installation' }],
+    listPlugins: async () => [
+      { patchId: 'forge-panel', moduleName: '@deepseek-ai/dsh-experimental-client-ui-forge', enabled: true, fiberPhase: 'active' },
+      { patchId: 'forge-worktree', moduleName: '@deepseek-ai/dsh-experimental-worktree', enabled: true, fiberPhase: 'active' },
+    ],
+  });
   ctx.provide('agents', { get: () => agent });
   ctx.provide('sessionController', {
     create: (input) => f.sessions.create(input),

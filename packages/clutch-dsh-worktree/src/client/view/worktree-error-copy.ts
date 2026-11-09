@@ -36,6 +36,7 @@ const DOMAIN_ERROR_COPY = {
   WORKTREE_IDENTITY_CHANGED: 'error.worktreeIdentityChanged',
   WORKTREE_SESSION_BUSY: 'error.worktreeSessionBusy',
   WORKTREE_ACTIVITY_UNAVAILABLE: 'error.worktreeActivityUnavailable',
+  WORKTREE_FORGE_UNAVAILABLE: 'error.forgeUnavailable',
 } as const satisfies Record<WorktreeErrorCode, WorktreeLocaleKey>;
 
 function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
@@ -72,6 +73,12 @@ function gitErrorCopy(error: WorktreeViewError): WorktreeLocaleKey {
 }
 
 export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTranslate): string {
+  if (error.code === 'WORKTREE_FORGE_UNAVAILABLE') {
+    if (error.details?.reason === 'starting') return t('error.forgeStarting');
+    if (error.details?.reason === 'restart-required') return t('error.forgeRestartRequired');
+    if (error.details?.reason === 'failed') return t('error.forgeActivationFailed');
+    return t('error.forgeUnavailable');
+  }
   if (error.code === 'GIT_OPERATION_FAILED') return t(gitErrorCopy(error));
   const domainKey = Object.hasOwn(DOMAIN_ERROR_COPY, error.code)
     ? DOMAIN_ERROR_COPY[error.code as WorktreeErrorCode]

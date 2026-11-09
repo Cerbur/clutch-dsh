@@ -23,3 +23,14 @@ Completed: implementation, full native-enabled package regression (1,419 passed,
 six official Forge recovery scenarios, and real ~/.dsh-test model/UI acceptance.
 Existing 676 raw Session/sidecar files retain their hashes; the original test profile is restored.
 See [acceptance evidence](../qa/2026-11-09-forge-acceptance.md).
+
+## Approved follow-up: independent automatic Forge activation
+
+The user approved enabling the installed official Forge bundle when Worktree loads,
+retaining it after Worktree uninstall, testing under ~/.dsh-test, protecting old data,
+and committing on this same feature branch. Enable through DSH pluginManager, never
+as a child plugin. Persist one attempt per profile to respect later manual disable.
+Gate new Session creation on the actual independent official runtime, including its
+isolated backend; missing/incompatible bundles require manual installation. Preserve
+existing read paths and Session records. Validate cold disable/re-enable, uninstall,
+native restore/Continue in Project and actual model replies before committing.

@@ -630,3 +630,14 @@ DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/native-forge-recove
 不请求模型账号。覆盖 producer 卸载后的冷重放、旧池恢复限制、缺失分支、共享 checkout、
 错误记录顺序和子目录 Workspace。fixture/config 写入临时目录，不修改 DSH 源码。
 profile 真机验收与旧数据保护证据见 [2026-11-09 验收报告](qa/2026-11-09-forge-acceptance.md)。
+
+自动启用另由 test/forge-activation.test.mjs 覆盖：独立 bundle 选择、跨 profile 偏好、
+手动禁用后的冷启动、失败/重启/损坏偏好、卸载时序，以及全局 backend 不能代替
+被禁用的 Forge 隔离 backend。native-session-flow 的 Host fixture 必须提供实际就绪的
+官方运行清单；仅注入 forgePanel 不代表 Forge 就绪。
+
+真实 ~/.dsh-test 验收不要在 overlay 中强行启用 Forge：只安装 feature link，观察
+profile 独立选中，再分别禁用隔离组件、禁用 bundle 后冷启动、手动启用同请求重试，
+最后通过官方 plugin remove 卸载 Worktree 并冷启动验证原生恢复与真实模型续聊。
+对既有 Session/sidecar 文件先计算散列，结束后逐个比较；只操作专用测试仓库。
+详见 [自动启用验收报告](qa/2026-11-09-forge-auto-enable.md)。
