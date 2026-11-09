@@ -123,7 +123,7 @@ export async function removeWorktreeTransaction(
             },
           );
         }
-        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot);
+        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot, repository.identity.topLevel);
         const pending = pendingRemove(input, record, repository.identity);
         await locked.mutate((snapshot) => {
           const { repository: _repository, ...withoutRepository } = snapshot;

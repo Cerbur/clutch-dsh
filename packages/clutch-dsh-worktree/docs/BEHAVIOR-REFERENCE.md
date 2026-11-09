@@ -39,7 +39,11 @@ the next new-Session action creates a fresh Session once that Session is no long
 This includes manual binding recovery. New Sessions in historical subdirectory Worktrees receive
 the same shared instructions; moving outside the bound directory still disables those instructions.
 
-New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
+New Worktrees live in `<repository-root>/.agents/worktrees/clutch/wt_<id>/`, inside DSH's default Worktree pool. New Sessions remain members of the original Workspace; DSH records their execution directory and official Forge Worktree facts before task input is admitted. They keep normal native permissions, including explicit user restrictions. A subdirectory Workspace may therefore need native approval to access the checkout outside its directory. The pool contains its own ignore file; existing repository ignore files are untouched.
+
+With DSH's official Forge Worktree component enabled, newly created Worktree Sessions retain the native Worktree label after **Remove from management** or uninstalling this plugin. DSH can restore a missing checkout in its configured pool, or **Continue in Project**. Continue in Project targets the source Git root and removes the active Worktree label. Official Forge must remain enabled; these functions no longer depend on this plugin or its index.
+
+Existing Sessions are not migrated. Old checkout paths stay in place. A new Session on an imported or older checkout can receive the label, but official disk restoration requires that checkout to be inside DSH's configured pool; otherwise use Continue in Project. Restoration does not recover uncommitted files. When several Sessions are waiting for the same missing checkout, resume each Session separately.
 
 Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 

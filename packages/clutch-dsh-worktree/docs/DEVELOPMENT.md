@@ -389,7 +389,7 @@ pnpm dsh web --dump-config | grep -A 10 clutch-dsh-worktree
 Sidecar、偏好与锁仍位于用户主目录的 DSH Home；新 checkout 放在原 Workspace 范围以沿用默认权限：
 
 - **工作区 Sidecar JSON**：`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`
-- **新建 Worktree 根目录**：`<workspace>/.agents/clutch-worktrees/wt_<hex>/`（子目录 Workspace 也在其自身范围内）；历史 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
+- **新建 Worktree 根目录**：`<repository-root>/.agents/worktrees/clutch/wt_<hex>/`；历史 Workspace 的 `.agents/clutch-worktrees/` 与 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
 - **跨进程文件锁**：`$dshHome/clutch-dsh-worktree/locks/`
 
 在开发调试过程中，若遇到并发异常或需要重置本地测试数据：
@@ -611,3 +611,22 @@ Desktop drain，不代表每 5 秒执行 Git。可运行 node --test test/git-ch
 Host 因此在注册后 1 秒补发一次校准，而不是延长测试超时或恢复高频 Git 轮询；
 常态事件丢失仍由 60 秒兜底覆盖。回归用静默 watcher 确认丢事件时校准、只执行一次、
 关闭前取消；真实文件事件测试继续保留 5 秒断言期限。
+
+## 官方 Forge 新 Session 互操作验证
+
+验证基线：DSH 0.2.2-rc.1，源码 66491b05e3。新建 port 额外要求 Agent.runMaintenance、
+导出的 appendPluginRecord 与 sessions.flush。插件的 dsh-session peer 必须由 DSH loader
+解析到宿主同一份模块；不能把另一份 Session 实例传入带私有字段的 appendPluginRecord。
+真实 profile 的 linked-package 验收已经覆盖此解析边界，不使用私有字段兼容补丁。
+
+默认 native-session-flow 测试覆盖新建门禁、目录/分支身份、写入顺序、持久化失败、调用取消、
+原生 maintenance 取消、重放及旧池中的新 Session。以下外部接缝另运行 6 个官方组件场景：
+
+```bash
+DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/native-forge-recovery.test.mjs
+```
+
+它使用上游 Forge test harness、真实工作目录/投影/压缩持久化/Git 服务；Agent 调度为上游 test double，
+不请求模型账号。覆盖 producer 卸载后的冷重放、旧池恢复限制、缺失分支、共享 checkout、
+错误记录顺序和子目录 Workspace。fixture/config 写入临时目录，不修改 DSH 源码。
+profile 真机验收与旧数据保护证据见 [2026-11-09 验收报告](qa/2026-11-09-forge-acceptance.md)。

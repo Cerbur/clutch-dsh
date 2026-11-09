@@ -72,7 +72,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 3. 确认后，点击 Worktree 上的 **+**，在该目录中打开会话。
 
 需要更新远端引用时，使用远端分支旁的 **Fetch**；列出分支不会自动访问远端。
-新 Worktree 仅继承已提交的文件，目录位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。
+新 Worktree 仅继承已提交的文件，目录位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`。
 
 接入已有目录时，切换到创建弹窗中的**导入**，选择 Worktree 后点击**导入 Worktree**。
 导入保留原目录及文件。列表仅显示尚未受管理、目录可用、绑定分支且不是仓库根的 Worktree。
@@ -152,6 +152,8 @@ Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出�
 | 文件系统 | Windows 或 macOS 本地路径；网络或特殊文件系统可能不支持 |
 
 ## 行为与限制
+
+启用官方 Forge 后，新会话在移出管理或卸载插件后仍保留原生 Worktree 记录。Forge 可以恢复配置池内缺失的 checkout，或让你选择 **Continue in Project（回到项目继续）**。恢复无法找回未提交文件。
 
 - Workspace、Session 和对话历史以 DSH 为唯一数据源。移除 Worktree 不会删除其原生会话。
 - 每个会话最多属于一个 active Worktree，每个 Worktree 可以有多个会话。

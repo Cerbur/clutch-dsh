@@ -93,7 +93,7 @@ async function recoverLocked(
 
       if (pending.type === 'create-worktree') {
         try {
-          await assertRecoverableCreatePath(dependencies, pending, input.workspaceRoot);
+          await assertRecoverableCreatePath(dependencies, pending, input.workspaceRoot, repository.identity.topLevel);
         } catch (error) {
           await markRecovery(locked, pending, 'WORKTREE_IDENTITY_CHANGED');
           if (error instanceof WorktreeProviderError) throw error;

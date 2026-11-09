@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
+import { Session, SessionId, SESSION_FORMAT_VERSION, appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session';
+import { initializeForgeSession } from '../lib/tool/forge-session.js';
 import { createRequire } from 'node:module';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
@@ -19,6 +21,137 @@ import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/genera
 import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
 const { AbortController } = globalThis;
+
+async function forgeFixture(t, nested = false) {
+  const f = await fixture(t, nested);
+  const ctx = new Context();
+  t.after(() => ctx.fiber.dispose());
+  const session = Session.create(SessionId('forge-new'), [], {
+    id: SessionId('forge-new'), version: SESSION_FORMAT_VERSION, createdAt: 0,
+    isSeeded: false, cwd: f.workspace,
+  });
+  const control = new AbortController();
+  const maintenance = new AbortController();
+  let cwd = f.workspace;
+  const calls = [];
+  const directories = {
+    get: () => cwd,
+    async set(_agent, value, signal) {
+      signal.throwIfAborted();
+      calls.push(['directory', value, records().length]);
+      cwd = value;
+      return cwd;
+    },
+  };
+  const records = () => session.snapshotEvents().map(pluginRecordOf).filter(Boolean);
+  const persistence = { async flush() { calls.push(['flush', records().length]); return true; } };
+  ctx.provide('workingDirectory', directories);
+  ctx.provide('sessions', persistence);
+  const agent = { session, async runMaintenance(work) {
+    calls.push(['maintenance', 'start']);
+    try { await work(maintenance.signal); } finally { calls.push(['maintenance', 'end']); }
+  } };
+  const initialize = () => initializeForgeSession(ctx, agent, f.record, control.signal,
+    async () => { calls.push(['bind', records().length]); });
+  return { ...f, ctx, session, agent, control, maintenance, directories, persistence, calls, records, initialize };
+}
+
+for (const nested of [false, true]) test(`new native Forge Session persists real checkout facts before binding (nested=${nested})`, async (t) => {
+  const f = await forgeFixture(t, nested);
+  await f.initialize();
+  assert.deepEqual(f.calls.map(c => c[0]), ['maintenance', 'directory', 'flush', 'bind', 'maintenance']);
+  assert.equal(f.calls[1][2], 0);
+  assert.equal(f.calls[2][1], 2);
+  assert.equal(f.session.header.cwd, f.workspace);
+  assert.deepEqual(f.records().map(r => r.data.action), ['request', 'created']);
+  const fact = f.records()[1].data.worktree;
+  assert.equal(fact.path, f.record.gitRootPath ?? f.record.absolutePath);
+  assert.equal(fact.repositoryRoot, f.repo);
+  assert.equal(fact.branch, f.record.branch);
+  assert.equal(fact.baseCommit, f.record.baseCommit);
+  assert.equal(fact.from, null);
+  await assert.rejects(f.initialize, /new, unstarted Session/);
+  assert.equal(f.records().length, 2);
+});
+
+for (const failure of ['abort-after-set', 'maintenance-abort-after-set', 'throw-after-set', 'flush-rejected', 'flush-false']) {
+  test(`failed Forge initialization restores Workspace without binding: ${failure}`, async (t) => {
+    const f = await forgeFixture(t);
+    const originalSet = f.directories.set;
+    f.directories.set = async (...args) => {
+      const result = await originalSet(...args);
+      if (args[1] === f.record.absolutePath) {
+        if (failure === 'abort-after-set') f.control.abort();
+        if (failure === 'maintenance-abort-after-set') f.maintenance.abort();
+        if (failure === 'throw-after-set') throw new Error('committed directory failure');
+      }
+      return result;
+    };
+    let flushed = false;
+    f.persistence.flush = async () => {
+      if (flushed) return true;
+      flushed = true;
+      if (failure === 'flush-rejected') throw new Error('disk failure');
+      return failure !== 'flush-false';
+    };
+    await assert.rejects(f.initialize);
+    assert.equal(f.directories.get(), f.workspace);
+    assert.equal(f.calls.some(c => c[0] === 'bind'), false);
+    assert.equal(f.records().some(r => r.data.action === 'request'), failure.startsWith('flush'));
+    assert.equal(f.session.header.cwd, f.workspace);
+  });
+}
+
+test('Forge initialization rejects branch drift and never backfills existing records', async (t) => {
+  const f = await forgeFixture(t);
+  f.git('-C', f.record.absolutePath, 'switch', '--detach');
+  await assert.rejects(f.initialize, /identity changed/);
+  assert.equal(f.directories.get(), f.workspace);
+  assert.deepEqual(f.records(), []);
+  appendPluginRecord(f.session, 'plugin:client-ui-forge/worktree', { action: 'cancel' });
+  const before = f.session.snapshotEvents();
+  await assert.rejects(f.initialize, /new, unstarted Session/);
+  assert.deepEqual(f.session.snapshotEvents(), before);
+});
+
+test('native Forge facts survive Session replay without the creating port', async (t) => {
+  const f = await forgeFixture(t);
+  await f.initialize();
+  const restored = Session.create(f.session.id, f.session.snapshotEvents(), f.session.header);
+  assert.deepEqual(restored.snapshotEvents().map(pluginRecordOf).filter(Boolean), f.records());
+  assert.equal(restored.header.cwd, f.workspace);
+});
+
+test('a started Session cannot receive official Worktree records', async (t) => {
+  const f = await forgeFixture(t);
+  f.session.append('turn/start', {});
+  const before = f.session.snapshotEvents();
+  await assert.rejects(f.initialize, /new, unstarted Session/);
+  assert.deepEqual(f.session.snapshotEvents(), before);
+  assert.equal(f.directories.get(), f.workspace);
+});
+
+test('a mismatched execution directory cannot be recorded as another checkout', async (t) => {
+  const f = await forgeFixture(t);
+  const checkout = f.record.absolutePath;
+  Object.assign(f.record, { gitRootPath: checkout, absolutePath: f.workspace });
+  await assert.rejects(f.initialize, /no longer belongs/);
+  assert.deepEqual(f.records(), []);
+});
+
+for (const legacy of ['workspace', 'home']) test(`new Sessions on the historical ${legacy} pool receive facts without moving the checkout`, async (t) => {
+  const f = await forgeFixture(t);
+  const pool = legacy === 'workspace'
+    ? path.join(f.workspace, '.agents', 'clutch-worktrees')
+    : path.join(f.home, 'clutch-dsh-worktree', 'worktree');
+  await mkdir(pool, { recursive: true });
+  const target = path.join(pool, f.record.worktreeId);
+  f.git('worktree', 'move', f.record.absolutePath, target);
+  Object.assign(f.record, { absolutePath: target });
+  await f.initialize();
+  assert.equal(f.records()[1].data.worktree.path, target);
+  assert.equal(f.directories.get(), target);
+});
 
 async function fixture(t, nested = false) {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'native-session-flow-')));
@@ -77,7 +210,11 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   for (const name of ['workspaceRegistry', 'sessions', 'sessionPersistence']) ctx.provide(name, f.native[name]);
-  const agent = { session: { id: 'child' } };
+  const agent = {
+    session: Session.create(SessionId('child'), [], { id: SessionId('child'), version: SESSION_FORMAT_VERSION, createdAt: 0, isSeeded: false, cwd: f.workspace }),
+    runMaintenance: (work) => work(new AbortController().signal),
+  };
+  f.native.sessions.flush = async () => true;
   ctx.provide('agents', { get: () => agent });
   ctx.provide('sessionController', {
     create: (input) => f.sessions.create(input),
@@ -162,9 +299,9 @@ for (const nested of [false, true]) test(
     assert.equal(session.originalCwd, f.workspace);
     assert.equal(session.cwd, f.record.absolutePath);
     assert.equal(f.actors.get('child').header.cwd, f.workspace);
-    assert.ok(f.record.absolutePath.startsWith(f.workspace + path.sep));
+    assert.ok(f.record.absolutePath.startsWith(path.join(f.repo, '.agents', 'worktrees', 'clutch') + path.sep));
     assert.equal(f.git('status', '--porcelain'), '', 'pool contents are ignored without changing tracked files');
-    assert.equal(await readFile(path.join(f.workspace, '.agents', 'clutch-worktrees', '.gitignore'), 'utf8'), '*\n');
+    assert.equal(await readFile(path.join(f.repo, '.agents', 'worktrees', 'clutch', '.gitignore'), 'utf8'), '*\n');
     assert.equal(await f.manager.readSessionHead({ workspaceId: 'ws', sessionId: 'child' }), f.record.baseCommit);
     await f.manager.updateWorktreeInstructions({ workspaceId: 'ws', worktreeId: f.record.worktreeId, instructions: 'Worktree guidance', expectedInstructions: '' });
     assert.equal(await f.manager.resolveSessionInstructions('child'), 'Worktree guidance');
@@ -277,7 +414,7 @@ test('native capability preflight failure retries after service recovery with th
       listWorktrees: async () => [{ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/wt', status: 'active' }],
       bindSession: async () => {},
     },
-    sessions: createNativeWorktreeSessionDirectoryPort(ctx), changed() {},
+    sessions: { ...createNativeWorktreeSessionDirectoryPort(ctx), initializeWorktreeSession: undefined }, changed() {},
   });
   t.after(() => creation.dispose());
   const input = { workspaceId: 'ws', worktreeId: 'wt', requestId: 'preflight' };
@@ -470,7 +607,7 @@ test('historical subdirectory checkout supplies instructions to newly bound nati
 
 test('contained pools reject replaced ancestors and never overwrite an existing ignore file', async (t) => {
   const f = await fixture(t);
-  const pool = path.join(f.workspace, '.agents', 'clutch-worktrees');
+  const pool = path.join(f.repo, '.agents', 'worktrees', 'clutch');
   await writeFile(path.join(pool, '.gitignore'), 'user data\n');
   await assert.rejects(prepareWorktreePool(f.home, f.workspace, path.join(pool, 'new')), { code: 'WORKTREE_STATE_CONFLICT' });
   assert.equal(await readFile(path.join(pool, '.gitignore'), 'utf8'), 'user data\n');

@@ -5,7 +5,7 @@ import type { WorktreeToolSessionPort } from './native-session.js';
 export async function createBoundWorktreeSession(input: {
   record: WorktreeRecord;
   manager: Pick<WorktreeManager, 'bindSession'>;
-  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory'>;
+  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
   signal: AbortSignal;
   check(): void;
 }): Promise<WorktreeSessionCreationResult> {
@@ -16,9 +16,15 @@ export async function createBoundWorktreeSession(input: {
     : { cwd: record.absolutePath });
   try {
     check();
-    await sessions.enterWorkingDirectory?.(sessionId, record.absolutePath, signal);
-    check();
-    await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId });
+    const bind = async () => {
+      check();
+      await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId });
+    };
+    if (sessions.initializeWorktreeSession) await sessions.initializeWorktreeSession(sessionId, record, signal, bind);
+    else {
+      await sessions.enterWorkingDirectory?.(sessionId, record.absolutePath, signal);
+      await bind();
+    }
     return { sessionId, bound: true };
   } catch (error) {
     return { sessionId, bound: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 700) };

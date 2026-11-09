@@ -32,7 +32,11 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 手动绑定恢复同样遵循此规则。历史子目录 Worktree 中的新 Session 也能获取共享指令；
 离开绑定目录后仍会停止注入这些指令。
 
-新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需插件专属权限配置。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+新 Worktree 位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`，属于 DSH 默认 Worktree 池。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 记录执行目录和官方 Forge Worktree 事实。它们保留正常原生权限及用户的显式限制；子目录 Workspace 访问位于其目录之外的新 checkout 时，可能需要原生审批。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+
+启用 DSH 官方 Forge Worktree 组件后，新建的 Worktree Session 在**移出管理**或卸载本插件后仍保留原生 Worktree 标签。DSH 可以恢复位于其配置池内的缺失 checkout，或选择 **Continue in Project（回到项目继续）**。回到项目指向源 Git 根目录，并移除当前 Worktree 标签。官方 Forge 必须保持启用；这些能力不再依赖本插件或其索引。
+
+不迁移已有 Session，旧 checkout 路径保持原位。在导入或旧 checkout 中新建的 Session 可以获得标签，但官方磁盘恢复要求路径位于 DSH 配置池内；否则请回到项目继续。恢复不能找回未提交文件。多个 Session 等待同一缺失 checkout 时，需要分别恢复每个 Session。
 
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 

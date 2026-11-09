@@ -3,12 +3,15 @@ import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { providerError } from './types.js';
 import { sameLexicalPath } from './path-identity.js';
 
-/** A dedicated pool inside the immutable Session workspace, including subdirectory Workspaces. */
-export const workspaceWorktreePool = (root: string): string => path.resolve(root, '.agents', 'clutch-worktrees');
+/** Dedicated subpool of DSH's default pool, rooted at the source Git checkout. */
+export const workspaceWorktreePool = (root: string): string => path.resolve(root, '.agents', 'worktrees', 'clutch');
 
-export function generatedPathAncestors(dshHome: string, root: string, target: string): readonly string[] | undefined {
-  const pool = workspaceWorktreePool(root);
-  if (sameLexicalPath(path.dirname(path.resolve(target)), pool)) return [path.join(root, '.agents'), pool, target];
+export function generatedPathAncestors(dshHome: string, root: string, target: string, repositoryRoot = root): readonly string[] | undefined {
+  const pool = workspaceWorktreePool(repositoryRoot);
+  if (sameLexicalPath(path.dirname(path.resolve(target)), pool))
+    return [path.join(repositoryRoot, '.agents'), path.join(repositoryRoot, '.agents', 'worktrees'), pool, target];
+  const previousPool = path.join(root, '.agents', 'clutch-worktrees');
+  if (sameLexicalPath(path.dirname(path.resolve(target)), previousPool)) return [path.join(root, '.agents'), previousPool, target];
   const legacy = path.resolve(dshHome, 'clutch-dsh-worktree', 'worktree');
   const relative = path.relative(legacy, path.resolve(target));
   const insideWorkspace = path.relative(path.resolve(root), path.resolve(target));
@@ -18,8 +21,8 @@ export function generatedPathAncestors(dshHome: string, root: string, target: st
   return undefined;
 }
 
-export async function assertGeneratedPath(dshHome: string, root: string, target: string, checkTarget = true): Promise<void> {
-  const ancestors = generatedPathAncestors(dshHome, root, target);
+export async function assertGeneratedPath(dshHome: string, root: string, target: string, checkTarget = true, repositoryRoot = root): Promise<void> {
+  const ancestors = generatedPathAncestors(dshHome, root, target, repositoryRoot);
   if (!ancestors) throw providerError('WORKTREE_IDENTITY_CHANGED', 'Worktree path is outside its trusted pool', { targetPath: target });
   for (const ancestor of checkTarget ? ancestors : ancestors.slice(0, -1)) {
     try {

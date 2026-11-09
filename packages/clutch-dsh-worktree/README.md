@@ -77,7 +77,7 @@ more than five Sessions, or **Collapse All** to focus on the current Session's g
 
 Use **Fetch** beside remote branches when you need updated remote refs; listing branches
 does not contact remotes automatically. New Worktrees inherit committed files only.
-They are created in `<workspace>/.agents/clutch-worktrees/wt_<id>/`.
+They are created in `<repository-root>/.agents/worktrees/clutch/wt_<id>/`.
 
 To bring in an existing checkout, switch the creation dialog to **Import**, choose a Worktree,
 and select **Import Worktree**. Import keeps the directory and its files in place. Only available,
@@ -171,6 +171,8 @@ Sessions and does not claim cleanup succeeded. Error history clears on page refr
 | Filesystem | Local Windows or macOS paths; network or special filesystems may not be supported |
 
 ## Behavior and limitations
+
+With official Forge enabled, new Sessions keep native Worktree records after removal from management or uninstall. Forge can restore missing checkouts inside its configured pool or let you **Continue in Project**. Restoration cannot recover uncommitted files.
 
 - DSH remains the source of truth for Workspaces, Sessions, and conversation history. Removing
   a Worktree does not delete its native Sessions.

@@ -210,7 +210,7 @@ wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时
 
 `WorktreeRecord.source` 记录来源类型：
 
-- `plugin`：在原 Workspace 的专属池（`<workspace>/.agents/clutch-worktrees/wt_<12-hex-chars>`）下新建；
+- `plugin`：在源 Git 根的专属池（`<repository-root>/.agents/worktrees/clutch/wt_<12-hex-chars>`）下新建；旧 Workspace/Home 池保持兼容；
   池内仅创建自己的 `.gitignore`（`*`），不修改已有业务忽略文件。历史 DSH Home 外置路径保留用于读取、恢复和清理，不自动迁移；
 - `external`：登记已存在的独立 Git linked worktree。
 
@@ -296,7 +296,7 @@ Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。�
   - 原生目录能力存在时读取 DSH effective cwd；解绑、清理或 Main 分组不构成目录切换；
   - Active Worktree binding 必须与 effective cwd 匹配；缺少原生目录事实的旧 adapter 才保留 Main/detached 使用 Workspace 根、active 使用 Worktree 的派生规则；
   - 绑定校验比较 Worktree 与 DSH Session cwd 的物理路径，而不是要求路径字符串完全一致，以兼容平台路径大小写、符号链接和别名规范化；Client 端快照只用于候选筛选，最终关系与物理身份必须由 Host 重新校验；
-  - **cwd 是 DSH 原生执行事实；插件不改写 Session 元数据或直接追加事件**。旧 adapter 的关系派生只用于兼容。
+  - **cwd 是 DSH 原生执行事实；插件不改写 Session 元数据**。仅新建 Session 可通过官方 appendPluginRecord 追加 Forge Worktree 事实（见下文）；旧 adapter 的关系派生只用于兼容。
 - **孤儿与解绑语义**：未绑定的 Session 归入 Main 分组展示；删除 Worktree 不会删除 Session，关系转换为 `detached`；只有显式解绑才会回归 Main。分组变更不是原生目录切换，绝不把运行中的任务重定向。
 
 ### 时序约束
@@ -1060,8 +1060,8 @@ requestId，覆盖手动恢复后已开始对话的情况；未知传输结果�
 共享指令读取对缺少 gitRootPath 的历史记录应用既有 Workspace 子目录投影，再校验 native cwd；
 此投影仅在内存中使用，不迁移原 Sidecar、Session 或指令。
 
-人类选择 Workspace 内新建方案。新 checkout 根固定为原 Workspace 的
-`<workspace>/.agents/clutch-worktrees/wt_<id>`，子目录 Workspace 也在自己的可写范围内；
+2026-11-09 官方恢复兼容方案替代原 Workspace 内池。新 checkout 根固定为源 Git 根的
+`<repository-root>/.agents/worktrees/clutch/wt_<id>`，子目录 Workspace 访问需遵循原生审批；
 完整仓库仍位于该 checkout，公开 absolutePath 保留原 Workspace 的相对子目录。
 池中的独立 .gitignore 只包含 *；用户已有 .gitignore、配置、AGENTS 与业务文件不修改。
 Sidecar、锁、偏好始终在 DSH Home，禁止把它们随 checkout 放进业务目录。
@@ -1131,3 +1131,23 @@ Git 只读命令保持 GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 ind
 退出动画可暂留 inert、aria-hidden 的视觉内容；关闭即停用内容的监听和读取生命周期，
 不能等动画结束才释放。进入 Dashboard 直接移除浮窗。关闭标记按 Session 存于浏览器，
 最多保留最近十个；手动打开移除标记，不影响 DSH 或 Sidecar。
+
+## 新 Session 的官方 Forge Worktree 记录（2026-11-09）
+
+人类批准通过 DSH appendPluginRecord 写入 `plugin:client-ui-forge/worktree`，范围仅为本次
+新建且无 turn/start、step/start 或既有官方 Worktree 记录的 Session。原生 port 持有一次性
+新建身份；绑定已有 Session、冷读取、卸载、移出管理不补写记录，不迁移旧数据。
+
+初始化在 Agent.runMaintenance 内解析原 cwd 对应的源 Git 根，并校验 live Git checkout
+的物理路径、分支与 acquisition baseCommit。先 workingDirectory.set，再同步追加
+request(from:null) 与 created(path, branch, from:null, baseCommit, repositoryRoot)。
+from 不使用可变的 Dashboard baseBranch。先写 request 会让目录通知触发官方重复创建，
+因此禁止调换顺序。sessions.flush 必须确认持久化，随后才绑定并允许外层派发输入。
+失败保留新 Session id、不投递任务；maintenance callback 返回前用独立的 10 秒清理信号
+尽力恢复原目录（原生 Stop 不能取消该清理；已销毁的 Agent 仍受原生服务拒绝），未完成 request 追加 cancel。
+
+官方 Forge 独立解释记录，clutch 卸载或移出管理不删除它。标签取决于当前目录仍在记录的
+checkout 内；Continue in Project 返回源 Git 根后标签消失。官方恢复只接受其配置池内的路径，
+默认池为源 Git 根的 .agents/worktrees；旧池/外部导入路径可带标签并回到项目，但不承诺磁盘恢复。
+官方组件停用时记录仍保留，显示与恢复需重新启用官方组件。多 Session 共用一个 checkout；
+已在等待恢复的 Session 仍需逐个触发原生恢复。未提交文件不在恢复范围。

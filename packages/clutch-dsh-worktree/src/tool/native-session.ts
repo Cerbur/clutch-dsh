@@ -2,6 +2,8 @@ import type { CallingAgent } from './types.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { samePhysicalPath } from '../provider/path-identity.js';
 import { createAgentRelaySender, type AgentRelayInput, type RelayAgent } from './agent-relay.js';
+import { initializeForgeSession, type ForgeAgent } from './forge-session.js';
+import type { WorktreeRecord } from '../contract/index.js';
 
 export interface ToolModel {
   readonly provider: string;
@@ -47,6 +49,7 @@ export interface WorktreeToolSessionPort {
   create(input: { cwd: string; workspaceId?: string }): Promise<{ sessionId: string }>;
   /** Native directory publication; optional only for legacy injected adapters. */
   enterWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
+  initializeWorktreeSession?(sessionId: string, record: WorktreeRecord, signal: AbortSignal, bind: () => Promise<void>): Promise<void>;
   assertWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
   prompt(
     input: {
@@ -107,15 +110,27 @@ export class NativeSessionCreationPreflightError extends Error {}
 
 /** Minimal native Session creation/directory seam; browser creation needs no commands, tools or model provider. */
 export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<WorktreeToolSessionPort,
-  'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory'> {
+  'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory' | 'initializeWorktreeSession'> {
   const native = ctx as unknown as NativeContext;
   const controller = ctx.get('sessionController') as NativeSessionController;
+  const fresh = new Set<string>();
   return {
     create: (input) => {
       if (input.workspaceId === undefined) return controller.create({ cwd: input.cwd });
       const directories = ctx.get('workingDirectory') as { set?: unknown } | undefined;
       if (typeof directories?.set !== 'function') throw new NativeSessionCreationPreflightError('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
-      return controller.create({ workspaceId: input.workspaceId });
+      return controller.create({ workspaceId: input.workspaceId }).then((created) => {
+        fresh.add(created.sessionId);
+        return created;
+      });
+    },
+    initializeWorktreeSession: async (sessionId, record, signal, bind) => {
+      if (!fresh.delete(sessionId)) throw new Error('Only a newly created Session may receive Forge Worktree records');
+      const result = await controller.resolveAgent(sessionId);
+      if ('error' in result) throw result.error;
+      if (result.agent.session.id !== sessionId || native.agents.get(sessionId) !== result.agent)
+        throw new Error('Native Session identity changed before Forge initialization');
+      await initializeForgeSession(ctx, result.agent as unknown as ForgeAgent, record, signal, bind);
     },
     enterWorkingDirectory: async (sessionId, cwd, signal) => {
       signal.throwIfAborted();

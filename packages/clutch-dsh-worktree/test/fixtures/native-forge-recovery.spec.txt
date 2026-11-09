@@ -1,0 +1,153 @@
+import { afterEach, expect, it } from '__DSH_SOURCE__/node_modules/vitest/dist/index.js'
+import { mkdtemp, mkdir, realpath, rename, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { appendPluginRecord, SessionId } from '__DSH_SOURCE__/packages/core/session/src/index.ts'
+import { bench, testAgent, follow, sendPrompt } from '__DSH_SOURCE__/packages/experimental/client-ui-forge/tests/harness.ts'
+import { WORKTREE_RECORD } from '__DSH_SOURCE__/packages/experimental/client-ui-forge/src/worktree.ts'
+import * as Jsonl from '__DSH_SOURCE__/packages/session/session-persistence-jsonl/src/index.ts'
+
+const execute = promisify(execFile)
+const cleanups: (() => Promise<unknown>)[] = []
+const signal = new AbortController().signal
+afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
+async function git(cwd: string, ...args: string[]) {
+  return (await execute('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+    cwd, timeout: 10000, maxBuffer: 65536,
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '', GIT_CONFIG_COUNT: '0', GIT_CONFIG_PARAMETERS: '' },
+  })).stdout.trim()
+}
+async function fixture(pool = '.agents/worktrees/clutch') {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'clutch-forge-probe-')))
+  cleanups.push(() => rm(root, { recursive: true, force: true }))
+  const repo = join(root, 'repo')
+  await mkdir(repo)
+  await git(repo, 'init', '-b', 'main')
+  await git(repo, '-c', 'user.name=Probe', '-c', 'user.email=probe@example.invalid', '-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-m', 'fixture')
+  const baseCommit = await git(repo, 'rev-parse', 'HEAD')
+  const path = join(repo, pool, 'wt_probe')
+  await mkdir(join(repo, pool), { recursive: true })
+  await git(repo, 'worktree', 'add', '-b', 'feature/probe', '--', path, baseCommit)
+  const opened = await bench(repo, {}, { worktrees: true })
+  cleanups.push(() => opened.ctx.fiber.dispose())
+  await opened.ctx.plugin(Jsonl, { root: join(root, 'sessions'), compression: 'zstd' })
+  await opened.ctx.sessionPersistence.create(opened.session.header)
+  const record = { path, branch: 'feature/probe', from: 'main', baseCommit, repositoryRoot: repo }
+  await opened.ctx.workingDirectory.set(opened.agent, path, signal)
+  // The producer has no long-lived callback or projection: the official owner interprets its records.
+  const producer = opened.ctx.plugin(() => {
+    appendPluginRecord(opened.session, WORKTREE_RECORD, { action: 'request', from: record.from })
+    appendPluginRecord(opened.session, WORKTREE_RECORD, { action: 'created', worktree: record })
+  })
+  await producer
+  expect(await opened.ctx.sessions.flush(opened.session)).toBe(true)
+  await producer.dispose()
+  return { ...opened, root, repo, record }
+}
+
+for (const pool of ['.agents/clutch-worktrees', '.agents/worktrees/clutch']) {
+  it(`official label survives producer disposal and cold replay: ${pool}`, async () => {
+    const f = await fixture(pool)
+    expect(f.ctx.sessionProjections.snapshot(f.session).values.forgeWorktree).toEqual(f.record)
+    await f.ctx.fiber.dispose()
+    const cold = await bench(f.repo, {}, { worktrees: true })
+    cleanups.push(() => cold.ctx.fiber.dispose())
+    await cold.ctx.plugin(Jsonl, { root: join(f.root, 'sessions'), compression: 'zstd' })
+    const reader = await cold.ctx.sessionPersistence.open(f.session.id, 'read')
+    const { events: seed } = await reader.read()
+    await reader.close()
+    const session = cold.ctx.sessions.create(f.session.id, { meta: { cwd: f.repo }, seed })
+    const agent = testAgent(cold.ctx, session)
+    await cold.ctx.agents.register(agent)
+    expect(cold.ctx.sessionProjections.snapshot(session).values.forgeWorktree).toEqual(f.record)
+    expect(cold.ctx.workingDirectory.get(session)).toBe(f.record.path)
+    await rename(f.record.path, f.record.path + '-retained')
+    if (pool === '.agents/clutch-worktrees') {
+      await expect(cold.ctx.forgePanel.restoreWorktree(session, signal)).rejects.toThrow('configured pool')
+      await cold.ctx.forgePanel.continueInProject(session, signal)
+      expect(cold.ctx.workingDirectory.get(session)).toBe(f.repo)
+      expect(cold.ctx.sessionProjections.snapshot(session).values.forgeWorktree).toBeNull()
+    } else {
+      await cold.ctx.forgePanel.restoreWorktree(session, signal)
+      expect(await git(f.record.path, 'branch', '--show-current')).toBe('feature/probe')
+      expect(await git(f.record.path, 'rev-parse', 'HEAD')).toBe(f.record.baseCommit)
+      expect(cold.ctx.sessionProjections.snapshot(session).values.forgeWorktree).toEqual(f.record)
+      expect(cold.worktreeStates.stateOf(session).restoring).toBe(false)
+    }
+  })
+}
+
+it('official restore recreates a missing branch from baseCommit without the producer', async () => {
+  const f = await fixture()
+  await rename(f.record.path, f.record.path + '-retained')
+  await git(f.repo, 'update-ref', '-d', `refs/heads/${f.record.branch}`)
+  await f.ctx.forgePanel.restoreWorktree(f.session, signal)
+  expect(await git(f.record.path, 'rev-parse', 'HEAD')).toBe(f.record.baseCommit)
+  expect(await git(f.record.path, 'branch', '--show-current')).toBe(f.record.branch)
+})
+
+it('two new Sessions share an official record; each held message needs its own recovery action', async () => {
+  const f = await fixture()
+  const second = f.ctx.sessions.create(SessionId('second'), { meta: { cwd: f.repo } })
+  const agent = testAgent(f.ctx, second)
+  await f.ctx.agents.register(agent)
+  await f.ctx.workingDirectory.set(agent, f.record.path, signal)
+  appendPluginRecord(second, WORKTREE_RECORD, { action: 'request', from: f.record.from })
+  appendPluginRecord(second, WORKTREE_RECORD, { action: 'created', worktree: f.record })
+  expect(f.ctx.sessionProjections.snapshot(second).values.forgeWorktree).toEqual(f.record)
+  await rename(f.record.path, f.record.path + '-retained')
+  const a = follow(f.ctx, f.session)
+  const b = follow(f.ctx, second)
+  cleanups.push(a.stop, b.stop)
+  sendPrompt(f.agent, 'resume A')
+  sendPrompt(agent, 'resume B')
+  await Promise.all([a.until(s => s.worktree.waiting === 'restoration'), b.until(s => s.worktree.waiting === 'restoration')])
+  await f.ctx.forgePanel.restoreWorktree(f.session, signal)
+  await f.agent.whenIdle()
+  expect(f.agent.wakes).toBe(1)
+  expect(agent.wakes).toBe(0)
+  await f.ctx.forgePanel.restoreWorktree(second, signal)
+  await agent.whenIdle()
+  expect(agent.wakes).toBe(1)
+  expect(await git(f.record.path, 'branch', '--show-current')).toBe(f.record.branch)
+})
+
+it('cwd must be entered before recording request to avoid a pending official creation', async () => {
+  const f = await fixture()
+  const session = f.ctx.sessions.create(SessionId('bad-order'), { meta: { cwd: f.repo } })
+  const agent = testAgent(f.ctx, session)
+  await f.ctx.agents.register(agent)
+  appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
+  await f.ctx.workingDirectory.set(agent, f.record.path, signal)
+  const stream = follow(f.ctx, session)
+  cleanups.push(stream.stop)
+  const observed = await stream.until(s => s.worktree.creation !== null || s.worktree.created !== null || s.worktree.failure !== null)
+  expect(observed.worktree.creation !== null || observed.worktree.created !== null || observed.worktree.failure !== null).toBe(true)
+  agent.cancel({ kind: 'disposed' })
+  await agent.whenIdle()
+})
+
+it('subdirectory Workspace restores with checkout-root facts, but Continue in Project goes to repository root', async () => {
+  const f = await fixture()
+  const original = join(f.repo, 'packages/app')
+  const selected = join(f.record.path, 'packages/app')
+  await mkdir(original, { recursive: true })
+  await mkdir(selected, { recursive: true })
+  await writeFile(join(selected, 'tracked.txt'), 'nested fixture\n')
+  await git(f.record.path, 'add', 'packages/app/tracked.txt')
+  await git(f.record.path, '-c', 'user.name=Probe', '-c', 'user.email=probe@example.invalid', '-c', 'commit.gpgSign=false', 'commit', '-m', 'nested fixture')
+  const session = f.ctx.sessions.create(SessionId('nested'), { meta: { cwd: original } })
+  const agent = testAgent(f.ctx, session)
+  await f.ctx.agents.register(agent)
+  await f.ctx.workingDirectory.set(agent, selected, signal)
+  appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
+  appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: f.record })
+  await rename(f.record.path, f.record.path + '-retained')
+  await f.ctx.forgePanel.restoreWorktree(session, signal)
+  expect(await f.ctx.workingDirectory.ensure(agent)).toBe(selected)
+  await f.ctx.forgePanel.continueInProject(session, signal)
+  expect(f.ctx.workingDirectory.get(session)).toBe(f.repo)
+  expect(session.header.cwd).toBe(original)
+})

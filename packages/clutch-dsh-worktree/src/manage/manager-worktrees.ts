@@ -337,9 +337,17 @@ async function createWorktreeAttempt(
   const workspace = await requireWorkspace(context, input.workspaceId);
   const transactional = context.sidecar.runExclusive !== undefined;
   if (!transactional) await context.git.validateRepository(workspace.rootPath);
-  const repositoryRoot = !transactional && context.git.resolveRepositoryRoot
-    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
-    : workspace.rootPath;
+  let repositoryRoot = workspace.rootPath;
+  if (context.git.resolveRepositoryRoot) {
+    try {
+      repositoryRoot = await context.git.resolveRepositoryRoot(workspace.rootPath);
+    } catch (error) {
+      // Preserve the public non-Git/missing-executable diagnostics while resolving
+      // the pool before the transaction's authoritative repository preflight.
+      if (transactional) await context.git.validateRepository(workspace.rootPath);
+      throw error;
+    }
+  }
 
   if (typeof input.branch !== 'string' || input.branch.length === 0) {
     throw providerError('GIT_OPERATION_FAILED', 'A base branch is required', {
@@ -407,11 +415,11 @@ async function createWorktreeAttempt(
     }
   }
 
-  const targetPath = path.resolve(workspace.rootPath, '.agents', 'clutch-worktrees', worktreeId);
+  const targetPath = path.resolve(repositoryRoot, '.agents', 'worktrees', 'clutch', worktreeId);
 
   // Validate the dedicated Workspace pool and its physical ancestors before creation.
-  validateGeneratedPath(context, workspace.rootPath, targetPath, worktreeId);
-  await validatePhysicalGeneratedPath(context, workspace.rootPath, targetPath);
+  validateGeneratedPath(context, repositoryRoot, targetPath, worktreeId);
+  await validatePhysicalGeneratedPath(context, repositoryRoot, targetPath);
 
   // The default Workspace-sharded sidecar exposes the transaction seam. Legacy
   // injected stores keep the previous path below for compatibility with older
@@ -437,7 +445,7 @@ async function createWorktreeAttempt(
     await context.git.listWorktrees(workspace.rootPath),
   );
 
-  await prepareWorktreePool(context.dshHome, workspace.rootPath, targetPath);
+  await prepareWorktreePool(context.dshHome, repositoryRoot, targetPath);
   // Git precedes the sidecar relation commit point.
   try {
     await context.git.createWorktree(workspace.rootPath, targetPath, newBranch === undefined ? targetBranch : baseRef, newBranch);
