@@ -34,3 +34,20 @@ Gate new Session creation on the actual independent official runtime, including 
 isolated backend; missing/incompatible bundles require manual installation. Preserve
 existing read paths and Session records. Validate cold disable/re-enable, uninstall,
 native restore/Continue in Project and actual model replies before committing.
+
+## Approved UI follow-up: case 05 only; case 08 upstream-blocked
+
+The user explicitly selected fixing case 05 and documenting case 08 as an upstream
+blocker, without an additional compatibility plugin. Case 05 must not reject native
+conversation after cwd has left a missing bound checkout. Suppress only the known
+unavailable-checkout result during instruction selection; preserve uncertain I/O
+errors, mutation gates, historical records and original Session identity.
+
+Case 08 reproduces for officially created Worktrees: sessionSkillCatalog.list calls
+workingDirectory.ensure for a live Agent, committing project fallback before Forge's
+inbox restoration check. Earlier direct API recovery tests did not include this UI
+read. They prove explicit restoration support, not reliable automatic UI recovery.
+Do not patch DSH, backfill records, restore cwd by editing history, or promise that
+uninstalling Worktree fixes this upstream behavior.
+
+Validation evidence: [case 05/08 UI follow-up](../qa/2026-11-09-forge-05-08.md).

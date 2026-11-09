@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -20,6 +20,7 @@ import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
 import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/generated-path.js';
 import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';
+import { WorktreeProviderError } from '../lib/provider/types.js';
 const { AbortController } = globalThis;
 
 async function forgeFixture(t, nested = false) {
@@ -611,6 +612,48 @@ test('historical subdirectory checkout supplies instructions to newly bound nati
   assert.equal(await f.manager.resolveSessionInstructions('child'), 'historical guidance');
   f.actors.get('child').effectiveCwd = f.workspace;
   assert.equal(await f.manager.resolveSessionInstructions('child'), '');
+});
+
+for (const kind of ['root', 'nested', 'historical']) test(`native return to Project ignores missing bound checkout instructions: ${kind}`, async (t) => {
+  const f = await fixture(t, kind !== 'root');
+  const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: f.home });
+  const shard = sidecar.getShardPath('ws');
+  if (kind === 'historical') {
+    const snapshot = JSON.parse(await readFile(shard, 'utf8'));
+    snapshot.worktrees[0].absolutePath = f.record.gitRootPath;
+    delete snapshot.worktrees[0].gitRootPath;
+    await writeFile(shard, JSON.stringify(snapshot));
+  }
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  await f.manager.bindSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' });
+  await f.manager.updateWorktreeInstructions({ workspaceId: 'ws', worktreeId: f.record.worktreeId,
+    instructions: 'Only in this checkout', expectedInstructions: '' });
+  assert.equal(await f.manager.resolveSessionInstructions('child'), 'Only in this checkout');
+  const saved = await readFile(shard, 'utf8');
+  const checkout = f.record.gitRootPath ?? f.record.absolutePath;
+  await rename(checkout, checkout + '-retained');
+  // The official Continue in Project action owns the cwd transition.
+  f.actors.get('child').effectiveCwd = f.repo;
+  assert.equal(await f.manager.resolveSessionInstructions('child'), '');
+  assert.equal(await readFile(shard, 'utf8'), saved, 'instruction reads do not migrate old records or detach bindings');
+  assert.equal(f.actors.get('child').header.cwd, f.workspace);
+});
+
+for (const failure of [
+  Object.assign(new Error('permission denied'), { code: 'EACCES' }),
+  new WorktreeProviderError('GIT_OPERATION_FAILED', 'Git failed', {}),
+  Object.assign(new Error('untrusted error code'), { code: 'WORKTREE_NOT_FOUND' }),
+]) test(`instruction fallback preserves uncertain failures: ${failure.message}`, async (t) => {
+  const f = await fixture(t);
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  await f.manager.bindSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child' });
+  f.actors.get('child').effectiveCwd = f.workspace;
+  const manager = createWorktreeManager({ dsh: f.dsh, dshHome: f.home,
+    git: { async resolveRepositoryRoot() { throw failure; } } });
+  t.after(() => manager.close());
+  await assert.rejects(manager.resolveSessionInstructions('child'), error => error === failure);
 });
 
 test('contained pools reject replaced ancestors and never overwrite an existing ignore file', async (t) => {

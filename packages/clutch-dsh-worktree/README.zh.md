@@ -153,6 +153,8 @@ Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出�
 
 ## 行为与限制
 
+DSH 可能在 Forge 提供恢复选项前将会话切回项目目录。你可以在那里继续对话。
+
 Worktree 会为每个配置档自动启用一次已安装的 Forge 插件。如果之后手动禁用 Forge，请先在插件设置中重新启用，再创建 Worktree 会话。
 
 启用官方 Forge 后，新会话在移出管理或卸载插件后仍保留原生 Worktree 记录。Forge 可以恢复配置池内缺失的 checkout，或让你选择 **Continue in Project（回到项目继续）**。恢复无法找回未提交文件。

@@ -1154,6 +1154,15 @@ checkout 内；Continue in Project 返回源 Git 根后标签消失。官方恢�
 
 ### 独立 Forge 自动启用与准入
 
+UI 回归发现当前 DSH 的 sessionSkillCatalog.list 对 live Agent 调用 workingDirectory.ensure；
+缺失目录会先提交回退并插入通知，早于 Forge 的 inbox 恢复门禁。官方自身创建的 Worktree
+亦可复现，因此仅持久化官方记录不能承诺自动恢复（case 08，等待上游修复）。不安装额外
+兼容插件、不拦截或重写 DSH 服务，不回滚已有 cwd 事件。
+
+case 05 的修复只影响指令读取：active binding 与原生当前 cwd 不匹配时，历史路径投影的
+WORKTREE_NOT_FOUND 表示无适用 Worktree 指令，不再阻止原生对话。其他错误继续抛出；
+绑定、创建、Git 操作的目录可用性门禁保持严格。读取不解绑、不迁移 Sidecar、不改变 cwd。
+
 Host 通过可选 pluginManager 注入，在初始化完成后的定时回调中调用
 setBundleEnabled('@deepseek-ai/dsh-experimental-forge-bundle', true)。不能在构造阶段等待
 profile 变更，否则 HMR 的重载与 profile 锁可能互相等待。Forge 由 DSH profile 独立拥有，

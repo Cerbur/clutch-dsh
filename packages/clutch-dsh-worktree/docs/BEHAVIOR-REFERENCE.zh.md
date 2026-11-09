@@ -34,7 +34,9 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 
 新 Worktree 位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`，属于 DSH 默认 Worktree 池。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 记录执行目录和官方 Forge Worktree 事实。它们保留正常原生权限及用户的显式限制；子目录 Workspace 访问位于其目录之外的新 checkout 时，可能需要原生审批。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
 
-每个 DSH profile 首次加载 Worktree 时，会将已安装的官方 Forge bundle 作为独立插件自动启用。卸载 Worktree 后，Forge 保持启用。新建的 Worktree Session 在**移出管理**或卸载本插件后仍保留原生 Worktree 标签。DSH 可以恢复位于其配置池内的缺失 checkout，或选择 **Continue in Project（回到项目继续）**。回到项目指向源 Git 根目录，并移除当前 Worktree 标签。官方 Forge 必须保持启用；这些能力不再依赖本插件或其索引。
+每个 DSH profile 首次加载 Worktree 时，会将已安装的官方 Forge bundle 作为独立插件自动启用。卸载 Worktree 后，Forge 保持启用。新建的 Worktree Session 在**移出管理**或卸载本插件后仍保留原生 Worktree 记录；当前目录仍位于该 checkout 内时显示标签。官方 Forge 提供配置池内缺失 checkout 的恢复以及 **Continue in Project（回到项目继续）**。回到项目指向源 Git 根目录，并移除当前 Worktree 标签。官方 Forge 必须保持启用；它独立解释这些记录，不依赖本插件或其索引。
+
+**已知上游限制：**在本次验证的 DSH 构建中，打开已加载的 Session 时，技能列表读取可能在 Forge 提示恢复前，将缺失 checkout 的执行目录自动回退到项目目录，标签随之消失。官方创建的 Worktree 也会出现此问题，因此不能保证卸载后的自动恢复。本插件不覆盖该原生行为。DSH 已返回项目后，不可用的旧绑定不会再阻止对话，也不会提供过期 Worktree 指令。已有 Session 不会被改写。
 
 每个 profile 只自动尝试启用一次。之后若手动关闭 Forge 或其 Worktree 组件，Worktree 会在重启后继续尊重该选择，并阻止新建 Worktree Session，直到你在插件页重新启用；已有列表仍可读取。启用失败或需要重启时，会在创建 Session 前给出操作提示。DSH 中必须已有可用的官方 bundle；Worktree 不会下载缺失或不兼容的 bundle。
 

@@ -641,3 +641,8 @@ profile 独立选中，再分别禁用隔离组件、禁用 bundle 后冷启动�
 最后通过官方 plugin remove 卸载 Worktree 并冷启动验证原生恢复与真实模型续聊。
 对既有 Session/sidecar 文件先计算散列，结束后逐个比较；只操作专用测试仓库。
 详见 [自动启用验收报告](qa/2026-11-09-forge-auto-enable.md)。
+
+后续真实 UI 验收发现：技能列表读取可在发送前触发 DSH 原生 cwd 回退，之前直接调用
+恢复接口的测试不足以覆盖此路径。case 05 修复与 case 08 上游阻塞的复现、范围及验收
+见 [05/08 回归报告](qa/2026-11-09-forge-05-08.md)。缺失目录测试必须包含打开 live Session
+和输入框初始化，不能仅调用 sessionController.prompt 或 forgePanel.restoreWorktree。

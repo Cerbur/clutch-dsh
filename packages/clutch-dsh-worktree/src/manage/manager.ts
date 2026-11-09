@@ -23,7 +23,7 @@ import { LocalGitAdapter } from '../provider/git/adapter.js';
 import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { WorktreeMutationTransaction } from '../provider/transaction/index.js';
-import { providerError } from '../provider/types.js';
+import { isWorktreeProviderError, providerError } from '../provider/types.js';
 import {
   bindSession,
   listBindings,
@@ -223,8 +223,16 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
             matches = await boundSessionCwdMatchesWorktree(session.cwd, record);
             if (!matches && record.gitRootPath === undefined) {
               const workspace = await this.context.dsh.getWorkspace(workspaceId);
-              if (workspace) matches = await boundSessionCwdMatchesWorktree(session.cwd,
-                await resolveWorktreeWorkspaceRecord(this.context, workspace, record));
+              if (workspace) {
+                try {
+                  matches = await boundSessionCwdMatchesWorktree(session.cwd,
+                    await resolveWorktreeWorkspaceRecord(this.context, workspace, record));
+                } catch (error) {
+                  // Native recovery may have left a missing checkout for the Project.
+                  // A stale binding supplies no guidance there; uncertain I/O still fails closed.
+                  if (!isWorktreeProviderError(error) || error.code !== 'WORKTREE_NOT_FOUND') throw error;
+                }
+              }
             }
           }
           return {
