@@ -218,6 +218,7 @@ export interface WorktreeDragProps {
 }
 
 export interface WorktreeSessionRowProps {
+  readonly worktreeBranch?: string;
   readonly t: WorktreeTranslate;
   readonly sessionId: string;
   readonly blank: boolean;
@@ -301,6 +302,8 @@ export interface WorktreeGroupRowProps {
 }
 
 export interface WorktreeSessionGroupProps {
+  /** Local rows lack a parent Worktree label; reuse the native Forge summary fact. */
+  readonly showWorktreeIcon?: boolean;
   readonly t: WorktreeTranslate;
   readonly groupKey: string;
   readonly sessionIds: readonly string[];

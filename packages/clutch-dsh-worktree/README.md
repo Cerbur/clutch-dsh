@@ -86,6 +86,8 @@ branch-attached, non-root Worktrees that are not already managed appear in the p
 Use **+** on Local/Main for a Session in the original Workspace. A matching blank Session may
 be reused. Forking a Worktree Session keeps the new Session in the same Worktree.
 
+In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
+
 ### Review changes and manage a Worktree
 
 Open **Dashboard** from a row menu or the Session header. Browse Sessions, edit shared

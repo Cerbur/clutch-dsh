@@ -42,6 +42,8 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 
 不迁移已有 Session，旧 checkout 路径保持原位。在导入或旧 checkout 中新建的 Session 可以获得标签，但官方磁盘恢复要求路径位于 DSH 配置池内；否则请回到项目继续。恢复不能找回未提交文件。多个 Session 等待同一缺失 checkout 时，需要分别恢复每个 Session。
 
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 
 ### 打开 Worktree 模式

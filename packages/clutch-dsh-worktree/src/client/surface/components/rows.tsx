@@ -588,6 +588,7 @@ export function WorktreeGroupRow({
 
 /** Worktree-mode Session row with the same trailing options menu as native DSH rows. */
 export function WorktreeSessionRow({
+  worktreeBranch,
   t,
   sessionId,
   blank,
@@ -733,6 +734,16 @@ export function WorktreeSessionRow({
           </span>
         </span>
       )}
+      {!blank && worktreeBranch !== undefined && (
+        <span
+          className={styles.sessionWorktreeIcon}
+          role="img"
+          aria-label={t('session.worktree', { branch: worktreeBranch })}
+          title={t('session.worktree', { branch: worktreeBranch })}
+        >
+          <IconBranchOutline16 />
+        </span>
+      )}
     </div>
   );
 
@@ -757,6 +768,7 @@ export function WorktreeSessionRow({
 }
 
 export function WorktreeSessionGroup({
+  showWorktreeIcon,
   t,
   groupKey,
   sessionIds,
@@ -792,6 +804,9 @@ export function WorktreeSessionGroup({
           current={sessionId === currentSessionId}
           label={sessionLabel(sessionId, sessions, t)}
           presentation={sessionPresentations[sessionId]}
+          worktreeBranch={showWorktreeIcon
+            ? sessions.byId[sessionId]?.projectionValues?.forgeWorktree?.branch
+            : undefined}
           drag={{
             active: sameGroupDrag,
             marker:

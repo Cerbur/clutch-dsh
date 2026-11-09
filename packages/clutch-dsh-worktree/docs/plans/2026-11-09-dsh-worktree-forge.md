@@ -51,3 +51,19 @@ Do not patch DSH, backfill records, restore cwd by editing history, or promise t
 uninstalling Worktree fixes this upstream behavior.
 
 Validation evidence: [case 05/08 UI follow-up](../qa/2026-11-09-forge-05-08.md).
+
+## Local Session branch icon (2026-11-10)
+
+During interactive acceptance the user requested a native-like branch indicator for
+Worktree Sessions that return to Local after lifecycle changes. Render only from the
+native Session list's `projectionValues.forgeWorktree`, with a localized branch tooltip.
+Do not change archive/grouping semantics, infer labels from obsolete bindings, or
+migrate historical Sessions. Verify the already-forgotten acceptance Session in the
+real Worktree Local list, alongside ordinary Local Sessions without the icon.
+
+Validated in `~/.dsh-test`: the freshly forgotten `acceptance/01-new-20261110`
+Session and existing case 02 show localized branch icons under Local; case 08,
+whose native cwd returned to the project, has no icon. Managed rows do not duplicate
+the marker. Workspace/patch checks, lint, typecheck, build, README parity and the
+native-enabled full suite passed (1,443 tests, zero skips/failures). Both review
+axes reported no findings. No Session or sidecar writes are introduced by this UI change.

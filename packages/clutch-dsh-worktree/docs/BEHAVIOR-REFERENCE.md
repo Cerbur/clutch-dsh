@@ -49,6 +49,8 @@ Automatic activation is attempted only once per profile. If you later disable Fo
 
 Existing Sessions are not migrated. Old checkout paths stay in place. A new Session on an imported or older checkout can receive the label, but official disk restoration requires that checkout to be inside DSH's configured pool; otherwise use Continue in Project. Restoration does not recover uncommitted files. When several Sessions are waiting for the same missing checkout, resume each Session separately.
 
+In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
+
 Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 
 ### Open Worktree mode

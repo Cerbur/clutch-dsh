@@ -80,6 +80,8 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 Local/Main 上的 **+** 在原 Workspace 中打开会话；存在匹配的空白会话时可能直接复用。
 Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
 
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+
 ### 检查改动与管理 Worktree
 
 从行菜单或会话标题栏打开 **Dashboard**。你可以浏览会话、编辑共享指引、用可用应用打开目录，
