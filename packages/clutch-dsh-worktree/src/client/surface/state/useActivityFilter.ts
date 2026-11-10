@@ -7,9 +7,11 @@ import {
   effectiveActivityWindow,
   effectiveActivityWindows,
   isSessionActiveInWindow,
+  workspaceSurvivesActivityWindow,
   type ActivityFilterView,
   type ActivitySessionScope,
   type ActivityWindowId,
+  type ActivityWorkspaceScope,
 } from '../../view/activity-filter.js';
 import type { SessionListLike, SessionPresentation } from '../../session/session-view.js';
 import type { WorktreeSurfaceProps } from '../types.js';
@@ -43,6 +45,9 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
   const preferredWindows = props.useStore((state) => state.activityWindows);
   const showInactiveStructure = props.useStore(
     (state) => state.showInactiveStructure !== false,
+  );
+  const keepDefaultWorkspaceVisible = props.useStore(
+    (state) => state.keepDefaultWorkspaceVisible !== false,
   );
   const visibleWindows = useMemo(
     () => effectiveActivityWindows(preferredWindows),
@@ -121,6 +126,20 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     },
     [props.actions],
   );
+  const setKeepDefaultWorkspaceVisible = useCallback(
+    (keep: boolean) => {
+      props.actions.setKeepDefaultWorkspaceVisible(keep === true);
+    },
+    [props.actions],
+  );
+  const workspaceSurvivesWindow = useCallback(
+    (workspace: ActivityWorkspaceScope, sessionIds: readonly string[]) =>
+      workspaceSurvivesActivityWindow(workspace, sessionIds, window, now, scope, {
+        showInactiveStructure,
+        keepDefaultWorkspaceVisible,
+      }),
+    [keepDefaultWorkspaceVisible, now, scope, showInactiveStructure, window],
+  );
   const count = useCallback(
     (candidate: ActivityWindowId) => counts[effectiveActivityWindow(candidate)] ?? 0,
     [counts],
@@ -136,9 +155,12 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     setWindowVisible,
     showInactiveStructure,
     setShowInactiveStructure,
+    keepDefaultWorkspaceVisible,
+    setKeepDefaultWorkspaceVisible,
     menuOpen,
     setMenuOpen,
     isActive,
+    workspaceSurvivesWindow,
     scopeSessionIds,
     hasActiveSession,
     count,

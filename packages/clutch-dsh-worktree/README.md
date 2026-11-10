@@ -181,6 +181,12 @@ adds no Git read and no new DSH request.
   Worktrees visible with their empty groups and management actions even when the range contains
   none of their Sessions. Turn it off to filter inactive structure too. The option is browser-local;
   an existing saved choice is preserved.
+- A Workspace created inside the selected range stays visible even before it has its first
+  Session, so creating a Workspace while a range is selected never hides the new row.
+- The range menu's **Keep default Workspace visible** option is on by default and pins DSH's
+  automatic `default-workspace` in every range, even when none of its Sessions are in range.
+  Unchecking it scopes that Workspace like any other; renaming it also opts out, matching how DSH
+  recognizes its automatic Workspace.
 - Each range counts non-blank, non-archived Sessions; a visible current blank Session is not counted.
   The selected range is a browser-local
   preference: it survives reopening the panel and reloading the page, and it is never written to

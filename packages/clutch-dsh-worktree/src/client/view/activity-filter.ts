@@ -15,6 +15,13 @@ export type ActivityWindowId = (typeof ACTIVITY_WINDOWS)[number];
 /** Preserve the pre-filter tree for existing users and for a fresh profile. */
 export const DEFAULT_ACTIVITY_WINDOW: ActivityWindowId = 'all';
 
+/**
+ * Stored title DSH gives its first-use Workspace under
+ * `<Documents>/deepseek-harness/default-workspace`. DSH itself recognizes the
+ * automatic Workspace by this title, so a user rename intentionally opts out.
+ */
+export const DEFAULT_WORKSPACE_TITLE = 'default-workspace';
+
 const DAY_MS = 86_400_000;
 
 export function isActivityWindowId(value: unknown): value is ActivityWindowId {
@@ -100,6 +107,15 @@ export function activityWindowSince(
   }
 }
 
+/**
+ * Workspace facts the structure filter reads. Both are already part of the
+ * native Workspace projection, so no new Host field or Sidecar value is needed.
+ */
+export interface ActivityWorkspaceScope {
+  readonly title: string;
+  readonly createdAt: string;
+}
+
 /** Native facts one activity decision needs. */
 export interface ActivitySessionScope {
   readonly sessions: Pick<SessionListLike, 'byId'>;
@@ -147,6 +163,62 @@ export function filterSessionIdsByActivity(
   return sessionIds.filter((sessionId) => isSessionActiveInWindow(sessionId, window, now, scope));
 }
 
+function workspaceCreatedAt(createdAt: string): number | undefined {
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+/** DSH labels its first-use Workspace by this stored title; a rename opts out. */
+export function isDefaultWorkspace(
+  workspace: Pick<ActivityWorkspaceScope, 'title'>,
+): boolean {
+  return workspace.title === DEFAULT_WORKSPACE_TITLE;
+}
+
+/**
+ * A Workspace created inside a bounded range stays visible before it has any
+ * Session. Without this, creating a Workspace while a range is selected would
+ * hide the row the user just created until its first Session exists.
+ */
+export function isWorkspaceCreatedInWindow(
+  createdAt: string,
+  window: ActivityWindowId,
+  now: number,
+): boolean {
+  // An unreadable clock or an unbounded range cannot exclude a Workspace.
+  const since = activityWindowSince(window, now);
+  if (since === undefined) return true;
+  const timestamp = workspaceCreatedAt(createdAt);
+  return timestamp !== undefined && timestamp >= since;
+}
+
+/** Structure-filter preferences shared by every Workspace row. */
+export interface ActivityStructureOptions {
+  /** Keep every Workspace and Worktree row; only Session rows are filtered. */
+  readonly showInactiveStructure: boolean;
+  /** Keep DSH's first-use Workspace even when the range has no activity in it. */
+  readonly keepDefaultWorkspaceVisible: boolean;
+}
+
+/**
+ * Whether a Workspace row survives the range once structure filtering is on.
+ * An active Session, a Workspace created inside the range, or the pinned
+ * default Workspace keeps the row; the Sessions themselves stay range-scoped.
+ */
+export function workspaceSurvivesActivityWindow(
+  workspace: ActivityWorkspaceScope,
+  sessionIds: readonly string[],
+  window: ActivityWindowId,
+  now: number,
+  scope: ActivitySessionScope,
+  options: ActivityStructureOptions,
+): boolean {
+  if (window === 'all' || options.showInactiveStructure) return true;
+  if (options.keepDefaultWorkspaceVisible && isDefaultWorkspace(workspace)) return true;
+  if (isWorkspaceCreatedInWindow(workspace.createdAt, window, now)) return true;
+  return sessionIds.some((sessionId) => isSessionActiveInWindow(sessionId, window, now, scope));
+}
+
 /** Session scope the tree and the range selector both count. */
 export function activityCandidateSessionIds(
   source: Pick<SessionListLike, 'ids' | 'byId'>,
@@ -186,10 +258,21 @@ export interface ActivityFilterView {
    */
   readonly showInactiveStructure: boolean;
   readonly setShowInactiveStructure: (show: boolean) => void;
+  /**
+   * Keep DSH's automatic first-use Workspace visible in every range. Defaults
+   * to true; a user rename of that Workspace opts out of the shortcut.
+   */
+  readonly keepDefaultWorkspaceVisible: boolean;
+  readonly setKeepDefaultWorkspaceVisible: (keep: boolean) => void;
   /** Ephemeral dropdown state for the visible-range checkboxes. */
   readonly menuOpen: boolean;
   readonly setMenuOpen: (open: boolean) => void;
   readonly isActive: (sessionId: string) => boolean;
+  /** Whether one Workspace survives the range when structure filtering is on. */
+  readonly workspaceSurvivesWindow: (
+    workspace: ActivityWorkspaceScope,
+    sessionIds: readonly string[],
+  ) => boolean;
   /** Narrow a list to the range; `all` returns the input unchanged. */
   readonly scopeSessionIds: (sessionIds: readonly string[]) => readonly string[];
   /** Whether any candidate Session survives this window. */
