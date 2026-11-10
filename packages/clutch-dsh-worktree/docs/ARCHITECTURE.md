@@ -662,6 +662,11 @@ Refresh scope is determined by the smallest affected identity.
 - Context projection is invalidated only when the current Session/Workspace is affected.
 - Global refresh is reserved for initial Worktree entry, reconnect/baseline recovery,
   explicit global retry, or a deliberately diagnosed unknown scope.
+- Re-entering Worktree mode is not a fresh global read: the Surface seeds its tree from
+  the shared reader's last projections, and a projection younger than
+  `ENTRY_REUSE_MAX_AGE_MS` (30 s) is reused without a Git read. Anything retired by a
+  mutation, admission notification or that age bound is still revalidated in place, so
+  the reuse never becomes a second source of truth.
 - Targeted refreshes merge into the existing ready projection and never clear unrelated
   Workspaces.
 - Stale-result guards are not request deduplication; equivalent in-flight targeted reads
@@ -672,7 +677,7 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 保持就绪内容 (Ready Content Preservation)
 
-任意客户端刷新、投影重放或错误切换，**严禁先清空当前 ready 内容触发白屏**。新数据到达前保留当前可见投影，loading 状态仅允许在首次进入或显式全局重试时呈现。
+任意客户端刷新、投影重放或错误切换，**严禁先清空当前 ready 内容触发白屏**。新数据到达前保留当前可见投影，loading 状态仅允许在首次进入或显式全局重试时呈现。进入 Worktree 模式时，Surface 先把共享 reader 仍持有的投影（包括已 retire 需重新校验的投影）合并进 ready 状态再发起读取，因此再次进入不会出现空树或全量 loading。
 
 ### 状态指示与活动聚合 (StateDot & Aggregate Activity)
 
