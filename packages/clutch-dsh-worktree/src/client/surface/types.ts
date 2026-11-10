@@ -163,6 +163,8 @@ export interface RefreshOptions {
   readonly preserveCurrent?: boolean;
   /** Only read-only triggers may reuse reads started before this refresh. */
   readonly reuseInFlight?: boolean;
+  /** Reuse cached projections younger than this age instead of re-reading them. */
+  readonly reuseCachedWithinMs?: number;
   readonly invalidateContext?: boolean;
   readonly scope?: WorktreeRefreshScope;
 }
