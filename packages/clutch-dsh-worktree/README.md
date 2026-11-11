@@ -145,7 +145,7 @@ enabled remain available until that Agent ends.
 | --- | --- |
 | **Archive Worktree** | Keeps files, Sessions, bindings, and instructions. You can unarchive while the Git registration remains intact. |
 | **Clean Up Disk** | Removes the checkout after a separate confirmation. Stop all tasks using it first; the plugin does not check whether they are running. Sessions are kept. |
-| **Remove from Management** | Stops tracking the Worktree while keeping its files and native DSH Sessions. |
+| **Remove from Management** | Stops tracking the Worktree while keeping its files and native DSH Sessions. Sessions already owned by a native Workspace stay in that Workspace immediately; no page refresh is needed. |
 
 Local/Main Dashboard's **Manage Worktrees** supports batch actions. Archive before cleanup or
 removal from management. Results are shown per Worktree so failed items can be retried.

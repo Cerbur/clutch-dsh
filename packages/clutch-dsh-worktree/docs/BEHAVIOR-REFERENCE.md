@@ -813,6 +813,7 @@ If the backup cannot be written, cancellation fails and the original journal sta
   bindings while keeping the recorded history until it is forgotten.
 - **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
   the disk files and native DSH Sessions, and does not require a Session activity check.
+  Sessions already owned by a native Workspace stay in that Workspace immediately; no page refresh is needed.
 
 When importing a Worktree created by DSH, native ownership and its archive-retention setting stay
 with DSH. Importing does not disable native cleanup. DSH may reclaim that directory after all

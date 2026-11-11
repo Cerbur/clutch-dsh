@@ -662,6 +662,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   binding 会 detached，记录会保留到之后显式移出管理。
 - **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
   DSH Session，也不要求检查 Session 活动状态。
+  已有原生 Workspace 归属的 Session 会立即保留在原 Workspace 中，无需刷新页面。
 
 导入由 DSH 创建的 Worktree 时，原生所有权及归档保留设置仍由 DSH 管理。导入不会禁止原生清理。
 所有引用 Session 归档后，DSH 可能回收该目录；仍有未归档 Session 使用该目录，或启用 DSH 的

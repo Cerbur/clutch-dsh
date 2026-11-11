@@ -67,3 +67,29 @@ whose native cwd returned to the project, has no icon. Managed rows do not dupli
 the marker. Workspace/patch checks, lint, typecheck, build, README parity and the
 native-enabled full suite passed (1,443 tests, zero skips/failures). Both review
 axes reported no findings. No Session or sidecar writes are introduced by this UI change.
+
+## Case 02 membership follow-up (2026-11-11)
+
+Real UI removal of the archived `demo/case-7` reproduced a native-owned Session moving
+to Ungrouped without any native membership mutation. The legacy browser wrapper applied
+an undo delta to an already unprojected native snapshot; both affected modules match main.
+Rebuild each view additively from the native snapshot instead of subtracting old bindings.
+Four new tests failed before the fix and pass afterward, covering scoped/global/per-Session
+removal, native ordering and later native adoption alongside virtual-only legacy entries.
+No Session migration, native storage write or DSH patch.
+
+Real UI validation in `~/.dsh-test`: reinstalled this feature, loaded the rebuilt Client,
+archived and forgot `demo/case-6`. Without reloading after these actions, its existing
+Session stayed under Local with the branch icon; switching to native navigation retained
+the original `forge-demo-20261109` Workspace instead of Ungrouped. Actual `pwd -P` returned
+the retained checkout and the model replied `LIVE_CASE_02_GROUPING_FIXED_OK`.
+The test profile is left with Worktree and independent Forge enabled. The reused case 06/07
+scratch checkouts are now forgotten, with directories and conversations retained.
+
+All required workspace/patch, lint, typecheck, build and bilingual README gates passed.
+`node --test test/client-mode.test.mjs test/navigation-surface.test.mjs`: 35 passed.
+Full `pnpm --filter @cerbur/clutch-dsh-worktree test` with `DSH_NATIVE_SOURCE` and
+`DSH_SCHEMA_ADAPTER_ANCHOR` pointing to the verified DSH checkout: 1,447 passed, zero
+failures/skips. Post-fix UI baseline: 705 of 707 Session/sidecar files byte-identical;
+only the intentionally continued case 06 Session and its scratch Workspace sidecar changed.
+DSH working tree remains clean.

@@ -72,21 +72,16 @@ export function createVirtualWorkspaceMembership<
   );
   let disposed = false;
 
-  const project = (
-    nextNativeSnapshot: T,
-    previousBindings: readonly VirtualWorkspaceBinding[],
-    nextBindings: readonly VirtualWorkspaceBinding[],
-  ): T => projectVirtualWorkspaceMembership(
-    nextNativeSnapshot,
-    previousBindings,
-    nextBindings,
-  );
+  // Every input is the unmodified native snapshot, never our previous projection.
+  // Removing old bindings here would also remove DSH-owned membership with the
+  // same Session IDs. Rebuild the additive view from native facts each time.
+  const project = (snapshot: T): T => projectVirtualWorkspaceMembership(snapshot, [], bindings);
 
   const refreshSnapshot = (): boolean => {
     const nextNativeSnapshot = nativeGetSnapshot();
     if (nextNativeSnapshot === nativeSnapshot) return false;
     nativeSnapshot = nextNativeSnapshot;
-    const nextProjectedSnapshot = project(nextNativeSnapshot, bindings, bindings);
+    const nextProjectedSnapshot = project(nextNativeSnapshot);
     const changed = nextProjectedSnapshot !== projectedSnapshot;
     projectedSnapshot = nextProjectedSnapshot;
     return changed;
@@ -128,11 +123,10 @@ export function createVirtualWorkspaceMembership<
     if (disposed) return;
     const normalized = normalizeBindings(nextBindings);
     if (sameBindings(bindings, normalized)) return;
-    const previousBindings = bindings;
     bindings = normalized;
     nativeSnapshot = nativeGetSnapshot();
     const previousProjectedSnapshot = projectedSnapshot;
-    projectedSnapshot = project(nativeSnapshot, previousBindings, bindings);
+    projectedSnapshot = project(nativeSnapshot);
     if (projectedSnapshot === previousProjectedSnapshot) return;
     for (const listener of [...listeners]) listener();
   };

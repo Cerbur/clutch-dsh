@@ -611,6 +611,10 @@ The Host shares the native creation module used by Agent and Dashboard dispatch.
 
 New Sessions already have DSH-owned original Workspace membership. The browser-only legacy
 projection does not modify DSH source, Session metadata or native Workspace storage.
+Every binding update and native refresh rebuilds that additive projection from the untouched
+native snapshot. Never subtract previous bindings from native membership: forgetting a Worktree
+must remove only virtual entries, preserve native ordering, and immediately retain Sessions that
+DSH already owns (including those adopted by a later native snapshot).
 All Sessions preserve native permissions. Browser creation retains one
 request id across uncertain failures and the Host shares its promise within one lifetime.
 Client/Host reload or replacement of native Session/Agent capabilities ends that deduplication scope.
