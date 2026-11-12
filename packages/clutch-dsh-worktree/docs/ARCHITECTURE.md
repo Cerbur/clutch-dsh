@@ -638,6 +638,12 @@ effect 能同步全部新增和移除关系，而不依赖下一次渲染。
 首屏读取方式，历史计划保持只读。
 冷启动全局 recovery gate 与路径物理身份算法本次不变，不能将稳态读取计数视为冷启动总成本。
 
+Local checkout 的 branch 跟随由 Host 的 `WorkspaceCheckoutWatcher` 完成：它监视
+`<gitRootPath>/.git/HEAD`（linked worktree 通过 `.git` 文件解析 gitdir），按 Workspace 去重，
+在 100ms 去抖后通过既有 change 通道发出 workspace-scoped 通知；客户端沿用现有刷新路径只重读
+该 Workspace，不触发全局刷新。工作树、index 与受管 Worktree checkout 不在监视范围；checkout
+缺失或不可读时保持显式刷新语义。
+
 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
 权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、
 原始 cwd 匹配根目录、未归档且无任何 Worktree 关系（含 detached）。不得直接使用按

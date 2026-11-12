@@ -381,6 +381,7 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 这些旧 Host 若在首个请求前重启会丢失覆盖。原生 Session 模型切换优先。
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
+外部切换 Local checkout 的 branch 时，只原位刷新该 Workspace 的 Local 行，其余 ready 内容保持不变。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
 权限由 DSH 原生设置管理。
 Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。
@@ -660,8 +661,10 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - 一个 Session 最多有一个 active Worktree binding，一个 Worktree 可以有多个 Session。移除或
   清理 Worktree 不会删除 DSH Session。失效的 active binding 会显示 repair 状态，不会静默切换到
   另一个 Worktree。
-- Git 会在相关刷新、相关菜单打开和进入 Git Dashboard 时读取，插件不会持续监视 Git。外部切换
-  branch 会显示 branch drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和
+- Host 会监视每个 Workspace checkout 的 `.git/HEAD`，因此外部切换 branch 后 Local 行的 branch
+  名称会跟随更新，无需刷新页面。工作树、index 与受管 Worktree 的 checkout 不会被监视；除此之外，
+  Git 仍在相关刷新、相关菜单打开和进入 Git Dashboard 时读取。受管 Worktree 内外部切换 branch
+  仍会显示 branch drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和
   recovery-needed 状态会保持可见并支持重试。
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。
