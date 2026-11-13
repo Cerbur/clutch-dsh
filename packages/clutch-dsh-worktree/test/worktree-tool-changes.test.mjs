@@ -5,6 +5,37 @@ import { WorktreeToolChanges } from '../lib/host/worktree-tool-changes.js';
 import { createWorktreeToolChangeMonitor } from '../lib/client/worktree-tool-changes.js';
 import { createWorktreeConnectionAdapter } from '../lib/client/worktree-connection.js';
 
+test('idle notification polls expire before Desktop admission, release resources, and retain later changes', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const feed = new WorktreeToolChanges();
+  const controller = new globalThis.AbortController();
+  const added = t.mock.method(controller.signal, 'addEventListener');
+  const removed = t.mock.method(controller.signal, 'removeEventListener');
+  let settled = false;
+  const pending = feed.watch(0, controller.signal).then((batch) => { settled = true; return batch; });
+  t.mock.timers.tick(4999);
+  await setImmediate();
+  assert.equal(settled, false, 'idle reads should still wait for pushed changes');
+  t.mock.timers.tick(1);
+  assert.deepEqual(await pending, { revision: 0, changes: [] });
+  assert.equal(feed.waiters.size, 0);
+  assert.equal(added.mock.callCount(), removed.mock.callCount());
+  feed.changed('ws', 'wt');
+  assert.deepEqual(await feed.watch(0, controller.signal), {
+    revision: 1, changes: [{ workspaceId: 'ws', worktreeId: 'wt' }],
+  });
+  const cancelled = feed.watch(1, controller.signal);
+  controller.abort(new Error('request failed'));
+  await assert.rejects(cancelled, /request failed/);
+  assert.equal(feed.waiters.size, 0);
+  assert.equal(added.mock.callCount(), removed.mock.callCount());
+  const closing = feed.watch(1, new globalThis.AbortController().signal);
+  feed.dispose();
+  await assert.rejects(closing, /disposed/);
+  assert.equal(feed.waiters.size, 0);
+  t.mock.timers.tick(20000);
+});
+
 test('change feed coalesces one Workspace, wakes readers, and closes cancelled/disposed waits', async () => {
   const feed = new WorktreeToolChanges();
   const signal = new globalThis.AbortController().signal;

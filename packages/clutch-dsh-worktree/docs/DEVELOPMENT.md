@@ -455,6 +455,22 @@ detached HEAD、相同内容去重与 Host 销毁门禁。保持 5 秒断言期�
 Git 仓库，在导航快照完成到观察注册之间切换 branch，覆盖首次/已有监听、并发首次读取、
 旧结果迟到、新鲜读取不循环通知以及 Host disposal；仅通过屏障固定时序，不伪造导航结果。
 
+### Desktop 升级与关闭回归
+
+Desktop 升级与关闭回归（构建后在本包目录运行）：
+
+```bash
+DSH_NATIVE_SOURCE=/absolute/path/to/deepseek-harness node --test test/host-upgrade-shutdown.test.mjs test/mutation-lock-lifecycle.test.mjs test/worktree-tool-changes.test.mjs test/subprocess-git.test.mjs
+```
+
+默认回归覆盖真实 Cordis Host、临时磁盘 shard/repository 锁、Git 取消后的 tree-exit 等待、
+通知过期/取消/卸载的 waiter 与 listener 清理，以及 Worktree 文件与 Sidecar binding 保留。
+配置 `DSH_NATIVE_SOURCE` 后，另执行真实 Desktop update admission（用 mock timer 推进 10 秒
+控制窗口）和真实 process-shutdown controller（IPC 子进程保留默认 5 秒强退期限）。未配置
+源码时仅这两项明确 skipped；错误路径必须失败。原生 roster 是 fixture，测试不执行
+electron-updater、不加载生产 profile 或重启用户 Desktop。证据与上游建议见
+[Desktop 升级超时诊断](plans/2026-11-14-desktop-upgrade-timeout.md)。
+
 ### README 双语结构与格式校验
 
 插件包含自动化测试以保证中英文 README 结构严格对齐：

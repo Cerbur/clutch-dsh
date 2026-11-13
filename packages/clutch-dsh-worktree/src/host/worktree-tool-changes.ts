@@ -1,5 +1,10 @@
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 
+// Desktop drains admitted /api requests before shutdown, with a 10s control
+// deadline. Leave time for transport and the final task check; an idle read
+// must finish even though Host disposal has not started yet.
+const POLL_TIMEOUT_MS = 5_000;
+
 /** Coalesced identities and bounded long-poll lifetime; no Git or Session facts. */
 export class WorktreeToolChanges {
   private revision = 0;
@@ -40,7 +45,7 @@ export class WorktreeToolChanges {
         };
         const wake = () => done();
         const abort = () => done(signal.reason ?? new Error('Aborted'));
-        const timer = setTimeout(wake, 20000);
+        const timer = setTimeout(wake, POLL_TIMEOUT_MS);
         this.waiters.add(wake);
         signal.addEventListener('abort', abort, { once: true });
       });

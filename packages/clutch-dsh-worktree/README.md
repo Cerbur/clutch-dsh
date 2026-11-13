@@ -796,6 +796,10 @@ made native-owned by this integration.
 
 ## Behavior and limitations
 
+- Desktop upgrade preparation drains the plugin's idle notification reads within five seconds.
+  Host shutdown cancels pending plugin lock acquisition and Git work, while allowing admitted
+  sidecar writes to finish and release their locks. Restarting or upgrading does not clean up
+  Worktree directories, detach bindings, or delete native Sessions.
 - DSH owns Workspace identity and root paths, Session identity and metadata, native lists,
   messages, prompts, transcripts, and history. The plugin never copies or rewrites those values.
 - The plugin's external index stores Worktree paths, branches, sources, lifecycle state, bindings,

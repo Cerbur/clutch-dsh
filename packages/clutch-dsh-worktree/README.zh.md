@@ -667,6 +667,9 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 
 ## 行为与限制
 
+- Desktop 升级准备期间，插件的空闲通知读取会在五秒内结束。Host 关闭时取消尚未取得的插件锁
+  与 Git 任务，已接收的 sidecar 写入仍完成并释放锁。重启或升级不会清理 Worktree 目录、
+  解绑关系或删除原生 Session。
 - DSH 拥有 Workspace 身份与根目录、Session 身份与元数据、原生列表、消息、prompt、transcript
   和历史。插件不会复制或改写这些数据。
 - 插件外部索引保存 Worktree 路径、branch、来源、生命周期状态、binding、排序、指令、获取事实

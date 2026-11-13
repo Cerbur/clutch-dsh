@@ -29,6 +29,7 @@ export class WorktreeMutationTransaction {
       sidecar: options.sidecar,
       repositoryLock: new CrossProcessMutationLock({
         lockRoot: path.join(dshHome, 'clutch-dsh-worktree', 'locks'),
+        signal: options.signal,
       }),
     };
   }

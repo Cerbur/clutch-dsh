@@ -89,13 +89,15 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
       subprocess: options.subprocess,
       signal: this.lifecycleController.signal,
     });
-    const sidecar = options.sidecar ?? new WorkspaceShardedSidecarRepository({ dshHome });
+    const sidecar = options.sidecar ?? new WorkspaceShardedSidecarRepository({
+      dshHome, signal: this.lifecycleController.signal,
+    });
     this.context = {
       dsh: options.dsh,
       dshHome,
       git,
       sidecar,
-      transaction: new WorktreeMutationTransaction({ dshHome, git, sidecar }),
+      transaction: new WorktreeMutationTransaction({ dshHome, git, sidecar, signal: this.lifecycleController.signal }),
       idFactory: options.idFactory ?? (() => `wt_${randomBytes(6).toString('hex')}`),
       signal: this.lifecycleController.signal,
     };
@@ -432,6 +434,7 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
   private async afterRecovery<T>(operation: () => Promise<T>): Promise<T> {
     return this.track(async () => {
       await this.recoveryReady;
+      this.lifecycleController.signal.throwIfAborted();
       return operation();
     });
   }

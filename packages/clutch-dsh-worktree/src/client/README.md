@@ -142,6 +142,8 @@ One cancellable long-poll loop belongs to the Client fiber. Each notification in
 its Workspace reader generation; the current matching Context and visible Surface share the
 replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
 This runtime notification carries identities only and does not add another data store.
+Idle polls return within five seconds so Desktop can drain admitted API reads before shutdown.
+An empty response only renews the shared poll; it does not invalidate projections or read Git.
 Baseline-sync notifications optionally carry their existing admission `requestId`. The Host
 notification and successful Surface completion pass that identity to the same reader invalidation,
 so either arrival order shares the post-change in-flight read (or its completed result). Reads

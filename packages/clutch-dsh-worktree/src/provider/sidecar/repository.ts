@@ -57,8 +57,8 @@ export class WorkspaceShardedSidecarRepository implements SidecarStore {
 
   private readonly persistence: SidecarPersistence;
 
-  constructor({ dshHome }: { readonly dshHome: string }) {
-    this.persistence = new SidecarPersistence({ dshHome });
+  constructor({ dshHome, signal }: { readonly dshHome: string; readonly signal?: AbortSignal }) {
+    this.persistence = new SidecarPersistence({ dshHome, signal });
     this.pluginRoot = this.persistence.pluginRoot;
     this.worktreeRoot = this.persistence.worktreeRoot;
     this.workspaceRoot = this.persistence.workspaceRoot;
