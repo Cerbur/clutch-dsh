@@ -59,6 +59,41 @@
   max-height: 100cqh;
 }
 
+/* Follow rc.2 WorkspaceBrowser's listArea geometry and native scrollbar skin.
+   The shell owns both the size and scroll-state containers; do not shadow them. */
+.workspaceSeat[data-worktree-section-scroller],
+.workspaceSeat[data-worktree-section-scroller] .surface {
+  overflow: visible;
+}
+
+.workspaceSeat[data-worktree-section-scroller] .scrollFrame {
+  display: flex;
+  flex-direction: column;
+}
+
+.content[data-worktree-native-scroll] {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  margin-left: -4px;
+  margin-right: calc(2px - var(--dsh-sidebar-inline-padding, 8px));
+  padding: 0 calc(var(--dsh-sidebar-inline-padding, 8px) - var(--dsh-scrollbar-width, 5px) - 2px) 0 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.content[data-worktree-native-scroll] .scrollContent {
+  padding-bottom: 16px;
+}
+
+/* Native wheel handoff can still write scrollTop during this phase. */
+@container scroll-state(scrollable: bottom) {
+  .content[data-worktree-native-scroll] {
+    overflow-y: hidden;
+  }
+}
+
 .surface {
   position: relative;
   flex: 1;
@@ -448,10 +483,13 @@
   box-sizing: border-box;
   overflow: auto;
   padding: 0 10px 12px 0;
+}
+
+.content:not([data-worktree-native-scroll]) {
   scrollbar-width: none;
 }
 
-.content::-webkit-scrollbar {
+.content:not([data-worktree-native-scroll])::-webkit-scrollbar {
   display: none;
 }
 

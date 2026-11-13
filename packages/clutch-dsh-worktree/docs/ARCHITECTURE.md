@@ -1053,4 +1053,11 @@ Workspace ID，同一 checkout 可被多个 Workspace 导入，因此只读扫�
 
 rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-scroller capability 的 seat
 使用 `max-height: 100cqh`，并把原生 `bindScrollerRef` 接至真正的列表滚动节点；折叠、移出与卸载
-解绑。rc.1 没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。
+解绑。没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。
+有 hook 时列表使用原生 WorkspaceBrowser 的 listArea 布局：左侧 margin -4px / padding 4px，
+右侧按 `--dsh-sidebar-inline-padding` 延伸至 Sidebar 右缘内 2px，再按 `--dsh-scrollbar-width`
+扣除原生滚动条占位。启用 `scrollbar-gutter: stable`，滚动条皮肤、hover 与 quietBars 隐藏完全
+由 DSH theme/sidebar 拥有，不挂载插件 OverlayScrollbar。内容 wrapper 保留原生 16px 底部留白。
+seat/surface 允许列表延伸，列表自身负责裁剪；原生 `scroll-state(scrollable: bottom)` query
+在外层仍可下滚时禁用内层用户滚动，不插入新的 size/scroll-state container。
+无 hook 路径保留旧布局与自绘悬浮滚动条，不降低公开最低版本。

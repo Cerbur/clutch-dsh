@@ -37,6 +37,20 @@ React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建�
 真实 Desktop 的玻璃材质、滚动和动画联调。`test/sidebar-glass.test.mjs` 检查生产 bundle
 不再包含侧栏遮蔽实现。当前 Host/Client 统一要求 DSH `>=0.2.2-rc.2`。
 
+侧栏宽度与滚动契约回归可在本包目录运行：
+
+```bash
+DSH_NATIVE_SOURCE=/absolute/path/to/deepseek-harness PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node test/manual/sidebar-scroll-layout.mjs
+```
+
+使用已经安装的 Playwright 与 Chromium；脚本不下载浏览器。它读取本包 CSS、已安装 rc.2
+原生 Sidebar/Workspace CSS、源码 checkout 的原生 scrollbar 皮肤和真实 handoff 实现，
+检查 200/280/400px 宽度、空/短/长列表、3px/5px 滚动条宽度、行边缘、稳定 gutter、
+quietBars 皮肤继承、滚动交接及无 hook 兼容布局。可设置 `SCREENSHOT_DIR` 保存截图。
+这是隔离 DOM 布局回归，不替代真实 DSH/桌面视觉验收。默认 slot 测试另覆盖有/无 hook 的
+真实注册、折叠、撤销和卸载生命周期。调查与验收记录见
+[Sidebar scroll contract](plans/2026-11-13-sidebar-scroll-contract.md)。
+
 Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
 共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
 `node --test test/navigation-loading.test.mjs test/navigation-surface.test.mjs` 在构建后验证
