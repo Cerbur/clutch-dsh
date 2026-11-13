@@ -580,7 +580,7 @@ Host 只读 adapter 使用 `ctx.get()` 动态解析可选的 `workingDirectory` 
 
 - 最低兼容基线及当前 Client graph 验证版本均为 DSH `dsh-v0.2.2-rc.1`。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
-- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航与目录选取委托至 `ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
+- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航委托至 `ctx.uiWorkspace.openSession()`，目录选取复用 DSH 组合的 `sidebar.workspaces.directoryFlow` occupant，经插件自有 child slot 和原生 renderer 渲染，选定路径后调用 `ctx.workspaces.create({ path })`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。
 - **Session 归属与 Projection**：
   Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
@@ -769,7 +769,8 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 导航，由 UiSession 清除完成未读。`activityClocks` 只保留客户端观察到的 ongoing 切换时刻，
 首次显示沿用原生 `updatedAt`（原生接口未提供开始/停止时间戳）；临时计时不落盘。
 仅浮窗打开时每秒更新显示时间，关闭/卸载取消计时和事件监听。浮窗使用原生 `MenuSurface`、
-`StateDot` 与定位/外部点击 hooks，通过 portal 避免 Sidebar 裁剪。
+`StateDot` 与外部点击 hook，通过 portal 避免 Sidebar 裁剪；触发器与浮窗共享唯一 CSS anchor，
+由 CSS 负责定位，不依赖 rc.2 已移除的 `useAnchoredPosition`。
 浮窗可见性同时依赖 Sidebar 的 `bounds.ready`：锚点丢失或几何失效时，即使 `collapsed=false`
 也关闭 portal 并释放计时和键盘监听；几何恢复不自动重开，等待用户再次点击铃铛。
 
@@ -1017,3 +1018,16 @@ Client/Host lifetime 中去重，进行中读写不重复创建。Host 最多保
 Sidecar v7 的事实字段不变，只扩展 plugin path 的词法形状。Workspace 根不复制到索引；
 实际创建、恢复、删除仍根据当前 DSH Workspace 根与物理祖先重新校验。
 旧插件不能识别新池路径，会将该索引视为不可用；因此不能无备份降级后继续操作新记录。
+
+## DSH rc.2 原生归档兼容（2026-11-13）
+
+Host 可选监听原生 `worktree/cleanup`。scheduled 只捕获短期物理身份；removed、retained、failed
+终态复核 Sidecar 记录与路径后，通过既有 `toolChanges` 通知匹配的 Worktree/Workspace。事件没有
+Workspace ID，同一 checkout 可被多个 Workspace 导入，因此只读扫描原生 registry 对应的索引分片，
+不读取无关 Git projection、不创建空分片，也不做全局刷新。仅明确 ENOENT 可使用词法或已验证的
+获取身份；权限/I/O 不确定性、别名改指、已遗忘或换属记录不扩大作用域。卸载取消监听和迟到通知。
+原生删除后目录投影为 repair，Clutch 不写 diskCleanup、不自动解绑、移除索引或改写 Session cwd。
+
+rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-scroller capability 的 seat
+使用 `max-height: 100cqh`，并把原生 `bindScrollerRef` 接至真正的列表滚动节点；折叠、移出与卸载
+解绑。rc.1 没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。

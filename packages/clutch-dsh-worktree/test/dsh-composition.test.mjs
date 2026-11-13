@@ -96,7 +96,7 @@ test('publishes the generated Host and Client Remote contribution entries', () =
 
 test('requires the DSH 0.2.2 prerelease graph and rejects earlier hosts', () => {
   const minimumDshVersion = '0.2.2-rc.1';
-  const validatedDshVersion = '0.2.2-rc.1';
+  const validatedDshVersion = '0.2.2-rc.2';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -131,7 +131,7 @@ test('depends on and injects the DSH locale service', () => {
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.2.2-rc.1',
+    '0.2.2-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);

@@ -163,6 +163,11 @@ and folding follow DSH's slot contract, without locating native rows by text, DO
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 
+The header's **Add Workspace** action uses DSH's configured directory picker, including the
+in-app directory browser on Web and the native chooser when composed. It creates a Workspace
+only after a directory is selected; cancelling leaves the list unchanged. The action is hidden
+when no directory picker is available, and selection or creation errors can be retried.
+
 ### Filter Sessions by activity
 
 The range selector below the Worktree header filters the tree to today, the last 24 hours, the
@@ -202,6 +207,8 @@ limit do not filter this list. Blank and archived Sessions are excluded.
 Each entry shows its Session name, Workspace, and Worktree (or Local), with the native Session
 status indicator and time on the right. Select an entry to open it; DSH clears its unread
 completion through normal navigation. Opening the bell alone does not mark anything read.
+The panel follows its trigger through CSS anchor positioning, including after Sidebar scrolling
+and browser zoom; use a browser that supports CSS Anchor Positioning, as required by DSH's native menus.
 Click outside or press Escape to close. The panel also closes if the Sidebar collapses or its
 layout becomes unavailable; reopen it with the bell after the Sidebar recovers.
 Running duration updates while the panel is open;
@@ -757,6 +764,14 @@ If the backup cannot be written, cancellation fails and the original journal sta
   bindings while keeping the recorded history until it is forgotten.
 - **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
   the disk files and native DSH Sessions, and does not require a Session activity check.
+
+When importing a Worktree created by DSH, native ownership and its archive-retention setting stay
+with DSH. Importing does not disable native cleanup. DSH may reclaim that directory after all
+referencing Sessions are archived; an unarchived Session using it or DSH's keep-on-archive option
+can retain it. After native cleanup finishes, Clutch refreshes only the matching Worktree and
+Workspace. A removed directory is shown as needing repair; its records and bindings remain,
+and it is not marked as a completed Clutch disk cleanup. Clutch-created directories are not
+made native-owned by this integration.
 
 ## Requirements
 

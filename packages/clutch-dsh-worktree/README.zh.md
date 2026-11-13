@@ -150,6 +150,10 @@ Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览
 不通过文字、DOM 顺序或坐标定位原生行。
 导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 
+标题栏的**添加 Workspace** 使用 DSH 配置的目录选择器，包括 Web 的应用内目录浏览器及
+已组合的原生选择器。只有选定目录后才创建 Workspace；取消时列表保持不变。没有可用目录
+选择器时隐藏此操作，选择或创建失败后可重试。
+
 ### 按活跃时间筛选会话
 
 Worktree 标题栏下方的范围选择器把树收窄到**今日**、**最近 24 小时**、**最近 7 天**或**全部**。
@@ -180,6 +184,8 @@ Session。列表非空时显示蓝色提醒圆点；空列表显示**无活跃�
 
 每项依次展示 Session 名称、Workspace、Worktree（或本地），右侧显示原生 Session 状态指示器
 和时间。点击条目打开会话，由 DSH 的正常导航清除完成未读；仅打开铃铛不会标记已读。
+浮窗通过 CSS anchor 定位跟随触发按钮，Sidebar 滚动或浏览器缩放后仍保持定位；
+与 DSH 原生菜单一样，需要使用支持 CSS Anchor Positioning 的浏览器。
 点击外部或按 Escape 关闭。Sidebar 收起或布局不可用时也会关闭浮窗；Sidebar 恢复后需再次点击铃铛打开。
 浮窗打开时更新运行时长；观察到停止后显示完成于多久前。
 当前 Client 尚未观察到状态切换时，沿用 Session 行使用的原生活动时间作为基线，因为 DSH
@@ -633,6 +639,12 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   binding 会 detached，记录会保留到之后显式移出管理。
 - **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
   DSH Session，也不要求检查 Session 活动状态。
+
+导入由 DSH 创建的 Worktree 时，原生所有权及归档保留设置仍由 DSH 管理。导入不会禁止原生清理。
+所有引用 Session 归档后，DSH 可能回收该目录；仍有未归档 Session 使用该目录，或启用 DSH 的
+归档时保留选项时，可以保留目录。原生清理结束后，Clutch 只刷新匹配的 Worktree 和 Workspace。
+目录被移除时显示需要修复，原记录和绑定继续保留，不会被标记为 Clutch 已完成磁盘清理。
+这项集成不会使 Clutch 自建目录变成原生自有目录。
 
 ## 要求
 

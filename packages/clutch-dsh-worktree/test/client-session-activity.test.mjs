@@ -147,7 +147,6 @@ test('production bell opens empty, renders native states, navigates, dismisses a
     timers.delete(id);
     originalClearInterval(id);
   };
-  const position = { left: 12, top: 44 };
   const dependencies = {
     react: React,
     'react/jsx-runtime': jsx,
@@ -156,7 +155,6 @@ test('production bell opens empty, renders native states, navigates, dismisses a
       MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
       StateDot: ({ state }) => React.createElement('i', { 'data-state': state }),
       Tooltip: ({ children }) => children,
-      useAnchoredPosition: () => position,
       useDismissOnOutsidePointer(root, open, setOpen, panel) {
         React.useEffect(() => {
           if (!open) return;
@@ -209,6 +207,12 @@ test('production bell opens empty, renders native states, navigates, dismisses a
     assert.equal(bell().dataset.sessionActivity, 'empty');
     await click('[data-session-activity]');
     assert.match(document.querySelector('[role="dialog"]').textContent, /activity.empty/);
+    const panel = document.querySelector('[role="dialog"]');
+    assert.equal(document.activeElement, panel, 'opening focuses the CSS-positioned panel');
+    const anchor = bell().style.getPropertyValue('--clutch-activity-anchor');
+    assert.match(anchor, /^--clutch-activity-/);
+    assert.equal(panel.style.getPropertyValue('--clutch-activity-anchor'), anchor);
+    assert.equal(panel.id, bell().getAttribute('aria-controls'));
     assert.equal(timers.size, 1);
     assert.deepEqual(calls, []);
     props.sessions = {
