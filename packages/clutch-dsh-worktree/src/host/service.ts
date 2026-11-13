@@ -43,6 +43,8 @@ import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
+import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
+import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -116,12 +118,17 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     this.dsh = dsh;
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
+    const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: config.dshHome });
     const manager = createWorktreeManager({
+      sidecar,
       dsh,
       dshHome: config.dshHome,
       subprocess,
     });
     this.manager = manager;
+    registerNativeWorktreeCleanup(ctx, { dsh, sidecar,
+      changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+    });
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
       const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx);

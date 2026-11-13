@@ -1,9 +1,10 @@
 import type { ConversationHeaderActionOwnerProps, InputZone } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client';
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client';
+import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { SnapshotSelectorHook, SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import type { SidebarFooterActionOwnerProps, SidebarSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type { SidebarFooterActionOwnerProps, SidebarSectionOwnerProps, SidebarSectionHookContext, SidebarSectionInjected } from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { UseSessions, UseSessionStatus } from '@deepseek-ai/dsh-client-ui-session/client';
 
 /**
@@ -14,7 +15,13 @@ import type { UseSessions, UseSessionStatus } from '@deepseek-ai/dsh-client-ui-s
  */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
-    'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps };
+    'sidebar.workspaces': {
+      kind: 'single';
+      scope: 'root';
+      owner: SidebarSectionOwnerProps;
+      hookContext: SidebarSectionHookContext;
+      inject: SidebarSectionInjected;
+    };
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone };
     'conversation.session.header.actions': {
       kind: 'list';
@@ -31,6 +38,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'root';
       owner: SidebarFooterActionOwnerProps;
     };
+    'clutch.worktree.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
     'shell.overlay': {
       kind: 'list';
       scope: 'root';

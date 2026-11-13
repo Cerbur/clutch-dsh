@@ -92,6 +92,7 @@ function hookHarness(source, modules, context) {
       return fn;
     },
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
+    useLayoutEffect(effect, deps) { react.useEffect(effect, deps); },
     useEffect(effect, deps) {
       const index = cursor++;
       if (!effects[index] || deps.some((value, i) => value !== effects[index].deps[i])) {
