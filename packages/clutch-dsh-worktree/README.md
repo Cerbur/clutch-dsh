@@ -450,7 +450,8 @@ the first request. Older hosts retain the runtime-only override until the first 
 restarting those hosts before that request discards the override. Native Session model changes take precedence.
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
-content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
+content. An external branch switch in the Local checkout refreshes only that Workspace's Local row
+in place; the rest of the ready tree is preserved. Dispatch keeps the current conversation open and uses DSH's normal new-Session
 preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
 `/cluworktree create <name> [baseBranch]` creates a managed Worktree and branch from the calling
 Session's healthy Worktree HEAD or the Workspace-root HEAD; the name is required and no Session is created.
@@ -802,9 +803,11 @@ made native-owned by this integration.
 - One Session can have at most one active Worktree binding, while a Worktree can have many Sessions.
   Removing or cleaning a Worktree never deletes a DSH Session. A broken active binding reports a
   repair state instead of silently falling back to another Worktree.
-- Git is read on relevant refreshes, when relevant menus open, and on Git Dashboard activation;
-  the plugin does not watch Git continuously. An external branch change is shown as branch drift
-  and requires explicit **Adopt current branch** before disk cleanup. Detached HEAD and
+- The Host watches each Workspace checkout's `.git/HEAD` so the Local row's branch name follows an
+  external branch switch without a page reload. Working trees, the index, and managed Worktree
+  checkouts are not watched; Git is otherwise read on relevant refreshes, when relevant menus open,
+  and on Git Dashboard activation. An external branch change inside a managed Worktree is shown as
+  branch drift and requires explicit **Adopt current branch** before disk cleanup. Detached HEAD and
   recovery-needed states remain visible and retryable.
 - Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
 - Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
