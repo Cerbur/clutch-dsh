@@ -20,6 +20,7 @@ export async function loadClientEntry({
   const registrations = [];
   const registrationsBySlot = new Map();
   const registrationsById = new Map();
+  const directoryFlowEntry = { component: () => null };
   const eventListeners = new Map();
   const disposers = [];
   const openedSessions = [];
@@ -283,7 +284,9 @@ export async function loadClientEntry({
       },
     },
     slots: {
+      subscribe() { return () => {}; },
       entriesOfSlot(name) {
+        if (name === 'sidebar.workspaces.directoryFlow') return [directoryFlowEntry];
         const entry = registrationsBySlot.get(name);
         return entry === undefined ? [] : [{ ...entry, store: entry.options.store }];
       },

@@ -95,8 +95,8 @@ test('publishes the generated Host and Client Remote contribution entries', () =
 });
 
 test('requires the DSH 0.2.2 prerelease graph and rejects earlier hosts', () => {
-  const minimumDshVersion = '0.2.2-rc.1';
-  const validatedDshVersion = '0.2.2-rc.1';
+  const minimumDshVersion = '0.2.2-rc.2';
+  const validatedDshVersion = '0.2.2-rc.2';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -106,7 +106,7 @@ test('requires the DSH 0.2.2 prerelease graph and rejects earlier hosts', () => 
   assert.ok(dshDevDependencies.length > 0);
   for (const [name, version] of dshPeerDependencies) {
     assert.equal(semver.satisfies(minimumDshVersion, version), true, `${name} must preserve the compatibility floor`);
-    for (const older of ['0.2.0-rc.1', '0.2.1-rc.1', '0.2.1', '0.2.2-rc.0'])
+    for (const older of ['0.2.0-rc.1', '0.2.1-rc.1', '0.2.1', '0.2.2-rc.0', '0.2.2-rc.1'])
       assert.equal(semver.satisfies(older, version), false, `${name} must reject DSH ${older}`);
     assert.equal(semver.satisfies(validatedDshVersion, version), true, `${name} must accept DSH ${validatedDshVersion}`);
   }
@@ -127,11 +127,11 @@ test('requires the DSH 0.2.2 prerelease graph and rejects earlier hosts', () => 
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '>=0.2.2-rc.1',
+    '>=0.2.2-rc.2',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.2.2-rc.1',
+    '0.2.2-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);

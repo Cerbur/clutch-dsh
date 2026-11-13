@@ -54,6 +54,11 @@
   overflow: hidden;
 }
 
+.workspaceSeat[data-worktree-section-scroller] {
+  flex: none;
+  max-height: 100cqh;
+}
+
 .surface {
   position: relative;
   flex: 1;
@@ -830,6 +835,10 @@
   position: relative;
 }
 
+.activityBell [data-session-activity] {
+  anchor-name: var(--clutch-activity-anchor);
+}
+
 .activityBadge {
   position: absolute;
   top: 4px;
@@ -844,6 +853,15 @@
 
 .activityPanel {
   position: fixed;
+  position-anchor: var(--clutch-activity-anchor);
+  top: calc(anchor(bottom) + 8px);
+  right: anchor(right);
+  bottom: 8px;
+  left: 8px;
+  align-self: safe start;
+  justify-self: safe end;
+  margin: 0;
+  height: fit-content;
   z-index: 1000;
   box-sizing: border-box;
   width: min(360px, calc(100vw - 16px));
