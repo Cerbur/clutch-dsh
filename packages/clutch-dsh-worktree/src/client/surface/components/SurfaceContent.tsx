@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import {
   formatWorktreeViewError,
 } from '../../view/worktree-error-copy.js';
@@ -40,6 +41,7 @@ type Input = {
     | 'forkSession'
     | 'archiveSession'
     | 'manager'
+    | 'sidebarSeat'
   >;
   lifecycle: Pick<
     ReturnType<typeof useLifecycleActions>,
@@ -133,6 +135,11 @@ export function SurfaceContent({
   native,
   lifecycleState,
 }: Input) {
+  const bindScrollerRef = props.sidebarSeat?.bindScrollerRef;
+  useLayoutEffect(() => {
+    bindScrollerRef?.(expansion.contentRef.current);
+    return () => bindScrollerRef?.(null);
+  }, [bindScrollerRef, expansion.contentRef]);
   const { forkRecoverySnapshot } = source;
   const { t, retryForkSession, openSession } = props;
   const { recoveryAction } = lifecycle;

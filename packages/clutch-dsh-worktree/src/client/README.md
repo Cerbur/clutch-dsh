@@ -12,6 +12,9 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   and their child declarations remain owned by DSH. No DOM row order, array index, text label,
   private class, or measured coordinate selects the navigation mount point.
   `view/sidebar-workspace-slot.tsx` publishes the plugin-owned seat and the owner's `wide` state.
+  On rc.2, the seat is bounded by `100cqh` and carries the native `useSectionScroller`
+  capability to the actual `SurfaceContent` scrollport. Collapse, withdrawal and disposal
+  release the binding. rc.1 retains its flex layout when the hook is absent.
   `WorktreeSurface` portals only its navigation into that seat; the persistent shell-overlay
   owner retains data/actions, Hero and Dashboard across seat changes. CSS supplies normal flow
   sizing and the native sidebar supplies material. `view/workspace-region-geometry.ts` observes
@@ -67,7 +70,7 @@ The Client does not read `ctx.remote.worktreeManager`, import or traverse the ge
 ## DSH Client boundary
 
 The browser Consumer uses the split Controller/Store graph introduced in
-`dsh-v0.1.2-rc.1`; the minimum supported and current validation graph is `dsh-v0.2.2-rc.1`. Browser-local
+`dsh-v0.1.2-rc.1`; the minimum supported graph is `dsh-v0.2.2-rc.2` and the development/validation graph is `dsh-v0.2.2-rc.2`. Browser-local
 stores import `createSnapshotStore` and `defineStore` from
 `@deepseek-ai/dsh-client-store`. The removed monolithic Client runtime entry is not probed or
 used as a fallback.
@@ -84,8 +87,15 @@ The injected DSH services have deliberately separate read and command faces:
 - `ctx.uiWorkspace` owns cross-Controller navigation and directory UI: Local creation uses
   `sessions.create({ workspaceId, sessionId? })` after excluding all Worktree relationships from blank
   reuse candidates; original header cwd alone cannot distinguish a Worktree blank from Local.
-  Both Local and Worktree Session opening use `openSession()`, and the Workspace picker uses
-  `pickDirectory()` before calling the native Workspace Controller's `create()` command.
+  Both Local and Worktree Session opening use `openSession()`. Workspace creation reuses the
+  composed `sidebar.workspaces.directoryFlow` occupant through a plugin-owned child slot,
+  preserving its injected picker capability and locale. Native slot declarations remain untouched;
+  the native renderer mounts the mirrored registration. `view/workspace-directory-flow.ts` tracks
+  occupancy and one pending request, then calls the Workspace Controller's `create({ path })`.
+  Cancellation, mode exit, picker withdrawal and disposal settle the request without adoption;
+  stale callbacks cannot adopt a directory. Picker/adoption errors use the existing action-error
+  surface. No unconditional `pickDirectory()` call or backend-kind branch is used. Both rc.1
+  and rc.2 provide this same directory-flow owner contract.
 
 On DSH 1.7, `SessionListState` no longer carries a `current` field: the selected Main Session is
 read from the `retainedBy.mainView` owner count. Rename actions use `ctx.sessions.using()` to
@@ -107,6 +117,8 @@ limits; blank/archived Sessions and catalog-only descendants are excluded. The s
 StateDot and localized Session time buckets are reused. Opening the panel does not acknowledge
 completion; selecting an entry uses the existing Workspace Session navigation. Outside pointer,
 Escape, search expansion, Sidebar collapse, unavailable Sidebar bounds and unmount dismiss it.
+Each bell has a unique CSS anchor name shared by its trigger and body portal. CSS owns placement
+and viewport bounds; no removed `useAnchoredPosition` export or geometry polling is used.
 `SurfaceHeader` passes the real overlay bounds readiness to the bell; losing anchors or valid
 geometry closes the portal and releases its timer/keyboard listener even without native collapse.
 Geometry recovery leaves it closed until another user click. Display clocks retain only

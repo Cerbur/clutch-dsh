@@ -931,9 +931,9 @@ test('routes Worktree Session creation through the browser Session connector', a
   assert.doesNotMatch(source, /createSessionForWorktree\(\{/);
 });
 
-test('routes native Workspace creation through uiWorkspace and workspaces commands', async () => {
+test('routes native Workspace creation through the composed picker and workspaces commands', async () => {
   const source = await readFile(path.join(packageDirectory, 'src', 'client', 'entry.ts'), 'utf8');
-  assert.match(source, /ctx\.uiWorkspace\.pickDirectory\(\)/);
+  assert.doesNotMatch(source, /ctx\.uiWorkspace\.pickDirectory\(\)/);
   assert.match(source, /createMainSession:.*localSessionConnector\.create\(workspaceId\)/);
   assert.match(source, /createLocalSessionConnector\(/);
   assert.doesNotMatch(source, /ctx\.workspaces\.pickDirectory/);
@@ -941,7 +941,13 @@ test('routes native Workspace creation through uiWorkspace and workspaces comman
 
   const fixture = await loadClientEntry();
   const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
-  await overlay.createWorkspace();
+  fixture.fakeContext.uiWorkspace.pickDirectory = () => { throw new Error('directory-picker/unavailable'); };
+  const action = overlay.createWorkspace();
+  assert.deepEqual(fixture.createdWorkspaces, [], 'opening the flow does not create a Workspace');
+  const flow = overlay.hooks.workspaceDirectoryFlow.getSnapshot();
+  assert.equal(flow.owner.open, true);
+  flow.owner.onPicked('/tmp/workspace-picked');
+  await action;
 
   assert.deepEqual(fixture.createdWorkspaces, [{ path: '/tmp/workspace-picked' }]);
   for (const dispose of fixture.disposers.reverse()) dispose();
@@ -1005,6 +1011,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
   const fixture = await loadClientEntry();
   assert.equal(typeof fixture.exports.apply, 'function');
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'clutch.worktree.directoryFlow',
     'conversation.input.dock',
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
@@ -1020,6 +1027,7 @@ test('loads and disposes the Client entry through the DSH module handoff', async
 test('contributes context to the active Session title row and the Hero overlay', async () => {
   const fixture = await loadClientEntry();
   assert.deepEqual([...fixture.registrationsBySlot.keys()].sort(), [
+    'clutch.worktree.directoryFlow',
     'conversation.input.dock',
     'conversation.session.header.actions',
     'conversation.session.header.utilities',
@@ -1168,9 +1176,9 @@ test('declares the native Conversation package without depending on a Hero conte
   );
   assert.equal(
     manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'],
-    '>=0.2.2-rc.1',
+    '>=0.2.2-rc.2',
   );
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.2.2-rc.1');
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.2.2-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);
   assert.doesNotMatch(clientReadme, /conversation\.hero\.context/);
   assert.match(source, /conversation\.session\.header\.actions/);
