@@ -142,6 +142,24 @@ export function ActivityFilterBar({ t, activity }: ActivityFilterBarProps) {
             {activity.showInactiveStructure && <IconCheckOutline16 />}
           </span>
         </button>
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={activity.keepDefaultWorkspaceVisible}
+          aria-label={t('filter.keepDefaultWorkspace')}
+          className={styles.activityOption}
+          data-activity-keep-default-workspace
+          data-checked={activity.keepDefaultWorkspaceVisible || undefined}
+          title={t('filter.keepDefaultWorkspaceHint')}
+          onClick={() => {
+            activity.setKeepDefaultWorkspaceVisible(!activity.keepDefaultWorkspaceVisible);
+          }}
+        >
+          <span className={styles.activityOptionLabel}>{t('filter.keepDefaultWorkspace')}</span>
+          <span className={styles.activityOptionCheck} aria-hidden="true">
+            {activity.keepDefaultWorkspaceVisible && <IconCheckOutline16 />}
+          </span>
+        </button>
       </Menu>
     </div>
   );

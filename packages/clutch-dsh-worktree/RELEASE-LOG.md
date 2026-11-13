@@ -1,5 +1,43 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.30 — 2026-11-13
+
+### 中文
+
+#### 版本说明
+
+- 本次包含新增功能，经发布决定在 0.1.x 阶段以 patch 版本 `0.1.30` 发布。
+
+#### 新增
+
+- 外部切换 Workspace checkout 的分支时，Local 行自动跟随更新，无需刷新页面。
+
+#### 优化
+
+- 重新进入 Worktree 视图时复用近期的 Workspace 数据，并在需要时于后台刷新，减少等待。
+
+#### 修复
+
+- 新建 Workspace 在首次创建 Session 前保持在所选活跃时间范围内，默认 Workspace 可通过浏览器本地偏好保持显示。
+
+### English
+
+#### Versioning note
+
+- This release includes new functionality and intentionally uses patch version `0.1.30` during the 0.1.x stage.
+
+#### Added
+
+- Automatically update the Local row when the Workspace checkout branch changes externally, without a page refresh.
+
+#### Improved
+
+- Reuse recent Workspace data when returning to Worktree view and refresh it in the background when needed, reducing wait time.
+
+#### Fixed
+
+- Keep newly created Workspaces visible in the selected activity range before their first Session, and allow the default Workspace to remain visible through a browser-local preference.
+
 ## 0.1.29 — 2026-11-13
 
 ### 中文

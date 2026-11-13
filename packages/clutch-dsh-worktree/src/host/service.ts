@@ -40,6 +40,7 @@ import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from 
 import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
 import { createNativeWorktreeSessionDirectoryPort } from '../tool/native-session.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
+import { WorkspaceCheckoutWatcher } from './checkout-head-watcher.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
@@ -79,6 +80,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly dsh: DshHostReadAdapter;
   private readonly remote: WorktreeRemoteManager;
   private readonly toolChanges = new WorktreeToolChanges();
+  private readonly checkoutWatcher: WorkspaceCheckoutWatcher;
   private readonly toolSettings: WorktreeToolSettings;
   private baselineSync?: ReturnType<typeof createBaselineSync>;
   private sessionCreation?: ReturnType<typeof createWorktreeSessionCreation>;
@@ -97,6 +99,15 @@ export class WorktreeRemoteService extends TypertRemoteService {
         disposed = true;
       },
       'clutch-dsh-worktree: activity reader disposal',
+    );
+    const checkoutWatcher = new WorkspaceCheckoutWatcher({
+      isDisposed: () => disposed,
+      onChanged: (workspaceId) => this.toolChanges.changed(workspaceId, `main:${workspaceId}`),
+    });
+    this.checkoutWatcher = checkoutWatcher;
+    ctx.effect(
+      () => () => checkoutWatcher.dispose(),
+      'clutch-dsh-worktree: checkout HEAD watch cleanup',
     );
     const activitySource = ctx.get('activitySource') as WorktreeActivitySource | undefined;
     const native = ctx as Context & DshHostReadContext;
@@ -284,8 +295,15 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  readWorkspaceNavigation(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceNavigation>> {
-    return this.remote.readWorkspaceNavigation(input);
+  async readWorkspaceNavigation(input: { workspaceId: WorkspaceId }): Promise<WorktreeRemoteResult<WorkspaceNavigation>> {
+    const result = await this.remote.readWorkspaceNavigation(input);
+    if (result.ok) {
+      // The Local row follows an external branch switch; unrelated Workspaces stay untouched.
+      void this.checkoutWatcher
+        .observe(input.workspaceId, result.value.checkout?.gitRootPath, result.value.checkout?.currentHead)
+        .catch(() => undefined);
+    }
+    return result;
   }
 
   @Remote

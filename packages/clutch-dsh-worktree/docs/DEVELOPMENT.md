@@ -445,6 +445,16 @@ node --test test/client-native-session-status.test.mjs
 Dashboard、legacy fallback 以及 catalog-only lineage。没有 `dev:web` watcher 时，本地 build
 不会自动更新已运行的生产 GUI；测试回放不表示已部署，不应为验证此回归修改生产 profile 或重启生产。
 
+### Local HEAD 监听回归
+
+构建后运行 `node --test test/checkout-head-watcher.test.mjs`。真实文件系统用例覆盖普通与
+linked checkout；故障注入覆盖通知丢失、watch 创建失败、异步 error、原子替换 HEAD、
+detached HEAD、相同内容去重与 Host 销毁门禁。保持 5 秒断言期限，不靠放宽超时隐藏丢事件。
+沙箱内 macOS `fs.watch` 可能报 `EMFILE`；轮询兜底仍应通过，原生通知路径需在正常宿主环境复验。
+`node --test test/host-checkout-navigation.test.mjs` 使用真实 Cordis service、Manager 与临时
+Git 仓库，在导航快照完成到观察注册之间切换 branch，覆盖首次/已有监听、并发首次读取、
+旧结果迟到、新鲜读取不循环通知以及 Host disposal；仅通过屏障固定时序，不伪造导航结果。
+
 ### README 双语结构与格式校验
 
 插件包含自动化测试以保证中英文 README 结构严格对齐：

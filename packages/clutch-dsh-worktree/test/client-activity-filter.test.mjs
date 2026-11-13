@@ -9,6 +9,7 @@ import {
   ACTIVITY_WINDOWS,
   DEFAULT_ACTIVITY_WINDOW,
   DEFAULT_ACTIVITY_WINDOWS,
+  DEFAULT_WORKSPACE_TITLE,
   activityCandidateSessionIds,
   activityWindowSince,
   countSessionsInWindow,
@@ -16,10 +17,13 @@ import {
   effectiveActivityWindows,
   filterSessionIdsByActivity,
   isActivityWindowId,
+  isDefaultWorkspace,
   isSessionActiveInWindow,
+  isWorkspaceCreatedInWindow,
   nextActivityWindow,
   startOfLocalDay,
   toggleActivityWindow,
+  workspaceSurvivesActivityWindow,
 } from '../lib/client/view/activity-filter.js';
 import { createWorktreeViewStore } from '../lib/client/view/view-mode-store.js';
 
@@ -68,6 +72,110 @@ test('bounded windows use local calendar and rolling bounds', () => {
 test('an unreadable clock disables the bound instead of hiding every row', () => {
   assert.equal(activityWindowSince('today', Number.NaN), undefined);
   assert.equal(activityWindowSince('last7d', Number.NaN), undefined);
+  const created = new Date(2026, 10, 3, 12, 0, 0, 0).toISOString();
+  assert.equal(isWorkspaceCreatedInWindow(created, 'today', Number.NaN), true);
+});
+
+test('a Workspace created inside the range survives before its first Session', () => {
+  const now = new Date(2026, 10, 3, 15, 0, 0, 0).getTime();
+  const created = (millisecondsAgo) => new Date(now - millisecondsAgo).toISOString();
+  assert.equal(isWorkspaceCreatedInWindow(created(HOUR), 'today', now), true);
+  assert.equal(isWorkspaceCreatedInWindow(created(DAY + HOUR), 'today', now), false);
+  assert.equal(isWorkspaceCreatedInWindow(created(2 * DAY), 'last7d', now), true);
+  assert.equal(isWorkspaceCreatedInWindow(created(8 * DAY), 'last7d', now), false);
+  // All is unbounded and malformed timestamps never count as creation activity.
+  assert.equal(isWorkspaceCreatedInWindow(created(90 * DAY), 'all', now), true);
+  assert.equal(isWorkspaceCreatedInWindow('not-a-date', 'today', now), false);
+
+  const scope = scopeOf();
+  const options = { showInactiveStructure: false, keepDefaultWorkspaceVisible: false };
+  assert.equal(
+    workspaceSurvivesActivityWindow(
+      { title: 'new-project', createdAt: created(HOUR) },
+      [],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    workspaceSurvivesActivityWindow(
+      { title: 'old-project', createdAt: created(DAY + HOUR) },
+      [],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    false,
+  );
+});
+
+test('the default Workspace is pinned unless the preference is turned off', () => {
+  const now = new Date(2026, 10, 3, 15, 0, 0, 0).getTime();
+  const defaultWorkspace = {
+    title: DEFAULT_WORKSPACE_TITLE,
+    createdAt: new Date(now - 90 * DAY).toISOString(),
+  };
+  const scope = scopeOf();
+  assert.equal(isDefaultWorkspace(defaultWorkspace), true);
+  assert.equal(isDefaultWorkspace({ title: 'default-workspace-copy' }), false);
+  assert.equal(isDefaultWorkspace({ title: 'my-project' }), false);
+
+  const options = { showInactiveStructure: false, keepDefaultWorkspaceVisible: true };
+  assert.equal(
+    workspaceSurvivesActivityWindow(defaultWorkspace, [], 'today', now, scope, options),
+    true,
+  );
+  assert.equal(
+    workspaceSurvivesActivityWindow(defaultWorkspace, [], 'today', now, scope, {
+      ...options,
+      keepDefaultWorkspaceVisible: false,
+    }),
+    false,
+  );
+  // A renamed automatic Workspace is no longer recognized, matching DSH's own rule.
+  assert.equal(
+    workspaceSurvivesActivityWindow(
+      { ...defaultWorkspace, title: 'renamed' },
+      [],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    false,
+  );
+});
+
+test('structure filtering still keeps active Sessions and the unfiltered All range', () => {
+  const now = new Date(2026, 10, 3, 15, 0, 0, 0).getTime();
+  const workspace = {
+    title: 'active-project',
+    createdAt: new Date(now - 90 * DAY).toISOString(),
+  };
+  const scope = scopeOf({ byId: { recent: { updatedAt: now - HOUR } } });
+  const options = { showInactiveStructure: false, keepDefaultWorkspaceVisible: true };
+
+  assert.equal(
+    workspaceSurvivesActivityWindow(workspace, ['recent'], 'today', now, scope, options),
+    true,
+  );
+  assert.equal(
+    workspaceSurvivesActivityWindow(workspace, [], 'today', now, scope, options),
+    false,
+  );
+  // All and the keep-everything preference bypass the structure filter.
+  assert.equal(workspaceSurvivesActivityWindow(workspace, [], 'all', now, scope, options), true);
+  assert.equal(
+    workspaceSurvivesActivityWindow(workspace, [], 'today', now, scope, {
+      ...options,
+      showInactiveStructure: true,
+    }),
+    true,
+  );
 });
 
 test('persisted values are guarded before they scope a visible tree', () => {
@@ -146,6 +254,13 @@ test('the store updates visibility and selection atomically and never empties th
   assert.equal(snapshot().showInactiveStructure, false);
   instance.actions.setShowInactiveStructure(true);
   assert.equal(snapshot().showInactiveStructure, true);
+
+  // The automatic default Workspace stays pinned by default and can be scoped.
+  assert.equal(snapshot().keepDefaultWorkspaceVisible, true);
+  instance.actions.setKeepDefaultWorkspaceVisible(false);
+  assert.equal(snapshot().keepDefaultWorkspaceVisible, false);
+  instance.actions.setKeepDefaultWorkspaceVisible(true);
+  assert.equal(snapshot().keepDefaultWorkspaceVisible, true);
 });
 
 test('all keeps every Session, including rows without activity facts', () => {
@@ -316,7 +431,12 @@ function barProps(window, counts, setWindow, options = {}) {
       setShowInactiveStructure: (next) => {
         options.setShowInactiveStructure?.(next);
       },
+      keepDefaultWorkspaceVisible: options.keepDefaultWorkspaceVisible ?? true,
+      setKeepDefaultWorkspaceVisible: (next) => {
+        options.setKeepDefaultWorkspaceVisible?.(next);
+      },
       isActive: () => true,
+      workspaceSurvivesWindow: () => true,
       scopeSessionIds: (sessionIds) => sessionIds,
       hasActiveSession: (sessionIds) => sessionIds.length > 0,
       count: (candidate) => counts[candidate] ?? 0,
@@ -453,6 +573,44 @@ test('the only remaining range cannot be unchecked', async () => {
 });
 
 
+test('the range menu pins the default Workspace by default', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const changes = [];
+  const element = ActivityFilterBar(
+    barProps('today', { today: 1, last24h: 0, last7d: 0, all: 1 }, () => {}, {
+      setKeepDefaultWorkspaceVisible: (next) => changes.push(next),
+    }),
+  );
+  const toggle = element.props.children[1].props.children
+    .flat()
+    .find((child) => child.props['data-activity-keep-default-workspace'] !== undefined);
+
+  assert.equal(toggle.props['aria-checked'], true);
+  assert.equal(toggle.props['aria-label'], 'filter.keepDefaultWorkspace');
+  assert.equal(toggle.props.title, 'filter.keepDefaultWorkspaceHint');
+  toggle.props.onClick();
+  assert.deepEqual(changes, [false]);
+});
+
+test('the default Workspace pin can already be unchecked', async () => {
+  const ActivityFilterBar = await loadFilterBar();
+  const changes = [];
+  const element = ActivityFilterBar(
+    barProps('today', { today: 1, last24h: 0, last7d: 0, all: 1 }, () => {}, {
+      keepDefaultWorkspaceVisible: false,
+      setKeepDefaultWorkspaceVisible: (next) => changes.push(next),
+    }),
+  );
+  const toggle = element.props.children[1].props.children
+    .flat()
+    .find((child) => child.props['data-activity-keep-default-workspace'] !== undefined);
+
+  assert.equal(toggle.props['aria-checked'], false);
+  assert.equal(toggle.props['data-checked'], undefined);
+  toggle.props.onClick();
+  assert.deepEqual(changes, [true]);
+});
+
 test('the range can hide inactive structure when its default preference is turned off', async () => {
   const readSurface = (file) =>
     readFile(new URL(`../src/client/surface/components/${file}`, import.meta.url), 'utf8');
@@ -463,6 +621,8 @@ test('the range can hide inactive structure when its default preference is turne
   assert.match(tree, /activity\.showInactiveStructure/);
   assert.match(tree, /worktreeSurvivesWindow/);
   assert.match(tree, /activity\.hasActiveSession/);
+  // A Workspace created inside the range survives structure filtering.
+  assert.match(tree, /activity\.workspaceSurvivesWindow/);
   assert.match(tree, /filter\.empty/);
   assert.match(tree, /activity\.scopeSessionIds/);
 

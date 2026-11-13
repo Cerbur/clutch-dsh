@@ -520,9 +520,11 @@ test('preserves a ready Worktree projection during automatic refreshes', async (
   assert.notEqual(effectStart, -1);
   assert.notEqual(effectEnd, -1);
   const effectSource = source.slice(effectStart, effectEnd);
+  assert.match(effectSource, /seedCachedViews\(\);/);
+  assert.match(effectSource, /reuseCachedWithinMs: ENTRY_REUSE_MAX_AGE_MS/);
   assert.match(
     effectSource,
-    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
+    /void refresh\(\{[\s\S]*?preserveCurrent: true,[\s\S]*?reuseInFlight: true,[\s\S]*?reuseCachedWithinMs: ENTRY_REUSE_MAX_AGE_MS,[\s\S]*?\}\);/,
   );
 });
 
@@ -1327,9 +1329,10 @@ test('preserves the Worktree projection for action refreshes', async () => {
   assert.match(retryBindingSource, /kind: 'workspace', workspaceId: pending\.workspaceId/);
 
   const initialReadSource = await readSurfaceSource(['state/useSurfaceRefresh.tsx']);
+  assert.match(initialReadSource, /seedCachedViews\(\);/);
   assert.match(
     initialReadSource,
-    /void refresh\(\{ preserveCurrent: true, reuseInFlight: true \}\);/,
+    /void refresh\(\{[\s\S]*?preserveCurrent: true,[\s\S]*?reuseInFlight: true,[\s\S]*?reuseCachedWithinMs: ENTRY_REUSE_MAX_AGE_MS,[\s\S]*?\}\);/,
   );
 
   const actionRetryStart = source.indexOf('...(error.retryable ?');

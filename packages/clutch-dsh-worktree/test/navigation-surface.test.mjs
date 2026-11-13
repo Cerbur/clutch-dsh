@@ -270,16 +270,21 @@ test('progressive surface, bounded reads, re-entry, additions and mutation race'
   source = { ...source, mode: 'worktree', workspaceIds: [...source.workspaceIds, 'new'],
     workspaces: { items: [...source.workspaces.items, { workspaceId: 'new', sessionIds: [] }] } };
   await render();
-  assert.match(dom.window.document.body.textContent, /fast:main/, 'ready content survives background validation');
-  await finish('fast', snapshot('external'));
-  assert.match(dom.window.document.body.textContent, /fast:external/);
-  await finish('slow');
-  await finish('failed');
-  await tick();
+  assert.match(dom.window.document.body.textContent, /fast:main/, 're-entry paints the cached projection');
+  assert.equal(calls.filter((id) => id === 'fast').length, 1,
+    'a projection younger than the entry reuse limit is not read again');
   assert.equal(calls.filter((id) => id === 'new').length, 1, 'entry and addition share queued request');
-  await finish('queued');
   await finish('new');
   assert.equal(maximum, 3);
+  // A retired projection is still revalidated in place; the cached content stays visible.
+  reader.invalidate('fast');
+  await React.act(async () => {
+    void state.refresh({ scope: { kind: 'workspace', workspaceId: 'fast' }, reuseInFlight: true });
+    await tick();
+  });
+  assert.match(dom.window.document.body.textContent, /fast:main/);
+  await finish('fast', snapshot('external'));
+  assert.match(dom.window.document.body.textContent, /fast:external/);
   let background;
   await React.act(async () => {
     background = state.refresh({ scope: { kind: 'workspace', workspaceId: 'fast' }, reuseInFlight: true });

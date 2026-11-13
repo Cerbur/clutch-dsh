@@ -90,7 +90,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 Worktree 视图逐个加载 Workspace，优先读取当前 Session 所属及已展开的 Workspace，
 并限制后台读取并发。较慢或失败的 Workspace 不会隐藏其他已就绪内容。再次进入 Worktree
-模式时立即保留上次内容，同时在后台检查外部 Git 变化。尚未加载的绑定不会被当作本地
+模式时立即保留上次内容。完整投影可在 30 秒内复用，超过该时限则在后台检查外部 Git
+变化；仅更新 Session 不会延长此时限。尚未加载的绑定不会被当作本地
 Session 显示；失败的 Workspace 可在**报错与修复**中重试。
 缓存读取后才出现的 Session 会等待绑定确认，不会先归入本地分组。
 原生列表尚未完整重放时刷新，已验证的本地 Session 仍保持可见。
@@ -168,6 +169,11 @@ Worktree 标题栏下方的范围选择器把树收窄到**今日**、**最近 2
 - 范围菜单中的**显示无活跃 Workspace** 选项默认勾选，保留 Workspace、Worktree 与已归档 Worktree
   结构（包括空分组和管理操作），即使范围内没有它们的 Session。该选项是浏览器本地偏好，
   取消勾选后也会筛选不活跃结构；已保存的选择会保留。
+- 在所选范围内创建的 Workspace 即使还没有第一个 Session 也会保持可见，因此在有界范围下新建
+  Workspace 不会把刚创建的行藏起来。
+- 范围菜单中的**默认工作区一直可见**选项默认勾选，让 DSH 自动创建的 `default-workspace` 在
+  所有范围内都显示，即使它的 Session 都不在范围内。取消勾选后它与其他 Workspace 一样按范围
+  筛选；重命名后也会失效，与 DSH 识别自动工作区的规则一致。
 - 每个范围统计非空白、未归档的 Session；当前可见的空白 Session 不计入数量。
   所选范围是浏览器本地偏好：重新打开面板或刷新页面后保留，
   绝不写入插件索引或 DSH。
@@ -387,6 +393,9 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 这些旧 Host 若在首个请求前重启会丢失覆盖。原生 Session 模型切换优先。
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
+外部切换 Local checkout 的 branch 时，只原位刷新该 Workspace 的 Local 行，其余 ready 内容保持不变。
+即使文件系统通知丢失，也会通过每秒一次的 HEAD 检查兜底更新。
+导航加载期间（包括首次加载）发生的 HEAD 变化也会核对并刷新。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
 权限由 DSH 原生设置管理。
 Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。
@@ -672,8 +681,10 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - 一个 Session 最多有一个 active Worktree binding，一个 Worktree 可以有多个 Session。移除或
   清理 Worktree 不会删除 DSH Session。失效的 active binding 会显示 repair 状态，不会静默切换到
   另一个 Worktree。
-- Git 会在相关刷新、相关菜单打开和进入 Git Dashboard 时读取，插件不会持续监视 Git。外部切换
-  branch 会显示 branch drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和
+- Host 会监视每个 Workspace checkout 的 `.git/HEAD`，因此外部切换 branch 后 Local 行的 branch
+  名称会跟随更新，无需刷新页面。工作树、index 与受管 Worktree 的 checkout 不会被监视；除此之外，
+  Git 仍在相关刷新、相关菜单打开和进入 Git Dashboard 时读取。受管 Worktree 内外部切换 branch
+  仍会显示 branch drift；清理磁盘前必须显式执行 **Adopt current branch**。Detached HEAD 和
   recovery-needed 状态会保持可见并支持重试。
 - Worktree 健康状态通过 branch icon 的颜色显示：ready 使用 success（绿色）状态色，branch drift 使用警告色，repair/recovery-needed 使用错误色。即使 hover 时 icon 被 disclosure control 替换，本地化健康状态标签仍可供辅助技术读取。
 - 新创建或新导入的 Worktree 会插入所属 Workspace 的 Worktree 列表队头；已有 Worktree 顺序保持不变，Main 固定在第一位。

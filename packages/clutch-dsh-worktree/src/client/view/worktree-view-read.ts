@@ -52,6 +52,15 @@ export interface WorktreeViewReader {
   /** Read exactly this ordered set; duplicate IDs share one read. */
   readMany(workspaceIds: readonly string[]): Promise<readonly WorktreeWorkspaceView[]>;
 
+  /**
+   * Return the last complete projection for immediate presentation. It may be
+   * stale, so callers must still revalidate it in the background.
+   */
+  peek?(workspaceId: string): WorktreeWorkspaceView | undefined;
+
+  /** True when a complete non-stale projection was loaded within `maxAgeMs`. */
+  isFresh?(workspaceId: string, maxAgeMs: number): boolean;
+
   /** Make cache entries and late callbacks inert. */
   dispose(): void;
 }
@@ -62,6 +71,8 @@ interface WorktreeViewReaderEntry {
   readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
+  /** Full projection read time; partial Session updates must not renew it. */
+  loadedAt?: number;
   sessionRevision?: string;
   sessionChanges?: Map<string, { generation: number; base?: WorktreeWorkspaceView }>;
   inFlight?: {
@@ -287,6 +298,7 @@ export function createWorktreeViewReader(
           entry.view = view;
           entry.knownSessionIds = knownSessionIds;
           entry.stale = false;
+          entry.loadedAt = Date.now();
         }
         return view;
       })
@@ -314,6 +326,7 @@ export function createWorktreeViewReader(
           entry.generation += 1;
           entry.stale = true;
           entry.view = undefined;
+          entry.loadedAt = undefined;
           return false;
         }
         entry.generation += 1; // Retire reads started before the commit.
@@ -331,6 +344,8 @@ export function createWorktreeViewReader(
             record.worktreeId === target.worktreeId ? target : record) };
         }
         entry.stale = false;
+        // Session state does not refresh Local HEAD or unrelated Worktrees.
+        // Keep the full projection's original age for mode-entry revalidation.
         return true;
       };
     },
@@ -359,7 +374,9 @@ export function createWorktreeViewReader(
       }
       entry.generation += 1;
       entry.stale = true;
-      entry.view = undefined;
+      // Keep the retired projection only for `peek`: `read` never serves it
+      // while stale, so immediate presentation cannot suppress revalidation.
+      entry.loadedAt = undefined;
     },
     read(workspaceId, options) {
       if (!options?.current) return read(workspaceId);
@@ -384,6 +401,17 @@ export function createWorktreeViewReader(
     readMany(workspaceIds): Promise<readonly WorktreeWorkspaceView[]> {
       const uniqueIds = [...new Set(workspaceIds)];
       return Promise.all(uniqueIds.map((workspaceId) => read(workspaceId)));
+    },
+    peek(workspaceId) {
+      if (disposed) return undefined;
+      return entries.get(workspaceId)?.view;
+    },
+    isFresh(workspaceId, maxAgeMs) {
+      if (disposed || !Number.isFinite(maxAgeMs) || maxAgeMs < 0) return false;
+      const entry = entries.get(workspaceId);
+      if (entry === undefined || entry.view === undefined || entry.stale) return false;
+      if (entry.loadedAt === undefined) return false;
+      return Date.now() - entry.loadedAt <= maxAgeMs;
     },
     dispose(): void {
       if (disposed) return;

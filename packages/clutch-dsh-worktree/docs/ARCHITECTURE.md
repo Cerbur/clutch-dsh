@@ -638,6 +638,22 @@ effect 能同步全部新增和移除关系，而不依赖下一次渲染。
 首屏读取方式，历史计划保持只读。
 冷启动全局 recovery gate 与路径物理身份算法本次不变，不能将稳态读取计数视为冷启动总成本。
 
+Local checkout 的 branch 跟随由 Host 的 `WorkspaceCheckoutWatcher` 完成：它监视
+`<gitRootPath>/.git/HEAD`（linked worktree 通过 `.git` 文件解析 gitdir），按 Workspace 去重，
+在 100ms 去抖后通过既有 change 通道发出 workspace-scoped 通知；客户端沿用现有刷新路径只重读
+该 Workspace，不触发全局刷新。工作树、index 与受管 Worktree checkout 不在监视范围；checkout
+缺失或不可读时保持显式刷新语义。
+文件事件之外，每秒只读一次 HEAD，兜底处理监听启动时丢失事件或原生 watcher 失败；
+事件读取与轮询共享在途读取及 HEAD 内容去重，不因 index 写入或同内容 HEAD 重写刷新。
+注册前捕获 HEAD，注册后重读以关闭建立监听的间隙；原子替换 HEAD 后继续观察该路径。
+临时空文件或读取失败保留上次观察值，后续轮询恢复。Host disposal gate 和 entry 身份
+挡住迟到读取，dispose 关闭 watcher、去抖与轮询计时器。观察值只在内存，不写 Sidecar。
+Host 将每次导航返回的 `currentHead` 交给监听器做一次性快照校验：branch 对应 symbolic
+HEAD，tag/commit 对应 detached commit。即使 HEAD 在导航读取完成后、监听初始基线读取前
+变化，下一次检查仍会对比快照并通知所属 Workspace。已有监听同样校验迟到快照，但不会
+用快照覆盖已观察基线；校验消费后不会持续通知，后续新鲜导航读取也不触发通知。
+同 Workspace/root 的并发注册共享 Promise；注册 token 与 entry 身份隔离被替换的异步任务。
+
 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
 权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、
 原始 cwd 匹配根目录、未归档且无任何 Worktree 关系（含 detached）。不得直接使用按
@@ -701,6 +717,11 @@ Refresh scope is determined by the smallest affected identity.
 - Context projection is invalidated only when the current Session/Workspace is affected.
 - Global refresh is reserved for initial Worktree entry, reconnect/baseline recovery,
   explicit global retry, or a deliberately diagnosed unknown scope.
+- Re-entering Worktree mode is not a fresh global read: the Surface seeds its tree from
+  the shared reader's last projections, and a projection younger than
+  `ENTRY_REUSE_MAX_AGE_MS` (30 s) is reused without a Git read. Anything retired by a
+  mutation, admission notification or that age bound is still revalidated in place, so
+  the reuse never becomes a second source of truth.
 - Targeted refreshes merge into the existing ready projection and never clear unrelated
   Workspaces.
 - Stale-result guards are not request deduplication; equivalent in-flight targeted reads
@@ -711,7 +732,7 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 保持就绪内容 (Ready Content Preservation)
 
-任意客户端刷新、投影重放或错误切换，**严禁先清空当前 ready 内容触发白屏**。新数据到达前保留当前可见投影，loading 状态仅允许在首次进入或显式全局重试时呈现。
+任意客户端刷新、投影重放或错误切换，**严禁先清空当前 ready 内容触发白屏**。新数据到达前保留当前可见投影，loading 状态仅允许在首次进入或显式全局重试时呈现。进入 Worktree 模式时，Surface 先把共享 reader 仍持有的投影（包括已 retire 需重新校验的投影）合并进 ready 状态再发起读取，因此再次进入不会出现空树或全量 loading。
 
 ### 状态指示与活动聚合 (StateDot & Aggregate Activity)
 

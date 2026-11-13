@@ -24,6 +24,12 @@ export interface WorktreeViewState {
    * an explicit false scopes the structure to the activity range.
    */
   showInactiveStructure: boolean;
+  /**
+   * Keep DSH's automatic first-use Workspace visible in every activity range.
+   * Defaults to true so the automatic Workspace never disappears from the tree;
+   * an explicit false scopes it to the range like every other Workspace.
+   */
+  keepDefaultWorkspaceVisible: boolean;
 }
 
 /** A browser-local Worktree → DSH Workspace membership projection. */
@@ -37,6 +43,7 @@ export type WorktreeViewActions = ActionsDecl<WorktreeViewState> & {
   setViewMode: (draft: WorktreeViewState, mode: WorktreeViewMode) => void;
   setActivityWindow: (draft: WorktreeViewState, window: ActivityWindowId) => void;
   setShowInactiveStructure: (draft: WorktreeViewState, show: boolean) => void;
+  setKeepDefaultWorkspaceVisible: (draft: WorktreeViewState, keep: boolean) => void;
   setActivityWindowVisible: (
     draft: WorktreeViewState,
     window: ActivityWindowId,

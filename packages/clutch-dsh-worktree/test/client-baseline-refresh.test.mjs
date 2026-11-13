@@ -317,3 +317,144 @@ for (const order of ['notification-first', 'completion-first', 'no-notification'
     }
   });
 }
+
+test('Worktree mode entry reuses a fresh shared projection without another Git read', async () => {
+  const calls = [];
+  const navigation = {
+    worktrees: [], bindings: [], mainInstructions: '',
+    gitState: { ok: true, value: { currentBranch: 'main' } },
+    checkout: { currentHead: { kind: 'branch', name: 'main', commit: 'a'.repeat(40) } },
+  };
+  const manager = {
+    async readWorkspaceNavigation({ workspaceId }) {
+      calls.push(workspaceId);
+      return navigation;
+    },
+  };
+  const reader = view.createWorktreeViewReader(manager);
+  const first = await reader.read('ws');
+  assert.equal(calls.length, 1);
+  assert.equal(reader.peek('ws'), first);
+  assert.equal(reader.isFresh('ws', 30_000), true);
+  const workspaceIds = ['ws'];
+  const h = refreshHarness({
+    source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+      workspaces: { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: [] }] },
+      expandSnapshot: { collapsedWorkspaceIds: {} },
+      sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
+    props: { manager, viewReader: reader, invalidateWorktreeContext: async () => {} },
+    registrationState: {
+      modalReadViewRef: { current: undefined },
+      setModalReadError() {}, setModalReadLoading() {}, setWorktreeModalWorkspaceId() {},
+      modalReadLoader: { current: view.createWorktreeModalViewLoader(reader) },
+    },
+  });
+  try {
+    const rendered = h.render();
+    assert.equal(rendered.readState.status, 'ready');
+    assert.deepEqual(rendered.readState.views.map((candidate) => candidate.workspaceId), ['ws'],
+      'cached projection paints before the first read resolves');
+    await setImmediate();
+    assert.equal(calls.length, 1, 'a fresh projection is reused verbatim');
+  } finally {
+    h.dispose(); reader.dispose();
+  }
+});
+
+for (const age of [20_000, 60_000]) {
+  test(`Session deltas preserve the full projection expiry at age ${age}`, async (t) => {
+    let now = 1_000;
+    t.mock.method(Date, 'now', () => now);
+    const calls = [];
+    let branch = 'main';
+    const target = { workspaceId: 'ws', worktreeId: 'wt', branch: 'feature', status: 'active' };
+    const manager = {
+      async readWorkspaceNavigation({ workspaceId }) {
+        calls.push(workspaceId);
+        return {
+          worktrees: [target], bindings: [], mainInstructions: '',
+          gitState: { ok: true, value: { currentBranch: branch } },
+          checkout: { currentHead: { kind: 'branch', name: branch, commit: 'a'.repeat(40) } },
+        };
+      },
+    };
+    const reader = view.createWorktreeViewReader(manager);
+    await reader.read('ws');
+    now += age;
+    branch = 'external-switch';
+    for (let revision = 1; revision <= 2; revision++) {
+      const changeId = `session-${revision}`;
+      const complete = reader.beginSessionChange('ws', changeId);
+      reader.invalidate('ws', { changeId });
+      assert.equal(complete({ workspaceId: 'ws', revision: String(revision), target,
+        bindings: [{ workspaceId: 'ws', worktreeId: 'wt', sessionId: 'created', status: 'active' }] }), true);
+      reader.invalidate('ws', { changeId });
+      assert.equal(reader.isFresh('ws', 30_000), age <= 30_000,
+        'a Session delta must neither expire a fresh projection nor rejuvenate an old one');
+    }
+    now = Math.max(now, 31_001);
+    assert.equal(reader.isFresh('ws', 30_000), false, 'expiry remains tied to the full read');
+    const cached = reader.peek('ws');
+    const workspaceIds = ['ws'];
+    const h = refreshHarness({
+      source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+        workspaces: { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: [] }] },
+        expandSnapshot: { collapsedWorkspaceIds: {} },
+        sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
+      props: { manager, viewReader: reader, invalidateWorktreeContext: async () => {} },
+      registrationState: {
+        modalReadViewRef: { current: undefined },
+        setModalReadError() {}, setModalReadLoading() {}, setWorktreeModalWorkspaceId() {},
+        modalReadLoader: { current: view.createWorktreeModalViewLoader(reader) },
+      },
+    });
+    try {
+      assert.equal(h.render().readState.views[0], cached, 'retain ready rows during re-entry');
+      await setImmediate();
+      assert.deepEqual(calls, ['ws', 'ws']);
+      assert.equal(h.render().readState.views[0].currentBranch, branch);
+    } finally {
+      h.dispose(); reader.dispose();
+    }
+  });
+}
+
+test('a retired projection still paints immediately and revalidates in the background', async () => {
+  const calls = [];
+  const manager = {
+    async readWorkspaceNavigation({ workspaceId }) {
+      calls.push(workspaceId);
+      return {
+        worktrees: [], bindings: [], mainInstructions: '',
+        gitState: { ok: true, value: { currentBranch: 'main' } },
+        checkout: { currentHead: { kind: 'branch', name: 'main', commit: 'a'.repeat(40) } },
+      };
+    },
+  };
+  const reader = view.createWorktreeViewReader(manager);
+  const retired = await reader.read('ws');
+  reader.invalidate('ws');
+  assert.equal(reader.isFresh('ws', 30_000), false);
+  assert.equal(reader.peek('ws'), retired, 'the retired projection stays available for presentation');
+  const workspaceIds = ['ws'];
+  const h = refreshHarness({
+    source: { mode: 'worktree', workspaceIds, workspaceIdsRef: { current: workspaceIds },
+      workspaces: { phase: 'ready', items: [{ workspaceId: 'ws', sessionIds: [] }] },
+      expandSnapshot: { collapsedWorkspaceIds: {} },
+      sessionPresentations: {}, forkRecoverySnapshot: { revision: 0, affectedWorkspaceIds: [] } },
+    props: { manager, viewReader: reader, invalidateWorktreeContext: async () => {} },
+    registrationState: {
+      modalReadViewRef: { current: undefined },
+      setModalReadError() {}, setModalReadLoading() {}, setWorktreeModalWorkspaceId() {},
+      modalReadLoader: { current: view.createWorktreeModalViewLoader(reader) },
+    },
+  });
+  try {
+    const rendered = h.render();
+    assert.equal(rendered.readState.views.length, 1, 'stale cache paints before revalidation');
+    await setImmediate();
+    assert.equal(calls.length, 2, 'a retired projection is still re-read');
+  } finally {
+    h.dispose(); reader.dispose();
+  }
+});
