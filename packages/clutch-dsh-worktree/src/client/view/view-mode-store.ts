@@ -25,6 +25,7 @@ export function createWorktreeViewStore(): EngineStoreHandle<
       activityWindow: DEFAULT_ACTIVITY_WINDOW,
       activityWindows: [...DEFAULT_ACTIVITY_WINDOWS],
       showInactiveStructure: true,
+      keepDefaultWorkspaceVisible: true,
     }),
     persist: WORKTREE_VIEW_MODE_STORAGE_KEY,
     actions: {
@@ -38,6 +39,9 @@ export function createWorktreeViewStore(): EngineStoreHandle<
       },
       setShowInactiveStructure: (draft, show: boolean) => {
         draft.showInactiveStructure = show === true;
+      },
+      setKeepDefaultWorkspaceVisible: (draft, keep: boolean) => {
+        draft.keepDefaultWorkspaceVisible = keep === true;
       },
       setActivityWindowVisible: (
         draft,

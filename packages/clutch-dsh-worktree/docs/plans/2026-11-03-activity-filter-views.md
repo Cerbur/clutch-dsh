@@ -120,8 +120,45 @@ node --test test/readme-parity.test.mjs
 
 - **截图与 Features 表**：本次未新增 `assets/screenshots/` 图片，因此没有向两份 README 的
   Features 表新增行；已在实际运行的 DSH 中完成视觉验证后再补截图与表格行，并同步 `screenshots.json`。
-- **Worktree 级独立活跃信号**：当前"活跃"完全由 Session 派生。若后续需要"今天创建的 Worktree
-  即使还没有 Session 也显示"，可以引入 `createdAt`/`importedAt`（获取事实，已在 Sidecar 中）作为
+- **Worktree 级独立活跃信号**：Workspace 行已在 2026-11-10 引入原生 `createdAt` 与默认工作区
+  补充（见上）；Worktree 行仍完全由绑定 Session 派生。若后续需要“今天创建的 Worktree
+  即使还没有 Session 也显示”，可以引入 `createdAt`/`importedAt`（获取事实，已在 Sidecar 中）作为
   补充条件；这会改变语义，需要人类确认。
 - **长期活动的低成本刷新**：目前 60 秒重算一次计数与边界。若树规模显著增长，可改为只在范围切换、
   Session 列表变化或文档可见性恢复时重算。
+
+## 周期内新建 Workspace 与默认工作区（2026-11-10）
+
+关闭「显示无活跃 Workspace」后，有界范围此前只按 Session 活跃状态保留 Workspace。刚创建的
+Workspace 还没有 Session，因此会立刻从所选范围中消失。本次在该结构谓词上补充两个原生
+Workspace 事实，不新增任何读取：
+
+| 规则 | 语义 |
+| --- | --- |
+| 周期内创建 | `workspace.createdAt` 落在当前范围下界之后（含下界）时，Workspace 行保留；`全部` 与时钟不可读时不做排除 |
+| 默认工作区常显 | 浏览器本地偏好 `keepDefaultWorkspaceVisible` 默认开启；`title === 'default-workspace'` 的 DSH 自动工作区在所有范围内保留 |
+| 重命名 | DSH 按存储标题识别自动工作区；用户重命名后该快捷规则失效，与原生行为一致 |
+| 作用范围 | 只影响 Workspace 行的结构筛选；Session 行、计数、Worktree 行与搜索仍按原规则收窄 |
+
+实现要点：
+
+- `activity-filter.ts` 新增 `DEFAULT_WORKSPACE_TITLE`、`isDefaultWorkspace`、
+  `isWorkspaceCreatedInWindow`、`workspaceSurvivesActivityWindow` 与 `ActivityWorkspaceScope`。
+- `ActivityFilterView` 暴露 `workspaceSurvivesWindow` 读面，`useActivityFilter` 只组合已有的
+  原生 Workspace 字段和当前范围，不触发刷新或 Host 读取。
+- `WorkspaceTree` 的 Workspace 结构谓词改为调用该读面；Worktree 行逻辑不变。
+- 范围菜单新增勾选行「默认工作区一直可见」；偏好与所选范围共用
+  `clutch-dsh-worktree.view-mode`，旧载荷缺少字段时按开启处理。
+- 两份 README 的活跃范围说明同步补充新建 Workspace 与默认工作区规则。
+
+验证：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree test
+node --test test/readme-parity.test.mjs
+```
+
+`test/client-activity-filter.test.mjs` 覆盖周期创建的边界与非法时间、默认工作区标题匹配与
+重命名、开关关闭后的行为、`全部` 与结构保留的旁路，以及新菜单勾选行。
