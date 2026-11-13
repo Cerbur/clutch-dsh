@@ -14,6 +14,14 @@ import type { ReadState, RefreshOptions, WorktreeSurfaceProps } from '../types.j
 import type { useRegistrationState } from './useRegistrationState.js';
 import type { useSurfaceSources } from './useSurfaceSources.js';
 
+/**
+ * Fresh cached projections are reused verbatim when Worktree mode is entered
+ * again. The reader still revalidates anything retired by a mutation,
+ * notification or this age limit, but a mode toggle no longer forces every
+ * Workspace through Git again.
+ */
+export const ENTRY_REUSE_MAX_AGE_MS = 30_000;
+
 type Input = {
   source: Pick<
     ReturnType<typeof useSurfaceSources>,
@@ -51,7 +59,19 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     modalReadLoader,
     setWorktreeModalWorkspaceId,
   } = registrationState;
-  const [readState, setReadState] = useState<ReadState>(EMPTY_READ_STATE);
+  // A remount keeps the shared reader's last projections; paint them before the
+  // first effect runs so mode re-entry never flashes an empty tree.
+  const initialReadState = useRef<ReadState | undefined>(undefined);
+  if (initialReadState.current === undefined) {
+    const cached = workspaceIds.flatMap((workspaceId) => {
+      const view = viewReader.peek?.(workspaceId);
+      return view === undefined ? [] : [view];
+    });
+    initialReadState.current = cached.length === 0
+      ? EMPTY_READ_STATE
+      : { status: 'ready', views: cached };
+  }
+  const [readState, setReadState] = useState<ReadState>(initialReadState.current);
   const readStateRef = useRef(readState);
   readStateRef.current = readState;
   const priorityIdsRef = useRef(workspaceIds);
@@ -80,6 +100,24 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     targetRefreshGuards.current.set(workspaceId, created);
     return created;
   };
+  /** Publish reader-held projections immediately; revalidation remains explicit. */
+  const seedCachedViews = useCallback((): void => {
+    const seeded = workspaceIdsRef.current.flatMap((workspaceId) => {
+      const view = viewReader.peek?.(workspaceId);
+      return view === undefined ? [] : [view];
+    });
+    if (seeded.length === 0) return;
+    setReadState((current) => {
+      const targetErrors = current.targetErrors ?? {};
+      let views = current.views;
+      for (const view of seeded) {
+        if (targetErrors[view.workspaceId] !== undefined) continue;
+        if (views.some((existing) => existing.workspaceId === view.workspaceId)) continue;
+        views = mergeWorktreeView(views, view);
+      }
+      return views === current.views ? current : { ...current, status: 'ready', views };
+    });
+  }, [viewReader]);
   const refresh = useCallback(
     async (options: RefreshOptions = {}): Promise<void> => {
       if (manager === undefined) {
@@ -108,9 +146,13 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         selectedWorkspaceIds.map(async (workspaceId) => {
           const guard = guardFor(workspaceId);
           if (!options.alreadyInvalidated && !options.ensureLoaded) {
-            viewReader.invalidate(workspaceId, {
-              reuseInFlight: options.reuseInFlight, changeId: options.changeId,
-            });
+            const reuseFresh = options.reuseCachedWithinMs !== undefined &&
+              viewReader.isFresh?.(workspaceId, options.reuseCachedWithinMs) === true;
+            if (!reuseFresh) {
+              viewReader.invalidate(workspaceId, {
+                reuseInFlight: options.reuseInFlight, changeId: options.changeId,
+              });
+            }
           }
           const contextRefresh =
             options.invalidateContext === false
@@ -275,7 +317,14 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   }, [readState.views, readState.targetErrors, source.workspaces.items, source.workspaces.phase, mode, refresh]);
   useEffect(() => {
     if (mode === 'worktree') {
-      void refresh({ preserveCurrent: true, reuseInFlight: true });
+      // Re-entry reuses every projection the shared reader still holds: the tree
+      // paints immediately and only retired Workspaces go through Git again.
+      seedCachedViews();
+      void refresh({
+        preserveCurrent: true,
+        reuseInFlight: true,
+        reuseCachedWithinMs: ENTRY_REUSE_MAX_AGE_MS,
+      });
     } else {
       refreshGuard.current.invalidate();
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
@@ -287,7 +336,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       setModalReadLoading(false);
       // Keep ready content for immediate reuse on re-entry.
     }
-  }, [mode, refresh]);
+  }, [mode, refresh, seedCachedViews]);
   const previousWorkspaceIdsRef = useRef<readonly string[]>(workspaceIds);
   useEffect(() => {
     if (isPendingListPhase(source.workspaces.phase)) return;
