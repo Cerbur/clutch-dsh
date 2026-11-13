@@ -394,6 +394,8 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 外部切换 Local checkout 的 branch 时，只原位刷新该 Workspace 的 Local 行，其余 ready 内容保持不变。
+即使文件系统通知丢失，也会通过每秒一次的 HEAD 检查兜底更新。
+导航加载期间（包括首次加载）发生的 HEAD 变化也会核对并刷新。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
 权限由 DSH 原生设置管理。
 Agent 或插件重启后，未配置自动注入的能力需要重新执行 `/cluworktree`。

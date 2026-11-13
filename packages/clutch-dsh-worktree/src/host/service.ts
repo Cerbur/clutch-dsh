@@ -300,7 +300,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     if (result.ok) {
       // The Local row follows an external branch switch; unrelated Workspaces stay untouched.
       void this.checkoutWatcher
-        .observe(input.workspaceId, result.value.checkout?.gitRootPath)
+        .observe(input.workspaceId, result.value.checkout?.gitRootPath, result.value.checkout?.currentHead)
         .catch(() => undefined);
     }
     return result;

@@ -643,6 +643,16 @@ Local checkout 的 branch 跟随由 Host 的 `WorkspaceCheckoutWatcher` 完成�
 在 100ms 去抖后通过既有 change 通道发出 workspace-scoped 通知；客户端沿用现有刷新路径只重读
 该 Workspace，不触发全局刷新。工作树、index 与受管 Worktree checkout 不在监视范围；checkout
 缺失或不可读时保持显式刷新语义。
+文件事件之外，每秒只读一次 HEAD，兜底处理监听启动时丢失事件或原生 watcher 失败；
+事件读取与轮询共享在途读取及 HEAD 内容去重，不因 index 写入或同内容 HEAD 重写刷新。
+注册前捕获 HEAD，注册后重读以关闭建立监听的间隙；原子替换 HEAD 后继续观察该路径。
+临时空文件或读取失败保留上次观察值，后续轮询恢复。Host disposal gate 和 entry 身份
+挡住迟到读取，dispose 关闭 watcher、去抖与轮询计时器。观察值只在内存，不写 Sidecar。
+Host 将每次导航返回的 `currentHead` 交给监听器做一次性快照校验：branch 对应 symbolic
+HEAD，tag/commit 对应 detached commit。即使 HEAD 在导航读取完成后、监听初始基线读取前
+变化，下一次检查仍会对比快照并通知所属 Workspace。已有监听同样校验迟到快照，但不会
+用快照覆盖已观察基线；校验消费后不会持续通知，后续新鲜导航读取也不触发通知。
+同 Workspace/root 的并发注册共享 Promise；注册 token 与 entry 身份隔离被替换的异步任务。
 
 新建、导入后的 Session 打开、空白 Session 复用与绑定重试，必须先读取所属 Workspace 的
 权威关系。Local 的 `+` 通过原生 Session Controller 创建，候选必须属于当前 Workspace、

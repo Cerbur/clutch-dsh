@@ -459,7 +459,9 @@ restarting those hosts before that request discards the override. Native Session
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. An external branch switch in the Local checkout refreshes only that Workspace's Local row
-in place; the rest of the ready tree is preserved. Dispatch keeps the current conversation open and uses DSH's normal new-Session
+in place; the rest of the ready tree is preserved. A once-per-second HEAD check provides a fallback
+for missed filesystem notifications. HEAD changes during navigation loading, including the first load,
+are also reconciled. Dispatch keeps the current conversation open and uses DSH's normal new-Session
 preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
 `/cluworktree create <name> [baseBranch]` creates a managed Worktree and branch from the calling
 Session's healthy Worktree HEAD or the Workspace-root HEAD; the name is required and no Session is created.
