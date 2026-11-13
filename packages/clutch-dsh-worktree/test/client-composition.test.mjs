@@ -1176,7 +1176,7 @@ test('declares the native Conversation package without depending on a Hero conte
   );
   assert.equal(
     manifest.peerDependencies['@deepseek-ai/dsh-client-ui-conversation'],
-    '>=0.2.2-rc.1',
+    '>=0.2.2-rc.2',
   );
   assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.2.2-rc.2');
   assert.match(clientReadme, /conversation\.session\.header\.actions/);

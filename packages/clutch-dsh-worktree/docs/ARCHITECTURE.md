@@ -578,7 +578,7 @@ Host 只读 adapter 使用 `ctx.get()` 动态解析可选的 `workingDirectory` 
 
 ### 客户端边界与接口契约
 
-- 最低兼容基线及当前 Client graph 验证版本均为 DSH `dsh-v0.2.2-rc.1`。
+- 最低兼容基线及当前 Client graph 验证版本均为 DSH `dsh-v0.2.2-rc.2`。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
 - Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航委托至 `ctx.uiWorkspace.openSession()`，目录选取复用 DSH 组合的 `sidebar.workspaces.directoryFlow` occupant，经插件自有 child slot 和原生 renderer 渲染，选定路径后调用 `ctx.workspaces.create({ path })`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。

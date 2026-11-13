@@ -1,5 +1,39 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.29 — 2026-11-13
+
+### 中文
+
+#### 版本说明
+
+- 本次最低 DSH 版本提高属于兼容性破坏；根据本次发布决定，在 0.1.x 阶段以 patch 版本 `0.1.29` 发布。
+
+#### 兼容性
+
+- 最低支持的 DSH 版本提高至 `0.2.2-rc.2`。
+
+#### 修复
+
+- 适配 DSH `0.2.2-rc.2`，修复活动铃铛的定位与打开问题，并兼容侧栏滚动契约。
+- 修复浏览器中添加 Workspace 时目录选择器不可用的问题。
+- 原生归档清理完成后刷新匹配的 Worktree 状态，无需手动刷新页面。
+
+### English
+
+#### Versioning note
+
+- Raising the minimum DSH version is a breaking change; this release intentionally uses patch version `0.1.29` during the 0.1.x stage.
+
+#### Compatibility
+
+- Raise the minimum supported DSH version to `0.2.2-rc.2`.
+
+#### Fixed
+
+- Adapt to DSH `0.2.2-rc.2`, fixing Activity Bell positioning and opening while supporting the sidebar scrolling contract.
+- Fix the unavailable directory picker when adding a Workspace in the browser.
+- Refresh the matching Worktree status after native archive cleanup settles without requiring a page refresh.
+
 ## 0.1.28 — 2026-11-08
 
 ### 中文

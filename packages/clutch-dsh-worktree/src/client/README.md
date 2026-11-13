@@ -70,7 +70,7 @@ The Client does not read `ctx.remote.worktreeManager`, import or traverse the ge
 ## DSH Client boundary
 
 The browser Consumer uses the split Controller/Store graph introduced in
-`dsh-v0.1.2-rc.1`; the minimum supported graph is `dsh-v0.2.2-rc.1` and the development/validation graph is `dsh-v0.2.2-rc.2`. Browser-local
+`dsh-v0.1.2-rc.1`; the minimum supported graph is `dsh-v0.2.2-rc.2` and the development/validation graph is `dsh-v0.2.2-rc.2`. Browser-local
 stores import `createSnapshotStore` and `defineStore` from
 `@deepseek-ai/dsh-client-store`. The removed monolithic Client runtime entry is not probed or
 used as a fallback.

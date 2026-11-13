@@ -4,6 +4,12 @@ Date: 2026-11-13. Feature branch: `wt-worktree/feat-2.2-rc.2-compatibility`.
 The DSH checkout is at `dsh-v0.2.2-rc.2`. Package version remains unchanged.
 This document records feature validation, not release verification.
 
+## Release amendment
+
+On 2026-11-13, the release raises the minimum supported DSH graph to
+`0.2.2-rc.2` at the user’s direction. Earlier statements in this feature
+validation record describe the prior `0.2.2-rc.1` floor.
+
 ## Status
 
 Four compatibility fixes are implemented and automated checks pass. Real UI

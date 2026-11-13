@@ -650,8 +650,8 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 
 | 组件            | 要求                                                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH Client      | `>=0.2.2-rc.1`，需要 Session/Workspace Controller 和 Client Store                                                                           |
-| DSH Host        | `>=0.2.2-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability                                                              |
+| DSH Client      | `>=0.2.2-rc.2`，需要 Session/Workspace Controller 和 Client Store                                                                           |
+| DSH Host        | `>=0.2.2-rc.2`，需要 Typert Gateway `/api` connection 和 subprocess capability                                                              |
 | Git             | `>=2.20.0`，必须已安装且可在 `PATH` 中使用                                                                                                  |
 | Node.js         | `>=24.9.0`，与最低支持的 DSH 版本一致 |
 | Host filesystem | 支持使用普通 Windows 和 macOS 本地路径保存 sidecar 与 Git Worktree 数据；网络、特殊或别名路径较多的文件系统可能不支持持久化同步或身份校验。 |

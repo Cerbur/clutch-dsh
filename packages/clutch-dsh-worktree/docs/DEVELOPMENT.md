@@ -10,7 +10,7 @@
 
 ## 1. 环境前置要求
 
-2026-11-13 兼容验证与开发依赖基线为 `dsh-v0.2.2-rc.2`，最低支持仍为 `0.2.2-rc.1`。
+2026-11-13 兼容验证与开发依赖基线为 `dsh-v0.2.2-rc.2`，最低支持为 `0.2.2-rc.2`。
 铃铛使用 CSS anchor；Sidebar 使用可选原生 section-scroller 接缝；原生归档清理终态只触发
 匹配记录的只读刷新。完整排查与 UI 回归记录见 [rc.2 compatibility](plans/2026-11-13-dsh-022-rc2-compatibility.md)。
 
@@ -35,7 +35,7 @@ step tool admission、独立 native/PTC executor 和 `agent.model` owner。
 React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建、卸载清理，以及主对话和
 共享 Surface owner 的身份保持。原生列表 renderer 的 owner props 由测试提供；它不替代
 真实 Desktop 的玻璃材质、滚动和动画联调。`test/sidebar-glass.test.mjs` 检查生产 bundle
-不再包含侧栏遮蔽实现。当前 Host/Client 统一要求 DSH `>=0.2.2-rc.1`。
+不再包含侧栏遮蔽实现。当前 Host/Client 统一要求 DSH `>=0.2.2-rc.2`。
 
 Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
 共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
@@ -79,7 +79,7 @@ Fetch 完成后由 Host 读取一次并直接返回列表，窗口焦点与 Git 
 
 本插件的本地开发、调试与全量联调以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness) 的源码 checkout 为准。
 
-> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本为 `dsh-v0.2.2-rc.1`，当前验证基线为 `dsh-v0.2.2-rc.2`，其 Node 引擎要求为 `>=24.9.0`。
+> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本为 `dsh-v0.2.2-rc.2`，当前验证基线为 `dsh-v0.2.2-rc.2`，其 Node 引擎要求为 `>=24.9.0`。
 
 克隆并构建 upstream DSH：
 
@@ -255,7 +255,7 @@ provider opt-in 隔离、其他插件不变及不确定回报的 wire 重试字�
 launcher 的 `--patch` 必须在 Web app 的 `--port` 前，且 config 覆盖需保留 dshHome。
 每次重载后使用新派发任务验证回报；旧进程的 token/目标不会恢复。
 
-Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.2-rc.1，开发 pin 为 0.2.2-rc.2），
+Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.2-rc.2，开发 pin 为 0.2.2-rc.2），
 避免借用偶然存在的传递依赖，也不导入原生 Session/subagent 服务的 Context 类型图污染 Client。
 锁文件只在本包 importer 添加既有 llm snapshot 引用，不升级其他 graph。
 
@@ -511,7 +511,7 @@ description:
 
 ## 原生 Session 目录能力验证
 
-生产依赖与类型验证最低 graph 为 `0.2.2-rc.1`，旧版本只保留为显式 legacy 测试 fixture。新建 Worktree Session 还要求
+生产依赖与类型验证最低 graph 为 `0.2.2-rc.2`，旧版本只保留为显式 legacy 测试 fixture。新建 Worktree Session 还要求
 原生 workingDirectory 服务，以及 Session 创建的 workspaceId 输入。不能仅按 semver 推断
 该 capability 已加载；缺失时新创建流程显式失败，不自动更改权限或 header cwd。
 
