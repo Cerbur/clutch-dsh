@@ -93,7 +93,9 @@ development details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 Worktree view loads Workspaces independently, prioritizing the current Session's Workspace
 and expanded Workspaces with bounded background reads. A slow or failed Workspace does not
 hide other ready Workspaces. Returning to Worktree mode immediately keeps the previous content
-visible while checking for external Git changes. Unloaded bindings are never shown as Local
+visible. Complete projections can be reused for 30 seconds; older projections are checked for
+external Git changes in the background. Session-only updates do not extend this window.
+Unloaded bindings are never shown as Local
 Sessions; a failed Workspace can be retried in **Errors & Repair**.
 Sessions appearing after a cached read stay unclassified until their bindings are checked.
 Refreshing during an incomplete native list replay keeps previously verified Local Sessions visible.

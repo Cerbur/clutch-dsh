@@ -175,6 +175,8 @@ The Promise may settle for cleanup, but its captured generation must still match
 the cache. This prevents an overlapping older read from replacing a newer invalidation with stale
 Worktree, branch, or binding facts. The reader owns this cache and lifecycle; Context and Surface do
 not maintain separate Manager read caches.
+Mode-entry reuse expires 30 seconds after the complete Workspace read. Merging a Session
+delta preserves that timestamp because it does not refresh Local HEAD or other Worktrees.
 
 Sidecar-backed reads tolerate a DSH Workspace whose root directory is gone: Worktree records, Session
 bindings, and recorded instructions project the indexed facts instead of failing. Git-dependent reads

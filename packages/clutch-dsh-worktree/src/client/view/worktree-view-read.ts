@@ -71,7 +71,7 @@ interface WorktreeViewReaderEntry {
   readonly changeIds: Set<string>;
   stale: boolean;
   view?: WorktreeWorkspaceView;
-  /** Publication time of `view`; cleared whenever the entry is retired. */
+  /** Full projection read time; partial Session updates must not renew it. */
   loadedAt?: number;
   sessionRevision?: string;
   sessionChanges?: Map<string, { generation: number; base?: WorktreeWorkspaceView }>;
@@ -344,7 +344,8 @@ export function createWorktreeViewReader(
             record.worktreeId === target.worktreeId ? target : record) };
         }
         entry.stale = false;
-        entry.loadedAt = Date.now();
+        // Session state does not refresh Local HEAD or unrelated Worktrees.
+        // Keep the full projection's original age for mode-entry revalidation.
         return true;
       };
     },

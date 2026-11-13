@@ -90,7 +90,8 @@ dsh plugin --profile web add "github:Cerbur/clutch-dsh#path:/packages/clutch-dsh
 
 Worktree 视图逐个加载 Workspace，优先读取当前 Session 所属及已展开的 Workspace，
 并限制后台读取并发。较慢或失败的 Workspace 不会隐藏其他已就绪内容。再次进入 Worktree
-模式时立即保留上次内容，同时在后台检查外部 Git 变化。尚未加载的绑定不会被当作本地
+模式时立即保留上次内容。完整投影可在 30 秒内复用，超过该时限则在后台检查外部 Git
+变化；仅更新 Session 不会延长此时限。尚未加载的绑定不会被当作本地
 Session 显示；失败的 Workspace 可在**报错与修复**中重试。
 缓存读取后才出现的 Session 会等待绑定确认，不会先归入本地分组。
 原生列表尚未完整重放时刷新，已验证的本地 Session 仍保持可见。
