@@ -52,6 +52,9 @@ specialist documents, rather than appending them to the READMEs.
 - Characters share model geometry and textures, with independent skeletons,
   animation and automatic blinking. The soft character-only fill keeps faces, blue
   hair and clothing readable in shadow while retaining the kitchen's warm lighting.
+- Actual signed yaw changes drive a small skeletal stepping turn with head/chest
+  anticipation and a tail counter-turn. This is an in-place runtime blend, not
+  foot-locked IK or a new GLB delivery. See [turning verification](CHARACTER-TURNING.md).
 - Reduced motion freezes wandering and blinking. Hidden/offscreen scenes pause;
   offscreen canvases release GPU resources and rebuild when visible. Generated
   environment, shadow and cache resources belong to the scene and must be disposed.
@@ -79,6 +82,10 @@ specialist documents, rather than appending them to the READMEs.
   skeletal walking and automatic blinking. The accepted Blender kitchen and warm
   lighting include a separate blue-and-cream mat in front of the refrigerator;
   this does not replace the whale rug.
+- Character CPU support probes follow each primitive's referenced vertices, not
+  the entire shared attribute buffer. Stable idle skips skeletal updates only
+  after its transition settles; blinking remains independent. See the current
+  [runtime optimization audit](CHARACTER-OPTIMIZATION.md) for measured limits.
 - The rejected refrigerator refinement is historical and must not be selected by
   default. Preserve its source and delivery for reference; follow the rollback and
   subsequent accepted baselines in AGENTS.md and the specialist documents.

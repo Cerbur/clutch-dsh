@@ -1,5 +1,100 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.29 — 2026-11-13
+
+### 中文
+
+#### 版本说明
+
+- 本次最低 DSH 版本提高属于兼容性破坏；根据本次发布决定，在 0.1.x 阶段以 patch 版本 `0.1.29` 发布。
+
+#### 兼容性
+
+- 最低支持的 DSH 版本提高至 `0.2.2-rc.2`。
+
+#### 修复
+
+- 适配 DSH `0.2.2-rc.2`，修复活动铃铛的定位与打开问题，并兼容侧栏滚动契约。
+- 修复浏览器中添加 Workspace 时目录选择器不可用的问题。
+- 原生归档清理完成后刷新匹配的 Worktree 状态，无需手动刷新页面。
+
+### English
+
+#### Versioning note
+
+- Raising the minimum DSH version is a breaking change; this release intentionally uses patch version `0.1.29` during the 0.1.x stage.
+
+#### Compatibility
+
+- Raise the minimum supported DSH version to `0.2.2-rc.2`.
+
+#### Fixed
+
+- Adapt to DSH `0.2.2-rc.2`, fixing Activity Bell positioning and opening while supporting the sidebar scrolling contract.
+- Fix the unavailable directory picker when adding a Workspace in the browser.
+- Refresh the matching Worktree status after native archive cleanup settles without requiring a page refresh.
+
+## 0.1.28 — 2026-11-08
+
+### 中文
+
+#### 修复
+
+- 切换到插件、自动化任务、Office 等原生主页面时自动关闭 Dashboard 并取消等待中的导航，返回对话后不再自动重新打开。
+
+### English
+
+#### Fixed
+
+- Automatically close Dashboard and cancel pending navigation when switching to native main pages such as Plugins, Scheduled Tasks, or Office, without reopening it when returning to the conversation.
+
+## 0.1.27 — 2026-11-07
+
+### 中文
+
+#### 新增/优化/修复
+
+- 集成归档死锁恢复逻辑。
+- 修复在 Git 错误下保持清理取消可用性的问题。
+- 修复工作区被待处理清理任务阻塞的问题。
+
+### English
+
+#### Added/Improved/Fixed
+
+- Integrate archive deadlock recovery.
+- Keep cleanup cancellation available on Git errors.
+- Recover workspace blocked by pending cleanup.
+
+
+
+
+## 0.1.26 — 2026-11-06
+
+### 中文
+
+#### 修复
+
+- 修复当前 DSH 工具准入机制下自动注入工具在首轮原生调用或 PTC 执行中缺失的问题，并保持手动启用幂等。
+- 修复委派 Session 的模型与推理配置在首次请求中未生效的问题，支持继承已有选择或显式指定配置。
+- 修复自动工具探测读取失败阻断普通 Agent 请求的问题，同时保留身份、执行目录校验与消息回报授权。
+
+#### 兼容性
+
+- 最低支持版本提升至 DSH `0.2.2-rc.1` 与 Node.js `>=24.9.0`，并同步更新依赖与双语兼容说明。
+
+### English
+
+#### Fixed
+
+- Fix missing automatically injected tools on the first native call or PTC execution under current DSH tool admission, while keeping manual activation idempotent.
+- Fix delegated Session model and reasoning settings not taking effect on the first request, supporting inherited selections and explicit configuration.
+- Prevent unavailable automatic tool probe data from blocking ordinary Agent requests while preserving identity, working directory, and report authorization checks.
+
+#### Compatibility
+
+- Raise the minimum supported versions to DSH `0.2.2-rc.1` and Node.js `>=24.9.0`, and align dependencies and bilingual compatibility guidance.
+
 ## 0.1.25 — 2026-11-05
 
 ### 中文

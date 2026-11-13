@@ -3,9 +3,9 @@ import test from 'node:test';
 import { z } from 'zod';
 import {
   assertSupportedJsonSchema,
-  jsonSchemaToTs,
   validateJsonSchemaValue,
 } from '@deepseek-ai/dsh-tools';
+import { jsonSchemaToTs } from '@deepseek-ai/dsh-tool-executor-ptc';
 import { toolParameters } from '../lib/tool/schema.js';
 
 test('compact length descriptions retain UTF-16 bounds and executable validation', () => {

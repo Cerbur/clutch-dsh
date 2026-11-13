@@ -94,9 +94,9 @@ test('publishes the generated Host and Client Remote contribution entries', () =
   });
 });
 
-test('accepts the DSH 0.2.0 prerelease graph while preserving the compatibility floor', () => {
-  const minimumDshVersion = '0.2.0-rc.1';
-  const validatedDshVersion = '0.2.0-rc.1';
+test('requires the DSH 0.2.2 prerelease graph and rejects earlier hosts', () => {
+  const minimumDshVersion = '0.2.2-rc.2';
+  const validatedDshVersion = '0.2.2-rc.2';
   const dshPeerDependencies = Object.entries(packageManifest.peerDependencies ?? {})
     .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'));
   const dshDevDependencies = Object.entries(packageManifest.devDependencies ?? {})
@@ -106,14 +106,17 @@ test('accepts the DSH 0.2.0 prerelease graph while preserving the compatibility 
   assert.ok(dshDevDependencies.length > 0);
   for (const [name, version] of dshPeerDependencies) {
     assert.equal(semver.satisfies(minimumDshVersion, version), true, `${name} must preserve the compatibility floor`);
+    for (const older of ['0.2.0-rc.1', '0.2.1-rc.1', '0.2.1', '0.2.2-rc.0', '0.2.2-rc.1'])
+      assert.equal(semver.satisfies(older, version), false, `${name} must reject DSH ${older}`);
     assert.equal(semver.satisfies(validatedDshVersion, version), true, `${name} must accept DSH ${validatedDshVersion}`);
   }
   for (const [name, version] of dshDevDependencies) {
     assert.equal(version, validatedDshVersion, `${name} must match the DSH ${validatedDshVersion} validation graph`);
   }
-  assert.equal(packageManifest.peerDependencies['@deepseek-ai/cordis'], '^4.0.1');
-  assert.equal(semver.satisfies('4.0.4', packageManifest.peerDependencies['@deepseek-ai/cordis']), true);
-  assert.equal(packageManifest.devDependencies['@deepseek-ai/cordis'], '4.0.4');
+  assert.equal(packageManifest.peerDependencies['@deepseek-ai/cordis'], '^4.1.0');
+  assert.equal(semver.satisfies('4.1.0', packageManifest.peerDependencies['@deepseek-ai/cordis']), true);
+  assert.equal(semver.satisfies('4.0.4', packageManifest.peerDependencies['@deepseek-ai/cordis']), false);
+  assert.equal(packageManifest.devDependencies['@deepseek-ai/cordis'], '4.1.0');
   assert.equal(packageManifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
   assert.equal(packageManifest.devDependencies['@deepseek-ai/dsh-client-runtime'], undefined);
   assert.doesNotMatch(JSON.stringify(packageManifest), /0\.1\.0-rc\.8/);
@@ -124,11 +127,11 @@ test('accepts the DSH 0.2.0 prerelease graph while preserving the compatibility 
 test('depends on and injects the DSH locale service', () => {
   assert.equal(
     packageManifest.peerDependencies['@deepseek-ai/dsh-client-locale'],
-    '>=0.2.0-rc.1',
+    '>=0.2.2-rc.2',
   );
   assert.equal(
     packageManifest.devDependencies['@deepseek-ai/dsh-client-locale'],
-    '0.2.0-rc.1',
+    '0.2.2-rc.2',
   );
   assert.ok(packageManifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.equal(packageManifest.dependencies['@deepseek-ai/dsh-subprocess-local'], undefined);
@@ -216,7 +219,8 @@ test('loads the package and calls its Host Remote through the real DSH compositi
   const { default: Loader } = await import('@deepseek-ai/cordis-plugin-loader');
   const { default: TypertRegistry } = await import('@deepseek-ai/dsh-typert-registry');
   const { default: TypertGatewayService } = await import('@deepseek-ai/dsh-api-gateway');
-  const { HostConnectionService } = await import('@deepseek-ai/dsh-client-connection');
+  const { default: RemoteAccessService } = await import('@deepseek-ai/dsh-api-remote-access');
+  const { HostConnectionService, Peer } = await import('@deepseek-ai/dsh-client-connection');
   const typertLoader = await import('@deepseek-ai/dsh-typert-loader');
   const workspace = {
     id: 'ws_example',
@@ -242,6 +246,7 @@ test('loads the package and calls its Host Remote through the real DSH compositi
 
   try {
     await host.plugin(TypertRegistry);
+    await host.plugin(RemoteAccessService);
     await host.plugin(Loader);
     await host.plugin(HostConnectionService, []);
     const packageRequire = createRequire(host.baseUrl);
@@ -261,9 +266,9 @@ test('loads the package and calls its Host Remote through the real DSH compositi
     await host.loader.await();
     await host.plugin(typertLoader);
 
-    const fetchHandler = host.connection.createSharedFetchHandler('/api', {
-      fetch: async () => new globalThis.Response('fallback', { status: 404 }),
-    });
+    const sharedHandler = host.connection.createSharedFetchHandler('/api');
+    const peer = new Peer(host, { principal: { kind: 'owner' } });
+    const fetchHandler = { fetch: (request) => sharedHandler.fetch(request, peer) };
     const response = await fetchHandler.fetch(
       new globalThis.Request('http://localhost/api/worktreeManager/listWorktrees', {
         method: 'POST',

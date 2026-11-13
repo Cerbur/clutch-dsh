@@ -165,7 +165,7 @@ export function SurfaceHeader({ expansion, props, source, read, mutation, onOpen
               <IconCollapseAll16 />
             </button>
           </Tooltip>
-          <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
+          {createWorkspace !== undefined && <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
             <button
               type="button"
               className={styles.iconButton}
@@ -176,7 +176,7 @@ export function SurfaceHeader({ expansion, props, source, read, mutation, onOpen
             >
               <IconProjectAddOutline16 />
             </button>
-          </Tooltip>
+          </Tooltip>}
           <Tooltip label={t('mode.exit')} side="bottom" delayMs={500}>
             <button
               type="button"

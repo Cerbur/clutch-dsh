@@ -3,6 +3,8 @@ import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 export type { ToolContext } from './types.js';
 export const errorText = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+/** Confirmed identity/cwd denial, distinct from unavailable probe data. */
+export class ToolAuthorizationError extends Error {}
 /** Ownership comes from native membership or one active binding, never cwd alone. */
 export async function toolWorkspace(sessionId: string, options: Options): Promise<string> {
   const session = await options.dsh.getSession(sessionId);
@@ -70,19 +72,20 @@ export async function authorize(
   write = false,
 ): Promise<void> {
   const session = await options.dsh.getSession(sessionId);
-  if (!session || (session.workspaceId !== undefined && session.workspaceId !== workspaceId))
-    throw new Error('Session is outside the calling Workspace or unavailable');
+  if (!session) throw new Error('Session is outside the calling Workspace or unavailable');
+  if (session.workspaceId !== undefined && session.workspaceId !== workspaceId)
+    throw new ToolAuthorizationError('Session is outside the calling Workspace or unavailable');
   // The read-only relation listing deliberately tolerates a missing Workspace
   // root. Native admission must still pass Manage's stricter write/cwd gate.
   if (write) await options.manager.resolveRuntimeCwd({ workspaceId, sessionId });
   const bindings = (await options.manager.listBindings({ workspaceId })).filter(
     (binding) => binding.sessionId === sessionId,
   );
-  if (bindings.length > 1) throw new Error('Session has ambiguous Worktree bindings');
+  if (bindings.length > 1) throw new ToolAuthorizationError('Session has ambiguous Worktree bindings');
   const binding = bindings[0];
   if (binding) {
     if (binding.status !== 'active')
-      throw new Error('Session binding is detached; repair it before using Session tools');
+      throw new ToolAuthorizationError('Session binding is detached; repair it before using Session tools');
     const record = (await options.manager.listWorktrees({ workspaceId })).find(
       (item) => item.worktreeId === binding.worktreeId,
     );
@@ -94,13 +97,14 @@ export async function authorize(
     )
       throw new Error('Session Worktree is unavailable or needs repair');
     if (!(await boundSessionCwdMatchesWorktree(session.cwd, record, options.samePhysicalPath)))
-      throw new Error('Session cwd does not match its Worktree');
+      throw new ToolAuthorizationError('Session cwd does not match its Worktree');
   } else {
     if (session.workspaceId !== workspaceId)
-      throw new Error('Session is outside the calling Workspace or unavailable');
+      throw new ToolAuthorizationError('Session is outside the calling Workspace or unavailable');
     const root = await options.dsh.getWorkspace(workspaceId);
-    if (!root || !(await options.samePhysicalPath(session.cwd, root.rootPath)))
-      throw new Error('Session cwd does not match the Workspace root');
+    if (!root) throw new Error('Session cwd does not match the Workspace root');
+    if (!(await options.samePhysicalPath(session.cwd, root.rootPath)))
+      throw new ToolAuthorizationError('Session cwd does not match the Workspace root');
   }
 }
 

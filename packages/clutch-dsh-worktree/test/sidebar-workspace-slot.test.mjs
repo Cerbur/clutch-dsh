@@ -43,16 +43,34 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     '../worktree.css': { default: { workspaceSeat: 'seat' } },
   });
   const { useWorkspaceRegionGeometry } = await load('view/workspace-region-geometry.ts');
+  const bound = [];
+  const scroller = { bindScrollerRef: (element) => bound.push(element) };
+  const useSectionScroller = () => scroller;
+  const { SurfaceContent } = await load('surface/components/SurfaceContent.tsx', {
+    '../../view/worktree-error-copy.js': {},
+    '../../worktree.css': { default: {} },
+    '../shared.js': {},
+    './WorkspaceTree.js': { WorkspaceTree: () => React.createElement('div', { 'data-tree': true }, 'ready worktree content') },
+    './OverlayScrollbar.js': { OverlayScrollbar: () => null },
+    './NotificationToasts.js': { NotificationToasts: () => null },
+    '../notification-queue.js': {},
+  });
   let mounts = 0;
   let geometry;
   function Surface({ sidebarSeat }) {
     React.useEffect(() => { mounts++; }, []);
     geometry = useWorkspaceRegionGeometry(sidebarSeat);
+    const contentRef = React.useRef(null);
     return React.createElement(React.Fragment, null,
       React.createElement('div', { 'data-dashboard': true }, 'dashboard'),
-      sidebarSeat && createPortal(React.createElement('div', {
-        'data-tree': true, hidden: geometry.collapsed,
-      }, 'ready worktree content'), sidebarSeat.element));
+      sidebarSeat && createPortal(React.createElement('div', { hidden: geometry.collapsed },
+        React.createElement(SurfaceContent, {
+          source: { forkRecoverySnapshot: { pending: [] }, workspaces: { items: [] }, sessions: { byId: {} } },
+          props: { sidebarSeat, t: (key) => key },
+          lifecycle: {}, mutation: {}, session: {},
+          read: { readState: { status: 'ready' } },
+          expansion: { contentRef },
+        })), sidebarSeat.element));
   }
   const { WorktreeOverlay } = await load('overlay/WorktreeOverlay.tsx', {
     '../WorktreeSurface.js': { WorktreeSurface: Surface },
@@ -89,7 +107,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     React.useSyncExternalStore(subscribe, () => revision);
     const entry = slots.entriesOfSlot('sidebar.workspaces').at(0);
     return entry ? React.createElement(entry.component, {
-      wide, expandSidebar() {}, ...entry.inject?.(),
+      wide, expandSidebar() {}, useSectionScroller, ...entry.inject?.(),
     }) : null;
   }
   const manager = {};
@@ -101,6 +119,8 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
       React.createElement('main', { 'data-conversation': true }, 'native conversation'),
       React.createElement('div', { 'data-shell-overlay': true }, React.createElement(WorktreeOverlay, {
         useStore: (select) => select({ viewMode: mode }), available: true, manager, mountWorkspaceSidebar,
+        useWorkspaceDirectoryFlow: (select) => select({ available: false, owner: {} }),
+        cancelDirectoryFlow() {}, renderSlot: () => null,
       })));
   }
   const root = createRoot(document.getElementById('root'));
@@ -122,6 +142,8 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     await React.act(async () => { for (const observer of observers) observer.callback(); });
     assert.equal(geometry.bounds.ready, true);
     const readyTree = document.querySelector('[data-tree]');
+    assert.strictEqual(bound.at(-1), document.querySelector('[data-worktree-scrollport]'), 'native handoff binds the content scroller, not the seat');
+    assert.equal(seat.dataset.worktreeSectionScroller, 'true');
     seat.getBoundingClientRect = () => ({ width: 0, height: 0 });
     await React.act(async () => { for (const observer of observers) observer.callback(); });
     assert.equal(geometry.bounds.ready, false);
@@ -132,7 +154,8 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     wide = false;
     await render();
     assert.equal(geometry.bounds.ready, false);
-    assert.equal(document.querySelector('[data-tree]').hidden, true);
+    assert.equal(document.querySelector('[data-tree]').closest('[hidden]')?.hidden, true);
+    assert.equal(bound.at(-1), null, 'fold releases the native scroller');
     wide = true;
     await render();
     assert.equal(geometry.bounds.ready, true);
@@ -140,6 +163,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     await React.act(async () => { disposeOwner(); });
     assert.equal(document.querySelector('[data-tree]'), null);
     assert.equal(observers.size, 0);
+    assert.equal(bound.at(-1), null, 'slot withdrawal releases the native scroller');
     await React.act(async () => { disposeOwner = declare(); native(); });
     assert.ok(document.querySelector('[data-tree]'));
     mode = 'workspace-session';

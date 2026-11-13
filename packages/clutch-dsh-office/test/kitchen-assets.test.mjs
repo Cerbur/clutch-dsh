@@ -1014,6 +1014,7 @@ test('delivered animated gait clears current furniture during fridge travel, ret
             distance * 60 * (next.phase === 'retreat' ? -1 : 1),
             false,
             plan.pose === 'search' && next.phase === 'idle' && !next.returning,
+            Math.atan2(Math.sin(next.yaw - state.yaw), Math.cos(next.yaw - state.yaw)) * 60,
           );
           state = next;
           phases.add(state.phase);
@@ -1098,7 +1099,7 @@ test('table stays near the right edge with both stools following its outward off
   }
 });
 
-test('four-session roaming aisle permits full turns of the actual face-blink-r2 silhouette', async () => {
+test('four-session roaming aisle permits full turns and skeletal turn poses of face-blink-r2', async (t) => {
   const { ROAM_POINTS, ROAM_SCALE } = await import('../lib/office/roaming.js');
   const obstacles = [];
   for (const id of Object.keys(KITCHEN_PLACEMENT)) {
@@ -1120,13 +1121,18 @@ test('four-session roaming aisle permits full turns of the actual face-blink-r2 
   const raw = geometryOnly(
     await readFile(new URL('../assets/models/character/deepseek.glb', import.meta.url)),
   );
-  const { scene } = await new GLTFLoader().parseAsync(
+  const { scene, animations } = await new GLTFLoader().parseAsync(
     raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
     '',
   );
   const character = new T.Group();
   character.add(scene);
   character.scale.setScalar(ROAM_SCALE);
+  const owner = new Models();
+  owner.ownObject(character);
+  const animation = createCharacterAnimation(scene, animations, () => 0.5);
+  owner.onDispose(() => animation.dispose());
+  t.after(() => owner.dispose());
   let checks = 0;
   const samples = [...ROAM_POINTS];
   for (const [a, b] of [
@@ -1145,8 +1151,17 @@ test('four-session roaming aisle permits full turns of the actual face-blink-r2 
     for (let step = 0; step < 8; step++) {
       character.position.set(x, kitchenActorGroundY([x, z], 0.054), z);
       character.rotation.y = (step * Math.PI) / 4;
+      for (let frame = 0; frame < 11; frame++)
+        animation.update(1 / 30, 0, false, false, step % 2 ? 2.2 : -2.2);
       character.updateMatrixWorld(true);
+      scene.traverse((node) => {
+        if (!node.isSkinnedMesh) return;
+        node.boundingBox = null;
+        node.boundingSphere = null;
+        neutralVertices.delete(node);
+      });
       const bounds = new T.Box3().setFromObject(scene, true);
+      assert.ok(bounds.min.y >= kitchenActorGroundY([x, z], 0.054) - 1e-5);
       assert.ok(
         bounds.min.x > -2.315 && bounds.max.x < 2.5 && bounds.min.z > -1.815 && bounds.max.z < 3,
         `roaming silhouette inside room: ${x},${z},yaw${step} ${JSON.stringify(bounds)}`,

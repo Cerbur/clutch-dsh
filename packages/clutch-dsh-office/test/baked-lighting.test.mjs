@@ -1,3 +1,8 @@
+import { TextEncoder } from 'node:util';
+import { URL } from 'node:url';
+import { btoa } from 'node:buffer';
+import console from 'node:console';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -22,6 +27,8 @@ import {
   KITCHEN_INSTANCE_GROUPS,
 } from '../lib/office/kitchen-layout.js';
 import { geometrySignature, geometryOnlyGlb } from '../scripts/export-lighting-geometry.mjs';
+
+const { structuredClone } = globalThis;
 test('late texture ownership is idempotent even after its room has been disposed', () => {
   const owner = new Models();
   let released = 0,

@@ -1,12 +1,17 @@
+import { Buffer } from 'node:buffer';
+import { URL, URLSearchParams, pathToFileURL } from 'node:url';
+import { setImmediate } from 'node:timers';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { inlineAssets } from '../scripts/inline-assets.mjs';
+
+const { AbortController, Headers, Request, Response } = globalThis;
 
 async function sourceModule(relative, metaUrl) {
   let source = await readFile(new URL('../src/' + relative, import.meta.url), 'utf8');

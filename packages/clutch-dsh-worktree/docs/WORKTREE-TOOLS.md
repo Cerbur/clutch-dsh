@@ -5,6 +5,10 @@ The requested DeepSeek Harness checkout is at
 `4878cdabd87d4041bdaff61d04c966883b9fd07a`; its package graph is
 `0.2.0-rc.1`. The plugin version stays unchanged for release aggregation.
 
+2026-11-13 compatibility floor: DSH `>=0.2.2-rc.2`, with development dependencies
+pinned to that graph. The earlier version above records the original research;
+it is retained only in explicit legacy test fixtures.
+
 ## Feasibility and upstream seams
 
 2026-10-31 native-directory amendment: the packaged Host now creates delegated Sessions with
@@ -225,6 +229,44 @@ one process, provider isolation and uncertain admission. A restart between dispa
 and follow-up invalidates the process-local report target; it is not evidence that
 completion disposed the tool. Live verification must record the same Host process
 throughout, inspect actual parameter payloads and confirm pushed reports at the parent.
+
+## Current DSH compatibility (2026-11-06)
+
+Verified source baseline: `66491b05e3` (DSH `0.2.2-rc.1`), located through `dwm home`.
+The current loop resolves `tools.resolve` before `systemPrompt.assemble`, and the presentation
+waterfall no longer owns tool declarations. Agent creation installs scoped conditional
+registrations; loading the plugin also prepares existing Agents. Each activation shares one
+preference read, checks native ownership/cwd, and selects capabilities without registering
+inside a condition. First native declarations and PTC SDK therefore agree with executable
+admission. Disabled automatic preferences skip managed Worktree Git reads. Existing enabled
+capabilities retain their Agent lifetime; unloading revokes even previously admitted handles.
+
+Automatic discovery failures reading bindings, settings, Worktree availability or native
+cwd data skip new capabilities without blocking unrelated native/PTC requests. This applies
+to the legacy assembly path too. Previously enabled/report tools remain visible and retain
+their normal runtime checks; unavailable authorization cannot deliver messages/reports or
+consume a report token. Cancellation/disposal and confirmed identity/cwd denials
+(`ToolAuthorizationError` or Manager `SESSION_CWD_MISMATCH`) still propagate.
+No exception from actual execution is swallowed.
+
+Current model configuration uses `agent.model.select` before step preparation, and inheritance
+reads `agent.model.current` or cold `pending/lastUsed` projections. This native Session-local
+selection survives restart before the first request and never saves a deployment default.
+Older graphs retain the original request-waterfall fallback and `next` projection compatibility.
+
+The legacy `nullableToolProviders` option applies only to graphs without step admission.
+Current DSH owns declarations and freezes loop requests: provider adapters perform their own
+strict conversion. The plugin neither rewrites requests nor replaces native/PTC executors.
+Runtime optional-null normalization, required/unknown-field rejection, report tokens and exact
+retry provenance are unchanged. The current-graph tests assert unchanged provider declarations
+and successful uncertain retries; the legacy-graph assertions retain the historical projection.
+This supersedes the assembly-time and wire-projection timing in the older amendments below.
+
+The current pi-ai Responses adapter defaults to omitting `strict`. A gateway may then
+normalize optional properties into required strings. On endpoints accepting that flag,
+native route `compat.supportsStrictMode: true` makes ordinary declarations explicitly
+non-strict (`strict: false`); it does not request constrained sampling. The test profile
+uses this setting for Magpie Responses. Invalid empty/invented request ids still fail.
 
 ## Tool preferences (2026-10-10 amendment)
 

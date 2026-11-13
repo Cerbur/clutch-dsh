@@ -408,6 +408,8 @@ export interface SidecarStore {
 }
 
 export interface LockedSidecarStore {
+  /** Durable backup followed by exact cleanup-journal cancellation under this same lock. */
+  quarantinePendingCleanup?(operationId: string): Promise<void>;
   read(): Promise<SidecarSnapshot>;
   mutate<T>(
     mutation: (snapshot: SidecarSnapshot) => SidecarMutation<T> | Promise<SidecarMutation<T>>,

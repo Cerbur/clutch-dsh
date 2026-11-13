@@ -37,7 +37,7 @@ function request(append) {
     session: { id: 'prepared-title', append },
     messages,
     route: { provider: 'test', model: 'test' },
-    signal: new AbortController().signal,
+    signal: new globalThis.AbortController().signal,
   };
 }
 const owner = SessionTitleProviderId('clutch-dsh-title');

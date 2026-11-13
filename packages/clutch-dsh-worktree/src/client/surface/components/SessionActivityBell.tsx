@@ -1,10 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MenuSurface,
   StateDot,
   Tooltip,
-  useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import {
@@ -51,15 +50,9 @@ export function SessionActivityBell({
   const panel = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const visible = open && !hidden;
-  const position = useAnchoredPosition({
-    open: visible,
-    anchorRef: trigger,
-    panelRef: panel,
-    side: 'bottom',
-    align: 'end',
-    gap: 8,
-    margin: 8,
-  });
+  const anchorStyle: CSSProperties & Record<'--clutch-activity-anchor', string> = {
+    '--clutch-activity-anchor': `--clutch-activity-${panelId.replaceAll(':', '')}`,
+  };
   useDismissOnOutsidePointer(root, visible, setOpen, panel);
 
   useEffect(() => {
@@ -87,8 +80,8 @@ export function SessionActivityBell({
     };
   }, [visible]);
   useEffect(() => {
-    if (visible && position !== null) panel.current?.focus();
-  }, [visible, position === null]);
+    if (visible) panel.current?.focus();
+  }, [visible]);
 
   const hasActivity = entries.length > 0;
   return (
@@ -98,6 +91,7 @@ export function SessionActivityBell({
           ref={trigger}
           type="button"
           className={styles.iconButton}
+          style={anchorStyle}
           aria-label={
             hasActivity ? t('activity.count', { n: entries.length }) : t('activity.title')
           }
@@ -135,7 +129,7 @@ export function SessionActivityBell({
             aria-label={t('activity.title')}
             tabIndex={-1}
             className={styles.activityPanel}
-            style={{ ...position, visibility: position === null ? 'hidden' : undefined }}
+            style={anchorStyle}
             onBlur={(event) => {
               const next = event.relatedTarget;
               if (

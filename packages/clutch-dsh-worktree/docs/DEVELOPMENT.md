@@ -10,12 +10,32 @@
 
 ## 1. 环境前置要求
 
+2026-11-13 兼容验证与开发依赖基线为 `dsh-v0.2.2-rc.2`，最低支持为 `0.2.2-rc.2`。
+铃铛使用 CSS anchor；Sidebar 使用可选原生 section-scroller 接缝；原生归档清理终态只触发
+匹配记录的只读刷新。完整排查与 UI 回归记录见 [rc.2 compatibility](plans/2026-11-13-dsh-022-rc2-compatibility.md)。
+
+2026-11-06 tool 兼容验证基线为 `dwm home` 定位的 DSH `0.2.2-rc.1`
+（`66491b05e3`）。当时最低支持版本与开发依赖统一为 `0.2.2-rc.1`；通过 capability detection 使用新的
+step tool admission、独立 native/PTC executor 和 `agent.model` owner。
+除默认全量测试外，设置 `DSH_NATIVE_SOURCE` 和 `DSH_SCHEMA_ADAPTER_ANCHOR`
+运行真实源码接缝；`test/native-tool-activation.test.mjs` 要求当前逐步准入图，
+覆盖 Local/Worktree 首轮 native/PTC、已存在/新建 Agent、偏好读取去重、禁用、取消与卸载。
+`native-agent-relay` 的 fixture 同时支持旧 projection owner 和新 state reader，
+消息来源、队列修改、重放与不可重复投递断言保持不变。
+
+当前 DSH 的 `nullableToolProviders` 不再改写 wire；provider adapter 拥有转换，
+测试 profile 的 Magpie Responses 路由需设置 `compat.supportsStrictMode: true`，
+让 pi-ai 明确发送 `strict: false`，避免网关将可选 requestId 强制变为字符串。
+这不是启用 strict sampling。旧图继续验证旧 projection，不能把两种
+接缝混同为同一套请求可变性保证。浏览器验收使用独立 `DSH_HOME=~/.dsh-test`
+服务和临时 Git Workspace；不向业务仓库写入测试任务。
+
 侧栏导航通过正式 `sidebar.workspaces` 插槽挂载，沿用现有 footer 入口。
 `node --test test/sidebar-workspace-slot.test.mjs` 使用安装依赖中的真实 DSH SlotRegistry、
 React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建、卸载清理，以及主对话和
 共享 Surface owner 的身份保持。原生列表 renderer 的 owner props 由测试提供；它不替代
 真实 Desktop 的玻璃材质、滚动和动画联调。`test/sidebar-glass.test.mjs` 检查生产 bundle
-不再包含侧栏遮蔽实现。Host API 与最低 DSH 依赖基线保持不变。
+不再包含侧栏遮蔽实现。当前 Host/Client 统一要求 DSH `>=0.2.2-rc.2`。
 
 Workspace 导航新增 `readWorkspaceNavigation` RPC；构建后重载 Host 并刷新 Client 才能使用
 共享事实优化。旧 Host 明确返回新 endpoint 的 HTTP 404 时回退原读取路径，其他错误不回退。
@@ -44,7 +64,7 @@ portal，以及已安装 DSH primitives 的原始 Modal/键盘/焦点 helper 声
 弹窗重开与 pending 接收后的 Session 导航。CSS、图标与无关子视图被隔离，不替换原生 Modal 的事件逻辑；
 该依赖不进入插件运行包。
 
-- **Node.js**: `>=20.0.0`（推荐使用 LTS 版本）
+- **Node.js**: `>=24.9.0`（与最低支持的 DSH 版本一致）
 - **pnpm**: 构建本 package 时使用其 `package.json` pin 的 `pnpm@10.32.1`。第 4 节的 pnpm 11+ `allowBuilds` 要求仅适用于上游 DSH profile 的 Git 源码安装。
 - **Git**: `>=2.20.0`（需要支持 worktree 核心命令与 branch 发现）
 
@@ -59,7 +79,7 @@ Fetch 完成后由 Host 读取一次并直接返回列表，窗口焦点与 Git 
 
 本插件的本地开发、调试与全量联调以官方 [DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness) 的源码 checkout 为准。
 
-> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本基线为 `dsh-v0.2.0-rc.1`；当前额外验证的 prerelease graph 为 `dsh-v0.2.0-rc.1`，其 Node 引擎要求为 `^22.19.0 || >=24.0.0`。
+> **注意：** Upstream 仓库当前的默认分支为 `master`（而非 `main` 或历史 prerelease 分支）。后续若官方切换默认分支，应跟从最新默认分支。最低兼容版本为 `dsh-v0.2.2-rc.2`，当前验证基线为 `dsh-v0.2.2-rc.2`，其 Node 引擎要求为 `>=24.9.0`。
 
 克隆并构建 upstream DSH：
 
@@ -155,13 +175,13 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 导入 smoke 不代表完整 Desktop GUI 已部署或验证。诊断结果见
 [Desktop 本地构建诊断](plans/2026-10-13-desktop-local-build.md)。
 
-针对 `dsh-v0.2.0-rc.1` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
+针对 `dsh-v0.2.2-rc.2` 的兼容性 smoke test 使用隔离 DSH Home，避免读写默认用户配置。先在 clutch-dsh 根目录构建插件，再从该 tag 的 DSH 源码根目录安装并启动：
 
 ```bash
 # From the clutch-dsh workspace root
 pnpm --filter @cerbur/clutch-dsh-worktree build
 
-# From the dsh-v0.2.0-rc.1 checkout root
+# From the dsh-v0.2.2-rc.2 checkout root
 export DSH_HOME="$HOME/.dsh-test"
 pnpm dsh plugin --profile web add /path/to/clutch-dsh/packages/clutch-dsh-worktree
 pnpm dsh web --port 3088 --no-open
@@ -186,8 +206,9 @@ Windows drive、extended prefix 与 UNC 在浏览器路径单测中验证；这�
 多位数统计与空 Git 面板，使用隔离组件 fixture 时需与实机联调结果区分。
 
 `/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
-`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖提供 DSH `0.2.0-rc.1` 的 commands/tools
-真实 registry 用于回归验证；实现通过最小 structural Host port 调用它们，避免将
+`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖使用 DSH `0.2.2-rc.2`；
+`clutch-test-dsh-*-legacy` 别名仅为旧 registry/SDK 回归保留 `0.2.0-rc.1`，不代表支持旧宿主。
+当前 native/PTC admission 由真实源码集成测试覆盖。实现通过最小 structural Host port 调用服务，避免将
 Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
 Agent 工具启用状态属于当前运行时，重启后需重新执行指令。新增验证命令：
 
@@ -201,9 +222,9 @@ node --test test/worktree-tool-schema.test.mjs
 模型请求，并验证普通任务委派指导的作用域。Host 模块需重新构建后重载或重启；页面刷新无法替换服务端已载入的模块。
 
 工具 Session port 通过原生 `sessionQuery` 读取冷历史，通过原生 `llm` resolver 验证模型，
-使用新 Agent 的请求/提示词 waterfall 配置初始路由；不调用会写部署默认值的 `selectModel`。
-原生 `request/header` 记录后卸载初始路由 hook；重启前尚未发出首个请求的 Session 会失去
-该运行时覆盖。模型 hook、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
+通过新 Agent 的 `agent.model.select()` 持久化 Session 专属模型选择；不调用会写部署默认值的 `selectModel`。
+仅 legacy fixture 使用请求/提示词 waterfall 临时覆盖，并在原生 `request/header` 后卸载 hook。
+模型选择、取消、参数纠错、旧 Session 单项容错、跨 Workspace 拒绝和有界结果推送均有
 确定性回归。真实 LLM 账号 smoke test 仍需另行执行，本地测试不会改动运行中的 DSH profile。
 
 工具定义必须遵循 [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md)：作者层使用每层封闭、无 union 的对象，
@@ -234,7 +255,7 @@ provider opt-in 隔离、其他插件不变及不确定回报的 wire 重试字�
 launcher 的 `--patch` 必须在 Web app 的 `--port` 前，且 config 覆盖需保留 dshHome。
 每次重载后使用新派发任务验证回报；旧进程的 token/目标不会恢复。
 
-Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.0-rc.1，开发 pin 同基线），
+Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.2-rc.2，开发 pin 为 0.2.2-rc.2），
 避免借用偶然存在的传递依赖，也不导入原生 Session/subagent 服务的 Context 类型图污染 Client。
 锁文件只在本包 importer 添加既有 llm snapshot 引用，不升级其他 graph。
 
@@ -377,6 +398,32 @@ pnpm --filter @cerbur/clutch-dsh-worktree test
 运行测试、构建或 typecheck 不能替代该检查。例如，Node 测试使用 `URL` 时须从 `node:url`
 显式导入，即使 Node 运行时也提供同名全局变量。
 
+### 归档与未决清理恢复回归
+
+在 monorepo 根构建后，从 package 根运行。所有 fixture 仓库、Sidecar、锁与日志必须位于
+唯一任务目录；只给子命令设置 DSH_HOME/TMPDIR，不覆盖 HOME 或现有 DSH 实例：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree build
+cd packages/clutch-dsh-worktree
+archiveTestRoot=$(mktemp -d "$HOME/.dsh-test/archive-recovery-XXXXXX")
+mkdir -p "$archiveTestRoot/tmp" "$archiveTestRoot/home"
+TMPDIR="$archiveTestRoot/tmp" DSH_HOME="$archiveTestRoot/home" \
+  node --test test/archive-recovery.test.mjs test/client-branch-drift.test.mjs \
+  > "$archiveTestRoot/recovery.log" 2>&1
+```
+
+`archive-recovery.test.mjs` 使用真实 Manager、LocalGitAdapter 与磁盘 Sidecar，复现
+目录残留/Git 无登记的 `WORKTREE_IDENTITY_CHANGED` 和无关新建的
+`WORKTREE_RECOVERY_REQUIRED`；验证明确取消、备份 fsync、原子发布失败、重启、幂等、
+跨进程、批量部分失败及路径权限/I/O 不确定性。Git 使用显式 cwd、结构化 argv、10 秒超时
+和 1 MiB 输出限额；并发采用调度屏障，测试具有 15–20 秒截止时间。fixture 保留在任务
+TMPDIR 下供取证，测试不会使用生产路径。全量门禁也须继承同样的隔离环境。
+
+既有现场备份只作只读取证，复现应重新生成路径/仓库指纹；不可把生产路径直接回放到清理
+入口。无需启动或替换用户 GUI；Client 回归执行生产恢复动作与范围刷新约束。
+新增恢复参数随 Host Remote 构建生成；仅本地构建不表示现有 GUI 已加载此实现。
+
 ### Session 完成提醒回归
 
 完成提醒测试必须跨越真实原生状态 owner，不能只给旧 summary 填 `completed=true`。
@@ -464,7 +511,7 @@ description:
 
 ## 原生 Session 目录能力验证
 
-已有类型与 legacy 测试的最低 graph 仍保留原版本；新建 Worktree Session 额外要求
+生产依赖与类型验证最低 graph 为 `0.2.2-rc.2`，旧版本只保留为显式 legacy 测试 fixture。新建 Worktree Session 还要求
 原生 workingDirectory 服务，以及 Session 创建的 workspaceId 输入。不能仅按 semver 推断
 该 capability 已加载；缺失时新创建流程显式失败，不自动更改权限或 header cwd。
 

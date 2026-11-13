@@ -1,6 +1,6 @@
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
+import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
@@ -62,6 +62,8 @@ export interface WorktreeSurfaceInjected {
   readonly available: boolean;
   readonly openErrorSettings?: () => boolean;
   readonly openDashboard?: (record: DashboardRecord) => void;
+  /** Native panel selection; Dashboard remains an overlay over the Conversation layout. */
+  readonly dashboardLayout?: Pick<ILayout, 'panelInfo' | 'selectPanel'>;
   readonly openResource?: (address: string, options?: { line?: number }) => boolean;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
   readonly closeRightSidebar?: () => void;

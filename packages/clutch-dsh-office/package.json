@@ -1,7 +1,7 @@
 {
   "name": "@cerbur/clutch-dsh-office",
-  "version": "0.1.0",
-  "description": "Plugin-only 3D kitchen offices for active DeepSeek Harness workspaces.",
+  "version": "0.1.1",
+  "description": "Plugin-only shared 3D kitchen dashboard for active DeepSeek Harness Sessions.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
-    "lint": "eslint src",
+    "lint": "eslint src scripts test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.client.json",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "preview": "node scripts/preview.mjs",

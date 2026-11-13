@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -24,6 +24,7 @@ export class SidecarPersistence {
   readonly worktreeRoot: string;
   readonly workspaceRoot: string;
   readonly lockRoot: string;
+  readonly quarantineRoot: string;
 
   private readonly dshHome: string;
   private readonly mutationLock: CrossProcessMutationLock;
@@ -37,6 +38,7 @@ export class SidecarPersistence {
     this.worktreeRoot = path.join(this.pluginRoot, 'worktree');
     this.workspaceRoot = path.join(this.pluginRoot, 'workspaces');
     this.lockRoot = path.join(this.pluginRoot, 'locks');
+    this.quarantineRoot = path.join(this.pluginRoot, 'cleanup-quarantine');
     this.mutationLock = new CrossProcessMutationLock({ lockRoot: this.lockRoot });
   }
 
@@ -58,6 +60,7 @@ export class SidecarPersistence {
     return this.mutationLock.run(`workspace:${workspaceId}`, async (lock) => {
       lock.assertHeld();
       const locked: LockedSidecarStore = {
+        quarantinePendingCleanup: (operationId) => this.quarantinePendingCleanup(workspaceId, operationId, lock),
         read: async () => {
           lock.assertHeld();
           return (await this.readSnapshot(workspaceId)).snapshot;
@@ -69,6 +72,73 @@ export class SidecarPersistence {
       };
       return operation(locked);
     });
+  }
+
+  /** No Git/path probes: cancelling intent never attests to the checkout's identity or cleanup. */
+  private async quarantinePendingCleanup(
+    workspaceId: string,
+    operationId: string,
+    lock: { assertHeld(): void },
+  ): Promise<void> {
+    lock.assertHeld();
+    if (typeof operationId !== 'string' || operationId.trim() === '') {
+      throw providerError('WORKTREE_RECOVERY_REQUIRED', 'An exact cleanup operation ID is required', { workspaceId });
+    }
+    const current = await this.read(workspaceId);
+    const pending = current.pendingOperation;
+    const key = createHash('sha256').update(JSON.stringify([workspaceId, operationId])).digest('hex');
+    const backupPath = path.join(this.quarantineRoot, `${key}.json`);
+    let backup: SidecarSnapshot | undefined;
+    try {
+      if (!(await lstat(backupPath)).isFile()) throw new Error('Backup must be a regular file');
+      backup = validateSidecarSnapshot(JSON.parse(await readFile(backupPath, 'utf8')), backupPath, this.worktreeRoot);
+      if (backup.workspaceId !== workspaceId || backup.pendingOperation?.id !== operationId ||
+          backup.pendingOperation.type !== 'clean-worktree') throw new Error('Backup identity mismatch');
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'ENOENT') {
+        throw providerError('SIDECAR_UNAVAILABLE', 'Unable to verify cleanup quarantine backup', { workspaceId, operationId, backupPath, cause: String(error) });
+      }
+    }
+    if (!pending && backup) return; // A completed cancellation is safe to retry after restart.
+    const record = current.worktrees.find((item) => item.worktreeId === pending?.worktreeId);
+    if (!pending || pending.id !== operationId || pending.type !== 'clean-worktree' ||
+        pending.phase !== 'recovery-needed' || !record || record.status !== 'removed' || record.diskCleanup === 'completed') {
+      throw providerError('WORKTREE_RECOVERY_REQUIRED', 'Only the exact unresolved archived-worktree cleanup can be cancelled', { workspaceId, operationId });
+    }
+    if (backup && (backup.pendingOperation?.targetPath !== pending.targetPath ||
+        backup.pendingOperation.worktreeId !== pending.worktreeId ||
+        backup.pendingOperation.repositoryFingerprint !== pending.repositoryFingerprint)) {
+      throw providerError('WORKTREE_IDENTITY_CHANGED', 'Cleanup quarantine backup does not match the pending operation', { workspaceId, operationId, backupPath });
+    }
+    if (!backup) {
+      // Preserve the complete original shard, including acquisition facts and bindings.
+      // Backup must be durable before the journal is retired; fsync errors are fatal.
+      await mkdir(this.quarantineRoot, { recursive: true });
+      await syncDirectory(this.pluginRoot);
+      const raw = await readFile(this.getShardPath(workspaceId), 'utf8');
+      const temporaryPath = `${backupPath}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporaryPath, raw, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+        await syncFile(temporaryPath);
+        lock.assertHeld();
+        await rename(temporaryPath, backupPath);
+        await syncDirectory(this.quarantineRoot);
+      } catch (error) {
+        throw providerError('SIDECAR_UNAVAILABLE', 'Unable to persist cleanup quarantine backup', { workspaceId, operationId, backupPath, cause: String(error) });
+      } finally {
+        await unlink(temporaryPath).catch(() => undefined);
+      }
+    }
+    await this.mutateLocked(workspaceId, (snapshot) => {
+      if (snapshot.pendingOperation?.id !== operationId) {
+        throw providerError('WORKTREE_RECOVERY_REQUIRED', 'Pending cleanup changed during quarantine', { workspaceId, operationId });
+      }
+      const { pendingOperation: _pending, recoveryIssues, ...rest } = snapshot;
+      void _pending;
+      const remaining = recoveryIssues?.filter((issue) =>
+        issue.operationId !== operationId || issue.worktreeId !== pending.worktreeId);
+      return { snapshot: { ...rest, ...(remaining?.length ? { recoveryIssues: remaining } : {}) }, result: undefined };
+    }, lock);
   }
 
   private async readSnapshot(workspaceId: string): Promise<ReadSnapshot> {
@@ -233,6 +303,7 @@ export class SidecarPersistence {
       [this.worktreeRoot, 'Worktree root'],
       [this.workspaceRoot, 'Workspace shard root'],
       [this.lockRoot, 'Mutation lock root'],
+      [this.quarantineRoot, 'Cleanup quarantine root'],
     ] as const) {
       try {
         if ((await lstat(pathname)).isSymbolicLink()) {

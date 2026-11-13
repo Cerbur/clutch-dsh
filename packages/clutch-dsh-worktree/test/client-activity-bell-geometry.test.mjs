@@ -99,7 +99,6 @@ for (const failure of ['missing anchor', 'invalid bounds']) {
         MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
         StateDot: icon,
         Tooltip: ({ children }) => children,
-        useAnchoredPosition: () => ({ left: 12, top: 44 }),
         useDismissOnOutsidePointer() {},
       },
       '../../dsh-icons.js': {

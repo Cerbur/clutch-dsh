@@ -150,6 +150,10 @@ Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览
 不通过文字、DOM 顺序或坐标定位原生行。
 导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 
+标题栏的**添加 Workspace** 使用 DSH 配置的目录选择器，包括 Web 的应用内目录浏览器及
+已组合的原生选择器。只有选定目录后才创建 Workspace；取消时列表保持不变。没有可用目录
+选择器时隐藏此操作，选择或创建失败后可重试。
+
 ### 按活跃时间筛选会话
 
 Worktree 标题栏下方的范围选择器把树收窄到**今日**、**最近 24 小时**、**最近 7 天**或**全部**。
@@ -180,6 +184,8 @@ Session。列表非空时显示蓝色提醒圆点；空列表显示**无活跃�
 
 每项依次展示 Session 名称、Workspace、Worktree（或本地），右侧显示原生 Session 状态指示器
 和时间。点击条目打开会话，由 DSH 的正常导航清除完成未读；仅打开铃铛不会标记已读。
+浮窗通过 CSS anchor 定位跟随触发按钮，Sidebar 滚动或浏览器缩放后仍保持定位；
+与 DSH 原生菜单一样，需要使用支持 CSS Anchor Positioning 的浏览器。
 点击外部或按 Escape 关闭。Sidebar 收起或布局不可用时也会关闭浮窗；Sidebar 恢复后需再次点击铃铛打开。
 浮窗打开时更新运行时长；观察到停止后显示完成于多久前。
 当前 Client 尚未观察到状态切换时，沿用 Session 行使用的原生活动时间作为基线，因为 DSH
@@ -257,8 +263,14 @@ Git-root Session 保留原有预览范围。
 开启 **自动注入 Worktree 工具**并选择能力。Local/Main 配置仅适用于此 Workspace 根目录中
 未绑定 Worktree 的会话；Worktree 配置仅适用于绑定到该 Worktree 的会话，各自独立保存。
 所选工具在首个模型请求组装前启用，Agent 重启后也按对应配置恢复；普通提示词 preset 同时包含委派指导，PTC 模式下也包含 SDK。
+当前 DSH 在每一步工具准入前解析自动选择，已打开会话的首个请求也会生效。
+关闭自动选择时，不触发 Git 可用性探测。
 此选择与通用设置独立：通用选择 1、2、3，自动注入选择 2、3、4 时，输入 `/cluworktree`
 只补齐能力 1。已经启用的工具保留到当前 Agent 结束；配置修改影响后续注入。
+
+自动探测若无法读取插件数据或检查可用性，不增加工具，普通 native/PTC 请求仍可继续。
+已有工具（含结果回报）保留到 Agent 结束；实际调用仍执行全部数据、身份、目录和回报授权校验。
+取消和已确认的身份或目录不匹配仍会报错，不会被当作可忽略的探测故障。
 
 设置中的 Worktree 入口与侧边栏使用相同的分支图标。
 两处设置均使用分组卡片，总开关位于顶部。开启后在分割线下展开工具选择与说明；
@@ -340,7 +352,8 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 首次回报若自造 id 而被拒绝，错误会说明如何纠正，且不消耗回报 token。
 投递结果不确定时，重试必须保留返回的 id 和完全相同的内容。
 
-原生 schema 保留真正可选字段。若路由会生成可选字段空值，可在 Host 配置中按准确 provider id 启用：
+原生 schema 保留真正可选字段。当前 DSH 拥有工具声明及 provider wire 转换，插件不会改写冻结的模型请求。
+仅在旧版 DSH Host 上，若路由会生成可选字段空值，可按准确 provider id 启用：
 
 ```yaml
 - id: clutch-dsh-worktree-host
@@ -349,7 +362,8 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
     nullableToolProviders: [ocx]
 ```
 
-默认列表为空。对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
+默认列表为空；在具有逐步工具准入能力的当前 Host 上，此选项不生效。
+在旧 Host 上，对于这些 provider，原生模型请求中的插件工具将属性全部设为必填，
 用可空值表达原本可选的字段，封闭嵌套对象并保留长度限制。
 首次回报的 wire requestId 只允许 null；存在不确定投递时恢复重试 id 字段。
 原生目录、PTC SDK、其他插件和执行校验保留既有契约。
@@ -357,13 +371,20 @@ PTC 模式生成的 SDK 提供明确参数类型，包括回报必填的 `status
 适配和真实 ocx/Luna 路由；其他路由需单独验证。
 官方来源、验证分层与限制见[工具 Schema 规范](docs/TOOL-SCHEMA-STANDARD.md)。
 
+对于当前 DSH pi-ai 的 `openai-responses` 路由，若端点接受 `strict` 字段，
+在该原生 provider 路由设置 `compat: { supportsStrictMode: true }`。
+这样适配器会为普通工具明确发送 `strict: false`，保留可选字段，
+避免端点自动将它们规范化为必填字符串。已在 Magpie Responses / GPT-6.1-Sol 验证；
+这不会启用严格采样。不接受该字段的端点需单独配置适配器兼容行为。
+
 `model` 的结构是 `{ provider, model, reasoningEffort? }`。省略时继承调用 Session 的
 有效模型与推理强度，该默认路径无需查询模型列表。
 用户指定其他模型或要求按任务选模型时，若已启用 `clutch_list_models`，先发现可用路由再显式传入所选对象。
 未知路由需查询或向用户确认，不猜测模型 id，也不回退到部署默认模型。
 模型或推理强度不可用时，在创建 Session 前失败。初始模型路由不会保存部署
-默认模型。在 DSH 记录首个 request header 前，该覆盖仅存在于运行时；之后由 DSH 根据
-自己的历史恢复模型。首个请求前重启会丢失初始路由覆盖。原生 Session 模型切换优先。
+默认模型。当前 DSH 在首步前通过新 Session 的原生模型 owner 记录选择，
+即使首个请求前重启也能恢复。旧 Host 在首个 request header 前仍使用运行时覆盖，
+这些旧 Host 若在首个请求前重启会丢失覆盖。原生 Session 模型切换优先。
 
 工具变更只刷新所属 Workspace 的 Worktree 列表与绑定，并保持已有 ready 内容可见。
 派发保留当前对话，使用 DSH 新 Session 的默认 preset 和权限；
@@ -432,6 +453,10 @@ Dashboard 右上角会保留原生的右侧栏按钮；右侧栏打开后，该�
 （或 **New Session**）和右侧工具栏按钮，页面滚动时保持可见。
 macOS desktop 下可拖动顶部栏空白区域移动窗口；左侧 Sidebar 收起时，
 红绿灯旁显示 DSH 原生展开按钮。Windows 保留原生窗口标题栏。
+
+选择插件、自动化任务、Office 或其他原生主页面时，会自动关闭 Dashboard，并取消等待中的
+Dashboard 导航。返回对话不会自动重新打开它；需要再次点击 Dashboard 入口。
+Dashboard 继续使用覆盖层和原生右侧栏。
 
 使用 **Back to session**、Escape、Sidebar 中的 Session 或退出 Worktree 模式关闭它。没有 Session 的
 Worktree 中，右上角操作会变为 **New Session**，直接在该 Worktree 中新建会话。当前 MVP 已连接的操作
@@ -592,6 +617,19 @@ Git 初始化指引仍在创建弹窗中显示。同一 Git 故障只弹一次 t
 Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文字、操作按钮和诊断详情跟随
 **设置 → 通用**中的字体大小设置。
 
+未决磁盘清理可能使整个 Workspace 的归档、批量管理和新建被
+`WORKTREE_RECOVERY_REQUIRED` 阻断。先选择**重试恢复**（受影响 Worktree 的菜单也有此入口）。
+如果仍无法确认清理结果，例如目录仍在但 Git 已无登记，恢复错误会在**报错与修复**中提供
+**保留文件并取消未决清理**。此操作先将完整插件索引备份至
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/`，再显式取消这一条清理请求。
+所有 Worktree 记录、binding、文件和原生 Session 均保留，也不会标记磁盘清理完成。
+重复取消同一请求是安全的；Host 提供取消能力时，Git 错误不会隐藏此操作。
+其他未决操作或仓库身份冲突仍保持阻断。
+
+取消后可重试其他选中项。对于受影响 checkout，可自行修复 Git 登记，或选择**移出管理**以保留
+文件并停止管理。之后再次清理磁盘仍须经过正常确认与身份校验。备份写入失败时取消操作失败，
+原始 journal 保持完整。
+
 ### 归档或移除 Worktree
 
 - **Archive Worktree** 是非破坏性操作，会保留目录、binding、指令和运行时 Worktree 上下文。
@@ -602,14 +640,20 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
   DSH Session，也不要求检查 Session 活动状态。
 
+导入由 DSH 创建的 Worktree 时，原生所有权及归档保留设置仍由 DSH 管理。导入不会禁止原生清理。
+所有引用 Session 归档后，DSH 可能回收该目录；仍有未归档 Session 使用该目录，或启用 DSH 的
+归档时保留选项时，可以保留目录。原生清理结束后，Clutch 只刷新匹配的 Worktree 和 Workspace。
+目录被移除时显示需要修复，原记录和绑定继续保留，不会被标记为 Clutch 已完成磁盘清理。
+这项集成不会使 Clutch 自建目录变成原生自有目录。
+
 ## 要求
 
 | 组件            | 要求                                                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH Client      | `>=0.2.0-rc.1`，需要 Session/Workspace Controller 和 Client Store                                                                           |
-| DSH Host        | `>=0.2.0-rc.1`，需要 Typert Gateway `/api` connection 和 subprocess capability                                                              |
+| DSH Client      | `>=0.2.2-rc.2`，需要 Session/Workspace Controller 和 Client Store                                                                           |
+| DSH Host        | `>=0.2.2-rc.2`，需要 Typert Gateway `/api` connection 和 subprocess capability                                                              |
 | Git             | `>=2.20.0`，必须已安装且可在 `PATH` 中使用                                                                                                  |
-| Node.js         | 插件自身要求 `>=20.0.0`；DSH `dsh-v0.2.0-rc.1` 要求 `^22.19.0                                                                               |     | >=24.0.0` |
+| Node.js         | `>=24.9.0`，与最低支持的 DSH 版本一致 |
 | Host filesystem | 支持使用普通 Windows 和 macOS 本地路径保存 sidecar 与 Git Worktree 数据；网络、特殊或别名路径较多的文件系统可能不支持持久化同步或身份校验。 |
 
 ## 行为与限制

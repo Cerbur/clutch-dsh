@@ -30,6 +30,7 @@ import { switchViewMode } from './view/view-mode-dispatch.js';
 import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
+import { createWorkspaceDirectoryFlow } from './view/workspace-directory-flow.js';
 import { WorktreeOverlay } from './overlay/WorktreeOverlay.js';
 import type { WorktreeSurfaceInjected } from './surface/types.js';
 import { workspaceSidebarMount } from './view/sidebar-workspace-slot.js';
@@ -182,7 +183,7 @@ function workspaceMembershipSignature(
 }
 
 /** Required DSH Client services; Connection is the sole Worktree wire dependency. */
-export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation'];
+export const inject = ['connection', 'locale', 'slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation', 'layout'];
 
 /**
  * DSH Client entry. The adapter is composed once per plugin fiber and is disposed
@@ -214,6 +215,10 @@ export function apply(ctx: Context): void {
   const sessions = ctx.sessions;
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
   const mountWorkspaceSidebar = workspaceSidebarMount(slots);
+  const directoryFlow = createWorkspaceDirectoryFlow(ctx.slots, async (path) => {
+    await ctx.workspaces.create({ path });
+  });
+  ctx.effect(() => () => directoryFlow.dispose(), 'clutch-dsh-worktree: directory flow cleanup');
   slots.inject('conversation.input.dock', () => slots.register({
     name: 'conversation.input.dock',
     id: 'clutch-dsh-worktree-steer',
@@ -550,14 +555,17 @@ export function apply(ctx: Context): void {
       {
         name: 'shell.overlay',
         id: 'clutch-dsh-worktree-navigation',
+        children: { 'clutch.worktree.directoryFlow': { kind: 'single', scope: 'root' } },
         store: viewStore,
         locale: WORKTREE_NS,
         inject: (): WorktreeSurfaceInjected & {
           mountWorkspaceSidebar: typeof mountWorkspaceSidebar;
-          hooks: { worktreeContext: typeof contextProjection.store };
+          cancelDirectoryFlow: typeof directoryFlow.cancel;
+          hooks: { worktreeContext: typeof contextProjection.store; workspaceDirectoryFlow: typeof directoryFlow.store };
         } => ({
           mountWorkspaceSidebar,
           available: true,
+          dashboardLayout: ctx.layout,
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);
@@ -585,14 +593,12 @@ export function apply(ctx: Context): void {
           expandState,
           sessionOrder,
           dashboardStore,
-          hooks: { worktreeContext: contextProjection.store },
+          hooks: { worktreeContext: contextProjection.store, workspaceDirectoryFlow: directoryFlow.store },
+          cancelDirectoryFlow: directoryFlow.cancel,
           manager,
           viewReader,
           subscribeToolChanges: toolChanges.subscribe,
-          createWorkspace: async () => {
-            const workspacePath = await ctx.uiWorkspace.pickDirectory();
-            if (workspacePath !== null) await ctx.workspaces.create({ path: workspacePath });
-          },
+          createWorkspace: directoryFlow.request,
           createSessionForWorktree: (input, beforeOpen) => worktreeSessionConnector.create(input, beforeOpen),
           invalidateWorktreeContext: (workspaceId?: string, options?: { readonly alreadyInvalidated?: boolean }) =>
             contextProjection.invalidate(workspaceId, options),

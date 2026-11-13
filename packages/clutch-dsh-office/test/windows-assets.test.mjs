@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer';
+import { URL, fileURLToPath } from 'node:url';
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -6,7 +9,6 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { runtimeModelPath } from '../scripts/runtime-models.mjs';
 import { inlineAssets } from '../scripts/inline-assets.mjs';
-import { fileURLToPath } from 'node:url';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const windows = (path) => path.replaceAll('/', '\\');

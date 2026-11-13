@@ -163,6 +163,11 @@ and folding follow DSH's slot contract, without locating native rows by text, DO
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 
+The header's **Add Workspace** action uses DSH's configured directory picker, including the
+in-app directory browser on Web and the native chooser when composed. It creates a Workspace
+only after a directory is selected; cancelling leaves the list unchanged. The action is hidden
+when no directory picker is available, and selection or creation errors can be retried.
+
 ### Filter Sessions by activity
 
 The range selector below the Worktree header filters the tree to today, the last 24 hours, the
@@ -202,6 +207,8 @@ limit do not filter this list. Blank and archived Sessions are excluded.
 Each entry shows its Session name, Workspace, and Worktree (or Local), with the native Session
 status indicator and time on the right. Select an entry to open it; DSH clears its unread
 completion through normal navigation. Opening the bell alone does not mark anything read.
+The panel follows its trigger through CSS anchor positioning, including after Sidebar scrolling
+and browser zoom; use a browser that supports CSS Anchor Positioning, as required by DSH's native menus.
 Click outside or press Escape to close. The panel also closes if the Sidebar collapses or its
 layout becomes unavailable; reopen it with the bell after the Sidebar recovers.
 Running duration updates while the panel is open;
@@ -289,11 +296,19 @@ capabilities under **Automatically inject Worktree tools**. Local/Main settings 
 Sessions in that Workspace root; Worktree settings apply only to Sessions bound to that Worktree.
 Each configuration is stored separately. Selected tools are assembled before the first model request,
 including after an Agent restart; ordinary prompt presets also include delegation guidance and,
-in PTC mode, their SDK.
+in PTC mode, their SDK. Current DSH resolves automatic selection before each step's tool
+admission, including the first request of an already-open Session. Disabled automatic selections
+do not trigger Git availability probes.
 These selections are independent of General:
 if General selects capabilities 1, 2, 3 and automatic injection selects 2, 3, 4, running
 `/cluworktree` adds only capability 1. Already enabled tools remain until that Agent ends; changing
 preferences affects future injection.
+
+If automatic discovery cannot read plugin data or check availability, it adds no tools
+and ordinary native/PTC requests can continue. Previously enabled tools, including reporting,
+retain their Agent lifetime; their actual calls still enforce all data, identity, directory
+and report-authorization checks. Cancellation and confirmed identity/directory mismatches
+remain errors rather than being treated as optional discovery failures.
 
 The Worktree entry in Settings uses the same branch icon as the sidebar.
 Both settings use a card with the main switch at the top. Turning it on reveals tool selections
@@ -396,8 +411,9 @@ must omit `requestId` or use JSON `null`: the Host generates it. A rejected firs
 with an invented id explains how to correct it without consuming the report token.
 After uncertain admission, preserve the returned id and identical content for retry.
 
-Native schemas keep genuinely optional fields. For routes that otherwise generate empty optional
-values, opt in by exact provider id in the Host configuration:
+Native schemas keep genuinely optional fields. Current DSH owns tool declarations and provider
+wire conversion; the plugin does not rewrite frozen model requests. On older DSH hosts only,
+routes that otherwise generate empty optional values can opt in by exact provider id:
 
 ```yaml
 - id: clutch-dsh-worktree-host
@@ -406,7 +422,8 @@ values, opt in by exact provider id in the Host configuration:
     nullableToolProviders: [ocx]
 ```
 
-This defaults to an empty list. For these providers, plugin tools in native model requests use
+This defaults to an empty list and has no effect on current hosts with step tool admission.
+On older hosts, for these providers, plugin tools in native model requests use
 required properties with nullable optional values and closed nested objects, retaining length bounds.
 A first report accepts only null for its wire requestId; an uncertain attempt restores the retry id
 field. The native catalog, PTC SDK, other plugins and execution validation keep their existing contracts.
@@ -414,15 +431,23 @@ This does not enable a provider's strict mode or promise support across gateways
 adapter and a real ocx/Luna route have been checked; other routes need their own verification. See the
 [tool schema standard](docs/TOOL-SCHEMA-STANDARD.md) for official sources, tested layers and limits.
 
+For current DSH pi-ai `openai-responses` routes whose endpoint accepts the `strict` field,
+set `compat: { supportsStrictMode: true }` on that native provider route. This makes the
+adapter send `strict: false` explicitly for ordinary tools, preserving optional fields
+instead of allowing the endpoint to normalize them into required strings. This was verified
+with Magpie Responses / GPT-6.1-Sol; it does not enable strict sampling. Endpoints that reject
+the field need their own adapter compatibility configuration.
+
 `model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
 effective selection, including reasoning effort; no catalog lookup is required for that default.
 When the user specifies a different model or asks to choose one for the task, discover supported
 routes with `clutch_list_models` if enabled and pass the selected object explicitly.
 Unknown routes require discovery or user clarification, never invented ids or a deployment-default fallback.
 An unavailable model or effort fails before creating a Session. Initial
-model routing does not save the deployment default. It is runtime-only until DSH records the
-first request header; after that, DSH restores the model from its own history. Restarting before
-that first request discards the initial routing override. Native Session model changes take precedence.
+model routing does not save the deployment default. Current DSH records the selection through
+the new Session's native model owner before the first step, so it survives restart even before
+the first request. Older hosts retain the runtime-only override until the first request header;
+restarting those hosts before that request discards the override. Native Session model changes take precedence.
 
 Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
 content. Dispatch keeps the current conversation open and uses DSH's normal new-Session
@@ -497,6 +522,10 @@ The top bar shows **{workspace}/{worktreeName}** and groups **Open in ...**, **B
 (or **New Session**) and the right-sidebar control. It stays visible while the page scrolls.
 On macOS desktop, its blank space drags the window, and a collapsed left Sidebar exposes
 DSH's native reopen button beside the traffic lights. Windows retains its native caption bar.
+
+Selecting Plugins, Scheduled Tasks, Office, or another native main page automatically closes
+Dashboard and cancels pending Dashboard navigation. Returning to the conversation does not reopen it;
+use a Dashboard entry to open it again. Dashboard continues to use the overlay and native right sidebar.
 
 Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
 Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
@@ -708,6 +737,22 @@ stays in the creation dialog. Matching Git failures share one toast while keepin
 The Worktree settings section uses DSH's native tabs, status tags and compact controls. Its
 text, actions and diagnostic details follow the font size selected in **Settings → General**.
 
+An unresolved disk cleanup can block archive, batch management, and creation throughout its
+Workspace with `WORKTREE_RECOVERY_REQUIRED`. Choose **Retry recovery** first (also available
+on the affected Worktree menu). If cleanup cannot be reconciled—for example, the directory
+still exists but Git no longer registers it—the recovery error offers **Keep files and cancel
+pending cleanup** in **Errors & recovery**. This explicitly cancels that one cleanup request
+after saving a complete plugin-index backup in
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/`. It preserves all Worktree records,
+bindings, files, and native Sessions; it does not mark disk cleanup completed. Repeating the
+same cancellation is safe. When the Host offers cancellation, Git failures do not hide this
+action. Unrelated pending operations or repository conflicts remain blocked.
+
+After cancellation, retry the other selected items. For the affected checkout, repair its Git
+registration yourself, or use **Remove from Management** to retain its files without managing
+it. Any later disk cleanup still requires the normal confirmation and identity checks.
+If the backup cannot be written, cancellation fails and the original journal stays intact.
+
 ### Archive or remove a Worktree
 
 - **Archive Worktree** is non-destructive. It keeps the directory, bindings, instructions, and
@@ -720,14 +765,22 @@ text, actions and diagnostic details follow the font size selected in **Settings
 - **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
   the disk files and native DSH Sessions, and does not require a Session activity check.
 
+When importing a Worktree created by DSH, native ownership and its archive-retention setting stay
+with DSH. Importing does not disable native cleanup. DSH may reclaim that directory after all
+referencing Sessions are archived; an unarchived Session using it or DSH's keep-on-archive option
+can retain it. After native cleanup finishes, Clutch refreshes only the matching Worktree and
+Workspace. A removed directory is shown as needing repair; its records and bindings remain,
+and it is not marked as a completed Clutch disk cleanup. Clutch-created directories are not
+made native-owned by this integration.
+
 ## Requirements
 
 | Component       | Requirement                                                                                                                                                                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DSH Client      | `>=0.2.0-rc.1`, including the Session and Workspace Controllers and Client Store                                                                                                    |
-| DSH Host        | `>=0.2.0-rc.1`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
+| DSH Client      | `>=0.2.2-rc.2`, including the Session and Workspace Controllers and Client Store                                                                                                    |
+| DSH Host        | `>=0.2.2-rc.2`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
 | Git             | `>=2.20.0`, installed and available on `PATH`                                                                                                                                       |
-| Node.js         | `>=20.0.0` for the plugin; DSH `dsh-v0.2.0-rc.1` requires `^22.19.0                                                                                                                 |     | >=24.0.0` |
+| Node.js         | `>=24.9.0`, matching the minimum supported DSH version |
 | Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
 
 ## Behavior and limitations

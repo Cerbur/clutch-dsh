@@ -96,6 +96,21 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ### Agent Worktree 工具接缝
 
+**2026-11-06 当前 DSH 接缝：** 以 `tools.resolve` 检测逐步工具准入能力。
+新图在 `agent/created` 注册 Agent-scoped 条件工具，插件重载时也覆盖已存在的 Agent；
+注册阶段不依赖尚未建立的 Workspace 归属或 Worktree binding。每轮 `when` 通过
+同一 activation 对象共享一次偏好/身份解析，只更新运行时启用集合，不修改注册目录。
+因此原生 toolSet、native declarations、PTC SDK 与指导在首轮同步可用；未启用工具
+不能执行，已启用工具仍保留至 Agent 结束。关闭偏好先于 Git 可用性读取。
+新图不递归 assemble、不替换 executor、不改写冻结请求；`nullableToolProviders`
+仅对旧图生效，当前图由原生 provider 负责 wire 转换。可选 null 归一化、参数约束、
+固定回报目标、token 与精确重试门禁在两条路径上保持一致。
+
+新 Session 的模型由 `agent.model.select` 在工具准入前记录；继承优先读取 live
+`agent.model.current`，冷读取兼容 raw `pending/lastUsed` 与旧 wire `next`。
+这些选择通过 DSH owner 写入原生事件，不由插件直接 append，也不修改部署默认值。
+仅缺少该能力的旧图使用下述请求 waterfall/首个 header 清理路径。
+
 Host 的可选 `commands/tools/sessionController/sessionQuery/agents/llm/systemPrompt` composition
 提供 `/cluworktree`，通用工具开关开启时注册指令，并在调用 Agent 的独立作用域按用户选择注册
 创建、Worktree/Session/模型发现、指派和继续投递能力，通过原生 `systemPrompt.section` 注入对应指导。
@@ -117,7 +132,7 @@ Local/Main 与 Worktree 的独立配置可在执行前自动注入所选能力�
 浏览器 `createWorktreeSession`、Agent 派发与 Dashboard 同步复用同一个创建 module，
 不直接修改 Session header、事件或权限；只有旧注入 adapter 保留 cwd 创建兼容 seam。
 模型省略时继承调用 Session 的有效 provider/model/effort，显式模型通过原生目录和 LLM
-resolver 验证。Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
+resolver 验证。旧图中 Host 使用新 Agent 的原生 `system-prompt/assemble` 与 `agent/request`
 外层 waterfall 配置首个请求，不调用会保存部署默认值的 `selectModel`，不直接 append
 Session 事件。DSH 记录 `request/header` 后撤销该路由覆盖，由原生历史恢复模型；首个请求前
 覆盖仅存在于内存。用户原生 `model/selection` 也立即撤销覆盖。可选标题走原生 rename，
@@ -358,7 +373,31 @@ Git 页只刷新历史，Fetch 返回列表直接更新其分支状态。Client 
 
 ### 安全恢复（recoverWorktrees）
 
-独立的 Remote 恢复重试入口，仅重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。旧版无事务分支观察标记会在获取 Sidecar 锁后自动淘汰，普通 checkout 漂移不需要手动编辑 JSON。
+独立的 Remote 恢复重试入口。默认只重试安全的事实恢复，绝不自动接受漂移分支，也不放宽恢复门禁。旧版无事务分支观察标记会在获取 Sidecar 锁后自动淘汰，普通 checkout 漂移不需要手动编辑 JSON。
+
+`clean-worktree` 在 `recovery-needed` 状态下无法确认结果时，普通恢复错误携带
+`details.quarantineOperationId`。Client 在报错与修复中提供「保留文件并取消未决清理」，
+显式调用 `recoverWorktrees({ workspaceId, quarantineOperationId })`。能力来自同一 Shard
+锁周期内的 journal；提交时重新校验精确 operation ID、类型、阶段及尚未完成清理的 archived 记录。
+旧请求不能取消后来的操作；create/remove journal 不适用此出口。
+
+隔离仅持 Workspace Shard 跨进程锁，不获取 Repository 锁、不执行 Git 或探测目标路径，
+因为它只撤销清理意图，不确认 checkout 身份或完成清理。没有新增锁或改变原有锁顺序。
+`SidecarPersistence` 先把完整原始 shard 写入
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/<sha256([workspaceId, operationId])>.json`，
+临时文件模式 0600，可写句柄 fsync 成功后 rename 发布；目录 fsync 维持 best effort。
+随后经既有原子写入协议仅移除指定 pending 与同时匹配 operationId/worktreeId 的 recoveryIssue，
+revision 加一；所有其他记录、binding、仓库指纹、指令和 DSH 数据保持不变。
+不新增 Sidecar schema 字段，不写 `diskCleanup=completed`，不删除或重定向未知目录。
+
+备份失败不退休 journal；备份成功后 shard 写入失败，重试复用并校验原始备份；
+成功取消后的重复请求（包括重启及跨进程）为无写入幂等结果。损坏备份、符号链接存储边界
+或不匹配的旧操作均 fail closed。普通恢复仍保留「路径缺失不等于清理已完成」的证据门禁。
+Workspace 本身的仓库身份冲突和无关 recoveryIssue 不被此操作清除。
+
+2026-11 诊断修正了历史生命周期计划中「只能反复重试安全恢复」的不足：目录残留而 Git
+登记消失时，永久阻断来自单一 pending journal 的 Workspace 准入门禁，不能通过放宽物理身份
+校验解决。现在提供保留数据的显式取消出口；自动恢复不自动隔离，批量动作仍逐项提交和报告。
 
 ---
 
@@ -539,9 +578,9 @@ Host 只读 adapter 使用 `ctx.get()` 动态解析可选的 `workingDirectory` 
 
 ### 客户端边界与接口契约
 
-- 最低兼容基线为 DSH `dsh-v0.2.0-rc.1`，并已按 `dsh-v0.2.0-rc.1` 的 Client graph 验证。
+- 最低兼容基线及当前 Client graph 验证版本均为 DSH `dsh-v0.2.2-rc.2`。
 - `ctx.workspaces.list` 是只读的 `WorkspaceSource`，仅提供 `getSnapshot()` 与 `subscribe()`。客户端在其上建立可撤销的只读投影，不复制或替换 Store，保持与原生引用一致。
-- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航与目录选取委托至 `ctx.uiWorkspace.openSession()` 与 `ctx.uiWorkspace.pickDirectory()`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
+- Local 创建通过 Session Controller 排除 Worktree 空白候选后执行；导航委托至 `ctx.uiWorkspace.openSession()`，目录选取复用 DSH 组合的 `sidebar.workspaces.directoryFlow` occupant，经插件自有 child slot 和原生 renderer 渲染，选定路径后调用 `ctx.workspaces.create({ path })`；旧 Client graph 在缺少 `openSession()` 时回退到 `ctx.sessions.open()`。
 - DSH 1.7 从 `SessionListState` 移除 `current` 字段；当前 Session 从 `retainedBy.mainView` 派生，重命名通过 `ctx.sessions.using()` 获得临时 Session reference。
 - **Session 归属与 Projection**：
   Worktree Session 的归属关系由浏览器端基于 `{ workspaceId, sessionId }` 维护本地 membership projection，而非持久化写入 DSH 原生 `Workspace.sessionIds`。在 DSH 原生列表刷新后自动重放，解绑或 Client 销毁时撤销。
@@ -735,7 +774,8 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 导航，由 UiSession 清除完成未读。`activityClocks` 只保留客户端观察到的 ongoing 切换时刻，
 首次显示沿用原生 `updatedAt`（原生接口未提供开始/停止时间戳）；临时计时不落盘。
 仅浮窗打开时每秒更新显示时间，关闭/卸载取消计时和事件监听。浮窗使用原生 `MenuSurface`、
-`StateDot` 与定位/外部点击 hooks，通过 portal 避免 Sidebar 裁剪。
+`StateDot` 与外部点击 hook，通过 portal 避免 Sidebar 裁剪；触发器与浮窗共享唯一 CSS anchor，
+由 CSS 负责定位，不依赖 rc.2 已移除的 `useAnchoredPosition`。
 浮窗可见性同时依赖 Sidebar 的 `bounds.ready`：锚点丢失或几何失效时，即使 `collapsed=false`
 也关闭 portal 并释放计时和键盘监听；几何恢复不自动重开，等待用户再次点击铃铛。
 
@@ -758,6 +798,7 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
   缺失、歧义或无效几何均恢复原生内容。此规则取代历史计划中的位置推断，不改变数据所有权和刷新作用域。
 - 导航列表的键控位置快照与动画仅属于浏览器呈现，不改变 Session 排序或关系。Dashboard 标题行请求可先于 Workspace projection 到达；未读取的目标不等于已删除目标，等待期间在 center 显示加载状态，错误通过 toast 提示并在 Worktree 设置中提供重试入口，重试保持 Workspace 作用域，且不展开导航。
 - Worktree Dashboard 使用 DSH `shell.overlay` 作为与原生 Session 内容平级的主区域页面，不注册到已占用的 `conversation` slot；
+- Dashboard 原生页面导航修复（2026-11-08）：Surface 在挂载期间订阅 `layout.panelInfo`；选择任意非空 `activePanelId` 时同步清除 Dashboard 选择、等待 Session list 的请求及等待 Session 切换的请求，防止迟到结果重新遮住插件、自动化任务或 Office 等主页面。清除后沿用 overlay 卸载恢复原生 center；返回 Conversation 不自动恢复 Dashboard。显式从全局页面打开 Dashboard 时先调用 `layout.selectPanel(null)`，不改当前 Session 身份，使再次点击同一全局入口仍能关闭它。右侧栏展开/收起不触发该关闭条件，订阅随 Surface 卸载释放。本项补充历史 Dashboard MVP 计划，继续保留 overlay 与原生右侧栏，不修改 DSH 源码或增加 Host 读取。
 - Local/Main Dashboard 独有的“管理 worktree”页签复用所属 Workspace 的 ready records，包含归档和清理记录，不包含 Main。选择、确认目标与逐项结果仅存在于浏览器；批量串行调用现有归档、磁盘清理和移出管理 RPC。每项执行前比对已确认的路径、分支与生命周期事实，并使用前一项局部刷新后的最新 mutation token，以适配 Sidecar revision 变化。清理需额外确认任务已停止，保留 binding detached 流程与原生权限；移出管理只移除插件关系。刷新始终限于所属 Workspace，成功项不因后续读取失败而重放，取消或 owner 卸载不再调度剩余项；不新增 Host API、持久化字段或全局刷新。
 - 派生 Worktree（2026-10-25）仅从所属 Workspace 的 ready records 投影：候选 `baseBranch` 匹配当前 checkout 的实际本地分支，无法获取时回退受管理记录分支；短名与 `refs/heads/` 等价，显式远端 ref 不匹配。排除自身、跨 Workspace 和间接后代，Detached HEAD 或未知 Main 分支返回空列表。归档项保留并展示生命周期与健康状态，概览预览五项并显示总数，children 页签显示全部，点击复用 `openDashboard` 的 Session 导航门禁。修改已保存基线会改变关系；不新增持久化血缘、委派目录、RPC 或全局刷新。此实现取代历史 Dashboard MVP 计划的 children 占位，不推断 Git 祖先关系，历史计划保持只读。
 - Overlay 仅覆盖 Sidebar 与原生 rightbar 之间的 center 区域；Session-bound Dashboard 保留已经打开的 rightbar 及其状态；
@@ -847,6 +888,18 @@ Sessions at the Workspace root use Local/Main preferences; an active binding use
 preferences and requires healthy availability. Detached or ambiguous bindings never use Local preferences.
 Delegated Sessions default to result reporting only; other tools follow explicit preferences or
 command activation. Reporting guidance remains independent of delegation guidance.
+
+Automatic discovery is a read-only optional boundary in both current step admission and
+legacy prompt assembly. Unavailable Sidecar/settings/Workspace or Git probe data adds no
+capabilities and does not block ordinary native/PTC requests. Existing enabled capabilities
+and report registrations remain Agent-scoped; actual operations still run their normal
+authorization and report-token checks, and failures do not become successful mutations.
+Cancellation, lifetime disposal and registration failures remain outside recovery.
+`ToolAuthorizationError` distinguishes confirmed identity/cwd denials from unavailable
+probe data without matching error-message strings; confirmed denials preserve the existing
+fail-closed assembly/admission contract. The Manager's structured `SESSION_CWD_MISMATCH`
+provider error also propagates unchanged. Detached/ambiguous preliminary candidates continue
+to be skipped as before. Recovery never creates report tokens or expands a failed selection.
 
 ### Task-scoped reporting and callback control (2026-10-10)
 
@@ -970,3 +1023,16 @@ Client/Host lifetime 中去重，进行中读写不重复创建。Host 最多保
 Sidecar v7 的事实字段不变，只扩展 plugin path 的词法形状。Workspace 根不复制到索引；
 实际创建、恢复、删除仍根据当前 DSH Workspace 根与物理祖先重新校验。
 旧插件不能识别新池路径，会将该索引视为不可用；因此不能无备份降级后继续操作新记录。
+
+## DSH rc.2 原生归档兼容（2026-11-13）
+
+Host 可选监听原生 `worktree/cleanup`。scheduled 只捕获短期物理身份；removed、retained、failed
+终态复核 Sidecar 记录与路径后，通过既有 `toolChanges` 通知匹配的 Worktree/Workspace。事件没有
+Workspace ID，同一 checkout 可被多个 Workspace 导入，因此只读扫描原生 registry 对应的索引分片，
+不读取无关 Git projection、不创建空分片，也不做全局刷新。仅明确 ENOENT 可使用词法或已验证的
+获取身份；权限/I/O 不确定性、别名改指、已遗忘或换属记录不扩大作用域。卸载取消监听和迟到通知。
+原生删除后目录投影为 repair，Clutch 不写 diskCleanup、不自动解绑、移除索引或改写 Session cwd。
+
+rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-scroller capability 的 seat
+使用 `max-height: 100cqh`，并把原生 `bindScrollerRef` 接至真正的列表滚动节点；折叠、移出与卸载
+解绑。rc.1 没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。

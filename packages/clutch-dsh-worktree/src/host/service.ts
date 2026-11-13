@@ -43,6 +43,8 @@ import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
+import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
+import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -51,7 +53,7 @@ import { WorktreeToolSettings } from './tool-settings.js';
 export interface WorktreeHostConfig {
   /** DSH 解析后的绝对数据根目录。 / Absolute DSH data root resolved by the Host. */
   readonly dshHome: string;
-  /** Provider ids whose wire tools require explicit nullable default fields. */
+  /** Legacy-host nullable wire projection; current DSH owns provider conversion. */
   readonly nullableToolProviders?: readonly string[];
 }
 
@@ -116,12 +118,17 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     this.dsh = dsh;
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
+    const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: config.dshHome });
     const manager = createWorktreeManager({
+      sidecar,
       dsh,
       dshHome: config.dshHome,
       subprocess,
     });
     this.manager = manager;
+    registerNativeWorktreeCleanup(ctx, { dsh, sidecar,
+      changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+    });
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
       const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx);
@@ -386,7 +393,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  recoverWorktrees(input: { workspaceId: string }): Promise<WorktreeRemoteResult<null>> {
+  recoverWorktrees(input: { workspaceId: string; quarantineOperationId?: string }): Promise<WorktreeRemoteResult<null>> {
     return this.remote.recoverWorktrees(input);
   }
 

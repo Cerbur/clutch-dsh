@@ -46,7 +46,7 @@ test('real native insertion receipts survive queue mutation and replay without r
         return event;
       },
     };
-    const inbox = new ReactLoopInbox({ stateOf: () => state }, session, { emit() {} });
+    const inbox = new ReactLoopInbox(Object.assign(() => state, { stateOf: () => state }), session, { emit() {} });
     const ctx = new Context();
     t.after(() => ctx.fiber.dispose());
     const sender = { session: { id: 'sender' }, ctx };
@@ -129,7 +129,7 @@ test('real native inbox, provider context and relay UI distinguish Agent message
       return event;
     },
   };
-  const inbox = new ReactLoopInbox({ stateOf: () => state }, session, { emit() {} });
+  const inbox = new ReactLoopInbox(Object.assign(() => state, { stateOf: () => state }), session, { emit() {} });
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   const sender = { session: { id: 'actual-sender' }, ctx };

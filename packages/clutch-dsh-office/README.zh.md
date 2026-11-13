@@ -9,8 +9,6 @@
 
 ### 从 npm 安装
 
-首个 npm 版本尚待发布，发布后使用：
-
 ```bash
 dsh plugin --profile web add @cerbur/clutch-dsh-office
 dsh web
@@ -39,7 +37,7 @@ pnpm dsh web
 | 共享厨房         | <img src="assets/screenshots/office-session-board.jpg" width="600" alt="本地预览：胡闹厨房中的四位模拟会话角色">       | 最多四位鲸鱼娘代表运行、待交互或未读完成会话。计数与列表包含超出部分，空闲会话不展示。                       |
 | 可点击会话气泡   | 同上                                                                                                                   | 常驻气泡展示标题、工作区和状态，点击打开对应原生会话。长标题可通过提示与列表完整查看。                       |
 | 活跃会话列表     | <img src="assets/screenshots/office-session-list.jpg" width="600" alt="本地预览：四种活跃状态，不含空闲行">            | 按更新时间从新到旧展示标题与工作区。运行行显示执行时长，未读完成显示完成时间，待交互保留状态；列表不限四条。 |
-| 鲸鱼娘与本地预览 | <img src="assets/screenshots/office-character-soft-fill.jpg" width="600" alt="本地预览：四位模拟鲸鱼娘，着色柔和明亮"> | 独立行走、自动眨眼与柔和角色补光。本地预览可显示一至四位模拟角色，不改变真实会话。                           |
+| 鲸鱼娘与本地预览 | <img src="assets/screenshots/office-character-soft-fill.jpg" width="600" alt="本地预览：四位模拟鲸鱼娘，着色柔和明亮"> | 独立行走、小步转身、自动眨眼与柔和角色补光。本地预览可显示一至四位模拟角色，不改变真实会话。                 |
 | 温馨厨房         | <img src="assets/screenshots/office-optimized-kitchen.jpg" width="600" alt="厨房中的暖色窗光、漆面油烟机和底板木框">   | 丰富的厨房摆设，搭配柔和暖光与细腻表面。                                                                     |
 
 会话与角色截图均来自明确标注的本地预览，四条会话均为模拟数据。
@@ -64,7 +62,7 @@ pnpm dsh web
   不代表实际工具执行。
 - 断连时清除过期角色与列表，重连后恢复。展示时间基于原生更新和观察到的状态变化估算，
   不作为执行日志；缺失时间明确显示。
-- 减少动态效果时停止游走与眨眼；隐藏时暂停，离屏时释放渲染资源并在返回时重建。
+- 减少动态效果时停止游走、转身动作与眨眼；隐藏时暂停，离屏时释放渲染资源并在返回时重建。
   动画上限为 30 FPS，实际性能取决于设备，近距离放大可能看到纹理或阴影细节减少。
 
 ## 开发
@@ -73,6 +71,7 @@ pnpm dsh web
 
 ```bash
 pnpm --filter @cerbur/clutch-dsh-office typecheck
+pnpm --filter @cerbur/clutch-dsh-office lint
 pnpm --filter @cerbur/clutch-dsh-office build
 pnpm --filter @cerbur/clutch-dsh-office test
 ```

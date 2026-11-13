@@ -18,6 +18,7 @@ import { Models, type CharacterAppearance } from './models.js';
 import { buildKitchen } from './kitchen/index.js';
 import { createKitchenCamera, resizeKitchenCamera } from './camera.js';
 import { buildDeepSeek } from './character/deepseek.js';
+import { turnVelocity } from './character/turn.js';
 import { createKitchenLighting } from './lighting.js';
 import { createKitchenRenderGuard } from './render-failure.js';
 import { kitchenPixelRatio } from './render-budget.js';
@@ -113,6 +114,7 @@ export function createKitchenRuntime(
       const { model, actor } = live;
       const plan = planAction(actor.activity, (actor.seat % 2) as 0 | 1);
       const previousPosition = live.roaming?.position ?? live.motion.position;
+      const previousYaw = live.roaming?.yaw ?? live.motion.yaw;
       if (actor.roaming) {
         live.roaming = advanceRoamingMotion(
           live.roaming ?? createRoamingMotion(actor.seat),
@@ -158,6 +160,7 @@ export function createKitchenRuntime(
             plan.pose === 'search' &&
             live.motion.phase === 'idle' &&
             !live.motion.returning,
+          turnVelocity(previousYaw, yaw, delta),
         );
       } else {
         const baseY =
