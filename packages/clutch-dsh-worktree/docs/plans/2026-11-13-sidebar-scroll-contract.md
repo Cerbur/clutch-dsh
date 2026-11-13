@@ -114,3 +114,18 @@ validates geometry, wheel handoff and keyboard scrolling, not those platforms.
 Upstream documents native limitations too: touch may stop at the outer boundary;
 browsers lacking scroll-state queries may scroll the section first. The existing
 floating thumb fallback remains covered by its pointer/resize/disposal unit tests.
+
+## Header spacing refinement (2026-11-14)
+
+After the user confirmed the slot layout visually, align the header and activity
+filter with the list's 4px horizontal inset. Remove the header's extra 2px top
+margin, retain its 4px bottom gap, and give the filter a 4px gap below its divider.
+The filter configuration trigger uses the same 28px control size as the toolbar.
+This changes spacing only; native scrolling, filtering and action behavior remain.
+Component-level Chromium checks cover 240/280/360px widths with search closed and
+expanded. They render the production Header and ActivityFilterBar with mocked
+icons/menu/tooltip services; their before/after image is not a full DSH screenshot.
+Both public README languages describe the shared inset and divider gap.
+All required workspace/package checks and README parity passed for this refinement.
+The full run with the native DSH source and schema adapter passed 1,443 tests,
+with zero failures or skips. The 18 native scrolling layout scenarios also pass.

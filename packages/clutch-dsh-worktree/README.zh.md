@@ -127,7 +127,7 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 缺少该能力的宿主保留原来的悬浮滚动条。
 使用滚轮或触控板时，向下滚动先移走导航再滚动 Worktree 列表；向上滚动先让列表回到顶部。Workspace 文件夹图标和展开时旋转的
 三角标与 DSH 原生一致，并与原生 Workspace 列表对齐。Worktree 标题采用原生 Workspace 标题的
-字体和间距。Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
+字体。工具栏和活跃会话筛选器与列表行采用一致的水平内边距，筛选器分隔线下方保留少量间隔。Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
 同一时间只展开一个 Workspace，并由它承载 Local/Main、Worktree 与 Session 树，让侧栏保持聚焦。
 选择其他 Workspace 会收起前一个；再次选择当前 Workspace 会收起它的树。收起的 Workspace 行在
 操作区显示一个聚合状态指示：Session 运行中时使用原生转圈，等待审批（或其他交互）时为黄色

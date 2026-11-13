@@ -138,7 +138,8 @@ capability retain the previous floating scrollbar. With a wheel or trackpad, scr
 moves the navigation away before scrolling the Worktree list; scrolling up returns the list
 to its top first. Workspace folders
 and rotating disclosure triangles match native DSH and align with its Workspace list.
-The Worktree heading follows the native Workspace heading's typography and spacing.
+The Worktree heading follows the native Workspace heading's typography. The toolbar and
+activity filter share the list rows' horizontal inset, with a small gap below the filter divider.
 Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
 Only one Workspace is expanded at a time, and it owns the Local/Main, Worktree, and Session
 tree so the sidebar stays focused. Selecting another Workspace collapses the previous one;
