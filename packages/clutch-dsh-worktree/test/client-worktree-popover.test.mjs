@@ -22,6 +22,107 @@ async function load(file, dependencies = {}) {
 }
 const selection = await load('popover-target.ts');
 const placement = await load('popover-placement.ts');
+
+for (const dismiss of ['close', 'dashboard']) {
+  test(`real popover shares notification reads and stops history continuations on ${dismiss}`, async () => {
+    const dom = new JSDOM('<header><div data-conversation-header-leading></div><div id="root"></div></header>', { url: 'https://dsh.test' });
+    dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+    const { document } = dom.window;
+    const originals = new Map();
+    for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
+      IS_REACT_ACT_ENVIRONMENT: true })) {
+      originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+    }
+    const facts = await import('../lib/client/dashboard/git/git-facts.js');
+    const { createWorktreeViewReader } = await import('../lib/client/view/worktree-view-read.js');
+    const hook = await load('git/WorktreeGitOverview.tsx', {
+      react: React, 'react/jsx-runtime': jsx,
+      '../../../contract/index.js': { WORKTREE_GIT_WORKING_TREE: 'working-tree' },
+      './git-facts.js': facts, './GitLineStats.js': {}, './GitCommitStats.js': {},
+      '../dashboard.css': { default: {} },
+    });
+    const { WorktreePopover } = await load('WorktreePopover.tsx', {
+      react: React, 'react/jsx-runtime': jsx, 'react-dom': { createPortal },
+      '@deepseek-ai/dsh-client-ui-primitives': { Tooltip: ({ children }) => children,
+        MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })) },
+      '../dsh-icons.js': { IconBranchOutline16: () => null, IconLoadingOutline16: () => null, IconRefreshOutline16: () => null },
+      './popover-target.js': selection, './popover-placement.js': placement,
+      './worktree-popover.css': { default: {} },
+      './WorktreeDashboard.js': { WorktreeBaselineEditor: () => null,
+        useWorktreeBaselineSync: () => ({ setSyncOpen() {}, syncPending: false, syncDialog: null }) },
+      './git/WorktreeGitOverview.js': { ...hook, WorktreeGitOverviewValue: () => null },
+    });
+    const navigation = { worktrees: [record], bindings: view.bindings,
+      checkout: { gitRootPath: '/repo', currentHead: { kind: 'branch', name: 'main', commit: 'a' } },
+      gitState: { ok: true, value: { currentBranch: 'main' } } };
+    let navigationReads = 0;
+    let deferNavigation = false;
+    const navigationResolvers = [];
+    const histories = [];
+    const files = [];
+    const manager = {
+      readWorkspaceNavigation: async () => {
+        navigationReads++;
+        return deferNavigation ? new Promise((resolve) => navigationResolvers.push(resolve)) : navigation;
+      },
+      listWorktreeCommits: () => new Promise((resolve) => histories.push(resolve)),
+      listWorktreeCommitFiles: async (input) => { files.push(input); return { files: [] }; },
+    };
+    const reader = createWorktreeViewReader(manager);
+    let notification;
+    let dashboard;
+    let dashboardChanged;
+    const props = { sessionId: 's', t: (key) => key, manager, viewReader: reader,
+      useWorktreeContext: (select) => select({ status: 'ready', workspaceId: 'w', sessionId: 's',
+        value: { kind: 'worktree', worktreeId: 'tree' } }),
+      dashboardStore: { getSnapshot: () => dashboard,
+        subscribe: (fn) => { dashboardChanged = fn; return () => {}; } },
+      subscribeChanges: (fn) => { notification = fn; return () => { notification = undefined; }; },
+      refreshContext: async () => {}, createSession: async () => {}, openSession() {}, expand() {},
+    };
+    const history = { commits: [{ kind: 'working-tree', sha: 'working-tree' }], truncated: false };
+    const root = createRoot(document.getElementById('root'));
+    try {
+      await React.act(async () => root.render(React.createElement(WorktreePopover, props)));
+      // Central notification first invalidates and starts Context's shared read.
+      // Exercise both queued (Git pending) and idle notification handling.
+      for (const busy of [true, false]) {
+        deferNavigation = true;
+        const before = navigationReads;
+        await React.act(async () => {
+          reader.invalidate('w', { changeId: String(busy) });
+          void reader.read('w');
+          notification({ workspaceId: 'w', requestId: String(busy) });
+        });
+        assert.equal(navigationReads, before + 1, 'one event starts only one Workspace read');
+        if (busy) await React.act(async () => histories.shift()(history));
+        assert.equal(navigationReads, before + 1, 'queued notification reuses central invalidation');
+        await React.act(async () => navigationResolvers.shift()(navigation));
+        await React.act(async () => histories.shift()(history));
+      }
+      deferNavigation = false;
+      await React.act(async () => document.querySelector('[data-popover-refresh]').click());
+      assert.equal(histories.length, 1, 'history is pending before dismissal');
+      const fileCount = files.length;
+      await React.act(async () => {
+        if (dismiss === 'close') document.querySelector('[aria-haspopup="dialog"]').click();
+        else { dashboard = {}; dashboardChanged(); }
+      });
+      assert.equal(document.querySelector('[data-worktree-popover]'), null);
+      assert.equal(notification, undefined);
+      await React.act(async () => histories.shift()(history));
+      assert.equal(files.length, fileCount, 'late history must not start file reads');
+    } finally {
+      await React.act(async () => root.unmount());
+      reader.dispose();
+      for (const [key, descriptor] of originals) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+      }
+      dom.window.close();
+    }
+  });
+}
 test('popover follows Session edges below tabs, including sidebar resize and narrow windows', () => {
   const dom = new JSDOM('<header><div data-conversation-header-leading></div><button></button></header>');
   let resized;

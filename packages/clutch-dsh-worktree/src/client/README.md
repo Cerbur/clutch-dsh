@@ -964,6 +964,10 @@ fallback ticks skip pending reads. Each notification wait ends within five secon
 reading Git on empty responses. Unmounting on close, Dashboard entry or Session replacement
 aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
 retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
+Tool notifications reuse the monitor's existing invalidation, including when queued during
+Git reads; filesystem events still request invalidation. The popover's read lifetime stops
+the shared reader's current-generation follow-up loop without aborting another consumer's
+in-flight request. Git history continuations check their effect lifetime before file fan-out.
 Local uses only the working-tree row and reads live files directly without comparison history.
 Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
 the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving

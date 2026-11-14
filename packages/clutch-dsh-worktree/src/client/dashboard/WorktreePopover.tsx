@@ -103,13 +103,16 @@ function PopoverContent(props: WorktreePopoverProps & {
   const alive = useRef(false);
   const generation = useRef(0);
   const refreshBusy = useRef(true);
-  const refreshQueued = useRef(false);
-  const requestRefresh = () => {
+  const refreshLifetime = useRef<AbortController | undefined>(undefined);
+  // undefined = no queued refresh; false = reuse central invalidation; true = invalidate.
+  const refreshQueued = useRef<boolean | undefined>(undefined);
+  const requestRefresh = (invalidate = true) => {
     if (!alive.current) return;
-    if (refreshBusy.current) refreshQueued.current = true;
-    else void refresh(true);
+    if (refreshBusy.current) refreshQueued.current = (refreshQueued.current ?? false) || invalidate;
+    else void refresh(invalidate);
   };
   const refresh = async (invalidate = false) => {
+    if (!alive.current) return;
     if (!workspaceId) { setTarget({ kind: 'unbound' }); setRefreshing(false); return; }
     const ticket = ++generation.current;
     refreshBusy.current = true;
@@ -117,7 +120,7 @@ function PopoverContent(props: WorktreePopoverProps & {
     setReadFailed(false);
     if (invalidate) viewReader.invalidate(workspaceId);
     try {
-      const view = await viewReader.read(workspaceId, { current: true });
+      const view = await viewReader.read(workspaceId, { current: true, signal: refreshLifetime.current?.signal });
       if (alive.current && ticket === generation.current) {
         setTarget(selectPopoverTarget(view, String(sessionId), props.mainConfirmed));
         setRevision((value) => value + 1);
@@ -132,10 +135,13 @@ function PopoverContent(props: WorktreePopoverProps & {
     }
   };
   useEffect(() => {
+    const lifetime = new AbortController();
+    refreshLifetime.current = lifetime;
     alive.current = true;
     void refresh(true);
     const unsubscribe = props.subscribeChanges((change) => {
-      if (change.workspaceId === workspaceId) requestRefresh();
+      // The monitor already invalidated this event and started the shared Context read.
+      if (change.workspaceId === workspaceId) requestRefresh(false);
     });
     // This content unmounts when closed or covered by Dashboard. Skip ticks until
     // both Workspace and Git reads settle; never queue overlapping polling reads.
@@ -144,6 +150,8 @@ function PopoverContent(props: WorktreePopoverProps & {
     }, 60_000);
     return () => {
       alive.current = false;
+      lifetime.abort();
+      refreshQueued.current = undefined;
       generation.current++;
       if (timer !== undefined) window.clearInterval(timer);
       unsubscribe();
@@ -202,9 +210,10 @@ function PopoverContent(props: WorktreePopoverProps & {
   const busy = refreshing || state.status === 'loading' || (state.status === 'ready' && state.refreshing === true);
   useLayoutEffect(() => {
     refreshBusy.current = busy;
-    if (!busy && refreshQueued.current && alive.current) {
-      refreshQueued.current = false;
-      void refresh(true);
+    if (!busy && refreshQueued.current !== undefined && alive.current) {
+      const invalidate = refreshQueued.current;
+      refreshQueued.current = undefined;
+      void refresh(invalidate);
     }
   });
   const title = record?.branch ?? (target.kind === 'main' ? props.workspaceTitle : undefined);

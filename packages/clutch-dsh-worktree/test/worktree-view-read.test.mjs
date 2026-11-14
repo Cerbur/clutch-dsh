@@ -21,6 +21,31 @@ function currentBranch(name) {
   return { name, isCurrent: true, checkedOut: true };
 }
 
+for (const failed of [false, true]) {
+  test(`cancelled current reader does not chase stale ${failed ? 'errors' : 'results'} or cancel shared consumers`, async () => {
+    let finish;
+    let reads = 0;
+    const navigation = { worktrees: [], bindings: [],
+      gitState: { ok: true, value: {} }, checkout: { currentHead: { name: 'main' } } };
+    const reader = createWorktreeViewReader({ readWorkspaceNavigation: () => {
+      reads++;
+      return new Promise((resolve, reject) => { finish = () => failed ? reject(new Error('old read')) : resolve(navigation); });
+    } });
+    const controller = new globalThis.AbortController();
+    const closed = reader.read('ws', { current: true, signal: controller.signal });
+    const rejected = assert.rejects(closed, { name: 'AbortError' });
+    const shared = reader.read('ws');
+    const sharedResult = failed ? assert.rejects(shared, /old read/) : shared;
+    reader.invalidate('ws');
+    controller.abort();
+    finish();
+    await rejected;
+    await sharedResult;
+    assert.equal(reads, 1, 'closed consumer never starts a follow-up request');
+    reader.dispose();
+  });
+}
+
 function activeBinding(sessionId, worktreeId, workspaceId) {
   return { workspaceId, worktreeId, sessionId, status: 'active' };
 }

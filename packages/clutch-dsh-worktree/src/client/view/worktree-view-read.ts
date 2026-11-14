@@ -47,7 +47,7 @@ export interface WorktreeViewReader {
   }): void;
 
   /** Return one complete Workspace view, sharing its current generation. */
-  read(workspaceId: string, options?: { readonly current?: boolean }): Promise<WorktreeWorkspaceView>;
+  read(workspaceId: string, options?: { readonly current?: boolean; readonly signal?: AbortSignal }): Promise<WorktreeWorkspaceView>;
 
   /** Read exactly this ordered set; duplicate IDs share one read. */
   readMany(workspaceIds: readonly string[]): Promise<readonly WorktreeWorkspaceView[]>;
@@ -382,6 +382,8 @@ export function createWorktreeViewReader(
       if (!options?.current) return read(workspaceId);
       const followCurrent = async (): Promise<WorktreeWorkspaceView> => {
         for (;;) {
+          // Cancel only this consumer's follow-up reads, never another consumer's shared RPC.
+          options.signal?.throwIfAborted();
           if (disposed) throw new Error('Worktree view reader disposed');
           const entry = entryFor(workspaceId);
           const generation = entry.generation;
@@ -389,9 +391,11 @@ export function createWorktreeViewReader(
           try {
             view = await read(workspaceId);
           } catch (error) {
+            options.signal?.throwIfAborted();
             if (disposed || generation === entry.generation) throw error;
             continue;
           }
+          options.signal?.throwIfAborted();
           if (disposed) throw new Error('Worktree view reader disposed');
           if (!entry.stale && entry.view === view) return view;
         }

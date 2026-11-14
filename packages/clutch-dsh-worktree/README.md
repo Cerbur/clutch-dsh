@@ -550,6 +550,8 @@ conversation restores it. Refresh switches the icon to a loading indicator until
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
 with a 60-second polling fallback. Closing it or opening Dashboard releases the listeners
 and stops the timer. Changes during pending reads are coalesced into one follow-up refresh.
+Shared tool notifications reuse the same Workspace read. After closing or entering Dashboard,
+late responses cannot start further popover reads.
 Automatic and manual refresh preserve ready content while
 reading. Initial loading fills fixed-size placeholders in the
 same layout without loading text or changing the panel size. Main, unbound, detached,

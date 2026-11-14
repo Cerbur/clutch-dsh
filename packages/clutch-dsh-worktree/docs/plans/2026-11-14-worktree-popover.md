@@ -45,6 +45,9 @@ Regression coverage: target identity, Main/detached/missing states, fresh compar
 sync gate in the full Dashboard, correct Git tab navigation, retained ready content,
 header toggle, conversation persistence, stable loading rows, reload icon lifetime,
 Escape dismissal and focus restoration.
+Regression review also covers real overview-hook history completion after close/Dashboard,
+one shared Workspace read per tool notification (idle and queued), and cancelled current
+reader continuations after both stale success and failure.
 Run workspace, patch, lint, typecheck, build, package test and README parity checks.
 Real DSH browser verification remains separate from jsdom interaction tests; do not
 change the running instance's installation configuration to perform it.

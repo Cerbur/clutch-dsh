@@ -78,6 +78,8 @@ export function useWorktreeGitOverview(
       baseBranch: baselineBranch,
     })
       .then(async (history) => {
+        // Unmounted/replaced consumers must not fan out a late history response.
+        if (!active) return;
         const workingTree = history.commits.find(isWorkingTreeCommit);
         const committedFilesPromise = history.unavailableReason === undefined
           ? manager.listWorktreeCommitFiles({
