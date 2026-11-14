@@ -10,6 +10,7 @@ export class GitChangeWatches {
     revision: number; watchers: FSWatcher[]; wake: Set<() => void>;
     expiry?: ReturnType<typeof setTimeout>; debounce?: ReturnType<typeof setTimeout>;
     startup?: ReturnType<typeof setTimeout>;
+    detachSetupAbort?: () => void;
   }>();
   private disposed = false;
 
@@ -20,9 +21,23 @@ export class GitChangeWatches {
     const lease = { revision: 0, watchers: [] as FSWatcher[], wake: new Set<() => void>(),
       expiry: undefined as ReturnType<typeof setTimeout> | undefined,
       startup: undefined as ReturnType<typeof setTimeout> | undefined,
+      detachSetupAbort: undefined as (() => void) | undefined,
       debounce: undefined as ReturnType<typeof setTimeout> | undefined };
     this.leases.set(id, lease);
+    // The caller has no lease ID until setup returns. Cancellation must therefore
+    // release resources here, without waiting for stat/readFile to finish.
+    const abortSetup = () => this.stop(id);
+    lease.detachSetupAbort = () => {
+      signal.removeEventListener('abort', abortSetup);
+      lease.detachSetupAbort = undefined;
+    };
+    signal.addEventListener('abort', abortSetup, { once: true });
     this.renew(id);
+    const assertActive = () => {
+      signal.throwIfAborted();
+      if (this.disposed) throw new Error('Worktree plugin is disposed');
+      if (this.leases.get(id) !== lease) throw new Error('Git watch expired during initialization');
+    };
     const notify = () => {
       if (!this.leases.has(id)) return;
       clearTimeout(lease.debounce);
@@ -47,28 +62,32 @@ export class GitChangeWatches {
     try {
       observe(root, true, (name) => !name.split('/').includes('.git'));
       let gitDir = path.join(root, '.git');
-      if ((await stat(gitDir)).isFile()) {
-        const pointer = /^gitdir:\s*(.+)\s*$/u.exec((await readFile(gitDir, 'utf8')).trim());
+      const entry = await stat(gitDir);
+      assertActive();
+      if (entry.isFile()) {
+        const contents = await readFile(gitDir, 'utf8');
+        assertActive();
+        const pointer = /^gitdir:\s*(.+)\s*$/u.exec(contents.trim());
         if (!pointer) throw new Error('Invalid gitdir');
         gitDir = path.resolve(root, pointer[1]!);
       }
       let common = gitDir;
       try { common = path.resolve(gitDir, (await readFile(path.join(gitDir, 'commondir'), 'utf8')).trim()); }
       catch { /* Normal checkouts have no commondir. */ }
+      assertActive();
       const metadata = (name: string) => ['HEAD', 'index', 'packed-refs', 'commondir', 'config', 'refs'].includes(name);
       observe(gitDir, false, metadata);
       if (common !== gitDir) observe(common, false, metadata);
       observe(path.join(common, 'refs'), true, (name) => !name.endsWith('.lock'));
       if (common !== gitDir) observe(path.join(gitDir, 'refs'), true, (name) => !name.endsWith('.lock'));
     } catch { /* File watching is advisory, never a prerequisite for readable Git data. */ }
-    if (signal.aborted || this.disposed) {
-      this.stop(id);
-      signal.throwIfAborted();
-      throw new Error('Worktree plugin is disposed');
+    finally {
+      // A successful lease outlives the start RPC; stop/expiry own it from now on.
+      lease.detachSetupAbort?.();
     }
     // Expiry may retire the lease while filesystem setup is awaiting I/O.
     // Never publish its stale ID or schedule a timer that stop() can no longer own.
-    if (this.leases.get(id) !== lease) throw new Error('Git watch expired during initialization');
+    assertActive();
     // fs.watch has no ready barrier. In particular, macOS can drop the first write
     // while multiple directory streams are being registered. Request one delayed
     // reconciliation instead of treating start() as proof of native readiness.
@@ -115,6 +134,7 @@ export class GitChangeWatches {
     const lease = this.leases.get(id);
     if (!lease) return;
     this.leases.delete(id);
+    lease.detachSetupAbort?.();
     clearTimeout(lease.expiry);
     clearTimeout(lease.debounce);
     clearTimeout(lease.startup);

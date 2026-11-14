@@ -6,9 +6,81 @@ import path from 'node:path';
 import { GitChangeWatches } from '../lib/host/git-change-watch.js';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import { EventEmitter } from 'node:events';
+import { EventEmitter, getEventListeners } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 const { AbortController } = globalThis;
+
+for (const stage of ['stat', 'gitdir', 'commondir']) {
+  for (const lateFailure of [false, true]) {
+    test(`abort immediately cleans resources while ${stage} stays blocked (late failure: ${lateFailure})`, async (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      const timers = new Map();
+      const setTimer = globalThis.setTimeout;
+      const clearTimer = globalThis.clearTimeout;
+      t.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
+        const timer = setTimer(() => { timers.delete(timer); callback(...args); }, delay);
+        timers.set(timer, delay);
+        return timer;
+      });
+      t.mock.method(globalThis, 'clearTimeout', (timer) => {
+        timers.delete(timer); return clearTimer(timer);
+      });
+      let ready;
+      const blocked = new Promise((resolve) => { ready = resolve; });
+      let finish;
+      const pause = (value) => new Promise((resolve, reject) => {
+        finish = () => lateFailure ? reject(new Error('late I/O failure')) : resolve(value);
+        ready();
+      });
+      let reads = 0;
+      t.mock.method(fsp, 'stat', async () => {
+        reads++;
+        return stage === 'stat' ? pause({ isFile: () => true }) : { isFile: () => true };
+      });
+      t.mock.method(fsp, 'readFile', async (file) => {
+        reads++;
+        const kind = path.basename(file) === '.git' ? 'gitdir' : 'commondir';
+        const value = kind === 'gitdir' ? 'gitdir: ../metadata' : '../common';
+        return stage === kind ? pause(value) : value;
+      });
+      let emitChange;
+      let opened = 0;
+      let closed = 0;
+      t.mock.method(fs, 'watch', (_directory, _options, listener) => {
+        emitChange = listener;
+        opened++;
+        const watcher = new EventEmitter();
+        watcher.close = () => { closed++; };
+        return watcher;
+      });
+      syncBuiltinESMExports();
+      const watches = new GitChangeWatches();
+      t.after(() => { watches.dispose(); t.mock.restoreAll(); syncBuiltinESMExports(); });
+      const controller = new AbortController();
+      const starting = watches.start('/slow-checkout', controller.signal);
+      const rejected = assert.rejects(starting, { name: 'AbortError' });
+      await blocked;
+      assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
+      emitChange('change', 'before-abort.txt');
+      assert.deepEqual([...timers.values()].sort((a, b) => a - b), [200, 15_000]);
+      controller.abort();
+      // Do not unblock the filesystem: cleanup must not depend on its completion.
+      assert.equal(closed, 1);
+      assert.equal(timers.size, 0, 'expiry and pending debounce are cancelled immediately');
+      assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+      emitChange('change', 'late-native-event.txt');
+      t.mock.timers.tick(60_000);
+      assert.equal(timers.size, 0, 'late callbacks cannot schedule more timers');
+      const readsAtAbort = reads;
+      finish();
+      await rejected;
+      assert.equal(reads, readsAtAbort, 'late I/O must not start the next setup read');
+      assert.equal(opened, 1);
+      assert.equal(closed, 1);
+      assert.equal(timers.size, 0);
+    });
+  }
+}
 
 for (const retirement of ['expiry', 'expiry-read-error', 'abort', 'dispose']) {
   test(`slow initialization cannot revive a lease after ${retirement}`, async (t) => {
@@ -41,6 +113,8 @@ for (const retirement of ['expiry', 'expiry-read-error', 'abort', 'dispose']) {
       assert.equal(closed, 1, 'expiry releases the initial watcher before initialization resumes');
     } else if (retirement === 'abort') controller.abort();
     else watches.dispose();
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 0,
+      'retirement must detach setup cancellation even while I/O remains pending');
     const timersBeforeResume = scheduled.mock.callCount();
     finish();
     await rejected;
@@ -124,6 +198,8 @@ test('Git leases observe working files, index and shared refs and release pendin
   t.after(async () => { watches.dispose(); await rm(temp, { recursive: true, force: true }); });
   const controller = new AbortController();
   const id = await watches.start(root, controller.signal);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0,
+    'successful setup must detach its temporary cancellation listener');
   let revision = 0;
   for (const file of [path.join(root, 'file.txt'), path.join(git, 'index'),
     path.join(common, 'refs', 'heads', 'main'), path.join(common, 'packed-refs')]) {

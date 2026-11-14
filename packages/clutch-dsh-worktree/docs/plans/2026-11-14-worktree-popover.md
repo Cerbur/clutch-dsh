@@ -52,6 +52,8 @@ one shared Workspace read per tool notification (idle and queued), and cancelled
 reader continuations after both stale success and failure.
 Slow watcher initialization is also tested after expiry (late I/O success and failure),
 abort and Host disposal; none may register more watchers or create another timer.
+Cancellation tests keep stat/gitdir/commondir I/O blocked after abort and assert immediate
+watcher/timer/cancellation-listener cleanup, inert late events and no subsequent setup reads.
 Run workspace, patch, lint, typecheck, build, package test and README parity checks.
 Real DSH browser verification remains separate from jsdom interaction tests; do not
 change the running instance's installation configuration to perform it.
