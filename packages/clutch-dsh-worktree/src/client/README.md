@@ -917,3 +917,81 @@ notes are combined in the tool-selection explanation before the individual switc
 is off, the entire selection section is absent; toggling it back on retains the saved selection.
 Writes use expected values, disable concurrent edits, and preserve saved content on failure.
 Retry reloads the latest selection. Configuration changes do not invalidate Workspace projections.
+
+
+## Current Session popover
+
+`dashboard/WorktreePopover.tsx` registers through the public
+`conversation.session.header.utilities` slot (before native More, not a guaranteed
+right-sidebar-toggle sibling). It owns only visibility, focus and a scoped read lifetime.
+`popover-target.ts` selects the current Session's same-Workspace active binding;
+Main requires an explicit Main context. Missing directories and detached relations
+never fall back to a different checkout.
+
+The popover uses the entry-owned ViewReader and tool-change subscription. Pending
+same-target reads preserve content; generation guards discard stale completions.
+The panel has an independent title/three-row layout, reusing the Git overview
+reader, metric values and baseline editor without mounting compact Dashboard.
+The native MenuSurface supplies the same glass material as the activity panel, including
+reduced-transparency preferences; the panel adds rounded corners and a light shadow.
+The native material retains its frosted backdrop. Container animations must only translate:
+opacity/filter on the parent isolates the material backdrop and exposes sharp text underneath.
+Entry animation releases its transform when finished rather than retaining a compositing layer.
+The header toggle owns visibility; conversation pointer/focus changes keep it open.
+Placement uses the triggering utility's native conversation header, verified by its
+`data-conversation-header-leading` marker. Its right edge and bottom (including view tabs)
+define a 12px inset; ResizeObserver and window resize/scroll keep the panel inside the Session
+column as sidebars and viewport dimensions change. Missing geometry hides the panel;
+neither the trigger coordinates nor private native classes are placement anchors.
+Every Session defaults to open. The browser-local `clutch-dsh-worktree.popover-closed-sessions`
+array stores up to ten most-recently-closed Session IDs (oldest first); manual opening removes
+that ID. The previous global open preference no longer hides unrelated Sessions.
+Automatic opening never takes focus. Escape records the current Session. The panel subscribes
+to the entry-owned Dashboard selection store: any open Dashboard suppresses the portal without
+overwriting the preference. Only the reload icon remains in the header, switching to
+the native loading icon for the entire Workspace-plus-Git read. The title uses regular 12px
+text; uncommitted changes precede a divider, then the same-size worktree-to-baseline heading,
+ahead/behind and committed changes. Both headings share the same typography class.
+Entry slides from the right in 180ms; exit slides right in 160ms, with animationend cleanup
+and a 220ms fallback. Closing immediately disables reads, subscriptions and timers; the retained
+exit content is inert and aria-hidden. Dashboard removes it immediately. Reopening cancels
+the exit cleanup and refreshes Workspace before resuming Git reads. Reduced motion skips exit retention.
+Trailing refresh/edit controls share
+a 28px border-box, 14px glyph and 1px row inset (22px glyph inset including panel padding).
+These constants and the alignment contract live in the popover CSS; its class names are
+prefixed to avoid collisions in the package-wide CSS namespace.
+Title, Worktree name and baseline name use native clipped-only, body-portaled Tooltips
+with a 360px width cap and keyboard focus support. Baseline text retains its natural
+width up to half the names area; the Worktree name takes the remaining space, while
+the arrow and pencil keep their fixed sizes.
+Initial reads use stationary placeholders inside these
+fixed-height rows. Refresh keeps ready values; no loading paragraph or sidebar action is mounted.
+Mounted content owns a Git watch lease via the existing Connection adapter's startGitWatch,
+watchGitChanges and stopGitWatch endpoints, plus a 60-second fallback interval. Only
+changed revisions invalidate its Workspace. Events during reads queue one follow-up;
+fallback ticks skip pending reads. Each notification wait ends within five seconds without
+reading Git on empty responses. Deactivation on close, or unmounting on Dashboard entry or Session replacement,
+aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
+retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
+Native fs.watch registration has no ready barrier. Host schedules one reconciliation
+revision one second after registration, merging any pending debounce; stop/dispose clears
+that timer. Client no longer refreshes immediately on the start response. This bounds
+the observed startup gap without claiming reliable event delivery or replacing the 60s fallback.
+Tool notifications reuse the monitor's existing invalidation, including when queued during
+Git reads; filesystem events still request invalidation. The popover's read lifetime stops
+the shared reader's current-generation follow-up loop without aborting another consumer's
+in-flight request. Git history continuations check their effect lifetime before file fan-out.
+Local uses only the working-tree row and reads live files directly without comparison history.
+Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
+the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving
+updates the current projection and invalidates only its Workspace context.
+Committed/uncommitted rows navigate to the full Dashboard Git tab. Ahead/behind opens
+the shared `useWorktreeBaselineSync` dialog directly, retaining strategy selection,
+idempotent request identity, partial-failure diagnostics and stale-navigation guards.
+It requires an active healthy record, a named baseline and a fresh readable comparison;
+refreshing/failed reads disable both opening and confirmation. No behind-positive gate
+is required for this row, matching the full Dashboard sync action.
+Git overview refreshes retain same-baseline ready metrics; changed baselines cannot reuse
+comparison evidence.
+
+No additional Connection adapter, Git transport or persisted projection is introduced.

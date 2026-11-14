@@ -12,6 +12,11 @@ import { GitCommitStats } from './GitCommitStats.js';
 import styles from '../dashboard.css';
 
 export interface WorktreeGitOverviewInput {
+  /** Suspend reads while preserving the last snapshot during the exit animation. */
+  readonly enabled?: boolean;
+  /** Read Local's live files directly, without baseline/history requests. */
+  readonly workingTreeOnly?: boolean;
+  readonly refreshKey?: number;
   readonly manager?: Pick<WorktreeManager, 'listWorktreeCommits' | 'listWorktreeCommitFiles'>;
   readonly workspaceId: string;
   readonly worktreeId: string;
@@ -26,6 +31,7 @@ export type WorktreeGitOverviewState =
   | { readonly status: 'loading' }
   | {
       readonly status: 'ready';
+      readonly refreshing?: boolean;
       readonly history: WorktreeGitHistory;
       readonly committedFiles: readonly WorktreeGitChangedFile[];
       readonly workingTreeFiles: readonly WorktreeGitChangedFile[];
@@ -44,21 +50,39 @@ export function useWorktreeGitOverview(
   // A captured acquisition commit keeps the Overview readable without a selected
   // branch; Main keeps this comparison-only Overview disconnected while its Git tab reads direct history.
   const readable = input.capturedBaseline === true || baselineBranch !== undefined;
-  const [state, setState] = useState<WorktreeGitOverviewState>({ status: 'unavailable' });
+  const identity = JSON.stringify([input.workspaceId, input.worktreeId, baselineBranch, readable, input.workingTreeOnly]);
+  const key = JSON.stringify([identity, input.refreshKey]);
+  const [snapshot, setSnapshot] = useState<{ identity: string; key: string; state: WorktreeGitOverviewState }>({ identity, key, state: { status: 'unavailable' } });
+  const state = snapshot.state;
+  const setState = (state: WorktreeGitOverviewState) => setSnapshot({ identity, key, state });
   useEffect(() => {
-    if (input.manager === undefined || isMainWorktreeId(input.worktreeId) || !readable) {
+    if (input.enabled === false) return;
+    if (input.manager === undefined || (!input.workingTreeOnly && (isMainWorktreeId(input.worktreeId) || !readable))) {
       setState({ status: 'unavailable' });
       return;
     }
     const manager = input.manager;
     let active = true;
-    setState({ status: 'loading' });
+    setSnapshot((previous) => previous.identity === identity && previous.state.status === 'ready'
+      ? { identity, key, state: { ...previous.state, refreshing: true } }
+      : { identity, key, state: { status: 'loading' } });
+    if (input.workingTreeOnly) {
+      void manager.listWorktreeCommitFiles({
+        workspaceId: input.workspaceId, worktreeId: input.worktreeId, commit: WORKTREE_GIT_WORKING_TREE,
+      }).then((result) => {
+        if (active) setState({ status: 'ready', history: { commits: [], truncated: false },
+          committedFiles: [], workingTreeFiles: result.files });
+      }).catch(() => { if (active) setState({ status: 'error' }); });
+      return () => { active = false; };
+    }
     void manager.listWorktreeCommits({
       workspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
       baseBranch: baselineBranch,
     })
       .then(async (history) => {
+        // Unmounted/replaced consumers must not fan out a late history response.
+        if (!active) return;
         const workingTree = history.commits.find(isWorkingTreeCommit);
         const committedFilesPromise = history.unavailableReason === undefined
           ? manager.listWorktreeCommitFiles({
@@ -88,7 +112,9 @@ export function useWorktreeGitOverview(
     return () => {
       active = false;
     };
-  }, [baselineBranch, readable, input.manager, input.workspaceId, input.worktreeId]);
+  }, [input.enabled, baselineBranch, readable, input.manager, input.workspaceId, input.worktreeId, input.refreshKey, input.workingTreeOnly]);
+  if (snapshot.identity !== identity) return { status: 'loading' };
+  if (snapshot.key !== key && state.status === 'ready') return { ...state, refreshing: true };
   return state;
 }
 

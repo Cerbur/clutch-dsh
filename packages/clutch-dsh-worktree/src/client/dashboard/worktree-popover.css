@@ -1,0 +1,134 @@
+.popoverTrigger, .popoverIconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.popoverTrigger:hover, .popoverIconButton:hover, .popoverRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.popoverTrigger[aria-expanded="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l1);
+}
+.popoverTrigger:focus-visible, .popoverIconButton:focus-visible, .popoverRow:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+.popoverIconButton:disabled { cursor: default; }
+.popoverIconButton svg { width: var(--worktree-popover-glyph-size); height: var(--worktree-popover-glyph-size); }
+.popoverIconButton[aria-busy='true'] svg { animation: popoverReloadSpin 1s linear infinite; }
+@keyframes popoverReloadSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .popoverIconButton[aria-busy='true'] svg { animation: none; }
+}
+.popoverPanel {
+  /* Alignment contract: all trailing actions use this inset and a 28px border-box
+     with a centered 14px glyph. With 14px panel padding, glyphs end 22px from the
+     panel edge (14 + 1 + 7), matching the metric values. Never add per-row offsets.
+     Keep popover class names unique: the client bundler shares the package namespace. */
+  --worktree-popover-action-inset: 1px;
+  --worktree-popover-action-size: 28px;
+  --worktree-popover-glyph-size: 14px;
+  position: fixed;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 14px;
+  border-radius: 20px;
+  z-index: 100;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l1), 0 4px 16px rgb(0 0 0 / 6%);
+  outline: none;
+}
+/* Material contract: MenuSurface's background owns the frosted glass blur.
+   Never animate opacity/filter on its ancestor: that isolates the backdrop and
+   makes conversation text show through. Release the entry transform on completion. */
+.popoverPanel[data-state='open'] { animation: popoverSlideIn 180ms cubic-bezier(.2, .8, .2, 1) backwards; }
+.popoverPanel[data-state='closing'] {
+  pointer-events: none;
+  animation: popoverSlideOut 160ms ease-in both;
+}
+@keyframes popoverSlideIn {
+  from { transform: translateX(calc(100% + 12px)); }
+  to { transform: translateX(0); }
+}
+@keyframes popoverSlideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(100% + 12px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popoverPanel[data-state] { animation: none; }
+}
+.popoverHeading { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 var(--worktree-popover-action-inset) 0 8px; }
+.popoverTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popoverDivider { height: 1px; background: var(--dsw-alias-border-l1); margin: 8px; }
+.popoverComparison { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--worktree-popover-action-inset) 0 8px; }
+.popoverComparison > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popoverComparison > [aria-hidden] { flex: none; }
+.popoverComparison > .popoverEditBaseline { flex: none; margin-left: auto; overflow: visible; }
+/* Reserve the baseline's natural width (at most half the name area). A long
+   Worktree name must not squeeze a short baseline down to a single character.
+   The arrow and edit action never shrink; tooltips portal out of this scrollport. */
+.popoverComparison > .popoverComparisonNames { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0; }
+.popoverBranchName { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popoverBaselineName { flex: 0 0 auto; max-width: 50%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popoverComparisonArrow { flex: none; }
+.popoverTitle:focus-visible, .popoverBranchName:focus-visible, .popoverBaselineName:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+.popoverRow {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.popoverRow:disabled { cursor: default; }
+.popoverRow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popoverValue { display: inline-flex; justify-content: flex-end; align-items: center; min-width: 64px; font-variant-numeric: tabular-nums; }
+.popoverValuePlaceholder, .popoverTitlePlaceholder { display: inline-block; height: 10px; border-radius: 4px; background: var(--dsw-alias-interactive-bg-hover); }
+.popoverValuePlaceholder { width: 64px; }
+.popoverTitlePlaceholder { width: 144px; max-width: 100%; }
+
+/* Title and comparison text must share typography; only their layout differs. */
+.popoverLabel {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.popoverPanel .popoverIconButton,
+.popoverEditBaseline [data-dashboard-baseline-edit] {
+  box-sizing: border-box;
+  width: var(--worktree-popover-action-size);
+  height: var(--worktree-popover-action-size);
+  padding: calc((var(--worktree-popover-action-size) - var(--worktree-popover-glyph-size)) / 2);
+  margin: 0;
+}
+.popoverEditBaseline { display: inline-flex; align-items: center; }
+.popoverEditBaseline [data-dashboard-baseline-edit] svg {
+  width: var(--worktree-popover-glyph-size);
+  height: var(--worktree-popover-glyph-size);
+}
