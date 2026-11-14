@@ -5,9 +5,54 @@ import os from 'node:os';
 import path from 'node:path';
 import { GitChangeWatches } from '../lib/host/git-change-watch.js';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 const { AbortController } = globalThis;
+
+for (const retirement of ['expiry', 'expiry-read-error', 'abort', 'dispose']) {
+  test(`slow initialization cannot revive a lease after ${retirement}`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const scheduled = t.mock.method(globalThis, 'setTimeout');
+    let finish;
+    let opened = 0;
+    let closed = 0;
+    t.mock.method(fsp, 'stat', () => new Promise((resolve, reject) => {
+      finish = () => retirement === 'expiry-read-error'
+        ? reject(new Error('late filesystem failure')) : resolve({ isFile: () => false });
+    }));
+    t.mock.method(fsp, 'readFile', async () => { throw new Error('no commondir'); });
+    t.mock.method(fs, 'watch', () => {
+      opened++;
+      const watcher = new EventEmitter();
+      watcher.close = () => { closed++; };
+      return watcher;
+    });
+    syncBuiltinESMExports();
+    const watches = new GitChangeWatches();
+    t.after(() => { watches.dispose(); t.mock.restoreAll(); syncBuiltinESMExports(); });
+    const controller = new AbortController();
+    const starting = watches.start('/slow-checkout', controller.signal);
+    const rejected = assert.rejects(starting, retirement === 'abort' ? { name: 'AbortError' }
+      : retirement === 'dispose' ? /disposed/ : /expired/);
+    assert.equal(opened, 1, 'the root watcher exists while metadata initialization is pending');
+    if (retirement.startsWith('expiry')) {
+      t.mock.timers.tick(15_000);
+      assert.equal(closed, 1, 'expiry releases the initial watcher before initialization resumes');
+    } else if (retirement === 'abort') controller.abort();
+    else watches.dispose();
+    const timersBeforeResume = scheduled.mock.callCount();
+    finish();
+    await rejected;
+    assert.equal(opened, 1, 'late setup must not register more watchers');
+    assert.equal(closed, 1);
+    assert.equal(scheduled.mock.callCount(), timersBeforeResume,
+      'late setup must not schedule an unowned startup timer or renew an expired lease');
+    watches.dispose();
+    t.mock.timers.tick(60_000);
+    assert.equal(scheduled.mock.callCount(), timersBeforeResume);
+  });
+}
 
 test('startup reconciliation covers a dropped native event and remains one-shot', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

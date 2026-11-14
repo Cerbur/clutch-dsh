@@ -66,6 +66,9 @@ export class GitChangeWatches {
       signal.throwIfAborted();
       throw new Error('Worktree plugin is disposed');
     }
+    // Expiry may retire the lease while filesystem setup is awaiting I/O.
+    // Never publish its stale ID or schedule a timer that stop() can no longer own.
+    if (this.leases.get(id) !== lease) throw new Error('Git watch expired during initialization');
     // fs.watch has no ready barrier. In particular, macOS can drop the first write
     // while multiple directory streams are being registered. Request one delayed
     // reconciliation instead of treating start() as proof of native readiness.
