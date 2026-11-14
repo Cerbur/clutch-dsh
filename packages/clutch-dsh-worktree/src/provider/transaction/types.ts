@@ -41,6 +41,7 @@ export interface RecoverWorktreesInput {
 }
 
 export interface WorktreeMutationTransactionOptions {
+  readonly signal?: AbortSignal;
   readonly dshHome: string;
   readonly git: GitWorktreeAdapter;
   readonly sidecar: SidecarStore;

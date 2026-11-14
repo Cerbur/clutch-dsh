@@ -29,7 +29,7 @@ export class SidecarPersistence {
   private readonly dshHome: string;
   private readonly mutationLock: CrossProcessMutationLock;
 
-  constructor({ dshHome }: { readonly dshHome: string }) {
+  constructor({ dshHome, signal }: { readonly dshHome: string; readonly signal?: AbortSignal }) {
     if (!path.isAbsolute(dshHome)) {
       throw providerError('SIDECAR_UNAVAILABLE', 'DSH Home must be an absolute path', { dshHome });
     }
@@ -39,7 +39,7 @@ export class SidecarPersistence {
     this.workspaceRoot = path.join(this.pluginRoot, 'workspaces');
     this.lockRoot = path.join(this.pluginRoot, 'locks');
     this.quarantineRoot = path.join(this.pluginRoot, 'cleanup-quarantine');
-    this.mutationLock = new CrossProcessMutationLock({ lockRoot: this.lockRoot });
+    this.mutationLock = new CrossProcessMutationLock({ lockRoot: this.lockRoot, signal });
   }
 
   getShardPath(workspaceId: string): string {

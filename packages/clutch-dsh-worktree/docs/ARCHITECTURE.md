@@ -53,7 +53,7 @@ contract  ←  provider
 - DSH 通过 `package.json.dsh.bundle.patch` 激活插件；`cordis.patch.yml` 为同目录下的 YAML 补丁层。
 - 补丁层装载 `clutch-dsh-worktree-host`，并通过 DSH 的 `dshHomePath()` 注入绝对路径 DSH Home。
 - 官方 `dsh-typert-loader` 通过 `./package.json` 和 `./typert` 注册 descriptor，Upstream DSH 的 `TypertGateway` 在现有的 `/api` 连接通道上接管 `worktreeManager/<method>`。插件不创建第二套 RPC 或传输层。
-- Host 生命周期：Host 将 `WorktreeManagerService.close()` 注册为 Cordis effect。当 Host 销毁时，Manager 拒绝新操作，向 Git Provider 发送取消信号，并等待进行中的操作完成，避免留下孤立的子进程树。
+- Host 生命周期：Host 将 `WorktreeManagerService.close()` 注册为 Cordis effect。当 Host 销毁时，Manager 拒绝新操作，向 Git Provider 与默认 Sidecar、transaction 锁发送同一取消信号，并等待进行中的操作完成。Shard、repository 与 candidate 锁的 acquisition/retry 可取消；取得锁到 callback 准入之间再次检查取消并释放已取得的锁。已进入 callback 的持久化写入不被中途放弃，仍通过 finally 释放自己的锁；取消不删除其他进程的锁、Worktree 或 Session。排在 startup recovery 后的操作醒来后重新检查生命周期，不得在关闭后继续执行。Host 的 native-cleanup 适配器使用独立只读 repository，Manager 的默认写入 repository 才拥有其生命周期 signal；注入的自定义 Provider 仍由注入方负责取消。
 
 ---
 
@@ -194,7 +194,9 @@ wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时
 校验仍为最终门禁。投影不写 Sidecar、不切换 provider strict 设置、不扩展空字符串语义。
 
 `watchToolChanges` 是同一 `/api` Connection 上的可取消长轮询，每次最多等待
-20 秒。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
+5 秒。DSH Desktop 升级在 Host disposal 之前锁住 API 准入并等待已接收请求结束，
+控制请求期限为 10 秒；长轮询必须主动在此之前结束，不能等待 disposal 唤醒。
+空返回只推进通知循环，不触发 Git 或列表读取。Host 仅保留每个受影响 Workspace 的最新 `workspaceId/worktreeId` 和
 内存 revision，绝不持久化到 Sidecar。Client fiber 共享一个通知循环，
 先使该 Workspace 的 reader generation 失效，再共享 Context/Surface 的定向读取，
 保持其他 ready Workspace 可见。没有新变更时不读取 Git 或 Worktree 列表。
@@ -1051,4 +1053,11 @@ Workspace ID，同一 checkout 可被多个 Workspace 导入，因此只读扫�
 
 rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-scroller capability 的 seat
 使用 `max-height: 100cqh`，并把原生 `bindScrollerRef` 接至真正的列表滚动节点；折叠、移出与卸载
-解绑。rc.1 没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。
+解绑。没有此 capability 时保持既有 flex 布局。列表 owner、ready 数据与 Dashboard 不随之重建。
+有 hook 时列表使用原生 WorkspaceBrowser 的 listArea 布局：左侧 margin -4px / padding 4px，
+右侧按 `--dsh-sidebar-inline-padding` 延伸至 Sidebar 右缘内 2px，再按 `--dsh-scrollbar-width`
+扣除原生滚动条占位。启用 `scrollbar-gutter: stable`，滚动条皮肤、hover 与 quietBars 隐藏完全
+由 DSH theme/sidebar 拥有，不挂载插件 OverlayScrollbar。内容 wrapper 保留原生 16px 底部留白。
+seat/surface 允许列表延伸，列表自身负责裁剪；原生 `scroll-state(scrollable: bottom)` query
+在外层仍可下滚时禁用内层用户滚动，不插入新的 size/scroll-state container。
+无 hook 路径保留旧布局与自绘悬浮滚动条，不降低公开最低版本。

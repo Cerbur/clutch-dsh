@@ -1,5 +1,23 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.31 — 2026-11-14
+
+### 中文
+
+#### 修复
+
+- 修复 Desktop 升级与关闭时 Worktree 通知长轮询和锁等待导致的超时。
+- 修复 Worktree 侧栏滚动布局，使其遵循原生 Workspace 侧栏契约。
+- 修复侧栏工具栏与活跃时间筛选的间距，使其与原生侧栏保持一致。
+
+### English
+
+#### Fixed
+
+- Fix Desktop upgrade and shutdown timeouts caused by Worktree notification long polling and lock waits.
+- Fix the Worktree sidebar scrolling layout to follow the native Workspace sidebar contract.
+- Fix sidebar toolbar and activity filter spacing to match the native sidebar.
+
 ## 0.1.30 — 2026-11-13
 
 ### 中文

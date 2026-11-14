@@ -73,6 +73,7 @@ Refresh scope is determined by the smallest affected identity.
 
 ### 7. 生命周期与破坏性操作安全
 
+- Host 关闭取消尚未取得的 shard、repository 与 candidate 锁等待；已持锁的写入保留所有权直到完成并释放。通知长轮询必须短于 Desktop 升级 API drain 的控制期限，不能依赖尚未开始的 Host disposal 唤醒它。
 - 磁盘清理（`git worktree remove`）必须经过二次确认，明确告知不校验运行状态，由用户确认任务已停止；
 - 移出管理仅清理插件索引，保留磁盘文件与 DSH 原生 Session；
 - 未知路径或存疑状态严禁执行非幂等或破坏性清理。

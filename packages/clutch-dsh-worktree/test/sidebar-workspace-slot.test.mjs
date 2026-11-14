@@ -25,7 +25,7 @@ async function load(file, modules = {}) {
   return exports;
 }
 
-test('footer mode shadows only workspace slot; fold, redeclaration and disposal preserve shell and surface state', async () => {
+for (const nativeScroller of [true, false]) test(`workspace slot preserves shell, state and lifecycle with section scroller ${nativeScroller}`, async () => {
   const dom = new JSDOM('<div id="root"></div>');
   const { document } = dom.window;
   const previous = { window: globalThis.window, document: globalThis.document,
@@ -51,7 +51,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     '../../worktree.css': { default: {} },
     '../shared.js': {},
     './WorkspaceTree.js': { WorkspaceTree: () => React.createElement('div', { 'data-tree': true }, 'ready worktree content') },
-    './OverlayScrollbar.js': { OverlayScrollbar: () => null },
+    './OverlayScrollbar.js': { OverlayScrollbar: () => React.createElement('div', { 'data-legacy-scrollbar': true }) },
     './NotificationToasts.js': { NotificationToasts: () => null },
     '../notification-queue.js': {},
   });
@@ -107,7 +107,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     React.useSyncExternalStore(subscribe, () => revision);
     const entry = slots.entriesOfSlot('sidebar.workspaces').at(0);
     return entry ? React.createElement(entry.component, {
-      wide, expandSidebar() {}, useSectionScroller, ...entry.inject?.(),
+      wide, expandSidebar() {}, useSectionScroller: nativeScroller ? useSectionScroller : undefined, ...entry.inject?.(),
     }) : null;
   }
   const manager = {};
@@ -142,8 +142,10 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     await React.act(async () => { for (const observer of observers) observer.callback(); });
     assert.equal(geometry.bounds.ready, true);
     const readyTree = document.querySelector('[data-tree]');
-    assert.strictEqual(bound.at(-1), document.querySelector('[data-worktree-scrollport]'), 'native handoff binds the content scroller, not the seat');
-    assert.equal(seat.dataset.worktreeSectionScroller, 'true');
+    assert.strictEqual(bound.at(-1), nativeScroller ? document.querySelector('[data-worktree-scrollport]') : undefined, 'native handoff binds the content scroller, not the seat');
+    assert.equal(seat.dataset.worktreeSectionScroller, nativeScroller ? 'true' : undefined);
+    assert.equal(document.querySelector('[data-worktree-scrollport]').hasAttribute('data-worktree-native-scroll'), nativeScroller);
+    assert.equal(document.querySelector('[data-legacy-scrollbar]') !== null, !nativeScroller, 'native contract must not mount a second scrollbar');
     seat.getBoundingClientRect = () => ({ width: 0, height: 0 });
     await React.act(async () => { for (const observer of observers) observer.callback(); });
     assert.equal(geometry.bounds.ready, false);
@@ -155,7 +157,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     await render();
     assert.equal(geometry.bounds.ready, false);
     assert.equal(document.querySelector('[data-tree]').closest('[hidden]')?.hidden, true);
-    assert.equal(bound.at(-1), null, 'fold releases the native scroller');
+    assert.equal(bound.at(-1), nativeScroller ? null : undefined, 'fold releases the native scroller');
     wide = true;
     await render();
     assert.equal(geometry.bounds.ready, true);
@@ -163,7 +165,7 @@ test('footer mode shadows only workspace slot; fold, redeclaration and disposal 
     await React.act(async () => { disposeOwner(); });
     assert.equal(document.querySelector('[data-tree]'), null);
     assert.equal(observers.size, 0);
-    assert.equal(bound.at(-1), null, 'slot withdrawal releases the native scroller');
+    assert.equal(bound.at(-1), nativeScroller ? null : undefined, 'slot withdrawal releases the native scroller');
     await React.act(async () => { disposeOwner = declare(); native(); });
     assert.ok(document.querySelector('[data-tree]'));
     mode = 'workspace-session';

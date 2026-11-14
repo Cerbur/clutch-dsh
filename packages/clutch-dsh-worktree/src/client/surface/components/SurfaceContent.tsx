@@ -265,6 +265,7 @@ export function SurfaceContent({
         className={styles.content}
         tabIndex={0}
         data-worktree-scrollport
+        data-worktree-native-scroll={bindScrollerRef !== undefined || undefined}
       >
         <div className={styles.scrollContent}>
           <NotificationToasts notices={notices} />
@@ -290,7 +291,7 @@ export function SurfaceContent({
           ) : null}
         </div>
       </div>
-      <OverlayScrollbar scrollportRef={expansion.contentRef} />
+      {bindScrollerRef === undefined && <OverlayScrollbar scrollportRef={expansion.contentRef} />}
     </div>
   );
 }

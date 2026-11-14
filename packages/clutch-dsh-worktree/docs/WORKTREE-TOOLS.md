@@ -407,10 +407,12 @@ fails rather than silently skipping. Evidence and design: [Agent relay record](p
 
 ## Notification and refresh design
 
-`watchToolChanges({ afterRevision }, signal)` waits at most 20 seconds and returns a
+`watchToolChanges({ afterRevision }, signal)` waits at most 5 seconds and returns a
 runtime revision and coalesced Workspace/Worktree identities. At most one latest notification
 per Workspace is retained. It is an invalidation feed and is never written to Sidecar.
 Cancellation and Host disposal release waiters.
+The idle bound leaves room inside Desktop's 10-second update admission drain, which runs
+before Host disposal. Empty responses do not refresh Git or Workspace lists.
 
 The Client owns one shared long-poll. Each change invalidates only its owning Workspace's
 reader generation. Matching Context and visible Surface share the replacement read.

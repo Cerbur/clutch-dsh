@@ -122,9 +122,12 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 
 ### 打开 Worktree 模式
 
-Sidebar 滚动条悬浮在边缘，不会挤压行内容或改变边距。Workspace 文件夹图标和展开时旋转的
+宿主提供原生 section-scroller 契约时，Worktree 使用与 Workspace 列表相同的原生滚动布局、
+滚动条皮肤和稳定滚动条占位。行内容保持相同的水平边距，滚动条位于 Sidebar 右缘内 2px。
+缺少该能力的宿主保留原来的悬浮滚动条。
+使用滚轮或触控板时，向下滚动先移走导航再滚动 Worktree 列表；向上滚动先让列表回到顶部。Workspace 文件夹图标和展开时旋转的
 三角标与 DSH 原生一致，并与原生 Workspace 列表对齐。Worktree 标题采用原生 Workspace 标题的
-字体和间距。Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
+字体。工具栏和活跃会话筛选器与列表行采用一致的水平内边距，筛选器分隔线下方保留少量间隔。Workspace 和 Worktree 行采用紧凑的图标与名称间距及层级缩进。
 同一时间只展开一个 Workspace，并由它承载 Local/Main、Worktree 与 Session 树，让侧栏保持聚焦。
 选择其他 Workspace 会收起前一个；再次选择当前 Workspace 会收起它的树。收起的 Workspace 行在
 操作区显示一个聚合状态指示：Session 运行中时使用原生转圈，等待审批（或其他交互）时为黄色
@@ -667,6 +670,9 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 
 ## 行为与限制
 
+- Desktop 升级准备期间，插件的空闲通知读取会在五秒内结束。Host 关闭时取消尚未取得的插件锁
+  与 Git 任务，已接收的 sidecar 写入仍完成并释放锁。重启或升级不会清理 Worktree 目录、
+  解绑关系或删除原生 Session。
 - DSH 拥有 Workspace 身份与根目录、Session 身份与元数据、原生列表、消息、prompt、transcript
   和历史。插件不会复制或改写这些数据。
 - 插件外部索引保存 Worktree 路径、branch、来源、生命周期状态、binding、排序、指令、获取事实

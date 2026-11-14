@@ -7,6 +7,8 @@ import { providerError } from '../types.js';
 import { defaultProcessLiveness, type ProcessLiveness } from './process-liveness.js';
 
 export interface MutationLockOptions {
+  /** Cancel acquisition only; an admitted transaction still owns and releases its lock. */
+  readonly signal?: AbortSignal;
   readonly acquisitionTimeoutMs?: number;
   readonly leaseMs?: number;
   readonly heartbeatMs?: number;
@@ -73,6 +75,7 @@ export class CrossProcessMutationLock {
   private readonly leaseMs: number;
   private readonly heartbeatMs: number;
   private readonly processLiveness: ProcessLiveness;
+  private readonly signal?: AbortSignal;
 
   constructor({
     lockRoot,
@@ -80,6 +83,7 @@ export class CrossProcessMutationLock {
     leaseMs = DEFAULT_LEASE_MS,
     heartbeatMs = DEFAULT_HEARTBEAT_MS,
     processLiveness = defaultProcessLiveness,
+    signal,
   }: MutationLockOptions & { readonly lockRoot: string }) {
     if (!path.isAbsolute(lockRoot)) {
       throw providerError('SIDECAR_UNAVAILABLE', 'Mutation lock root must be an absolute path', { lockRoot });
@@ -96,6 +100,7 @@ export class CrossProcessMutationLock {
     this.leaseMs = leaseMs;
     this.heartbeatMs = heartbeatMs;
     this.processLiveness = processLiveness;
+    this.signal = signal;
   }
 
   getLockPath(key: string): string {
@@ -106,6 +111,7 @@ export class CrossProcessMutationLock {
   async run<T>(key: string, operation: (handle: MutationLockHandle) => Promise<T>): Promise<T> {
     const handle = await this.acquire(key);
     try {
+      this.signal?.throwIfAborted();
       return await operation(handle);
     } finally {
       await handle.release();
@@ -113,6 +119,7 @@ export class CrossProcessMutationLock {
   }
 
   private async acquire(key: string): Promise<MutationLockHandle> {
+    this.signal?.throwIfAborted();
     try {
       if ((await lstat(this.lockRoot)).isSymbolicLink()) {
         throw providerError('SIDECAR_UNAVAILABLE', `Mutation lock root must not be a symlink: ${this.lockRoot}`, {
@@ -180,6 +187,7 @@ export class CrossProcessMutationLock {
     };
 
     while (true) {
+      this.signal?.throwIfAborted();
       try {
         await mkdir(lockPath, { recursive: false, mode: 0o700 });
         try {
@@ -219,7 +227,7 @@ export class CrossProcessMutationLock {
             timeoutMs: this.acquisitionTimeoutMs,
           });
         }
-        await delay(Math.min(50, Math.max(5, this.heartbeatMs / 10)));
+        await delay(Math.min(50, Math.max(5, this.heartbeatMs / 10)), undefined, { signal: this.signal });
       }
     }
   }

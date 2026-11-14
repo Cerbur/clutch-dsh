@@ -14,7 +14,18 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   `view/sidebar-workspace-slot.tsx` publishes the plugin-owned seat and the owner's `wide` state.
   On rc.2, the seat is bounded by `100cqh` and carries the native `useSectionScroller`
   capability to the actual `SurfaceContent` scrollport. Collapse, withdrawal and disposal
-  release the binding. rc.1 retains its flex layout when the hook is absent.
+  release the binding. Without the hook, the existing flex layout and scrollbar inset remain.
+  With the hook, `SurfaceContent` marks the real scrollport with `data-worktree-native-scroll`
+  and does not mount `OverlayScrollbar`. The list follows native WorkspaceBrowser listArea:
+  a -4px left margin with 4px padding, a right margin of `2px - --dsh-sidebar-inline-padding`,
+  and right padding of `--dsh-sidebar-inline-padding - --dsh-scrollbar-width - 2px`.
+  It uses `scrollbar-gutter: stable` and the inherited DSH scrollbar skin/quietBars tokens;
+  no plugin scrollbar-width, thumb skin, hover timer or pointer handlers override native behavior.
+  The stable content wrapper owns 16px bottom clearance. Seat/surface allow the list's extension,
+  and the content owns clipping. The native `scroll-state(scrollable: bottom)` query suppresses
+  inner user scrolling until the outer viewport reaches its end. No nearer size or scroll-state
+  container is introduced.
+  This capability fallback does not lower the package’s minimum supported DSH version.
   `WorktreeSurface` portals only its navigation into that seat; the persistent shell-overlay
   owner retains data/actions, Hero and Dashboard across seat changes. CSS supplies normal flow
   sizing and the native sidebar supplies material. `view/workspace-region-geometry.ts` observes
@@ -142,6 +153,8 @@ One cancellable long-poll loop belongs to the Client fiber. Each notification in
 its Workspace reader generation; the current matching Context and visible Surface share the
 replacement read. Surface refresh uses `alreadyInvalidated` and keeps ready content visible.
 This runtime notification carries identities only and does not add another data store.
+Idle polls return within five seconds so Desktop can drain admitted API reads before shutdown.
+An empty response only renews the shared poll; it does not invalidate projections or read Git.
 Baseline-sync notifications optionally carry their existing admission `requestId`. The Host
 notification and successful Surface completion pass that identity to the same reader invalidation,
 so either arrival order shares the post-change in-flight read (or its completed result). Reads
@@ -708,7 +721,7 @@ The Worktree surface is additive:
   Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
   The plugin does not render a duplicate `WT` rail button;
 - no separate Workspace/Worktree mode Tab is added;
-- the overlay is bounded from the native New Session control to the native Sidebar footer and remains independently scrollable. `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
+- the navigation section is bounded by the native slot viewport and coordinates its inner scrollport through the section-scroller contract described above. When the native capability is absent, `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
   Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
 - Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 200ms `--ds-transition-duration` / `--ds-ease-in-out` rotation; reduced motion disables the transition. The 24×24 hit target stays centered on the 20px leading cell, uses the shared `--dsw-focus-ring-*` tokens, and is always visible without hover. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
 - Session titles and Worktree names share `useTitleMarquee`, adapted from DSH `ui-workspace/src/client/rows/Rows.tsx` because that hook is private upstream. It ignores overflow of at most 8px, moves at 30px/s with 12px edge fades, holds the tail until pointer leave, then resets immediately. Reduced motion jumps to the tail. Frames are cancelled on pointer leave and unmount; the existing HoverCards still reveal complete values;

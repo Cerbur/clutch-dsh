@@ -129,9 +129,10 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     this.dsh = dsh;
     const subprocess = ctx.get('subprocess') as GitSubprocessRuntime | undefined;
+    // Native cleanup only reads facts. Manager creates its own repository with
+    // its lifecycle signal so shutdown also cancels pending lock acquisition.
     const sidecar = new WorkspaceShardedSidecarRepository({ dshHome: config.dshHome });
     const manager = createWorktreeManager({
-      sidecar,
       dsh,
       dshHome: config.dshHome,
       subprocess,

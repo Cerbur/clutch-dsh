@@ -131,9 +131,15 @@ Historical and imported external Worktrees stay in place. Historical Sessions an
 
 ### Open Worktree mode
 
-The Sidebar scrollbar floats over the edge without shifting row spacing. Workspace folders
+On hosts with the native section-scroller contract, Worktree uses the same native scrolling
+layout, scrollbar skin and stable scrollbar gutter as the Workspace list. Rows share its
+horizontal insets, and the scrollbar sits 2px inside the Sidebar edge. Hosts without this
+capability retain the previous floating scrollbar. With a wheel or trackpad, scrolling down
+moves the navigation away before scrolling the Worktree list; scrolling up returns the list
+to its top first. Workspace folders
 and rotating disclosure triangles match native DSH and align with its Workspace list.
-The Worktree heading follows the native Workspace heading's typography and spacing.
+The Worktree heading follows the native Workspace heading's typography. The toolbar and
+activity filter share the list rows' horizontal inset, with a small gap below the filter divider.
 Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
 Only one Workspace is expanded at a time, and it owns the Local/Main, Worktree, and Session
 tree so the sidebar stays focused. Selecting another Workspace collapses the previous one;
@@ -796,6 +802,10 @@ made native-owned by this integration.
 
 ## Behavior and limitations
 
+- Desktop upgrade preparation drains the plugin's idle notification reads within five seconds.
+  Host shutdown cancels pending plugin lock acquisition and Git work, while allowing admitted
+  sidecar writes to finish and release their locks. Restarting or upgrading does not clean up
+  Worktree directories, detach bindings, or delete native Sessions.
 - DSH owns Workspace identity and root paths, Session identity and metadata, native lists,
   messages, prompts, transcripts, and history. The plugin never copies or rewrites those values.
 - The plugin's external index stores Worktree paths, branches, sources, lifecycle state, bindings,
