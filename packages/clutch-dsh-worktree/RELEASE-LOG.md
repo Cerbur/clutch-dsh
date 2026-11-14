@@ -1,5 +1,47 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.32 — 2026-11-15
+
+### 中文
+
+#### 版本说明
+
+- 本次包含新增功能，经发布决定在 0.1.x 阶段以 patch 版本 `0.1.32` 发布。
+
+#### 新增
+
+- 新增会话内 Worktree 玻璃浮窗，展示未提交变更、基线领先/落后与已提交变更，并记住各会话的关闭偏好。
+- 支持在浮窗中编辑对比基线、打开 Git 与变更视图，并从领先/落后行发起 Rebase 或 Merge 基线同步。
+- 浮窗随本地文件和 Git 元数据变化自动刷新，并通过定时轮询与监听启动校准覆盖遗漏变化。
+
+#### 优化
+
+- 浮窗采用紧凑布局、长名称提示与滑入滑出动画，刷新时保留已有内容，切换 Dashboard 后恢复当前会话的显示偏好。
+
+#### 修复
+
+- 关闭浮窗或进入 Dashboard 时及时停止读取与监听，合并重复刷新，并阻止过期响应或已取消的监听初始化继续工作。
+
+### English
+
+#### Versioning note
+
+- This release includes new functionality and intentionally uses patch version `0.1.32` during the 0.1.x stage.
+
+#### Added
+
+- Add a glass Worktree panel within each Session showing uncommitted changes, baseline ahead/behind counts and committed changes, with a remembered closed preference per Session.
+- Edit the comparison baseline, open Git & Changes, and start Rebase or Merge baseline synchronization from the panel’s ahead/behind row.
+- Refresh the panel automatically on local file and Git metadata changes, with polling and watcher startup reconciliation to cover missed changes.
+
+#### Improved
+
+- Give the panel a compact layout, long-name tooltips and slide animations, preserving content during refresh and restoring the current Session’s visibility preference after leaving Dashboard.
+
+#### Fixed
+
+- Stop reads and listeners promptly when closing the panel or entering Dashboard, coalesce duplicate refreshes, and prevent stale responses or cancelled watcher initialization from continuing work.
+
 ## 0.1.31 — 2026-11-14
 
 ### 中文
