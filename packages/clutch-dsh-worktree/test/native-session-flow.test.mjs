@@ -10,6 +10,7 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { createWorktreeManager } from '../lib/manage/index.js';
 import { WorktreeRemoteService } from '../lib/host/service.js';
+import { canOpenNativeChanges } from '../lib/host/native-changes.js';
 import { DshHostReadAdapter } from '../lib/host/dsh-read-adapter.js';
 import { createWorktreeSessionCreation } from '../lib/host/session-creation.js';
 import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
@@ -95,6 +96,15 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
   assert.deepEqual(await service.canReuseLocalSession({ workspaceId: 'ws', sessionId: 'missing' }), { ok: true, value: false });
   assert.equal(service.ensureWorktreePermission, undefined);
   assert.equal(service.normalizeDetachedWorktreePermissions, undefined);
+  const diffTarget = { workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child', expectedPath: f.record.absolutePath };
+  assert.deepEqual(await service.canOpenNativeChanges(diffTarget), { ok: true, value: true });
+  assert.deepEqual(await service.canOpenNativeChanges({ ...diffTarget, expectedPath: f.workspace }), { ok: true, value: false });
+  assert.deepEqual(await service.canOpenNativeChanges({ ...diffTarget, sessionId: 'missing' }), { ok: true, value: false });
+  assert.deepEqual(await service.canOpenNativeChanges({ ...diffTarget, workspaceId: 'other' }), { ok: true, value: false });
+  f.actors.get('child').effectiveCwd = f.workspace;
+  assert.deepEqual(await service.canOpenNativeChanges(diffTarget), { ok: true, value: false });
+  assert.deepEqual(await service.canOpenNativeChanges({ ...diffTarget, worktreeId: 'main:ws', expectedPath: f.workspace }), { ok: true, value: true });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
   const result = await service.createWorktreeSession({ workspaceId: 'ws', worktreeId: f.record.worktreeId, requestId: 'mounted' }, new AbortController().signal);
   assert.equal(result.ok, true);
   const { state, ...created } = result.value;
@@ -103,6 +113,39 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
   assert.equal((await f.dsh.getSession('child')).cwd, f.record.absolutePath);
   assert.equal(f.actors.get('child').header.cwd, f.workspace);
   assert.deepEqual((await f.manager.listBindings({ workspaceId: 'ws' })).map((b) => b.sessionId), ['child']);
+});
+
+for (const nested of [false, true]) test(`native Changes validates physical cwd without requiring a message (nested=${nested})`, async (t) => {
+  const f = await fixture(t, nested);
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId, sessionId: 'child', expectedPath: f.record.absolutePath };
+  const before = await f.manager.listBindings({ workspaceId: 'ws' });
+  assert.equal(await canOpenNativeChanges(f.manager, f.dsh, input), true);
+  const alias = path.join(f.root, 'cwd-alias');
+  await symlink(f.record.absolutePath, alias);
+  f.actors.get('child').effectiveCwd = alias;
+  assert.equal(await canOpenNativeChanges(f.manager, f.dsh, input), true);
+  f.actors.get('child').effectiveCwd = f.workspace;
+  assert.equal(await canOpenNativeChanges(f.manager, f.dsh, input), false);
+  f.actors.get('child').effectiveCwd = path.join(f.root, 'missing');
+  await assert.rejects(canOpenNativeChanges(f.manager, f.dsh, input), { code: 'ENOENT' });
+  const file = path.join(f.root, 'not-a-directory');
+  await writeFile(file, 'fixture');
+  f.actors.get('child').effectiveCwd = file;
+  assert.equal(await canOpenNativeChanges(f.manager, f.dsh, input), false);
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  const manager = { readWorktreeSessionState: async (request) => {
+    const state = await f.manager.readWorktreeSessionState(request);
+    f.actors.get('child').effectiveCwd = f.workspace;
+    return state;
+  } };
+  assert.equal(await canOpenNativeChanges(manager, f.dsh, input), false, 'cwd changed during target probes');
+  f.native.workingDirectory = undefined;
+  assert.equal(await canOpenNativeChanges(f.manager, f.dsh, input), false, 'header cwd cannot authorize');
+  assert.deepEqual(await f.manager.listBindings({ workspaceId: 'ws' }), before);
+  assert.equal(f.calls.some(([kind]) => kind === 'prompt'), false);
+  assert.equal(f.actors.get('child').header.cwd, f.workspace);
 });
 
 for (const nested of [false, true]) test(

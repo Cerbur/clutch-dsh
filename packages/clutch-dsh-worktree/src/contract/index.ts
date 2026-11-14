@@ -200,6 +200,7 @@ export interface WorktreeGitFileDiff {
 }
 
 export * from './session-flow.js';
+export * from './native-changes.js';
 export * from './worktree-tool-changes.js';
 export * from './tool-settings.js';
 export * from './windows-path.js';
@@ -489,6 +490,7 @@ export interface WorktreeManager {
 export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'readWorkspaceNavigation',
   'canReuseLocalSession',
+  'canOpenNativeChanges',
   'createWorktreeSession',
   'readWorktreeSessionState',
   'syncWorktreeBaseline',

@@ -1,4 +1,5 @@
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client';
+import type { NativeChangesManager } from '../contract/native-changes.js';
 
 import type {
   BranchRecord,
@@ -21,6 +22,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   canReuseLocalSession: 'worktreeManager/canReuseLocalSession',
+  canOpenNativeChanges: 'worktreeManager/canOpenNativeChanges',
   createWorktreeSession: 'worktreeManager/createWorktreeSession',
   readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
@@ -82,7 +84,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager, NativeChangesManager {
   startGitWatch(input: { workspaceId: string; worktreeId: string }, signal: AbortSignal): Promise<string>;
   watchGitChanges(watchId: string, afterRevision: number, signal: AbortSignal): Promise<number>;
   stopGitWatch(watchId: string): Promise<null>;
@@ -303,6 +305,7 @@ export function createWorktreeConnectionAdapter(
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
     canReuseLocalSession: (input) => invoke('canReuseLocalSession', input),
+    canOpenNativeChanges: (input) => invoke('canOpenNativeChanges', input),
     createWorktreeSession: (input) => invoke('createWorktreeSession', input),
     readWorktreeSessionState: (input) => invoke('readWorktreeSessionState', input),
     dispose(): void {
