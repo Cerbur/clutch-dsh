@@ -109,10 +109,21 @@ for (const dismiss of ['close', 'dashboard']) {
         if (dismiss === 'close') document.querySelector('[aria-haspopup="dialog"]').click();
         else { dashboard = {}; dashboardChanged(); }
       });
-      assert.equal(document.querySelector('[data-worktree-popover]'), null);
+      assert.equal(document.querySelector('[data-worktree-popover][data-state="open"]'), null);
+      if (dismiss === 'close') {
+        const exiting = document.querySelector('[data-state="closing"]');
+        assert.ok(exiting, 'closing retains the visual panel for its exit animation');
+        assert.equal(exiting.getAttribute('aria-hidden'), 'true');
+        assert.ok(exiting.hasAttribute('inert'));
+      } else assert.equal(document.querySelector('[data-worktree-popover]'), null);
       assert.equal(notification, undefined);
       await React.act(async () => histories.shift()(history));
       assert.equal(files.length, fileCount, 'late history must not start file reads');
+      if (dismiss === 'close') {
+        await React.act(async () => document.querySelector('[aria-haspopup="dialog"]').click());
+        assert.equal(histories.length, 1, 'reopening during exit starts only one fresh Git read');
+        assert.ok(document.querySelector('[data-state="open"]'));
+      }
     } finally {
       await React.act(async () => root.unmount());
       reader.dispose();
@@ -137,13 +148,13 @@ test('popover follows Session edges below tabs, including sidebar resize and nar
   header.getBoundingClientRect = () => box;
   let style;
   const dispose = placement.observePopoverPlacement(header.querySelector('button'), (value) => { style = value; });
-  assert.deepEqual(style, { left: 668, top: 132, width: 320, maxHeight: 624 });
+  assert.deepEqual(style, { left: 732, top: 132, width: 256, maxHeight: 624 });
   box = { ...box, right: 700 };
   resized();
-  assert.equal(style.left, 368, 'right sidebar opening moves the panel with the Session edge');
-  box = { ...box, left: 0, right: 300, bottom: 160 };
+  assert.equal(style.left, 432, 'right sidebar opening moves the panel with the Session edge');
+  box = { ...box, left: 0, right: 240, bottom: 160 };
   resized();
-  assert.deepEqual(style, { left: 12, top: 172, width: 276, maxHeight: 584 });
+  assert.deepEqual(style, { left: 12, top: 172, width: 216, maxHeight: 584 });
   box = { ...box, bottom: 100 };
   dom.window.dispatchEvent(new dom.window.Event('resize'));
   assert.equal(style.top, 112, 'header height changes move the panel below all tabs');
@@ -175,7 +186,21 @@ test('production popover toggles accessibly, stays open during conversation, and
   dom.window.document.querySelector('header').getBoundingClientRect = () =>
     ({ left: 200, right: 1000, bottom: 100, height: 80 });
   const { document } = dom.window;
+  dom.window.localStorage.setItem('clutch-dsh-worktree.popover-open', 'false');
   const timers = new Map();
+  const exits = new Map();
+  const nativeTimeout = dom.window.setTimeout.bind(dom.window);
+  const nativeClearTimeout = dom.window.clearTimeout.bind(dom.window);
+  let exitId = -1;
+  dom.window.setTimeout = (callback, delay) => {
+    if (delay !== 220) return nativeTimeout(callback, delay);
+    exits.set(exitId, callback);
+    return exitId--;
+  };
+  dom.window.clearTimeout = (id) => {
+    if (exits.has(id)) exits.delete(id);
+    else nativeClearTimeout(id);
+  };
   let timerId = 0;
   dom.window.setInterval = (callback, delay) => {
     assert.equal(delay, 60_000);
@@ -381,7 +406,12 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.equal(button().getAttribute('aria-expanded'), 'false', 'header button closes the panel');
     assert.equal(timers.size, 0, 'closing clears the interval');
     assert.equal(watches.size, 0, 'closing releases filesystem watches');
-    assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'false');
+    assert.equal(exits.size, 1, 'only a bounded visual exit timer remains');
+    assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-closed-sessions')), ['s']);
+    await React.act(async () => document.querySelector('[data-state="closing"]')
+      .dispatchEvent(new dom.window.Event('animationend', { bubbles: true })));
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'exit animation releases the visual panel');
+    assert.equal(exits.size, 0, 'animationend also cancels the fallback timer');
     await React.act(async () => root.render(null));
     await render();
     assert.equal(button().getAttribute('aria-expanded'), 'false', 'closed preference survives remount');
@@ -392,7 +422,7 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.equal(document.querySelector('[role="dialog"]'), null, 'Dashboard hides the portal');
     assert.equal(timers.size, 0, 'Dashboard clears the interval');
     assert.equal(watches.size, 0, 'Dashboard releases filesystem watches');
-    assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'true');
+    assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-closed-sessions')), []);
     await React.act(async () => { dashboard = undefined; dashboardListener(); });
     assert.ok(document.querySelector('[role="dialog"]'), 'returning to Session restores the open preference');
     assert.equal(timers.size, 1, 'returning creates exactly one fresh interval');
@@ -415,7 +445,38 @@ test('production popover toggles accessibly, stays open during conversation, and
     await open();
     props.sessionId = 'next'; context = { ...context, sessionId: 'next' };
     await render();
-    assert.equal(button().getAttribute('aria-expanded'), 'false', 'Session switch also preserves closed state');
+    assert.equal(button().getAttribute('aria-expanded'), 'true', 'a different Session defaults to open');
+    props.sessionId = 's'; context = { ...context, sessionId: 's' };
+    await render();
+    assert.equal(button().getAttribute('aria-expanded'), 'false', 'returning to a marked Session stays closed');
+    // Close eleven distinct Sessions; the oldest marker must be evicted.
+    for (let index = 0; index < 11; index++) {
+      props.sessionId = 'session-' + index; context = { ...context, sessionId: props.sessionId };
+      await render();
+      assert.equal(button().getAttribute('aria-expanded'), 'true');
+      await open();
+    }
+    const marks = () => JSON.parse(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-closed-sessions'));
+    assert.deepEqual(marks(), Array.from({ length: 10 }, (_, index) => 'session-' + (index + 1)));
+    await open();
+    assert.ok(!marks().includes('session-10'), 'manual opening removes its marker');
+    props.sessionId = 'session-0'; context = { ...context, sessionId: props.sessionId };
+    await render();
+    assert.equal(button().getAttribute('aria-expanded'), 'true', 'evicted Session is exposed again');
+    await open();
+    await React.act(async () => { for (const callback of [...exits.values()]) callback(); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'fallback removes the panel when animationend is absent');
+    assert.equal(exits.size, 0);
+    await open();
+    dom.window.matchMedia = () => ({ matches: true });
+    await open();
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'reduced motion skips exit retention');
+    assert.equal(exits.size, 0);
+    await React.act(async () => {
+      dom.window.localStorage.setItem('clutch-dsh-worktree.popover-closed-sessions', '[]');
+      dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: 'clutch-dsh-worktree.popover-closed-sessions' }));
+    });
+    assert.equal(button().getAttribute('aria-expanded'), 'true', 'cross-tab marker removal opens the Session');
   } finally {
     await React.act(async () => root.unmount());
     for (const [key, descriptor] of originals) {

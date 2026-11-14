@@ -27,14 +27,23 @@ export interface WorktreePopoverServices {
 }
 export type WorktreePopoverProps = DashboardHeaderActionProps & WorktreePopoverServices;
 
-const OPEN_KEY = 'clutch-dsh-worktree.popover-open';
-function readOpenPreference() {
-  try { return window.localStorage.getItem(OPEN_KEY) !== 'false'; } catch { return true; }
+export const POPOVER_CLOSED_SESSIONS_KEY = 'clutch-dsh-worktree.popover-closed-sessions';
+export function updateClosedSessions(sessions: readonly string[], sessionId: string, opened: boolean): string[] {
+  const remaining = sessions.filter((id) => id !== sessionId);
+  return [...new Set(opened ? remaining : [...remaining, sessionId])].slice(-10);
+}
+function readClosedSessions(fallback: string[] = []): string[] {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(POPOVER_CLOSED_SESSIONS_KEY) ?? '[]');
+    return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string'))].slice(-10) : [];
+  } catch { return fallback; }
 }
 
 export function WorktreePopover(props: WorktreePopoverProps) {
   const context = props.useWorktreeContext((value) => value);
-  const [opened, setOpened] = useState(readOpenPreference);
+  const [closedSessions, setClosedSessions] = useState(() => readClosedSessions());
+  const sessionId = String(props.sessionId);
+  const opened = !closedSessions.includes(sessionId);
   const dashboard = useSyncExternalStore(props.dashboardStore.subscribe, props.dashboardStore.getSnapshot);
   const focusRequested = useRef(false);
   const [placement, setPlacement] = useState<CSSProperties>();
@@ -42,18 +51,32 @@ export function WorktreePopover(props: WorktreePopoverProps) {
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
   const visible = opened && dashboard === undefined;
+  const [retainedSession, setRetainedSession] = useState<string>();
+  const present = dashboard === undefined && (visible || retainedSession === sessionId);
   const saveOpen = (value: boolean) => {
-    setOpened(value);
-    try { window.localStorage.setItem(OPEN_KEY, String(value)); } catch { /* Keep the in-memory preference. */ }
+    const next = updateClosedSessions(readClosedSessions(closedSessions), sessionId, value);
+    setClosedSessions(next);
+    try { window.localStorage.setItem(POPOVER_CLOSED_SESSIONS_KEY, JSON.stringify(next)); } catch { /* Keep the in-memory preference. */ }
   };
   const close = () => saveOpen(false);
   useLayoutEffect(() => {
     if (!visible || !trigger.current) return;
     return observePopoverPlacement(trigger.current, setPlacement);
   }, [visible, props.sessionId]);
+  useLayoutEffect(() => {
+    if (visible) { setRetainedSession(sessionId); return; }
+    if (dashboard !== undefined || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setRetainedSession(undefined);
+      return;
+    }
+    if (retainedSession !== sessionId) return;
+    // CSS animationend is primary; this fallback also handles disabled/interrupted animations.
+    const timer = window.setTimeout(() => setRetainedSession(undefined), 220);
+    return () => window.clearTimeout(timer);
+  }, [visible, sessionId, dashboard, retainedSession]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
-      if (event.key === OPEN_KEY || event.key === null) setOpened(readOpenPreference());
+      if (event.key === POPOVER_CLOSED_SESSIONS_KEY || event.key === null) setClosedSessions(readClosedSessions());
     };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
@@ -70,7 +93,7 @@ export function WorktreePopover(props: WorktreePopoverProps) {
     };
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [visible]);
+  }, [visible, sessionId]);
   return <>
     <Tooltip label={props.t('popover.title')} side="bottom" delayMs={500} disabled={visible}>
       <button type="button" ref={trigger} className={styles.popoverTrigger}
@@ -80,12 +103,18 @@ export function WorktreePopover(props: WorktreePopoverProps) {
         <IconBranchOutline16 />
       </button>
     </Tooltip>
-    {visible && createPortal(<MenuSurface ref={panel} id={id} role="dialog" tabIndex={-1}
-      data-worktree-popover aria-label={props.t('popover.title')} className={styles.popoverPanel}
+    {present && createPortal(<MenuSurface ref={panel} id={id} role={visible ? 'dialog' : undefined} tabIndex={-1}
+      {...(!visible ? { inert: '' } : {})} aria-hidden={!visible || undefined}
+      data-worktree-popover data-state={visible ? 'open' : 'closing'}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && !visible) setRetainedSession(undefined);
+      }}
+      aria-label={props.t('popover.title')} className={styles.popoverPanel}
       style={placement ?? { visibility: 'hidden' }}>
       <PopoverContent key={JSON.stringify([props.sessionId, context.workspaceId, context.value.kind,
         context.value.kind === 'worktree' ? context.value.worktreeId : undefined])} {...props}
         workspaceId={context.sessionId === props.sessionId ? context.workspaceId : undefined}
+        active={visible}
         mainConfirmed={context.status === 'ready' && context.value.kind === 'main'}
         workspaceTitle={context.workspaceTitle ?? ''} close={close} />
     </MenuSurface>, document.body)}
@@ -93,7 +122,7 @@ export function WorktreePopover(props: WorktreePopoverProps) {
 }
 
 function PopoverContent(props: WorktreePopoverProps & {
-  workspaceId?: string; mainConfirmed: boolean; workspaceTitle: string; close: () => void;
+  active: boolean; workspaceId?: string; mainConfirmed: boolean; workspaceTitle: string; close: () => void;
 }) {
   const { manager, viewReader, workspaceId, sessionId, t } = props;
   const [target, setTarget] = useState<PopoverTarget>({ kind: 'loading' });
@@ -135,6 +164,7 @@ function PopoverContent(props: WorktreePopoverProps & {
     }
   };
   useEffect(() => {
+    if (!props.active) return;
     const lifetime = new AbortController();
     refreshLifetime.current = lifetime;
     alive.current = true;
@@ -156,7 +186,7 @@ function PopoverContent(props: WorktreePopoverProps & {
       if (timer !== undefined) window.clearInterval(timer);
       unsubscribe();
     };
-  }, [manager, viewReader, workspaceId, sessionId, props.subscribeChanges]);
+  }, [props.active, manager, viewReader, workspaceId, sessionId, props.subscribeChanges]);
   const expand = () => {
     if (!workspaceId || (target.kind !== 'worktree' && target.kind !== 'main')) return;
     props.expand(String(sessionId), 'git', workspaceId, target.kind === 'worktree' ? target.record.worktreeId : 'main');
@@ -164,7 +194,7 @@ function PopoverContent(props: WorktreePopoverProps & {
   const record = target.kind === 'worktree' ? target.record : undefined;
   const watchedWorktreeId = record?.worktreeId ?? (target.kind === 'main' ? 'main' : undefined);
   useEffect(() => {
-    if (!workspaceId || !watchedWorktreeId || !manager.startGitWatch ||
+    if (!props.active || !workspaceId || !watchedWorktreeId || !manager.startGitWatch ||
         !manager.watchGitChanges || !manager.stopGitWatch) return;
     const controller = new AbortController();
     let watchId: string | undefined;
@@ -198,8 +228,9 @@ function PopoverContent(props: WorktreePopoverProps & {
       window.clearTimeout(retry);
       if (watchId) release(watchId);
     };
-  }, [manager, workspaceId, watchedWorktreeId]);
+  }, [props.active, manager, workspaceId, watchedWorktreeId]);
   const state = useWorktreeGitOverview({
+    enabled: props.active && !refreshing && refreshLifetime.current?.signal.aborted !== true,
     manager: record || target.kind === 'main' ? manager : undefined,
     workspaceId: workspaceId ?? '', worktreeId: record?.worktreeId ?? 'main',
     defaultBaselineBranch: record?.baseBranch,
@@ -210,7 +241,7 @@ function PopoverContent(props: WorktreePopoverProps & {
   const busy = refreshing || state.status === 'loading' || (state.status === 'ready' && state.refreshing === true);
   useLayoutEffect(() => {
     refreshBusy.current = busy;
-    if (!busy && refreshQueued.current !== undefined && alive.current) {
+    if (props.active && !busy && refreshQueued.current !== undefined && alive.current) {
       const invalidate = refreshQueued.current;
       refreshQueued.current = undefined;
       void refresh(invalidate);

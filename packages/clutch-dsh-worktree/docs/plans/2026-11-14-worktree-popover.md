@@ -32,8 +32,11 @@ native More. Exact adjacency to the sidebar toggle is not exposed by the DSH slo
   resize and viewport changes; do not anchor placement to the trigger button.
   Conversation clicks/focus leave the panel open.
   Header toggle and Escape dismiss it, with nested-modal Escape ownership.
-  Persist the open preference in localStorage, defaulting to open; Session switches retain
-  it without taking focus. Dashboard selection suppresses the panel without saving a close.
+  Default every Session to open; persist a maximum of ten recently closed Session IDs in
+  localStorage. Opening removes its marker; oldest markers are evicted. Session switching
+  applies that Session's marker without taking focus. Dashboard suppresses the panel without saving a close.
+  Use a light shadow, right-to-left entry and left-to-right exit; honour reduced motion.
+  Retain inert visual content only during exit while immediately stopping all reads and listeners.
 - While mounted, listen to checkout files, index/HEAD and shared refs; retain ready content
   and coalesce events during reads. A 60-second refresh covers unavailable watchers and missed events.
   Closing, Dashboard entry and Session replacement cancel waits, release Host leases and clear

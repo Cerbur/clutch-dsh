@@ -933,20 +933,29 @@ same-target reads preserve content; generation guards discard stale completions.
 The panel has an independent title/three-row layout, reusing the Git overview
 reader, metric values and baseline editor without mounting compact Dashboard.
 The native MenuSurface supplies the same glass material as the activity panel, including
-reduced-transparency preferences; the panel adds rounded corners and a prominent shadow.
+reduced-transparency preferences; the panel adds rounded corners and a light shadow.
+The native material retains its frosted backdrop. Container animations must only translate:
+opacity/filter on the parent isolates the material backdrop and exposes sharp text underneath.
+Entry animation releases its transform when finished rather than retaining a compositing layer.
 The header toggle owns visibility; conversation pointer/focus changes keep it open.
 Placement uses the triggering utility's native conversation header, verified by its
 `data-conversation-header-leading` marker. Its right edge and bottom (including view tabs)
 define a 12px inset; ResizeObserver and window resize/scroll keep the panel inside the Session
 column as sidebars and viewport dimensions change. Missing geometry hides the panel;
 neither the trigger coordinates nor private native classes are placement anchors.
-The open preference defaults to true and persists in localStorage across Session changes.
-Automatic opening never takes focus. Escape saves the closed preference. The panel subscribes
+Every Session defaults to open. The browser-local `clutch-dsh-worktree.popover-closed-sessions`
+array stores up to ten most-recently-closed Session IDs (oldest first); manual opening removes
+that ID. The previous global open preference no longer hides unrelated Sessions.
+Automatic opening never takes focus. Escape records the current Session. The panel subscribes
 to the entry-owned Dashboard selection store: any open Dashboard suppresses the portal without
 overwriting the preference. Only the reload icon remains in the header, switching to
 the native loading icon for the entire Workspace-plus-Git read. The title uses regular 12px
 text; uncommitted changes precede a divider, then the same-size worktree-to-baseline heading,
 ahead/behind and committed changes. Both headings share the same typography class.
+Entry slides from the right in 180ms; exit slides right in 160ms, with animationend cleanup
+and a 220ms fallback. Closing immediately disables reads, subscriptions and timers; the retained
+exit content is inert and aria-hidden. Dashboard removes it immediately. Reopening cancels
+the exit cleanup and refreshes Workspace before resuming Git reads. Reduced motion skips exit retention.
 Trailing refresh/edit controls share
 a 28px border-box, 14px glyph and 1px row inset (22px glyph inset including panel padding).
 These constants and the alignment contract live in the popover CSS; its class names are
@@ -961,7 +970,7 @@ Mounted content owns a Git watch lease via the existing Connection adapter's sta
 watchGitChanges and stopGitWatch endpoints, plus a 60-second fallback interval. Only
 changed revisions invalidate its Workspace. Events during reads queue one follow-up;
 fallback ticks skip pending reads. Each notification wait ends within five seconds without
-reading Git on empty responses. Unmounting on close, Dashboard entry or Session replacement
+reading Git on empty responses. Deactivation on close, or unmounting on Dashboard entry or Session replacement,
 aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
 retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
 Native fs.watch registration has no ready barrier. Host schedules one reconciliation

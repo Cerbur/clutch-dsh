@@ -46,8 +46,27 @@
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-elevation-prominent), 0 12px 36px rgb(0 0 0 / 10%);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l1), 0 4px 16px rgb(0 0 0 / 6%);
   outline: none;
+}
+/* Material contract: MenuSurface's background owns the frosted glass blur.
+   Never animate opacity/filter on its ancestor: that isolates the backdrop and
+   makes conversation text show through. Release the entry transform on completion. */
+.popoverPanel[data-state='open'] { animation: popoverSlideIn 180ms cubic-bezier(.2, .8, .2, 1) backwards; }
+.popoverPanel[data-state='closing'] {
+  pointer-events: none;
+  animation: popoverSlideOut 160ms ease-in both;
+}
+@keyframes popoverSlideIn {
+  from { transform: translateX(calc(100% + 12px)); }
+  to { transform: translateX(0); }
+}
+@keyframes popoverSlideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(100% + 12px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popoverPanel[data-state] { animation: none; }
 }
 .popoverHeading { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 var(--worktree-popover-action-inset) 0 8px; }
 .popoverTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

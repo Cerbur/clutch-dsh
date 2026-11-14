@@ -16,7 +16,7 @@ export function observePopoverPlacement(
     const left = Math.max(0, box.left) + 12;
     const right = Math.min(window.innerWidth, box.right) - 12;
     const top = Math.max(0, box.bottom) + 12;
-    const width = Math.min(320, right - left);
+    const width = Math.min(256, right - left);
     const maxHeight = window.innerHeight - top - 12;
     if (!header.isConnected || ![left, right, top, width, maxHeight].every(Number.isFinite) ||
       box.height <= 0 || width <= 0 || maxHeight <= 0) {

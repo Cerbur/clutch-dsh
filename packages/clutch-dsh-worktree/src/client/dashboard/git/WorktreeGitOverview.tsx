@@ -12,6 +12,8 @@ import { GitCommitStats } from './GitCommitStats.js';
 import styles from '../dashboard.css';
 
 export interface WorktreeGitOverviewInput {
+  /** Suspend reads while preserving the last snapshot during the exit animation. */
+  readonly enabled?: boolean;
   /** Read Local's live files directly, without baseline/history requests. */
   readonly workingTreeOnly?: boolean;
   readonly refreshKey?: number;
@@ -54,6 +56,7 @@ export function useWorktreeGitOverview(
   const state = snapshot.state;
   const setState = (state: WorktreeGitOverviewState) => setSnapshot({ identity, key, state });
   useEffect(() => {
+    if (input.enabled === false) return;
     if (input.manager === undefined || (!input.workingTreeOnly && (isMainWorktreeId(input.worktreeId) || !readable))) {
       setState({ status: 'unavailable' });
       return;
@@ -109,7 +112,7 @@ export function useWorktreeGitOverview(
     return () => {
       active = false;
     };
-  }, [baselineBranch, readable, input.manager, input.workspaceId, input.worktreeId, input.refreshKey, input.workingTreeOnly]);
+  }, [input.enabled, baselineBranch, readable, input.manager, input.workspaceId, input.worktreeId, input.refreshKey, input.workingTreeOnly]);
   if (snapshot.identity !== identity) return { status: 'loading' };
   if (snapshot.key !== key && state.status === 'ready') return { ...state, refreshing: true };
   return state;

@@ -542,11 +542,15 @@ current readable comparison are required; refreshing or unavailable comparisons 
 this action. Clicking only opens the dialog; confirming creates the native Agent task.
 The committed and uncommitted change rows open the full Git & Changes view.
 
-The header button toggles the panel and highlights while open. It defaults to open and saves
-the preference in browser localStorage across reloads and Session changes. There is no close
-button; conversation clicks keep it visible, while Escape saves the closed preference.
-Dashboard temporarily hides the panel without changing that preference; returning to the
-conversation restores it. Refresh switches the icon to a loading indicator until both Workspace and Git
+The header button toggles the panel and highlights while open. Every Session defaults to open.
+Closing via the header or Escape stores that Session's closed marker in localStorage; manually
+opening removes its marker. Only the 10 most recently closed Sessions are retained, so other
+Sessions remain visible by default. There is no close button; conversation clicks keep it visible.
+The panel is up to 256px wide, uses a frosted glass background with a light shadow and slides in from the right and out toward the right; reduced-motion
+preferences disable these animations. Reads and listeners stop immediately when closing,
+while the exit animation retains only the existing visual content.
+Dashboard hides the panel immediately without changing the markers; returning to the
+conversation restores its Session preference. Refresh switches the icon to a loading indicator until both Workspace and Git
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
 with a 60-second polling fallback and a one-time reconciliation for changes missed while
 native watchers are starting. Closing it or opening Dashboard releases the listeners and

@@ -1086,3 +1086,6 @@ Git 只读命令保持 GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 ind
 工具通知沿用中央处理已执行的失效，空闲或排队消费都不得再次失效同一事件。
 浮窗卸载取消自身 current-generation 追读，并在 Git history 的异步续接前检查生命周期；
 共享在途请求仍归 reader 所有，不能因单个浮窗关闭而中止其他消费者。
+退出动画可暂留 inert、aria-hidden 的视觉内容；关闭即停用内容的监听和读取生命周期，
+不能等动画结束才释放。进入 Dashboard 直接移除浮窗。关闭标记按 Session 存于浏览器，
+最多保留最近十个；手动打开移除标记，不影响 DSH 或 Sidecar。
