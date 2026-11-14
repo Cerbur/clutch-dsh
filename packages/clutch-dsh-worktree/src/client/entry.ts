@@ -28,6 +28,7 @@ import { WorktreeHeaderContext } from './context/WorktreeContext.js';
 import { WorktreeModeAction } from './view/WorktreeModeAction.js';
 import { switchViewMode } from './view/view-mode-dispatch.js';
 import { IconDashboard } from './dashboard/dashboard-icon.js';
+import { WorktreePopover } from './dashboard/WorktreePopover.js';
 import { DashboardHeaderAction } from './dashboard/DashboardHeaderAction.js';
 import type { DashboardSelection } from './dashboard/dashboard-selection.js';
 import { createWorkspaceDirectoryFlow } from './view/workspace-directory-flow.js';
@@ -535,6 +536,36 @@ export function apply(ctx: Context): void {
       },
       DashboardHeaderAction,
     ),
+  );
+
+  slots.inject('conversation.session.header.utilities', () =>
+    slots.register({
+      name: 'conversation.session.header.utilities',
+      id: 'clutch-dsh-worktree-popover', order: -9, locale: WORKTREE_NS,
+      inject: () => ({
+        hooks: { worktreeContext: contextProjection.store },
+        openDashboard: openDashboardForSession,
+        manager, viewReader, dashboardStore, subscribeChanges: toolChanges.subscribe,
+        refreshContext: (workspaceId: string) => contextProjection.invalidate(workspaceId),
+        createSession: (record: import('../contract/index.js').WorktreeRecord, isCurrent: () => boolean) =>
+          worktreeSessionConnector.create({ workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+            cwd: record.absolutePath }, async () => {
+            if (!isCurrent()) throw new Error('Popover Session changed before navigation');
+          }),
+        openSession: (_workspaceId: string, sessionId: string) =>
+          openWorktreeSession(ctx.uiWorkspace, ctx.sessions, sessionId as SessionId),
+        expand: (sessionId: string, tab: 'overview' | 'git', workspaceId: string, worktreeId: string) => {
+          const snapshot = contextProjection.store.getSnapshot();
+          if (snapshot.status !== 'ready' || snapshot.sessionId !== sessionId || snapshot.value.kind === 'none') return;
+          if (snapshot.value.workspaceId !== workspaceId ||
+            (snapshot.value.kind === 'main' ? 'main' : snapshot.value.worktreeId) !== worktreeId) return;
+          switchViewMode('worktree');
+          dashboardStore.set({ workspaceId: snapshot.value.workspaceId,
+            worktreeId: snapshot.value.kind === 'main' ? 'main' : snapshot.value.worktreeId,
+            sessionId, initialTab: tab });
+        },
+      }),
+    }, WorktreePopover),
   );
 
   slots.inject('sidebar.footer.action', () =>

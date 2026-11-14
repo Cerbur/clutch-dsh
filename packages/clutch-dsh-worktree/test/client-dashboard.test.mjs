@@ -231,7 +231,7 @@ const notificationSource = await readFile(
   new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url), 'utf8',
 );
 
-function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics, browserCrypto = globalThis.crypto } = {}) {
+function renderHarness(writeClipboard, { stubBranchPicker = false, overview = () => ({ status: 'unavailable' }), diagnostics, browserCrypto = globalThis.crypto } = {}) {
   const state = [];
   const effects = [];
   let cursor = 0;
@@ -358,7 +358,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, diagnostics, 
         './BatchManageWorktrees.js': { BatchManageWorktrees: 'BatchManageWorktrees' },
         './git/WorktreeGitPanel.js': { WorktreeGitPanel: 'GitPanel' },
         './git/WorktreeGitOverview.js': {
-          useWorktreeGitOverview: () => ({ status: 'unavailable' }),
+          useWorktreeGitOverview: overview,
           WorktreeGitOverviewValue: ({ metric }) => jsx('span', {
             'data-dashboard-overview-metric': metric,
             children: metric === 'aheadBehind' ? '+3 / -1' : metric === 'committed' ? '+20 / -6' : '+12 / -4',
@@ -2334,4 +2334,37 @@ test('OpenInAppController degrades to an empty app list when the apps endpoint f
 
   await assert.doesNotReject(controller.load());
   assert.deepEqual(controller.apps, []);
+});
+
+
+test('compact Dashboard gates sync on fresh behind evidence and expands the requested tab', async () => {
+  let state = { status: 'loading' };
+  const harness = renderHarness(async () => true, { overview: () => state });
+  const expanded = [];
+  const calls = [];
+  const props = { compact: { onExpand: (tab) => expanded.push(tab) },
+    record: { ...record, baseBranch: 'main' },
+    onSyncBaseline: async (...args) => { calls.push(args); return { sessionId: 'task', status: 'dispatched' }; },
+    onOpenSession: (id) => calls.push(['open', id]) };
+  const sync = (node) => findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline');
+  for (const candidate of [{ status: 'loading' }, { status: 'error' },
+    { status: 'ready', history: { behind: 0 } },
+    { status: 'ready', history: { behind: 2, unavailableReason: 'missing' } },
+    { status: 'ready', history: { behind: 2 }, refreshing: true }]) {
+    state = candidate;
+    assert.equal(sync(harness.render(props)).length, 0);
+  }
+  state = { status: 'ready', history: { behind: 2, ahead: 1 } };
+  let node = harness.render(props);
+  assert.equal(sync(node).length, 1);
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.tab.git'])[0].props.onClick();
+  assert.deepEqual(expanded, ['git']);
+  sync(node)[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'button' && item.props.children === en['dashboard.sync.create'])[0].props.onClick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls[0][0], 'rebase');
+  assert.equal(calls[0][1], 'main');
+  assert.deepEqual(calls.at(-1), ['open', 'task']);
+  harness.dispose();
 });

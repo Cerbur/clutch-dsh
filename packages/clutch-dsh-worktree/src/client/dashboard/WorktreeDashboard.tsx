@@ -79,6 +79,9 @@ function baselineSyncFailureNotices(
 }
 
 export interface WorktreeDashboardProps {
+  readonly compact?: { readonly refreshing?: boolean; readonly onExpand: (tab: 'overview' | 'git') => void };
+  readonly gitRefreshKey?: number;
+  readonly initialTab?: 'overview' | 'git';
   readonly manager?: WorktreeManager & Partial<WorktreeToolSettingsManager>;
   readonly onSaveInstructions?: (text: string, expected: string) => Promise<string>;
   readonly onSaveBaseline?: (baseBranch: string, expectedBaseBranch?: string) => Promise<string>;
@@ -179,7 +182,8 @@ function DashboardFactRow({
   );
 }
 
-function WorktreeBaselineEditor({
+export function WorktreeBaselineEditor({
+  iconOnly = false,
   value,
   renderValue,
   branches,
@@ -193,6 +197,7 @@ function WorktreeBaselineEditor({
   context,
 }: {
   readonly value?: string;
+  readonly iconOnly?: boolean;
   readonly renderValue?: (value: string | undefined) => ReactNode;
   readonly branches: readonly BranchRecord[];
   readonly loading: boolean;
@@ -306,13 +311,7 @@ function WorktreeBaselineEditor({
     }
   };
 
-  return (
-    <>
-      <DashboardFactRow
-        label={t('dashboard.base')}
-        baseline
-        action={
-          onSave !== undefined ? (
+  const editAction = onSave !== undefined ? (
             <Tooltip
               label={t('dashboard.editBase')}
               side="bottom"
@@ -334,15 +333,20 @@ function WorktreeBaselineEditor({
                 <IconEditOutline16 />
               </button>
             </Tooltip>
-          ) : undefined
-        }
+          ) : undefined;
+  return (
+    <>
+      {iconOnly ? editAction : <DashboardFactRow
+        label={t('dashboard.base')}
+        baseline
+        action={editAction}
       >
         {renderValue !== undefined ? renderValue(saved) : saved === undefined ? (
           <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
         ) : (
           <span data-dashboard-baseline-value title={saved}>{saved.replace(/^refs\/(heads|remotes)\//u, '')}</span>
         )}
-      </DashboardFactRow>
+      </DashboardFactRow>}
       <Modal
         open={draft !== undefined}
         onClose={closeEditor}
@@ -403,8 +407,118 @@ function WorktreeBaselineEditor({
   );
 }
 
+/** Shared baseline-sync dialog, request identity, retry and late-result handling. */
+export function useWorktreeBaselineSync({
+  record, displayedBaseline, manager, onSyncBaseline, onOpenSession, t, disabled = false,
+}: {
+  record: DashboardRecord;
+  displayedBaseline?: string;
+  manager?: WorktreeManager;
+  onSyncBaseline?: WorktreeDashboardProps['onSyncBaseline'];
+  onOpenSession: (sessionId: string) => void;
+  t: WorktreeTranslate;
+  disabled?: boolean;
+}) {
+  const id = useId();
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncStrategy, setSyncStrategy] = useState<WorktreeSyncStrategy>('rebase');
+  const [syncPending, setSyncPending] = useState(false);
+  const [syncError, setSyncError] = useState<WorktreeViewError>();
+  const [syncResult, setSyncResult] = useState<WorktreeSessionDispatchResult>();
+  const syncRequest = useRef<string>();
+  const syncBusy = useRef(false);
+  const syncGeneration = useRef(0);
+  useEffect(() => {
+    syncGeneration.current++;
+    syncBusy.current = false;
+    syncRequest.current = undefined;
+    setSyncOpen(false);
+    setSyncPending(false);
+    setSyncError(undefined);
+    setSyncResult(undefined);
+    return () => { syncGeneration.current++; };
+  }, [record.workspaceId, record.worktreeId, displayedBaseline, manager]);
+  const closeSync = () => {
+    if (syncBusy.current) return;
+    syncGeneration.current++;
+    setSyncOpen(false);
+  };
+  const startSync = async () => {
+    if (disabled || syncBusy.current || syncResult || !onSyncBaseline || !displayedBaseline) return;
+    const generation = syncGeneration.current;
+    syncBusy.current = true;
+    setSyncPending(true);
+    setSyncError(undefined);
+    let requestId = syncRequest.current;
+    try {
+      requestId ??= createSyncRequestId();
+      syncRequest.current = requestId;
+      const result = await onSyncBaseline(syncStrategy, displayedBaseline, requestId);
+      if (generation !== syncGeneration.current) {
+        // Retiring navigation must not discard an already-created Session's failure.
+        // Capture the original identity without reviving UI sources or callbacks.
+        if (result.status !== 'dispatched') worktreeDiagnostics.recordInactive('sync:' + requestId,
+          baselineSyncFailureNotices(record, requestId, result, t));
+        return;
+      }
+      setSyncResult(result);
+      if (result.status === 'dispatched') {
+        setSyncOpen(false);
+        onOpenSession(result.sessionId);
+      }
+    } catch (cause) {
+      if (generation === syncGeneration.current) setSyncError(toWorktreeViewError(cause));
+    } finally {
+      if (generation === syncGeneration.current) {
+        syncBusy.current = false;
+        setSyncPending(false);
+      }
+    }
+  };
+  const partialSync = syncResult !== undefined && syncResult.status !== 'dispatched'
+    ? { ...syncResult, status: syncResult.status } : undefined;
+  const syncDialog = <>
+      <Modal open={syncOpen} onClose={closeSync} closeLabel={t('dialog.close')}
+        title={t('dashboard.action.sync')} description={t('dashboard.sync.description')}
+        className={styles.dashboardBaselineModal}
+        footer={<>
+          <Button variant="outline" disabled={syncPending} onClick={closeSync}>{t('dashboard.cancelBase')}</Button>
+          {syncResult ? <Button variant="primary" onClick={() => onOpenSession(syncResult.sessionId)}>
+            {t('dashboard.sync.openSession')}
+          </Button> : <Button variant="primary" disabled={syncPending || disabled || !onSyncBaseline || !displayedBaseline} onClick={() => void startSync()}>
+            {t(syncPending ? 'dashboard.sync.creating' : 'dashboard.sync.create')}
+          </Button>}
+        </>}>
+        <div className={styles.dashboardSyncOptions}>
+          <p><code>{displayedBaseline}</code><span aria-hidden="true"> → </span><code>{record.currentBranch ?? record.branch}</code></p>
+          {(['rebase', 'merge'] as const).map((strategy) => <label key={strategy}>
+            <input type="radio" name={`${id}-sync-strategy`} value={strategy}
+              checked={syncStrategy === strategy} disabled={syncPending || syncResult !== undefined || syncError !== undefined}
+              onChange={() => { syncRequest.current = undefined; setSyncStrategy(strategy); }} />
+            <span><strong>{strategy === 'rebase' ? 'Rebase' : 'Merge baseline'}</strong>
+              <small>{t(`dashboard.sync.${strategy}`)}</small></span>
+          </label>)}
+          {partialSync && <p role="status">{t(`dashboard.sync.${partialSync.status}`)}<br />
+            {t('dashboard.sync.partial')}<br /><code>{partialSync.sessionId}</code>
+          </p>}
+        </div>
+      </Modal>
+      <NotificationToasts notices={partialSync !== undefined
+        ? baselineSyncFailureNotices(record, syncRequest.current, partialSync, t, onOpenSession)
+        : syncError === undefined ? [] : [{
+            key: 'sync:' + record.worktreeId, error: syncError,
+            text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
+            message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),
+          }]} />
+  </>;
+  return { syncOpen, setSyncOpen, syncPending, syncDialog };
+}
+
 /** A managed Worktree or browser Main projection with explicit unavailable states for inapplicable facts. */
 export function WorktreeDashboard({
+  compact,
+  gitRefreshKey,
+  initialTab = 'overview',
   manager,
   record,
   worktrees = [],
@@ -437,7 +551,8 @@ export function WorktreeDashboard({
   const heading = useRef<HTMLHeadingElement>(null);
   const [placement, setPlacement] = useState<DashboardPlacement>();
   const [rightSidebarOpen, setRightSidebarOpen] = useState(Boolean(isRightSidebarExpanded?.()));
-  const [tab, setTab] = useState<DashboardTab>('overview');
+  const [tab, setTab] = useState<DashboardTab>(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
   const [baselineBranch, setBaselineBranch] = useState(record.baseBranch);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>('idle');
   const [branchCopyState, setBranchCopyState] = useState<'idle' | 'pending' | 'copied' | 'failed'>(
@@ -453,7 +568,7 @@ export function WorktreeDashboard({
   }, [record.baseBranch]);
   useLayoutEffect(() => {
     const element = surface.current;
-    if (!element) return;
+    if (!element || compact) return;
     return mountDashboardOverlay(
       element,
       (next) =>
@@ -465,7 +580,7 @@ export function WorktreeDashboard({
         isRightSidebarExpanded,
       },
     );
-  }, [isRightSidebarExpanded]);
+  }, [isRightSidebarExpanded, compact !== undefined]);
   useLayoutEffect(() => {
     if (!placement) return;
     const previous = document.activeElement;
@@ -559,63 +674,9 @@ export function WorktreeDashboard({
           return result;
         };
   const displayedBaseline = onSaveBaseline === undefined ? record.baseBranch : baselineBranch;
-  const [syncOpen, setSyncOpen] = useState(false);
-  const [syncStrategy, setSyncStrategy] = useState<WorktreeSyncStrategy>('rebase');
-  const [syncPending, setSyncPending] = useState(false);
-  const [syncError, setSyncError] = useState<WorktreeViewError>();
-  const [syncResult, setSyncResult] = useState<WorktreeSessionDispatchResult>();
-  const syncRequest = useRef<string>();
-  const syncBusy = useRef(false);
-  const syncGeneration = useRef(0);
-  useEffect(() => {
-    syncGeneration.current++;
-    syncBusy.current = false;
-    syncRequest.current = undefined;
-    setSyncOpen(false);
-    setSyncPending(false);
-    setSyncError(undefined);
-    setSyncResult(undefined);
-    return () => { syncGeneration.current++; };
-  }, [record.workspaceId, record.worktreeId, displayedBaseline, manager]);
-  const closeSync = () => {
-    if (syncBusy.current) return;
-    syncGeneration.current++;
-    setSyncOpen(false);
-  };
-  const startSync = async () => {
-    if (syncBusy.current || syncResult || !onSyncBaseline || !displayedBaseline) return;
-    const generation = syncGeneration.current;
-    syncBusy.current = true;
-    setSyncPending(true);
-    setSyncError(undefined);
-    let requestId = syncRequest.current;
-    try {
-      requestId ??= createSyncRequestId();
-      syncRequest.current = requestId;
-      const result = await onSyncBaseline(syncStrategy, displayedBaseline, requestId);
-      if (generation !== syncGeneration.current) {
-        // Retiring navigation must not discard an already-created Session's failure.
-        // Capture the original identity without reviving UI sources or callbacks.
-        if (result.status !== 'dispatched') worktreeDiagnostics.recordInactive('sync:' + requestId,
-          baselineSyncFailureNotices(record, requestId, result, t));
-        return;
-      }
-      setSyncResult(result);
-      if (result.status === 'dispatched') {
-        setSyncOpen(false);
-        onOpenSession(result.sessionId);
-      }
-    } catch (cause) {
-      if (generation === syncGeneration.current) setSyncError(toWorktreeViewError(cause));
-    } finally {
-      if (generation === syncGeneration.current) {
-        syncBusy.current = false;
-        setSyncPending(false);
-      }
-    }
-  };
-  const partialSync = syncResult !== undefined && syncResult.status !== 'dispatched'
-    ? { ...syncResult, status: syncResult.status } : undefined;
+  const { syncOpen, setSyncOpen, syncPending, syncDialog } = useWorktreeBaselineSync({
+    record, displayedBaseline, manager, onSyncBaseline, onOpenSession, t,
+  });
   const renderBaseline = (value: string | undefined) => {
     const label = value === undefined ? (
       <span className={styles.dashboardHistorical}>{t('dashboard.historicalUnavailable')}</span>
@@ -640,6 +701,7 @@ export function WorktreeDashboard({
     defaultBaselineBranch: displayedBaseline,
     currentBranch: baselineCurrentBranch,
     capturedBaseline: record.baseCommit !== undefined,
+    refreshKey: gitRefreshKey,
   });
   const acquisitionFacts = selectWorktreeAcquisitionFacts(record);
   const acquisitionLabel =
@@ -746,6 +808,38 @@ export function WorktreeDashboard({
         })}
       </ul>
     );
+  if (compact) return <div className={styles.dashboardCompact} data-worktree-compact={record.worktreeId}>
+    <strong>{workspaceTitle} / {displayBranch}</strong>
+    <code>{record.worktreeId}</code>
+    <code>{record.absolutePath}</code>
+    {gitOverview.status === 'ready' && gitOverview.refreshing && <p role="status">{t('popover.loading')}</p>}
+    <span>{t(healthKey)}</span>
+    <dl className={styles.dashboardFacts}>
+      <WorktreeBaselineEditor value={displayedBaseline} branches={branches} loading={branchesLoading}
+        currentBranch={baselineCurrentBranch} onSave={persistBaseline} onLoad={onLoadBranches}
+        onFetch={onFetchBranches} t={t} disabled={actionPending || syncPending}
+        context={record.branch + ' · ' + record.absolutePath}
+        renderValue={(value) => value ?? record.baseCommit ?? t('dashboard.historicalUnavailable')} />
+      {(['aheadBehind', 'committed', 'workingTree'] as const).map((metric) =>
+        <DashboardFactRow key={metric} label={t(metric === 'committed' ? 'dashboard.committedChanges'
+          : metric === 'workingTree' ? 'dashboard.workingTree' : 'dashboard.aheadBehind')}>
+          <WorktreeGitOverviewValue state={gitOverview} metric={metric} t={t} />
+        </DashboardFactRow>)}
+    </dl>
+    {gitOverview.status !== 'ready' && <p role="status">{t(gitOverview.status === 'loading'
+      ? 'popover.loading' : gitOverview.status === 'error' ? 'popover.failed' : 'popover.noComparison')}</p>}
+    {gitOverview.status === 'ready' && gitOverview.history.unavailableReason !== undefined &&
+      <p role="status">{t('popover.noComparison')}</p>}
+    <Button variant="outline" onClick={() => compact.onExpand('git')}>{t('dashboard.tab.git')}</Button>
+    {!compact.refreshing && gitOverview.status === 'ready' && !gitOverview.refreshing && gitOverview.history.unavailableReason === undefined &&
+      (gitOverview.history.behind ?? 0) > 0 && displayedBaseline && onSyncBaseline &&
+      <Button variant="outline" disabled={actionPending} data-dashboard-action="sync-baseline"
+        onClick={() => setSyncOpen(true)}>{t('dashboard.action.sync')}</Button>}
+    {onCreateSession && <Button variant="outline" disabled={actionPending || syncPending}
+      onClick={onCreateSession}>{t('dashboard.newSession')}</Button>}
+    <Button variant="outline" onClick={() => compact.onExpand('overview')}>{t('dashboard.open')}</Button>
+    {syncDialog}
+  </div>;
   const topActionIsCreateSession = sessionIds.length === 0 && onCreateSession !== undefined;
   return (
     <section
@@ -1136,38 +1230,7 @@ export function WorktreeDashboard({
         </div>
         <p className={styles.dashboardFooter}>{t('dashboard.mvpHint')}</p>
       </div>
-      <Modal open={syncOpen} onClose={closeSync} closeLabel={t('dialog.close')}
-        title={t('dashboard.action.sync')} description={t('dashboard.sync.description')}
-        className={styles.dashboardBaselineModal}
-        footer={<>
-          <Button variant="outline" disabled={syncPending} onClick={closeSync}>{t('dashboard.cancelBase')}</Button>
-          {syncResult ? <Button variant="primary" onClick={() => onOpenSession(syncResult.sessionId)}>
-            {t('dashboard.sync.openSession')}
-          </Button> : <Button variant="primary" disabled={syncPending} onClick={() => void startSync()}>
-            {t(syncPending ? 'dashboard.sync.creating' : 'dashboard.sync.create')}
-          </Button>}
-        </>}>
-        <div className={styles.dashboardSyncOptions}>
-          <p><code>{displayedBaseline}</code><span aria-hidden="true"> → </span><code>{record.currentBranch ?? record.branch}</code></p>
-          {(['rebase', 'merge'] as const).map((strategy) => <label key={strategy}>
-            <input type="radio" name={`${id}-sync-strategy`} value={strategy}
-              checked={syncStrategy === strategy} disabled={syncPending || syncResult !== undefined || syncError !== undefined}
-              onChange={() => { syncRequest.current = undefined; setSyncStrategy(strategy); }} />
-            <span><strong>{strategy === 'rebase' ? 'Rebase' : 'Merge baseline'}</strong>
-              <small>{t(`dashboard.sync.${strategy}`)}</small></span>
-          </label>)}
-          {partialSync && <p role="status">{t(`dashboard.sync.${partialSync.status}`)}<br />
-            {t('dashboard.sync.partial')}<br /><code>{partialSync.sessionId}</code>
-          </p>}
-        </div>
-      </Modal>
-      <NotificationToasts notices={partialSync !== undefined
-        ? baselineSyncFailureNotices(record, syncRequest.current, partialSync, t, onOpenSession)
-        : syncError === undefined ? [] : [{
-            key: 'sync:' + record.worktreeId, error: syncError,
-            text: t('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, t),
-            message: (translate) => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(syncError, translate),
-          }]} />
+      {syncDialog}
     </section>
   );
 }

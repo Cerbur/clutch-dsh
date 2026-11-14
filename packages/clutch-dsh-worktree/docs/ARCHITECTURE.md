@@ -838,6 +838,8 @@ Surface 生命周期和 pending；busy token 属于具体操作，旧 finally �
 
 
 Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
+Session 浮窗的领先/落后行与 Dashboard 共用 `useWorktreeBaselineSync` 弹窗与请求生命周期；
+点击仅打开选择器，确认后调用同一 Remote，沿用请求幂等身份、部分失败诊断和过期导航门禁。
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
 初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
 UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，
@@ -1061,3 +1063,29 @@ rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-
 seat/surface 允许列表延伸，列表自身负责裁剪；原生 `scroll-state(scrollable: bottom)` query
 在外层仍可下滚时禁用内层用户滚动，不插入新的 size/scroll-state container。
 无 hook 路径保留旧布局与自绘悬浮滚动条，不降低公开最低版本。
+
+### Session popover Git 监听
+
+Host 的 GitChangeWatches 持有临时监听租约，路径只由 Manage 校验的 Workspace/Worktree
+身份解析，不接受客户端路径。监听工作树、index/HEAD、linked-worktree commondir 的 refs
+和 packed-refs；200ms 合并事件，不读取或持久化 Git projection。
+监听注册完成后 1 秒发出一次校准通知，补偿原生 fs.watch 启动窗口可能丢失的事件；
+它不是底层 ready 保证，也不替代 60 秒兜底。此一次性定时器同租约一起释放，
+并合并当时待发送的去抖通知。Client 不再在 start 返回时额外请求一次刷新。
+异步文件系统初始化完成后必须复核租约仍由当前实例持有；初始化期间已过期的租约
+不得返回失效 ID、续期或重新创建启动校准定时器。
+初始化期间通过 abort → stop 立即释放监听与定时器，不等待文件系统 I/O 返回；
+停止、过期、Host 销毁及初始化完成都会解绑此临时取消回调。每次 I/O 后复核生命周期，
+已取消或退役的初始化不得继续读取下一段元数据。
+Git 只读命令保持 GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 index。
+每次通知等待最多 5 秒，空返回不刷新。
+客户端关闭浮窗、进入 Dashboard 或切换 Session 时取消等待并显式释放租约；断连未能释放的
+租约 15 秒后过期，Host disposal 释放全部资源。60 秒数据轮询覆盖监听不支持、缺失目录、
+事件丢失和 refs 目录替换；远端变化仍须 fetch 后才成为本地事实。
+刷新只作用于目标 Workspace，读取期间变化合并为一次后续刷新，保留 ready 内容。
+工具通知沿用中央处理已执行的失效，空闲或排队消费都不得再次失效同一事件。
+浮窗卸载取消自身 current-generation 追读，并在 Git history 的异步续接前检查生命周期；
+共享在途请求仍归 reader 所有，不能因单个浮窗关闭而中止其他消费者。
+退出动画可暂留 inert、aria-hidden 的视觉内容；关闭即停用内容的监听和读取生命周期，
+不能等动画结束才释放。进入 Dashboard 直接移除浮窗。关闭标记按 Session 存于浏览器，
+最多保留最近十个；手动打开移除标记，不影响 DSH 或 Sidecar。

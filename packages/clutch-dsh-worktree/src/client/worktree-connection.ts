@@ -29,6 +29,9 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   getToolSettings: 'worktreeManager/getToolSettings',
   updateToolSettings: 'worktreeManager/updateToolSettings',
   watchToolChanges: 'worktreeManager/watchToolChanges',
+  startGitWatch: 'worktreeManager/startGitWatch',
+  watchGitChanges: 'worktreeManager/watchGitChanges',
+  stopGitWatch: 'worktreeManager/stopGitWatch',
   listWorktrees: 'worktreeManager/listWorktrees',
   listWorktreeCommits: 'worktreeManager/listWorktreeCommits',
   listWorktreeCommitFiles: 'worktreeManager/listWorktreeCommitFiles',
@@ -80,6 +83,9 @@ export class WorktreeConnectionError extends Error {
 }
 
 export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
+  startGitWatch(input: { workspaceId: string; worktreeId: string }, signal: AbortSignal): Promise<string>;
+  watchGitChanges(watchId: string, afterRevision: number, signal: AbortSignal): Promise<number>;
+  stopGitWatch(watchId: string): Promise<null>;
   watchToolChanges(afterRevision: number, signal: AbortSignal): Promise<WorktreeToolChangeBatch>;
   /** Check Host composition without requiring a user Workspace or reading its projection. */
   probeHost(signal: AbortSignal): Promise<WorktreeHostProbeResult>;
@@ -217,6 +223,11 @@ export function createWorktreeConnectionAdapter(
   }
 
   return {
+    startGitWatch: async (input, signal) => unwrap<string>(
+      WORKTREE_CONNECTION_ENDPOINTS.startGitWatch, await call('startGitWatch', input, signal)),
+    watchGitChanges: async (watchId, afterRevision, signal) => unwrap<number>(
+      WORKTREE_CONNECTION_ENDPOINTS.watchGitChanges, await call('watchGitChanges', { watchId, afterRevision }, signal)),
+    stopGitWatch: (watchId) => invoke('stopGitWatch', { watchId }),
     syncWorktreeBaseline: (input) => invoke('syncWorktreeBaseline', input),
     getToolSettings: (input) => invoke('getToolSettings', input),
     updateToolSettings: (input) => invoke('updateToolSettings', input),

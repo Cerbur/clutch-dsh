@@ -520,6 +520,50 @@ The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bu
 If DSH creates a Session but binding fails, the Session is kept. The Worktree view exposes retry
 or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 
+### Current Session Worktree panel
+
+Use **Worktree panel** in the Session header to open a compact panel without leaving the conversation.
+The public DSH utilities slot places it before the native More menu; the plugin cannot guarantee
+placement immediately beside the right-sidebar toggle. The existing Dashboard shortcut remains available.
+
+The panel is a small glass surface inset 12px from the Session’s right edge and 12px below
+its header and view tabs. It follows Session resizing and sidebar changes, with a
+small, regular-weight Worktree title and a refresh icon aligned right. Refresh and baseline-edit
+icons align with the metric values; the title shares the comparison heading’s typography.
+Long names truncate with an ellipsis; hover or keyboard-focus a truncated name to read
+its full text in a wrapping tooltip. Short baseline names retain their space.
+Uncommitted changes come first; a divider separates the `worktree → baseline` heading and its ahead/behind
+and committed-change rows. Paths and sidebar buttons are omitted.
+Local Sessions show only uncommitted changes. For managed Worktrees, the pencil at the
+right of the comparison heading opens the existing baseline picker, with branch loading,
+Fetch and conflict-checked saving. Click **Ahead / Behind** to open the **Sync with Base**
+dialog and choose Rebase or Merge. A healthy active Worktree, saved named baseline and
+current readable comparison are required; refreshing or unavailable comparisons disable
+this action. Clicking only opens the dialog; confirming creates the native Agent task.
+The committed and uncommitted change rows open the full Git & Changes view.
+
+The header button toggles the panel and highlights while open. Every Session defaults to open.
+Closing via the header or Escape stores that Session's closed marker in localStorage; manually
+opening removes its marker. Only the 10 most recently closed Sessions are retained, so other
+Sessions remain visible by default. There is no close button; conversation clicks keep it visible.
+The panel is up to 256px wide, uses a frosted glass background with a light shadow and slides in from the right and out toward the right; reduced-motion
+preferences disable these animations. Reads and listeners stop immediately when closing,
+while the exit animation retains only the existing visual content.
+Dashboard hides the panel immediately without changing the markers; returning to the
+conversation restores its Session preference. Refresh switches the icon to a loading indicator until both Workspace and Git
+reads finish. While visible, the panel refreshes on local file and Git metadata changes,
+with a 60-second polling fallback and a one-time reconciliation for changes missed while
+native watchers are starting. Closing it or opening Dashboard releases the listeners and
+cancels both the startup reconciliation and the polling timer.
+Changes during pending reads are coalesced into one follow-up refresh.
+Shared tool notifications reuse the same Workspace read. After closing or entering Dashboard,
+late responses cannot start further popover reads.
+Automatic and manual refresh preserve ready content while
+reading. Initial loading fills fixed-size placeholders in the
+same layout without loading text or changing the panel size. Main, unbound, detached,
+missing-directory and failed reads use the reserved status area or refresh-icon tooltip.
+Session creation remains in the full Dashboard.
+
 ### Open the Worktree Dashboard
 
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon

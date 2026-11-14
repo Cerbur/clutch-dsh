@@ -853,3 +853,7 @@ html[data-platform='darwin']
   gap: 8px;
   margin-top: 8px;
 }
+
+.dashboardCompact { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dashboardCompact code { font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
+.dashboardCompact .dashboardFacts { margin: 0; }

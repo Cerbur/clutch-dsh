@@ -1,6 +1,17 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  'popover.title': 'Worktree 面板',
+  'popover.loading': '正在刷新…',
+  'popover.failed': '无法读取当前会话的 Worktree，请重试。',
+  'popover.noComparison': '当前基线无法比较。请检查或选择有效基线。',
+  'popover.main': '当前会话位于 Main。可打开完整 Dashboard 查看。',
+  'popover.unbound': '当前会话尚无可确认的 Workspace 或 Worktree 关系。',
+  'popover.detached': '当前会话的 Worktree 已解绑或清理。',
+  'popover.missing': 'Workspace 或 Worktree 目录缺失或需要修复，操作不可用。',
+  'popover.refresh': '刷新',
+  'popover.createFailed': '创建或打开会话失败。请在 Workspace 会话列表中检查已创建的会话后重试。',
+
   'steer.title': 'Agent steer',
   'steer.pending': '等待接收',
   'steer.preparing': '准备接收',
@@ -474,6 +485,17 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  'popover.title': 'Worktree panel',
+  'popover.loading': 'Refreshing…',
+  'popover.failed': 'Unable to read this Session’s Worktree. Retry to refresh.',
+  'popover.noComparison': 'This baseline cannot be compared. Check or select a valid baseline.',
+  'popover.main': 'This Session uses Main. Open the full Dashboard for details.',
+  'popover.unbound': 'No confirmed Workspace or Worktree relationship is available for this Session.',
+  'popover.detached': 'This Session’s Worktree is detached or cleaned.',
+  'popover.missing': 'The Workspace or Worktree directory is missing or needs repair. Actions are unavailable.',
+  'popover.refresh': 'Refresh',
+  'popover.createFailed': 'Could not create or open the Session. Check the Workspace Session list for an existing Session before retrying.',
+
   'steer.title': 'Agent steer',
   'steer.pending': 'Waiting for receipt',
   'steer.preparing': 'Preparing receipt',

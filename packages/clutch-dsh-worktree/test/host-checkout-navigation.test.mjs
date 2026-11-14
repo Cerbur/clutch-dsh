@@ -46,6 +46,21 @@ async function fixture(t) {
   return { ctx, service, git, read, navigation, changed };
 }
 
+test('popover watch resolves Main on Host and rejects unrelated identities', async (t) => {
+  const { service, git } = await fixture(t);
+  const signal = new globalThis.AbortController().signal;
+  const started = await service.startGitWatch({ workspaceId: 'ws', worktreeId: 'main' }, signal);
+  assert.equal(started.ok, true);
+  const waiting = service.watchGitChanges({ watchId: started.value, afterRevision: 0 }, signal);
+  git('switch', 'next');
+  assert.ok((await waiting).value > 0);
+  assert.deepEqual(await service.stopGitWatch({ watchId: started.value }), { ok: true, value: null });
+  await assert.rejects(service.watchGitChanges({ watchId: started.value, afterRevision: 0 }, signal), /expired/);
+  await assert.rejects(service.startGitWatch({ workspaceId: 'ws', worktreeId: 'not-owned' }, signal), /unavailable/);
+  const missing = await service.startGitWatch({ workspaceId: 'unknown', worktreeId: 'main' }, signal);
+  assert.equal(missing.ok, false);
+});
+
 for (const mounted of [false, true]) {
   test(`navigation snapshot is reconciled when HEAD switches before observe (mounted: ${mounted})`, async (t) => {
     const f = await fixture(t);
