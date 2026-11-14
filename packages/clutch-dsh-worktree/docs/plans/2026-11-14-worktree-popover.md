@@ -34,6 +34,9 @@ native More. Exact adjacency to the sidebar toggle is not exposed by the DSH slo
   Header toggle and Escape dismiss it, with nested-modal Escape ownership.
   Persist the open preference in localStorage, defaulting to open; Session switches retain
   it without taking focus. Dashboard selection suppresses the panel without saving a close.
+- While the content is mounted, refresh every 5 seconds, retaining ready content. Skip
+  ticks during pending Workspace/Git reads. Closing, Dashboard entry and Session replacement
+  clear the interval; reopening starts a fresh scoped lifetime.
 
 ## Verification
 

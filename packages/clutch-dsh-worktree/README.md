@@ -547,7 +547,10 @@ the preference in browser localStorage across reloads and Session changes. There
 button; conversation clicks keep it visible, while Escape saves the closed preference.
 Dashboard temporarily hides the panel without changing that preference; returning to the
 conversation restores it. Refresh switches the icon to a loading indicator until both Workspace and Git
-reads finish, preserving ready content. Initial loading fills fixed-size placeholders in the
+reads finish. While visible, the panel automatically refreshes every 5 seconds; closing it
+or opening Dashboard stops the timer. Ticks during pending Workspace or Git reads are skipped.
+Automatic and manual refresh preserve ready content while
+reading. Initial loading fills fixed-size placeholders in the
 same layout without loading text or changing the panel size. Main, unbound, detached,
 missing-directory and failed reads use the reserved status area or refresh-icon tooltip.
 Session creation remains in the full Dashboard.

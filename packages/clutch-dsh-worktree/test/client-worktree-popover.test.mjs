@@ -74,6 +74,15 @@ test('production popover toggles accessibly, stays open during conversation, and
   dom.window.document.querySelector('header').getBoundingClientRect = () =>
     ({ left: 200, right: 1000, bottom: 100, height: 80 });
   const { document } = dom.window;
+  const timers = new Map();
+  let timerId = 0;
+  dom.window.setInterval = (callback, delay) => {
+    assert.equal(delay, 5000);
+    timers.set(++timerId, callback);
+    return timerId;
+  };
+  dom.window.clearInterval = (id) => timers.delete(id);
+  const tick = () => React.act(async () => { for (const callback of [...timers.values()]) callback(); });
   const originals = new Map();
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
     Node: dom.window.Node, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement,
@@ -148,6 +157,9 @@ test('production popover toggles accessibly, stays open during conversation, and
   try {
     await render();
     assert.ok(document.querySelector('[role="dialog"]'), 'default is open');
+    assert.equal(timers.size, 1);
+    await tick();
+    assert.equal(invalidations.length, 1, 'initial pending read suppresses the polling tick');
     assert.notEqual(document.activeElement.getAttribute('role'), 'dialog', 'default opening does not steal focus');
     const rows = () => [...document.querySelectorAll('[data-popover-metric]')].map((row) => row.dataset.popoverMetric);
     assert.deepEqual(rows(), ['workingTree', 'aheadBehind', 'committed']);
@@ -182,6 +194,13 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.equal(button().getAttribute('aria-pressed'), 'true');
     assert.equal(document.querySelector('[aria-label="dashboard.openSidebar"]'), null);
     assert.deepEqual(invalidations, ['w']);
+    const contentBeforeTick = document.querySelector('[data-worktree-summary]');
+    await tick();
+    assert.equal(invalidations.length, 2, 'idle polling invalidates only the current Workspace');
+    assert.strictEqual(document.querySelector('[data-worktree-summary]'), contentBeforeTick);
+    assert.equal(document.querySelectorAll('[data-popover-placeholder]').length, 0);
+    await tick();
+    assert.equal(invalidations.length, 3, 'fast completed reads do not leave polling locked');
     assert.equal(editor.iconOnly, true);
     await React.act(async () => editor.onSave('release', 'main'));
     assert.deepEqual(savedInput, { workspaceId: 'w', worktreeId: 'tree', baseBranch: 'release', expectedBaseBranch: 'main' });
@@ -190,6 +209,9 @@ test('production popover toggles accessibly, stays open during conversation, and
     await React.act(async () => document.querySelector('[data-popover-refresh]').click());
     assert.ok(document.querySelector('[data-loading-icon]'));
     assert.equal(document.querySelector('[data-popover-refresh]').disabled, true);
+    const pendingInvalidations = invalidations.length;
+    await tick();
+    assert.equal(invalidations.length, pendingInvalidations, 'slow Workspace reads never overlap with polling');
     assert.equal(document.querySelector('[data-popover-metric="aheadBehind"]').disabled, true,
       'refreshing comparison cannot start synchronization');
     assert.ok(document.querySelector('[data-worktree-summary="tree"]'), 'ready content stays while reading');
@@ -197,6 +219,8 @@ test('production popover toggles accessibly, stays open during conversation, and
     gitState = { status: 'ready', refreshing: true, history: {} };
     await React.act(async () => resolveRead(view));
     assert.ok(document.querySelector('[data-loading-icon]'), 'spinner includes pending Git file reads');
+    await tick();
+    assert.equal(invalidations.length, pendingInvalidations, 'pending Git reads also suppress polling');
     gitState = { status: 'ready', history: {} };
     await render();
     assert.ok(document.querySelector('[data-reload-icon]'));
@@ -216,6 +240,7 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.equal(button().getAttribute('aria-expanded'), 'true', 'conversation focus keeps the panel visible');
     await open();
     assert.equal(button().getAttribute('aria-expanded'), 'false', 'header button closes the panel');
+    assert.equal(timers.size, 0, 'closing clears the interval');
     assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'false');
     await React.act(async () => root.render(null));
     await render();
@@ -225,13 +250,16 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.deepEqual(expanded, ['s', 'git', 'w', 'tree']);
     assert.equal(button().getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('[role="dialog"]'), null, 'Dashboard hides the portal');
+    assert.equal(timers.size, 0, 'Dashboard clears the interval');
     assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'true');
     await React.act(async () => { dashboard = undefined; dashboardListener(); });
     assert.ok(document.querySelector('[role="dialog"]'), 'returning to Session restores the open preference');
+    assert.equal(timers.size, 1, 'returning creates exactly one fresh interval');
     context = { ...context, sessionId: 'new' }; props.sessionId = 'new';
     await React.act(async () => document.getElementById('outside').focus());
     await render();
     assert.ok(document.querySelector('[role="dialog"]'), 'Session switch preserves open state');
+    assert.equal(timers.size, 1, 'Session switch replaces rather than accumulates intervals');
     assert.equal(document.activeElement.id, 'outside', 'Session switch must not steal focus');
     props.sessionId = 's'; context = { ...context, sessionId: 's' };
     await render();

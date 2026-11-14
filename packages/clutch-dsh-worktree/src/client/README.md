@@ -957,6 +957,10 @@ width up to half the names area; the Worktree name takes the remaining space, wh
 the arrow and pencil keep their fixed sizes.
 Initial reads use stationary placeholders inside these
 fixed-height rows. Refresh keeps ready values; no loading paragraph or sidebar action is mounted.
+The mounted popover content owns a 5-second interval that invalidates only its Workspace.
+Ticks skip the entire pending Workspace-plus-Git read lifetime, including immediately
+resolved reads. Unmounting on close, Dashboard entry or Session replacement clears the
+interval; returning opens a new scoped read and timer without accumulating subscriptions.
 Local uses only the working-tree row and reads live files directly without comparison history.
 Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
 the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving

@@ -101,9 +101,11 @@ function PopoverContent(props: WorktreePopoverProps & {
   const [readFailed, setReadFailed] = useState(false);
   const alive = useRef(false);
   const generation = useRef(0);
+  const refreshBusy = useRef(true);
   const refresh = async (invalidate = false) => {
     if (!workspaceId) { setTarget({ kind: 'unbound' }); setRefreshing(false); return; }
     const ticket = ++generation.current;
+    refreshBusy.current = true;
     setRefreshing(true);
     setReadFailed(false);
     if (invalidate) viewReader.invalidate(workspaceId);
@@ -128,7 +130,17 @@ function PopoverContent(props: WorktreePopoverProps & {
     const unsubscribe = props.subscribeChanges((change) => {
       if (change.workspaceId === workspaceId) void refresh();
     });
-    return () => { alive.current = false; generation.current++; unsubscribe(); };
+    // This content unmounts when closed or covered by Dashboard. Skip ticks until
+    // both Workspace and Git reads settle; never queue overlapping polling reads.
+    const timer = workspaceId === undefined ? undefined : window.setInterval(() => {
+      if (alive.current && !refreshBusy.current) void refresh(true);
+    }, 5000);
+    return () => {
+      alive.current = false;
+      generation.current++;
+      if (timer !== undefined) window.clearInterval(timer);
+      unsubscribe();
+    };
   }, [manager, viewReader, workspaceId, sessionId, props.subscribeChanges]);
   const expand = () => {
     if (!workspaceId || (target.kind !== 'worktree' && target.kind !== 'main')) return;
@@ -144,6 +156,7 @@ function PopoverContent(props: WorktreePopoverProps & {
     workingTreeOnly: props.mainConfirmed,
   });
   const busy = refreshing || state.status === 'loading' || (state.status === 'ready' && state.refreshing === true);
+  useLayoutEffect(() => { refreshBusy.current = busy; });
   const title = record?.branch ?? (target.kind === 'main' ? props.workspaceTitle : undefined);
   const branch = record?.currentHead?.name ?? (record?.currentBranch === null
     ? t('dashboard.detached') : record?.currentBranch ?? record?.branch);
