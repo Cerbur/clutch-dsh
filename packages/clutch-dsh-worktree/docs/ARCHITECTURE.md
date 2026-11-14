@@ -1063,3 +1063,14 @@ rc.2 Sidebar 的 max-content grid 由 occupant 自行限制高度：带 section-
 seat/surface 允许列表延伸，列表自身负责裁剪；原生 `scroll-state(scrollable: bottom)` query
 在外层仍可下滚时禁用内层用户滚动，不插入新的 size/scroll-state container。
 无 hook 路径保留旧布局与自绘悬浮滚动条，不降低公开最低版本。
+
+### Session popover Git 监听
+
+Host 的 GitChangeWatches 持有临时监听租约，路径只由 Manage 校验的 Workspace/Worktree
+身份解析，不接受客户端路径。监听工作树、index/HEAD、linked-worktree commondir 的 refs
+和 packed-refs；200ms 合并事件，不读取或持久化 Git projection。Git 只读命令保持
+GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 index。每次通知等待最多 5 秒，空返回不刷新。
+客户端关闭浮窗、进入 Dashboard 或切换 Session 时取消等待并显式释放租约；断连未能释放的
+租约 15 秒后过期，Host disposal 释放全部资源。60 秒数据轮询覆盖监听不支持、缺失目录、
+事件丢失和 refs 目录替换；远端变化仍须 fetch 后才成为本地事实。
+刷新只作用于目标 Workspace，读取期间变化合并为一次后续刷新，保留 ready 内容。

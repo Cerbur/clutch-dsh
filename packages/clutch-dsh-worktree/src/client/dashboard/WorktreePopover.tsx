@@ -6,6 +6,7 @@ import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord, WorktreeManager } from '../../contract/index.js';
 import type { WorktreeToolChange } from '../../contract/worktree-tool-changes.js';
 import type { WorktreeViewReader } from '../view/worktree-view-read.js';
+import type { WorktreeConnectionAdapter } from '../worktree-connection.js';
 import type { DashboardHeaderActionProps } from './DashboardHeaderAction.js';
 import { IconBranchOutline16, IconLoadingOutline16, IconRefreshOutline16 } from '../dsh-icons.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
@@ -16,7 +17,7 @@ import styles from './worktree-popover.css';
 
 export interface WorktreePopoverServices {
   readonly dashboardStore: SnapshotStore<DashboardSelection | undefined>;
-  readonly manager: WorktreeManager;
+  readonly manager: WorktreeManager & Partial<Pick<WorktreeConnectionAdapter, 'startGitWatch' | 'watchGitChanges' | 'stopGitWatch'>>;
   readonly viewReader: WorktreeViewReader;
   readonly subscribeChanges: (listener: (change: WorktreeToolChange) => void) => () => void;
   readonly refreshContext: (workspaceId: string) => Promise<void>;
@@ -102,6 +103,12 @@ function PopoverContent(props: WorktreePopoverProps & {
   const alive = useRef(false);
   const generation = useRef(0);
   const refreshBusy = useRef(true);
+  const refreshQueued = useRef(false);
+  const requestRefresh = () => {
+    if (!alive.current) return;
+    if (refreshBusy.current) refreshQueued.current = true;
+    else void refresh(true);
+  };
   const refresh = async (invalidate = false) => {
     if (!workspaceId) { setTarget({ kind: 'unbound' }); setRefreshing(false); return; }
     const ticket = ++generation.current;
@@ -128,13 +135,13 @@ function PopoverContent(props: WorktreePopoverProps & {
     alive.current = true;
     void refresh(true);
     const unsubscribe = props.subscribeChanges((change) => {
-      if (change.workspaceId === workspaceId) void refresh();
+      if (change.workspaceId === workspaceId) requestRefresh();
     });
     // This content unmounts when closed or covered by Dashboard. Skip ticks until
     // both Workspace and Git reads settle; never queue overlapping polling reads.
     const timer = workspaceId === undefined ? undefined : window.setInterval(() => {
       if (alive.current && !refreshBusy.current) void refresh(true);
-    }, 5000);
+    }, 60_000);
     return () => {
       alive.current = false;
       generation.current++;
@@ -147,6 +154,43 @@ function PopoverContent(props: WorktreePopoverProps & {
     props.expand(String(sessionId), 'git', workspaceId, target.kind === 'worktree' ? target.record.worktreeId : 'main');
   };
   const record = target.kind === 'worktree' ? target.record : undefined;
+  const watchedWorktreeId = record?.worktreeId ?? (target.kind === 'main' ? 'main' : undefined);
+  useEffect(() => {
+    if (!workspaceId || !watchedWorktreeId || !manager.startGitWatch ||
+        !manager.watchGitChanges || !manager.stopGitWatch) return;
+    const controller = new AbortController();
+    let watchId: string | undefined;
+    let retry: number | undefined;
+    const release = (id: string) => { void manager.stopGitWatch!(id).catch(() => {}); };
+    const listen = async () => {
+      try {
+        const id = await manager.startGitWatch!({ workspaceId, worktreeId: watchedWorktreeId }, controller.signal);
+        if (controller.signal.aborted) { release(id); return; }
+        watchId = id;
+        // Reconcile the initial read/registration gap without clearing ready data.
+        requestRefresh();
+        let revision = 0;
+        while (!controller.signal.aborted) {
+          const next = await manager.watchGitChanges!(id, revision, controller.signal);
+          if (controller.signal.aborted) return;
+          if (next !== revision) requestRefresh();
+          revision = next;
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          if (watchId) release(watchId);
+          watchId = undefined;
+          retry = window.setTimeout(() => { void listen(); }, 60_000);
+        }
+      }
+    };
+    void listen();
+    return () => {
+      controller.abort();
+      window.clearTimeout(retry);
+      if (watchId) release(watchId);
+    };
+  }, [manager, workspaceId, watchedWorktreeId]);
   const state = useWorktreeGitOverview({
     manager: record || target.kind === 'main' ? manager : undefined,
     workspaceId: workspaceId ?? '', worktreeId: record?.worktreeId ?? 'main',
@@ -156,7 +200,13 @@ function PopoverContent(props: WorktreePopoverProps & {
     workingTreeOnly: props.mainConfirmed,
   });
   const busy = refreshing || state.status === 'loading' || (state.status === 'ready' && state.refreshing === true);
-  useLayoutEffect(() => { refreshBusy.current = busy; });
+  useLayoutEffect(() => {
+    refreshBusy.current = busy;
+    if (!busy && refreshQueued.current && alive.current) {
+      refreshQueued.current = false;
+      void refresh(true);
+    }
+  });
   const title = record?.branch ?? (target.kind === 'main' ? props.workspaceTitle : undefined);
   const branch = record?.currentHead?.name ?? (record?.currentBranch === null
     ? t('dashboard.detached') : record?.currentBranch ?? record?.branch);

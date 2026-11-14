@@ -77,7 +77,7 @@ test('production popover toggles accessibly, stays open during conversation, and
   const timers = new Map();
   let timerId = 0;
   dom.window.setInterval = (callback, delay) => {
-    assert.equal(delay, 5000);
+    assert.equal(delay, 60_000);
     timers.set(++timerId, callback);
     return timerId;
   };
@@ -106,6 +106,8 @@ test('production popover toggles accessibly, stays open during conversation, and
     subscribe: (listener) => { dashboardListener = listener; return () => { dashboardListener = undefined; }; },
   };
   const invalidations = [];
+  const watches = new Map();
+  let nextWatch = 0;
   const { WorktreePopover } = await load('WorktreePopover.tsx', {
     react: React, 'react/jsx-runtime': jsx, 'react-dom': { createPortal },
     '@deepseek-ai/dsh-client-ui-primitives': {
@@ -226,6 +228,40 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.ok(document.querySelector('[data-reload-icon]'));
     slow = false;
     await React.act(async () => listener({ workspaceId: 'w' }));
+    props.manager = { ...props.manager,
+      startGitWatch: async (input) => {
+        const id = String(++nextWatch);
+        watches.set(id, { input });
+        return id;
+      },
+      watchGitChanges: (id, revision, signal) => new Promise((resolve, reject) => {
+        watches.get(id).notify = () => resolve(revision + 1);
+        watches.get(id).idle = () => resolve(revision);
+        watches.get(id).signal = signal;
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }),
+      stopGitWatch: async (id) => { watches.delete(id); return null; },
+    };
+    await render();
+    assert.equal(watches.size, 1);
+    assert.deepEqual([...watches.values()][0].input, { workspaceId: 'w', worktreeId: 'tree' });
+    const beforeEvent = invalidations.length;
+    const preserved = document.querySelector('[data-worktree-summary]');
+    await React.act(async () => [...watches.values()][0].notify());
+    assert.equal(invalidations.length, beforeEvent + 1, 'filesystem event refreshes the target');
+    assert.strictEqual(document.querySelector('[data-worktree-summary]'), preserved);
+    assert.equal(document.querySelectorAll('[data-popover-placeholder]').length, 0);
+    await React.act(async () => [...watches.values()][0].idle());
+    assert.equal(invalidations.length, beforeEvent + 1, 'empty notification wait does not read Git');
+    slow = true;
+    await React.act(async () => [...watches.values()][0].notify());
+    await React.act(async () => [...watches.values()][0].notify());
+    await React.act(async () => [...watches.values()][0].notify());
+    assert.equal(invalidations.length, beforeEvent + 2, 'events never overlap an active read');
+    slow = false;
+    await React.act(async () => resolveRead(view));
+    assert.equal(invalidations.length, beforeEvent + 3, 'events during reads queue one reconciliation');
+    const watchSignal = [...watches.values()][0].signal;
     const modal = document.createElement('div'); modal.setAttribute('role', 'dialog'); document.body.append(modal);
     await React.act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     assert.equal(button().getAttribute('aria-expanded'), 'true', 'nested modal owns Escape');
@@ -233,6 +269,8 @@ test('production popover toggles accessibly, stays open during conversation, and
     await React.act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     assert.equal(button().getAttribute('aria-expanded'), 'false');
     assert.equal(document.activeElement, button());
+    assert.equal(watches.size, 0, 'Escape releases filesystem watches');
+    assert.equal(watchSignal.aborted, true, 'Escape aborts notification wait');
     await open();
     await React.act(async () => document.getElementById('outside').dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })));
     assert.equal(button().getAttribute('aria-expanded'), 'true', 'conversation clicks keep the panel visible');
@@ -241,6 +279,7 @@ test('production popover toggles accessibly, stays open during conversation, and
     await open();
     assert.equal(button().getAttribute('aria-expanded'), 'false', 'header button closes the panel');
     assert.equal(timers.size, 0, 'closing clears the interval');
+    assert.equal(watches.size, 0, 'closing releases filesystem watches');
     assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'false');
     await React.act(async () => root.render(null));
     await render();
@@ -251,10 +290,12 @@ test('production popover toggles accessibly, stays open during conversation, and
     assert.equal(button().getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('[role="dialog"]'), null, 'Dashboard hides the portal');
     assert.equal(timers.size, 0, 'Dashboard clears the interval');
+    assert.equal(watches.size, 0, 'Dashboard releases filesystem watches');
     assert.equal(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-open'), 'true');
     await React.act(async () => { dashboard = undefined; dashboardListener(); });
     assert.ok(document.querySelector('[role="dialog"]'), 'returning to Session restores the open preference');
     assert.equal(timers.size, 1, 'returning creates exactly one fresh interval');
+    assert.equal(watches.size, 1, 'returning starts one filesystem watch');
     context = { ...context, sessionId: 'new' }; props.sessionId = 'new';
     await React.act(async () => document.getElementById('outside').focus());
     await render();

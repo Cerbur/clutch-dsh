@@ -957,10 +957,13 @@ width up to half the names area; the Worktree name takes the remaining space, wh
 the arrow and pencil keep their fixed sizes.
 Initial reads use stationary placeholders inside these
 fixed-height rows. Refresh keeps ready values; no loading paragraph or sidebar action is mounted.
-The mounted popover content owns a 5-second interval that invalidates only its Workspace.
-Ticks skip the entire pending Workspace-plus-Git read lifetime, including immediately
-resolved reads. Unmounting on close, Dashboard entry or Session replacement clears the
-interval; returning opens a new scoped read and timer without accumulating subscriptions.
+Mounted content owns a Git watch lease via the existing Connection adapter's startGitWatch,
+watchGitChanges and stopGitWatch endpoints, plus a 60-second fallback interval. Only
+changed revisions invalidate its Workspace. Events during reads queue one follow-up;
+fallback ticks skip pending reads. Each notification wait ends within five seconds without
+reading Git on empty responses. Unmounting on close, Dashboard entry or Session replacement
+aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
+retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
 Local uses only the working-tree row and reads live files directly without comparison history.
 Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
 the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving

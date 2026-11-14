@@ -565,3 +565,9 @@ DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/native-session-flow
 该测试只创建临时 Git 仓库和内存 Session，调用真实 WorkingDirectory/Projection/SandboxPolicy，
 验证原 header 与权限不变、原生目录事件先发布、取消不改目录。未设置 DSH_NATIVE_SOURCE
 时仅该真实 graph 用例跳过，主要契约回归仍执行。历史 preset smoke 继续只验证 legacy Session。
+
+Popover Git 事件刷新新增 startGitWatch/watchGitChanges/stopGitWatch RPC，更新后需重新加载
+Host 插件并刷新 Client。只刷新 Client 时旧 Host 不支持监听，仍每 60 秒读取兜底。
+Host 使用 Node 文件监听；无事件支持的文件系统依赖兜底。事件等待每 5 秒结束以满足
+Desktop drain，不代表每 5 秒执行 Git。可运行 node --test test/git-change-watch.test.mjs
+和 test/client-worktree-popover.test.mjs 验证事件与关闭生命周期。

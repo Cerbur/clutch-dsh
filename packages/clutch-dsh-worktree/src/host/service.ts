@@ -41,6 +41,7 @@ import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/in
 import { createNativeWorktreeSessionDirectoryPort } from '../tool/native-session.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import { WorkspaceCheckoutWatcher } from './checkout-head-watcher.js';
+import { GitChangeWatches } from './git-change-watch.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
 import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
@@ -80,6 +81,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly dsh: DshHostReadAdapter;
   private readonly remote: WorktreeRemoteManager;
   private readonly toolChanges = new WorktreeToolChanges();
+  private readonly gitWatches = new GitChangeWatches();
   private readonly checkoutWatcher: WorkspaceCheckoutWatcher;
   private readonly toolSettings: WorktreeToolSettings;
   private baselineSync?: ReturnType<typeof createBaselineSync>;
@@ -93,6 +95,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   constructor(ctx: Context, config: WorktreeHostConfig) {
     super(ctx, 'worktreeManager');
     this.toolSettings = new WorktreeToolSettings(config.dshHome);
+    ctx.effect(() => () => this.gitWatches.dispose(), 'clutch-dsh-worktree: Git watch cleanup');
     let disposed = false;
     ctx.effect(
       () => () => {
@@ -260,6 +263,35 @@ export class WorktreeRemoteService extends TypertRemoteService {
     signal: AbortSignal,
   ): Promise<WorktreeRemoteResult<WorktreeToolChangeBatch>> {
     return { ok: true, value: await this.toolChanges.watch(input.afterRevision, signal) };
+  }
+
+  @Remote
+  async startGitWatch(input: { workspaceId: string; worktreeId: string }, signal: AbortSignal): Promise<WorktreeRemoteResult<string>> {
+    return project(async () => {
+      // Resolve trusted identities through Manage, never a browser-supplied path.
+      let root: string;
+      if (input.worktreeId === 'main') {
+        if (!this.manager.getWorkspaceCheckout) throw new Error('Checkout read unavailable');
+        root = (await this.manager.getWorkspaceCheckout(input)).gitRootPath;
+      } else {
+        const record = (await this.manager.listWorktrees(input))
+          .find((item) => item.worktreeId === input.worktreeId && item.status === 'active');
+        if (!record) throw new Error('Worktree unavailable');
+        root = record.gitRootPath ?? record.absolutePath;
+      }
+      return this.gitWatches.start(root, signal);
+    });
+  }
+
+  @Remote
+  async watchGitChanges(input: { watchId: string; afterRevision: number }, signal: AbortSignal): Promise<WorktreeRemoteResult<number>> {
+    return { ok: true, value: await this.gitWatches.next(input.watchId, input.afterRevision, signal) };
+  }
+
+  @Remote
+  async stopGitWatch(input: { watchId: string }): Promise<WorktreeRemoteResult<null>> {
+    this.gitWatches.stop(input.watchId);
+    return { ok: true, value: null };
   }
 
   @Remote

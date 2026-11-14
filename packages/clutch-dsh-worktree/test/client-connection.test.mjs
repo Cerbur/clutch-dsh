@@ -2,6 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
 
+test('Git watch lifecycle uses the shared adapter and forwards cancellation', async () => {
+  const calls = [];
+  const adapter = createWorktreeConnectionAdapter({ async call(channel, endpoint, payload, signal) {
+    calls.push({ channel, endpoint, input: payload.args.input, signal });
+    return { ok: true, value: { ok: true, value: endpoint.endsWith('/startGitWatch') ? 'lease'
+      : endpoint.endsWith('/watchGitChanges') ? 2 : null } };
+  } });
+  const controller = new globalThis.AbortController();
+  assert.equal(await adapter.startGitWatch({ workspaceId: 'ws', worktreeId: 'wt' }, controller.signal), 'lease');
+  assert.equal(await adapter.watchGitChanges('lease', 1, controller.signal), 2);
+  assert.equal(await adapter.stopGitWatch('lease'), null);
+  assert.deepEqual(calls.map(({ channel, endpoint, input }) => ({ channel, endpoint, input })), [
+    { channel: '/api', endpoint: 'worktreeManager/startGitWatch', input: { workspaceId: 'ws', worktreeId: 'wt' } },
+    { channel: '/api', endpoint: 'worktreeManager/watchGitChanges', input: { watchId: 'lease', afterRevision: 1 } },
+    { channel: '/api', endpoint: 'worktreeManager/stopGitWatch', input: { watchId: 'lease' } },
+  ]);
+  controller.abort();
+  await adapter.watchGitChanges('lease', 2, controller.signal);
+  assert.equal(calls.at(-1).signal.aborted, true);
+  adapter.dispose();
+});
+
 test('old Host navigation falls back only on the canonical missing endpoint response', async () => {
   const calls = [];
   const adapter = createWorktreeConnectionAdapter({ async call(channel, endpoint) {
@@ -144,6 +166,9 @@ test('routes all Worktree methods through /api with the canonical endpoint and p
     'worktreeManager/getToolSettings',
     'worktreeManager/updateToolSettings',
     'worktreeManager/watchToolChanges',
+    'worktreeManager/startGitWatch',
+    'worktreeManager/watchGitChanges',
+    'worktreeManager/stopGitWatch',
     'worktreeManager/listWorktrees',
     'worktreeManager/listWorktreeCommits',
     'worktreeManager/listWorktreeCommitFiles',
