@@ -964,6 +964,10 @@ fallback ticks skip pending reads. Each notification wait ends within five secon
 reading Git on empty responses. Unmounting on close, Dashboard entry or Session replacement
 aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
 retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
+Native fs.watch registration has no ready barrier. Host schedules one reconciliation
+revision one second after registration, merging any pending debounce; stop/dispose clears
+that timer. Client no longer refreshes immediately on the start response. This bounds
+the observed startup gap without claiming reliable event delivery or replacing the 60s fallback.
 Tool notifications reuse the monitor's existing invalidation, including when queued during
 Git reads; filesystem events still request invalidation. The popover's read lifetime stops
 the shared reader's current-generation follow-up loop without aborting another consumer's

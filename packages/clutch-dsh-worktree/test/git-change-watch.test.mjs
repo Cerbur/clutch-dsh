@@ -4,7 +4,53 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { GitChangeWatches } from '../lib/host/git-change-watch.js';
+import fs from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { syncBuiltinESMExports } from 'node:module';
 const { AbortController } = globalThis;
+
+test('startup reconciliation covers a dropped native event and remains one-shot', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let closed = 0;
+  let emitChange;
+  t.mock.method(fs, 'watch', (_directory, _options, listener) => {
+    emitChange = listener;
+    const watcher = new EventEmitter();
+    watcher.close = () => { closed++; };
+    return watcher; // Simulate a native startup window silently dropping all events.
+  });
+  syncBuiltinESMExports();
+  const watches = new GitChangeWatches();
+  t.after(() => { watches.dispose(); t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const signal = new AbortController().signal;
+  const id = await watches.start('/missing-startup-fixture', signal);
+  const first = watches.next(id, 0, signal);
+  t.mock.timers.tick(5000);
+  const revision = await first;
+  assert.ok(revision > 0, 'startup must reconcile even if native events are lost');
+  const idle = watches.next(id, revision, signal);
+  t.mock.timers.tick(5000);
+  assert.equal(await idle, revision, 'reconciliation must not become five-second Git polling');
+  watches.stop(id);
+  assert.equal(closed, 1);
+  const cancelled = await watches.start('/missing-startup-fixture', signal);
+  const pending = watches.next(cancelled, 0, signal);
+  watches.stop(cancelled);
+  await assert.rejects(pending, /expired/);
+  t.mock.timers.tick(5000);
+  assert.equal(closed, 2, 'closing before startup reconciliation releases the watcher');
+  await assert.rejects(watches.next(cancelled, 0, signal), /expired/);
+  const coalesced = await watches.start('/missing-startup-fixture', signal);
+  const changed = watches.next(coalesced, 0, signal);
+  t.mock.timers.tick(900);
+  emitChange('change', 'file.txt');
+  t.mock.timers.tick(100);
+  assert.equal(await changed, 1);
+  const quiet = watches.next(coalesced, 1, signal);
+  t.mock.timers.tick(5000);
+  assert.equal(await quiet, 1, 'startup consumes the pending debounce instead of emitting twice');
+  watches.stop(coalesced);
+});
 
 test('idle waits drain in five seconds and abandoned leases expire', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

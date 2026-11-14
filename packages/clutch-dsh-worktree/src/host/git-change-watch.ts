@@ -9,6 +9,7 @@ export class GitChangeWatches {
   private readonly leases = new Map<string, {
     revision: number; watchers: FSWatcher[]; wake: Set<() => void>;
     expiry?: ReturnType<typeof setTimeout>; debounce?: ReturnType<typeof setTimeout>;
+    startup?: ReturnType<typeof setTimeout>;
   }>();
   private disposed = false;
 
@@ -18,16 +19,20 @@ export class GitChangeWatches {
     const id = randomUUID();
     const lease = { revision: 0, watchers: [] as FSWatcher[], wake: new Set<() => void>(),
       expiry: undefined as ReturnType<typeof setTimeout> | undefined,
+      startup: undefined as ReturnType<typeof setTimeout> | undefined,
       debounce: undefined as ReturnType<typeof setTimeout> | undefined };
     this.leases.set(id, lease);
     this.renew(id);
+    const notify = () => {
+      if (!this.leases.has(id)) return;
+      clearTimeout(lease.debounce);
+      lease.debounce = undefined;
+      lease.revision++;
+      for (const wake of lease.wake) wake();
+    };
     const changed = () => {
       if (!this.leases.has(id) || lease.debounce) return;
-      lease.debounce = setTimeout(() => {
-        lease.debounce = undefined;
-        lease.revision++;
-        for (const wake of lease.wake) wake();
-      }, 200);
+      lease.debounce = setTimeout(notify, 200);
     };
     const observe = (directory: string, recursive: boolean, accepts: (name: string) => boolean) => {
       if (!this.leases.has(id) || signal.aborted) return;
@@ -61,6 +66,14 @@ export class GitChangeWatches {
       signal.throwIfAborted();
       throw new Error('Worktree plugin is disposed');
     }
+    // fs.watch has no ready barrier. In particular, macOS can drop the first write
+    // while multiple directory streams are being registered. Request one delayed
+    // reconciliation instead of treating start() as proof of native readiness.
+    // This is not a readiness guarantee; the 60s client fallback remains necessary.
+    if (lease.watchers.length > 0) lease.startup = setTimeout(() => {
+      lease.startup = undefined;
+      notify();
+    }, 1000);
     return id;
   }
 
@@ -101,6 +114,7 @@ export class GitChangeWatches {
     this.leases.delete(id);
     clearTimeout(lease.expiry);
     clearTimeout(lease.debounce);
+    clearTimeout(lease.startup);
     for (const watcher of lease.watchers) watcher.close();
     for (const wake of [...lease.wake]) wake();
   }

@@ -38,6 +38,8 @@ native More. Exact adjacency to the sidebar toggle is not exposed by the DSH slo
   and coalesce events during reads. A 60-second refresh covers unavailable watchers and missed events.
   Closing, Dashboard entry and Session replacement cancel waits, release Host leases and clear
   the fallback/retry timers; reopening starts a fresh scoped lifetime.
+  Host also owns a single post-registration reconciliation timer for native startup
+  event loss; releasing the lease cancels it.
 
 ## Verification
 

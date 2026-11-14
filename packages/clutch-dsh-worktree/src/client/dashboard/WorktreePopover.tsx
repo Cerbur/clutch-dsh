@@ -175,8 +175,8 @@ function PopoverContent(props: WorktreePopoverProps & {
         const id = await manager.startGitWatch!({ workspaceId, worktreeId: watchedWorktreeId }, controller.signal);
         if (controller.signal.aborted) { release(id); return; }
         watchId = id;
-        // Reconcile the initial read/registration gap without clearing ready data.
-        requestRefresh();
+        // Host sends a one-shot startup reconciliation after registration; start()
+        // itself does not establish native watcher readiness.
         let revision = 0;
         while (!controller.signal.aborted) {
           const next = await manager.watchGitChanges!(id, revision, controller.signal);

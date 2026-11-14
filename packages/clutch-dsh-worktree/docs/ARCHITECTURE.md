@@ -1068,8 +1068,12 @@ seat/surface 允许列表延伸，列表自身负责裁剪；原生 `scroll-stat
 
 Host 的 GitChangeWatches 持有临时监听租约，路径只由 Manage 校验的 Workspace/Worktree
 身份解析，不接受客户端路径。监听工作树、index/HEAD、linked-worktree commondir 的 refs
-和 packed-refs；200ms 合并事件，不读取或持久化 Git projection。Git 只读命令保持
-GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 index。每次通知等待最多 5 秒，空返回不刷新。
+和 packed-refs；200ms 合并事件，不读取或持久化 Git projection。
+监听注册完成后 1 秒发出一次校准通知，补偿原生 fs.watch 启动窗口可能丢失的事件；
+它不是底层 ready 保证，也不替代 60 秒兜底。此一次性定时器同租约一起释放，
+并合并当时待发送的去抖通知。Client 不再在 start 返回时额外请求一次刷新。
+Git 只读命令保持 GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 index。
+每次通知等待最多 5 秒，空返回不刷新。
 客户端关闭浮窗、进入 Dashboard 或切换 Session 时取消等待并显式释放租约；断连未能释放的
 租约 15 秒后过期，Host disposal 释放全部资源。60 秒数据轮询覆盖监听不支持、缺失目录、
 事件丢失和 refs 目录替换；远端变化仍须 fetch 后才成为本地事实。

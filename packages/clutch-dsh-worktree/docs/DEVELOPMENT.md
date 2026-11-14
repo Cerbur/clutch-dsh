@@ -571,3 +571,12 @@ Host 插件并刷新 Client。只刷新 Client 时旧 Host 不支持监听，仍
 Host 使用 Node 文件监听；无事件支持的文件系统依赖兜底。事件等待每 5 秒结束以满足
 Desktop drain，不代表每 5 秒执行 Git。可运行 node --test test/git-change-watch.test.mjs
 和 test/client-worktree-popover.test.mjs 验证事件与关闭生命周期。
+
+2026-11-14 在 macOS / Node v26.3.1 排查首次文件事件偶发丢失：原生监听测试
+4 路并发运行 20 次有 7 次漏收首次创建；去掉插件，仅连续注册多个 fs.watch 后立即写入，
+30 次有 11 次漏收。只增加注册后间隔时，1ms 为 1/30、20ms 和 100ms 为 0/30。
+这是原生启动窗口的实测证据，不是插件过滤或 5 秒等待超时；固定等待不构成 ready 契约。
+[Node 官方说明](https://nodejs.org/api/fs.html#caveats) 也明确 fs.watch 的平台限制。
+Host 因此在注册后 1 秒补发一次校准，而不是延长测试超时或恢复高频 Git 轮询；
+常态事件丢失仍由 60 秒兜底覆盖。回归用静默 watcher 确认丢事件时校准、只执行一次、
+关闭前取消；真实文件事件测试继续保留 5 秒断言期限。

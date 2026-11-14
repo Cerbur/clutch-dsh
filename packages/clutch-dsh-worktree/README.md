@@ -548,8 +548,10 @@ button; conversation clicks keep it visible, while Escape saves the closed prefe
 Dashboard temporarily hides the panel without changing that preference; returning to the
 conversation restores it. Refresh switches the icon to a loading indicator until both Workspace and Git
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
-with a 60-second polling fallback. Closing it or opening Dashboard releases the listeners
-and stops the timer. Changes during pending reads are coalesced into one follow-up refresh.
+with a 60-second polling fallback and a one-time reconciliation for changes missed while
+native watchers are starting. Closing it or opening Dashboard releases the listeners and
+cancels both the startup reconciliation and the polling timer.
+Changes during pending reads are coalesced into one follow-up refresh.
 Shared tool notifications reuse the same Workspace read. After closing or entering Dashboard,
 late responses cannot start further popover reads.
 Automatic and manual refresh preserve ready content while
