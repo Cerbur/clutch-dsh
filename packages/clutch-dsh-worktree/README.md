@@ -520,6 +520,34 @@ The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bu
 If DSH creates a Session but binding fails, the Session is kept. The Worktree view exposes retry
 or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 
+### Current Session Worktree panel
+
+Use **Worktree panel** in the Session header to open a compact panel without leaving the conversation.
+The public DSH utilities slot places it before the native More menu; the plugin cannot guarantee
+placement immediately beside the right-sidebar toggle. The existing Dashboard shortcut remains available.
+
+The panel is a small glass surface inset 12px from the Session’s right edge and 12px below
+its header and view tabs. It follows Session resizing and sidebar changes, with a
+small, regular-weight Worktree title and a refresh icon aligned right. Refresh and baseline-edit
+icons align with the metric values; the title shares the comparison heading’s typography.
+Long names truncate with an ellipsis; hover or keyboard-focus a truncated name to read
+its full text in a wrapping tooltip. Short baseline names retain their space.
+Uncommitted changes come first; a divider separates the `worktree → baseline` heading and its ahead/behind
+and committed-change rows. Paths and sidebar buttons are omitted.
+Local Sessions show only uncommitted changes. For managed Worktrees, the pencil at the
+right of the comparison heading opens the existing baseline picker, with branch loading,
+Fetch and conflict-checked saving. Click a Git row for the full Git & Changes view.
+
+The header button toggles the panel and highlights while open. It defaults to open and saves
+the preference in browser localStorage across reloads and Session changes. There is no close
+button; conversation clicks keep it visible, while Escape saves the closed preference.
+Dashboard temporarily hides the panel without changing that preference; returning to the
+conversation restores it. Refresh switches the icon to a loading indicator until both Workspace and Git
+reads finish, preserving ready content. Initial loading fills fixed-size placeholders in the
+same layout without loading text or changing the panel size. Main, unbound, detached,
+missing-directory and failed reads use the reserved status area or refresh-icon tooltip.
+Synchronization and Session creation remain in the full Dashboard.
+
 ### Open the Worktree Dashboard
 
 Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon

@@ -1071,10 +1071,13 @@ test('steer dock borrows only its scoped native Conversation source without RPC 
 
 test('registers a quick Dashboard utility before the native More action', async () => {
   const fixture = await loadClientEntry();
-  const header = fixture.registrationsBySlot.get('conversation.session.header.utilities');
+  const header = fixture.registrationsById.get('clutch-dsh-worktree-dashboard-header');
   assert.ok(header);
   assert.equal(header.options.id, 'clutch-dsh-worktree-dashboard-header');
   assert.equal(header.options.order, -10);
+  const popover = fixture.registrationsById.get('clutch-dsh-worktree-popover');
+  assert.equal(popover.options.name, 'conversation.session.header.utilities');
+  assert.equal(popover.options.order, -9);
 
   const injected = header.options.inject();
   const overlay = fixture.registrationsBySlot.get('shell.overlay').options.inject();
@@ -1103,6 +1106,13 @@ test('registers a quick Dashboard utility before the native More action', async 
     worktreeId: 'worktree-one',
     sessionId: 'session-current',
   });
+  const compact = popover.options.inject();
+  assert.strictEqual(compact.viewReader, overlay.viewReader);
+  assert.strictEqual(compact.manager, overlay.manager);
+  compact.expand('session-current', 'git', 'workspace-current', 'worktree-one');
+  assert.equal(overlay.dashboardStore.getSnapshot().initialTab, 'git');
+  compact.expand('session-current', 'overview', 'workspace-current', 'wrong-target');
+  assert.equal(overlay.dashboardStore.getSnapshot().initialTab, 'git', 'mismatched identity cannot navigate');
 
   for (const dispose of fixture.disposers.reverse()) dispose();
 });
@@ -1351,7 +1361,8 @@ test('disposes Client slot contributions through a real Cordis Client context', 
       { workspaceId: 'ws_native', sessionIds: ['s_virtual'] },
     ]);
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
-    assert.equal(ctx.slots.entries('conversation.session.header.utilities').length, 1);
+    assert.deepEqual(ctx.slots.entries('conversation.session.header.utilities').map((entry) => entry.options.id).sort(),
+      ['clutch-dsh-worktree-dashboard-header', 'clutch-dsh-worktree-popover']);
     assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
     assert.equal(ctx.slots.entries('settings.section').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 3);

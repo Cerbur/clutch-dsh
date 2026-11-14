@@ -433,6 +433,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         <WorktreeDashboard
           key={`${dashboardRecord.workspaceId}:${dashboardRecord.worktreeId}`}
           manager={props.manager}
+          initialTab={dashboard?.initialTab}
           record={dashboardRecord}
           worktrees={dashboardView?.worktrees ?? []}
           mainRecord={dashboardMainRecord}

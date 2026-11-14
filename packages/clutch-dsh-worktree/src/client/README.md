@@ -917,3 +917,52 @@ notes are combined in the tool-selection explanation before the individual switc
 is off, the entire selection section is absent; toggling it back on retains the saved selection.
 Writes use expected values, disable concurrent edits, and preserve saved content on failure.
 Retry reloads the latest selection. Configuration changes do not invalidate Workspace projections.
+
+
+## Current Session popover
+
+`dashboard/WorktreePopover.tsx` registers through the public
+`conversation.session.header.utilities` slot (before native More, not a guaranteed
+right-sidebar-toggle sibling). It owns only visibility, focus and a scoped read lifetime.
+`popover-target.ts` selects the current Session's same-Workspace active binding;
+Main requires an explicit Main context. Missing directories and detached relations
+never fall back to a different checkout.
+
+The popover uses the entry-owned ViewReader and tool-change subscription. Pending
+same-target reads preserve content; generation guards discard stale completions.
+The panel has an independent title/three-row layout, reusing the Git overview
+reader, metric values and baseline editor without mounting compact Dashboard.
+The native MenuSurface supplies the same glass material as the activity panel, including
+reduced-transparency preferences; the panel adds rounded corners and a prominent shadow.
+The header toggle owns visibility; conversation pointer/focus changes keep it open.
+Placement uses the triggering utility's native conversation header, verified by its
+`data-conversation-header-leading` marker. Its right edge and bottom (including view tabs)
+define a 12px inset; ResizeObserver and window resize/scroll keep the panel inside the Session
+column as sidebars and viewport dimensions change. Missing geometry hides the panel;
+neither the trigger coordinates nor private native classes are placement anchors.
+The open preference defaults to true and persists in localStorage across Session changes.
+Automatic opening never takes focus. Escape saves the closed preference. The panel subscribes
+to the entry-owned Dashboard selection store: any open Dashboard suppresses the portal without
+overwriting the preference. Only the reload icon remains in the header, switching to
+the native loading icon for the entire Workspace-plus-Git read. The title uses regular 12px
+text; uncommitted changes precede a divider, then the same-size worktree-to-baseline heading,
+ahead/behind and committed changes. Both headings share the same typography class.
+Trailing refresh/edit controls share
+a 28px border-box, 14px glyph and 1px row inset (22px glyph inset including panel padding).
+These constants and the alignment contract live in the popover CSS; its class names are
+prefixed to avoid collisions in the package-wide CSS namespace.
+Title, Worktree name and baseline name use native clipped-only, body-portaled Tooltips
+with a 360px width cap and keyboard focus support. Baseline text retains its natural
+width up to half the names area; the Worktree name takes the remaining space, while
+the arrow and pencil keep their fixed sizes.
+Initial reads use stationary placeholders inside these
+fixed-height rows. Refresh keeps ready values; no loading paragraph or sidebar action is mounted.
+Local uses only the working-tree row and reads live files directly without comparison history.
+Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
+the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving
+updates the current projection and invalidates only its Workspace context.
+Git rows navigate to the full Dashboard Git tab.
+Git overview refreshes retain same-baseline ready metrics; changed baselines cannot reuse
+comparison evidence.
+
+No additional Connection adapter, Git transport or persisted projection is introduced.

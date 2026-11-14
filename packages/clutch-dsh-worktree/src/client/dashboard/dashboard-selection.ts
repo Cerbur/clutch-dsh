@@ -2,6 +2,7 @@ import type { WorktreeRecord, WorkspaceCheckout, GitCheckoutHead } from '../../c
 
 /** Navigation identity only; an undefined Session id denotes a page-level Dashboard. */
 export interface DashboardSelection {
+  readonly initialTab?: 'overview' | 'git';
   readonly workspaceId: string;
   readonly worktreeId: string;
   readonly sessionId: string | undefined;

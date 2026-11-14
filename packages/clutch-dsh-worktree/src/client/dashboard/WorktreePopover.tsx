@@ -1,0 +1,218 @@
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
+import type { DashboardSelection } from './dashboard-selection.js';
+import { createPortal } from 'react-dom';
+import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
+import type { WorktreeRecord, WorktreeManager } from '../../contract/index.js';
+import type { WorktreeToolChange } from '../../contract/worktree-tool-changes.js';
+import type { WorktreeViewReader } from '../view/worktree-view-read.js';
+import type { DashboardHeaderActionProps } from './DashboardHeaderAction.js';
+import { IconBranchOutline16, IconLoadingOutline16, IconRefreshOutline16 } from '../dsh-icons.js';
+import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
+import { selectPopoverTarget, type PopoverTarget } from './popover-target.js';
+import { observePopoverPlacement } from './popover-placement.js';
+import { WorktreeBaselineEditor } from './WorktreeDashboard.js';
+import styles from './worktree-popover.css';
+
+export interface WorktreePopoverServices {
+  readonly dashboardStore: SnapshotStore<DashboardSelection | undefined>;
+  readonly manager: WorktreeManager;
+  readonly viewReader: WorktreeViewReader;
+  readonly subscribeChanges: (listener: (change: WorktreeToolChange) => void) => () => void;
+  readonly refreshContext: (workspaceId: string) => Promise<void>;
+  readonly createSession: (record: WorktreeRecord, isCurrent: () => boolean) => Promise<unknown>;
+  readonly openSession: (workspaceId: string, sessionId: string) => void;
+  readonly expand: (sessionId: string, tab: 'overview' | 'git', workspaceId: string, worktreeId: string) => void;
+}
+export type WorktreePopoverProps = DashboardHeaderActionProps & WorktreePopoverServices;
+
+const OPEN_KEY = 'clutch-dsh-worktree.popover-open';
+function readOpenPreference() {
+  try { return window.localStorage.getItem(OPEN_KEY) !== 'false'; } catch { return true; }
+}
+
+export function WorktreePopover(props: WorktreePopoverProps) {
+  const context = props.useWorktreeContext((value) => value);
+  const [opened, setOpened] = useState(readOpenPreference);
+  const dashboard = useSyncExternalStore(props.dashboardStore.subscribe, props.dashboardStore.getSnapshot);
+  const focusRequested = useRef(false);
+  const [placement, setPlacement] = useState<CSSProperties>();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const visible = opened && dashboard === undefined;
+  const saveOpen = (value: boolean) => {
+    setOpened(value);
+    try { window.localStorage.setItem(OPEN_KEY, String(value)); } catch { /* Keep the in-memory preference. */ }
+  };
+  const close = () => saveOpen(false);
+  useLayoutEffect(() => {
+    if (!visible || !trigger.current) return;
+    return observePopoverPlacement(trigger.current, setPlacement);
+  }, [visible, props.sessionId]);
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key === OPEN_KEY || event.key === null) setOpened(readOpenPreference());
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+  useEffect(() => {
+    if (!visible) return;
+    if (focusRequested.current) panel.current?.focus({ preventScroll: true });
+    focusRequested.current = false;
+    const document = trigger.current!.ownerDocument;
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented ||
+        document.querySelector('[role="dialog"]:not([data-worktree-popover])')) return;
+      event.preventDefault(); close(); trigger.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [visible]);
+  return <>
+    <Tooltip label={props.t('popover.title')} side="bottom" delayMs={500} disabled={visible}>
+      <button type="button" ref={trigger} className={styles.popoverTrigger}
+        aria-label={props.t('popover.title')} aria-haspopup="dialog" aria-expanded={visible}
+        aria-pressed={visible} aria-controls={visible ? id : undefined}
+        onClick={() => { focusRequested.current = !visible; saveOpen(!visible); }}>
+        <IconBranchOutline16 />
+      </button>
+    </Tooltip>
+    {visible && createPortal(<MenuSurface ref={panel} id={id} role="dialog" tabIndex={-1}
+      data-worktree-popover aria-label={props.t('popover.title')} className={styles.popoverPanel}
+      style={placement ?? { visibility: 'hidden' }}>
+      <PopoverContent key={JSON.stringify([props.sessionId, context.workspaceId, context.value.kind,
+        context.value.kind === 'worktree' ? context.value.worktreeId : undefined])} {...props}
+        workspaceId={context.sessionId === props.sessionId ? context.workspaceId : undefined}
+        mainConfirmed={context.status === 'ready' && context.value.kind === 'main'}
+        workspaceTitle={context.workspaceTitle ?? ''} close={close} />
+    </MenuSurface>, document.body)}
+  </>;
+}
+
+function PopoverContent(props: WorktreePopoverProps & {
+  workspaceId?: string; mainConfirmed: boolean; workspaceTitle: string; close: () => void;
+}) {
+  const { manager, viewReader, workspaceId, sessionId, t } = props;
+  const [target, setTarget] = useState<PopoverTarget>({ kind: 'loading' });
+  const [refreshing, setRefreshing] = useState(true);
+  const [revision, setRevision] = useState(0);
+  const [readFailed, setReadFailed] = useState(false);
+  const alive = useRef(false);
+  const generation = useRef(0);
+  const refresh = async (invalidate = false) => {
+    if (!workspaceId) { setTarget({ kind: 'unbound' }); setRefreshing(false); return; }
+    const ticket = ++generation.current;
+    setRefreshing(true);
+    setReadFailed(false);
+    if (invalidate) viewReader.invalidate(workspaceId);
+    try {
+      const view = await viewReader.read(workspaceId, { current: true });
+      if (alive.current && ticket === generation.current) {
+        setTarget(selectPopoverTarget(view, String(sessionId), props.mainConfirmed));
+        setRevision((value) => value + 1);
+      }
+    } catch {
+      if (alive.current && ticket === generation.current) {
+        setReadFailed(true);
+        setTarget((previous) => previous.kind === 'worktree' ? previous : { kind: 'failed' });
+      }
+    } finally {
+      if (alive.current && ticket === generation.current) setRefreshing(false);
+    }
+  };
+  useEffect(() => {
+    alive.current = true;
+    void refresh(true);
+    const unsubscribe = props.subscribeChanges((change) => {
+      if (change.workspaceId === workspaceId) void refresh();
+    });
+    return () => { alive.current = false; generation.current++; unsubscribe(); };
+  }, [manager, viewReader, workspaceId, sessionId, props.subscribeChanges]);
+  const expand = () => {
+    if (!workspaceId || (target.kind !== 'worktree' && target.kind !== 'main')) return;
+    props.expand(String(sessionId), 'git', workspaceId, target.kind === 'worktree' ? target.record.worktreeId : 'main');
+  };
+  const record = target.kind === 'worktree' ? target.record : undefined;
+  const state = useWorktreeGitOverview({
+    manager: record || target.kind === 'main' ? manager : undefined,
+    workspaceId: workspaceId ?? '', worktreeId: record?.worktreeId ?? 'main',
+    defaultBaselineBranch: record?.baseBranch,
+    currentBranch: record?.currentBranch === undefined ? record?.branch : record.currentBranch ?? undefined,
+    capturedBaseline: record?.baseCommit !== undefined, refreshKey: revision,
+    workingTreeOnly: props.mainConfirmed,
+  });
+  const busy = refreshing || state.status === 'loading' || (state.status === 'ready' && state.refreshing === true);
+  const title = record?.branch ?? (target.kind === 'main' ? props.workspaceTitle : undefined);
+  const branch = record?.currentHead?.name ?? (record?.currentBranch === null
+    ? t('dashboard.detached') : record?.currentBranch ?? record?.branch);
+  const baseline = record?.baseBranch?.replace(/^refs\/(heads|remotes)\//u, '') ?? record?.baseCommit?.slice(0, 8) ?? '—';
+  const failure = readFailed || state.status === 'error';
+  const notice = failure ? t('popover.failed') : target.kind !== 'worktree' && target.kind !== 'loading'
+    ? t(`popover.${target.kind}`) : state.status === 'unavailable' && record ? t('popover.noComparison') : undefined;
+  const skeleton = (className = styles.popoverValuePlaceholder) =>
+    <span className={className} aria-hidden="true" data-popover-placeholder />;
+  const metricRow = (metric: 'workingTree' | 'aheadBehind' | 'committed') => <button
+    type="button" className={styles.popoverRow} data-popover-metric={metric} onClick={expand}
+    disabled={!record && target.kind !== 'main'} title={t('dashboard.git.title')}>
+    <span>{t(metric === 'committed' ? 'dashboard.committedChanges' : `dashboard.${metric}`)}</span>
+    <span className={styles.popoverValue}>
+      {(record || target.kind === 'main') && state.status === 'ready' ? <WorktreeGitOverviewValue state={state} metric={metric} t={t} />
+        : busy ? skeleton() : <span title={notice}>—</span>}
+    </span>
+  </button>;
+  return <div data-worktree-summary={record?.worktreeId} aria-busy={busy}>
+    <div className={styles.popoverHeading}>
+      <Tooltip label={title ?? ''} onlyWhenClipped portal side="bottom" maxWidth={360} delayMs={400} disabled={!title}>
+        <span className={`${styles.popoverTitle} ${styles.popoverLabel}`} tabIndex={title ? 0 : undefined}>
+          {title ?? (busy ? skeleton(styles.popoverTitlePlaceholder) : t('popover.title'))}
+        </span>
+      </Tooltip>
+      <button type="button" className={styles.popoverIconButton} disabled={busy}
+        aria-busy={busy} data-popover-refresh
+        aria-label={failure ? t('popover.failed') : t('popover.refresh')}
+        title={failure ? t('popover.failed') : t('popover.refresh')} onClick={() => void refresh(true)}>
+        {busy ? <IconLoadingOutline16 /> : <IconRefreshOutline16 />}
+      </button>
+    </div>
+    {metricRow('workingTree')}
+    {!props.mainConfirmed && <>
+    <div className={styles.popoverDivider} role="separator" />
+    <div className={`${styles.popoverComparison} ${styles.popoverLabel}`} title={notice}>
+      {branch ? <span className={styles.popoverComparisonNames}>
+        <Tooltip label={branch} onlyWhenClipped portal side="bottom" maxWidth={360} delayMs={400}>
+          <span className={styles.popoverBranchName} tabIndex={0}>{branch}</span>
+        </Tooltip>
+        <span className={styles.popoverComparisonArrow} aria-hidden="true">→</span>
+        <Tooltip label={baseline} onlyWhenClipped portal side="bottom" maxWidth={360} delayMs={400}>
+          <span className={styles.popoverBaselineName} tabIndex={0}>{baseline}</span>
+        </Tooltip>
+      </span>
+        : busy ? skeleton(styles.popoverTitlePlaceholder) : <span role="status">{notice}</span>}
+      {record && <span className={styles.popoverEditBaseline}>
+        <WorktreeBaselineEditor iconOnly value={record.baseBranch} branches={[]} loading={false}
+          currentBranch={record.currentBranch === null ? undefined : record.currentBranch ?? record.branch}
+          disabled={busy || record.status !== 'active' || (record.health !== undefined && record.health !== 'ready')}
+          t={t} context={record.branch}
+          onLoad={() => manager.listBranches({ workspaceId: record.workspaceId })}
+          onFetch={manager.fetchRemoteBranches ? () => manager.fetchRemoteBranches!({ workspaceId: record.workspaceId }) : undefined}
+          onSave={async (baseBranch, expectedBaseBranch) => {
+            const saved = await manager.updateWorktreeBaseBranch({
+              workspaceId: record.workspaceId, worktreeId: record.worktreeId, baseBranch, expectedBaseBranch,
+            });
+            if (alive.current) {
+              setTarget((previous) => previous.kind === 'worktree'
+                ? { kind: 'worktree', record: { ...previous.record, baseBranch: saved } } : previous);
+              setRevision((value) => value + 1);
+            }
+            await props.refreshContext(record.workspaceId);
+            return saved;
+          }} />
+      </span>}
+    </div>
+    {metricRow('aheadBehind')}
+    {metricRow('committed')}
+    </>}
+  </div>;
+}
