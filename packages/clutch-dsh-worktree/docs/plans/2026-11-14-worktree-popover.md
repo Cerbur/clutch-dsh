@@ -24,7 +24,9 @@ native More. Exact adjacency to the sidebar toggle is not exposed by the DSH slo
 - Keep Session creation in Dashboard. Reuse its baseline editor via a right-aligned pencil
   on the Worktree comparison heading. Local shows only live uncommitted changes.
 - Preserve same-target ready content during refresh, invalidate only its Workspace,
-  reject stale completion and hide sync unless current comparison proves behind > 0.
+  reject stale completion. Ahead/behind opens the shared sync dialog instead of Dashboard;
+  require a healthy active Worktree, named baseline and fresh readable comparison.
+  This row follows the full Dashboard action without a behind-positive gate.
 - Position 12px inside the Session right edge and 12px below the native conversation
   header including view tabs, verified with its public leading marker. Observe header
   resize and viewport changes; do not anchor placement to the trigger button.
@@ -47,4 +49,5 @@ change the running instance's installation configuration to perform it.
 
 The user requested a minimal Codex-style floating panel on 2026-11-14. This supersedes
 the initial compact Dashboard design. A later revision adds the shared baseline editor;
-Session creation and synchronization remain in the full Dashboard.
+Session creation remains in the full Dashboard. The ahead/behind row now opens the shared
+baseline-sync dialog, including its retry identity and partial-failure handling.

@@ -88,6 +88,8 @@ test('production popover toggles accessibly, stays open during conversation, and
   let expanded;
   let editor;
   let savedInput;
+  let syncProps;
+  let syncInput;
   let dashboard;
   let dashboardListener;
   const dashboardStore = {
@@ -110,7 +112,13 @@ test('production popover toggles accessibly, stays open during conversation, and
     './popover-target.js': selection,
     './popover-placement.js': placement,
     './worktree-popover.css': { default: {} },
-    './WorktreeDashboard.js': { WorktreeBaselineEditor: (props) => {
+    './WorktreeDashboard.js': { useWorktreeBaselineSync: (props) => {
+      syncProps = props;
+      const [syncOpen, setSyncOpen] = React.useState(false);
+      return { setSyncOpen, syncPending: false, syncDialog: syncOpen
+        ? React.createElement('div', { role: 'dialog', 'data-sync-dialog': true },
+          React.createElement('button', { onClick: () => setSyncOpen(false) }, 'cancel')) : null };
+    }, WorktreeBaselineEditor: (props) => {
       editor = props;
       return React.createElement('button', { 'data-baseline-pencil': true });
     } },
@@ -123,7 +131,10 @@ test('production popover toggles accessibly, stays open during conversation, and
     value: { kind: 'worktree', workspaceId: 'w', worktreeId: 'tree' } };
   const props = { sessionId: 's', useWorktreeContext: (select) => select(context), t: (key) => key,
     dashboardStore,
-    manager: { updateWorktreeBaseBranch: async (input) => { savedInput = input; return input.baseBranch; } },
+    manager: {
+      updateWorktreeBaseBranch: async (input) => { savedInput = input; return input.baseBranch; },
+      syncWorktreeBaseline: async (input) => { syncInput = input; return { status: 'dispatched', sessionId: 'sync-session' }; },
+    },
     viewReader: { invalidate: (id) => invalidations.push(id), read: () => slow
       ? new Promise((resolve) => { resolveRead = resolve; }) : Promise.resolve(view) },
     subscribeChanges: (fn) => { listener = fn; return () => { listener = undefined; }; },
@@ -151,8 +162,19 @@ test('production popover toggles accessibly, stays open during conversation, and
     slow = false;
     assert.ok(document.querySelector('[data-reload-icon]'));
     assert.equal(document.querySelectorAll('[data-popover-placeholder]').length, 0);
-    assert.deepEqual([...document.querySelectorAll('[data-popover-metric]')], rowElements,
-      'ready values fill existing rows rather than replacing the loading layout');
+    const readyRows = [...document.querySelectorAll('[data-popover-metric]')];
+    assert.deepEqual(rows(), ['workingTree', 'aheadBehind', 'committed'], 'sync action keeps the three-row layout');
+    assert.equal(readyRows[0], rowElements[0]);
+    assert.equal(readyRows[2], rowElements[2]);
+    await React.act(async () => document.querySelector('[data-popover-metric="aheadBehind"]').click());
+    assert.ok(document.querySelector('[data-sync-dialog]'));
+    assert.equal(expanded, undefined, 'ahead/behind opens sync without navigating to Dashboard');
+    assert.equal(syncInput, undefined, 'opening the dialog does not dispatch a task');
+    await React.act(async () => syncProps.onSyncBaseline('merge', 'main', 'sync-request'));
+    assert.deepEqual(syncInput, {
+      workspaceId: 'w', worktreeId: 'tree', strategy: 'merge', baseBranch: 'main', requestId: 'sync-request',
+    });
+    await React.act(async () => document.querySelector('[data-sync-dialog] button').click());
     assert.ok(document.querySelector('[role="dialog"]').textContent.includes('topic→main'));
     assert.ok(document.querySelector('[data-worktree-summary="tree"]'));
     assert.equal(document.querySelector('[aria-label="dialog.close"]'), null);
@@ -168,6 +190,8 @@ test('production popover toggles accessibly, stays open during conversation, and
     await React.act(async () => document.querySelector('[data-popover-refresh]').click());
     assert.ok(document.querySelector('[data-loading-icon]'));
     assert.equal(document.querySelector('[data-popover-refresh]').disabled, true);
+    assert.equal(document.querySelector('[data-popover-metric="aheadBehind"]').disabled, true,
+      'refreshing comparison cannot start synchronization');
     assert.ok(document.querySelector('[data-worktree-summary="tree"]'), 'ready content stays while reading');
     assert.equal(document.querySelectorAll('[data-popover-placeholder]').length, 0, 'refresh retains ready metrics');
     gitState = { status: 'ready', refreshing: true, history: {} };

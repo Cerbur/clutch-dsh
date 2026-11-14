@@ -838,6 +838,8 @@ Surface 生命周期和 pending；busy token 属于具体操作，旧 finally �
 
 
 Dashboard 同步基线通过 `syncWorktreeBaseline` Remote 请求创建原生 Agent 任务，会话执行 Git，
+Session 浮窗的领先/落后行与 Dashboard 共用 `useWorktreeBaselineSync` 弹窗与请求生命周期；
+点击仅打开选择器，确认后调用同一 Remote，沿用请求幂等身份、部分失败诊断和过期导航门禁。
 插件不执行 merge/rebase 或修改业务文件。Host 复用 `src/tool/dispatch-session.ts` 的原生创建、绑定、
 初始模型、标题与 prompt admission；Agent span 工具使用同一函数并保留其 reporting prepare 步骤。
 UI 选择 merge/rebase，Host 校验 active/healthy/current branch、CAS 基线事实和枚举出的准确本地/远端 ref，

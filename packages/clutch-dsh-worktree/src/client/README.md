@@ -961,7 +961,12 @@ Local uses only the working-tree row and reads live files directly without compa
 Managed Worktrees reuse `WorktreeBaselineEditor` in icon-only mode on the comparison heading;
 the same modal owns loading, Fetch, expected-baseline validation and failure handling. Saving
 updates the current projection and invalidates only its Workspace context.
-Git rows navigate to the full Dashboard Git tab.
+Committed/uncommitted rows navigate to the full Dashboard Git tab. Ahead/behind opens
+the shared `useWorktreeBaselineSync` dialog directly, retaining strategy selection,
+idempotent request identity, partial-failure diagnostics and stale-navigation guards.
+It requires an active healthy record, a named baseline and a fresh readable comparison;
+refreshing/failed reads disable both opening and confirmation. No behind-positive gate
+is required for this row, matching the full Dashboard sync action.
 Git overview refreshes retain same-baseline ready metrics; changed baselines cannot reuse
 comparison evidence.
 

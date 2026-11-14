@@ -536,7 +536,11 @@ Uncommitted changes come first; a divider separates the `worktree → baseline` 
 and committed-change rows. Paths and sidebar buttons are omitted.
 Local Sessions show only uncommitted changes. For managed Worktrees, the pencil at the
 right of the comparison heading opens the existing baseline picker, with branch loading,
-Fetch and conflict-checked saving. Click a Git row for the full Git & Changes view.
+Fetch and conflict-checked saving. Click **Ahead / Behind** to open the **Sync with Base**
+dialog and choose Rebase or Merge. A healthy active Worktree, saved named baseline and
+current readable comparison are required; refreshing or unavailable comparisons disable
+this action. Clicking only opens the dialog; confirming creates the native Agent task.
+The committed and uncommitted change rows open the full Git & Changes view.
 
 The header button toggles the panel and highlights while open. It defaults to open and saves
 the preference in browser localStorage across reloads and Session changes. There is no close
@@ -546,7 +550,7 @@ conversation restores it. Refresh switches the icon to a loading indicator until
 reads finish, preserving ready content. Initial loading fills fixed-size placeholders in the
 same layout without loading text or changing the panel size. Main, unbound, detached,
 missing-directory and failed reads use the reserved status area or refresh-icon tooltip.
-Synchronization and Session creation remain in the full Dashboard.
+Session creation remains in the full Dashboard.
 
 ### Open the Worktree Dashboard
 

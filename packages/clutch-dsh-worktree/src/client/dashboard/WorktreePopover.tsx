@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { DashboardSelection } from './dashboard-selection.js';
 import { createPortal } from 'react-dom';
@@ -11,7 +11,7 @@ import { IconBranchOutline16, IconLoadingOutline16, IconRefreshOutline16 } from 
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import { selectPopoverTarget, type PopoverTarget } from './popover-target.js';
 import { observePopoverPlacement } from './popover-placement.js';
-import { WorktreeBaselineEditor } from './WorktreeDashboard.js';
+import { WorktreeBaselineEditor, useWorktreeBaselineSync } from './WorktreeDashboard.js';
 import styles from './worktree-popover.css';
 
 export interface WorktreePopoverServices {
@@ -153,15 +153,25 @@ function PopoverContent(props: WorktreePopoverProps & {
     ? t(`popover.${target.kind}`) : state.status === 'unavailable' && record ? t('popover.noComparison') : undefined;
   const skeleton = (className = styles.popoverValuePlaceholder) =>
     <span className={className} aria-hidden="true" data-popover-placeholder />;
-  const metricRow = (metric: 'workingTree' | 'aheadBehind' | 'committed') => <button
-    type="button" className={styles.popoverRow} data-popover-metric={metric} onClick={expand}
-    disabled={!record && target.kind !== 'main'} title={t('dashboard.git.title')}>
+  const metricRow = (metric: 'workingTree' | 'aheadBehind' | 'committed') => {
+    const content = <>
     <span>{t(metric === 'committed' ? 'dashboard.committedChanges' : `dashboard.${metric}`)}</span>
     <span className={styles.popoverValue}>
       {(record || target.kind === 'main') && state.status === 'ready' ? <WorktreeGitOverviewValue state={state} metric={metric} t={t} />
         : busy ? skeleton() : <span title={notice}>—</span>}
     </span>
-  </button>;
+    </>;
+    if (metric === 'aheadBehind') return record ? <PopoverSyncRow
+      record={record} services={props}
+      disabled={busy || failure || state.status !== 'ready' || state.history.unavailableReason !== undefined}>
+      {content}
+    </PopoverSyncRow> : <button type="button" className={styles.popoverRow}
+      data-popover-metric={metric} disabled>{content}</button>;
+    return <button type="button" className={styles.popoverRow} data-popover-metric={metric}
+      onClick={expand} disabled={!record && target.kind !== 'main'} title={t('dashboard.git.title')}>
+      {content}
+    </button>;
+  };
   return <div data-worktree-summary={record?.worktreeId} aria-busy={busy}>
     <div className={styles.popoverHeading}>
       <Tooltip label={title ?? ''} onlyWhenClipped portal side="bottom" maxWidth={360} delayMs={400} disabled={!title}>
@@ -215,4 +225,35 @@ function PopoverContent(props: WorktreePopoverProps & {
     {metricRow('committed')}
     </>}
   </div>;
+}
+
+function PopoverSyncRow({ record, services, disabled, children }: {
+  record: WorktreeRecord; services: WorktreePopoverProps; disabled: boolean; children: ReactNode;
+}) {
+  const { manager, t } = services;
+  const unavailable = disabled || !record.baseBranch || !manager.syncWorktreeBaseline ||
+    record.status !== 'active' || (record.health !== undefined && record.health !== 'ready');
+  const { setSyncOpen, syncPending, syncDialog } = useWorktreeBaselineSync({
+    record, displayedBaseline: record.baseBranch, manager, t, disabled: unavailable,
+    onOpenSession: (sessionId) => services.openSession(record.workspaceId, sessionId),
+    onSyncBaseline: async (strategy, baseBranch, requestId) => {
+      try {
+        return await manager.syncWorktreeBaseline!({
+          workspaceId: record.workspaceId, worktreeId: record.worktreeId, strategy, baseBranch, requestId,
+        });
+      } finally {
+        // Refresh only this Workspace; a failed recovery read must not turn an
+        // already-dispatched task into a retryable dispatch error.
+        void services.refreshContext(record.workspaceId).catch(() => {});
+      }
+    },
+  });
+  return <>
+    <button type="button" className={styles.popoverRow} data-popover-metric="aheadBehind"
+      disabled={unavailable || syncPending} title={t('dashboard.action.sync')}
+      aria-haspopup="dialog" onClick={() => setSyncOpen(true)}>
+      {children}
+    </button>
+    {syncDialog}
+  </>;
 }
