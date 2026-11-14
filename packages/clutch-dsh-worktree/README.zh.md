@@ -562,6 +562,19 @@ Dashboard 的 **Open in ...** 分割按钮保留插件自己的按钮 UI，但�
 
 ### 使用 Git 与变更
 
+点击 Git 与变更标题栏的**打开原生本地变更**，在 DSH 右侧栏打开所选 Worktree（或 Local/Main）的
+**本地变更**视图。优先复用原生运行目录匹配的当前 Session，包括空白新会话，无需先发送消息。
+没有匹配的可用 Session 时，请从此 Worktree 的 Dashboard 新建会话后重试；若需要打开已有的匹配
+Session，入口会先切换会话，并提示加载完成后再次点击；切换期间保留 Dashboard 和当前 Git 页签。
+目录核验失败、Session 切换尚未完成或原生
+能力缺失时会显示反馈，不会打开其他目录的 Diff。此入口要求启用 DSH 原生 Forge 和右侧栏插件，
+并加载更新后的 Worktree Host；重新构建此插件后请重载 Host。
+
+**请在原生视图中选择对比分支。**原生导航 API 无法接收 Dashboard Base 或 Git Tab 的基线。
+原生范围和基线选择由 DSH 管理；重新打开时可能保留已有页签的选择。Workspace 位于仓库子目录时，
+原生视图比较该目录所在的整个 checkout。Dashboard 自身的 Git 视图仍为只读；原生视图中的操作
+遵循 DSH 自身的行为和权限。
+
 从受管理 Worktree 或 Main Dashboard 打开 **Git 与变更** Tab。Main 直接读取当前 Workspace 根目录 HEAD 的
 commit history；当根目录存在 tracked、staged、unstaged 或 untracked 改动时，顶部会加入**未提交的改动** entry。
 基线选择器默认**无**，展示 HEAD history，不显示总提交数。选择本地或已获取的远端对比分支后，

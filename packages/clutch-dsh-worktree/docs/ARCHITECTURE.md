@@ -493,6 +493,21 @@ generation；StrictMode effect replay 淘汰旧请求并由 replay 的 picker ef
 
 ### Git Dashboard 只读投影
 
+Git 页原生本地变更入口（2026-11-14）只负责导航，不创建第二个 Diff 数据源。Client 读取当前
+Session 的原生 `workingDirectory` projection，包含未发消息的空白 Session；列表 `cwd` 仍为
+header fact，不能代替运行目录。`worktreeManager/canOpenNativeChanges` 在现有 `/api` Connection
+上执行只读核验：原生 Workspace 成员关系、最新 Dashboard 目标路径/可用状态与双方目录物理身份，
+不写 Sidecar、Session 或绑定。await 后重查当前 Session、cwd、openState 与 rightbar mounted
+身份，选择变化或 Dashboard 关闭会撤销迟到结果。需要切换时由 Surface 先登记 pending Dashboard
+Session 身份，再调用原生导航并提示就绪后重试。同一目标的 pending 身份在原生选择 commit 的
+render 阶段就参与 record 解析，不等待 effect，从而保留 Dashboard 与 Git 页签而不卸载。
+关闭、模式变化和无关 Session 切换仍会撤销 pending 导航；原生导航失败会清除其 pending 身份。
+原生注册缺失或右侧栏尚未 adopted 时显式反馈，绝不借 URI 中的 Session ID 假设已切换成功。
+资源使用 `forge-changes/<编码 Session ID>/local`，显式指定原生 kind 和 sidebar destination；
+它没有 Base 参数，原生范围/基线独立于 Dashboard，子目录 Session 由原生 Forge 解析到整个 checkout。
+这扩展历史 Git Dashboard 计划的插件内只读呈现，未修改 DSH 核心，详细来源见
+[native Diff plan](plans/2026-11-14-dashboard-native-diff.md)。
+
 Git Dashboard 是在现有 Dashboard overlay 中按需加载的 browser projection，不是新的数据源。
 Git Tab 首次挂载时，Main 直接读取 Workspace root `HEAD` 的有界 commit history，并按需读取 root 的 changed-path projection；它不读取 branch 列表、
 不使用 Worktree 基线，但会在存在 tracked/staged/unstaged/untracked 改动时投影 working-tree entry。对于受管理 Worktree，挂载时直接读取 history，不预加载分支列表；

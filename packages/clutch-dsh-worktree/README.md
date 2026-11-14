@@ -659,6 +659,22 @@ existing VS Code protocol-link fallback.
 
 ### Use Git & Changes
 
+Click **Open native local changes** in the Git & Changes header to open DSH's **Local changes**
+view in the right sidebar for the selected Worktree (or Local/Main). The current Session is preferred
+when its native working directory matches, including a blank new Session: no message is required.
+If no matching Session is available, create one from this Worktree's Dashboard and retry. If a matching
+existing Session must be opened, the action switches to it and asks you to click again after it loads.
+The Dashboard and its selected Git tab stay open throughout this switch.
+Directory verification failures, a pending Session switch, and missing native capabilities show feedback
+without opening another directory's Diff. This requires the native DSH Forge and right sidebar plugins,
+plus the updated Worktree Host; reload the Host after rebuilding this plugin.
+
+**Select the comparison branch in the native view.** Its navigation API cannot receive the Dashboard
+Base or Git-tab baseline. Native scope and baseline choices belong to DSH; reopening may retain the
+existing tab's choices. For a Workspace inside a repository subdirectory, the native view compares the
+whole checkout containing that directory. The Dashboard's own Git view remains read-only; actions in
+the native view follow DSH's own behavior and permissions.
+
 Open the **Git & Changes** tab from a managed Worktree or Main Dashboard. Main reads the current Workspace-root
 commit history directly and prepends an **Uncommitted changes** entry when the root has tracked, staged, unstaged, or
 untracked changes. Its baseline selector defaults to **None**, showing HEAD history without a total commit count.

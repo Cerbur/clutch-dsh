@@ -33,6 +33,7 @@ import type { ForgottenWorktree, WorktreeForkRecoveryStore } from '../session/wo
 import type { WorktreeSessionOrderStore } from '../session/worktree-session-order.js';
 import type { WorktreeViewReader } from '../view/worktree-view-read.js';
 import type { WorkspaceSeat } from '../view/sidebar-workspace-slot.js';
+import type { NativeChangesResult } from '../dashboard/git/native-changes-navigation.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -65,6 +66,11 @@ export interface WorktreeSurfaceInjected {
   /** Native panel selection; Dashboard remains an overlay over the Conversation layout. */
   readonly dashboardLayout?: Pick<ILayout, 'panelInfo' | 'selectPanel'>;
   readonly openResource?: (address: string, options?: { line?: number }) => boolean;
+  readonly currentSessionDirectory?: () => { readonly sessionId?: string; readonly cwd?: string };
+  readonly openNativeChanges?: (
+    record: DashboardRecord, sessionIds: readonly string[], isCurrent: () => boolean,
+    openSession?: (sessionId: string) => void,
+  ) => Promise<NativeChangesResult>;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
   readonly closeRightSidebar?: () => void;
   /** Reveal the native session-scoped rightbar from the Dashboard header. */

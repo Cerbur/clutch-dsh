@@ -2,7 +2,7 @@ import { NotificationToasts } from '../../surface/components/NotificationToasts.
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
@@ -42,6 +42,7 @@ export interface WorktreeGitPanelProps {
   /** The record captured an acquisition commit the Manager can use implicitly. */
   readonly capturedBaseline?: boolean;
   readonly onOpenFile?: (path: string) => void;
+  readonly onOpenNativeChanges?: () => Promise<void>;
   readonly t: WorktreeTranslate;
 }
 
@@ -117,9 +118,11 @@ export function WorktreeGitPanel({
   context,
   capturedBaseline,
   onOpenFile,
+  onOpenNativeChanges,
   t,
 }: WorktreeGitPanelProps) {
   const isMain = isMainWorktreeId(worktreeId);
+  const [openingNativeChanges, setOpeningNativeChanges] = useState(false);
   const selectedDefaultBaseline = normalizeBaselineBranch(defaultBaselineBranch, currentBranch);
   const state = useWorktreeGitState({
     manager,
@@ -301,16 +304,33 @@ export function WorktreeGitPanel({
             </dl>
           )}
         </div>
-        <button
-          type="button"
-          className={styles.gitRefresh}
-          data-dashboard-git-refresh
-          disabled={refreshing || state.history.status === 'loading'}
-          aria-busy={refreshing || state.history.status === 'loading'}
-          onClick={() => void state.refresh()}
-        >
-          {refreshing ? t('dashboard.git.refreshing') : t('dashboard.git.refresh')}
-        </button>
+        <div className={styles.gitPanelActions}>
+          <button
+            type="button"
+            className={styles.gitRefresh}
+            data-dashboard-git-native-changes
+            disabled={openingNativeChanges}
+            aria-busy={openingNativeChanges}
+            onClick={async () => {
+              setOpeningNativeChanges(true);
+              try { await onOpenNativeChanges?.(); }
+              finally { setOpeningNativeChanges(false); }
+            }}
+          >
+            {t(openingNativeChanges ? 'dashboard.git.native.opening' : 'dashboard.git.native.open')}
+          </button>
+          <p className={styles.gitNativeChangesHint}>{t('dashboard.git.native.baselineHint')}</p>
+          <button
+            type="button"
+            className={styles.gitRefresh}
+            data-dashboard-git-refresh
+            disabled={refreshing || state.history.status === 'loading'}
+            aria-busy={refreshing || state.history.status === 'loading'}
+            onClick={() => void state.refresh()}
+          >
+            {refreshing ? t('dashboard.git.refreshing') : t('dashboard.git.refresh')}
+          </button>
+        </div>
       </header>
 
 

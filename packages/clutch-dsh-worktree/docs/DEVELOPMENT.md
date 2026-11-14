@@ -14,6 +14,16 @@
 铃铛使用 CSS anchor；Sidebar 使用可选原生 section-scroller 接缝；原生归档清理终态只触发
 匹配记录的只读刷新。完整排查与 UI 回归记录见 [rc.2 compatibility](plans/2026-11-13-dsh-022-rc2-compatibility.md)。
 
+原生本地变更入口的源码核实基线为 DSH `0.2.2-rc.2` / `ddac96760b6edf8fa0fe17cbdcf0b512f4c12b2c`。
+它按运行时能力检测 `uiSession`、原生 working-directory projection、`sidebarRight` 和
+`sidebarRightTabs`，不以版本范围推断未来接口可用。新增只读 `canOpenNativeChanges` Remote；
+构建后须重载插件 Host 并刷新 Client，旧 Host 缺端点时明确反馈核验失败。
+构建后在本包目录运行 `node --test test/native-changes-navigation.test.mjs test/native-session-flow.test.mjs
+test/client-dashboard.test.mjs test/client-git-pagination.test.mjs`，覆盖打包后的 Client 接缝、空白会话、
+真实 Host 目录身份、切换/卸载竞态与能力缺失。这些测试不替代真实 DSH Web/Desktop 的交互验收，
+尤其是原生基线选择、浮动页签重新停靠和上游未来版本兼容；来源及限制见
+[native Diff plan](plans/2026-11-14-dashboard-native-diff.md)。
+
 2026-11-06 tool 兼容验证基线为 `dwm home` 定位的 DSH `0.2.2-rc.1`
 （`66491b05e3`）。当时最低支持版本与开发依赖统一为 `0.2.2-rc.1`；通过 capability detection 使用新的
 step tool admission、独立 native/PTC executor 和 `agent.model` owner。

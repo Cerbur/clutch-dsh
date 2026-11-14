@@ -344,6 +344,26 @@ Dashboard remains a page-level target. Its top-right navigation action becomes N
 Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
 identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
 
+The Git header's native Changes action uses `dashboard/git/native-changes-navigation.ts`. It prefers
+the live `uiSession.adapter.current` binding, including blanks; its effective directory comes from
+`session.projections.faceOf('workingDirectory')`, never the list's original header cwd. Dashboard entry
+also keeps a matching current blank instead of switching to a visible retained row. The new read-only
+`canOpenNativeChanges` endpoint on the existing Connection verifies Workspace membership, a fresh target
+path and health, and existing physical directory identity on the Host. No Session or binding is mutated.
+After that await, the Client rechecks selection lifetime, current identity, directory, `openState === 'open'`
+and `sidebarRight.mounted`. Switching to a retained candidate returns retry feedback without resource
+navigation; a fresh click is required after load. The Surface supplies the Session-navigation callback,
+registering the target in its pending Dashboard navigation before calling native navigation. On selection
+commit, the same-target pending identity participates in record resolution before effects settle it,
+so the Dashboard and selected Git tab remain mounted. Closing, mode changes and unrelated selection
+still cancel pending navigation. Missing Forge registration or sidebar capabilities,
+failed directory verification and native adoption exceptions preserve Dashboard and report feedback.
+The action checks the exact native Forge definition via `sidebarRightTabs.candidates`, then synchronously
+opens the encoded `dsh-resource://forge-changes/<Session ID>/local` with explicit kind and `destination: 'sidebar'`.
+There is no baseline parameter; native scope/base are independent and may be retained on reopening.
+Source verification and compatibility limits are recorded in
+[`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
+
 Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
 time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
 including while opening an empty Dashboard. File preview uses the current Session only after checking

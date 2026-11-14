@@ -19,7 +19,8 @@ async function loadComponent(name, modules = {}) {
   }).outputText;
   const exports = {};
   new Function('require', 'exports', output)((id) => ({
-    react: { useRef: (value) => ({ current: value }), useMemo: (read) => read() },
+    react: { useRef: (value) => ({ current: value }), useMemo: (read) => read(),
+      useState: (value) => [value, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     './git-facts.js': facts,
     '../../view/worktree-view.js': { toWorktreeViewError },
@@ -37,6 +38,24 @@ function nodes(tree) {
   if (Array.isArray(tree)) return tree.flatMap(nodes);
   return [tree, ...nodes(tree.props?.children)];
 }
+
+test('native Changes entry stays available without Git history and explains the independent baseline', async () => {
+  let opens = 0;
+  const Panel = await loadComponent('WorktreeGitPanel', {
+    './useWorktreeGitState.js': { useWorktreeGitState: () => ({
+      branches: { status: 'idle' }, view: 'commits', selectedCommits: [],
+      files: { status: 'idle' }, diff: { status: 'idle' }, history: { status: 'loading' },
+    }) },
+  });
+  const tree = nodes(Panel({ workspaceId: 'ws', worktreeId: 'wt', t,
+    onOpenNativeChanges: async () => { opens++; } }));
+  const button = tree.find((node) => node.props?.['data-dashboard-git-native-changes'] !== undefined);
+  assert.equal(button.props.children, en['dashboard.git.native.open']);
+  assert.equal(button.props.disabled, false);
+  await button.props.onClick();
+  assert.equal(opens, 1);
+  assert.ok(tree.some((node) => node.type === 'p' && node.props.children === en['dashboard.git.native.baselineHint']));
+});
 
 test('pagination conflicts turn the load-more button into a refresh action', async () => {
   let refreshes = 0;
