@@ -263,3 +263,44 @@ reading the bucket and immediately before mutation; polling is limited to the re
 budget. A repeated eight-cycle unload/reload regression verifies every reference is released,
 late old publishers/cleanup cannot affect the new face, and disposal unregisters the listener.
 Follow-up Spec review confirmed the P2 resolved with no remaining actionable findings.
+
+## Dashboard-selected Base (2026-11-15)
+
+Dashboard now passes the Git tab's current branch selection through the existing navigation
+and store-handle bridge. This includes Main when a branch is selected. An explicit empty
+selection does not fall back to the saved record Base or a retained history response;
+popover opens continue to use the saved Worktree Base. No persisted record is changed.
+A committed Base change or Git panel unmount retires the click's lifetime, including a
+change away and back. The existing Session/cwd, Forge registration and timeout guards remain.
+Disabled Forge still requires confirmation; enabled navigation failures preserve Dashboard
+feedback, while optional bridge incompatibility preserves the opened native view.
+
+Real UI acceptance used the linked build at localhost:3088 with DSH_HOME=~/.dsh-test:
+
+- Saved Base stayed qa/compare; selecting main only in Dashboard and clicking open selected
+  main in Forge, branch scope, with src/demo.ts +1/-1.
+- Disabling Forge, opening, cancelling, and opening again showed the confirmation again.
+  Confirming enabled Forge and automatically opened the selected main comparison on that click.
+- Pausing the test Host during verification and changing Session returned stale without any
+  new Base-sync event. The destination Session restored its own pre-existing native tab with
+  default Base; it did not receive the previous Session's main selection.
+- A second paused-Host attempt reached verification-timeout at 15002ms with no Base-sync.
+  After Host recovery a fresh open succeeded. This attempt could not exercise a live Base
+  change because the branch roster was refreshing and its options were disabled.
+- Deterministic React lifecycle tests cover changing Base away/back and unmount; navigation
+  tests cover explicit None, saved-Base fallback for popovers, and bridge exceptions retaining
+  the opened native view. Unsupported Forge versions are covered by adapter fault injection,
+  not by modifying the real DSH installation.
+
+The test home contains older missing/corrupt Workspace fixtures that produce unrelated
+global toasts; those fixtures were left intact. Screenshots are local evidence under
+/tmp/dashboard-forge-ui-evidence/dashboard-base-*.png.
+
+### Dashboard Base pre-commit review
+
+Independent Standards and Spec reviews found no actionable findings in this change.
+Review covered Base changes away/back, panel unmount, Session/cwd authorization,
+Forge registration replacement and old publisher/cleanup isolation, and both navigation
+and optional bridge fallback. Each review ran the four related test files: 51 passed.
+The full suite passed 1,563 tests with no failures or skips; workspace/patch validation,
+lint, typecheck, build, README parity and diff whitespace checks passed.

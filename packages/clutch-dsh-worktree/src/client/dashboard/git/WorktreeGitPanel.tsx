@@ -3,7 +3,7 @@ import { IconLoadingOutline16, IconRefreshOutline16, IconRightUpOutline16 } from
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
@@ -43,7 +43,7 @@ export interface WorktreeGitPanelProps {
   /** The record captured an acquisition commit the Manager can use implicitly. */
   readonly capturedBaseline?: boolean;
   readonly onOpenFile?: (path: string) => void;
-  readonly onOpenNativeChanges?: () => Promise<void>;
+  readonly onOpenNativeChanges?: (baseBranch?: string, isCurrent?: () => boolean) => Promise<void>;
   readonly t: WorktreeTranslate;
 }
 
@@ -163,6 +163,11 @@ export function WorktreeGitPanel({
     : state.branches.status === 'ready'
       ? state.branches.error
       : undefined;
+  const nativeSelection = useRef<object | undefined>(undefined);
+  useLayoutEffect(() => {
+    nativeSelection.current = {};
+    return () => { nativeSelection.current = undefined; };
+  }, [workspaceId, worktreeId, state.baselineBranch]);
   const baselineCommit = historyValue?.baseline?.commit;
   const baselineRef = state.baselineBranch ?? historyValue?.baseline?.ref;
   const targetLabel = state.view === 'summary'
@@ -316,7 +321,11 @@ export function WorktreeGitPanel({
             aria-busy={openingNativeChanges}
             onClick={async () => {
               setOpeningNativeChanges(true);
-              try { await onOpenNativeChanges?.(); }
+              const selection = nativeSelection.current;
+              try {
+                await onOpenNativeChanges?.(state.baselineBranch,
+                  () => selection !== undefined && nativeSelection.current === selection);
+              }
               finally { setOpeningNativeChanges(false); }
             }}
           >

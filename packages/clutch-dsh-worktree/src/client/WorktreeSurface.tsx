@@ -568,8 +568,8 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               }
             } : undefined}
           onOpenFile={typeof props.openResource === 'function' ? onOpenFile : undefined}
-          onOpenNativeChanges={async () => {
-            const isCurrent = () => nativeChangesSelection.current === dashboard && dashboard !== undefined &&
+          onOpenNativeChanges={async (baseBranch, isBaseCurrent = () => true) => {
+            const isCurrent = () => isBaseCurrent() && nativeChangesSelection.current === dashboard && dashboard !== undefined &&
               nativeChangesRecord.current === nativeChangesRecordKey;
             mutation.setActionError(undefined);
             const ids = dashboardSessionIds(dashboardRecord, source.sessions,
@@ -593,7 +593,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 mutation.setActionError({ code: 'NATIVE_CHANGES_SESSION_SWITCHING',
                   message: props.t('dashboard.git.native.session-switching'), retryable: true });
               }
-            }, forgeConfirmation.confirm)
+            }, forgeConfirmation.confirm, { baseBranch })
               .catch(() => 'verification-failed' as const) ?? 'unavailable';
             if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
             mutation.setActionError({ code: 'NATIVE_CHANGES_' + result.replaceAll('-', '_').toUpperCase(),

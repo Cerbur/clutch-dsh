@@ -265,8 +265,8 @@ export function apply(ctx: Context): void {
   });
   ctx.effect(() => () => forgeBase.dispose(), 'clutch-dsh-worktree: Forge Base bridge cleanup');
   const syncBase: NonNullable<Parameters<typeof createNativeChangesNavigation>[0]['syncBase']> =
-    async (record, sessionId, address, isCurrent, signal) => {
-      const result = await forgeBase.sync({ sessionId, address, baseBranch: record.baseBranch, isCurrent, signal });
+    async (_record, sessionId, address, isCurrent, signal, baseBranch) => {
+      const result = await forgeBase.sync({ sessionId, address, baseBranch, isCurrent, signal });
       console.info('[Worktree native Diff]', JSON.stringify({ phase: 'base-sync', result }));
     };
   // Popover clicks never activate Forge or select a different Session.
@@ -683,8 +683,8 @@ export function apply(ctx: Context): void {
           available: true,
           dashboardLayout: ctx.layout,
           currentSessionDirectory: () => nativeChangesScreen(),
-          openNativeChanges: (record, sessionIds, isCurrent, openSession, confirm) =>
-            nativeChanges.open(record, sessionIds, isCurrent, openSession, confirm),
+          openNativeChanges: (record, sessionIds, isCurrent, openSession, confirm, baseSelection) =>
+            nativeChanges.open(record, sessionIds, isCurrent, openSession, confirm, baseSelection),
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);

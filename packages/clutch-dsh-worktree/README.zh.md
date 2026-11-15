@@ -590,11 +590,12 @@ Session，入口会先切换会话，并提示加载完成后再次点击；切�
 标题栏使用紧凑的打开和刷新图标，悬停显示名称，操作进行中显示加载图标。
 打开图标的悬停提示说明 Base 同步及降级行为；Diff 工具栏的**在侧栏打开**也改为纯图标按钮。
 
-**打开时尝试同步已保存的 Worktree Base。**兼容桥接复用 Forge 的 Session store handle，
-每次点击仅应用一次完整的已保存分支 ref，切到分支范围并清除旧的提交选择。
+**打开时尝试同步 Git 与变更页当前选择的 Base。**兼容桥接复用 Forge 的 Session store handle，
+每次点击仅应用一次当前选择的完整分支 ref，切到分支范围并清除旧的提交选择。
 不会持续同步或写入原生 Session 元数据。API 缺失、状态不兼容、初始化超时，
 或 Base 仅为 commit / 存在歧义时保留原生行为，请在 Forge 中手动选择分支。
-Local/Main 和仅在 Git Tab 选择的基线不同步。Forge 分支范围包含未提交改动，
+Local/Main 选择分支时也支持同步；选择无或仅有 commit 基线时保留原生行为。
+等待期间切换 Base 或离开 Git 页签会取消打开。Popover 仍使用已保存的 Worktree Base。Forge 分支范围包含未提交改动，
 因此其统计可能与已提交变更行不同。Workspace 位于仓库子目录时，
 原生视图比较该目录所在的整个 checkout。Dashboard 自身的 Git 视图仍为只读；原生视图中的操作
 遵循 DSH 自身的行为和权限。

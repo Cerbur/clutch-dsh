@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import test from 'node:test';
 import ts from 'typescript';
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
+import { JSDOM } from 'jsdom';
 import { en } from '../lib/client/locales.js';
 import * as facts from '../lib/client/dashboard/git/git-facts.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
@@ -20,7 +23,7 @@ async function loadComponent(name, modules = {}) {
   const exports = {};
   new Function('require', 'exports', output)((id) => ({
     react: { useRef: (value) => ({ current: value }), useMemo: (read) => read(),
-      useState: (value) => [value, () => {}] },
+      useState: (value) => [value, () => {}], useLayoutEffect: (effect) => effect() },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     './git-facts.js': facts,
     '../../view/worktree-view.js': { toWorktreeViewError },
@@ -55,6 +58,78 @@ test('native Changes entry stays available without Git history and explains the 
   await button.props.onClick();
   assert.equal(opens, 1);
   assert.ok(button.props.title.includes(en['dashboard.git.native.baselineHint']));
+});
+
+test('native open forwards the selected Base even while old history remains visible', async () => {
+  const state = { branches: { status: 'idle' }, view: 'commits', selectedCommits: [],
+    files: { status: 'idle' }, diff: { status: 'idle' },
+    history: { status: 'ready', value: { commits: [], baseline: { ref: 'refs/heads/old' } } } };
+  const Panel = await loadComponent('WorktreeGitPanel', {
+    './useWorktreeGitState.js': { useWorktreeGitState: () => state },
+  });
+  for (const worktreeId of ['wt', 'main:ws']) {
+    for (const baseBranch of ['refs/heads/selected', undefined]) {
+      state.baselineBranch = baseBranch;
+      let received;
+      const button = nodes(Panel({ workspaceId: 'ws', worktreeId, t,
+        defaultBaselineBranch: 'refs/heads/saved',
+        onOpenNativeChanges: async (base, current) => { received = [base, current()]; },
+      })).find((node) => node.props?.['data-dashboard-git-native-changes'] !== undefined);
+      await button.props.onClick();
+      assert.deepEqual(received, [baseBranch, true]);
+    }
+  }
+});
+
+test('Base changes and Git panel unmount retire the captured native-open lifetime', async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  const previous = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
+    IS_REACT_ACT_ENVIRONMENT: true })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const root = createRoot(dom.window.document.getElementById('root'));
+  const state = { baselineBranch: 'refs/heads/first', branches: { status: 'idle' },
+    view: 'commits', selectedCommits: [], files: { status: 'idle' },
+    diff: { status: 'idle' }, history: { status: 'loading' } };
+  const Panel = await loadComponent('WorktreeGitPanel', {
+    react: React, './useWorktreeGitState.js': { useWorktreeGitState: () => state },
+  });
+  let tree;
+  let current;
+  function Harness() {
+    tree = Panel({ workspaceId: 'ws', worktreeId: 'wt', t,
+      onOpenNativeChanges: async (_base, guard) => { current = guard; } });
+    return null;
+  }
+  const render = () => React.act(async () => root.render(React.createElement(Harness)));
+  const click = () => React.act(async () => {
+    await nodes(tree).find((node) => node.props?.['data-dashboard-git-native-changes'] !== undefined).props.onClick();
+  });
+  try {
+    await render(); await click();
+    const first = current;
+    assert.equal(first(), true);
+    state.baselineBranch = 'refs/heads/second';
+    await render();
+    assert.equal(first(), false);
+    // Even switching back cannot revive the retired click.
+    state.baselineBranch = 'refs/heads/first';
+    await render();
+    assert.equal(first(), false);
+    await click();
+    assert.equal(current(), true);
+    await React.act(async () => root.unmount());
+    assert.equal(current(), false);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
 });
 
 test('pagination conflicts turn the load-more button into a refresh action', async () => {

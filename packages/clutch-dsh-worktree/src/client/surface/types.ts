@@ -72,6 +72,7 @@ export interface WorktreeSurfaceInjected {
     record: DashboardRecord, sessionIds: readonly string[], isCurrent: () => boolean,
     openSession?: (sessionId: string) => void,
     confirm?: ConfirmNativeForge,
+    baseSelection?: { readonly baseBranch?: string },
   ) => Promise<NativeChangesResult>;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
   readonly closeRightSidebar?: () => void;

@@ -115,6 +115,20 @@ for (const cancel of ['close', 'mode', 'unrelated']) test(`a ${cancel} during Ho
   assert.equal(f.error, undefined);
 });
 
+test('changing the selected Base while Host verification waits cancels Dashboard native open', async (t) => {
+  const f = await fixture(t, { external: true });
+  let finish;
+  f.verify = () => new Promise((resolve) => { finish = resolve; });
+  let current = true;
+  let pending;
+  await React.act(async () => {
+    pending = f.dashboard.onOpenNativeChanges('refs/heads/selected', () => current);
+  });
+  current = false;
+  await React.act(async () => { finish(true); await pending; });
+  assert.deepEqual(f.resources, []);
+});
+
 test('closing while native selection is pending prevents a late Dashboard reopening', async (t) => {
   const f = await fixture(t, { external: true });
   await React.act(async () => f.dashboard.onOpenNativeChanges());

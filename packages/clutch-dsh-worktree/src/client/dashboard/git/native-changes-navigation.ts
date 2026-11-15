@@ -36,7 +36,7 @@ export function createNativeChangesNavigation(options: {
   readonly pollMs?: number;
   readonly onDiagnostic?: (event: NativeDiffDiagnostic) => void;
   readonly syncBase?: (record: DashboardRecord, sessionId: string, address: string,
-    isCurrent: () => boolean, signal: AbortSignal) => Promise<unknown>;
+    isCurrent: () => boolean, signal: AbortSignal, baseBranch: string | undefined) => Promise<unknown>;
 }) {
   let disposed = false;
   const pending = new Set<AbortController>();
@@ -44,8 +44,11 @@ export function createNativeChangesNavigation(options: {
   return {
     dispose() { disposed = true; for (const controller of pending) controller.abort(); },
     open(record: DashboardRecord, sessionIds: readonly string[], isCurrent: () => boolean,
-      openSession = options.openSession, confirm?: ConfirmNativeForge): Promise<NativeChangesResult> {
-      const key = JSON.stringify([record.workspaceId, record.worktreeId, record.absolutePath, record.baseBranch]);
+      openSession = options.openSession, confirm?: ConfirmNativeForge,
+      baseSelection?: { readonly baseBranch?: string }): Promise<NativeChangesResult> {
+      // An explicit empty selection (Main's None) must not reuse the saved Base.
+      const baseBranch = baseSelection === undefined ? record.baseBranch : baseSelection.baseBranch;
+      const key = JSON.stringify([record.workspaceId, record.worktreeId, record.absolutePath, baseBranch]);
       if (inFlight?.key === key && inFlight.isCurrent()) return inFlight.promise;
       const active = () => !disposed && isCurrent();
       const report = nativeDiffReporter(options.onDiagnostic);
@@ -165,7 +168,7 @@ export function createNativeChangesNavigation(options: {
                 return active() && screen.sessionId === target && screen.mountedSessionId === target &&
                   screen.ready && screen.cwd === after.cwd;
               };
-              try { await options.syncBase(record, target, address, sameTarget, controller.signal); }
+              try { await options.syncBase(record, target, address, sameTarget, controller.signal, baseBranch); }
               catch { /* Optional Forge compatibility bridge must not break native navigation. */ }
             }
             return 'opened';

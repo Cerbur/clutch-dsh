@@ -697,12 +697,13 @@ The header uses compact open and refresh icons with hover labels; busy actions s
 The open icon's hover hint explains Base synchronization and its fallback. The Diff toolbar also uses an
 icon-only **Open in sidebar** action.
 
-**Opening attempts to apply the saved Worktree Base.** A compatibility bridge shares Forge's
-Session store handle and applies the exact saved branch ref once per click, selecting branch
+**Opening attempts to apply the Base currently selected in Git & Changes.** A compatibility bridge shares Forge's
+Session store handle and applies the selected canonical branch ref once per click, selecting branch
 scope and clearing any old commit selection. It does not continuously synchronize or write
 native Session metadata. Missing APIs, incompatible state, initialization timeout, or a
 commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
-Local/Main and a Git-tab-only baseline are not synchronized. Forge branch scope includes
+This also supports Local/Main with a selected branch. Selecting None or a commit-only Base keeps native behavior.
+Changing the selected Base or leaving the Git tab cancels a pending open. The popover still uses the saved Worktree Base. Forge branch scope includes
 uncommitted changes, so its totals can differ from the committed-change row.
 For a Workspace inside a repository subdirectory, the native view compares the
 whole checkout containing that directory. The Dashboard's own Git view remains read-only; actions in

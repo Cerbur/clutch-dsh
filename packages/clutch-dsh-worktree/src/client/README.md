@@ -364,7 +364,9 @@ There is no native baseline navigation parameter. The optional `native-forge-bas
 reuses the winning Forge registration's store handle in a no-UI Session header slot.
 The renderer supplies the same Session instance; the adapter never calls handle.create(),
 uses private registry fields, or replaces Forge's component. Only an authorized open
-requests synchronization of the saved canonical branch ref. It pins the active local tab,
+requests synchronization of the canonical branch ref selected in Dashboard's Git tab (including Main),
+or the saved Worktree Base for popover clicks. An explicit empty Dashboard selection never falls back
+to the saved Base. Changing Base or unmounting the Git panel retires the pending click. It pins the active local tab,
 waits at most 1.5 seconds for its native byTab bucket, then calls scoped/based once.
 Session/cwd/lifetime, active tab and registration identity are checked before writing.
 Registration withdrawal/replacement releases our extra store reference and retires requests.

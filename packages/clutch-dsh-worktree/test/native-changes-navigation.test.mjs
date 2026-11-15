@@ -39,6 +39,26 @@ test('current blank Session wins over retained rows and uses encoded local URI w
   ]);
 });
 
+test('Dashboard Base overrides saved Base, explicit None stays empty, and bridge failures retain native open', async () => {
+  const f = fixture();
+  const bases = [];
+  const navigation = createNativeChangesNavigation({
+    screen: () => f.screen, sidebar: () => f.sidebar,
+    manager: { canOpenNativeChanges: async () => true },
+    openSession: () => assert.fail('must not switch'),
+    syncBase: async (_record, _session, _address, _current, _signal, base) => {
+      bases.push(base);
+      throw new Error('incompatible Forge');
+    },
+  });
+  for (const selection of [{ baseBranch: 'refs/heads/selected' }, {}, undefined]) {
+    assert.equal(await navigation.open(record, [], () => true, undefined, undefined, selection), 'opened');
+  }
+  assert.deepEqual(bases, ['refs/heads/selected', undefined, record.baseBranch]);
+  assert.equal(f.calls.length, 3);
+  navigation.dispose();
+});
+
 test('Base bridge runs only after authorized open and loses authority on Session change', async () => {
   const f = fixture();
   let finish;
