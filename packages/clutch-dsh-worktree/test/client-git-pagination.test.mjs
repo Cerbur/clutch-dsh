@@ -50,11 +50,11 @@ test('native Changes entry stays available without Git history and explains the 
   const tree = nodes(Panel({ workspaceId: 'ws', worktreeId: 'wt', t,
     onOpenNativeChanges: async () => { opens++; } }));
   const button = tree.find((node) => node.props?.['data-dashboard-git-native-changes'] !== undefined);
-  assert.equal(button.props.children, en['dashboard.git.native.open']);
+  assert.equal(button.props['aria-label'], en['dashboard.git.native.open']);
   assert.equal(button.props.disabled, false);
   await button.props.onClick();
   assert.equal(opens, 1);
-  assert.ok(tree.some((node) => node.type === 'p' && node.props.children === en['dashboard.git.native.baselineHint']));
+  assert.ok(button.props.title.includes(en['dashboard.git.native.baselineHint']));
 });
 
 test('pagination conflicts turn the load-more button into a refresh action', async () => {

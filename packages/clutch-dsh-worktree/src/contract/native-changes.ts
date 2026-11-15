@@ -8,5 +8,6 @@ export interface NativeChangesTarget {
 }
 
 export interface NativeChangesManager {
-  canOpenNativeChanges(input: NativeChangesTarget): Promise<boolean>;
+  /** The optional signal cancels the Client read; it is never serialized into the Host input. */
+  canOpenNativeChanges(input: NativeChangesTarget, signal?: AbortSignal): Promise<boolean>;
 }

@@ -34,6 +34,7 @@ import type { WorktreeSessionOrderStore } from '../session/worktree-session-orde
 import type { WorktreeViewReader } from '../view/worktree-view-read.js';
 import type { WorkspaceSeat } from '../view/sidebar-workspace-slot.js';
 import type { NativeChangesResult } from '../dashboard/git/native-changes-navigation.js';
+import type { ConfirmNativeForge } from '../dashboard/git/native-forge-activation.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -70,6 +71,7 @@ export interface WorktreeSurfaceInjected {
   readonly openNativeChanges?: (
     record: DashboardRecord, sessionIds: readonly string[], isCurrent: () => boolean,
     openSession?: (sessionId: string) => void,
+    confirm?: ConfirmNativeForge,
   ) => Promise<NativeChangesResult>;
   /** Collapse the native session-scoped rightbar before showing a page-level Dashboard. */
   readonly closeRightSidebar?: () => void;

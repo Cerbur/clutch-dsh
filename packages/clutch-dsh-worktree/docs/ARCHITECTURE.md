@@ -52,6 +52,11 @@ contract  ←  provider
 - 整个插件由单一 npm package `@cerbur/clutch-dsh-worktree` 组成，内部各层为源码模块，而非独立的 workspace package。
 - DSH 通过 `package.json.dsh.bundle.patch` 激活插件；`cordis.patch.yml` 为同目录下的 YAML 补丁层。
 - 补丁层装载 `clutch-dsh-worktree-host`，并通过 DSH 的 `dshHomePath()` 注入绝对路径 DSH Home。
+- Dashboard 原生 Diff 入口仅在点击时探测 Forge；组合包未启用时由用户确认，再通过既有
+  Connection 调用官方 Plugin Manager 启用固定的 Forge 组合包。配置所有权属于 DSH，
+  不写 Sidecar、不编辑 profile 文件、不复制官方 plugin rows，也不在启动或卸载时改变 Forge 开关。
+  Host 启用成功后仍须等待 Client 原生 Diff 注册，再按原有目录身份与 Session 门禁导航。
+  取消只终止待执行的导航和请求等待，不撤销已经完成的官方配置变更。
 - 官方 `dsh-typert-loader` 通过 `./package.json` 和 `./typert` 注册 descriptor，Upstream DSH 的 `TypertGateway` 在现有的 `/api` 连接通道上接管 `worktreeManager/<method>`。插件不创建第二套 RPC 或传输层。
 - Host 生命周期：Host 将 `WorktreeManagerService.close()` 注册为 Cordis effect。当 Host 销毁时，Manager 拒绝新操作，向 Git Provider 与默认 Sidecar、transaction 锁发送同一取消信号，并等待进行中的操作完成。Shard、repository 与 candidate 锁的 acquisition/retry 可取消；取得锁到 callback 准入之间再次检查取消并释放已取得的锁。已进入 callback 的持久化写入不被中途放弃，仍通过 finally 释放自己的锁；取消不删除其他进程的锁、Worktree 或 Session。排在 startup recovery 后的操作醒来后重新检查生命周期，不得在关闭后继续执行。Host 的 native-cleanup 适配器使用独立只读 repository，Manager 的默认写入 repository 才拥有其生命周期 signal；注入的自定义 Provider 仍由注入方负责取消。
 
@@ -503,6 +508,18 @@ Session 身份，再调用原生导航并提示就绪后重试。同一目标的
 render 阶段就参与 record 解析，不等待 effect，从而保留 Dashboard 与 Git 页签而不卸载。
 关闭、模式变化和无关 Session 切换仍会撤销 pending 导航；原生导航失败会清除其 pending 身份。
 原生注册缺失或右侧栏尚未 adopted 时显式反馈，绝不借 URI 中的 Session ID 假设已切换成功。
+启用 Forge 后允许同一 Session 的暂时缺失 cwd/openState 与 store adoption 在 15 秒内完成；
+先通过 Host 解析授权目标，只有目标就是当前 Session 才进入挂载等待，不能等待一个不存在
+或不相关的当前 Session 而阻断已有候选的选择。
+若 Client 首次已知 cwd 在 Host 核验期间才出现，先固定该 projection，再重新核验，
+不得把未知 cwd 时发起的成功结果用于打开后来出现的目录。
+每次等候之后重新读取 Host 目录授权，不能复用等待前的核验。真实 Session/cwd 变化、目标退出
+和 disposal 仍取消操作；主动选择另一个匹配 Session 仍要求新点击。
+启用 RPC 的 15 秒期限不代表 Host 撤销了 mutation。响应丢失后最多再等 15 秒原生注册，
+随后只读重查 bundle 仍选中且可管理、注册仍存在，才继续导航；不重发启用，不做禁用回滚。
+状态读取、启用结果不明、注册超时和同 Session 侧栏挂载超时使用不同结果码。
+Host 目录核验读取独立限时 15 秒；Client AbortSignal 仅作用于 Connection 传输，不进入
+序列化 RPC input，不改变 Host 的只读身份规则。超时/取消后的迟到成功不得重新触发打开。
 资源使用 `forge-changes/<编码 Session ID>/local`，显式指定原生 kind 和 sidebar destination；
 它没有 Base 参数，原生范围/基线独立于 Dashboard，子目录 Session 由原生 Forge 解析到整个 checkout。
 这扩展历史 Git Dashboard 计划的插件内只读呈现，未修改 DSH 核心，详细来源见

@@ -24,6 +24,13 @@ test/client-dashboard.test.mjs test/client-git-pagination.test.mjs`，覆盖打�
 尤其是原生基线选择、浮动页签重新停靠和上游未来版本兼容；来源及限制见
 [native Diff plan](plans/2026-11-14-dashboard-native-diff.md)。
 
+首次 Forge 启用时序回归还包括 `node --test test/native-forge-activation.test.mjs`。
+浏览器控制台的 `[Worktree native Diff]` 日志仅记录阶段、毫秒耗时和结果码，不包含 Session ID、
+路径、RPC 内容或凭据。`enable-response-lost` / `enable-reconciled` 区分响应丢失与只读恢复，
+`session-mount-wait` 区分原生注册完成但 store 尚未 adopted，`session-changed` / `directory-changed`
+说明取消原因，`navigation-finished` 给出最终结果。真实冷启动验收须等所有构建与测试结束再
+重启 Host、重新加载 Client；并行构建会触发 HMR、销毁当前 Dashboard，不能计为冷启动验收。
+
 2026-11-06 tool 兼容验证基线为 `dwm home` 定位的 DSH `0.2.2-rc.1`
 （`66491b05e3`）。当时最低支持版本与开发依赖统一为 `0.2.2-rc.1`；通过 capability detection 使用新的
 step tool admission、独立 native/PTC executor 和 `agent.model` owner。

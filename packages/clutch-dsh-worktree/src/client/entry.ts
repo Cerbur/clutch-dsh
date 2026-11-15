@@ -57,6 +57,7 @@ import {
 import { renameWorktreeSession } from './session/session-rename.js';
 import { openWorktreeSession } from './session/session-navigation.js';
 import { createNativeChangesNavigation } from './dashboard/git/native-changes-navigation.js';
+import { ensureNativeForge } from './dashboard/git/native-forge-activation.js';
 import type { SessionBinding } from '../contract/index.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
@@ -242,6 +243,18 @@ export function apply(ctx: Context): void {
   };
   const nativeChanges = createNativeChangesNavigation({
     manager,
+    onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
+    ensureAvailable: (address, confirm, signal, isCurrent) => ensureNativeForge({
+      manager, confirm, signal, isCurrent,
+      onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
+      ready: () => {
+        const tabs = ctx.get('sidebarRightTabs') as {
+          candidates?: (address: string) => readonly { kind: string; id: string }[];
+        } | undefined;
+        return tabs?.candidates?.(address).some((tab) =>
+          tab.kind === 'forge-changes' && tab.id === '@deepseek-ai/dsh-experimental-client-ui-forge/changes') ?? false;
+      },
+    }),
     screen: nativeChangesScreen,
     openSession: (sessionId) => openWorktreeSession(ctx.uiWorkspace, sessions, sessionId as SessionId),
     sidebar: () => {
@@ -646,7 +659,8 @@ export function apply(ctx: Context): void {
           available: true,
           dashboardLayout: ctx.layout,
           currentSessionDirectory: () => nativeChangesScreen(),
-          openNativeChanges: (record, sessionIds, isCurrent, openSession) => nativeChanges.open(record, sessionIds, isCurrent, openSession),
+          openNativeChanges: (record, sessionIds, isCurrent, openSession, confirm) =>
+            nativeChanges.open(record, sessionIds, isCurrent, openSession, confirm),
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);

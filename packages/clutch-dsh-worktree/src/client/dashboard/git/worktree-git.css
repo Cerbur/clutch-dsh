@@ -41,16 +41,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  max-width: 360px;
-}
-
-.gitNativeChangesHint {
-  flex-basis: 100%;
-  order: 1;
-  margin: 0;
-  color: var(--dsw-alias-label-secondary, #6f7887);
-  font-size: 12px;
+  gap: 4px;
+  flex: none;
 }
 
 .gitBaselineSelector {
@@ -113,14 +105,31 @@
 }
 
 .gitRefresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
   flex: none;
-  padding: 6px 11px;
-  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
+  padding: 0;
+  border: 0;
   border-radius: 6px;
-  background: var(--dsw-alias-bg-base, #fff);
-  color: inherit;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #6f7887);
   cursor: pointer;
   font-size: 12px;
+}
+
+.gitRefresh:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, #f1f3f6);
+  color: var(--dsw-alias-label-primary, #263342);
+}
+
+.gitRefresh:focus-visible,
+.gitDiffOpenInSidebar:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4b80d4);
+  outline-offset: 2px;
 }
 
 .gitRefresh:disabled {
@@ -741,11 +750,14 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--dsw-alias-border-l3, #dfe3ea);
-  border-radius: 4px;
-  background: var(--dsw-alias-bg-base, #ffffff);
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--dsw-alias-label-secondary, #6f7887);
   font-size: 11px;
   line-height: 16px;
@@ -753,7 +765,7 @@
   transition: all 0.15s ease;
 }
 
-/* The square 16px arrow keeps its aspect ratio; pin the box so it centers on the label. */
+/* Keep the arrow square and centered in the icon button. */
 .gitDiffOpenIcon {
   flex: none;
   width: 14px;

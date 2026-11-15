@@ -356,13 +356,41 @@ navigation; a fresh click is required after load. The Surface supplies the Sessi
 registering the target in its pending Dashboard navigation before calling native navigation. On selection
 commit, the same-target pending identity participates in record resolution before effects settle it,
 so the Dashboard and selected Git tab remain mounted. Closing, mode changes and unrelated selection
-still cancel pending navigation. Missing Forge registration or sidebar capabilities,
+still cancel pending navigation. Missing sidebar capabilities,
 failed directory verification and native adoption exceptions preserve Dashboard and report feedback.
 The action checks the exact native Forge definition via `sidebarRightTabs.candidates`, then synchronously
 opens the encoded `dsh-resource://forge-changes/<Session ID>/local` with explicit kind and `destination: 'sidebar'`.
 There is no baseline parameter; native scope/base are independent and may be retained on reopening.
 Source verification and compatibility limits are recorded in
 [`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
+
+If the native definition is absent, `native-forge-activation.ts` reads the official Forge bundle
+through the existing Connection adapter. A disabled bundle requires the Surface's native Modal
+confirmation before the adapter calls `pluginManager/setBundleEnabled` with the fixed bundle name
+and `enabled: true`. Native endpoints return direct Gateway values, unlike Worktree's nested result.
+The confirmation is cancelled on action retirement or Surface unmount. The action rechecks bundle
+state after confirmation, bounds each management request and Client registration wait to 15 seconds,
+and only continues directory validation when the exact native definition is registered. Existing
+selected bundles are never re-enabled to override row-level settings. Restart-required, overridden,
+failed and registration-timeout outcomes preserve Dashboard and report localized feedback.
+An enable RPC timeout or lost response does not prove the Host mutation failed. The action grants
+one bounded 15-second registration recovery window, then rereads the saved selection and rechecks
+registration before continuing, without another enable request. An explicit failed/restart/override
+response is not recovered this way. After activation, the same Session can take up to 15 seconds
+to finish loading/adoption; temporary missing cwd waits, but a different known cwd or Session cancels.
+The exact native no-adopted-store exception is retryable only in this activation continuation.
+Each retry performs fresh Host directory validation. A deliberate candidate Session switch retains
+the existing fresh-click gate. Phase/timing/result diagnostics contain no identities or paths.
+Authorization selects the target before mount waiting; no current Session or an unrelated loading
+Session must not block selecting a retained candidate. Only an authorized current target waits,
+and visibly unready polls do not repeat Host reads until readiness changes.
+If the first known cwd appears during a Host read, pin that projection and authorize again before
+opening; the success of a read started with unknown cwd is not correlated with that new projection.
+Directory validation has its own 15-second deadline and passes a Client-only AbortSignal through
+the existing Connection; the Host RPC payload is unchanged. Non-cooperative adapters are bounded
+too, and late fulfillment after timeout/disposal cannot publish navigation.
+No startup call, dependency copy, profile-file edit, Sidecar activation record or disable/uninstall
+rollback is added. A completed enablement belongs to DSH even if the initiating action is cancelled.
 
 Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
 time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,

@@ -409,6 +409,9 @@ for (const target of ['main', 'wt']) {
         },
         './dashboard/WorktreeDashboard.js': { WorktreeDashboard: 'Dashboard' },
         './dashboard/DashboardRequest.js': { DashboardRequest: 'PendingDashboard' },
+        './dashboard/git/useNativeForgeConfirmation.js': {
+          useNativeForgeConfirmation: () => ({ dialog: null, confirm: async () => false }),
+        },
         './dashboard/dashboard-selection.js': await loadSource('dashboard/dashboard-selection.ts'),
         './dashboard/dashboard-navigation.js': await loadSource(
           'dashboard/dashboard-navigation.ts',

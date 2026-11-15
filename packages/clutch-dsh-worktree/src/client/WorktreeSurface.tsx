@@ -40,12 +40,14 @@ import {
   type PendingDashboardNavigation,
 } from './dashboard/dashboard-navigation.js';
 import { buildSessionFileAddress, GitFileAddressError } from './dashboard/git/file-address.js';
+import { useNativeForgeConfirmation } from './dashboard/git/useNativeForgeConfirmation.js';
 import { sameWindowsPath } from '../contract/windows-path.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Retains shared state/actions and portals navigation into the workspace slot. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
+  const forgeConfirmation = useNativeForgeConfirmation(inputProps.t);
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
   const pendingDashboard = useRef<PendingDashboardNavigation>();
   const pendingDashboardRecord = useRef<DashboardRecord>();
@@ -387,6 +389,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { t } = props;
   return (
     <NotificationProvider t={t} openSettings={props.openErrorSettings}>
+      {forgeConfirmation.dialog}
       {props.sidebarSeat && createPortal(<aside
         className={styles.surface}
         data-worktree-surface
@@ -590,9 +593,9 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
                 mutation.setActionError({ code: 'NATIVE_CHANGES_SESSION_SWITCHING',
                   message: props.t('dashboard.git.native.session-switching'), retryable: true });
               }
-            })
+            }, forgeConfirmation.confirm)
               .catch(() => 'verification-failed' as const) ?? 'unavailable';
-            if (switching || !isCurrent() || result === 'opened' || result === 'stale') return;
+            if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
             mutation.setActionError({ code: 'NATIVE_CHANGES_' + result.replaceAll('-', '_').toUpperCase(),
               message: props.t(`dashboard.git.native.${result}`), retryable: true });
           }}

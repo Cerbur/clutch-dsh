@@ -1,4 +1,5 @@
 import { NotificationToasts } from '../../surface/components/NotificationToasts.js';
+import { IconLoadingOutline16, IconRefreshOutline16, IconRightUpOutline16 } from '../../dsh-icons.js';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
@@ -309,6 +310,8 @@ export function WorktreeGitPanel({
             type="button"
             className={styles.gitRefresh}
             data-dashboard-git-native-changes
+            aria-label={t(openingNativeChanges ? 'dashboard.git.native.opening' : 'dashboard.git.native.open')}
+            title={t('dashboard.git.native.open') + '\n' + t('dashboard.git.native.baselineHint')}
             disabled={openingNativeChanges}
             aria-busy={openingNativeChanges}
             onClick={async () => {
@@ -317,18 +320,20 @@ export function WorktreeGitPanel({
               finally { setOpeningNativeChanges(false); }
             }}
           >
-            {t(openingNativeChanges ? 'dashboard.git.native.opening' : 'dashboard.git.native.open')}
+            {openingNativeChanges ? <IconLoadingOutline16 size={16} /> : <IconRightUpOutline16 size={16} />}
           </button>
-          <p className={styles.gitNativeChangesHint}>{t('dashboard.git.native.baselineHint')}</p>
           <button
             type="button"
             className={styles.gitRefresh}
             data-dashboard-git-refresh
+            aria-label={t(refreshing || state.history.status === 'loading' ? 'dashboard.git.refreshing' : 'dashboard.git.refresh')}
+            title={t('dashboard.git.refresh')}
             disabled={refreshing || state.history.status === 'loading'}
             aria-busy={refreshing || state.history.status === 'loading'}
             onClick={() => void state.refresh()}
           >
-            {refreshing ? t('dashboard.git.refreshing') : t('dashboard.git.refresh')}
+            {refreshing || state.history.status === 'loading'
+              ? <IconLoadingOutline16 size={16} /> : <IconRefreshOutline16 size={16} />}
           </button>
         </div>
       </header>

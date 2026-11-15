@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setTimeout } from 'node:timers';
 import { createNativeChangesNavigation } from '../lib/client/dashboard/git/native-changes-navigation.js';
 import { createWorktreeConnectionAdapter } from '../lib/client/worktree-connection.js';
 import { loadClientEntry } from './client-fixture.mjs';
+import { NATIVE_FORGE_BUNDLE } from '../lib/client/dashboard/git/native-forge-activation.js';
 
 const record = { workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo/worktree',
   status: 'active', branch: 'feature', source: 'plugin', baseBranch: 'refs/heads/main' };
@@ -121,8 +123,10 @@ test('built Client entry reads the blank binding projection and opens the regist
   const f = await loadClientEntry({
     sessionListSnapshot: { ids: [blankId], byId: { [blankId]: { blank: true, cwd: '/original' } } },
     workspaceSnapshot: { items: [{ workspaceId: 'ws', path: '/original', sessionIds: [blankId] }] },
-    rpc: { call: async (_channel, endpoint, payload) => ({ ok: true, value: { ok: true,
-      value: endpoint.endsWith('/canOpenNativeChanges') ? payload.args.input.sessionId === acceptedSession : [] } }) },
+    rpc: { call: async (_channel, endpoint, payload) => endpoint === 'pluginManager/listBundles'
+      ? { ok: true, value: [] }
+      : { ok: true, value: { ok: true,
+        value: endpoint.endsWith('/canOpenNativeChanges') ? payload.args.input.sessionId === acceptedSession : [] } } },
   });
   t.after(() => { for (const dispose of f.disposers.reverse()) dispose(); });
   let expanded = false;
@@ -197,4 +201,146 @@ test('native Changes validation uses the existing Connection and exact target pa
   assert.equal(await adapter.canOpenNativeChanges(input), true);
   assert.deepEqual(calls[0].slice(0, 3), ['/api', 'worktreeManager/canOpenNativeChanges', { args: { input } }]);
   adapter.dispose();
+});
+
+test('a stalled directory read times out and a late success cannot open Diff', async () => {
+  let release;
+  let readSignal;
+  const events = [];
+  const navigation = createNativeChangesNavigation({
+    screen: () => ({ sessionId: 's', workspaceId: 'ws', cwd: '/repo/worktree', ready: true, mountedSessionId: 's' }),
+    sidebar: () => ({ accepts: () => true, open: () => assert.fail('late authorization must not open') }),
+    manager: { canOpenNativeChanges: (_input, signal) => {
+      readSignal = signal;
+      return new Promise((resolve) => { release = resolve; });
+    } },
+    openSession: () => assert.fail('must not switch'),
+    verificationTimeoutMs: 5,
+    onDiagnostic: (event) => events.push(event),
+  });
+  assert.equal(await navigation.open(record, [], () => true), 'verification-timeout');
+  assert.equal(readSignal.aborted, true);
+  release(true);
+  await Promise.resolve();
+  assert.equal(events.at(-1).result, 'verification-timeout');
+  navigation.dispose();
+});
+
+test('disposing cancels an in-flight directory read without waiting for a non-cooperative Host', async () => {
+  const navigation = createNativeChangesNavigation({
+    screen: () => ({ sessionId: 's', workspaceId: 'ws', cwd: '/repo/worktree', ready: true, mountedSessionId: 's' }),
+    sidebar: () => ({ accepts: () => true, open: () => assert.fail('disposed open') }),
+    manager: { canOpenNativeChanges: () => new Promise(() => {}) },
+    openSession: () => assert.fail('disposed navigation'),
+  });
+  const pending = navigation.open(record, [], () => true);
+  navigation.dispose();
+  assert.equal(await pending, 'stale');
+});
+
+test('directory-read cancellation reaches the Connection without changing the RPC payload', async () => {
+  const controller = new globalThis.AbortController();
+  let signal;
+  const adapter = createWorktreeConnectionAdapter({ call: async (_channel, _endpoint, payload, requestSignal) => {
+    signal = requestSignal;
+    assert.deepEqual(payload, { args: { input: { workspaceId: 'ws', worktreeId: 'wt', sessionId: 's', expectedPath: '/repo' } } });
+    return { ok: true, value: { ok: true, value: true } };
+  } });
+  controller.abort();
+  await adapter.canOpenNativeChanges({ workspaceId: 'ws', worktreeId: 'wt', sessionId: 's', expectedPath: '/repo' }, controller.signal);
+  assert.equal(signal.aborted, true);
+  adapter.dispose();
+});
+
+test('built Client entry enables Forge only after the supplied confirmation and opens after registration', async (t) => {
+  let enabled = false;
+  let registered = false;
+  const calls = [];
+  const f = await loadClientEntry({
+    workspaceSnapshot: { items: [{ workspaceId: 'ws', path: record.absolutePath, sessionIds: [blankId] }] },
+    rpc: { call: async (_channel, endpoint, payload) => {
+      calls.push(endpoint);
+      if (endpoint === 'pluginManager/listBundles') return { ok: true,
+        value: [{ name: NATIVE_FORGE_BUNDLE, enabled, availability: 'installation' }] };
+      if (endpoint === 'pluginManager/setBundleEnabled') {
+        assert.deepEqual(payload, { args: { name: NATIVE_FORGE_BUNDLE, enabled: true } });
+        enabled = true;
+        setTimeout(() => { registered = true; }, 5);
+        return { ok: true, value: { target: NATIVE_FORGE_BUNDLE, stage: 'enable', application: 'applied' } };
+      }
+      return { ok: true, value: { ok: true, value: endpoint.endsWith('/canOpenNativeChanges') ? true : [] } };
+    } },
+  });
+  const services = {
+    uiSession: { adapter: { current: { getSnapshot: () => ({ key: blankId }) } } },
+    sidebarRightTabs: { candidates: () => registered
+      ? [{ kind: 'forge-changes', id: '@deepseek-ai/dsh-experimental-client-ui-forge/changes' }] : [] },
+    sidebarRight: { mounted: { getSnapshot: () => blankId }, isExpanded: () => true,
+      toggleExpanded: () => {}, openResource: () => calls.push('open') },
+  };
+  f.fakeContext.get = (name) => services[name];
+  f.fakeContext.sessions.binding = () => ({ session: {
+    getSnapshot: () => ({ openState: 'open' }),
+    projections: { faceOf: () => ({ getSnapshot: () => record.absolutePath }) },
+  } });
+  const dispose = () => { for (const fn of f.disposers.splice(0).reverse()) fn(); };
+  t.after(dispose);
+  assert.equal(calls.some((call) => call.startsWith('pluginManager/')), false, 'startup must not manage Forge');
+  calls.length = 0;
+  const injected = f.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
+  assert.equal(await injected.openNativeChanges(record, [], () => true, undefined, async () => {
+    calls.push('confirm');
+    assert.equal(enabled, false);
+    return true;
+  }), 'opened');
+  assert.deepEqual(calls, ['pluginManager/listBundles', 'confirm', 'pluginManager/listBundles',
+    'pluginManager/setBundleEnabled', 'worktreeManager/canOpenNativeChanges', 'open']);
+  dispose();
+  assert.equal(enabled, true);
+  assert.equal(calls.filter((call) => call === 'pluginManager/setBundleEnabled').length, 1);
+});
+
+test('built Client continues through a lost enable response and delayed Session adoption', async (t) => {
+  let enabled = false;
+  let registered = false;
+  let adopted = false;
+  const calls = [];
+  const f = await loadClientEntry({
+    workspaceSnapshot: { items: [{ workspaceId: 'ws', path: record.absolutePath, sessionIds: [blankId] }] },
+    rpc: { call: async (_channel, endpoint) => {
+      calls.push(endpoint);
+      if (endpoint === 'pluginManager/listBundles') return { ok: true,
+        value: [{ name: NATIVE_FORGE_BUNDLE, enabled, availability: 'installation' }] };
+      if (endpoint === 'pluginManager/setBundleEnabled') {
+        enabled = true;
+        registered = true;
+        setTimeout(() => { adopted = true; }, 20);
+        throw new Error('transport lost the enable response after saving');
+      }
+      return { ok: true, value: { ok: true, value: endpoint.endsWith('/canOpenNativeChanges') ? true : [] } };
+    } },
+  });
+  t.after(() => { for (const dispose of f.disposers.reverse()) dispose(); });
+  const services = {
+    uiSession: { adapter: { current: { getSnapshot: () => ({ key: blankId }) } } },
+    sidebarRightTabs: { candidates: () => registered
+      ? [{ kind: 'forge-changes', id: '@deepseek-ai/dsh-experimental-client-ui-forge/changes' }] : [] },
+    sidebarRight: { mounted: { getSnapshot: () => blankId }, isExpanded: () => true,
+      toggleExpanded: () => {}, openResource: () => {
+        if (!adopted) throw new Error('sidebarRight: no session surface is mounted');
+        calls.push('open');
+      } },
+  };
+  f.fakeContext.get = (name) => services[name];
+  f.fakeContext.sessions.binding = () => ({ session: {
+    getSnapshot: () => ({ openState: 'open' }),
+    projections: { faceOf: () => ({ getSnapshot: () => record.absolutePath }) },
+  } });
+  const injected = f.registrationsById.get('clutch-dsh-worktree-navigation').options.inject();
+  assert.equal(await injected.openNativeChanges(record, [], () => true, undefined, async () => true), 'opened');
+  assert.equal(calls.filter((call) => call === 'pluginManager/setBundleEnabled').length, 1);
+  assert.equal(calls.filter((call) => call === 'open').length, 1);
+  assert.equal(calls.at(-2), 'worktreeManager/canOpenNativeChanges');
+  assert.equal(calls.filter((call) => call === 'worktreeManager/canOpenNativeChanges').length, 2,
+    'directory is verified again after the native adoption error');
 });

@@ -659,15 +659,38 @@ existing VS Code protocol-link fallback.
 
 ### Use Git & Changes
 
-Click **Open native local changes** in the Git & Changes header to open DSH's **Local changes**
+Click the **Open native local changes** arrow icon in the Git & Changes header to open DSH's **Local changes**
 view in the right sidebar for the selected Worktree (or Local/Main). The current Session is preferred
 when its native working directory matches, including a blank new Session: no message is required.
 If no matching Session is available, create one from this Worktree's Dashboard and retry. If a matching
 existing Session must be opened, the action switches to it and asks you to click again after it loads.
 The Dashboard and its selected Git tab stay open throughout this switch.
 Directory verification failures, a pending Session switch, and missing native capabilities show feedback
-without opening another directory's Diff. This requires the native DSH Forge and right sidebar plugins,
-plus the updated Worktree Host; reload the Host after rebuilding this plugin.
+without opening another directory's Diff. This requires the native DSH right sidebar and the updated
+Worktree Host; reload the Host after rebuilding this plugin.
+
+If the official Forge bundle is off, clicking the open icon asks you to **Enable and open Diff**.
+The confirmation explains that Forge also includes native Worktree and GitHub integration and affects
+every Session using the current profile. After confirmation, the plugin enables Forge through DSH's
+Plugin Manager, waits for the native Diff to register, verifies the target directory, and opens it
+without another click. Cancel leaves the setting unchanged. If DSH requires a restart, reports a
+configuration override, or cannot load the panel, the action explains how to retry.
+If the enable response is lost or times out, the action briefly waits for native registration and
+checks the saved Forge selection without sending another enable request. It also waits for the
+same Session's sidebar to mount, then verifies the directory again before opening. A different
+Session or working directory cancels this continuation. Status-read, activation and sidebar-readiness
+timeouts have distinct feedback; an activation timeout does not mean the saved setting was undone.
+Directory verification also has a timeout, and closing the Dashboard cancels its pending read.
+An already selected bundle is not force-enabled again; check its panel toggle on the DSH Plugins page
+if Diff remains unavailable. Closing Dashboard or changing its target cancels the pending open.
+Any completed Forge enablement remains saved, including after uninstalling this plugin.
+Startup never enables Forge. To turn it off, open **Plugins → Experimental plugins** and switch off
+**Change requests & worktrees**. This disables the whole official Forge bundle for the current profile,
+including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
+
+The header uses compact open and refresh icons with hover labels; busy actions show a loading icon.
+The open icon's hover hint explains the independent baseline. The Diff toolbar also uses an
+icon-only **Open in sidebar** action.
 
 **Select the comparison branch in the native view.** Its navigation API cannot receive the Dashboard
 Base or Git-tab baseline. Native scope and baseline choices belong to DSH; reopening may retain the
