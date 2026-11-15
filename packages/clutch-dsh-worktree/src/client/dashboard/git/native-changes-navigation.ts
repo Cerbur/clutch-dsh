@@ -35,6 +35,8 @@ export function createNativeChangesNavigation(options: {
   readonly verificationTimeoutMs?: number;
   readonly pollMs?: number;
   readonly onDiagnostic?: (event: NativeDiffDiagnostic) => void;
+  readonly syncBase?: (record: DashboardRecord, sessionId: string, address: string,
+    isCurrent: () => boolean, signal: AbortSignal) => Promise<unknown>;
 }) {
   let disposed = false;
   const pending = new Set<AbortController>();
@@ -43,7 +45,7 @@ export function createNativeChangesNavigation(options: {
     dispose() { disposed = true; for (const controller of pending) controller.abort(); },
     open(record: DashboardRecord, sessionIds: readonly string[], isCurrent: () => boolean,
       openSession = options.openSession, confirm?: ConfirmNativeForge): Promise<NativeChangesResult> {
-      const key = JSON.stringify([record.workspaceId, record.worktreeId, record.absolutePath]);
+      const key = JSON.stringify([record.workspaceId, record.worktreeId, record.absolutePath, record.baseBranch]);
       if (inFlight?.key === key && inFlight.isCurrent()) return inFlight.promise;
       const active = () => !disposed && isCurrent();
       const report = nativeDiffReporter(options.onDiagnostic);
@@ -157,6 +159,15 @@ export function createNativeChangesNavigation(options: {
             const sidebar = options.sidebar();
             if (!sidebar?.accepts(address)) return 'unavailable';
             sidebar.open(address);
+            if (options.syncBase) {
+              const sameTarget = () => {
+                const screen = options.screen();
+                return active() && screen.sessionId === target && screen.mountedSessionId === target &&
+                  screen.ready && screen.cwd === after.cwd;
+              };
+              try { await options.syncBase(record, target, address, sameTarget, controller.signal); }
+              catch { /* Optional Forge compatibility bridge must not break native navigation. */ }
+            }
             return 'opened';
           } catch (error) {
             if (!(error instanceof Error) || error.message !== 'sidebarRight: no session surface is mounted') return 'unavailable';

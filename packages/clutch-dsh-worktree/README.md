@@ -542,8 +542,9 @@ current readable comparison are required; refreshing or unavailable comparisons 
 this action. Clicking only opens the dialog; confirming creates the native Agent task.
 The committed-change row opens the native Diff sidebar directly when Forge is ready,
 after verifying the current Session's directory. Otherwise it opens the full Git & Changes
-view; it never enables Forge or switches Sessions. The native view owns its scope and
-baseline; the popover's baseline is not synchronized. The uncommitted-change row opens
+view; it never enables Forge or switches Sessions. On click, a compatible Forge view
+receives the saved Worktree Base and switches to branch scope; this includes uncommitted
+changes. Unsupported versions retain native choices. The uncommitted-change row opens
 the full Git & Changes view.
 
 The header button toggles the panel and highlights while open. Every Session defaults to open.
@@ -693,12 +694,17 @@ Startup never enables Forge. To turn it off, open **Plugins → Experimental plu
 including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
 
 The header uses compact open and refresh icons with hover labels; busy actions show a loading icon.
-The open icon's hover hint explains the independent baseline. The Diff toolbar also uses an
+The open icon's hover hint explains Base synchronization and its fallback. The Diff toolbar also uses an
 icon-only **Open in sidebar** action.
 
-**Select the comparison branch in the native view.** Its navigation API cannot receive the Dashboard
-Base or Git-tab baseline. Native scope and baseline choices belong to DSH; reopening may retain the
-existing tab's choices. For a Workspace inside a repository subdirectory, the native view compares the
+**Opening attempts to apply the saved Worktree Base.** A compatibility bridge shares Forge's
+Session store handle and applies the exact saved branch ref once per click, selecting branch
+scope and clearing any old commit selection. It does not continuously synchronize or write
+native Session metadata. Missing APIs, incompatible state, initialization timeout, or a
+commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
+Local/Main and a Git-tab-only baseline are not synchronized. Forge branch scope includes
+uncommitted changes, so its totals can differ from the committed-change row.
+For a Workspace inside a repository subdirectory, the native view compares the
 whole checkout containing that directory. The Dashboard's own Git view remains read-only; actions in
 the native view follow DSH's own behavior and permissions.
 

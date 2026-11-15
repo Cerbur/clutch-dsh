@@ -39,6 +39,35 @@ test('current blank Session wins over retained rows and uses encoded local URI w
   ]);
 });
 
+test('Base bridge runs only after authorized open and loses authority on Session change', async () => {
+  const f = fixture();
+  let finish;
+  let authority;
+  const navigation = createNativeChangesNavigation({
+    screen: () => f.screen, sidebar: () => f.sidebar,
+    manager: { canOpenNativeChanges: async () => true },
+    openSession: () => assert.fail('must not switch'),
+    syncBase: async (target, sessionId, address, isCurrent) => {
+      assert.equal(target.baseBranch, 'refs/heads/main');
+      assert.equal(sessionId, blankId);
+      assert.deepEqual(f.calls.at(-1), ['resource', address], 'open must precede Base synchronization');
+      authority = isCurrent;
+      await new Promise((resolve) => { finish = resolve; });
+    },
+  });
+  const pending = navigation.open(record, [], () => true);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(authority(), true);
+  f.screen = { ...f.screen, sessionId: 'new-session' };
+  assert.equal(authority(), false);
+  finish();
+  assert.equal(await pending, 'opened', 'a retired optional bridge does not undo the completed open');
+  navigation.dispose();
+  f.navigation.dispose();
+});
+
 test('matching target candidates switch through native navigation and require a fresh click', async () => {
   const f = fixture();
   f.screen = { sessionId: 'other', workspaceId: 'other-ws', cwd: '/other', ready: true, mountedSessionId: 'other' };

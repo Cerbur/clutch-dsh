@@ -58,6 +58,7 @@ import { renameWorktreeSession } from './session/session-rename.js';
 import { openWorktreeSession } from './session/session-navigation.js';
 import { createNativeChangesNavigation } from './dashboard/git/native-changes-navigation.js';
 import { ensureNativeForge } from './dashboard/git/native-forge-activation.js';
+import { createNativeForgeBaseBridge } from './dashboard/git/native-forge-base.js';
 import type { SessionBinding } from '../contract/index.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
@@ -104,6 +105,7 @@ interface ForkableSessions {
 }
 
 interface SidebarRightControllerLike {
+  active?: () => { id: string; contentId?: string; kind?: string } | undefined;
   mounted?: { getSnapshot(): string | undefined };
   isExpanded?: () => boolean;
   toggleExpanded?: () => void;
@@ -257,14 +259,25 @@ export function apply(ctx: Context): void {
       },
     };
   };
+  const forgeBase = createNativeForgeBaseBridge({
+    slots: ctx.slots,
+    activeTab: () => sidebarRightController(ctx)?.active?.(),
+  });
+  ctx.effect(() => () => forgeBase.dispose(), 'clutch-dsh-worktree: Forge Base bridge cleanup');
+  const syncBase: NonNullable<Parameters<typeof createNativeChangesNavigation>[0]['syncBase']> =
+    async (record, sessionId, address, isCurrent, signal) => {
+      const result = await forgeBase.sync({ sessionId, address, baseBranch: record.baseBranch, isCurrent, signal });
+      console.info('[Worktree native Diff]', JSON.stringify({ phase: 'base-sync', result }));
+    };
   // Popover clicks never activate Forge or select a different Session.
   const popoverNativeChanges = createNativeChangesNavigation({
     manager, screen: nativeChangesScreen, sidebar: nativeChangesSidebar,
-    openSession: () => {},
+    openSession: () => {}, syncBase,
   });
   ctx.effect(() => () => popoverNativeChanges.dispose(), 'clutch-dsh-worktree: popover native Changes cleanup');
   const nativeChanges = createNativeChangesNavigation({
     manager,
+    syncBase,
     onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
     ensureAvailable: (address, confirm, signal, isCurrent) => ensureNativeForge({
       manager, confirm, signal, isCurrent,

@@ -521,7 +521,14 @@ render 阶段就参与 record 解析，不等待 effect，从而保留 Dashboard
 Host 目录核验读取独立限时 15 秒；Client AbortSignal 仅作用于 Connection 传输，不进入
 序列化 RPC input，不改变 Host 的只读身份规则。超时/取消后的迟到成功不得重新触发打开。
 资源使用 `forge-changes/<编码 Session ID>/local`，显式指定原生 kind 和 sidebar destination；
-它没有 Base 参数，原生范围/基线独立于 Dashboard，子目录 Session 由原生 Forge 解析到整个 checkout。
+它没有 Base 参数；可选兼容桥接通过公开 Slot 注册表取得 Forge 的实际 store handle，
+在无 UI 的 Session header slot 中复用，由 renderer 提供同一 Session 实例，不调用 create()。
+仅在本次授权打开之后同步已保存的完整 branch ref，等待原生 byTab 初始化最多 1.5 秒，
+核验 Session/cwd、准确 contentId/tab ID 与注册项代际后调用原生 scoped/based actions。
+这只改变 Forge 的临时视图选择，不写 Session 元数据或 Sidecar；不是第二个 Diff 数据源。
+关闭/切换/卸载撤销待处理请求；Forge 注册项退出或替换时释放共享引用。
+未知 API、action 或状态形状及超时均保留原生行为；Local/Main、Git Tab 临时基线与 commit-only
+基线不参与同步。Forge 分支范围包含未提交改动；子目录 Session 仍由 Forge 解析到整个 checkout。
 这扩展历史 Git Dashboard 计划的插件内只读呈现，未修改 DSH 核心，详细来源见
 [native Diff plan](plans/2026-11-14-dashboard-native-diff.md)。
 

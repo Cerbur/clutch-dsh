@@ -360,7 +360,17 @@ still cancel pending navigation. Missing sidebar capabilities,
 failed directory verification and native adoption exceptions preserve Dashboard and report feedback.
 The action checks the exact native Forge definition via `sidebarRightTabs.candidates`, then synchronously
 opens the encoded `dsh-resource://forge-changes/<Session ID>/local` with explicit kind and `destination: 'sidebar'`.
-There is no baseline parameter; native scope/base are independent and may be retained on reopening.
+There is no native baseline navigation parameter. The optional `native-forge-base.ts` adapter
+reuses the winning Forge registration's store handle in a no-UI Session header slot.
+The renderer supplies the same Session instance; the adapter never calls handle.create(),
+uses private registry fields, or replaces Forge's component. Only an authorized open
+requests synchronization of the saved canonical branch ref. It pins the active local tab,
+waits at most 1.5 seconds for its native byTab bucket, then calls scoped/based once.
+Session/cwd/lifetime, active tab and registration identity are checked before writing.
+Registration withdrawal/replacement releases our extra store reference and retires requests.
+Unknown APIs/actions/state and timeouts retain native behavior; native manual choices after
+the click are not continuously overwritten. This is a guarded Forge-internal state contract,
+not a stable Forge integration API. Branch scope includes uncommitted changes.
 Source verification and compatibility limits are recorded in
 [`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
 
@@ -984,7 +994,7 @@ The committed metric uses an entry-owned native navigation instance without Forg
 or Session selection. Only the live current Session is authorized by Host. Closing the
 popover, opening Dashboard or changing Session invalidates pending navigation. Unavailable
 Forge or failed verification falls back to Dashboard; stale/Session-switching results do not
-navigate. Native scope and baseline remain independent of the popover comparison.
+navigate. Successful opens attempt the saved-Base bridge described above.
 The native MenuSurface supplies the same glass material as the activity panel, including
 reduced-transparency preferences; the panel adds rounded corners and a light shadow.
 The native material retains its frosted backdrop. Container animations must only translate:

@@ -192,6 +192,14 @@ enabled and the feature link. No commit, push, publish or upstream source change
 
 ## Pre-commit review (2026-11-15)
 
+Follow-up approved direction: use public Slot handle sharing to bridge Forge's internal
+Base actions without changing DSH. Apply the saved canonical Worktree Base only after a
+user click opens an authorized native local tab; never continuously synchronize. A hidden
+Session header contribution shares the exact live Forge handle, with bounded initialization
+waiting and registration/Session/tab cancellation. Unsupported versions retain native
+behavior. No native Session metadata is written. This supersedes the earlier no-Base-sync
+limitation for compatible Forge stores, but not for Local/Main or Git-tab-only baselines.
+
 Standards review found no blocking violations. Spec review found one P2: the activation continuation
 waited for the original current Session to mount before authorizing retained candidates. With no
 current Session or an unrelated loading Session, this timed out without selecting a valid candidate.
@@ -214,3 +222,44 @@ misnavigation path while preserving retained-candidate selection and the fresh-c
 Independent follow-up review confirmed both findings resolved with no remaining actionable findings.
 Final pre-commit workspace/patch checks, lint, typecheck, build, README parity and diff whitespace
 checks passed. The full upstream-enabled suite passed **1,544 tests, 0 failed, 0 skipped**.
+
+## Store-handle Base bridge validation (2026-11-15)
+
+The bridge uses SlotRegistry.entriesOfSlot/subscribe/register and a Session header contribution
+with Forge's exact handle. It does not use private registry fields, instantiate another store,
+patch upstream code or replace the Forge component. Native actions select branch scope and
+the saved canonical Base once per authorized click. Unsupported shapes and missing/ambiguous
+Base refs retain the native view; initial bucket waiting is bounded to 1.5 seconds.
+
+The first real UI attempt safely returned unsupported: the initial adapter expected an address
+field on the native active tab. Upstream TabRecord instead exposes contentId; the native claim
+uses the resource address as contentId. The adapter and regression fixture now use that contract.
+
+Validated against the linked feature build in ~/.dsh-test on port 3088:
+
+- Existing native Base main changed to saved qa/compare on a popover click (base-sync: synced).
+- Closing the native tab, then opening a fresh tab synchronized qa/compare on the first click.
+- Manually selecting main in Forge and refreshing preserved main; no continuous synchronization.
+- Dashboard's native-open icon also synchronized qa/compare.
+- Disabling Forge withdrew its renderer and popover fell back to Dashboard. Enabling it through
+  Dashboard confirmation automatically opened Diff and synchronized qa/compare using the new handle.
+- Temporarily pausing the test server held Host verification pending. Switching to another Worktree
+  Session before resuming produced no late Diff open and no Base-sync event. The server was restored.
+- A different Session with a noncanonical/missing saved Base opened the native view with no-base
+  fallback rather than borrowing qa/compare from the previous Session.
+
+Additional adapter tests cover waiting-bucket Session/tab cancellation, disposal, unload before
+the registry's batched notification, handle replacement, per-Session isolation, timeout, and
+unknown API/state fallback. These are fault-injection tests, not claims of real-UI version mutation.
+Screenshots are local acceptance artifacts under /tmp/dashboard-forge-ui-evidence/base-bridge-*.png.
+
+### Store bridge pre-commit review
+
+Independent Standards review found no documented violations or retained-handle leak.
+Spec review reproduced one P2: a ready bucket published after the initialization deadline
+could be consumed before the loop checked timeout. The deterministic regression failed
+with synced instead of timeout before the fix. The bridge now checks the deadline before
+reading the bucket and immediately before mutation; polling is limited to the remaining
+budget. A repeated eight-cycle unload/reload regression verifies every reference is released,
+late old publishers/cleanup cannot affect the new face, and disposal unregisters the listener.
+Follow-up Spec review confirmed the P2 resolved with no remaining actionable findings.
