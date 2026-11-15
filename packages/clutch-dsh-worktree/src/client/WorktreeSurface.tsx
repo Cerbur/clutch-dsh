@@ -40,11 +40,14 @@ import {
   type PendingDashboardNavigation,
 } from './dashboard/dashboard-navigation.js';
 import { buildSessionFileAddress, GitFileAddressError } from './dashboard/git/file-address.js';
+import { useNativeForgeConfirmation } from './dashboard/git/useNativeForgeConfirmation.js';
+import { sameWindowsPath } from '../contract/windows-path.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
 /** Retains shared state/actions and portals navigation into the workspace slot. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
+  const forgeConfirmation = useNativeForgeConfirmation(inputProps.t);
   const [internalDashboard, setInternalDashboard] = useState<DashboardSelection>();
   const pendingDashboard = useRef<PendingDashboardNavigation>();
   const pendingDashboardRecord = useRef<DashboardRecord>();
@@ -57,8 +60,17 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       )
     : undefined;
   const dashboard = inputProps.dashboardStore !== undefined ? externalDashboard : internalDashboard;
+  const nativeChangesSelection = useRef(dashboard);
+  nativeChangesSelection.current = dashboard;
+  useEffect(() => {
+    nativeChangesSelection.current = dashboard;
+    return () => {
+      if (nativeChangesSelection.current === dashboard) nativeChangesSelection.current = undefined;
+    };
+  }, [dashboard]);
   const setDashboard = useCallback(
     (selection: DashboardSelection | undefined) => {
+      nativeChangesSelection.current = selection;
       if (inputProps.dashboardStore !== undefined) {
         inputProps.dashboardStore.set(selection);
       }
@@ -130,14 +142,26 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           targetView?.checkout,
         );
 
+  // Accept the intended Session in the same render that native selection changes.
+  // Waiting for the settlement effect would unmount the Dashboard and reset its Git tab.
+  const pendingSelection = pendingDashboard.current?.selection;
+  const currentDashboard = dashboard !== undefined && pendingSelection !== undefined &&
+    pendingSelection.workspaceId === dashboard.workspaceId && pendingSelection.worktreeId === dashboard.worktreeId &&
+    pendingSelection.sessionId === source.currentSessionId ? pendingSelection : dashboard;
   const dashboardRecord = resolveDashboardRecord(
-    dashboard,
+    currentDashboard,
     source.mode,
     source.currentSessionId,
     source.workspaceIds,
     dashboard === undefined ? undefined : targetView?.worktrees,
     dashboardMainRecord,
   );
+  const nativeChangesRecordKey = dashboardRecord === undefined ? undefined : JSON.stringify([
+    dashboardRecord.workspaceId, dashboardRecord.worktreeId, dashboardRecord.absolutePath,
+    dashboardRecord.gitRootPath, dashboardRecord.status, dashboardRecord.health, dashboardRecord.diskCleanup,
+  ]);
+  const nativeChangesRecord = useRef(nativeChangesRecordKey);
+  nativeChangesRecord.current = nativeChangesRecordKey;
   useEffect(() => {
     if (
       dashboard !== undefined &&
@@ -175,7 +199,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         (candidate) => candidate.workspaceId === record.workspaceId,
       );
       const view = read.viewByWorkspace.get(record.workspaceId);
-      const sessionIds = dashboardSessionIds(
+      let sessionIds = dashboardSessionIds(
         record,
         source.sessions,
         view?.bindings ?? [],
@@ -188,10 +212,18 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           : workspaceSessionIds(source.workspaces, workspace.workspaceId, source.sessions.ids),
         view?.knownSessionIds ?? [],
       );
+      // A current blank may not yet appear in the target's retained membership.
+      // Keep its matching native directory instead of switching to a visible row.
+      const currentDirectory = inputProps.currentSessionDirectory?.();
+      if (currentDirectory?.sessionId !== undefined && currentDirectory.cwd &&
+          workspace?.sessionIds.includes(currentDirectory.sessionId) &&
+          (currentDirectory.cwd === record.absolutePath || sameWindowsPath(currentDirectory.cwd, record.absolutePath))) {
+        sessionIds = [currentDirectory.sessionId, ...sessionIds.filter((id) => id !== currentDirectory.sessionId)];
+      }
       const navigation = prepareDashboardNavigation(
         record,
         sessionIds,
-        source.currentSessionId,
+        currentDirectory?.sessionId ?? source.currentSessionId,
         source.sessions.phase ?? 'ready',
       );
       if (navigation.waitForSessionList === true) {
@@ -210,11 +242,17 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       }
       pendingDashboard.current = undefined;
       if (navigation.selection.sessionId === undefined) inputProps.closeRightSidebar?.();
+      if (navigation.selection.sessionId !== undefined && navigation.selection.sessionId !== source.currentSessionId) {
+        // Native selection may lead the Surface's list snapshot during a blank Session switch.
+        pendingDashboard.current = { selection: navigation.selection, originSessionId: source.currentSessionId };
+        return;
+      }
       setDashboard(navigation.selection);
     },
     [
       inputProps.dashboardLayout,
       inputProps.closeRightSidebar,
+      inputProps.currentSessionDirectory,
       inputProps.openSession,
       ordering.orderedSessionIdsByAccount,
       read.viewByWorkspace,
@@ -351,6 +389,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { t } = props;
   return (
     <NotificationProvider t={t} openSettings={props.openErrorSettings}>
+      {forgeConfirmation.dialog}
       {props.sidebarSeat && createPortal(<aside
         className={styles.surface}
         data-worktree-surface
@@ -529,6 +568,37 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               }
             } : undefined}
           onOpenFile={typeof props.openResource === 'function' ? onOpenFile : undefined}
+          onOpenNativeChanges={async (baseBranch, isBaseCurrent = () => true) => {
+            const isCurrent = () => isBaseCurrent() && nativeChangesSelection.current === dashboard && dashboard !== undefined &&
+              nativeChangesRecord.current === nativeChangesRecordKey;
+            mutation.setActionError(undefined);
+            const ids = dashboardSessionIds(dashboardRecord, source.sessions,
+              dashboardView?.bindings ?? [], source.archivedSessionIds, [],
+              dashboardWorkspace?.sessionIds ?? [], dashboardView?.knownSessionIds);
+            let switching = false;
+            const result = await props.openNativeChanges?.(dashboardRecord, ids, isCurrent, (sessionId) => {
+              if (!isCurrent() || dashboard === undefined) return;
+              const pending = { selection: { ...dashboard, sessionId }, originSessionId: source.currentSessionId };
+              pendingDashboard.current = pending;
+              pendingDashboardRecord.current = undefined;
+              try {
+                inputProps.openSession(sessionId);
+              } catch (error) {
+                if (pendingDashboard.current === pending) pendingDashboard.current = undefined;
+                throw error;
+              }
+              switching = true;
+              // Native selection can commit before this async action resumes.
+              if (nativeChangesSelection.current === dashboard || nativeChangesSelection.current === pending.selection) {
+                mutation.setActionError({ code: 'NATIVE_CHANGES_SESSION_SWITCHING',
+                  message: props.t('dashboard.git.native.session-switching'), retryable: true });
+              }
+            }, forgeConfirmation.confirm, { baseBranch })
+              .catch(() => 'verification-failed' as const) ?? 'unavailable';
+            if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
+            mutation.setActionError({ code: 'NATIVE_CHANGES_' + result.replaceAll('-', '_').toUpperCase(),
+              message: props.t(`dashboard.git.native.${result}`), retryable: true });
+          }}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
           }

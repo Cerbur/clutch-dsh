@@ -124,10 +124,10 @@ export function GitDiffView({ diff, onOpenFile, t }: GitDiffViewProps) {
           className={styles.gitDiffOpenInSidebar}
           onClick={() => onOpenFile(diff.path)}
           title={t('dashboard.git.openInSidebar')}
+          aria-label={t('dashboard.git.openInSidebar')}
           data-dashboard-git-open-file={diff.path}
         >
           <IconRightUpOutline16 size={14} className={styles.gitDiffOpenIcon} />
-          <span>{t('dashboard.git.openInSidebar')}</span>
         </button>
       )}
     </div>

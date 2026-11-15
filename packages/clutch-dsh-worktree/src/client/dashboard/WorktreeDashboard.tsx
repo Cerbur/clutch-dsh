@@ -109,6 +109,7 @@ export interface WorktreeDashboardProps {
   readonly onManageWorktree?: BatchManageWorktreesProps['onManage'];
   readonly onSyncBaseline?: (strategy: WorktreeSyncStrategy, baseBranch: string, requestId: string) => Promise<WorktreeSessionDispatchResult>;
   readonly onOpenFile?: (path: string) => void;
+  readonly onOpenNativeChanges?: (baseBranch?: string, isCurrent?: () => boolean) => Promise<void>;
 }
 
 function DashboardIcon({ kind }: { kind: DashboardTab | 'instructions' | 'actions' }) {
@@ -540,6 +541,7 @@ export function WorktreeDashboard({
   onManageWorktree,
   onSyncBaseline,
   onOpenFile,
+  onOpenNativeChanges,
   onSaveInstructions,
   onSaveBaseline,
   onFetchBranches,
@@ -1181,6 +1183,10 @@ export function WorktreeDashboard({
               defaultBaselineBranch={displayedBaseline}
               currentBranch={baselineCurrentBranch}
               capturedBaseline={record.baseCommit !== undefined}
+              onOpenNativeChanges={onOpenNativeChanges === undefined ? undefined : async (baseBranch, isCurrent) => {
+                await onOpenNativeChanges(baseBranch, isCurrent);
+                setRightSidebarOpen(isRightSidebarExpanded?.() ?? false);
+              }}
               onOpenFile={onOpenFile === undefined ? undefined : (filePath) => {
                 onOpenFile?.(filePath);
                 setRightSidebarOpen(isRightSidebarExpanded?.() ?? false);

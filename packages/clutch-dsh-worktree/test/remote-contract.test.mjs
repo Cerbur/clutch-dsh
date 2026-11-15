@@ -20,6 +20,7 @@ test('publishes the browser-safe Worktree Manager method names', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'readWorkspaceNavigation',
     'canReuseLocalSession',
+    'canOpenNativeChanges',
     'createWorktreeSession',
     'readWorktreeSessionState',
     'syncWorktreeBaseline',

@@ -1,5 +1,39 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.33 — 2026-11-16
+
+### 中文
+
+#### 版本说明
+
+- 本次包含新增功能，经发布决定在 0.1.x 阶段以 patch 版本 `0.1.33` 发布。
+
+#### 新增
+
+- 支持从 Dashboard 的 Git 与变更页打开 DSH 原生 Diff，按需确认启用官方 Forge，并在打开前核验目标 Session 的执行目录。
+- Forge 已就绪时，会话内 Worktree 浮窗的已提交变更行可直接打开原生 Diff，否则回到 Git 与变更页。
+
+#### 优化
+
+- 打开原生 Diff 时尝试同步 Dashboard 当前选择或浮窗已保存的 Base，并使用包含未提交改动的分支范围。
+- 切换 Session、目标或对比基线时取消过期的打开操作，并在 Forge 注册延迟或启用响应丢失时避免重复启用。
+
+### English
+
+#### Versioning note
+
+- This release includes new functionality and intentionally uses patch version `0.1.33` during the 0.1.x stage.
+
+#### Added
+
+- Open DSH's native Diff from the Dashboard's Git & Changes tab, with confirmation to enable the official Forge bundle when needed and verification of the target Session's execution directory before opening.
+- Open native Diff directly from the in-Session Worktree panel's committed-change row when Forge is ready, otherwise return to Git & Changes.
+
+#### Improved
+
+- Attempt to apply the Dashboard's selected Base or the panel's saved Base when opening native Diff, using branch scope that includes uncommitted changes.
+- Cancel stale opens when the Session, target, or comparison baseline changes, and avoid duplicate enablement when Forge registration is delayed or the enable response is lost.
+
 ## 0.1.32 — 2026-11-15
 
 ### 中文

@@ -47,6 +47,8 @@ import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contra
 import { WorktreeToolSettings } from './tool-settings.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
+import { canOpenNativeChanges } from './native-changes.js';
+import type { NativeChangesTarget } from '../contract/native-changes.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -210,6 +212,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
         !bindings.some((binding) => binding.sessionId === input.sessionId) &&
         await samePhysicalPath(session.cwd, workspace.rootPath);
     });
+  }
+
+  @Remote
+  canOpenNativeChanges(input: NativeChangesTarget): Promise<WorktreeRemoteResult<boolean>> {
+    return project(() => canOpenNativeChanges(this.manager, this.dsh, input));
   }
 
   @Remote

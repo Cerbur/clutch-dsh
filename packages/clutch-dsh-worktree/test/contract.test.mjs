@@ -97,6 +97,7 @@ test('exposes the approved Manager and Remote methods', () => {
   assert.deepEqual(WORKTREE_REMOTE_METHODS, [
     'readWorkspaceNavigation',
     'canReuseLocalSession',
+    'canOpenNativeChanges',
     'createWorktreeSession',
     'readWorktreeSessionState',
     'syncWorktreeBaseline',

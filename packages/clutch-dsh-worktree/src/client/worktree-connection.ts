@@ -1,4 +1,7 @@
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client';
+import type { NativeChangesManager } from '../contract/native-changes.js';
+import { NATIVE_FORGE_BUNDLE } from './dashboard/git/native-forge-activation.js';
+import type { NativeForgeManager, NativeForgeApplication } from './dashboard/git/native-forge-activation.js';
 
 import type {
   BranchRecord,
@@ -21,6 +24,7 @@ export const WORKTREE_CONNECTION_CHANNEL = '/api' as const;
  */
 export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   canReuseLocalSession: 'worktreeManager/canReuseLocalSession',
+  canOpenNativeChanges: 'worktreeManager/canOpenNativeChanges',
   createWorktreeSession: 'worktreeManager/createWorktreeSession',
   readWorktreeSessionState: 'worktreeManager/readWorktreeSessionState',
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
@@ -82,7 +86,7 @@ export class WorktreeConnectionError extends Error {
   }
 }
 
-export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager {
+export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager, NativeChangesManager, NativeForgeManager {
   startGitWatch(input: { workspaceId: string; worktreeId: string }, signal: AbortSignal): Promise<string>;
   watchGitChanges(watchId: string, afterRevision: number, signal: AbortSignal): Promise<number>;
   stopGitWatch(watchId: string): Promise<null>;
@@ -186,9 +190,9 @@ export function createWorktreeConnectionAdapter(
   const branchReads = new Map<string, Promise<readonly BranchRecord[]>>();
   let disposed = false;
 
-  async function call(
-    method: WorktreeRemoteMethod,
-    input: unknown,
+  async function request(
+    endpoint: string,
+    args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<ConnectionResult> {
     if (disposed) throw disposedError();
@@ -197,14 +201,13 @@ export function createWorktreeConnectionAdapter(
     if (signal?.aborted) controller.abort();
     else signal?.addEventListener('abort', abort, { once: true });
     inFlight.add(controller);
-    const endpoint = WORKTREE_CONNECTION_ENDPOINTS[method];
     try {
       let result: ConnectionResult;
       try {
         result = await rpc.call(
           WORKTREE_CONNECTION_CHANNEL,
           endpoint,
-          { args: { input } },
+          { args },
           controller.signal,
         );
       } catch (error) {
@@ -218,11 +221,44 @@ export function createWorktreeConnectionAdapter(
     }
   }
 
+  function call(method: WorktreeRemoteMethod, input: unknown, signal?: AbortSignal) {
+    return request(WORKTREE_CONNECTION_ENDPOINTS[method], { input }, signal);
+  }
+
+  async function nativeCall(endpoint: string, args: Record<string, unknown>, signal: AbortSignal) {
+    const result = await request(endpoint, args, signal);
+    if (!result.ok) gatewayFailure(endpoint, result);
+    // Native methods return their value directly inside the Gateway envelope.
+    return result.value;
+  }
+
   async function invoke<Value>(method: WorktreeRemoteMethod, input: unknown): Promise<Value> {
     return unwrap<Value>(WORKTREE_CONNECTION_ENDPOINTS[method], await call(method, input));
   }
 
   return {
+    async readNativeForge(signal) {
+      const endpoint = 'pluginManager/listBundles';
+      const value = await nativeCall(endpoint, {}, signal);
+      if (!Array.isArray(value)) throw invalidResult(endpoint);
+      const matches = value.filter((row: unknown) => isRecord(row) && row.name === NATIVE_FORGE_BUNDLE);
+      if (matches.length === 0) return undefined;
+      const row: unknown = matches[0];
+      if (matches.length !== 1 || !isRecord(row) || typeof row.enabled !== 'boolean') throw invalidResult(endpoint);
+      return { enabled: row.enabled, manageable: row.error === undefined && row.readOnlyReason === undefined &&
+        row.availability !== 'missing' };
+    },
+    async enableNativeForge(signal) {
+      const endpoint = 'pluginManager/setBundleEnabled';
+      const value = await nativeCall(endpoint, { name: NATIVE_FORGE_BUNDLE, enabled: true }, signal);
+      if (!isRecord(value) || value.target !== NATIVE_FORGE_BUNDLE || value.stage !== 'enable' ||
+          typeof value.application !== 'string' ||
+          !['applied', 'restart-required', 'overridden', 'failed', 'cancelled'].includes(value.application)) {
+        throw invalidResult(endpoint);
+      }
+      if (value.error !== undefined) return 'failed';
+      return value.application as NativeForgeApplication;
+    },
     startGitWatch: async (input, signal) => unwrap<string>(
       WORKTREE_CONNECTION_ENDPOINTS.startGitWatch, await call('startGitWatch', input, signal)),
     watchGitChanges: async (watchId, afterRevision, signal) => unwrap<number>(
@@ -303,6 +339,8 @@ export function createWorktreeConnectionAdapter(
     listBindings: (input) => invoke('listBindings', input),
     bindSession: (input) => invoke('bindSession', input),
     canReuseLocalSession: (input) => invoke('canReuseLocalSession', input),
+    canOpenNativeChanges: async (input, signal) => unwrap<boolean>(
+      WORKTREE_CONNECTION_ENDPOINTS.canOpenNativeChanges, await call('canOpenNativeChanges', input, signal)),
     createWorktreeSession: (input) => invoke('createWorktreeSession', input),
     readWorktreeSessionState: (input) => invoke('readWorktreeSessionState', input),
     dispose(): void {

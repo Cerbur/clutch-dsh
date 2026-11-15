@@ -1,8 +1,9 @@
 import { NotificationToasts } from '../../surface/components/NotificationToasts.js';
+import { IconLoadingOutline16, IconRefreshOutline16, IconRightUpOutline16 } from '../../dsh-icons.js';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
   WorktreeGitCommit,
@@ -42,6 +43,7 @@ export interface WorktreeGitPanelProps {
   /** The record captured an acquisition commit the Manager can use implicitly. */
   readonly capturedBaseline?: boolean;
   readonly onOpenFile?: (path: string) => void;
+  readonly onOpenNativeChanges?: (baseBranch?: string, isCurrent?: () => boolean) => Promise<void>;
   readonly t: WorktreeTranslate;
 }
 
@@ -117,9 +119,11 @@ export function WorktreeGitPanel({
   context,
   capturedBaseline,
   onOpenFile,
+  onOpenNativeChanges,
   t,
 }: WorktreeGitPanelProps) {
   const isMain = isMainWorktreeId(worktreeId);
+  const [openingNativeChanges, setOpeningNativeChanges] = useState(false);
   const selectedDefaultBaseline = normalizeBaselineBranch(defaultBaselineBranch, currentBranch);
   const state = useWorktreeGitState({
     manager,
@@ -159,6 +163,11 @@ export function WorktreeGitPanel({
     : state.branches.status === 'ready'
       ? state.branches.error
       : undefined;
+  const nativeSelection = useRef<object | undefined>(undefined);
+  useLayoutEffect(() => {
+    nativeSelection.current = {};
+    return () => { nativeSelection.current = undefined; };
+  }, [workspaceId, worktreeId, state.baselineBranch]);
   const baselineCommit = historyValue?.baseline?.commit;
   const baselineRef = state.baselineBranch ?? historyValue?.baseline?.ref;
   const targetLabel = state.view === 'summary'
@@ -301,16 +310,41 @@ export function WorktreeGitPanel({
             </dl>
           )}
         </div>
-        <button
-          type="button"
-          className={styles.gitRefresh}
-          data-dashboard-git-refresh
-          disabled={refreshing || state.history.status === 'loading'}
-          aria-busy={refreshing || state.history.status === 'loading'}
-          onClick={() => void state.refresh()}
-        >
-          {refreshing ? t('dashboard.git.refreshing') : t('dashboard.git.refresh')}
-        </button>
+        <div className={styles.gitPanelActions}>
+          <button
+            type="button"
+            className={styles.gitRefresh}
+            data-dashboard-git-native-changes
+            aria-label={t(openingNativeChanges ? 'dashboard.git.native.opening' : 'dashboard.git.native.open')}
+            title={t('dashboard.git.native.open') + '\n' + t('dashboard.git.native.baselineHint')}
+            disabled={openingNativeChanges}
+            aria-busy={openingNativeChanges}
+            onClick={async () => {
+              setOpeningNativeChanges(true);
+              const selection = nativeSelection.current;
+              try {
+                await onOpenNativeChanges?.(state.baselineBranch,
+                  () => selection !== undefined && nativeSelection.current === selection);
+              }
+              finally { setOpeningNativeChanges(false); }
+            }}
+          >
+            {openingNativeChanges ? <IconLoadingOutline16 size={16} /> : <IconRightUpOutline16 size={16} />}
+          </button>
+          <button
+            type="button"
+            className={styles.gitRefresh}
+            data-dashboard-git-refresh
+            aria-label={t(refreshing || state.history.status === 'loading' ? 'dashboard.git.refreshing' : 'dashboard.git.refresh')}
+            title={t('dashboard.git.refresh')}
+            disabled={refreshing || state.history.status === 'loading'}
+            aria-busy={refreshing || state.history.status === 'loading'}
+            onClick={() => void state.refresh()}
+          >
+            {refreshing || state.history.status === 'loading'
+              ? <IconLoadingOutline16 size={16} /> : <IconRefreshOutline16 size={16} />}
+          </button>
+        </div>
       </header>
 
 
