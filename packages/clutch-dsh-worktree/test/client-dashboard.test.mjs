@@ -1819,6 +1819,68 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   assert.equal(typeof render().onCreateSession, 'function');
   const surfaceContentProps = (tree) =>
     findAll(tree, (item) => item.type === 'SurfaceContent')[0].props.props;
+  // Even an unbound blank absent from target rows can keep its matching native effective cwd.
+  target = record;
+  surfaceInput.currentSessionDirectory = () => ({ sessionId: 'current', cwd: record.absolutePath });
+  workspace.sessionIds = ['current', 'head'];
+  sourceState.sessions.byId.current = { blank: true, cwd: '/original-workspace' };
+  sourceState.sessions.ids = ['head', 'current'];
+  bindings = [
+    { workspaceId: 'repo', worktreeId: 'wt', sessionId: 'head' },
+  ];
+  selected = undefined;
+  calls.splice(0);
+  surfaceContentProps(renderTree(false)).openDashboard(record);
+  assert.deepEqual(selected, selection);
+  assert.deepEqual(calls, []);
+  let nativeInputs;
+  sourceState.currentSessionId = 'lagging';
+  sourceState.sessions.current = 'lagging';
+  selected = undefined;
+  surfaceContentProps(renderTree(false)).openDashboard(record);
+  assert.equal(selected, undefined, 'wait for the Surface list to catch up with native blank selection');
+  assert.deepEqual(calls, []);
+  sourceState.currentSessionId = 'current';
+  sourceState.sessions.current = 'current';
+  renderTree(false);
+  assert.deepEqual(selected, selection);
+  surfaceInput.openNativeChanges = async (nativeTarget, ids, isCurrent) => {
+    nativeInputs = { nativeTarget, ids, current: isCurrent() };
+    return 'session-required';
+  };
+  await render().onOpenNativeChanges();
+  assert.deepEqual(nativeInputs, { nativeTarget: record, ids: ['head'], current: true });
+  assert.deepEqual(calls.splice(0), [
+    ['error', undefined],
+    ['error', { code: 'NATIVE_CHANGES_SESSION_REQUIRED', message: en['dashboard.git.native.session-required'], retryable: true }],
+  ]);
+  delete surfaceInput.currentSessionDirectory;
+  let completeNative;
+  let nativeIsCurrent;
+  surfaceInput.openNativeChanges = (_target, _ids, isCurrent) => {
+    nativeIsCurrent = isCurrent;
+    return new Promise((resolve) => { completeNative = resolve; });
+  };
+  const changedTargetPending = render().onOpenNativeChanges();
+  target = { ...record };
+  renderTree(false);
+  assert.equal(nativeIsCurrent(), true, 'equivalent record projection does not retire navigation');
+  target = { ...record, absolutePath: record.absolutePath + '/moved' };
+  renderTree(false);
+  assert.equal(nativeIsCurrent(), false, 'a changed directory projection retires navigation');
+  completeNative('session-required');
+  await changedTargetPending;
+  assert.deepEqual(calls.splice(0), [['error', undefined]]);
+  target = record;
+  const nativePending = render().onOpenNativeChanges();
+  render().onClose();
+  assert.equal(nativeIsCurrent(), false, 'closing retires navigation before the next React render');
+  completeNative('session-required');
+  await nativePending;
+  assert.deepEqual(calls.splice(0), [['error', undefined]], 'late errors do not revive the closed Dashboard');
+  delete surfaceInput.openNativeChanges;
+  delete sourceState.sessions.byId.current;
+  bindings = [{ workspaceId: 'repo', worktreeId: 'wt', sessionId: 'current' }];
   target = record;
   selected = selection;
   sourceState.currentSessionId = 'current';

@@ -14,6 +14,7 @@ import { selectPopoverTarget, type PopoverTarget } from './popover-target.js';
 import { observePopoverPlacement } from './popover-placement.js';
 import { WorktreeBaselineEditor, useWorktreeBaselineSync } from './WorktreeDashboard.js';
 import styles from './worktree-popover.css';
+import type { NativeChangesResult } from './git/native-changes-navigation.js';
 
 export interface WorktreePopoverServices {
   readonly dashboardStore: SnapshotStore<DashboardSelection | undefined>;
@@ -23,6 +24,8 @@ export interface WorktreePopoverServices {
   readonly refreshContext: (workspaceId: string) => Promise<void>;
   readonly createSession: (record: WorktreeRecord, isCurrent: () => boolean) => Promise<unknown>;
   readonly openSession: (workspaceId: string, sessionId: string) => void;
+  readonly openNativeChanges?: (record: WorktreeRecord, sessionId: string,
+    isCurrent: () => boolean) => Promise<NativeChangesResult>;
   readonly expand: (sessionId: string, tab: 'overview' | 'git', workspaceId: string, worktreeId: string) => void;
 }
 export type WorktreePopoverProps = DashboardHeaderActionProps & WorktreePopoverServices;
@@ -192,6 +195,25 @@ function PopoverContent(props: WorktreePopoverProps & {
     props.expand(String(sessionId), 'git', workspaceId, target.kind === 'worktree' ? target.record.worktreeId : 'main');
   };
   const record = target.kind === 'worktree' ? target.record : undefined;
+  const [openingDiff, setOpeningDiff] = useState(false);
+  const diffPending = useRef(false);
+  const openCommitted = async () => {
+    if (diffPending.current) return;
+    if (!record || !props.openNativeChanges) { expand(); return; }
+    const lifetime = refreshLifetime.current;
+    const isCurrent = () => alive.current && lifetime !== undefined && !lifetime.signal.aborted;
+    diffPending.current = true;
+    setOpeningDiff(true);
+    try {
+      const result = await props.openNativeChanges(record, String(sessionId), isCurrent);
+      if (isCurrent() && result !== 'opened' && result !== 'stale' && result !== 'session-switching') expand();
+    } catch {
+      if (isCurrent()) expand();
+    } finally {
+      diffPending.current = false;
+      setOpeningDiff(false);
+    }
+  };
   const watchedWorktreeId = record?.worktreeId ?? (target.kind === 'main' ? 'main' : undefined);
   useEffect(() => {
     if (!props.active || !workspaceId || !watchedWorktreeId || !manager.startGitWatch ||
@@ -271,7 +293,9 @@ function PopoverContent(props: WorktreePopoverProps & {
     </PopoverSyncRow> : <button type="button" className={styles.popoverRow}
       data-popover-metric={metric} disabled>{content}</button>;
     return <button type="button" className={styles.popoverRow} data-popover-metric={metric}
-      onClick={expand} disabled={!record && target.kind !== 'main'} title={t('dashboard.git.title')}>
+      onClick={metric === 'committed' ? () => void openCommitted() : expand}
+      disabled={(!record && target.kind !== 'main') || (metric === 'committed' && openingDiff)}
+      title={t(metric === 'committed' ? 'dashboard.committedChanges' : 'dashboard.git.title')}>
       {content}
     </button>;
   };

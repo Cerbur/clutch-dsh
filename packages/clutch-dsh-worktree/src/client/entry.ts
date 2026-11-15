@@ -56,6 +56,9 @@ import {
 } from './session/worktree-session.js';
 import { renameWorktreeSession } from './session/session-rename.js';
 import { openWorktreeSession } from './session/session-navigation.js';
+import { createNativeChangesNavigation } from './dashboard/git/native-changes-navigation.js';
+import { ensureNativeForge } from './dashboard/git/native-forge-activation.js';
+import { createNativeForgeBaseBridge } from './dashboard/git/native-forge-base.js';
 import type { SessionBinding } from '../contract/index.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
@@ -102,9 +105,11 @@ interface ForkableSessions {
 }
 
 interface SidebarRightControllerLike {
+  active?: () => { id: string; contentId?: string; kind?: string } | undefined;
+  mounted?: { getSnapshot(): string | undefined };
   isExpanded?: () => boolean;
   toggleExpanded?: () => void;
-  openResource?: (address: string, options?: { params?: { line?: number } }) => void;
+  openResource?: (address: string, options?: { params?: { line?: number }; kind?: string; destination?: 'sidebar' }) => void;
 }
 
 function sidebarRightController(ctx: Context): SidebarRightControllerLike | undefined {
@@ -214,6 +219,82 @@ export function apply(ctx: Context): void {
   const restartNotice = new RestartNotice((signal) => manager.probeHost(signal));
   const dashboardStore = createSnapshotStore<DashboardSelection | undefined>(undefined);
   const sessions = ctx.sessions;
+  const nativeChangesScreen = () => {
+    try {
+      const uiSession = ctx.get('uiSession') as {
+        adapter?: { current?: { getSnapshot(): { key?: string } } };
+      } | undefined;
+      const sessionId = uiSession?.adapter?.current?.getSnapshot?.()?.key;
+      const binding = sessionId === undefined ? undefined : sessions.binding?.(sessionId as SessionId);
+      const snapshot = binding?.session.getSnapshot();
+      const cwd = binding?.session.projections?.faceOf?.('workingDirectory').getSnapshot();
+      return {
+        sessionId,
+        supported: typeof uiSession?.adapter?.current?.getSnapshot === 'function' &&
+          typeof sessions.binding === 'function' &&
+          typeof sidebarRightController(ctx)?.mounted?.getSnapshot === 'function',
+        workspaceId: ctx.workspaces.list.getSnapshot().items
+          .find((workspace) => workspace.sessionIds.includes(sessionId as SessionId))?.workspaceId,
+        cwd: typeof cwd === 'string' ? cwd : undefined,
+        ready: snapshot?.openState === 'open' && !snapshot.removed,
+        mountedSessionId: sidebarRightController(ctx)?.mounted?.getSnapshot(),
+      };
+    } catch {
+      return { supported: false, ready: false };
+    }
+  };
+  const nativeChangesSidebar = () => {
+    const sidebar = sidebarRightController(ctx);
+    const tabs = ctx.get('sidebarRightTabs') as {
+      candidates?: (address: string) => readonly { kind: string; id: string }[];
+    } | undefined;
+    if (typeof sidebar?.openResource !== 'function' || typeof sidebar.isExpanded !== 'function' ||
+        typeof sidebar.toggleExpanded !== 'function' || typeof tabs?.candidates !== 'function') return undefined;
+    return {
+      accepts: (address: string) => tabs.candidates!(address).some((tab) =>
+        tab.kind === 'forge-changes' && tab.id === '@deepseek-ai/dsh-experimental-client-ui-forge/changes'),
+      open: (address: string) => {
+        sidebar.openResource!(address, { kind: 'forge-changes', destination: 'sidebar' });
+        if (!sidebar.isExpanded!()) sidebar.toggleExpanded!();
+      },
+    };
+  };
+  const forgeBase = createNativeForgeBaseBridge({
+    slots: ctx.slots,
+    activeTab: () => sidebarRightController(ctx)?.active?.(),
+  });
+  ctx.effect(() => () => forgeBase.dispose(), 'clutch-dsh-worktree: Forge Base bridge cleanup');
+  const syncBase: NonNullable<Parameters<typeof createNativeChangesNavigation>[0]['syncBase']> =
+    async (_record, sessionId, address, isCurrent, signal, baseBranch) => {
+      const result = await forgeBase.sync({ sessionId, address, baseBranch, isCurrent, signal });
+      console.info('[Worktree native Diff]', JSON.stringify({ phase: 'base-sync', result }));
+    };
+  // Popover clicks never activate Forge or select a different Session.
+  const popoverNativeChanges = createNativeChangesNavigation({
+    manager, screen: nativeChangesScreen, sidebar: nativeChangesSidebar,
+    openSession: () => {}, syncBase,
+  });
+  ctx.effect(() => () => popoverNativeChanges.dispose(), 'clutch-dsh-worktree: popover native Changes cleanup');
+  const nativeChanges = createNativeChangesNavigation({
+    manager,
+    syncBase,
+    onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
+    ensureAvailable: (address, confirm, signal, isCurrent) => ensureNativeForge({
+      manager, confirm, signal, isCurrent,
+      onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
+      ready: () => {
+        const tabs = ctx.get('sidebarRightTabs') as {
+          candidates?: (address: string) => readonly { kind: string; id: string }[];
+        } | undefined;
+        return tabs?.candidates?.(address).some((tab) =>
+          tab.kind === 'forge-changes' && tab.id === '@deepseek-ai/dsh-experimental-client-ui-forge/changes') ?? false;
+      },
+    }),
+    screen: nativeChangesScreen,
+    openSession: (sessionId) => openWorktreeSession(ctx.uiWorkspace, sessions, sessionId as SessionId),
+    sidebar: nativeChangesSidebar,
+  });
+  ctx.effect(() => () => nativeChanges.dispose(), 'clutch-dsh-worktree: native Changes navigation cleanup');
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
   const mountWorkspaceSidebar = workspaceSidebarMount(slots);
   const directoryFlow = createWorkspaceDirectoryFlow(ctx.slots, async (path) => {
@@ -546,6 +627,10 @@ export function apply(ctx: Context): void {
         hooks: { worktreeContext: contextProjection.store },
         openDashboard: openDashboardForSession,
         manager, viewReader, dashboardStore, subscribeChanges: toolChanges.subscribe,
+        openNativeChanges: (record: import('../contract/index.js').WorktreeRecord,
+          sessionId: string, isCurrent: () => boolean) =>
+          popoverNativeChanges.open(record, [], () => isCurrent() &&
+            dashboardStore.getSnapshot() === undefined && nativeChangesScreen().sessionId === sessionId),
         refreshContext: (workspaceId: string) => contextProjection.invalidate(workspaceId),
         createSession: (record: import('../contract/index.js').WorktreeRecord, isCurrent: () => boolean) =>
           worktreeSessionConnector.create({ workspaceId: record.workspaceId, worktreeId: record.worktreeId,
@@ -597,6 +682,9 @@ export function apply(ctx: Context): void {
           mountWorkspaceSidebar,
           available: true,
           dashboardLayout: ctx.layout,
+          currentSessionDirectory: () => nativeChangesScreen(),
+          openNativeChanges: (record, sessionIds, isCurrent, openSession, confirm, baseSelection) =>
+            nativeChanges.open(record, sessionIds, isCurrent, openSession, confirm, baseSelection),
           openErrorSettings: () => openWorktreeErrorSettings(ctx.slots),
           openResource: (address: string, options?: { line?: number }) => {
             const sidebar = sidebarRightController(ctx);

@@ -540,7 +540,12 @@ Fetch and conflict-checked saving. Click **Ahead / Behind** to open the **Sync w
 dialog and choose Rebase or Merge. A healthy active Worktree, saved named baseline and
 current readable comparison are required; refreshing or unavailable comparisons disable
 this action. Clicking only opens the dialog; confirming creates the native Agent task.
-The committed and uncommitted change rows open the full Git & Changes view.
+The committed-change row opens the native Diff sidebar directly when Forge is ready,
+after verifying the current Session's directory. Otherwise it opens the full Git & Changes
+view; it never enables Forge or switches Sessions. On click, a compatible Forge view
+receives the saved Worktree Base and switches to branch scope; this includes uncommitted
+changes. Unsupported versions retain native choices. The uncommitted-change row opens
+the full Git & Changes view.
 
 The header button toggles the panel and highlights while open. Every Session defaults to open.
 Closing via the header or Escape stores that Session's closed marker in localStorage; manually
@@ -658,6 +663,51 @@ application is used. If no application is available or the Host request fails, t
 existing VS Code protocol-link fallback.
 
 ### Use Git & Changes
+
+Click the **Open native local changes** arrow icon in the Git & Changes header to open DSH's **Local changes**
+view in the right sidebar for the selected Worktree (or Local/Main). The current Session is preferred
+when its native working directory matches, including a blank new Session: no message is required.
+If no matching Session is available, create one from this Worktree's Dashboard and retry. If a matching
+existing Session must be opened, the action switches to it and asks you to click again after it loads.
+The Dashboard and its selected Git tab stay open throughout this switch.
+Directory verification failures, a pending Session switch, and missing native capabilities show feedback
+without opening another directory's Diff. This requires the native DSH right sidebar and the updated
+Worktree Host; reload the Host after rebuilding this plugin.
+
+If the official Forge bundle is off, clicking the open icon asks you to **Enable and open Diff**.
+The confirmation explains that Forge also includes native Worktree and GitHub integration and affects
+every Session using the current profile. After confirmation, the plugin enables Forge through DSH's
+Plugin Manager, waits for the native Diff to register, verifies the target directory, and opens it
+without another click. Cancel leaves the setting unchanged. If DSH requires a restart, reports a
+configuration override, or cannot load the panel, the action explains how to retry.
+If the enable response is lost or times out, the action briefly waits for native registration and
+checks the saved Forge selection without sending another enable request. It also waits for the
+same Session's sidebar to mount, then verifies the directory again before opening. A different
+Session or working directory cancels this continuation. Status-read, activation and sidebar-readiness
+timeouts have distinct feedback; an activation timeout does not mean the saved setting was undone.
+Directory verification also has a timeout, and closing the Dashboard cancels its pending read.
+An already selected bundle is not force-enabled again; check its panel toggle on the DSH Plugins page
+if Diff remains unavailable. Closing Dashboard or changing its target cancels the pending open.
+Any completed Forge enablement remains saved, including after uninstalling this plugin.
+Startup never enables Forge. To turn it off, open **Plugins → Experimental plugins** and switch off
+**Change requests & worktrees**. This disables the whole official Forge bundle for the current profile,
+including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
+
+The header uses compact open and refresh icons with hover labels; busy actions show a loading icon.
+The open icon's hover hint explains Base synchronization and its fallback. The Diff toolbar also uses an
+icon-only **Open in sidebar** action.
+
+**Opening attempts to apply the Base currently selected in Git & Changes.** A compatibility bridge shares Forge's
+Session store handle and applies the selected canonical branch ref once per click, selecting branch
+scope and clearing any old commit selection. It does not continuously synchronize or write
+native Session metadata. Missing APIs, incompatible state, initialization timeout, or a
+commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
+This also supports Local/Main with a selected branch. Selecting None or a commit-only Base keeps native behavior.
+Changing the selected Base or leaving the Git tab cancels a pending open. The popover still uses the saved Worktree Base. Forge branch scope includes
+uncommitted changes, so its totals can differ from the committed-change row.
+For a Workspace inside a repository subdirectory, the native view compares the
+whole checkout containing that directory. The Dashboard's own Git view remains read-only; actions in
+the native view follow DSH's own behavior and permissions.
 
 Open the **Git & Changes** tab from a managed Worktree or Main Dashboard. Main reads the current Workspace-root
 commit history directly and prepends an **Uncommitted changes** entry when the root has tracked, staged, unstaged, or

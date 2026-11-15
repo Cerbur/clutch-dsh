@@ -344,6 +344,66 @@ Dashboard remains a page-level target. Its top-right navigation action becomes N
 Sessions. Explicit Sidebar Session opens (including the same Session), mode exit, and removal of the selected
 identity close the dashboard. No native Session or Workspace data is mutated by the Dashboard navigation.
 
+The Git header's native Changes action uses `dashboard/git/native-changes-navigation.ts`. It prefers
+the live `uiSession.adapter.current` binding, including blanks; its effective directory comes from
+`session.projections.faceOf('workingDirectory')`, never the list's original header cwd. Dashboard entry
+also keeps a matching current blank instead of switching to a visible retained row. The new read-only
+`canOpenNativeChanges` endpoint on the existing Connection verifies Workspace membership, a fresh target
+path and health, and existing physical directory identity on the Host. No Session or binding is mutated.
+After that await, the Client rechecks selection lifetime, current identity, directory, `openState === 'open'`
+and `sidebarRight.mounted`. Switching to a retained candidate returns retry feedback without resource
+navigation; a fresh click is required after load. The Surface supplies the Session-navigation callback,
+registering the target in its pending Dashboard navigation before calling native navigation. On selection
+commit, the same-target pending identity participates in record resolution before effects settle it,
+so the Dashboard and selected Git tab remain mounted. Closing, mode changes and unrelated selection
+still cancel pending navigation. Missing sidebar capabilities,
+failed directory verification and native adoption exceptions preserve Dashboard and report feedback.
+The action checks the exact native Forge definition via `sidebarRightTabs.candidates`, then synchronously
+opens the encoded `dsh-resource://forge-changes/<Session ID>/local` with explicit kind and `destination: 'sidebar'`.
+There is no native baseline navigation parameter. The optional `native-forge-base.ts` adapter
+reuses the winning Forge registration's store handle in a no-UI Session header slot.
+The renderer supplies the same Session instance; the adapter never calls handle.create(),
+uses private registry fields, or replaces Forge's component. Only an authorized open
+requests synchronization of the canonical branch ref selected in Dashboard's Git tab (including Main),
+or the saved Worktree Base for popover clicks. An explicit empty Dashboard selection never falls back
+to the saved Base. Changing Base or unmounting the Git panel retires the pending click. It pins the active local tab,
+waits at most 1.5 seconds for its native byTab bucket, then calls scoped/based once.
+Session/cwd/lifetime, active tab and registration identity are checked before writing.
+Registration withdrawal/replacement releases our extra store reference and retires requests.
+Unknown APIs/actions/state and timeouts retain native behavior; native manual choices after
+the click are not continuously overwritten. This is a guarded Forge-internal state contract,
+not a stable Forge integration API. Branch scope includes uncommitted changes.
+Source verification and compatibility limits are recorded in
+[`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
+
+If the native definition is absent, `native-forge-activation.ts` reads the official Forge bundle
+through the existing Connection adapter. A disabled bundle requires the Surface's native Modal
+confirmation before the adapter calls `pluginManager/setBundleEnabled` with the fixed bundle name
+and `enabled: true`. Native endpoints return direct Gateway values, unlike Worktree's nested result.
+The confirmation is cancelled on action retirement or Surface unmount. The action rechecks bundle
+state after confirmation, bounds each management request and Client registration wait to 15 seconds,
+and only continues directory validation when the exact native definition is registered. Existing
+selected bundles are never re-enabled to override row-level settings. Restart-required, overridden,
+failed and registration-timeout outcomes preserve Dashboard and report localized feedback.
+An enable RPC timeout or lost response does not prove the Host mutation failed. The action grants
+one bounded 15-second registration recovery window, then rereads the saved selection and rechecks
+registration before continuing, without another enable request. An explicit failed/restart/override
+response is not recovered this way. After activation, the same Session can take up to 15 seconds
+to finish loading/adoption; temporary missing cwd waits, but a different known cwd or Session cancels.
+The exact native no-adopted-store exception is retryable only in this activation continuation.
+Each retry performs fresh Host directory validation. A deliberate candidate Session switch retains
+the existing fresh-click gate. Phase/timing/result diagnostics contain no identities or paths.
+Authorization selects the target before mount waiting; no current Session or an unrelated loading
+Session must not block selecting a retained candidate. Only an authorized current target waits,
+and visibly unready polls do not repeat Host reads until readiness changes.
+If the first known cwd appears during a Host read, pin that projection and authorize again before
+opening; the success of a read started with unknown cwd is not correlated with that new projection.
+Directory validation has its own 15-second deadline and passes a Client-only AbortSignal through
+the existing Connection; the Host RPC payload is unchanged. Non-cooperative adapters are bounded
+too, and late fulfillment after timeout/disposal cannot publish navigation.
+No startup call, dependency copy, profile-file edit, Sidecar activation record or disable/uninstall
+rollback is added. A completed enablement belongs to DSH even if the initiating action is cancelled.
+
 Rightbar actions resolve the optional sibling service with Cordis `ctx.get('sidebarRight')` at action
 time. Direct `ctx.sidebarRight` access without an injection declaration throws in a real plugin fiber,
 including while opening an empty Dashboard. File preview uses the current Session only after checking
@@ -932,6 +992,11 @@ The popover uses the entry-owned ViewReader and tool-change subscription. Pendin
 same-target reads preserve content; generation guards discard stale completions.
 The panel has an independent title/three-row layout, reusing the Git overview
 reader, metric values and baseline editor without mounting compact Dashboard.
+The committed metric uses an entry-owned native navigation instance without Forge activation
+or Session selection. Only the live current Session is authorized by Host. Closing the
+popover, opening Dashboard or changing Session invalidates pending navigation. Unavailable
+Forge or failed verification falls back to Dashboard; stale/Session-switching results do not
+navigate. Successful opens attempt the saved-Base bridge described above.
 The native MenuSurface supplies the same glass material as the activity panel, including
 reduced-transparency preferences; the panel adds rounded corners and a light shadow.
 The native material retains its frosted backdrop. Container animations must only translate:
