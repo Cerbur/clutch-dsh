@@ -980,6 +980,11 @@ The popover uses the entry-owned ViewReader and tool-change subscription. Pendin
 same-target reads preserve content; generation guards discard stale completions.
 The panel has an independent title/three-row layout, reusing the Git overview
 reader, metric values and baseline editor without mounting compact Dashboard.
+The committed metric uses an entry-owned native navigation instance without Forge activation
+or Session selection. Only the live current Session is authorized by Host. Closing the
+popover, opening Dashboard or changing Session invalidates pending navigation. Unavailable
+Forge or failed verification falls back to Dashboard; stale/Session-switching results do not
+navigate. Native scope and baseline remain independent of the popover comparison.
 The native MenuSurface supplies the same glass material as the activity panel, including
 reduced-transparency preferences; the panel adds rounded corners and a light shadow.
 The native material retains its frosted backdrop. Container animations must only translate:

@@ -540,7 +540,11 @@ Fetch and conflict-checked saving. Click **Ahead / Behind** to open the **Sync w
 dialog and choose Rebase or Merge. A healthy active Worktree, saved named baseline and
 current readable comparison are required; refreshing or unavailable comparisons disable
 this action. Clicking only opens the dialog; confirming creates the native Agent task.
-The committed and uncommitted change rows open the full Git & Changes view.
+The committed-change row opens the native Diff sidebar directly when Forge is ready,
+after verifying the current Session's directory. Otherwise it opens the full Git & Changes
+view; it never enables Forge or switches Sessions. The native view owns its scope and
+baseline; the popover's baseline is not synchronized. The uncommitted-change row opens
+the full Git & Changes view.
 
 The header button toggles the panel and highlights while open. Every Session defaults to open.
 Closing via the header or Escape stores that Session's closed marker in localStorage; manually

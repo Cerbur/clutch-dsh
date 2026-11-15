@@ -241,6 +241,28 @@ export function apply(ctx: Context): void {
       return { supported: false, ready: false };
     }
   };
+  const nativeChangesSidebar = () => {
+    const sidebar = sidebarRightController(ctx);
+    const tabs = ctx.get('sidebarRightTabs') as {
+      candidates?: (address: string) => readonly { kind: string; id: string }[];
+    } | undefined;
+    if (typeof sidebar?.openResource !== 'function' || typeof sidebar.isExpanded !== 'function' ||
+        typeof sidebar.toggleExpanded !== 'function' || typeof tabs?.candidates !== 'function') return undefined;
+    return {
+      accepts: (address: string) => tabs.candidates!(address).some((tab) =>
+        tab.kind === 'forge-changes' && tab.id === '@deepseek-ai/dsh-experimental-client-ui-forge/changes'),
+      open: (address: string) => {
+        sidebar.openResource!(address, { kind: 'forge-changes', destination: 'sidebar' });
+        if (!sidebar.isExpanded!()) sidebar.toggleExpanded!();
+      },
+    };
+  };
+  // Popover clicks never activate Forge or select a different Session.
+  const popoverNativeChanges = createNativeChangesNavigation({
+    manager, screen: nativeChangesScreen, sidebar: nativeChangesSidebar,
+    openSession: () => {},
+  });
+  ctx.effect(() => () => popoverNativeChanges.dispose(), 'clutch-dsh-worktree: popover native Changes cleanup');
   const nativeChanges = createNativeChangesNavigation({
     manager,
     onDiagnostic: (event) => console.info('[Worktree native Diff]', JSON.stringify(event)),
@@ -257,22 +279,7 @@ export function apply(ctx: Context): void {
     }),
     screen: nativeChangesScreen,
     openSession: (sessionId) => openWorktreeSession(ctx.uiWorkspace, sessions, sessionId as SessionId),
-    sidebar: () => {
-      const sidebar = sidebarRightController(ctx);
-      const tabs = ctx.get('sidebarRightTabs') as {
-        candidates?: (address: string) => readonly { kind: string; id: string }[];
-      } | undefined;
-      if (typeof sidebar?.openResource !== 'function' || typeof sidebar.isExpanded !== 'function' ||
-          typeof sidebar.toggleExpanded !== 'function' || typeof tabs?.candidates !== 'function') return undefined;
-      return {
-        accepts: (address: string) => tabs.candidates!(address).some((tab) =>
-          tab.kind === 'forge-changes' && tab.id === '@deepseek-ai/dsh-experimental-client-ui-forge/changes'),
-        open: (address: string) => {
-          sidebar.openResource!(address, { kind: 'forge-changes', destination: 'sidebar' });
-          if (!sidebar.isExpanded!()) sidebar.toggleExpanded!();
-        },
-      };
-    },
+    sidebar: nativeChangesSidebar,
   });
   ctx.effect(() => () => nativeChanges.dispose(), 'clutch-dsh-worktree: native Changes navigation cleanup');
   const slots = ctx.slots as unknown as WorktreeSlotRegistry;
@@ -607,6 +614,10 @@ export function apply(ctx: Context): void {
         hooks: { worktreeContext: contextProjection.store },
         openDashboard: openDashboardForSession,
         manager, viewReader, dashboardStore, subscribeChanges: toolChanges.subscribe,
+        openNativeChanges: (record: import('../contract/index.js').WorktreeRecord,
+          sessionId: string, isCurrent: () => boolean) =>
+          popoverNativeChanges.open(record, [], () => isCurrent() &&
+            dashboardStore.getSnapshot() === undefined && nativeChangesScreen().sessionId === sessionId),
         refreshContext: (workspaceId: string) => contextProjection.invalidate(workspaceId),
         createSession: (record: import('../contract/index.js').WorktreeRecord, isCurrent: () => boolean) =>
           worktreeSessionConnector.create({ workspaceId: record.workspaceId, worktreeId: record.worktreeId,

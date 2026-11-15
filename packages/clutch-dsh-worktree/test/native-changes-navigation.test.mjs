@@ -177,6 +177,51 @@ test('built Client entry reads the blank binding projection and opens the regist
   assert.equal(await injected.openNativeChanges(record, [], () => true), 'unavailable');
 });
 
+test('popover native entry never manages Forge or switches Sessions and rejects late authorization', async (t) => {
+  let registered = true;
+  let current = blankId;
+  let verify = async () => true;
+  let opens = 0;
+  const f = await loadClientEntry({
+    workspaceSnapshot: { items: [{ workspaceId: 'ws', path: record.absolutePath, sessionIds: [blankId] }] },
+    rpc: { call: async (_channel, endpoint) => {
+      assert.equal(endpoint.startsWith('pluginManager/'), false, 'popover must not manage Forge');
+      return { ok: true, value: { ok: true,
+        value: endpoint.endsWith('/canOpenNativeChanges') ? await verify() : [] } };
+    } },
+  });
+  t.after(() => { for (const dispose of f.disposers.reverse()) dispose(); });
+  const services = {
+    uiSession: { adapter: { current: { getSnapshot: () => ({ key: current }) } } },
+    sidebarRightTabs: { candidates: () => registered
+      ? [{ kind: 'forge-changes', id: '@deepseek-ai/dsh-experimental-client-ui-forge/changes' }] : [] },
+    sidebarRight: { mounted: { getSnapshot: () => current }, isExpanded: () => true,
+      toggleExpanded() {}, openResource: () => { opens++; } },
+  };
+  f.fakeContext.get = (name) => services[name];
+  f.fakeContext.sessions.binding = () => ({ session: {
+    getSnapshot: () => ({ openState: 'open' }),
+    projections: { faceOf: () => ({ getSnapshot: () => record.absolutePath }) },
+  } });
+  const popover = f.registrationsById.get('clutch-dsh-worktree-popover').options.inject();
+  const open = () => popover.openNativeChanges(record, blankId, () => true);
+  assert.equal(await open(), 'opened');
+  assert.equal(popover.dashboardStore.getSnapshot(), undefined);
+  registered = false;
+  assert.equal(await open(), 'unavailable');
+  registered = true;
+  verify = async () => false;
+  assert.equal(await open(), 'directory-mismatch');
+  let release;
+  verify = () => new Promise((resolve) => { release = resolve; });
+  const pending = open();
+  current = 'other';
+  release(true);
+  assert.equal(await pending, 'stale');
+  assert.equal(opens, 1);
+  assert.deepEqual(f.openedSessions, []);
+});
+
 test('a new Dashboard action is not blocked by a retired target validation', async () => {
   const f = fixture();
   let release;
