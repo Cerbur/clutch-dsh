@@ -1,5 +1,6 @@
 import { useLayoutEffect } from 'react';
-import { waitNativeDiffPoll } from './native-diff-wait.js';
+import { nativeDiffRequest, NativeDiffRequestTimeout, waitNativeDiffPoll } from './native-diff-wait.js';
+import type { WorktreeManager, WorktreeGitRequestContext } from '../../../contract/index.js';
 
 const SLOT = 'sidebar.right.pane.tab';
 const FORGE = '@deepseek-ai/dsh-experimental-client-ui-forge/changes';
@@ -29,6 +30,35 @@ function Bridge({ sessionId, useStore, actions, publish }: BridgeProps) {
 }
 
 export type ForgeBaseResult = 'synced' | 'unsupported' | 'no-base' | 'stale' | 'timeout';
+
+export async function syncNativeForgeBase(
+  bridge: Pick<ReturnType<typeof createNativeForgeBaseBridge>, 'sync'>,
+  manager: Pick<WorktreeManager, 'listBranches'>,
+  input: Parameters<ReturnType<typeof createNativeForgeBaseBridge>['sync']>[0] & WorktreeGitRequestContext,
+  timeoutMs = 1500,
+): Promise<ForgeBaseResult> {
+  const current = () => !input.signal.aborted && input.isCurrent();
+  if (!current()) return 'stale';
+  let baseBranch = input.baseBranch;
+  // Creation and older saved baselines can use short names. Only Host may
+  // disambiguate those names; never prefix refs/heads or borrow a stale UI read.
+  if (baseBranch && !baseBranch.startsWith('refs/')) {
+    try {
+      const branches = await nativeDiffRequest(input.signal, timeoutMs, () =>
+        manager.listBranches({ workspaceId: input.workspaceId }));
+      if (!current()) return 'stale';
+      const matches = branches.filter((branch) => branch.name === baseBranch ||
+        (branch.kind === 'remote' && 'remotes/' + branch.name === baseBranch));
+      if (matches.length > 1) return 'unsupported';
+      baseBranch = matches[0]?.ref;
+    } catch (error) {
+      if (!current()) return 'stale';
+      return error instanceof NativeDiffRequestTimeout ? 'timeout' : 'unsupported';
+    }
+  }
+  if (!current()) return 'stale';
+  return bridge.sync({ ...input, baseBranch });
+}
 
 /**
  * Public Slot handle sharing, with a guarded dependency on Forge's internal
@@ -77,7 +107,8 @@ export function createNativeForgeBaseBridge(options: {
         return () => { if (faces.get(sessionId) === face) faces.delete(sessionId); };
       };
       release = slots.register!({
-        name: 'conversation.session.header.utilities', id: BRIDGE,
+        // Blank Sessions hide header utilities, but still mount the composer.
+        name: 'conversation.input.right', id: BRIDGE,
         store: next.store, inject: () => ({ publish }),
       }, Bridge);
     } catch { retire(); }

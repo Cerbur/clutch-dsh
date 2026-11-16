@@ -708,7 +708,10 @@ icon-only **Open in sidebar** action.
 **Opening attempts to apply the Base currently selected in Git & Changes.** A compatibility bridge shares Forge's
 Session store handle and applies the selected canonical branch ref once per click, selecting branch
 scope and clearing any old commit selection. It does not continuously synchronize or write
-native Session metadata. Missing APIs, incompatible state, initialization timeout, or a
+native Session metadata. Short branch names such as a newly created Worktree's `main`
+are resolved by Host before synchronization, preserving local versus remote identity even
+when Forge is enabled for the first time, including from a blank Session. Missing APIs,
+incompatible state, resolution or initialization timeout, or a
 commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
 This also supports Local/Main with a selected branch. Selecting None or a commit-only Base keeps native behavior.
 Changing the selected Base or leaving the Git tab cancels a pending open. The popover still uses the saved Worktree Base. Forge branch scope includes

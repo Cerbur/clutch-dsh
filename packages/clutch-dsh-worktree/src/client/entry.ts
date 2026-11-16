@@ -58,7 +58,7 @@ import { renameWorktreeSession } from './session/session-rename.js';
 import { openWorktreeSession } from './session/session-navigation.js';
 import { createNativeChangesNavigation } from './dashboard/git/native-changes-navigation.js';
 import { ensureNativeForge } from './dashboard/git/native-forge-activation.js';
-import { createNativeForgeBaseBridge } from './dashboard/git/native-forge-base.js';
+import { createNativeForgeBaseBridge, syncNativeForgeBase } from './dashboard/git/native-forge-base.js';
 import type { SessionBinding } from '../contract/index.js';
 import type { WorktreeSlotRegistry } from './dsh-slot-contract.js';
 import type {} from './dsh-slot-contract.js';
@@ -265,8 +265,11 @@ export function apply(ctx: Context): void {
   });
   ctx.effect(() => () => forgeBase.dispose(), 'clutch-dsh-worktree: Forge Base bridge cleanup');
   const syncBase: NonNullable<Parameters<typeof createNativeChangesNavigation>[0]['syncBase']> =
-    async (_record, sessionId, address, isCurrent, signal, baseBranch) => {
-      const result = await forgeBase.sync({ sessionId, address, baseBranch, isCurrent, signal });
+    async (record, sessionId, address, isCurrent, signal, baseBranch) => {
+      const result = await syncNativeForgeBase(forgeBase, manager, {
+        workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+        sessionId, address, baseBranch, isCurrent, signal,
+      });
       console.info('[Worktree native Diff]', JSON.stringify({ phase: 'base-sync', result }));
     };
   // Popover clicks never activate Forge or select a different Session.
