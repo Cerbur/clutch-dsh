@@ -453,7 +453,7 @@ Local/Main 和 Worktree 行的新建 Session 按钮使用 DSH 原生的气泡加
 
 此面板底部、Dashboard 底部和 **设置 → Worktree** 的 **Worktree** 标题右侧都显示小号灰色来源标签
 `from @cerbur/clutch-dsh-worktree`。悬停、点击或键盘聚焦标签可打开插件说明浮窗，
-按 Tab 可访问主题强调色的插件链接，在新标签页打开 GitHub 包页面。
+按 Tab 可访问主题强调色的插件链接，在新标签页打开 GitHub 仓库首页。
 浮窗中的包名前显示 GitHub 图标。鼠标离开标签或浮窗后会在短暂宽限后关闭，
 在两者之间移动时保持可见；点击外部或按 Escape 也可关闭说明浮窗，不会同时关闭 Worktree 面板。
 Worktree 面板中的来源标签采用紧凑留白，上方使用分割线与内容区分隔。

@@ -77,7 +77,7 @@ test('attribution keeps its link interactive and dismisses before its parent', a
       const link = card.querySelector('a');
       assert.equal(link.firstElementChild.tagName.toLowerCase(), 'svg', 'GitHub icon precedes the package name');
       assert.equal(link.firstElementChild.getAttribute('aria-hidden'), 'true');
-      assert.equal(link.href, 'https://github.com/Cerbur/clutch-dsh/tree/main/packages/clutch-dsh-worktree');
+      assert.equal(link.href, 'https://github.com/Cerbur/clutch-dsh');
       assert.equal(link.target, '_blank');
       assert.equal(link.rel, 'noopener noreferrer');
       assert.equal(card.textContent, locale['attribution.before'] + '@cerbur/clutch-dsh-worktree' + locale['attribution.after']);

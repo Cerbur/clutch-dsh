@@ -5,7 +5,7 @@ import type { WorktreeTranslate } from './surface/types.js';
 import styles from './plugin-attribution.css';
 
 const PACKAGE_NAME = '@cerbur/clutch-dsh-worktree';
-const PACKAGE_URL = 'https://github.com/Cerbur/clutch-dsh/tree/main/packages/clutch-dsh-worktree';
+const PACKAGE_URL = 'https://github.com/Cerbur/clutch-dsh';
 
 /** UI-only attribution. Keep the interactive card open across the portal gap. */
 export function PluginAttribution({ t }: { readonly t: WorktreeTranslate }) {
