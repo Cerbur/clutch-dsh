@@ -361,13 +361,23 @@ failed directory verification and native adoption exceptions preserve Dashboard 
 The action checks the exact native Forge definition via `sidebarRightTabs.candidates`, then synchronously
 opens the encoded `dsh-resource://forge-changes/<Session ID>/local` with explicit kind and `destination: 'sidebar'`.
 There is no native baseline navigation parameter. The optional `native-forge-base.ts` adapter
-reuses the winning Forge registration's store handle in a no-UI Session header slot.
+reuses the winning Forge registration's store handle in the no-UI Session composer
+`conversation.input.right` slot, which also mounts for blank Sessions whose header
+utilities are hidden.
 The renderer supplies the same Session instance; the adapter never calls handle.create(),
 uses private registry fields, or replaces Forge's component. Only an authorized open
 requests synchronization of the canonical branch ref selected in Dashboard's Git tab (including Main),
 or the saved Worktree Base for popover clicks. An explicit empty Dashboard selection never falls back
 to the saved Base. Changing Base or unmounting the Git panel retires the pending click. It pins the active local tab,
 waits at most 1.5 seconds for its native byTab bucket, then calls scoped/based once.
+Before entering the bridge, both entry paths resolve a short selected branch through
+the existing Workspace-scoped `listBranches` Host roster (at most 1.5 seconds).
+An absolute deadline is checked after the read, so a busy browser cannot accept a late
+result merely because its timeout callback has not run yet.
+Only a unique matching branch's canonical ref is accepted; no local prefix is guessed and no
+retained UI history is borrowed. Canonical selections and None need no extra read.
+Abort, target/selection changes, failed or ambiguous resolution and late results cannot
+write Forge state. This covers newly created Worktrees whose saved Base is simply `main`.
 Session/cwd/lifetime, active tab and registration identity are checked before writing.
 Registration withdrawal/replacement releases our extra store reference and retires requests.
 Unknown APIs/actions/state and timeouts retain native behavior; native manual choices after
@@ -980,6 +990,18 @@ Retry reloads the latest selection. Configuration changes do not invalidate Work
 
 
 ## Current Session popover
+
+`PluginAttribution` supplies this popover's footer, the Dashboard footer, and the label beside the Worktree settings title.
+The Dashboard footer replaces the former baseline-sync task hint with the same compact 8px label.
+It reuses native MenuSurface material and locale copy, with a body portal clamped to
+the viewport above the parent surface. Hover, click and focus open the card; leaving
+either trigger or card schedules dismissal after 200ms, cancelled by re-entry or focus.
+Timers are cancelled on dismissal and unmount. The card link includes a decorative
+GitHub icon; only the popover footer has a divider. Outside pointer/focus and Escape dismiss it. Capture-phase
+Escape dismisses only the child and restores trigger focus; explicit Tab routing
+keeps the portaled link next to its trigger in keyboard navigation. Parent closure or
+Session replacement unmounts the card. This is a UI-only extension of the historical
+client plan; it adds no service contract, stored facts or refreshes.
 
 `dashboard/WorktreePopover.tsx` registers through the public
 `conversation.session.header.utilities` slot (before native More, not a guaranteed

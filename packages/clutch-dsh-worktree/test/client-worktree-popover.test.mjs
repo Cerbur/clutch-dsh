@@ -49,6 +49,7 @@ for (const dismiss of ['close', 'dashboard']) {
       '../dsh-icons.js': { IconBranchOutline16: () => null, IconLoadingOutline16: () => null, IconRefreshOutline16: () => null },
       './popover-target.js': selection, './popover-placement.js': placement,
       './worktree-popover.css': { default: {} },
+      '../PluginAttribution.js': { PluginAttribution: () => null },
       './WorktreeDashboard.js': { WorktreeBaselineEditor: () => null,
         useWorktreeBaselineSync: () => ({ setSyncOpen() {}, syncPending: false, syncDialog: null }) },
       './git/WorktreeGitOverview.js': { ...hook, WorktreeGitOverviewValue: () => null },
@@ -249,6 +250,7 @@ test('production popover toggles accessibly, stays open during conversation, and
     './popover-target.js': selection,
     './popover-placement.js': placement,
     './worktree-popover.css': { default: {} },
+    '../PluginAttribution.js': { PluginAttribution: () => null },
     './WorktreeDashboard.js': { useWorktreeBaselineSync: (props) => {
       syncProps = props;
       const [syncOpen, setSyncOpen] = React.useState(false);
@@ -467,7 +469,10 @@ test('production popover toggles accessibly, stays open during conversation, and
     await render();
     assert.deepEqual(rows(), ['workingTree'], 'Local only shows live changes');
     assert.equal(document.querySelector('[data-baseline-pencil]'), null);
-    assert.equal(document.querySelector('[role="separator"]'), null);
+    assert.equal(document.querySelector('[role="separator"]:not([data-worktree-attribution-divider])'), null,
+      'Local has no comparison divider');
+    assert.equal(document.querySelectorAll('[data-worktree-attribution-divider]').length, 1,
+      'Local retains the attribution footer divider');
     await open();
     props.sessionId = 'next'; context = { ...context, sessionId: 'next' };
     await render();

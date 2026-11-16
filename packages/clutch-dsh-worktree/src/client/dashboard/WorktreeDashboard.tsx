@@ -1,4 +1,5 @@
 import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { PluginAttribution } from '../PluginAttribution.js';
 import type { WorktreeNotification } from '../surface/notification-queue.js';
 import { worktreeDiagnostics } from '../settings/diagnostics.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
@@ -1234,7 +1235,7 @@ export function WorktreeDashboard({
             </Card>
           )}
         </div>
-        <p className={styles.dashboardFooter}>{t('dashboard.mvpHint')}</p>
+        <div className={styles.dashboardFooter}><PluginAttribution t={t} /></div>
       </div>
       {syncDialog}
     </section>

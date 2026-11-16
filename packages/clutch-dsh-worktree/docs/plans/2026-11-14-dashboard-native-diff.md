@@ -1,5 +1,30 @@
 # Dashboard native local Changes entry
 
+## 2026-11-16 short Base resolution correction
+
+Reproduced with Forge disabled and a newly created clutch-dsh Worktree based on local
+`main`: Dashboard showed `main`, but first activation opened Forge on `origin/main`;
+the bridge diagnostic was `no-base`. The saved short name was rejected by the canonical-ref
+gate, so Forge retained its automatic baseline. This was not a store overwrite.
+Both navigation entry paths now resolve short names through the existing Host branch
+roster before bridge synchronization. The history baseline ref echoes the requested
+identity and is not a canonicalization source. Resolution is bounded to 1.5 seconds and
+checks the live navigation guard and abort signal before and after reading. Only a
+result received before the absolute deadline is accepted, even if a busy browser has
+not yet run the timeout callback. Regression tests cover the exact deadline and a late
+Promise completion before timers resume. Only a
+unique matching branch's canonical ref can pass; ambiguous, unavailable and commit-only results
+retain native behavior. Canonical refs and explicit None do not read or borrow saved/UI
+baselines. No new RPC, persisted field, native store, or continuous synchronization is added.
+This supersedes the earlier acceptance note that all noncanonical saved names retain
+native behavior. Raw short names still cannot be written by the low-level bridge.
+
+Browser revalidation also exposed a second failure in blank Sessions: header utilities
+are not mounted, so the shared store face never arrives and synchronization times out.
+The no-UI bridge now uses the Session-scoped composer `conversation.input.right`
+list slot, which mounts for both blank and populated Sessions without replacing native UI.
+This supersedes the header-slot placement described in the historical sections below.
+
 ## Goal and boundary
 
 Add **Open native local changes** to Git & Changes for managed Worktrees and Local/Main.
