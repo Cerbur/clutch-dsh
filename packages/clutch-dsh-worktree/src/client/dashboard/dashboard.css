@@ -771,10 +771,7 @@ html[data-platform='darwin']
   margin: 8px 0 18px;
 }
 .dashboardFooter {
-  margin: 23px 0 0;
-  text-align: center;
-  font-size: 11px;
-  color: var(--dsw-alias-label-secondary, #8a92a0);
+  margin: 8px 0 0;
 }
 
 @container (max-width: 820px) {

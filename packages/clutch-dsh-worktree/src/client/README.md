@@ -989,7 +989,8 @@ Retry reloads the latest selection. Configuration changes do not invalidate Work
 
 ## Current Session popover
 
-`PluginAttribution` supplies this popover's footer and the label beside the Worktree settings title.
+`PluginAttribution` supplies this popover's footer, the Dashboard footer, and the label beside the Worktree settings title.
+The Dashboard footer replaces the former baseline-sync task hint with the same compact 8px label.
 It reuses native MenuSurface material and locale copy, with a body portal clamped to
 the viewport above the parent surface. Hover, click and focus open the card; leaving
 either trigger or card schedules dismissal after 200ms, cancelled by re-entry or focus.

@@ -264,6 +264,7 @@ export async function statusRenderers() {
     '../selectors.js': { sessionLabel: (id) => id },
   });
   const dashboard = await source('dashboard/WorktreeDashboard.tsx', {
+    '../PluginAttribution.js': { PluginAttribution: 'PluginAttribution' },
     '../branch/GitBranchSelector.js': { GitBranchPicker: () => null },
     ...common,
     '@deepseek-ai/dsh-client-ui-primitives': {

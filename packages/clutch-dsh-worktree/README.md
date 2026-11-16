@@ -522,7 +522,7 @@ or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 
 ### Current Session Worktree panel
 
-The bottom of this panel and the right of the **Worktree** title in **Settings → Worktree** share a small gray
+The bottom of this panel, the Dashboard footer, and the right of the **Worktree** title in **Settings → Worktree** share a small gray
 `from @cerbur/clutch-dsh-worktree` label. Hover, click, or focus it to open
 the plugin information card. Tab reaches the highlighted plugin link, which opens
 the GitHub package page in a new tab. A GitHub icon precedes the package name in the card.
