@@ -451,6 +451,13 @@ Local/Main 和 Worktree 行的新建 Session 按钮使用 DSH 原生的气泡加
 
 ### 当前 Session 的 Worktree 面板
 
+此面板底部、Dashboard 底部和 **设置 → Worktree** 的 **Worktree** 标题右侧都显示小号灰色来源标签
+`from @cerbur/clutch-dsh-worktree`。悬停、点击或键盘聚焦标签可打开插件说明浮窗，
+按 Tab 可访问主题强调色的插件链接，在新标签页打开 GitHub 仓库首页。
+浮窗中的包名前显示 GitHub 图标。鼠标离开标签或浮窗后会在短暂宽限后关闭，
+在两者之间移动时保持可见；点击外部或按 Escape 也可关闭说明浮窗，不会同时关闭 Worktree 面板。
+Worktree 面板中的来源标签采用紧凑留白，上方使用分割线与内容区分隔。
+
 在 Session 标题行点击 **Worktree 面板**，无需离开对话即可打开紧凑浮窗。
 DSH 公开 utilities 插槽将其放在原生 More 菜单之前；插件无法保证按钮紧贴右侧栏开关。
 原有 Dashboard 快捷入口继续保留。
@@ -592,8 +599,10 @@ Session，入口会先切换会话，并提示加载完成后再次点击；切�
 
 **打开时尝试同步 Git 与变更页当前选择的 Base。**兼容桥接复用 Forge 的 Session store handle，
 每次点击仅应用一次当前选择的完整分支 ref，切到分支范围并清除旧的提交选择。
-不会持续同步或写入原生 Session 元数据。API 缺失、状态不兼容、初始化超时，
+不会持续同步或写入原生 Session 元数据。新建 Worktree 的 `main` 等短分支名会先由 Host
+解析再同步，即使从空白会话首次启用 Forge 也保留本地与远端分支的区别。API 缺失、状态不兼容、解析或初始化超时，
 或 Base 仅为 commit / 存在歧义时保留原生行为，请在 Forge 中手动选择分支。
+分支解析结果达到或超过 1.5 秒截止时间后会被忽略，浏览器繁忙时也不会应用迟到结果。
 Local/Main 选择分支时也支持同步；选择无或仅有 commit 基线时保留原生行为。
 等待期间切换 Base 或离开 Git 页签会取消打开。Popover 仍使用已保存的 Worktree Base。Forge 分支范围包含未提交改动，
 因此其统计可能与已提交变更行不同。Workspace 位于仓库子目录时，

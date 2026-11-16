@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNativeForgeBaseBridge } from '../lib/client/dashboard/git/native-forge-base.js';
+import { createNativeForgeBaseBridge, syncNativeForgeBase } from '../lib/client/dashboard/git/native-forge-base.js';
 
 function fixture(options = {}) {
   const events = [];
@@ -17,7 +17,7 @@ function fixture(options = {}) {
     subscribe: (_slot, fn) => { f.changed = fn; return () => { f.changed = undefined; }; },
     register: (options) => {
       assert.equal(options.store, f.entry.store);
-      assert.equal(options.name, 'conversation.session.header.utilities');
+      assert.equal(options.name, 'conversation.input.right');
       f.publish = options.inject().publish;
       return () => { f.releases++; };
     },
@@ -33,6 +33,90 @@ function fixture(options = {}) {
   };
   f.publishFace = (session = 's') => f.publish(session, { state: f.state, actions: f.actions });
   return f;
+}
+
+test('a new Worktree short main baseline replaces Forge automatic origin/main with the Host-resolved local ref', async () => {
+  const f = fixture();
+  f.state.byTab.tab.base = { ref: 'refs/remotes/origin/main', name: 'origin/main' };
+  f.publishFace();
+  const reads = [];
+  try {
+    const result = await syncNativeForgeBase(f.bridge, {
+      listBranches: async (input) => {
+        reads.push(input);
+        return [{ name: 'main', kind: 'local', ref: 'refs/heads/main' },
+          { name: 'origin/main', kind: 'remote', ref: 'refs/remotes/origin/main' }];
+      },
+    }, { workspaceId: 'w', worktreeId: 'wt', sessionId: 's', address: f.tab.contentId,
+      baseBranch: 'main', signal: f.controller.signal, isCurrent: () => f.live });
+    assert.equal(result, 'synced');
+    assert.deepEqual(f.state.byTab.tab.base, { ref: 'refs/heads/main', name: 'main' });
+    assert.deepEqual(reads, [{ workspaceId: 'w' }]);
+  } finally { f.bridge.dispose(); }
+});
+
+test('canonical refs and explicit None never trigger a resolution read or a saved-Base fallback', async () => {
+  const f = fixture();
+  f.publishFace();
+  const manager = { listBranches: async () => assert.fail('canonical/None needs no read') };
+  const input = { workspaceId: 'w', worktreeId: 'main:w', sessionId: 's', address: f.tab.contentId,
+    signal: f.controller.signal, isCurrent: () => f.live };
+  try {
+    assert.equal(await syncNativeForgeBase(f.bridge, manager, { ...input, baseBranch: 'refs/remotes/origin/main' }), 'synced');
+    assert.equal(f.state.byTab.tab.base.ref, 'refs/remotes/origin/main');
+    f.events.length = 0;
+    assert.equal(await syncNativeForgeBase(f.bridge, manager, input), 'no-base');
+    assert.deepEqual(f.events, []);
+  } finally { f.bridge.dispose(); }
+});
+
+for (const mode of ['remote', 'ambiguous', 'legacy', 'unavailable', 'error', 'abort', 'selection', 'timeout']) {
+  test('short Base resolution handles ' + mode + ' without guessing or late writes', async () => {
+    const f = fixture();
+    f.publishFace();
+    let resolve;
+    const pending = syncNativeForgeBase(f.bridge, {
+      listBranches: () => mode === 'error' ? Promise.reject(new Error('read failed'))
+        : new Promise((done) => { resolve = done; }),
+    }, { workspaceId: 'w', worktreeId: 'wt', sessionId: 's', address: f.tab.contentId,
+      baseBranch: 'origin/main', signal: f.controller.signal, isCurrent: () => f.live }, 5);
+    try {
+      if (mode === 'abort') f.controller.abort();
+      if (mode === 'selection') f.live = false;
+      const branches = mode === 'unavailable' ? [] : mode === 'legacy' ? [{ name: 'origin/main' }]
+        : [{ name: 'origin/main', kind: 'remote', ref: 'refs/remotes/origin/main' }];
+      if (mode === 'ambiguous') branches.push({ name: 'origin/main', kind: 'local', ref: 'refs/heads/origin/main' });
+      if (mode !== 'timeout') resolve?.(branches);
+      const expected = { remote: 'synced', ambiguous: 'unsupported', legacy: 'no-base',
+        unavailable: 'no-base', error: 'unsupported', abort: 'stale', selection: 'stale', timeout: 'timeout' }[mode];
+      assert.equal(await pending, expected);
+      if (mode === 'timeout') { resolve(branches); await Promise.resolve(); }
+      if (mode === 'remote') assert.equal(f.state.byTab.tab.base.ref, 'refs/remotes/origin/main');
+      else assert.deepEqual(f.events, []);
+    } finally { f.bridge.dispose(); }
+  });
+}
+
+for (const elapsed of [5, 30]) {
+  test('short Base resolution rejects a result at elapsed ' + elapsed + 'ms before the timeout callback runs', async (t) => {
+    let now = 100;
+    t.mock.method(Date, 'now', () => now);
+    const f = fixture();
+    f.publishFace();
+    let resolve;
+    try {
+      const pending = syncNativeForgeBase(f.bridge, {
+        listBranches: () => new Promise((done) => { resolve = done; }),
+      }, { workspaceId: 'w', worktreeId: 'wt', sessionId: 's', address: f.tab.contentId,
+        baseBranch: 'main', signal: f.controller.signal, isCurrent: () => f.live }, 5);
+      // Advance wall time without yielding to timers, as in a busy browser.
+      now += elapsed;
+      resolve([{ name: 'main', kind: 'local', ref: 'refs/heads/main' }]);
+      assert.equal(await pending, 'timeout');
+      assert.deepEqual(f.events, []);
+      assert.equal(f.state.byTab.tab.base, null);
+    } finally { f.bridge.dispose(); }
+  });
 }
 
 test('shares the declared handle, applies exact Base once per click and preserves later native choices', async () => {

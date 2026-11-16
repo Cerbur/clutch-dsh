@@ -15,6 +15,7 @@ import { observePopoverPlacement } from './popover-placement.js';
 import { WorktreeBaselineEditor, useWorktreeBaselineSync } from './WorktreeDashboard.js';
 import styles from './worktree-popover.css';
 import type { NativeChangesResult } from './git/native-changes-navigation.js';
+import { PluginAttribution } from '../PluginAttribution.js';
 
 export interface WorktreePopoverServices {
   readonly dashboardStore: SnapshotStore<DashboardSelection | undefined>;
@@ -120,6 +121,8 @@ export function WorktreePopover(props: WorktreePopoverProps) {
         active={visible}
         mainConfirmed={context.status === 'ready' && context.value.kind === 'main'}
         workspaceTitle={context.workspaceTitle ?? ''} close={close} />
+      {visible && <div role="separator" data-worktree-attribution-divider className={styles.popoverDivider} />}
+      {visible && <PluginAttribution key={sessionId} t={props.t} />}
     </MenuSurface>, document.body)}
   </>;
 }

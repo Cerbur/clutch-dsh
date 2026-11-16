@@ -318,6 +318,7 @@ test('Settings renders contextual explanations, original diagnostics and safe re
     '../view/worktree-error-copy.js': { formatWorktreeViewError },
     './diagnostics.js': { worktreeDiagnostics: store },
     './ToolSettings.js': { ToolSettings: 'ToolSettings' },
+    '../PluginAttribution.js': { PluginAttribution: 'PluginAttribution' },
     './settings.css': { default: {} },
   });
   let retried = 0, closed = 0;
@@ -330,6 +331,7 @@ test('Settings renders contextual explanations, original diagnostics and safe re
   }]);
   const input = { t: (key) => en[key], close: () => closed++ };
   let node = h.render('WorktreeSettings', input);
+  assert.equal(nodes(node).filter(item => item.type === 'PluginAttribution').length, 1);
   assert.ok(nodes(node).some(item => item.props?.children === 'My Workspace · feature/task · /repo/wt'));
   assert.ok(nodes(node).some(item => item.props?.children === en['error.gitAccessDenied']));
   assert.ok(nodes(node).some(item => item.type === 'pre' && item.props.children.includes('fatal: permission denied')));

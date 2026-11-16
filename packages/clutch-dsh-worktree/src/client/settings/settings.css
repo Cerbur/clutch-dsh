@@ -102,6 +102,13 @@
   font-weight: 500;
 }
 
+.settingsTitleRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
 .settingsTitle {
   margin: 0;
   font-size: calc(var(--dsh-content-font-size, 14px) + 2px);

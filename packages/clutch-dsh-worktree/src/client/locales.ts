@@ -1,6 +1,9 @@
 export const WORKTREE_NS = 'worktree' as const;
 
 export const zh = {
+  'attribution.label': 'from {plugin}',
+  'attribution.before': '组件来自插件 ',
+  'attribution.after': '，欢迎提 issue or star，你的鼓励和批评对我们都很重要。',
   'popover.title': 'Worktree 面板',
   'popover.loading': '正在刷新…',
   'popover.failed': '无法读取当前会话的 Worktree，请重试。',
@@ -505,6 +508,9 @@ export const zh = {
 export type WorktreeLocaleKey = keyof typeof zh;
 
 export const en = {
+  'attribution.label': 'from {plugin}',
+  'attribution.before': 'This component comes from the ',
+  'attribution.after': ' plugin. Feel free to open an issue or leave a star—your encouragement and feedback mean a lot to us.',
   'popover.title': 'Worktree panel',
   'popover.loading': 'Refreshing…',
   'popover.failed': 'Unable to read this Session’s Worktree. Retry to refresh.',

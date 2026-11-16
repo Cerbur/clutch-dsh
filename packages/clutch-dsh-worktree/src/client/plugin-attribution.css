@@ -1,0 +1,45 @@
+.attributionFooter {
+  display: flex;
+  justify-content: center;
+  margin-top: 0;
+  text-align: center;
+  line-height: 10px;
+}
+.attributionTrigger {
+  max-width: 100%;
+  padding: 1px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 8px;
+  line-height: 10px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.attributionCard {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 12px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l1), 0 4px 16px rgb(0 0 0 / 6%);
+}
+.attributionLink { color: var(--dsw-alias-brand-primary); }
+.attributionGithubIcon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.attributionTrigger:focus-visible, .attributionLink:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}

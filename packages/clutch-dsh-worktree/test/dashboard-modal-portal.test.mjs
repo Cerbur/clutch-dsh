@@ -59,6 +59,7 @@ function dashboard() {
       StateDot: noop,
     },
     '../dsh-icons.js': icons,
+    '../PluginAttribution.js': { PluginAttribution: noop },
     './dashboard-selection.js': selection,
     './worktree-acquisition-facts.js': acquisition,
     './dashboard-overlay.js': { mountDashboardOverlay: () => () => {} },
