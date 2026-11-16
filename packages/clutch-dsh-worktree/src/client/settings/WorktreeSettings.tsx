@@ -6,6 +6,7 @@ import { worktreeDiagnostics } from './diagnostics.js';
 import styles from './settings.css';
 import { ToolSettings } from './ToolSettings.js';
 import type { WorktreeToolSettingsManager } from '../../contract/tool-settings.js';
+import { PluginAttribution } from '../PluginAttribution.js';
 
 export function WorktreeSettings({
   t,
@@ -25,7 +26,10 @@ export function WorktreeSettings({
   const id = useId();
   return (
     <section className={styles.settings} data-worktree-settings>
-      <h2 className={styles.settingsTitle}>{t('settings.title')}</h2>
+      <div className={styles.settingsTitleRow}>
+        <h2 className={styles.settingsTitle}>{t('settings.title')}</h2>
+        <PluginAttribution t={t} />
+      </div>
       <SegmentedTabs
         label={t('settings.title')}
         className={styles.settingsTabs}

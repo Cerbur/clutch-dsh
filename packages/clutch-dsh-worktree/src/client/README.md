@@ -981,6 +981,17 @@ Retry reloads the latest selection. Configuration changes do not invalidate Work
 
 ## Current Session popover
 
+`PluginAttribution` supplies this popover's footer and the label beside the Worktree settings title.
+It reuses native MenuSurface material and locale copy, with a body portal clamped to
+the viewport above the parent surface. Hover, click and focus open the card; leaving
+either trigger or card schedules dismissal after 200ms, cancelled by re-entry or focus.
+Timers are cancelled on dismissal and unmount. The card link includes a decorative
+GitHub icon; only the popover footer has a divider. Outside pointer/focus and Escape dismiss it. Capture-phase
+Escape dismisses only the child and restores trigger focus; explicit Tab routing
+keeps the portaled link next to its trigger in keyboard navigation. Parent closure or
+Session replacement unmounts the card. This is a UI-only extension of the historical
+client plan; it adds no service contract, stored facts or refreshes.
+
 `dashboard/WorktreePopover.tsx` registers through the public
 `conversation.session.header.utilities` slot (before native More, not a guaranteed
 right-sidebar-toggle sibling). It owns only visibility, focus and a scoped read lifetime.

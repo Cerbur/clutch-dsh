@@ -41,6 +41,7 @@
   overflow: auto;
   box-sizing: border-box;
   padding: 14px;
+  padding-bottom: 6px;
   border-radius: 20px;
   z-index: 100;
   color: var(--dsw-alias-label-primary);
@@ -71,6 +72,7 @@
 .popoverHeading { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 var(--worktree-popover-action-inset) 0 8px; }
 .popoverTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .popoverDivider { height: 1px; background: var(--dsw-alias-border-l1); margin: 8px; }
+.popoverDivider[data-worktree-attribution-divider] { margin: 3px 8px; }
 .popoverComparison { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--worktree-popover-action-inset) 0 8px; }
 .popoverComparison > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .popoverComparison > [aria-hidden] { flex: none; }
