@@ -1,5 +1,37 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.34 — 2026-11-16
+
+### 中文
+
+#### 版本说明
+
+- 本次包含新增功能，经发布决定在 0.1.x 阶段以 patch 版本 `0.1.34` 发布。
+
+#### 新增
+
+- 在会话内 Worktree 浮窗、Dashboard 页脚和设置页展示统一的插件署名与版本信息，并支持打开仓库主页。
+
+#### 修复
+
+- 修复空白 Session 打开原生 Diff 时本地 Forge 对比基线未同步的问题。
+- 修复 Forge 基线解析超过时限后仍继续应用过期结果的问题。
+
+### English
+
+#### Versioning note
+
+- This release includes new functionality and intentionally uses patch version `0.1.34` during the 0.1.x stage.
+
+#### Added
+
+- Show consistent plugin attribution and version information in the in-Session Worktree panel, Dashboard footer and settings page, with a link to the repository homepage.
+
+#### Fixed
+
+- Fix local Forge comparison baseline synchronization when opening native Diff in a blank Session.
+- Prevent Forge baseline resolution from applying stale results after its deadline.
+
 ## 0.1.33 — 2026-11-16
 
 ### 中文
