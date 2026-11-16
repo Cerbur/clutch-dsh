@@ -10,6 +10,9 @@ Both navigation entry paths now resolve short names through the existing Host br
 roster before bridge synchronization. The history baseline ref echoes the requested
 identity and is not a canonicalization source. Resolution is bounded to 1.5 seconds and
 checks the live navigation guard and abort signal before and after reading. Only a
+result received before the absolute deadline is accepted, even if a busy browser has
+not yet run the timeout callback. Regression tests cover the exact deadline and a late
+Promise completion before timers resume. Only a
 unique matching branch's canonical ref can pass; ambiguous, unavailable and commit-only results
 retain native behavior. Canonical refs and explicit None do not read or borrow saved/UI
 baselines. No new RPC, persisted field, native store, or continuous synchronization is added.

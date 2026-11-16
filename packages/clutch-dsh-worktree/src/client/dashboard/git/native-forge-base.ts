@@ -43,10 +43,14 @@ export async function syncNativeForgeBase(
   // Creation and older saved baselines can use short names. Only Host may
   // disambiguate those names; never prefix refs/heads or borrow a stale UI read.
   if (baseBranch && !baseBranch.startsWith('refs/')) {
+    const deadline = Date.now() + timeoutMs;
     try {
       const branches = await nativeDiffRequest(input.signal, timeoutMs, () =>
         manager.listBranches({ workspaceId: input.workspaceId }));
       if (!current()) return 'stale';
+      // A busy browser may settle the read before its overdue timer runs.
+      // Do not let that late result start a fresh bridge synchronization.
+      if (Date.now() >= deadline) return 'timeout';
       const matches = branches.filter((branch) => branch.name === baseBranch ||
         (branch.kind === 'remote' && 'remotes/' + branch.name === baseBranch));
       if (matches.length > 1) return 'unsupported';

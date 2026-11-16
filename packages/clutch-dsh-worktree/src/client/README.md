@@ -372,6 +372,8 @@ to the saved Base. Changing Base or unmounting the Git panel retires the pending
 waits at most 1.5 seconds for its native byTab bucket, then calls scoped/based once.
 Before entering the bridge, both entry paths resolve a short selected branch through
 the existing Workspace-scoped `listBranches` Host roster (at most 1.5 seconds).
+An absolute deadline is checked after the read, so a busy browser cannot accept a late
+result merely because its timeout callback has not run yet.
 Only a unique matching branch's canonical ref is accepted; no local prefix is guessed and no
 retained UI history is borrowed. Canonical selections and None need no extra read.
 Abort, target/selection changes, failed or ambiguous resolution and late results cannot

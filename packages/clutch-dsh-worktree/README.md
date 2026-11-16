@@ -713,6 +713,7 @@ are resolved by Host before synchronization, preserving local versus remote iden
 when Forge is enabled for the first time, including from a blank Session. Missing APIs,
 incompatible state, resolution or initialization timeout, or a
 commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
+Branch resolution results arriving at or after the 1.5-second deadline are ignored, including when the browser is busy.
 This also supports Local/Main with a selected branch. Selecting None or a commit-only Base keeps native behavior.
 Changing the selected Base or leaving the Git tab cancels a pending open. The popover still uses the saved Worktree Base. Forge branch scope includes
 uncommitted changes, so its totals can differ from the committed-change row.

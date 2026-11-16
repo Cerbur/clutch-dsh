@@ -97,6 +97,28 @@ for (const mode of ['remote', 'ambiguous', 'legacy', 'unavailable', 'error', 'ab
   });
 }
 
+for (const elapsed of [5, 30]) {
+  test('short Base resolution rejects a result at elapsed ' + elapsed + 'ms before the timeout callback runs', async (t) => {
+    let now = 100;
+    t.mock.method(Date, 'now', () => now);
+    const f = fixture();
+    f.publishFace();
+    let resolve;
+    try {
+      const pending = syncNativeForgeBase(f.bridge, {
+        listBranches: () => new Promise((done) => { resolve = done; }),
+      }, { workspaceId: 'w', worktreeId: 'wt', sessionId: 's', address: f.tab.contentId,
+        baseBranch: 'main', signal: f.controller.signal, isCurrent: () => f.live }, 5);
+      // Advance wall time without yielding to timers, as in a busy browser.
+      now += elapsed;
+      resolve([{ name: 'main', kind: 'local', ref: 'refs/heads/main' }]);
+      assert.equal(await pending, 'timeout');
+      assert.deepEqual(f.events, []);
+      assert.equal(f.state.byTab.tab.base, null);
+    } finally { f.bridge.dispose(); }
+  });
+}
+
 test('shares the declared handle, applies exact Base once per click and preserves later native choices', async () => {
   const f = fixture();
   f.publishFace();
