@@ -1,0 +1,892 @@
+# Detailed behavior reference
+
+Maintainer reference moved from the package README. For the product overview and quick start, see [README](../README.md). Architecture remains authoritative in [ARCHITECTURE.md](ARCHITECTURE.md); tool contracts and development checks live in [WORKTREE-TOOLS.md](WORKTREE-TOOLS.md), [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md), and [DEVELOPMENT.md](DEVELOPMENT.md). This move changes documentation only, not runtime behavior or the historical implementation plan.
+
+## Usage
+
+Worktree view loads Workspaces independently, prioritizing the current Session's Workspace
+and expanded Workspaces with bounded background reads. A slow or failed Workspace does not
+hide other ready Workspaces. Returning to Worktree mode immediately keeps the previous content
+visible. Complete projections can be reused for 30 seconds; older projections are checked for
+external Git changes in the background. Session-only updates do not extend this window.
+Unloaded bindings are never shown as Local
+Sessions; a failed Workspace can be retried in **Errors & Repair**.
+Sessions appearing after a cached read stay unclassified until their bindings are checked.
+Refreshing during an incomplete native list replay keeps previously verified Local Sessions visible.
+Each Workspace keeps its own failure details. Older Hosts without the navigation endpoint
+use the previous read path; reload the updated Host to benefit from the reduced Git probes.
+
+Opening a newly created or reused Worktree Session waits for its Worktree grouping to be ready,
+so it appears directly under that Worktree without briefly appearing in Local. If the grouping
+cannot be refreshed, the current view stays visible and the action reports an error for retry.
+Overlapping creation and notification refreshes share the latest result instead of reporting a
+binding repair error just because an earlier read was superseded.
+Once the destination grouping is ready, opening does not wait for the previous Session's
+context refresh; that refresh continues in the background.
+Worktree status reads run with bounded parallelism to reduce waiting in Workspaces with multiple Worktrees.
+With an existing ready grouping, creation and reuse read only the target Worktree and merge the
+confirmed bindings before opening. An unrelated change, reconnect, or stale result falls back to
+an authoritative Workspace refresh while keeping the current view visible.
+Local's **+** excludes Worktree-bound blanks (including detached bindings) when choosing a reusable
+Session. You can switch from an untouched Worktree blank to a separate Local blank without sending a message.
+Local also checks the native execution directory before reuse and opening, excluding unbound
+Sessions left in a Worktree after a binding failure. Directory read failures keep the current view visible.
+
+Worktree Session retries preserve existing legacy bindings, including Git-root Sessions in
+subdirectory Workspaces, while rejecting changed ownership or unrelated execution directories.
+Temporary failures before Session creation can be retried. After recovery opens a blank Session,
+the next new-Session action creates a fresh Session once that Session is no longer blank.
+This includes manual binding recovery. New Sessions in historical subdirectory Worktrees receive
+the same shared instructions; moving outside the bound directory still disables those instructions.
+
+New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
+
+Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
+
+### Open Worktree mode
+
+On hosts with the native section-scroller contract, Worktree uses the same native scrolling
+layout, scrollbar skin and stable scrollbar gutter as the Workspace list. Rows share its
+horizontal insets, and the scrollbar sits 2px inside the Sidebar edge. Hosts without this
+capability retain the previous floating scrollbar. With a wheel or trackpad, scrolling down
+moves the navigation away before scrolling the Worktree list; scrolling up returns the list
+to its top first. Workspace folders
+and rotating disclosure triangles match native DSH and align with its Workspace list.
+The Worktree heading follows the native Workspace heading's typography. The toolbar and
+activity filter share the list rows' horizontal inset, with a small gap below the filter divider.
+Workspace and Worktree rows use compact icon-to-name spacing and nested indentation.
+Only one Workspace is expanded at a time, and it owns the Local/Main, Worktree, and Session
+tree so the sidebar stays focused. Selecting another Workspace collapses the previous one;
+selecting the open Workspace collapses its tree. A collapsed Workspace row carries one
+aggregated status indicator at its action edge: the native running spinner while a Session is
+running, a yellow dot while waiting for approval or another interaction, and a green dot for
+an unread completion, so another Workspace can pull attention without opening it.
+Workspace and Session titles retain regular weight, including the open Workspace and current
+Session; background highlighting continues to indicate selection.
+An open Workspace containing the current Session uses the native blue folder; other Workspace
+folders use the native gray. Hover over a long Session title or Worktree name to reveal its
+tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
+
+1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
+2. Search or select a Workspace in the Worktree tree.
+3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native
+   Workspace and Session navigation remains available. Each group initially shows five rows;
+   use **Expand more** and **Collapse** for additional rows.
+4. Use **Collapse All** in the header to collapse other unrelated Workspaces and Worktrees;
+   the Workspace and Worktree containing the current Session remain expanded.
+
+Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
+keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
+reduced motion and settles immediately during search, drag, and initial loading.
+Worktree replaces only the Workspace browsing region through DSH's `sidebar.workspaces` slot.
+The brand, New Session button, plugin menus, footer, and current conversation stay in place.
+Select the same footer entry again to restore the native Workspace browser. Sidebar placement
+and folding follow DSH's slot contract, without locating native rows by text, DOM order, or coordinates.
+The navigation inherits the native Sidebar material and transparency preferences. Dashboard
+remains an independent overlay opened explicitly from its existing actions.
+
+The header's **Add Workspace** action uses DSH's configured directory picker, including the
+in-app directory browser on Web and the native chooser when composed. It creates a Workspace
+only after a directory is selected; cancelling leaves the list unchanged. The action is hidden
+when no directory picker is available, and selection or creation errors can be retried.
+
+### Filter Sessions by activity
+
+The range selector below the Worktree header filters the tree to today, the last 24 hours, the
+last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
+adds no Git read and no new DSH request.
+
+- A Session is active when it is running, waiting for interaction, or was last updated inside the
+  range. Running and waiting Sessions stay visible even with an older update.
+- **Today** starts at local midnight; **24 hours** and **7 days** are rolling windows measured from
+  the current time.
+- The Session you are viewing stays visible in every range, so navigation never hides it.
+- By default, a bounded range filters Session rows while keeping Workspace and Worktree structure.
+  **All** restores all Session rows, and search is unchanged. Records, directories, and bindings
+  are untouched.
+- The range menu's **Show inactive Workspaces** option is on by default and keeps Workspaces, Worktrees, and archived
+  Worktrees visible with their empty groups and management actions even when the range contains
+  none of their Sessions. Turn it off to filter inactive structure too. The option is browser-local;
+  an existing saved choice is preserved.
+- A Workspace created inside the selected range stays visible even before it has its first
+  Session, so creating a Workspace while a range is selected never hides the new row.
+- The range menu's **Keep default Workspace visible** option is on by default and pins DSH's
+  automatic `default-workspace` in every range, even when none of its Sessions are in range.
+  Unchecking it scopes that Workspace like any other; renaming it also opts out, matching how DSH
+  recognizes its automatic Workspace.
+- Each range counts non-blank, non-archived Sessions; a visible current blank Session is not counted.
+  The selected range is a browser-local
+  preference: it survives reopening the panel and reloading the page, and it is never written to
+  the plugin index or to DSH.
+- The button at the right edge of the range bar opens a checklist of the four ranges. Only checked
+  ranges appear as tabs, at least one always stays checked, and hiding the selected range moves the
+  selection to the next visible tab. The visible set is a browser-local preference like the range
+  itself.
+- When the range contains no Sessions and inactive structure is hidden, the tree reports the empty
+  range and points back to **All**, or to the range menu when **All** is hidden.
+
+### Active sessions
+
+The bell between Search and Collapse All opens a compact list of running Sessions, Sessions
+waiting for interaction, and unread completions across Workspaces. A blue dot marks a nonempty
+list; otherwise it shows **No active sessions**. Search, collapsed groups, and the five-row tree
+limit do not filter this list. Blank and archived Sessions are excluded.
+
+Each entry shows its Session name, Workspace, and Worktree (or Local), with the native Session
+status indicator and time on the right. Select an entry to open it; DSH clears its unread
+completion through normal navigation. Opening the bell alone does not mark anything read.
+The panel follows its trigger through CSS anchor positioning, including after Sidebar scrolling
+and browser zoom; use a browser that supports CSS Anchor Positioning, as required by DSH's native menus.
+Click outside or press Escape to close. The panel also closes if the Sidebar collapses or its
+layout becomes unavailable; reopen it with the bell after the Sidebar recovers.
+Running duration updates while the panel is open;
+observed stops show time since completion. Before this Client observes a transition, time uses
+the same native Session activity timestamp as Session rows, since DSH exposes no start/stop
+timestamp. Display clocks are temporary and reset on Client reload.
+
+### Create a Worktree
+
+You can also enable Agent tools with `/cluworktree`; see the next section.
+
+New Worktree actions use the same branch icon as Worktree rows. The Workspace row button appears
+on hover, keyboard focus, or while its options menu is open, matching the menu button.
+
+1. Open the options menu for Local/Main or an active Worktree and choose **Create Worktree**.
+2. Choose a local or fetched remote base branch and a new local branch name. The dialog suggests an available name.
+3. Confirm the dialog. The plugin creates the Git Worktree, records its acquisition facts, and
+   continues through the normal Session and binding flow when you open a Session from that Worktree.
+
+The Create and Import tabs share aligned, full-width controls and consistent spacing between fields.
+
+Creation, saved baselines, and Git comparison use the same searchable selector, grouped into **Local branches**
+and **Remote branches**, with current/checked-out markers and filters for all, local, or remote branches.
+Dropdowns use DSH’s native menu material in light and dark themes.
+Dropdown lists are compact and prefer opening below the field, shrinking to available space with internal scrolling;
+they open above only when there is too little useful space below.
+Search ignores case; use Arrow Up/Down to move, Enter to choose, and Escape to close. Clicking within the dropdown keeps it open, including headings,
+empty space, search, filters, and fetch controls; selecting an option or clicking outside closes it.
+Branch and import selectors open immediately while candidates load, show a loading indicator inside,
+and update in place when data arrives. Search and filters stay intact; refreshes keep existing rows visible.
+Closing and reopening the baseline editor discards pending results from the previous dialog.
+Only the latest branch read or Fetch can update its candidates and loading state.
+Even with cached candidates, the dropdown paints its compact loading shell before preparing the list.
+The initial shell and loading state keep the same height; ready results size to their content within the scrolling limit.
+Large lists render only rows near the viewport; search, filters, and keyboard selection still cover every candidate.
+Switching between **Create** and **Import** replaces the form content in the same dialog without replaying its opening animation.
+Opening any branch selector rereads local Git refs, including changes made in a terminal. Returning to
+the browser does not reload candidates. Fetch reads the updated list once and supplies it directly to the selector.
+Opening the New Worktree dialog does not preload branches; its default comes from the current branch or HEAD.
+The full branch list is loaded only when a picker opens or Fetch completes. Workspace navigation
+reads Git readiness and the current root-checkout branch separately; entering Git & Changes loads history without preloading branches.
+The current local branch is preferred by default. Remote refs are read
+from the local repository. Use the download-arrow button beside **Remote branches** to fetch all configured
+remotes, including when the remote list is empty. Fetch updates remote branch refs and refreshes this Workspace;
+it preserves your current selection, local branches, tags and working files, and does not prune deleted refs.
+The button shows a loading icon during fetch, then displays **Remote branches updated** in place for two
+seconds before restoring the download icon. Failures retain the list and show a retry on the same button;
+the button details retain the error code, message, and diagnostics, also available in **Errors & Repair**.
+no extra status row is added beneath the list.
+Listing branches never contacts a remote automatically.
+Remote baselines require a new local branch when creating a Worktree; its short name may match the remote baseline
+when that local branch does not exist. Symbolic remote HEAD entries are excluded.
+
+Git must have a usable repository and initial commit. Choose a local branch, or choose **HEAD** to
+create a new branch from Main's current checkout, including an exact Tag or detached Commit.
+The localized HEAD option includes the current reference name, for example **HEAD (v1.0.0)**.
+Creation uses the commit shown when selected. If HEAD changes before submission, creation is rejected
+with `WORKTREE_STATE_CONFLICT`; refresh the dialog and select the source again.
+Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
+If setup is incomplete, DSH
+shows the relevant readiness message and copyable setup guidance.
+
+When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
+For example, a Workspace at `/repo/packages/app` uses `<worktree-root>/packages/app` for new
+Sessions, the Dashboard path, Copy Path, and Open In. Git operations still use the entire checkout.
+If that directory is missing or resolves outside the checkout, the Worktree needs repair; it does
+not fall back to the Git root or create the missing directory.
+
+Already-bound Sessions with a legacy Git-root cwd remain usable after a subdirectory upgrade,
+including automatic tool injection, Session discovery, follow-ups, result reports and default
+Worktree creation from their own checkout's HEAD. Their original cwd and history remain unchanged;
+new Session bindings still require the Workspace directory inside the checkout. Git file previews use
+relative addresses inside the target Session cwd. Files outside that cwd show a prompt to use an IDE
+or a Session at the repository root; already-bound Git-root Sessions keep their original preview scope.
+
+### Enable Agent Worktree tools
+
+Open **Settings → Worktree → General** and turn on **Worktree tools**, then select the
+capabilities you want. Both tool switches start off. Run `/cluworktree` in a Session belonging to a
+Workspace or an active managed Worktree to enable your selected capabilities. Turning the general
+switch off removes the command; deselecting every capability turns the switch off automatically.
+
+For automatic injection, open **Dashboard → Settings** for Local/Main or a managed Worktree and select
+capabilities under **Automatically inject Worktree tools**. Local/Main settings apply only to unbound
+Sessions in that Workspace root; Worktree settings apply only to Sessions bound to that Worktree.
+Each configuration is stored separately. Selected tools are assembled before the first model request,
+including after an Agent restart; ordinary prompt presets also include delegation guidance and,
+in PTC mode, their SDK. Current DSH resolves automatic selection before each step's tool
+admission, including the first request of an already-open Session. Disabled automatic selections
+do not trigger Git availability probes.
+These selections are independent of General:
+if General selects capabilities 1, 2, 3 and automatic injection selects 2, 3, 4, running
+`/cluworktree` adds only capability 1. Already enabled tools remain until that Agent ends; changing
+preferences affects future injection.
+
+If automatic discovery cannot read plugin data or check availability, it adds no tools
+and ordinary native/PTC requests can continue. Previously enabled tools, including reporting,
+retain their Agent lifetime; their actual calls still enforce all data, identity, directory
+and report-authorization checks. Cancellation and confirmed identity/directory mismatches
+remain errors rather than being treated as optional discovery failures.
+
+The Worktree entry in Settings uses the same branch icon as the sidebar.
+Both settings use a card with the main switch at the top. Turning it on reveals tool selections
+and their descriptions below a divider; turning it off collapses them and retains your selection.
+Injection and reporting notes sit directly under the tool-selection explanation.
+The command and automatic-injection settings carry DSH's native **Experimental** badge.
+The settings explain each capability in plain language. Command results use DSH's native command
+presentation and report how many capabilities were added or already available.
+In a new Session, running `/cluworktree` immediately opens the conversation page and shows
+the command outcome, without first sending a message to the model.
+
+With delegation enabled, a request to create a feature Worktree and implement or fix something
+defaults to creating the Worktree and assigning the work to its own Session. That Session handles
+code edits, dependency setup and verification; creating the directory alone does not start the task.
+Guidance prefers the enabled plugin tools over other Worktree/Session tools, while respecting
+explicit requests to only create a Worktree, work in the current Session or use a different tool.
+
+The six selectable capabilities correspond to these tools:
+
+| Tool                    | Parameters                                                         | Behavior                                                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clutch_new_worktree`   | `name`, optional `baseBranch`, `instructions`                      | Creates a new branch at the calling Session's committed Worktree HEAD; Local/Main captures root HEAD, including detached HEAD. An explicit local or fetched remote `baseBranch` overrides this. Returns the acquisition `baseBranch` and `baseCommit`. |
+| `clutch_list_worktrees` | optional `workspaceId`                                             | Lists managed Worktree ids, branches, paths, lifecycle and health, plus available local and fetched remote base branches. Defaults to the calling Workspace.                                                                                          |
+| `clutch_span_worktree`  | `worktreeId` or legacy `name`, `prompt`, optional `model`, `title` | Creates a fresh native Session, binds it, configures its initial model and submits the prompt. Returns its `sessionId` and admission status.                                                                                       |
+| `clutch_list_models`    | optional `provider`                                                | Lists native provider/model routes, reasoning efforts and provider failures, alongside the current Session model and deployment default.                                                                                           |
+| `clutch_list_sessions`  | optional `workspaceId`, `worktreeId`                               | Finds existing Sessions, binding state, status and title. Unavailable relations return a diagnostic without reading their history.                                                                                                 |
+| `clutch_send_message`   | `sessionId`, `prompt`, optional `mode`, `requestId`                | Continues an existing Session. `queue` is the default; `steer` corrects at a native step boundary. Returns admission, not a reply.                                                                                                 |
+
+For example, ask the Agent to call `clutch_new_worktree({ name: "feature/demo", instructions: "Run tests before finishing." })`,
+then `clutch_span_worktree({ worktreeId: created.worktreeId, prompt: "Implement the feature and report the result." })` using the returned Worktree id.
+The tool name is intentionally `clutch_span_worktree`. Worktree names are exact Git branch names
+within the calling Workspace; prefer stable `worktreeId` for dispatch. Creating a Worktree alone does not create a Session.
+Only committed state is inherited; staged, unstaged and untracked files are not copied.
+An unhealthy binding never silently falls back to Main. The default captures the calling checkout's
+committed HEAD, including a detached root HEAD. Detached sources return `baseCommit` without inventing
+a `baseBranch`; an explicit local or fetched remote `baseBranch` remains available as an override.
+
+Newly delegated Sessions automatically receive only
+`clutch_report_result({ status, summary, evidence?, requestId? })`. The Host fixes the destination
+to the delegating Session. `status` is `completed`, `blocked`, or `failed`; `summary` and `evidence`
+are each limited to 2,000 characters. The other six capabilities require `/cluworktree` or the
+Worktree's explicit automatic-injection selection. Reports arrive as queued native Agent relays, not human messages;
+verify their claims and evidence before accepting completion. Reports are model-driven:
+a crash, stopped Agent or unanswered human approval may prevent reporting. `idle` is not success.
+
+Agent-originated task dispatch, continuation and reporting record native `agent-message` /
+`relay` provenance with the actual sending Session. The Host derives that identity; tool inputs
+cannot impersonate another sender. Model-visible content includes an Agent-source envelope while
+preserving the supplied prompt body. Supported native Chat renders a relay/context disclosure with
+the sending Session, or an Agent turn trigger when it wakes the recipient, rather than a human
+message bubble. Protocol-level `user` role does not make it human input or elevate its authority.
+Human prompts and user-originated Dashboard synchronization keep their existing native user route.
+Old history is not rewritten or reclassified by guessing from text.
+
+Agent steer messages sent by this plugin also appear in an **Agent steer** strip above the
+recipient's input box. Expand an entry to see its sender and content. The strip distinguishes
+waiting, preparation, entry into conversation context, cancellation, and unconfirmed status;
+receipt does not mean task completion. Up to eight recent received/canceled entries remain
+after the turn ends and clear when a new turn starts; pending entries remain visible.
+Ordinary queued messages stay in the native queue. History outside the loaded window may
+not have enough evidence to reconstruct a steer receipt.
+
+Reporting is limited to the active delegated task. One successfully admitted `completed`, `blocked`,
+or `failed` report consumes and clears its in-memory token. The reporting tool, SDK and guidance
+stay stable; calls without a token are rejected. Later user input clears any remaining token;
+it does not report to the former parent. An explicit new `clutch_send_message`
+dispatch from that parent opens reporting again after its prompt is consumed. Uncertain report
+admission permits only an identical retry with the returned `requestId`.
+Tokens are never persisted and are lost on Agent/plugin restart. Dispatch retry identities are
+retained in a bounded in-memory cache; expired retries fail explicitly instead of reopening reporting.
+The plugin rejects self/ancestor messages and blocks further message/task dispatch from turns
+triggered solely by reports or ordinary plugin messages. New human input permits dispatch again;
+these guards apply to this plugin's tools in both native and PTC modes.
+
+`clutch_read_session` and `clutch_wait_sessions` are removed from the model catalog. Do not
+poll lists or read raw Session logs for progress. After successful dispatch or follow-up admission,
+acknowledge dispatch and end the turn, waiting for the executing Session's pushed report.
+Continue only separate independent work already requested by the user. Do not check the delegated
+task through agent lists, terminal commands, Git, files or tests, and do not edit or commit it yourself.
+An explicit user progress/investigation request or a concrete admission failure permits a targeted action.
+Evaluate a report's supplied evidence rather than automatically rerunning checks; investigate only
+when requested or when the evidence has a concrete gap or inconsistency.
+Complete prompt presets such as **minimal** omit extra prompt sections; critical handoff and
+model-selection rules also appear in native tool descriptions, preserving that preset's complete prompt.
+Activation adds Agent-scoped guidance for choosing delegation from ordinary task descriptions,
+so users need not specify tool names. Schemas describe exact ids, defaults and target alternatives
+without `$schema`; errors explain the cause, correction and a valid invocation. A bad Session
+history returns one `unavailable` diagnostic while keeping healthy list entries available.
+
+In PTC mode, the generated SDK exposes concrete argument types, including required report
+`status` and `summary`. Length limits remain in field descriptions and are enforced at execution;
+all tool inputs use closed object roots without unions, including the nested model object.
+Dispatch keeps legacy exact branch names, but requires exactly one nonempty target at runtime;
+invalid targets or unknown fields fail before Session creation. Optional fields accept omission or
+`null` as omission, including model.reasoningEffort and mode (default queue); required fields still
+reject null. Blank identities/title/evidence are not defaults; empty instructions mean no save.
+For defaults, omit optional keys or use JSON `null`; neither `""`, `"null"`, nor a model
+object with empty provider/model fields means inheritance. New messages and first reports
+must omit `requestId` or use JSON `null`: the Host generates it. A rejected first report
+with an invented id explains how to correct it without consuming the report token.
+After uncertain admission, preserve the returned id and identical content for retry.
+
+Native schemas keep genuinely optional fields. Current DSH owns tool declarations and provider
+wire conversion; the plugin does not rewrite frozen model requests. On older DSH hosts only,
+routes that otherwise generate empty optional values can opt in by exact provider id:
+
+```yaml
+- id: clutch-dsh-worktree-host
+  config:
+    dshHome: !!js dshHomePath()
+    nullableToolProviders: [ocx]
+```
+
+This defaults to an empty list and has no effect on current hosts with step tool admission.
+On older hosts, for these providers, plugin tools in native model requests use
+required properties with nullable optional values and closed nested objects, retaining length bounds.
+A first report accepts only null for its wire requestId; an uncertain attempt restores the retry id
+field. The native catalog, PTC SDK, other plugins and execution validation keep their existing contracts.
+This does not enable a provider's strict mode or promise support across gateways. The local DSH pi-ai
+adapter and a real ocx/Luna route have been checked; other routes need their own verification. See the
+[tool schema standard](TOOL-SCHEMA-STANDARD.md) for official sources, tested layers and limits.
+
+For current DSH pi-ai `openai-responses` routes whose endpoint accepts the `strict` field,
+set `compat: { supportsStrictMode: true }` on that native provider route. This makes the
+adapter send `strict: false` explicitly for ordinary tools, preserving optional fields
+instead of allowing the endpoint to normalize them into required strings. This was verified
+with Magpie Responses / GPT-6.1-Sol; it does not enable strict sampling. Endpoints that reject
+the field need their own adapter compatibility configuration.
+
+`model` is `{ provider, model, reasoningEffort? }`. Omission inherits the calling Session's
+effective selection, including reasoning effort; no catalog lookup is required for that default.
+When the user specifies a different model or asks to choose one for the task, discover supported
+routes with `clutch_list_models` if enabled and pass the selected object explicitly.
+Unknown routes require discovery or user clarification, never invented ids or a deployment-default fallback.
+An unavailable model or effort fails before creating a Session. Initial
+model routing does not save the deployment default. Current DSH records the selection through
+the new Session's native model owner before the first step, so it survives restart even before
+the first request. Older hosts retain the runtime-only override until the first request header;
+restarting those hosts before that request discards the override. Native Session model changes take precedence.
+
+Tool changes refresh the owning Workspace's Worktree list and bindings while preserving ready
+content. An external branch switch in the Local checkout refreshes only that Workspace's Local row
+in place; the rest of the ready tree is preserved. A once-per-second HEAD check provides a fallback
+for missed filesystem notifications. HEAD changes during navigation loading, including the first load,
+are also reconciled. Dispatch keeps the current conversation open and uses DSH's normal new-Session
+preset and permission defaults. Run `/cluworktree` again after the Agent or plugin restarts for capabilities not automatically injected.
+`/cluworktree create <name> [baseBranch]` creates a managed Worktree and branch from the calling
+Session's healthy Worktree HEAD or the Workspace-root HEAD; the name is required and no Session is created.
+Lifecycle subcommands act on the calling Session's active Worktree binding: `/cluworktree list`,
+`archive`, `clean --yes`, `forget`, and `unarchive`. They accept no Worktree id; the Main Workspace has no binding and is rejected.
+All discovery, reports and follow-ups are restricted
+to the calling Workspace; passing another `workspaceId` grants no additional access. Sessions
+are ordinary native Sessions, not native subagent children or a persistent delegation catalog.
+Detached bindings must be repaired before sending or reporting through these tools.
+Healthy archived Worktrees retain their active bindings and allow Session follow-ups;
+a missing Workspace root still blocks message admission.
+
+If saving instructions, binding, or prompt admission fails after creation, the tool returns the
+created identity and an error (`instructionsSaved: false`, `binding-failed`, `model-failed`,
+`title-failed`, `reporting-failed`, or `prompt-failed`).
+The Worktree and native Session are retained. Repair or open the returned Session before retrying;
+another dispatch creates another Session. After a successful binding/model setup, retry a failed
+prompt with `clutch_send_message` and the returned `requestId`. Reuse a request id only for the
+same message retry; new follow-ups get fresh ids. `clutch_send_message` also returns `prompt-failed`
+with that id when native admission throws, including when acceptance is uncertain.
+Reporting destinations and activation are runtime-only. Restart discards the destination;
+a resumed Session can enable `/cluworktree` and use `clutch_send_message` with a known delegator id. There are no automatic merge, publish or disk-cleanup tools.
+
+### Import an existing Worktree
+
+1. Select a Workspace, open its branch-icon **New Worktree** action, and switch to **Import**.
+2. Open the searchable Worktree selector and filter by branch name or path. Each candidate shows its branch and directory; choose the Worktree to import.
+3. Select **Import Worktree**. The plugin registers the existing directory without moving,
+   copying, or changing its files, then uses the same Session flow as a created Worktree.
+
+The first version lists only ready, branch-attached, non-root Git Worktrees that are not already
+managed by the plugin. Detached, bare, prunable, missing, and invalid entries are omitted. Imported
+Worktrees can still use Git & Changes after you choose a local or fetched remote baseline branch.
+
+Import uses the same Workspace-relative directory rule and offers only candidates where that
+directory is available. Existing records are projected with the corrected path when the original
+Workspace is available. Existing DSH Sessions keep their original metadata; create a new Session
+to run from the corrected directory.
+
+### Create and open Sessions
+
+The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bubble-plus icon.
+
+- Use **+** on Local/Main for a normal DSH Session whose runtime directory is the Workspace root.
+- Use **+** on a Worktree for a Session whose runtime directory is that Worktree.
+- When possible, the plugin reuses an unarchived blank Session with the exact target directory.
+- Use native DSH fork actions from a Session list, Worktree Session menu, or conversation. A
+  child of a Worktree-bound Session is bound to the same Worktree and opens in that view.
+
+If DSH creates a Session but binding fails, the Session is kept. The Worktree view exposes retry
+or open recovery actions; the plugin does not delete or rewrite the DSH Session.
+
+### Current Session Worktree panel
+
+The bottom of this panel, the Dashboard footer, and the right of the **Worktree** title in **Settings → Worktree** share a small gray
+`from @cerbur/clutch-dsh-worktree` label. Hover, click, or focus it to open
+the plugin information card. Tab reaches the highlighted plugin link, which opens
+the GitHub repository homepage in a new tab. A GitHub icon precedes the package name in the card.
+Leaving the label or card dismisses it after a short grace period, allowing the pointer
+to move between them. Click outside or press Escape to dismiss it without closing the
+Worktree panel. A divider separates the panel's compact attribution footer from its content.
+
+Use **Worktree panel** in the Session header to open a compact panel without leaving the conversation.
+The public DSH utilities slot places it before the native More menu; the plugin cannot guarantee
+placement immediately beside the right-sidebar toggle. The existing Dashboard shortcut remains available.
+
+The panel is a small glass surface inset 12px from the Session’s right edge and 12px below
+its header and view tabs. It follows Session resizing and sidebar changes, with a
+small, regular-weight Worktree title and a refresh icon aligned right. Refresh and baseline-edit
+icons align with the metric values; the title shares the comparison heading’s typography.
+Long names truncate with an ellipsis; hover or keyboard-focus a truncated name to read
+its full text in a wrapping tooltip. Short baseline names retain their space.
+Uncommitted changes come first; a divider separates the `worktree → baseline` heading and its ahead/behind
+and committed-change rows. Paths and sidebar buttons are omitted.
+Local Sessions show only uncommitted changes. For managed Worktrees, the pencil at the
+right of the comparison heading opens the existing baseline picker, with branch loading,
+Fetch and conflict-checked saving. Click **Ahead / Behind** to open the **Sync with Base**
+dialog and choose Rebase or Merge. A healthy active Worktree, saved named baseline and
+current readable comparison are required; refreshing or unavailable comparisons disable
+this action. Clicking only opens the dialog; confirming creates the native Agent task.
+The committed-change row opens the native Diff sidebar directly when Forge is ready,
+after verifying the current Session's directory. Otherwise it opens the full Git & Changes
+view; it never enables Forge or switches Sessions. On click, a compatible Forge view
+receives the saved Worktree Base and switches to branch scope; this includes uncommitted
+changes. Unsupported versions retain native choices. The uncommitted-change row opens
+the full Git & Changes view.
+
+The header button toggles the panel and highlights while open. Every Session defaults to open.
+Closing via the header or Escape stores that Session's closed marker in localStorage; manually
+opening removes its marker. Only the 10 most recently closed Sessions are retained, so other
+Sessions remain visible by default. There is no close button; conversation clicks keep it visible.
+The panel is up to 256px wide, uses a frosted glass background with a light shadow and slides in from the right and out toward the right; reduced-motion
+preferences disable these animations. Reads and listeners stop immediately when closing,
+while the exit animation retains only the existing visual content.
+Dashboard hides the panel immediately without changing the markers; returning to the
+conversation restores its Session preference. Refresh switches the icon to a loading indicator until both Workspace and Git
+reads finish. While visible, the panel refreshes on local file and Git metadata changes,
+with a 60-second polling fallback and a one-time reconciliation for changes missed while
+native watchers are starting. Closing it or opening Dashboard releases the listeners and
+cancels both the startup reconciliation and the polling timer.
+Changes during pending reads are coalesced into one follow-up refresh.
+Shared tool notifications reuse the same Workspace read. After closing or entering Dashboard,
+late responses cannot start further popover reads.
+Automatic and manual refresh preserve ready content while
+reading. Initial loading fills fixed-size placeholders in the
+same layout without loading text or changing the panel size. Main, unbound, detached,
+missing-directory and failed reads use the reserved status area or refresh-icon tooltip.
+Session creation remains in the full Dashboard.
+
+### Open the Worktree Dashboard
+
+Open **Dashboard** from a Local/Main or Worktree row menu, its hover action, or the Dashboard icon
+beside the native Session-header actions. The header icon opens it in one click even when the Sidebar
+is collapsed, without expanding the Sidebar. If the target is still loading, the request stays open
+and shows loading in the center area, with failures announced by toast and retries available in Worktree settings. The Dashboard is a peer page to the native Session content: it
+occupies the center area beside the Sidebar while leaving an already-open right sidebar visible for a
+session-bound target. When the target Worktree has Sessions, opening its Dashboard waits for an initial pending
+Session list to become ready, then keeps the current Session if it belongs to that Worktree; otherwise it
+switches to the retained head Session so both views stay aligned. A ready
+empty Session list opens a page-level Dashboard without changing the current Session, collapses any currently
+open native right sidebar because there is no target Session, and does not create a Session automatically. The
+Dashboard header keeps the native right-sidebar button available whenever a current Session can host it and the
+sidebar is collapsed; once opened, the button is hidden following native behavior.
+
+The top bar shows **{workspace}/{worktreeName}** and groups **Open in ...**, **Back to session**
+(or **New Session**) and the right-sidebar control. It stays visible while the page scrolls.
+On macOS desktop, its blank space drags the window, and a collapsed left Sidebar exposes
+DSH's native reopen button beside the traffic lights. Windows retains its native caption bar.
+
+Selecting Plugins, Scheduled Tasks, Office, or another native main page automatically closes
+Dashboard and cancels pending Dashboard navigation. Returning to the conversation does not reopen it;
+use a Dashboard entry to open it again. Dashboard continues to use the overlay and native right sidebar.
+
+Use **Back to session**, Escape, a Sidebar Session, or Worktree mode exit to close it. For a Worktree with no
+Sessions, the top-right action becomes **New Session** and starts one in that Worktree. The connected MVP surface
+can show Overview and Sessions, create a Session or Worktree, archive a Worktree, edit instructions, copy a
+path, open the recorded directory in VS Code, and inspect Git & Changes.
+Quick Actions offers baseline synchronization and archive. VS Code must be
+installed on the browser's machine and able to access the recorded path; the link does not verify
+launch success.
+
+Local/Main Dashboard adds **Manage Worktrees** after **Settings**. Rows use the same branch icons,
+paths, and availability badges as Derived Worktrees; archived records have a separate badge and
+the heading shows the total. Select individual records or all Worktrees in this Workspace,
+including archived and cleaned records, then archive, clean up
+disk, or remove them from management. Confirmation lists the selected paths; disk cleanup also
+requires confirming that all tasks using them have stopped. Buttons show eligible target counts;
+confirmation includes only those targets, while ineligible items stay selected. Archive before
+cleanup or removal from management. Results appear per Worktree; successful items are deselected and failures
+remain selected for explicit retry. Main itself is never a batch target.
+
+
+**Derived Worktrees** shows managed Worktrees in the same Workspace whose saved baseline matches
+this checkout's current local branch. Overview previews five entries; the tab shows all matches,
+including archived entries with their availability and paths. Click an entry to open its Dashboard.
+Changing a saved baseline updates the relationship; this view represents direct baseline matches,
+not Git ancestry or delegated Session history. Local branch names and `refs/heads/` refs match;
+explicit remote refs do not. Detached HEAD or an unknown Main branch has no matches. When a
+managed checkout's current branch is unavailable, its recorded branch is used.
+In a derived Worktree's Dashboard header, click the **Base** branch to open the matching
+Worktree or Local/Main Dashboard. The edit button remains separate. A link appears only
+when exactly one checkout in this Workspace matches; remote, missing, and ambiguous bases
+remain plain text. The link follows the saved baseline when you edit it.
+
+**Sync with Base** opens a dialog with **Rebase** and **Merge baseline**. Confirming creates and
+opens a fresh native task Session in the current managed Worktree. Escape closes only this dialog;
+while task admission is pending, Escape closes neither the dialog nor the Dashboard. The Session uses
+the configured default model and normal native permissions. The saved local or fetched remote baseline is used, and the
+Host rejects stale, missing, ambiguous or unhealthy targets before creating a Session. A baseline saved
+while branch enumeration is pending invalidates the old request with `WORKTREE_STATE_CONFLICT`;
+reopen the dialog to use the new baseline. Baseline saves wait for any final task admission already
+in progress for that Worktree. Local/Main
+has no synchronization task. The Agent checks for a clean working tree and stops on conflicts;
+Rebase rewrites the current branch's commits. Admission means the task started, not that Git finished.
+Inspect the Session's result before starting further work. Partial creation preserves the Session
+and offers **Open created Session**; retrying a failed transport request reuses its admission identity
+within the current Host lifetime. Binding, model, title, reporting, and task-submission failures also
+show a toast and a localized problem and recovery entry in **Errors & recovery**, including the
+created Session identity. Recovery opens that Session without creating or dispatching another task.
+Closing the Dashboard preserves diagnostic history and revokes its recovery callbacks.
+Partial failures arriving after closing the Dashboard or changing its target or baseline also
+retain the created Session identity in inactive history, without navigating away from the current view.
+Task creation supports plain-HTTP LAN browser access as well as localhost and HTTPS.
+Plugin restart clears admission memory. No automatic push or publish
+is performed. Terminal, Git Diff, Pull Request and Run Tests placeholders have been removed.
+After reconnecting, replayed synchronization notifications refresh the affected Workspace and
+current context while keeping ready content visible; unrelated Workspaces retain their views.
+
+### Open the recorded directory in an app
+
+The Dashboard **Open in ...** split button is plugin UI backed by DSH's official Host routes:
+
+- `GET /open-in-app/apps` detects the available applications;
+- `GET /open-in-app/icon/<appId>` supplies each application icon; and
+- `POST /open-in-app/open` launches `{ "app": string, "path": absoluteDirectoryPath }`.
+
+The button sends relative requests to the current DSH host and uses the Dashboard record's
+`absolutePath`; it does not probe the operating system or persist an application choice. The selected
+application is remembered only in the current page's memory. After a refresh, the first available
+application is used. If no application is available or the Host request fails, the button keeps the
+existing VS Code protocol-link fallback.
+
+### Use Git & Changes
+
+Click the **Open native local changes** arrow icon in the Git & Changes header to open DSH's **Local changes**
+view in the right sidebar for the selected Worktree (or Local/Main). The current Session is preferred
+when its native working directory matches, including a blank new Session: no message is required.
+If no matching Session is available, create one from this Worktree's Dashboard and retry. If a matching
+existing Session must be opened, the action switches to it and asks you to click again after it loads.
+The Dashboard and its selected Git tab stay open throughout this switch.
+Directory verification failures, a pending Session switch, and missing native capabilities show feedback
+without opening another directory's Diff. This requires the native DSH right sidebar and the updated
+Worktree Host; reload the Host after rebuilding this plugin.
+
+If the official Forge bundle is off, clicking the open icon asks you to **Enable and open Diff**.
+The confirmation explains that Forge also includes native Worktree and GitHub integration and affects
+every Session using the current profile. After confirmation, the plugin enables Forge through DSH's
+Plugin Manager, waits for the native Diff to register, verifies the target directory, and opens it
+without another click. Cancel leaves the setting unchanged. If DSH requires a restart, reports a
+configuration override, or cannot load the panel, the action explains how to retry.
+If the enable response is lost or times out, the action briefly waits for native registration and
+checks the saved Forge selection without sending another enable request. It also waits for the
+same Session's sidebar to mount, then verifies the directory again before opening. A different
+Session or working directory cancels this continuation. Status-read, activation and sidebar-readiness
+timeouts have distinct feedback; an activation timeout does not mean the saved setting was undone.
+Directory verification also has a timeout, and closing the Dashboard cancels its pending read.
+An already selected bundle is not force-enabled again; check its panel toggle on the DSH Plugins page
+if Diff remains unavailable. Closing Dashboard or changing its target cancels the pending open.
+Any completed Forge enablement remains saved, including after uninstalling this plugin.
+Startup never enables Forge. To turn it off, open **Plugins → Experimental plugins** and switch off
+**Change requests & worktrees**. This disables the whole official Forge bundle for the current profile,
+including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
+
+The header uses compact open and refresh icons with hover labels; busy actions show a loading icon.
+The open icon's hover hint explains Base synchronization and its fallback. The Diff toolbar also uses an
+icon-only **Open in sidebar** action.
+
+**Opening attempts to apply the Base currently selected in Git & Changes.** A compatibility bridge shares Forge's
+Session store handle and applies the selected canonical branch ref once per click, selecting branch
+scope and clearing any old commit selection. It does not continuously synchronize or write
+native Session metadata. Short branch names such as a newly created Worktree's `main`
+are resolved by Host before synchronization, preserving local versus remote identity even
+when Forge is enabled for the first time, including from a blank Session. Missing APIs,
+incompatible state, resolution or initialization timeout, or a
+commit-only/ambiguous Base retain native behavior; choose the branch in Forge manually.
+Branch resolution results arriving at or after the 1.5-second deadline are ignored, including when the browser is busy.
+This also supports Local/Main with a selected branch. Selecting None or a commit-only Base keeps native behavior.
+Changing the selected Base or leaving the Git tab cancels a pending open. The popover still uses the saved Worktree Base. Forge branch scope includes
+uncommitted changes, so its totals can differ from the committed-change row.
+For a Workspace inside a repository subdirectory, the native view compares the
+whole checkout containing that directory. The Dashboard's own Git view remains read-only; actions in
+the native view follow DSH's own behavior and permissions.
+
+Open the **Git & Changes** tab from a managed Worktree or Main Dashboard. Main reads the current Workspace-root
+commit history directly and prepends an **Uncommitted changes** entry when the root has tracked, staged, unstaged, or
+untracked changes. Its baseline selector defaults to **None**, showing HEAD history without a total commit count.
+Choose a local or fetched remote comparison branch to show Baseline summary, the full comparison commit count,
+and ahead/behind facts. Selecting **None** returns to direct history. These choices stay in page memory.
+Direct history selects the first visible target and uses the same
+changed-file and diff panes for either a live working-tree target or a committed history entry. For a managed Worktree with a
+persisted `baseBranch` that differs from the current branch, or with a captured acquisition commit that
+supplies the implicit baseline, the Overview performs one compact, on-demand Git status read through the
+existing `/api` Connection. It shows ahead/behind commit counts plus separate
+committed (baseline-to-HEAD) and uncommitted (live working-tree) line totals; this is an ephemeral
+projection, not a watcher or a Worktree-record field. Local/Main's comparison is a transient Git-tab choice, so Overview remains
+**Not connected** for ahead/behind facts while its Git tab still exposes Main history. Unavailable or baseline-unselected
+managed views honestly remain **Not connected**. Opening Overview does not load the branch list; mounting the Git tab
+reads history against the saved branch or captured acquisition commit. Branch candidates load only when a
+selector opens; Fetch supplies its returned candidates directly. To replace that baseline, click the pencil icon beside the Base fact to open the branch
+picker: its search field sits permanently above a bounded branch list that shows roughly seven rows and
+scrolls internally, so the dialog keeps one size while you filter. Choose any local or fetched remote branch except the
+current Worktree branch and save.
+The save replaces the persisted `baseBranch` in the plugin sidecar; the saved value becomes the default for
+the Git selector. Once the Git tab is open, changing its selector remains a transient view choice and reloads
+history, changed files, and diffs without another Worktree-record write. If no usable saved baseline exists
+(absent or equal to the current Worktree branch), the Git tab and the Overview read against the Worktree's
+immutable captured acquisition commit and show that resolved commit as the Base fact; only a Worktree with
+neither a usable saved baseline nor a captured commit stays baseline-unselected and prompts you to choose
+one. When the selected branch has diverged, Git resolves the two heads' common ancestor. The
+Git & Changes view reports Worktree commits after that ancestor as `↑ N` ahead and base-branch commits after it
+as `↓ N` behind; history and file reads remain available. If the two heads have no common ancestor, the
+committed summary falls back to the full tree diff between the base branch tip and Worktree `HEAD`, while
+history uses the Worktree commits not reachable from that base tip.
+With a valid managed Worktree baseline loaded, the Git & Changes tab initially selects **Baseline summary** rather than the
+first commit; changing the baseline branch also returns to that summary. Choose a commit or **Uncommitted
+changes** when you need a narrower target. Local/Main with **None** skips this comparison-only summary but presents the same committed history and multi-commit selection behavior, plus a live working-tree target when the
+Workspace root has changes. Selecting **Uncommitted changes** compares the current Workspace root with `HEAD`; it does not
+create a baseline or write any Git state.
+
+The selected local or fetched remote branch is resolved again for each read. Selectors display short names and
+use the enumerated `refs/heads/...` or `refs/remotes/...` as stable identities. New remote baseline saves retain
+the exact remote ref, so adding or removing a same-named local branch cannot change the baseline.
+Legacy short names are accepted only when unambiguous; an ambiguous saved value reports
+`WORKTREE_STATE_CONFLICT` and requires selecting the intended branch again. Raw commit SHAs, tags, and
+arbitrary revision expressions remain rejected. A selected exact branch that no longer exists shows the honest unavailable state instead of a
+generic Git failure. `baseCommit` is immutable acquisition metadata, is never user-selectable directly, and
+is the implicit baseline whenever no saved branch baseline is usable; creation recovery never overwrites
+it. When a managed Worktree or Main Workspace root has staged, unstaged, or untracked files, the list prepends an
+**Uncommitted changes** entry; selecting it compares that live working tree with `HEAD` and uses the same changed-file
+and diff views.
+
+The **Baseline summary** is a separate target that shows the net committed tree diff from the resolved
+common ancestor to the request's captured `HEAD` (or the two branch tips when no common ancestor exists);
+it excludes working-tree changes by default. Turn on **Include working tree** to replace that target with
+one net diff from the same comparison boundary to the current working tree, including committed, staged,
+unstaged, untracked, deleted, and renamed changes. This is a
+fresh on-demand projection rather than a concatenation of two diffs. Clicking a commit shows that
+commit's own diff. For managed Worktrees and Main, turn on **Multi-select commits** in the commits header to pick several committed rows
+and view the exact union of their first-parent deltas; Local/Main with **None** has no baseline-summary or working-tree-inclusion controls, and the switch is off by default; turning it off
+collapses the selection back to the focused commit. The changed-file list
+records the contributing commits, and each selected commit is rendered as its own diff segment; this is
+not an implicit range and does not include unselected commits. The changed-files column header shows the
+aggregate green `+N` and red `-N` totals for the current target, including the Baseline summary, selected
+commits, or Uncommitted changes; binary-only totals show Unknown. The working-tree entry remains mutually
+exclusive with committed multi-selection. **Open in Sidebar** is available in the diff toolbar and on
+existing changed-file rows. It uses the current Session when it belongs to the Dashboard group,
+otherwise the group's first visible Session, and explicitly expands the native right sidebar.
+With no target Session it prompts you to create one; the Overview's empty Session card includes **New Session**.
+File-tree paths, Diff titles and file requests are relative to the Workspace directory, for both Main and
+managed Worktrees. At `/repo/packages/app`, `src/index.ts` names `/repo/packages/app/src/index.ts`;
+repository-root `README.md` appears as `../../README.md`. The view retains changes across the checkout.
+Files outside the target Session cwd show a prompt instead of an invalid resource address.
+
+Main shows a local checkout status and omits derived Worktree creation-time and baseline facts.
+Ahead/Behind uses neutral commit counts (`↑ N` / `↓ N`), while added/deleted code lines keep their green/red counts.
+The sticky top bar truncates long references on one line, and only the reference text copies to the clipboard.
+
+Managed Worktree and Local/Main history load the newest 50 commits first. Scrolling to the bottom appends
+the next 50 without replacing the current selection or diff; the load-more button also supports keyboard use.
+Comparison views show the full committed total from ahead counts, independent of loaded pages.
+If HEAD or the baseline moves between pages, refresh before continuing; existing rows remain visible.
+The load-more button becomes **Refresh** after this conflict. Commit file and Diff reads also require
+a stable HEAD throughout authorization and reading.
+Multi-selection supports up to 200 selected commits. A changed-file list larger
+than the Git adapter's output bound reports an explicit truncated state instead of a generic error.
+Commit details use
+first-parent comparisons; root commits compare against the empty tree; rename and copy rows retain
+both paths; binary or oversized diffs show an explicit display-safe state. Changed-file rows show text
+line counts as green `+N` additions and red `-N` deletions; binary files omit those counts. File names use
+green for additions, red for deletions, and blue for other changes, and each row's title and accessible
+label spells the status out. Folder icons indicate whether each folder is
+expanded or collapsed. The **Uncommitted changes** entry is an on-demand snapshot, is not persisted, and is not a
+Git watcher; refresh it to see later edits.
+
+Git & Changes uses a viewport-bounded, fixed-size surface. Wide layouts show two columns: commits and
+changed files stack in the narrower left column around a draggable divider, while the diff keeps the full
+height on the right. Narrow layouts keep two rows: commits and changed files side by side on the first row,
+with the summary diff underneath. Both dividers stay draggable in either layout — the vertical one trades
+width between the columns, or between commits and changed files inside the first row, and the horizontal one
+trades height between the commits and changed-file panes, or between the first row and the diff. Drag a
+divider, or focus it and press the arrow keys, to move it, and double-click it to restore the default split.
+Long commit and changed-file lists scroll inside their panes instead of expanding the Dashboard. The
+changed-file pane also scrolls horizontally when paths are wider than the pane, keeping file and folder
+names untruncated. Changed files are grouped by folders; folders start expanded and can be opened or
+collapsed independently. Diff content also scrolls inside its bounded pane, while the read-only selection
+and refresh behavior remains unchanged.
+
+The view is read-only and does not provide commit or staging controls. For managed Worktrees, the plugin validates committed
+entries against the selected branch-to-`HEAD` projection and re-reads working-tree paths against a fresh status projection;
+Local/Main validates committed entries against HEAD reachability, excluding baseline ancestors when comparing. These endpoints are not generic Git object or file readers. Refresh keeps ready
+content visible while replacement data loads, and late responses for an older commit or file selection
+are ignored.
+
+### Add Worktree or Main instructions
+
+In the Dashboard, use **Edit** on the instructions card to save or clear shared guidance for the selected Worktree or
+Main Workspace, up to 32,000 UTF-16 code units. The next model request receives the text as a separate
+`<system-reminder>` context entry through DSH's pre-step hook, including unbound Sessions running at Main.
+
+Instructions stay in the plugin's own data. They are not written to the project directory or an
+`AGENTS.md` file. Clearing, detaching, cleaning, or forgetting a Worktree stops future injection; archiving
+keeps an active binding and therefore keeps its Worktree instruction effective. Unchanged instruction text is not repeatedly added while its message remains visible.
+
+### Resolve errors
+
+Failures in the Worktree list, dialogs, and Dashboard appear as native toasts in the current DSH
+language (English or Chinese). Each message explains the problem and how to recover. The list
+keeps its existing content and has no error banner or diagnostics drawer at the top.
+
+Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
+to read each failure and expand its original
+diagnostics (including Git stderr). Retry reads, recover interrupted Worktree operations, retry
+Session bindings, or open retained Sessions from the same tab. Records remain after the toast
+fades; the list and Git panels have no inline error or retry controls. Closed operation views
+disable their recovery actions; reopen the corresponding view to load its current state.
+Records stay in page memory and clear on reload. **Clear history** keeps active recoveries.
+Dialogs keep input; failed instruction and baseline saves retain drafts. Git setup guidance
+stays in the creation dialog. Matching Git failures share one toast while keeping separate records.
+
+The Worktree settings section uses DSH's native tabs, status tags and compact controls. Its
+text, actions and diagnostic details follow the font size selected in **Settings → General**.
+
+An unresolved disk cleanup can block archive, batch management, and creation throughout its
+Workspace with `WORKTREE_RECOVERY_REQUIRED`. Choose **Retry recovery** first (also available
+on the affected Worktree menu). If cleanup cannot be reconciled—for example, the directory
+still exists but Git no longer registers it—the recovery error offers **Keep files and cancel
+pending cleanup** in **Errors & recovery**. This explicitly cancels that one cleanup request
+after saving a complete plugin-index backup in
+`$dshHome/clutch-dsh-worktree/cleanup-quarantine/`. It preserves all Worktree records,
+bindings, files, and native Sessions; it does not mark disk cleanup completed. Repeating the
+same cancellation is safe. When the Host offers cancellation, Git failures do not hide this
+action. Unrelated pending operations or repository conflicts remain blocked.
+
+After cancellation, retry the other selected items. For the affected checkout, repair its Git
+registration yourself, or use **Remove from Management** to retain its files without managing
+it. Any later disk cleanup still requires the normal confirmation and identity checks.
+If the backup cannot be written, cancellation fails and the original journal stays intact.
+
+### Archive or remove a Worktree
+
+- **Archive Worktree** is non-destructive. It keeps the directory, bindings, instructions, and
+  runtime Worktree context. An archived Worktree can be unarchived while its Git registration is
+  intact.
+- **Clean Up Disk** is a separate action. It requires a second confirmation and runs the normal
+  non-forced `git worktree remove`. The plugin does not check whether Sessions or subagents are
+  still using the directory; stop those tasks before confirming. Successful cleanup detaches the
+  bindings while keeping the recorded history until it is forgotten.
+- **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
+  the disk files and native DSH Sessions, and does not require a Session activity check.
+
+When importing a Worktree created by DSH, native ownership and its archive-retention setting stay
+with DSH. Importing does not disable native cleanup. DSH may reclaim that directory after all
+referencing Sessions are archived; an unarchived Session using it or DSH's keep-on-archive option
+can retain it. After native cleanup finishes, Clutch refreshes only the matching Worktree and
+Workspace. A removed directory is shown as needing repair; its records and bindings remain,
+and it is not marked as a completed Clutch disk cleanup. Clutch-created directories are not
+made native-owned by this integration.
+
+## Requirements
+
+| Component       | Requirement                                                                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSH Client      | `>=0.2.2-rc.2`, including the Session and Workspace Controllers and Client Store                                                                                                    |
+| DSH Host        | `>=0.2.2-rc.2`, including the Typert Gateway `/api` connection and subprocess capability                                                                                            |
+| Git             | `>=2.20.0`, installed and available on `PATH`                                                                                                                                       |
+| Node.js         | `>=24.9.0`, matching the minimum supported DSH version |
+| Host filesystem | Normal Windows and macOS local paths are supported for sidecar and Git Worktree data; network, special, or alias-heavy filesystems may not support durable sync or identity checks. |
+
+## Behavior and limitations
+
+- Desktop upgrade preparation drains the plugin's idle notification reads within five seconds.
+  Host shutdown cancels pending plugin lock acquisition and Git work, while allowing admitted
+  sidecar writes to finish and release their locks. Restarting or upgrading does not clean up
+  Worktree directories, detach bindings, or delete native Sessions.
+- DSH owns Workspace identity and root paths, Session identity and metadata, native lists,
+  messages, prompts, transcripts, and history. The plugin never copies or rewrites those values.
+- The plugin's external index stores Worktree paths, branches, sources, lifecycle state, bindings,
+  ordering, instructions, acquisition facts, and related metadata. For managed Worktrees, the
+  Dashboard Base fact is the persisted `baseBranch`; users can replace it with a local or fetched remote branch other
+  than the current Worktree branch, and the saved value becomes the Git-tab selector default. The
+  immutable acquisition `baseCommit` remains separate and is not rewritten by that edit. The index is
+  kept in the DSH host plugin data directory, not in a project directory or DSH's raw data store. It
+  does not store Session content or a copy of the Workspace root.
+- New Sessions retain the original Workspace and immutable header directory. DSH owns the effective
+  working-directory projection and its change events; the plugin never rewrites Session metadata.
+  An active binding must match the effective directory. Leaving, detaching or cleaning a Worktree
+  never redirects a running Session to Main; DSH may recover a missing directory on the next native operation.
+  Old injected adapters without native directory facts retain their derived cwd compatibility behavior.
+- One Session can have at most one active Worktree binding, while a Worktree can have many Sessions.
+  Removing or cleaning a Worktree never deletes a DSH Session. A broken active binding reports a
+  repair state instead of silently falling back to another Worktree.
+- The Host watches each Workspace checkout's `.git/HEAD` so the Local row's branch name follows an
+  external branch switch without a page reload. Working trees, the index, and managed Worktree
+  checkouts are not watched; Git is otherwise read on relevant refreshes, when relevant menus open,
+  and on Git Dashboard activation. An external branch change inside a managed Worktree is shown as
+  branch drift and requires explicit **Adopt current branch** before disk cleanup. Detached HEAD and
+  recovery-needed states remain visible and retryable.
+- Worktree health is shown by tinting the branch icon: ready uses the success (green) color, branch drift uses the warning color, and repair/recovery-needed uses the error color. The localized health label remains available to assistive technology even when hover replaces the icon with the disclosure control.
+- Newly created or imported Worktrees are inserted at the head of their Workspace's Worktree list; existing Worktree order is preserved and Main remains fixed first.
+- Persist the open Workspace plus Main and Worktree expansion choices in browser-local storage; the five-row Session overflow state remains transient and resets after refresh or parent collapse. **Collapse All** collapses unrelated nodes while keeping the current Session's Workspace and Worktree expanded.
+- The activity range is a presentation filter over native Session facts. It hides rows only: it never archives, unbinds, or deletes anything, and it adds no Git or Host read. A hidden Workspace or Worktree remains in the plugin index with its Sessions and bindings intact.
+- Range counts and range boundaries are recomputed at most once a minute while the panel is open, so a Session can remain listed for up to a minute after it leaves a rolling window.
+- When the current Session is outside the visible tree, the matching row is highlighted and temporarily revealed; positioning keeps the navigation scroll unchanged when the row is already visible and moves only enough to expose it otherwise. This does not change persisted expansion choices.
+- Git Dashboard reads run on the Host through the existing DSH `/api` transport. The browser does
+  not execute Git, read sidecar files or `.git`, or expose working-tree mutation controls. File
+  diffs disable external diff and text conversion and are bounded for safe display.
+- The Dashboard Open In action uses only the official relative DSH Host open-in-app routes for application discovery, icons, and launching. It keeps the application choice in current-page memory; refreshes use the first available application, and an empty or failed Host response falls back to the encoded VS Code protocol link.
+- The Git Dashboard is intentionally limited to committed history, a read-only **Baseline summary**
+  (optionally including one fresh baseline-to-working-tree projection), one **Uncommitted changes**
+  snapshot, changed files, and one unified diff at a time. These projections combine staged, unstaged,
+  and untracked files when requested but are never written back to Git. The Dashboard does not provide
+  commit, staging, reset, revert, cherry-pick, push, pull, pull requests, graph lanes,
+  or syntax highlighting.
+- Session rows and Dashboard cards use DSH's native status and relative-time presentation. The green
+  completion dot is DSH's unread reminder for a Session that stops outside the current main view;
+  opening that Session or running it again clears the reminder. A cold-start idle Session does not
+  count as completed. The reminder remains DSH-owned and is not persisted by this plugin.
+  Collapsed Workspace rows keep the native status indicator: running uses the spinner, a
+  pending-interaction warning uses the yellow dot, and an unread completion uses the green dot,
+  so the row itself signals that switching may be needed. Collapsed
+  Main and Worktree groups use the same native aggregate `StateDot`, where waiting
+  approval (and other pending-interaction warnings) takes priority over running, and running
+  takes priority over completed. Idle Sessions do not contribute a group dot; Worktree health
+  remains a separate leading indicator. Visual Session ordering initially follows the newest `updatedAt` values and
+  remains browser-local; Main remains fixed first, Worktree drag updates only this local order projection,
+  and Main drag updates native Workspace order only after DSH accepts it.
+- Session creation, reuse, archive, cleanup and removal preserve native DSH permissions. The plugin provides no dedicated access preset, confirmation or permission recovery. Historical Session permissions remain unchanged; use DSH native controls when ordinary approval is needed.
+- Session-to-Worktree bindings compare physical filesystem identity on the Host (`stat`/`realpath`) rather than relying on lexical path equality. This ensures robust compatibility across Windows and macOS path variations (including drive-letter casing, forward/backward slashes, UNC paths, and extended-length prefixes like `\\?\\`). On Windows, sidecar atomic persistence uses file-handle synchronization with best-effort directory sync, and Git CLI integration cleanly handles `NUL` null-device paths and CRLF line endings.
+- Git must be installed and available on `PATH`. A missing Git executable shows install guidance
+  and no command block; the plugin does not run setup or installation commands.
+- If a Workspace root directory is missing, the Worktree view still renders the indexed Worktrees,
+  Session bindings, and recorded instructions, and reports a localized missing-directory state
+  instead of failing the whole view. Git-backed reads, Worktree creation and import, and cleanup
+  actions remain rejected for that Workspace until its directory returns.
+- If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
+  remain readable and the plugin enters a degraded read-only state. It never replaces native data
+  with an empty index.
+

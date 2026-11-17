@@ -102,6 +102,9 @@ Refresh scope is determined by the smallest affected identity.
 
 ## 文档同步要求 (Documentation Synchronization)
 
+- **README 面向插件用户**：DSH 会展示 npm 中的 README；两种语言只保留功能介绍、安装、截图、常用操作、兼容要求与必要的使用限制。不要加入代码结构、API/schema 参数、实现算法、刷新时序或测试门禁。代码与架构说明放入 `docs/ARCHITECTURE.md`，开发与检查命令放入 `docs/DEVELOPMENT.md`，工具契约放入 `docs/WORKTREE-TOOLS.md` 和 `docs/TOOL-SCHEMA-STANDARD.md`。需要 agent 关注的新文档必须加入本文件的文档地图。
+- **详细行为参考**：从旧 README 迁出的完整行为与接缝细节见 [docs/BEHAVIOR-REFERENCE.md](docs/BEHAVIOR-REFERENCE.md) 和 [中文版](docs/BEHAVIOR-REFERENCE.zh.md)。修改相关行为时阅读并同步对应段落，避免重新将实现细节堆回 README；架构和工具规范仍以各自权威文档为准。
+- **npm 展示链接**：README 中的文档链接使用完整 GitHub URL，截图使用完整 raw URL，避免依赖 npm/DSH 的相对路径解析。双语链接指向对应语言，截图保持在安装后的 Features 表中。
 - **公开行为变动**：修改用户可见能力、菜单项、安装命令或前置兼容条件时，必须同步更新 `README.md` 与 `README.zh.md`，确保标题级别序列和语义完全对齐；
 - **架构与模型变动**：调整领域模型、数据边界、生命周期状态、并发锁或依赖拓扑时，必须更新 `docs/ARCHITECTURE.md`；
 - **开发与构建变动**：修改开发依赖、upstream DSH 基线、测试命令、本地联调步骤时，必须更新 `docs/DEVELOPMENT.md`；
@@ -150,6 +153,8 @@ ESLint 是提交前独立必过的门禁，覆盖源码和测试文件；测试�
 - **使用指南**：[`README.md`](README.md)（英文用户手册）、[`README.zh.md`](README.zh.md)（中文用户手册）
 - **架构设计**：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（核心领域模型、生命周期、事务控制、持久化设计）
 - **开发指引**：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（环境准备、本地安装、联调、调试与贡献者门禁）
+- **详细行为与接缝参考**：[`docs/BEHAVIOR-REFERENCE.md`](docs/BEHAVIOR-REFERENCE.md)、[`docs/BEHAVIOR-REFERENCE.zh.md`](docs/BEHAVIOR-REFERENCE.zh.md)（导航、Dashboard、Git、恢复与工具行为；修改对应功能前阅读）
+- **Agent 工具契约**：[`docs/WORKTREE-TOOLS.md`](docs/WORKTREE-TOOLS.md)、[`docs/TOOL-SCHEMA-STANDARD.md`](docs/TOOL-SCHEMA-STANDARD.md)（工具实现接缝、schema 与人类决策门禁；修改工具前阅读）
 - **发布指南**：[`docs/RELEASING.md`](docs/RELEASING.md)（包版本参数与发布前提）
 - **客户端规范**：[`src/client/README.md`](src/client/README.md)（Browser Consumer、Overlay 与 Connection 契约）
 - **截图标注规范**：[`docs/SCREENSHOT-ANNOTATION-SOP.md`](docs/SCREENSHOT-ANNOTATION-SOP.md)（框线、直接标签、对比图布局与制图流程）

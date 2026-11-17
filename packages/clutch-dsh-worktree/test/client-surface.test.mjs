@@ -22,9 +22,9 @@ import {
 } from '../lib/client/view/worktree-view.js';
 import * as worktreeView from '../lib/client/view/worktree-view.js';
 
-test('documents persistent Worktree ordering and fixed Main behavior', async () => {
-  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
+test('documents persistent Worktree ordering and fixed Main behavior in the behavior reference', async () => {
+  const readme = await readFile(new URL('../docs/BEHAVIOR-REFERENCE.md', import.meta.url), 'utf8');
+  const readmeZh = await readFile(new URL('../docs/BEHAVIOR-REFERENCE.zh.md', import.meta.url), 'utf8');
   const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
 
   assert.match(readme, /Worktree.*排序|Worktree.*order/i);
@@ -89,9 +89,9 @@ test('documents persistent Worktree ordering and fixed Main behavior', async () 
   assert.match(clientReadme, /scrollIntoView|nearest visible area|最近可见区域/i);
 });
 
-test('documents Worktree health icon presentation in bilingual READMEs', async () => {
-  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  const readmeZh = await readFile(new URL('../README.zh.md', import.meta.url), 'utf8');
+test('documents Worktree health icon presentation in bilingual behavior references', async () => {
+  const readme = await readFile(new URL('../docs/BEHAVIOR-REFERENCE.md', import.meta.url), 'utf8');
+  const readmeZh = await readFile(new URL('../docs/BEHAVIOR-REFERENCE.zh.md', import.meta.url), 'utf8');
   const clientReadme = await readFile(new URL('../src/client/README.md', import.meta.url), 'utf8');
 
   assert.match(readme, /Worktree health is shown by tinting the branch icon/);

@@ -6,6 +6,20 @@
 关于 Agent 维护指令与关键约束，请参阅 [../AGENTS.md](../AGENTS.md)。
 关于通用与本包的发布流程，请参阅 [RELEASING.md](RELEASING.md) 及根目录 [../../../docs/RELEASING.md](../../../docs/RELEASING.md)。
 
+## 文档分工
+
+npm 与 DSH 展示的 package README 面向插件用户，保留功能、安装、截图、常用操作与必要限制。
+代码介绍和约束通过以下文档维护，不再追加到 README：
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)：模块职责、数据所有权、生命周期与并发约束。
+- [BEHAVIOR-REFERENCE.md](BEHAVIOR-REFERENCE.md) / [中文版](BEHAVIOR-REFERENCE.zh.md)：从 README 迁出的详细导航、Dashboard、Git、恢复与工具行为。
+- [WORKTREE-TOOLS.md](WORKTREE-TOOLS.md) / [TOOL-SCHEMA-STANDARD.md](TOOL-SCHEMA-STANDARD.md)：Agent 工具实现与 schema 规范。
+- [客户端规范](../src/client/README.md)：浏览器接缝和 UI 实现约束。
+- 本文档：源码安装、构建、联调、检查命令和贡献门禁。
+
+修改相应行为时同步维护详细参考；需要 coding agent 关注的文档还须链接到 [AGENTS.md](../AGENTS.md)。
+本次 README 整理不改变产品行为、架构或历史计划，仅调整文档入口与内容归属。
+
 ---
 
 ## 1. 环境前置要求
