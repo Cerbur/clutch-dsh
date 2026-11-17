@@ -93,7 +93,7 @@ when no directory picker is available, and selection or creation errors can be r
 ### Filter Sessions by activity
 
 The range selector below the Worktree header filters the tree to today, the last 24 hours, the
-last 7 days, or every Session. It reads only the Session facts the tree already shows, so it
+last 7 days, or every Session. It uses existing Session activity, Workspace creation times, and Worktree creation or import times. It
 adds no Git read and no new DSH request.
 
 - A Session is active when it is running, waiting for interaction, or was last updated inside the
@@ -110,6 +110,8 @@ adds no Git read and no new DSH request.
   an existing saved choice is preserved.
 - A Workspace created inside the selected range stays visible even before it has its first
   Session, so creating a Workspace while a range is selected never hides the new row.
+- A Worktree created or imported within the range stays visible alongside its Workspace even before its first
+  Session. Archived Worktrees follow the same rule.
 - The range menu's **Keep default Workspace visible** option is on by default and pins DSH's
   automatic `default-workspace` in every range, even when none of its Sessions are in range.
   Unchecking it scopes that Workspace like any other; renaming it also opts out, matching how DSH

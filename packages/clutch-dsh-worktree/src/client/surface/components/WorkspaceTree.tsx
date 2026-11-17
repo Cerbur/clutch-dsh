@@ -16,6 +16,7 @@ import { AnimatedTree } from './AnimatedTree.js';
 import { WorktreeGroupRow, WorktreeSessionGroup, WorktreeWorkspaceRow } from './rows.js';
 import { includesText, isSessionGroupAutoExpanded, workspaceMatches, bindingIdsFor } from '../selectors.js';
 import type { WorktreeSurfaceProps, WorkspaceLike } from '../types.js';
+import type { WorktreeRecord } from '../../../contract/index.js';
 import type { useDragActions } from '../actions/useDragActions.js';
 import type { useLifecycleActions } from '../actions/useLifecycleActions.js';
 import type { useLifecycleState } from '../state/useLifecycleState.js';
@@ -163,9 +164,9 @@ export function WorkspaceTree({
 
   // The default "show inactive structure" preference keeps every Workspace and
   // Worktree row, so structure and management actions stay reachable. Turning
-  // it off scopes structure to the activity range; a Workspace created inside
-  // that range and DSH's pinned default Workspace still survive, and either way
-  // only Session rows are filtered by the range.
+  // it off scopes structure to the activity range; a Workspace or Worktree
+  // acquired inside that range and DSH's pinned default Workspace still
+  // survive, and either way only Session rows are filtered by the range.
   const workspaceCandidateSessionIds = (workspaceId: string): readonly string[] => {
     const candidates = new Set(workspaceSessionIds(workspaces, workspaceId, sessions.ids));
     for (const binding of viewByWorkspace.get(workspaceId)?.bindings ?? []) {
@@ -176,13 +177,16 @@ export function WorkspaceTree({
   const structureSurvivesWindow = (
     workspace: Pick<WorkspaceLike, 'title' | 'createdAt'>,
     sessionIds: readonly string[],
-  ): boolean => activity.workspaceSurvivesWindow(workspace, sessionIds);
-  const worktreeSurvivesWindow = (workspaceId: string, worktreeId: string): boolean => {
-    if (!activity.active || activity.showInactiveStructure) return true;
-    const bindings = viewByWorkspace.get(workspaceId)?.bindings ?? [];
-    return activity.hasActiveSession(
+    worktrees: readonly WorktreeRecord[],
+  ): boolean => activity.workspaceSurvivesWindow(workspace, sessionIds, worktrees);
+  const worktreeSurvivesWindow = (record: WorktreeRecord): boolean => {
+    const bindings = viewByWorkspace.get(record.workspaceId)?.bindings ?? [];
+    return activity.worktreeSurvivesWindow(
+      record,
       filterArchivedSessionIds(
-        bindingIdsFor(bindings, worktreeId).filter((sessionId) => sessions.ids.includes(sessionId)),
+        bindingIdsFor(bindings, record.worktreeId).filter((sessionId) =>
+          sessions.ids.includes(sessionId),
+        ),
         archivedSessionIds,
       ),
     );
@@ -190,7 +194,11 @@ export function WorkspaceTree({
   const visibleWorkspaces = workspaces.items.filter(
     (workspace) =>
       workspaceMatches(workspace, viewByWorkspace.get(workspace.workspaceId), sessions, query) &&
-      structureSurvivesWindow(workspace, workspaceCandidateSessionIds(workspace.workspaceId)),
+      structureSurvivesWindow(
+        workspace,
+        workspaceCandidateSessionIds(workspace.workspaceId),
+        viewByWorkspace.get(workspace.workspaceId)?.worktrees ?? [],
+      ),
   );
   return (
     <>
@@ -281,10 +289,10 @@ export function WorkspaceTree({
             const activeWorktrees = worktrees.filter((record) => record.status === 'active');
             const archivedWorktrees = worktrees.filter((record) => record.status === 'removed');
             const visibleActiveWorktrees = activeWorktrees.filter((record) =>
-              worktreeSurvivesWindow(workspace.workspaceId, record.worktreeId),
+              worktreeSurvivesWindow(record),
             );
             const visibleArchivedWorktrees = archivedWorktrees.filter((record) =>
-              worktreeSurvivesWindow(workspace.workspaceId, record.worktreeId),
+              worktreeSurvivesWindow(record),
             );
             const workspaceWorktreeNames = [
               ...(view?.branches.map((branch) => branch.name) ?? []),

@@ -121,11 +121,47 @@ node --test test/readme-parity.test.mjs
 - **截图与 Features 表**：本次未新增 `assets/screenshots/` 图片，因此没有向两份 README 的
   Features 表新增行；已在实际运行的 DSH 中完成视觉验证后再补截图与表格行，并同步 `screenshots.json`。
 - **Worktree 级独立活跃信号**：Workspace 行已在 2026-11-10 引入原生 `createdAt` 与默认工作区
-  补充（见上）；Worktree 行仍完全由绑定 Session 派生。若后续需要“今天创建的 Worktree
-  即使还没有 Session 也显示”，可以引入 `createdAt`/`importedAt`（获取事实，已在 Sidecar 中）作为
-  补充条件；这会改变语义，需要人类确认。
+  补充（见上）；Worktree 行仍完全由绑定 Session 派生。人类已确认需要“今天创建的 Worktree
+  即使还没有 Session 也显示”，2026-11-15 引入 `createdAt`/`importedAt`（获取事实，已在 Sidecar 中）
+  作为补充条件，详见下文。
 - **长期活动的低成本刷新**：目前 60 秒重算一次计数与边界。若树规模显著增长，可改为只在范围切换、
   Session 列表变化或文档可见性恢复时重算。
+
+## 周期内获取的 Worktree（2026-11-15）
+
+Worktree 行此前完全由绑定 Session 派生；关闭「显示无活跃 Workspace」后，刚创建或导入但还没有
+Session 的 Worktree 会立刻从所选范围消失。Agent tool `clutch_new_worktree` 明确不创建 Session，
+因此一次成功的创建看起来像失败；用户随后重试创建或导入时会撞上已存在的 branch 或受管路径。
+
+| 规则 | 语义 |
+| --- | --- |
+| 获取时间 | `source === 'external'` 读取不可变 `importedAt`，其他读取 `createdAt`；与 Dashboard acquisition facts 同一口径。legacy 记录、缺失或非法时间戳不构成获取活动，回退到 Session 谓词 |
+| 周期内获取 | 获取时间落在当前范围下界之后（含下界）时 Worktree 行保留；`全部`、时钟不可读或「显示无活跃 Workspace」开启时不做排除 |
+| 所属 Workspace | 任一 Worktree 在当前范围内获取时，即使 Workspace 本身较旧且没有活跃 Session 也保留，避免父行先被隐藏 |
+| 归档行 | 已移出管理的 Worktree 复用同一谓词，刚获取的 Worktree 不会因归档立刻消失 |
+| 作用范围 | 只影响结构行是否显示；Session 行、计数、搜索、Sidecar 记录与绑定不变，也不新增读取 |
+
+实现要点：
+
+- `activity-filter.ts` 新增 `ActivityWorktreeScope`、`isWorktreeAcquiredInWindow` 与
+  `worktreeSurvivesActivityWindow`；`workspaceSurvivesActivityWindow` 接受可选的 Worktree
+  获取事实数组，并让 `ActivityFilterView` 暴露 `worktreeSurvivesWindow`。
+- `useActivityFilter` 只组合已有的 Worktree 获取事实、当前范围与结构偏好，不触发刷新或 Host 读取。
+- `WorkspaceTree` 把所属 Workspace 的 Worktree 记录传入结构谓词，并用 Worktree 谓词替换原先只看
+  session 计数的本地判断；`ActiveWorktree`、`ArchivedWorktree` 共用同一谓词。
+- 获取事实始终只读：不写入 Sidecar、不修改 Git，也不把被隐藏的记录当作不存在。
+
+验证：
+
+```bash
+pnpm --filter @cerbur/clutch-dsh-worktree lint
+pnpm --filter @cerbur/clutch-dsh-worktree typecheck
+pnpm --filter @cerbur/clutch-dsh-worktree test
+node --test test/readme-parity.test.mjs
+```
+
+`test/client-activity-filter.test.mjs` 覆盖创建/导入时间来源、周期边界、非法时间与缺失事实、
+`全部`/结构保留旁路、归档与活跃行共用谓词，以及“Worktree 在周期内获取时保留旧 Workspace”。
 
 ## 周期内新建 Workspace 与默认工作区（2026-11-10）
 
