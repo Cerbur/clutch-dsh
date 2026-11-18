@@ -306,6 +306,7 @@ test('registered input boundaries preserve lengths, defaults, nested closure and
   const before = f.calls.length;
   for (const args of [
     { worktreeId: 'wt', prompt: 'Task', title: 'x'.repeat(201) },
+    { worktreeId: 'wt', prompt: 'Task', title: '😀'.repeat(100) + 'a' },
     { worktreeId: 'wt', prompt: 'Task', model: { provider: 'provider', model: 'model', extra: null } },
     { worktreeId: 'wt', prompt: 'Task', model: { provider: null, model: 'model' } },
     { worktreeId: 'wt', prompt: 'Task', model: { provider: 'provider', model: 'model', reasoningEffort: '' } },
@@ -314,14 +315,19 @@ test('registered input boundaries preserve lengths, defaults, nested closure and
   ]) await assert.rejects(span.execute(args, { agent: f.agent, signal: f.signal }), /INVALID_ARGUMENTS/);
   for (const [name, args] of [
     ['clutch_new_worktree', { name: 'feature/valid', instructions: 'x'.repeat(32001) }],
+    ['clutch_new_worktree', { name: 'feature/valid', instructions: '😀'.repeat(16000) + 'a' }],
     ['clutch_send_message', { sessionId: 'child', prompt: 'Task', mode: 'interrupt' }],
     ['clutch_send_message', { sessionId: 'child', prompt: 'Task', requestId: 'x'.repeat(201) }],
+    ['clutch_send_message', { sessionId: 'child', prompt: 'Task', requestId: '😀'.repeat(100) + 'a' }],
     ['clutch_report_result', { status: 'done', summary: 'Outcome' }],
     ['clutch_report_result', { status: 'completed', summary: ' ' }],
     ['clutch_report_result', { status: 'completed', summary: 'x'.repeat(2001) }],
+    ['clutch_report_result', { status: 'completed', summary: '😀'.repeat(1000) + 'a' }],
     ['clutch_report_result', { status: 'completed', summary: 'Outcome', evidence: '' }],
     ['clutch_report_result', { status: 'completed', summary: 'Outcome', evidence: 'x'.repeat(2001) }],
+    ['clutch_report_result', { status: 'completed', summary: 'Outcome', evidence: '😀'.repeat(1000) + 'a' }],
     ['clutch_report_result', { status: 'completed', summary: 'Outcome', requestId: 'x'.repeat(201) }],
+    ['clutch_report_result', { status: 'completed', summary: 'Outcome', requestId: '😀'.repeat(100) + 'a' }],
   ]) {
     const owner = name === 'clutch_report_result' ? f.child : f.agent;
     await assert.rejects(f.ctx.tools.get(name, owner).execute(args, { agent: owner, signal: f.signal }), /INVALID_ARGUMENTS/);
@@ -1971,6 +1977,7 @@ test('delegated Session pushes one bounded result through native admission witho
   assert.equal(f.subscriptions.size, 0);
   for (const args of [
     { ...report, summary: 'x'.repeat(2001) },
+    { ...report, summary: '😀'.repeat(1000) + 'a' },
     { ...report, parentSessionId: 'foreign' },
     { ...report, status: 'idle' },
   ]) {

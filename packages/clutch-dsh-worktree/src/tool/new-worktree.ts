@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { text } from './inputs.js';
+import { maxUtf16, text } from './inputs.js';
 import * as output from './outputs.js';
 import { defaultBase, errorText } from './context.js';
 
@@ -14,9 +14,7 @@ const newArgs = z
       .describe(
         'Local/fetched remote base branch. Omitted/null captures the caller’s healthy Worktree HEAD or Workspace root HEAD, including detached HEAD; never assumes main.',
       ),
-    instructions: z
-      .string()
-      .max(32000)
+    instructions: maxUtf16(z.string(), 32000)
       .optional()
       .describe('Shared Worktree instructions; omitted/null/empty saves none.'),
   })

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { text, prompt, model } from './inputs.js';
+import { maxUtf16, text, prompt, model } from './inputs.js';
 import * as output from './outputs.js';
 import { available } from './context.js';
 import { toolHandoff } from './guidance.js';
@@ -9,7 +9,7 @@ import { dispatchWorktreeSession } from './dispatch-session.js';
 const common = {
   prompt: prompt.describe('Self-contained task with goal, scope, acceptance criteria and checks; delivered verbatim. Must be nonblank.'),
   model: model.optional(),
-  title: text.max(200).optional().describe('New Session title; omitted/null keeps the native title.'),
+  title: maxUtf16(text, 200).optional().describe('New Session title; omitted/null keeps the native title.'),
 };
 const spanArgs = z
   .object({

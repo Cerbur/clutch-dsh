@@ -1,4 +1,11 @@
 import { z } from 'zod';
+// JSON Schema carries the bound to providers. The tool enforces it in UTF-16 units.
+export function maxUtf16(schema: z.ZodString, maximum: number) {
+  return schema
+    .refine((value) => value.length <= maximum, `Maximum length: ${maximum} UTF-16 units.`)
+    .meta({ maxLength: maximum });
+}
+
 export const text = z.string().trim().min(1);
 export const prompt = z
   .string()

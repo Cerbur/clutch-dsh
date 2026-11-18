@@ -6,10 +6,11 @@ import {
   validateJsonSchemaValue,
 } from '@deepseek-ai/dsh-tools';
 import { jsonSchemaToTs } from '@deepseek-ai/dsh-tool-executor-ptc';
+import { maxUtf16 } from '../lib/tool/inputs.js';
 import { toolParameters } from '../lib/tool/schema.js';
 
 test('compact length descriptions retain UTF-16 bounds and executable validation', () => {
-  const value = z.string().min(1).max(200).describe('Exact identifier supplied by the caller.');
+  const value = maxUtf16(z.string().min(1), 200).describe('Exact identifier supplied by the caller.');
   const schema = z.object({ value }).strict();
   const parameters = toolParameters(schema);
   assert.equal(parameters.properties.value.description,
@@ -26,8 +27,8 @@ test('compact length descriptions retain UTF-16 bounds and executable validation
 
 test('low-level legacy SDK projection preserves exclusive targets and runtime string limits', () => {
   const schema = z.union([
-    z.object({ worktreeId: z.string().min(1), prompt: z.string().max(200) }).strict(),
-    z.object({ name: z.string().min(1), prompt: z.string().max(200) }).strict(),
+    z.object({ worktreeId: z.string().min(1), prompt: maxUtf16(z.string(), 200) }).strict(),
+    z.object({ name: z.string().min(1), prompt: maxUtf16(z.string(), 200) }).strict(),
   ]);
   const parameters = toolParameters(schema);
   assertSupportedJsonSchema(parameters);
