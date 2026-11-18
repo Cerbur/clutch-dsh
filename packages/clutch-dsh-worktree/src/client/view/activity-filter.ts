@@ -1,3 +1,4 @@
+import type { WorktreeSource } from '../../contract/index.js';
 import type { SessionListLike, SessionPresentation } from '../session/session-view.js';
 
 /**
@@ -163,8 +164,9 @@ export function filterSessionIdsByActivity(
   return sessionIds.filter((sessionId) => isSessionActiveInWindow(sessionId, window, now, scope));
 }
 
-function workspaceCreatedAt(createdAt: string): number | undefined {
-  const timestamp = Date.parse(createdAt);
+function parseTimestamp(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
@@ -188,7 +190,43 @@ export function isWorkspaceCreatedInWindow(
   // An unreadable clock or an unbounded range cannot exclude a Workspace.
   const since = activityWindowSince(window, now);
   if (since === undefined) return true;
-  const timestamp = workspaceCreatedAt(createdAt);
+  const timestamp = parseTimestamp(createdAt);
+  return timestamp !== undefined && timestamp >= since;
+}
+
+/**
+ * Acquisition facts one Worktree record carries. `createdAt` is the immutable
+ * fact for a plugin-created checkout and `importedAt` for an externally
+ * imported one, matching the Dashboard's acquisition projection; legacy
+ * records may carry neither.
+ */
+export interface ActivityWorktreeScope {
+  readonly source: WorktreeSource;
+  readonly createdAt?: string;
+  readonly importedAt?: string;
+}
+
+function worktreeAcquiredAt(worktree: ActivityWorktreeScope): number | undefined {
+  return parseTimestamp(
+    worktree.source === 'external' ? worktree.importedAt : worktree.createdAt,
+  );
+}
+
+/**
+ * A Worktree created or imported inside a bounded range stays visible before
+ * any Session is bound to it. An agent tool can create a Worktree without a
+ * Session, so hiding it would make a successful acquisition look like a
+ * failure and invite a conflicting retry.
+ */
+export function isWorktreeAcquiredInWindow(
+  worktree: ActivityWorktreeScope,
+  window: ActivityWindowId,
+  now: number,
+): boolean {
+  // An unreadable clock or an unbounded range cannot exclude a Worktree.
+  const since = activityWindowSince(window, now);
+  if (since === undefined) return true;
+  const timestamp = worktreeAcquiredAt(worktree);
   return timestamp !== undefined && timestamp >= since;
 }
 
@@ -202,8 +240,9 @@ export interface ActivityStructureOptions {
 
 /**
  * Whether a Workspace row survives the range once structure filtering is on.
- * An active Session, a Workspace created inside the range, or the pinned
- * default Workspace keeps the row; the Sessions themselves stay range-scoped.
+ * An active Session, a Workspace created inside the range, a Worktree acquired
+ * inside the range, or the pinned default Workspace keeps the row; the
+ * Sessions themselves stay range-scoped.
  */
 export function workspaceSurvivesActivityWindow(
   workspace: ActivityWorkspaceScope,
@@ -212,10 +251,35 @@ export function workspaceSurvivesActivityWindow(
   now: number,
   scope: ActivitySessionScope,
   options: ActivityStructureOptions,
+  worktrees: readonly ActivityWorktreeScope[] = [],
 ): boolean {
   if (window === 'all' || options.showInactiveStructure) return true;
   if (options.keepDefaultWorkspaceVisible && isDefaultWorkspace(workspace)) return true;
   if (isWorkspaceCreatedInWindow(workspace.createdAt, window, now)) return true;
+  // A Worktree acquired inside the range keeps its owning Workspace visible even
+  // before the Worktree's first Session exists.
+  if (worktrees.some((worktree) => isWorktreeAcquiredInWindow(worktree, window, now))) {
+    return true;
+  }
+  return sessionIds.some((sessionId) => isSessionActiveInWindow(sessionId, window, now, scope));
+}
+
+/**
+ * Whether one Worktree row survives the range once structure filtering is on.
+ * An acquisition inside the range or an active bound Session keeps the row;
+ * archived rows use the same predicate so a recently acquired Worktree does not
+ * disappear from the archived group the moment it is removed from management.
+ */
+export function worktreeSurvivesActivityWindow(
+  worktree: ActivityWorktreeScope,
+  sessionIds: readonly string[],
+  window: ActivityWindowId,
+  now: number,
+  scope: ActivitySessionScope,
+  options: Pick<ActivityStructureOptions, 'showInactiveStructure'>,
+): boolean {
+  if (window === 'all' || options.showInactiveStructure) return true;
+  if (isWorktreeAcquiredInWindow(worktree, window, now)) return true;
   return sessionIds.some((sessionId) => isSessionActiveInWindow(sessionId, window, now, scope));
 }
 
@@ -272,10 +336,14 @@ export interface ActivityFilterView {
   readonly workspaceSurvivesWindow: (
     workspace: ActivityWorkspaceScope,
     sessionIds: readonly string[],
+    worktrees?: readonly ActivityWorktreeScope[],
+  ) => boolean;
+  /** Whether one Worktree survives the range when structure filtering is on. */
+  readonly worktreeSurvivesWindow: (
+    worktree: ActivityWorktreeScope,
+    sessionIds: readonly string[],
   ) => boolean;
   /** Narrow a list to the range; `all` returns the input unchanged. */
   readonly scopeSessionIds: (sessionIds: readonly string[]) => readonly string[];
-  /** Whether any candidate Session survives this window. */
-  readonly hasActiveSession: (sessionIds: readonly string[]) => boolean;
   readonly count: (window: ActivityWindowId) => number;
 }

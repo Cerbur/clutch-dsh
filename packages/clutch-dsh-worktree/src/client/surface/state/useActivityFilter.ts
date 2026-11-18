@@ -8,10 +8,12 @@ import {
   effectiveActivityWindows,
   isSessionActiveInWindow,
   workspaceSurvivesActivityWindow,
+  worktreeSurvivesActivityWindow,
   type ActivityFilterView,
   type ActivitySessionScope,
   type ActivityWindowId,
   type ActivityWorkspaceScope,
+  type ActivityWorktreeScope,
 } from '../../view/activity-filter.js';
 import type { SessionListLike, SessionPresentation } from '../../session/session-view.js';
 import type { WorktreeSurfaceProps } from '../types.js';
@@ -95,10 +97,6 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     (sessionId: string) => isSessionActiveInWindow(sessionId, window, now, scope),
     [now, scope, window],
   );
-  const hasActiveSession = useCallback(
-    (sessionIds: readonly string[]) => sessionIds.some(isActive),
-    [isActive],
-  );
   const scopeSessionIds = useCallback(
     (sessionIds: readonly string[]) =>
       window === 'all' ? sessionIds : sessionIds.filter(isActive),
@@ -133,12 +131,23 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     [props.actions],
   );
   const workspaceSurvivesWindow = useCallback(
-    (workspace: ActivityWorkspaceScope, sessionIds: readonly string[]) =>
+    (
+      workspace: ActivityWorkspaceScope,
+      sessionIds: readonly string[],
+      worktrees: readonly ActivityWorktreeScope[] = [],
+    ) =>
       workspaceSurvivesActivityWindow(workspace, sessionIds, window, now, scope, {
         showInactiveStructure,
         keepDefaultWorkspaceVisible,
-      }),
+      }, worktrees),
     [keepDefaultWorkspaceVisible, now, scope, showInactiveStructure, window],
+  );
+  const worktreeSurvivesWindow = useCallback(
+    (worktree: ActivityWorktreeScope, sessionIds: readonly string[]) =>
+      worktreeSurvivesActivityWindow(worktree, sessionIds, window, now, scope, {
+        showInactiveStructure,
+      }),
+    [now, scope, showInactiveStructure, window],
   );
   const count = useCallback(
     (candidate: ActivityWindowId) => counts[effectiveActivityWindow(candidate)] ?? 0,
@@ -161,8 +170,8 @@ export function useActivityFilter({ props, source, enabled }: Input): ActivityFi
     setMenuOpen,
     isActive,
     workspaceSurvivesWindow,
+    worktreeSurvivesWindow,
     scopeSessionIds,
-    hasActiveSession,
     count,
   };
 }
