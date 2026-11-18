@@ -126,10 +126,11 @@ export function ActiveWorktree({
     ),
     sessions,
   );
-  // Turning off show-inactive omits a Worktree with no Session inside a bounded
-  // range from the tree, never from the index: its record, bindings and directory
-  // stay untouched. The default keeps the row and its actions.
-  if (activity.active && !activity.showInactiveStructure && worktreeSessionIds.length === 0) {
+  // Turning off show-inactive omits a Worktree with no in-range Session from
+  // the tree, never from the index: its record, bindings and directory stay
+  // untouched. A Worktree acquired inside the range keeps its row even before
+  // its first Session exists, so a successful creation never looks missing.
+  if (!activity.worktreeSurvivesWindow(record, worktreeSessionIds)) {
     return null;
   }
   const worktreeMatchesQuery =

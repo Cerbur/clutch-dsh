@@ -27,7 +27,9 @@ const ALL_ACTIVITY = {
   now: 0,
   setWindow: () => {},
   isActive: () => true,
-  hasActiveSession: (sessionIds) => sessionIds.length > 0,
+  workspaceSurvivesWindow: () => true,
+  worktreeSurvivesWindow: () => true,
+  scopeSessionIds: (sessionIds) => sessionIds,
   count: () => 0,
 };
 
