@@ -1,9 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Domain } from '@deepseek-ai/dsh-storage-domain';
-import { defineDomain } from '@deepseek-ai/dsh-storage-domain';
 import type { StreamChunk } from '@deepseek-ai/dsh-llm';
 import { z } from 'zod';
+import { defineGlobalStorageDomain } from './storage-schema.js';
 import {
   aggregateInputTokens,
   DEFAULT_TITLE_STATS,
@@ -32,15 +32,11 @@ export const titleStatsRecord = z.object({
   lastUsage: titleTokenLastUsageRecord.optional(),
 });
 
-export const titleStatsDomainSpec = defineDomain({
-  name: 'clutch_title_stats',
-  version: 1,
-  global: {
-    schema: titleStatsRecord,
-    initial: DEFAULT_TITLE_STATS,
-  },
-  tables: {},
-});
+export const titleStatsDomainSpec = defineGlobalStorageDomain(
+  'clutch_title_stats',
+  titleStatsRecord,
+  DEFAULT_TITLE_STATS,
+);
 
 export interface TitleStatsStore {
   get(): Promise<TitleTokenStats>;
