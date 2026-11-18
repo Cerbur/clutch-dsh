@@ -180,6 +180,7 @@ export function WorkspaceTree({
     worktrees: readonly WorktreeRecord[],
   ): boolean => activity.workspaceSurvivesWindow(workspace, sessionIds, worktrees);
   const worktreeSurvivesWindow = (record: WorktreeRecord): boolean => {
+    if (!activity.active || activity.showInactiveStructure) return true;
     const bindings = viewByWorkspace.get(record.workspaceId)?.bindings ?? [];
     return activity.worktreeSurvivesWindow(
       record,
