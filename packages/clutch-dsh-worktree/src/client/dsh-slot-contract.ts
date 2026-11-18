@@ -4,7 +4,7 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { SnapshotSelectorHook, SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import type { SidebarFooterActionOwnerProps, SidebarSectionOwnerProps, SidebarSectionHookContext, SidebarSectionInjected } from '@deepseek-ai/dsh-client-ui-sidebar/client';
+import type { SidebarSectionOwnerProps, SidebarSectionHookContext, SidebarSectionInjected } from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { UseSessions, UseSessionStatus } from '@deepseek-ai/dsh-client-ui-session/client';
 
 /**
@@ -32,11 +32,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       kind: 'list';
       scope: 'session';
       owner: ConversationHeaderActionOwnerProps;
-    };
-    'sidebar.footer.action': {
-      kind: 'list';
-      scope: 'root';
-      owner: SidebarFooterActionOwnerProps;
     };
     'clutch.worktree.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
     'shell.overlay': {

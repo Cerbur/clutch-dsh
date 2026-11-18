@@ -25,7 +25,6 @@ import { createWorktreeToolChangeMonitor } from './worktree-tool-changes.js';
 import { RestartNotice } from './restart-notice.js';
 import { RestartToast } from './surface/components/RestartToast.js';
 import { WorktreeHeaderContext } from './context/WorktreeContext.js';
-import { WorktreeModeAction } from './view/WorktreeModeAction.js';
 import { switchViewMode } from './view/view-mode-dispatch.js';
 import { IconDashboard } from './dashboard/dashboard-icon.js';
 import { WorktreePopover } from './dashboard/WorktreePopover.js';
@@ -654,19 +653,6 @@ export function apply(ctx: Context): void {
         },
       }),
     }, WorktreePopover),
-  );
-
-  slots.inject('sidebar.footer.action', () =>
-    slots.register(
-      {
-        name: 'sidebar.footer.action',
-        id: 'clutch-dsh-worktree-mode-action',
-        store: viewStore,
-        locale: WORKTREE_NS,
-        inject: () => ({ available: true }),
-      },
-      WorktreeModeAction,
-    ),
   );
 
   slots.inject('shell.overlay', () =>

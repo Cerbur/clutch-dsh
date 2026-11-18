@@ -14,7 +14,7 @@ export function resolveAppFrame(
   const overlay = surface.closest('[data-shell-overlay]');
   const frame = overlay?.parentElement;
   if (!(overlay instanceof HTMLElement) || !frame || !overlay.isConnected) return undefined;
-  // The plugin footer survives the collapsed rail; the public pane is an alternate anchor.
+  // The mode marker survives the collapsed rail; the public pane is an alternate anchor.
   for (const selector of ['[data-worktree-mode-action]', '[data-pane="sidebar"]']) {
     const columns = new Set(
       Array.from(frame.querySelectorAll(selector))

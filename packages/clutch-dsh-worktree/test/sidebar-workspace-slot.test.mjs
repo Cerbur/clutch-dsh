@@ -40,7 +40,13 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
     disconnect() { observers.delete(this); }
   };
   const { workspaceSidebarMount } = await load('view/sidebar-workspace-slot.tsx', {
-    '../worktree.css': { default: { workspaceSeat: 'seat' } },
+    '../worktree.css': { default: { workspaceSeat: 'seat', railSwitch: 'rail-switch' } },
+    '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('span', { 'data-branch': true }) },
+    '../locales.js': { WORKTREE_NS: 'worktree' },
+    './view-mode-dispatch.js': { switchViewMode: () => {} },
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Tooltip: ({ children }) => children,
+    },
   });
   const { useWorkspaceRegionGeometry } = await load('view/workspace-region-geometry.ts');
   const bound = [];
@@ -75,6 +81,8 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
   const { WorktreeOverlay } = await load('overlay/WorktreeOverlay.tsx', {
     '../WorktreeSurface.js': { WorktreeSurface: Surface },
     '../context/WorktreeHeroContext.js': { WorktreeHeroContext: () => null },
+    '../view/SidebarViewSwitch.js': { SidebarViewSwitch: () => null },
+    '../view/view-mode-dispatch.js': { registerViewModeSetter: () => {} },
   });
   const entries = [];
   const nativeRenderer = await readFile(new URL(import.meta.resolve('@deepseek-ai/dsh-client-ui-renderer/client')), 'utf8');
@@ -107,7 +115,8 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
     React.useSyncExternalStore(subscribe, () => revision);
     const entry = slots.entriesOfSlot('sidebar.workspaces').at(0);
     return entry ? React.createElement(entry.component, {
-      wide, expandSidebar() {}, useSectionScroller: nativeScroller ? useSectionScroller : undefined, ...entry.inject?.(),
+      wide, expandSidebar() {}, t: (key) => key,
+      useSectionScroller: nativeScroller ? useSectionScroller : undefined, ...entry.inject?.(),
     }) : null;
   }
   const manager = {};
@@ -119,6 +128,7 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
       React.createElement('main', { 'data-conversation': true }, 'native conversation'),
       React.createElement('div', { 'data-shell-overlay': true }, React.createElement(WorktreeOverlay, {
         useStore: (select) => select({ viewMode: mode }), available: true, manager, mountWorkspaceSidebar,
+        actions: { setViewMode: (next) => { mode = next; } }, t: (key) => key,
         useWorkspaceDirectoryFlow: (select) => select({ available: false, owner: {} }),
         cancelDirectoryFlow() {}, renderSlot: () => null,
       })));

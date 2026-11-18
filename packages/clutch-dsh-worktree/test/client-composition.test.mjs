@@ -54,7 +54,9 @@ test('publishes an official DSH client-module handoff with a browser-safe apply 
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   assert.match(clientBundle, /window\.__ModuleLoader__\.load/);
   assert.match(clientBundle, /@cerbur\/clutch-dsh-worktree/);
-  assert.match(clientBundle, /sidebar\.footer\.action/);
+  assert.match(clientBundle, /data-sidebar-workspace-header/);
+  assert.match(clientBundle, /data-sidebar-list-area/);
+  assert.doesNotMatch(clientBundle, /sidebar\.footer\.action/);
   assert.match(clientBundle, /shell\.overlay/);
   assert.doesNotMatch(clientBundle, /@deepseek-ai\/dsh-api-remotes|\.\/remote/);
   assert.doesNotMatch(clientBundle, /(?:Host|Manage|Provider) runtime/i);
@@ -1017,7 +1019,6 @@ test('loads and disposes the Client entry through the DSH module handoff', async
     'conversation.session.header.utilities',
     'settings.section',
     'shell.overlay',
-    'sidebar.footer.action',
   ]);
 
   for (const dispose of fixture.disposers.reverse()) dispose();
@@ -1033,7 +1034,6 @@ test('contributes context to the active Session title row and the Hero overlay',
     'conversation.session.header.utilities',
     'settings.section',
     'shell.overlay',
-    'sidebar.footer.action',
   ]);
   assert.equal(
     fixture.registrationsBySlot.get('conversation.session.header.actions').options.order,
@@ -1208,7 +1208,6 @@ test('declares the DSH locale service and namespace on both Client Slots', async
     'en',
     'zh',
   ]);
-  assert.equal(fixture.registrationsBySlot.get('sidebar.footer.action').options.locale, 'worktree');
   assert.equal(fixture.registrationsBySlot.get('shell.overlay').options.locale, 'worktree');
 
   for (const dispose of fixture.disposers.reverse()) dispose();
@@ -1363,7 +1362,7 @@ test('disposes Client slot contributions through a real Cordis Client context', 
     assert.equal(ctx.slots.entries('conversation.session.header.actions').length, 1);
     assert.deepEqual(ctx.slots.entries('conversation.session.header.utilities').map((entry) => entry.options.id).sort(),
       ['clutch-dsh-worktree-dashboard-header', 'clutch-dsh-worktree-popover']);
-    assert.equal(ctx.slots.entries('sidebar.footer.action').length, 1);
+    assert.equal(ctx.slots.entries('sidebar.footer.action').length, 0);
     assert.equal(ctx.slots.entries('settings.section').length, 1);
     assert.equal(ctx.slots.entries('shell.overlay').length, 3);
 

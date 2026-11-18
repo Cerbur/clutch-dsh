@@ -55,9 +55,10 @@ Keep the checkout and its dependencies available while linked. See the
 
 ### Browse your tasks
 
-Select **Worktree** in the Sidebar footer, then open a Workspace and its Local/Main or Worktree
-group. Select a Session to continue the conversation. Select the footer entry again to return
-to native Workspace navigation.
+Select the branch control in the Workspace header, or its control in the collapsed rail, then
+open a Workspace and its Local/Main or Worktree group. Select a Session to continue the
+conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
+return to native Workspace navigation.
 
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,
 and the Session you are viewing, remain visible. The range menu lets you hide inactive groups
