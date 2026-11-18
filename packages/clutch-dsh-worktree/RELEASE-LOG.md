@@ -1,5 +1,27 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.35 — 2026-11-18
+
+### 中文
+
+#### 依赖
+
+- 将 Zod 的最低版本提高至 4.6.6。
+
+#### 修复
+
+- 按 UTF-16 单元校验会话标题、Worktree 指令、结果摘要、证据和请求 ID 的长度，防止包含 emoji 的超长输入通过工具校验。
+
+### English
+
+#### Dependencies
+
+- Raise the minimum Zod version to 4.6.6.
+
+#### Fixed
+
+- Enforce UTF-16 length limits on session titles, Worktree instructions, result summaries, evidence, and request IDs so tools reject oversized inputs containing emoji.
+
 ## 0.1.34 — 2026-11-16
 
 ### 中文
