@@ -1,5 +1,13 @@
 # 发布记录
 
+## 0.2.1 — 2026-11-18
+
+### 中文
+
+#### 修复
+
+- 将 Zod 升级至 `4.6.6`，保持烟花会话投影与旧版 DSH 的兼容性。
+
 ## 0.2.0 — 2026-10-24
 
 ### 中文
@@ -36,6 +44,14 @@
 - 修复 configForms 快照结构兼容性，确保表单配置稳定读取。
 
 # Release log
+
+## 0.2.1 — 2026-11-18
+
+### English
+
+#### Fixed
+
+- Upgrade to Zod `4.6.6` while keeping the fireworks session projection compatible with older DSH releases.
 
 ## 0.2.0 — 2026-10-24
 

@@ -25,7 +25,7 @@ test('resolves the same Cordis instance as every DSH development dependency', ()
 
 test('declares an installable DSH plugin package', () => {
   assert.equal(manifest.name, '@cerbur/clutch-dsh-fireworks');
-  assert.equal(manifest.version, '0.2.0');
+  assert.ok(semver.valid(manifest.version), 'package.json must declare a valid SemVer version');
   assert.deepEqual(manifest.clutchDsh, {
     plugin: '@cerbur/clutch-dsh-fireworks',
     role: 'plugin',
