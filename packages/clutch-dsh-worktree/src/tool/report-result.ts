@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { ToolContext } from './types.js';
-import { text } from './inputs.js';
+import { maxUtf16, text } from './inputs.js';
 import { authorize, errorText } from './context.js';
 import * as output from './outputs.js';
 import { ToolRecoveryError } from './errors.js';
@@ -13,19 +13,16 @@ const reportArgs = z
       .describe(
         'completed: requested work and checks finished; blocked: needs help; failed: task could not be fulfilled.',
       ),
-    summary: text
-      .max(2000)
+    summary: maxUtf16(text, 2000)
       .describe(
         'Concise outcome or blocker; no history or intermediate steps.',
       ),
-    evidence: text
-      .max(2000)
+    evidence: maxUtf16(text, 2000)
       .optional()
       .describe(
         'Checks/results, artifacts, risks or required help; omitted/null adds none.',
       ),
-    requestId: text
-      .max(200)
+    requestId: maxUtf16(text, 200)
       .optional()
       .describe(
         'Host-returned retry id only; never invent one or use the task/message id. Omit for a first report (JSON null also accepted); for uncertain admission reuse the returned report id with identical content.',

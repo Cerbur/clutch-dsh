@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { text, prompt } from './inputs.js';
+import { maxUtf16, text, prompt } from './inputs.js';
 import * as output from './outputs.js';
 import { authorize, errorText } from './context.js';
 import { toolHandoff } from './guidance.js';
@@ -18,8 +18,7 @@ const sendArgs = z
       .describe(
         'queue: after the current turn; steer: next step boundary. Omitted/null defaults to queue.',
       ),
-    requestId: text
-      .max(200)
+    requestId: maxUtf16(text, 200)
       .optional()
       .describe(
         'Host-returned retry id only; never invent one. Omit for a new message (JSON null also accepted), never an empty string. For uncertain admission reuse the returned id with identical sessionId, prompt and mode.',
