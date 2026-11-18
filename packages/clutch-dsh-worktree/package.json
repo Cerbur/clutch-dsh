@@ -87,7 +87,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-commands": ">=0.2.2-rc.2",
