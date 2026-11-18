@@ -62,6 +62,8 @@ to native Workspace navigation.
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,
 and the Session you are viewing, remain visible. The range menu lets you hide inactive groups
 and choose which range tabs to show. Filtering does not archive or remove anything.
+When inactive groups are hidden, a Worktree created or imported within the selected range stays visible
+alongside its Workspace, even before its first Session.
 
 The bell opens **Active sessions** across Workspaces: running tasks, pending interactions,
 and unread completions. Select an entry to open it. Use **Expand more** in a group to see

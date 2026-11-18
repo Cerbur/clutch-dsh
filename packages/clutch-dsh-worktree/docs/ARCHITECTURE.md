@@ -811,6 +811,9 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 - 浏览器本地偏好 `showInactiveStructure`（默认 `true`）打开后，Workspace / Worktree 结构始终
   保留（搜索没有匹配项时除外），即使范围内没有它们的 Session；分类、空分组与管理入口保持可达，
   此时只过滤 Session 行。两种模式下 Session 行都由范围谓词过滤。
+- 在所选范围内获取（创建读 `createdAt`，导入读 `importedAt`）的 Worktree 保留其行，即使还没有
+  绑定 Session；任一 Worktree 在范围内获取时，其所属 Workspace 也保留，避免父行先被隐藏。归档
+  Worktree 复用同一谓词。缺失或非法获取事实的 legacy 记录回退到绑定 Session 的活动判定。
 - 搜索与活跃范围是两个独立维度：搜索始终收窄 Workspace/Worktree 结构；范围决定结构是否保留以及
   其下哪些 Session 行可见。范围切换与搜索一样按 `AnimatedTree` resetKey 立即完成布局，不改变
   已保存的展开或顺序偏好。

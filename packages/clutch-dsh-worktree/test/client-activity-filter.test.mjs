@@ -20,10 +20,12 @@ import {
   isDefaultWorkspace,
   isSessionActiveInWindow,
   isWorkspaceCreatedInWindow,
+  isWorktreeAcquiredInWindow,
   nextActivityWindow,
   startOfLocalDay,
   toggleActivityWindow,
   workspaceSurvivesActivityWindow,
+  worktreeSurvivesActivityWindow,
 } from '../lib/client/view/activity-filter.js';
 import { createWorktreeViewStore } from '../lib/client/view/view-mode-store.js';
 
@@ -109,6 +111,141 @@ test('a Workspace created inside the range survives before its first Session', (
       scope,
       options,
     ),
+    false,
+  );
+});
+
+test('a Worktree acquired inside the range survives before its first Session', () => {
+  const now = new Date(2026, 10, 3, 15, 0, 0, 0).getTime();
+  const created = (millisecondsAgo) => new Date(now - millisecondsAgo).toISOString();
+
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'plugin', createdAt: created(HOUR) }, 'today', now),
+    true,
+  );
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'plugin', createdAt: created(DAY + HOUR) }, 'today', now),
+    false,
+  );
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'plugin', createdAt: created(2 * DAY) }, 'last7d', now),
+    true,
+  );
+  // Imports read importedAt; a created record reads createdAt, not importedAt.
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'external', importedAt: created(HOUR) }, 'today', now),
+    true,
+  );
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'external', createdAt: created(HOUR) }, 'today', now),
+    false,
+  );
+  // Legacy records without an acquisition fact, malformed timestamps and an
+  // unbounded or unreadable range never count as an acquisition.
+  assert.equal(isWorktreeAcquiredInWindow({ source: 'plugin' }, 'today', now), false);
+  assert.equal(
+    isWorktreeAcquiredInWindow({ source: 'plugin', createdAt: 'not-a-date' }, 'today', now),
+    false,
+  );
+  assert.equal(isWorktreeAcquiredInWindow({ source: 'plugin' }, 'all', now), true);
+  assert.equal(
+    isWorktreeAcquiredInWindow(
+      { source: 'plugin', createdAt: created(HOUR) },
+      'today',
+      Number.NaN,
+    ),
+    true,
+  );
+
+  const scope = scopeOf({ byId: { recent: { updatedAt: now - HOUR } } });
+  const options = { showInactiveStructure: false };
+  assert.equal(
+    worktreeSurvivesActivityWindow(
+      { source: 'plugin', createdAt: created(HOUR) },
+      [],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    worktreeSurvivesActivityWindow(
+      { source: 'plugin', createdAt: created(2 * DAY) },
+      [],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    false,
+  );
+  // A bound active Session, the keep-structure preference and All still keep it.
+  assert.equal(
+    worktreeSurvivesActivityWindow(
+      { source: 'plugin', createdAt: created(2 * DAY) },
+      ['recent'],
+      'today',
+      now,
+      scope,
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    worktreeSurvivesActivityWindow(
+      { source: 'plugin', createdAt: created(2 * DAY) },
+      [],
+      'all',
+      now,
+      scope,
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    worktreeSurvivesActivityWindow(
+      { source: 'plugin', createdAt: created(2 * DAY) },
+      [],
+      'today',
+      now,
+      scope,
+      { showInactiveStructure: true },
+    ),
+    true,
+  );
+});
+
+test('a Worktree acquired inside the range keeps its Workspace visible', () => {
+  const now = new Date(2026, 10, 3, 15, 0, 0, 0).getTime();
+  const created = (millisecondsAgo) => new Date(now - millisecondsAgo).toISOString();
+  const scope = scopeOf();
+  const options = { showInactiveStructure: false, keepDefaultWorkspaceVisible: false };
+  // An old Workspace with no in-range Session would normally be hidden.
+  const oldWorkspace = { title: 'old-project', createdAt: created(90 * DAY) };
+
+  assert.equal(
+    workspaceSurvivesActivityWindow(oldWorkspace, [], 'today', now, scope, options),
+    false,
+  );
+  assert.equal(
+    workspaceSurvivesActivityWindow(oldWorkspace, [], 'today', now, scope, options, [
+      { source: 'plugin', createdAt: created(HOUR) },
+    ]),
+    true,
+  );
+  assert.equal(
+    workspaceSurvivesActivityWindow(oldWorkspace, [], 'today', now, scope, options, [
+      { source: 'external', importedAt: created(HOUR) },
+    ]),
+    true,
+  );
+  // A Worktree acquired outside the range does not keep the Workspace.
+  assert.equal(
+    workspaceSurvivesActivityWindow(oldWorkspace, [], 'today', now, scope, options, [
+      { source: 'plugin', createdAt: created(2 * DAY) },
+    ]),
     false,
   );
 });
@@ -437,8 +574,8 @@ function barProps(window, counts, setWindow, options = {}) {
       },
       isActive: () => true,
       workspaceSurvivesWindow: () => true,
+      worktreeSurvivesWindow: () => true,
       scopeSessionIds: (sessionIds) => sessionIds,
-      hasActiveSession: (sessionIds) => sessionIds.length > 0,
       count: (candidate) => counts[candidate] ?? 0,
     },
     visibility,
@@ -619,19 +756,20 @@ test('the range can hide inactive structure when its default preference is turne
   // Turning off showInactiveStructure hides a Workspace/Worktree with no in-range
   // Session; the default keeps structure and management actions.
   assert.match(tree, /activity\.showInactiveStructure/);
-  assert.match(tree, /worktreeSurvivesWindow/);
-  assert.match(tree, /activity\.hasActiveSession/);
-  // A Workspace created inside the range survives structure filtering.
+  assert.match(tree, /activity\.worktreeSurvivesWindow/);
+  // A Workspace created or containing a Worktree acquired inside the range
+  // survives structure filtering.
   assert.match(tree, /activity\.workspaceSurvivesWindow/);
+  assert.match(
+    tree,
+    /activity\.workspaceSurvivesWindow\(workspace, sessionIds, worktrees\)/,
+  );
   assert.match(tree, /filter\.empty/);
   assert.match(tree, /activity\.scopeSessionIds/);
 
   for (const file of ['ActiveWorktree.tsx', 'ArchivedWorktree.tsx']) {
     const source = await readSurface(file);
-    assert.match(
-      source,
-      /activity\.active\s*&&\s*!activity\.showInactiveStructure\s*&&\s*worktreeSessionIds\.length === 0/,
-    );
+    assert.match(source, /activity\.worktreeSurvivesWindow\(record, worktreeSessionIds\)/);
     assert.match(source, /activity\.scopeSessionIds/);
   }
 });
