@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-title Release Log
 
+## 0.1.8 — 2026-11-18
+
+### 中文
+
+#### 修复
+
+- 升级 Zod 至 4.6.6，继续兼容受支持 DSH 宿主中的既有 Token 统计和诊断记录。
+
+### English
+
+#### Fixed
+
+- Upgrade Zod to 4.6.6 and preserve compatibility with existing token usage statistics and diagnostics on supported DSH hosts.
+
 ## 0.1.7 — 2026-10-18
 
 ### 中文
