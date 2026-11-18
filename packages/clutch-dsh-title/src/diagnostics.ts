@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Domain } from '@deepseek-ai/dsh-storage-domain';
-import { defineDomain } from '@deepseek-ai/dsh-storage-domain';
 import { z } from 'zod';
+import { defineGlobalStorageDomain } from './storage-schema.js';
 import {
   DEFAULT_TITLE_DIAGNOSTICS,
   MAX_DIAGNOSTIC_ATTEMPTS,
@@ -57,15 +57,14 @@ export const titleDiagnosticsRecord = z.object({
   lastRepairAt: z.number().int().nonnegative().optional(),
 });
 
-export const titleDiagnosticsDomainSpec = defineDomain({
-  name: 'clutch_title_diagnostics',
-  version: 1,
-  global: {
-    schema: titleDiagnosticsRecord,
-    initial: DEFAULT_TITLE_DIAGNOSTICS,
-  },
-  tables: {},
-});
+// Persisted v1 records may predate the recent-incidents list.
+type PersistedTitleDiagnostics = Omit<TitleDiagnostics, 'recentIncidents'> &
+  Partial<Pick<TitleDiagnostics, 'recentIncidents'>>;
+
+export const titleDiagnosticsDomainSpec = defineGlobalStorageDomain<
+  'clutch_title_diagnostics',
+  PersistedTitleDiagnostics
+>('clutch_title_diagnostics', titleDiagnosticsRecord, DEFAULT_TITLE_DIAGNOSTICS);
 
 /** Incidents retained in memory while no storageDomain facility is available. */
 export const MAX_PENDING_INCIDENTS = 64;
