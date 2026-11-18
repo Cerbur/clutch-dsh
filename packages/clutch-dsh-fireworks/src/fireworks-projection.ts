@@ -98,13 +98,16 @@ type FireworksProjectionDefinition = Omit<
 };
 
 export function createFireworksProjectionDefinition(): FireworksProjectionDefinition {
+  // Older DSH declarations pin Zod's internal minor version.
+  const schema: z.ZodType<FireworksProjection> = fireworksProjectionSchema;
+  const projectionSchema = schema as unknown as FireworksProjectionDefinition['stateSchema'];
   return {
     key: FIREWORKS_PROJECTION_KEY,
-    stateSchema: fireworksProjectionSchema,
+    stateSchema: projectionSchema,
     init: () => null,
     apply: applyFireworksProjection,
     wire: {
-      viewSchema: fireworksProjectionSchema,
+      viewSchema: projectionSchema,
       view: (state) => state,
     },
     stateVersion: 1,

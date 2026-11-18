@@ -1,6 +1,6 @@
 {
   "name": "@cerbur/clutch-dsh-fireworks",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Adds a celebratory fireworks overlay to the DSH Web UI through a happy_fireworks agent tool.",
   "license": "MIT",
   "repository": {
@@ -79,7 +79,7 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.4",
     "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-api-gateway": ">=0.2.1-rc.1",
