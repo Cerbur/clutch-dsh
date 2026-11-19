@@ -1,5 +1,21 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.36 — 2026-11-18
+
+### 中文
+
+#### 修复
+
+- 按活跃时间筛选时，在所选时段内创建或导入的 Worktree 及其所属 Workspace 会保持可见，即使该 Worktree 尚未绑定 Session。
+- 当筛选设置允许显示所有 Worktree 时，跳过不必要的 Session 绑定扫描。
+
+### English
+
+#### Fixed
+
+- Keep a Worktree and its Workspace visible when the Worktree was created or imported within the selected activity range, even if it has no bound Sessions.
+- Skip unnecessary Session binding scans when the filter settings allow all Worktrees to remain visible.
+
 ## 0.1.35 — 2026-11-18
 
 ### 中文
