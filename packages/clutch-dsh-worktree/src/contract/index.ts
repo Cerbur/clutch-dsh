@@ -481,7 +481,7 @@ export interface WorktreeManager {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
     sessionId: SessionId;
-  }): Promise<SessionBinding>;
+  }, purpose?: 'new-session'): Promise<SessionBinding>;
 }
 
 /**

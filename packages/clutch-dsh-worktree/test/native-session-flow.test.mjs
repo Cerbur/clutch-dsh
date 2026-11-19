@@ -9,6 +9,7 @@ import { Session, SessionId, SESSION_FORMAT_VERSION, appendPluginRecord, pluginR
 import { initializeForgeSession } from '../lib/tool/forge-session.js';
 import { createRequire } from 'node:module';
 import process from 'node:process';
+import { forgeRows, forgePlugins } from './fixtures/forge-inventory.mjs';
 import { pathToFileURL } from 'node:url';
 import { createWorktreeManager } from '../lib/manage/index.js';
 import { WorktreeRemoteService } from '../lib/host/service.js';
@@ -115,6 +116,53 @@ test('Forge initialization rejects branch drift and never backfills existing rec
   assert.deepEqual(f.session.snapshotEvents(), before);
 });
 
+test('native Stop during a committed Forge binding preserves the Session but never dispatches input', async (t) => {
+  const f = await forgeFixture(t);
+  const actions = [];
+  const sessions = { ...f.sessions, create: async () => {
+    f.actors.set(f.session.id, { id: f.session.id, header: f.session.header });
+    f.native.workspaceRegistry.get().sessionIds.push(f.session.id);
+    return { sessionId: f.session.id };
+  }, initializeWorktreeSession: (_id, record, signal, bind) => initializeForgeSession(f.ctx, f.agent, record, signal, bind),
+  configureModel: async () => { actions.push('model'); }, prompt: async () => { actions.push('prompt'); } };
+  const manager = { bindSession: async input => {
+    f.actors.get(input.sessionId).effectiveCwd = f.directories.get();
+    await f.manager.bindSession(input);
+    f.maintenance.abort({ kind: 'user' });
+  } };
+  const result = await dispatchWorktreeSession({ record: f.record, manager, sessions, signal: f.control.signal,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', check() {} });
+  assert.equal(result.status, 'prompt-failed');
+  assert.match(result.error, /cancelled/u);
+  assert.deepEqual((await f.manager.listBindings({ workspaceId: 'ws' })).map(b => b.sessionId), [result.sessionId]);
+  assert.deepEqual(actions, []);
+});
+
+test('archiving during Forge persistence rejects new dispatch, not existing Session repair', async (t) => {
+  const f = await forgeFixture(t);
+  const input = { workspaceId: 'ws', worktreeId: f.record.worktreeId };
+  await f.sessions.create({ workspaceId: 'ws' });
+  f.actors.get('child').effectiveCwd = f.record.absolutePath;
+  const existing = await f.manager.bindSession({ ...input, sessionId: 'child' });
+  f.persistence.flush = async () => {
+    const [target] = await f.manager.listWorktrees(input);
+    await f.manager.removeWorktree({ ...input, mutationToken: target.mutationToken });
+    return true;
+  };
+  const actions = [];
+  const sessions = { create: async () => ({ sessionId: f.session.id }),
+    initializeWorktreeSession: (_id, record, signal, bind) => initializeForgeSession(f.ctx, f.agent, record, signal, bind),
+    configureModel: async () => { actions.push('model'); }, prompt: async () => { actions.push('prompt'); } };
+  const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions, signal: f.control.signal,
+    model: { provider: 'fixture', model: 'fixture' }, prompt: 'work', check() {} });
+  assert.equal(result.status, 'binding-failed');
+  assert.equal(result.sessionId, f.session.id);
+  assert.match(result.error, /archived Worktree/u);
+  assert.deepEqual(actions, []);
+  assert.deepEqual(await f.manager.bindSession({ ...input, sessionId: 'child' }), existing);
+  assert.deepEqual(await f.manager.listBindings(input), [existing]);
+});
+
 test('native Forge facts survive Session replay without the creating port', async (t) => {
   const f = await forgeFixture(t);
   await f.initialize();
@@ -216,13 +264,11 @@ test('mounted Cordis Host creates and binds a Workspace-owned Session with nativ
     runMaintenance: (work) => work(new AbortController().signal),
   };
   f.native.sessions.flush = async () => true;
+  ctx.provide('profileContext', { dir: path.join(f.home, 'profiles', 'web') });
   ctx.provide('forgePanel', { ctx: { get: () => ({}) } });
   ctx.provide('pluginManager', {
-    listBundles: async () => [{ name: '@deepseek-ai/dsh-experimental-forge-bundle', enabled: true, availability: 'installation' }],
-    listPlugins: async () => [
-      { patchId: 'forge-panel', moduleName: '@deepseek-ai/dsh-experimental-client-ui-forge', enabled: true, fiberPhase: 'active' },
-      { patchId: 'forge-worktree', moduleName: '@deepseek-ai/dsh-experimental-worktree', enabled: true, fiberPhase: 'active' },
-    ],
+    listBundles: async () => [{ name: '@deepseek-ai/dsh-experimental-forge-bundle', enabled: true, availability: 'installation', rows: forgeRows() }],
+    listPlugins: async () => forgePlugins(forgeRows(), true),
   });
   ctx.provide('agents', { get: () => agent });
   ctx.provide('sessionController', {

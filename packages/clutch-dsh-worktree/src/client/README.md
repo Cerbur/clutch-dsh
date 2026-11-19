@@ -391,13 +391,16 @@ not a stable Forge integration API. Branch scope includes uncommitted changes.
 Source verification and compatibility limits are recorded in
 [`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
 
-If the native definition is absent, `native-forge-activation.ts` reads the official Forge bundle
+The Host must authorize the current Session before the Dashboard offers to enable Forge.
+Opening Diff keeps its own confirmation. Explicit new Worktree Session creation from the sidebar or Dashboard delegates Forge activation to the Host without a Client prompt, as does creation from Agent tools.
+A matching non-current candidate is selected without touching the profile and requires a new click.
+If the native definition is absent for the verified current target, `native-forge-activation.ts` reads the official Forge bundle
 through the existing Connection adapter. A disabled bundle requires the Surface's native Modal
 confirmation before the adapter calls `pluginManager/setBundleEnabled` with the fixed bundle name
 and `enabled: true`. Native endpoints return direct Gateway values, unlike Worktree's nested result.
 The confirmation is cancelled on action retirement or Surface unmount. The action rechecks bundle
 state after confirmation, bounds each management request and Client registration wait to 15 seconds,
-and only continues directory validation when the exact native definition is registered. Existing
+and revalidates the authorized Session after registration and sidebar mounting. Existing
 selected bundles are never re-enabled to override row-level settings. Restart-required, overridden,
 failed and registration-timeout outcomes preserve Dashboard and report localized feedback.
 An enable RPC timeout or lost response does not prove the Host mutation failed. The action grants

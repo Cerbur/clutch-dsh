@@ -3,11 +3,14 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
+import { parse } from 'yaml';
+import { forgeRows, forgePlugins } from './fixtures/forge-inventory.mjs';
 import { registerForgeActivation, FORGE_BUNDLE } from '../lib/host/forge-activation.js';
-import { createNativeWorktreeSessionDirectoryPort, NativeSessionCreationPreflightError } from '../lib/tool/native-session.js';
+import { createNativeWorktreeSessionDirectoryPort, createWorktreeToolSessionPort, NativeSessionCreationPreflightError } from '../lib/tool/native-session.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 
 async function until(check) {
@@ -23,14 +26,11 @@ async function fixture(t, options = {}) {
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   let available = options.live ?? false;
-  const bundle = { name: FORGE_BUNDLE, enabled: options.enabled ?? false, availability: 'installation', ...options.bundle };
+  const bundle = { name: FORGE_BUNDLE, enabled: options.enabled ?? false, availability: 'installation', rows: forgeRows(), ...options.bundle };
   const calls = [];
   const manager = {
     async listBundles() { return [bundle]; },
-    async listPlugins() { return [
-      { patchId: 'forge-panel', moduleName: '@deepseek-ai/dsh-experimental-client-ui-forge', enabled: available, fiberPhase: available ? 'active' : null },
-      { patchId: 'forge-worktree', moduleName: '@deepseek-ai/dsh-experimental-worktree', enabled: available, fiberPhase: available ? 'active' : null },
-    ]; },
+    async listPlugins() { return forgePlugins(bundle.rows, available); },
     async setBundleEnabled(name, enabled) {
       calls.push([name, enabled]);
       if (options.activate) return options.activate();
@@ -119,12 +119,45 @@ test('profiles sharing a DSH Home receive independent activation preferences', a
 test('a live global backend cannot mask a disabled isolated Forge backend', async (t) => {
   const f = await fixture(t, { enabled: true, live: true });
   f.ctx.provide('worktrees', {});
+  f.bundle.rows.push({ ...f.bundle.rows[0], rowId: 'forge-worktree', entryId: 'include/forge-worktree' });
   const entries = await f.manager.listPlugins();
   f.manager.listPlugins = async () => entries.map(row =>
-    row.patchId === 'forge-worktree' ? { ...row, enabled: false, fiberPhase: null } : row);
+    row.entryId === 'include/forge-worktree' ? { ...row, enabled: false, fiberPhase: null } : row);
   await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
   assert.equal((await failure(f.gate)).code, 'WORKTREE_FORGE_UNAVAILABLE');
   assert.deepEqual(f.calls, []);
+});
+
+test('official DSH source bundle patch admits a Session with its declared live modules', async (t) => {
+  const source = process.env.DSH_NATIVE_SOURCE;
+  if (!source) return t.skip('Set DSH_NATIVE_SOURCE to verify the actual official bundle declarations.');
+  const patch = parse(await readFile(path.join(source, 'packages/experimental/forge-bundle/cordis.patch.yml'), 'utf8'));
+  const rows = forgeRows(patch.flatMap(op => op.insert ?? []));
+  const f = await fixture(t, { enabled: true, live: true, bundle: { rows } });
+  await f.gate.assertReady();
+  assert.deepEqual(f.calls, []);
+});
+
+test('a different live entry of the same module cannot substitute for the declared backend', async (t) => {
+  const f = await fixture(t, { enabled: true, live: true });
+  const entries = await f.manager.listPlugins();
+  f.manager.listPlugins = async () => entries.map(row => row.entryId === 'include/worktree'
+    ? { ...row, entryId: 'unrelated/worktree', patchId: 'worktree' } : row);
+  await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
+});
+
+test('concurrent admissions share one read but never cache readiness after it settles', async (t) => {
+  const f = await fixture(t, { enabled: true });
+  await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
+  f.setLive(true);
+  let reads = 0;
+  const list = f.manager.listPlugins;
+  f.manager.listPlugins = () => { reads++; return list(); };
+  await Promise.all([f.gate.assertReady(), f.gate.assertReady()]);
+  assert.equal(reads, 1);
+  f.setLive(false);
+  assert.equal((await failure(f.gate)).details.reason, 'disabled');
+  assert.equal(reads, 2);
 });
 
 test('missing or incompatible official bundle is reported without altering the profile', async (t) => {
@@ -169,12 +202,102 @@ test('native creation is gated before creating any Session and can retry after m
   let created = 0;
   f.ctx.provide('workingDirectory', { set() {} });
   f.ctx.provide('sessionController', { create: async () => { created++; return { sessionId: 'new' }; } });
-  const port = createNativeWorktreeSessionDirectoryPort(f.ctx, f.gate.assertReady);
+  const port = createNativeWorktreeSessionDirectoryPort(f.ctx, f.gate);
   await assert.rejects(port.create({ cwd: '/tmp', workspaceId: 'ws' }), { code: 'WORKTREE_FORGE_UNAVAILABLE' });
   assert.equal(created, 0);
   f.setLive(true); f.bundle.enabled = true; f.bundle.availability = 'installation';
   assert.equal((await port.create({ cwd: '/tmp', workspaceId: 'ws' })).sessionId, 'new');
   assert.equal(created, 1);
+});
+
+test('browser and tool creation share one enable and wait for live Forge; later checks are read-only', async (t) => {
+  const f = await fixture(t, { enabled: true });
+  await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
+  f.bundle.enabled = false;
+  let created = 0;
+  f.ctx.provide('workingDirectory', { set() {} });
+  f.ctx.provide('sessionController', { async create() { return { sessionId: String(++created) }; } });
+  const browser = createNativeWorktreeSessionDirectoryPort(f.ctx, f.gate);
+  const tool = createWorktreeToolSessionPort(f.ctx, f.gate);
+  const writes = [];
+  f.manager.setBundleEnabled = async (...args) => { writes.push(args); f.bundle.enabled = true; return { application: 'applied' }; };
+  const input = { cwd: '/tmp', workspaceId: 'ws' };
+  const controller = new globalThis.AbortController();
+  const cancelled = browser.create(input, controller.signal);
+  const next = tool.create(input);
+  await until(() => f.bundle.enabled);
+  const late = browser.create(input);
+  assert.equal(created, 0);
+  controller.abort();
+  await assert.rejects(cancelled, NativeSessionCreationPreflightError);
+  f.setLive(true);
+  await Promise.all([next, late, browser.create(input)]);
+  assert.equal(created, 3);
+  assert.deepEqual(writes, [[FORGE_BUNDLE, true]]);
+  f.bundle.enabled = false;
+  await assert.rejects(tool.assertWorkingDirectory('1', '/tmp', new globalThis.AbortController().signal), { code: 'WORKTREE_FORGE_UNAVAILABLE' });
+  assert.equal(writes.length, 1);
+});
+
+for (const application of ['restart-required', 'failed', 'overridden', 'cancelled']) {
+  test(`on-demand ${application} never creates an orphan or loops`, async (t) => {
+    const f = await fixture(t, { enabled: true, activate: async () => ({ application }) });
+    await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
+    f.bundle.enabled = false;
+    f.ctx.provide('workingDirectory', { set() {} });
+    f.ctx.provide('sessionController', { create: () => assert.fail('must not create') });
+    const port = createNativeWorktreeSessionDirectoryPort(f.ctx, f.gate);
+    await assert.rejects(port.create({ cwd: '/tmp', workspaceId: 'ws' }), {
+      code: 'WORKTREE_FORGE_UNAVAILABLE', details: { diagnostic: '', reason: application === 'restart-required' ? application
+        : application === 'overridden' ? 'disabled' : 'failed' },
+    });
+    assert.deepEqual(f.calls, [[FORGE_BUNDLE, true]]);
+  });
+}
+
+test('a disabled component is not force-enabled by explicit Session creation', async (t) => {
+  const f = await fixture(t, { enabled: true, live: false });
+  await assert.rejects(f.gate.ensureForCreation(), { code: 'WORKTREE_FORGE_UNAVAILABLE', details: { reason: 'disabled', diagnostic: '' } });
+  assert.deepEqual(f.calls, []);
+});
+
+test('first creation joins startup activation and manager unload retires both without creating', async (t) => {
+  const enabled = Promise.withResolvers();
+  const f = await fixture(t, { activate: () => enabled.promise });
+  f.ctx.provide('workingDirectory', { set() {} });
+  let creations = 0;
+  f.ctx.provide('sessionController', { create: async () => ({ sessionId: String(++creations) }) });
+  const port = createNativeWorktreeSessionDirectoryPort(f.ctx, f.gate);
+  const input = { cwd: '/tmp', workspaceId: 'ws' };
+  await until(() => f.calls.length === 1);
+  const requests = Promise.allSettled([port.create(input), port.create(input)]);
+  await delay(5);
+  assert.equal(f.calls.length, 1);
+  await f.managerOwner.dispose();
+  for (const result of await requests) {
+    assert.equal(result.status, 'rejected');
+    assert.equal(result.reason.details.reason, 'unavailable');
+  }
+  f.bundle.enabled = true; f.setLive(true);
+  enabled.resolve({ application: 'applied' });
+  await delay(5);
+  assert.equal(creations, 0);
+  assert.equal(f.calls.length, 1);
+});
+
+test('cancelling the last creation before selection completes leaves manual disable intact', async (t) => {
+  const f = await fixture(t, { enabled: true });
+  await until(async () => (await failure(f.gate))?.details.reason === 'disabled');
+  f.bundle.enabled = false;
+  const read = Promise.withResolvers();
+  f.manager.listBundles = () => read.promise;
+  const controller = new globalThis.AbortController();
+  const pending = f.gate.ensureForCreation(controller.signal);
+  controller.abort();
+  await assert.rejects(pending, NativeSessionCreationPreflightError);
+  read.resolve([f.bundle]);
+  await delay(5);
+  assert.deepEqual(f.calls, []);
 });
 
 test('a ready inventory arriving after unload cannot admit a new Session', async (t) => {
@@ -198,6 +321,10 @@ test('unloading only the manager provider cancels pending activation without unl
   await delay(10);
   assert.deepEqual(f.calls, []);
   assert.equal((await failure(f.gate)).details.reason, 'unavailable');
+  f.manager.listBundles = async () => [f.bundle];
+  await f.ctx.plugin(owner => { owner.provide('pluginManager', f.manager); });
+  await until(async () => !await failure(f.gate));
+  assert.deepEqual(f.calls, [[FORGE_BUNDLE, true]], 'the replacement manager completes the unclaimed first attempt');
 });
 
 test('unloading the manager rejects its in-flight ready inventory while Forge remains mounted', async (t) => {

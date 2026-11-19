@@ -52,9 +52,10 @@ contract  ←  provider
 - 整个插件由单一 npm package `@cerbur/clutch-dsh-worktree` 组成，内部各层为源码模块，而非独立的 workspace package。
 - DSH 通过 `package.json.dsh.bundle.patch` 激活插件；`cordis.patch.yml` 为同目录下的 YAML 补丁层。
 - 补丁层装载 `clutch-dsh-worktree-host`，并通过 DSH 的 `dshHomePath()` 注入绝对路径 DSH Home。
-- Dashboard 原生 Diff 入口仅在点击时探测 Forge；组合包未启用时由用户确认，再通过既有
+- Dashboard 原生 Diff 入口先经 Host 检查 Session 与目标目录。仅其他 Session 匹配时只切换，
+  不读写 Forge 开关；用户再次点击后重新核验。仅当前 Session 匹配时才探测启用状态；未启用时由用户确认，再通过既有
   Connection 调用官方 Plugin Manager 启用固定的 Forge 组合包。配置所有权属于 DSH，
-  不写 Sidecar、不编辑 profile 文件、不复制官方 plugin rows，也不在启动或卸载时改变 Forge 开关。
+  不写 Sidecar、不编辑 profile 文件、不复制官方 plugin rows。Dashboard 不在启动时修改开关。Host 的首次加载与新建 Session 启用规则见下文，卸载不关闭 Forge。
   Host 启用成功后仍须等待 Client 原生 Diff 注册，再按原有目录身份与 Session 门禁导航。
   取消只终止待执行的导航和请求等待，不撤销已经完成的官方配置变更。
 - 官方 `dsh-typert-loader` 通过 `./package.json` 和 `./typert` 注册 descriptor，Upstream DSH 的 `TypertGateway` 在现有的 `/api` 连接通道上接管 `worktreeManager/<method>`。插件不创建第二套 RPC 或传输层。
@@ -1171,12 +1172,20 @@ profile 变更，否则 HMR 的重载与 profile 锁可能互相等待。Forge �
 每个 profile 的首次尝试由 Home/clutch-dsh-worktree/forge-activation/
 sha256(profileContext.dir).json 记录（version 与 bundle），独立于 Workspace 关系索引。
 排他创建、写入并 fsync 后才请求启用，避免 HMR 重复启用；已有损坏文件保留且显式失败。
-已启用、缺失或不兼容的 bundle 也记为已尝试；不自动下载安装。后续手动关闭跨进程生效，
-恢复需用户在插件页启用。失败或需要重启只影响新 Session 准入，不阻止旧列表读取。
+已启用、缺失或不兼容的 bundle 也记为已尝试。手动关闭后，普通重启、列表读取及已有 Session 的操作均保留关闭状态。
+
+侧栏、Dashboard 和 Agent 工具显式创建新 Worktree Session 时，Host 可按需启用已安装且兼容的官方 bundle，
+无需确认。首次加载标记只约束启动尝试。按需启用保留各组件单独的禁用设置，不下载安装；请求启用后等待
+官方面板及 Worktree 服务实际就绪。若启用失败、组件未就绪或需要重启，必须在创建原生 Session 前返回错误。
+Dashboard 打开 Diff 仍采用独立确认流程。
 
 新建前、初始化前、绑定前和派发输入前异步检查官方运行状态：bundle 独立选中且无错误，
-forge-panel 与 forge-worktree 对应官方模块 enabled 且 fiberPhase=active，并存在 forgePanel。
-必须使用 pluginManager 的 listBundles/listPlugins，不能从 forgePanel.ctx 获取 worktrees：
-Cordis 代理会重绑调用者上下文，可能把全局 backend 误认为官方隔离 backend 已就绪。
+DSH rc.1 起面板 `forge-panel` 与工具共享 `worktree` 服务。用官方 bundle 声明行的
+`entryId` 和模块名关联 `listPlugins()`；两行都须 enabled 且 fiberPhase=active，并存在 forgePanel。
+`patchId` 表示能否通过 profile 修改条目，不是运行时身份。若旧布局声明 `forge-worktree`，则只认该隔离行，
+不能用同名模块或 `forgePanel.ctx` 看到的全局服务替代。并发准入共享进行中的读取，不缓存已完成的结果。
+manager 热替换使旧读取失效；新 manager 重新检查首次尝试标记，不重复启用。
+新建流程在绑定锁内拒绝已归档 Worktree；既有 Session 的补绑和幂等复用不受影响。原生 Stop 到达时，
+已提交的绑定不回滚；初始化停止，不再派发首条任务。
 失败使用 WORKTREE_FORGE_UNAVAILABLE 和 NativeSessionCreationPreflightError，创建前失败
 不留 Session，恢复后同一 requestId 可重试。停止后的迟到检查不得放行。

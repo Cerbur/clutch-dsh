@@ -95,8 +95,9 @@ Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
 会话标题栏的 **Worktree 面板**在对话旁显示简洁的改动摘要。
 可以直接刷新，也可以打开完整 Dashboard 查看详情。
 
-**打开原生本地改动**会为匹配的会话打开 DSH Diff 侧栏。如果 Forge 尚未启用，会先询问是否
-为当前 profile 启用；这也会启用 Forge 的原生 Worktree 和 GitHub 集成，且卸载本插件后仍然有效。
+**打开原生本地改动**先检查是否有会话正在使用目标目录。如果只有其他会话匹配，Dashboard 会先切换过去；
+等会话加载后，再点一次打开 Diff 侧栏。没有匹配会话时不会更改 Forge 设置。当前会话匹配但 Forge 未启用时，
+DSH 会询问是否为当前 profile 启用；这也会启用 Forge 的原生 Worktree 和 GitHub 集成，且卸载本插件后仍然有效。
 可在**插件 → 实验性插件 → Change requests & worktrees**中关闭。
 
 ### 同步基线
@@ -157,7 +158,9 @@ Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出�
 
 DSH 可能在 Forge 提供恢复选项前将会话切回项目目录。你可以在那里继续对话。
 
-Worktree 会为每个配置档自动启用一次已安装的 Forge 插件。如果之后手动禁用 Forge，请先在插件设置中重新启用，再创建 Worktree 会话。
+Worktree 在每个配置档首次加载时，会尝试启用一次已安装且兼容的官方 Forge 组合包。之后手动关闭 Forge，重启 DSH、浏览列表或打开已有会话都会保持关闭。从侧栏、Dashboard 或 Agent 工具新建 Worktree 会话时，会直接为当前配置档重新启用 Forge，无需确认。打开 **Diff** 时若需启用 Forge，仍会单独询问。
+
+新建会话会等到 Forge 面板和 Worktree 服务都已运行。如果单独关闭了其中一项，请在**插件**中重新启用。Worktree 不会下载 Forge。启用失败或需要重启时不会创建会话，请解决问题或重启 DSH 后重试。
 
 启用官方 Forge 后，新会话在移出管理或卸载插件后仍保留原生 Worktree 记录。Forge 可以恢复配置池内缺失的 checkout，或让你选择 **Continue in Project（回到项目继续）**。恢复无法找回未提交文件。
 

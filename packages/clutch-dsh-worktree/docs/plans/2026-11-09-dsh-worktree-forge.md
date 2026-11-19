@@ -29,7 +29,7 @@ See [acceptance evidence](../qa/2026-11-09-forge-acceptance.md).
 The user approved enabling the installed official Forge bundle when Worktree loads,
 retaining it after Worktree uninstall, testing under ~/.dsh-test, protecting old data,
 and committing on this same feature branch. Enable through DSH pluginManager, never
-as a child plugin. Persist one attempt per profile to respect later manual disable.
+as a child plugin. Persist one first-load attempt per profile so ordinary restarts respect a later manual disable.
 Gate new Session creation on the actual independent official runtime, including its
 isolated backend; missing/incompatible bundles require manual installation. Preserve
 existing read paths and Session records. Validate cold disable/re-enable, uninstall,
@@ -93,3 +93,26 @@ Full `pnpm --filter @cerbur/clutch-dsh-worktree test` with `DSH_NATIVE_SOURCE` a
 failures/skips. Post-fix UI baseline: 705 of 707 Session/sidecar files byte-identical;
 only the intentionally continued case 06 Session and its scratch Workspace sidecar changed.
 DSH working tree remains clean.
+
+## Forge contract recheck (2026-11-19)
+
+At upstream `dsh-v0.2.2-rc.5` (`9c2670d3bc`), the official bundle declares
+`forge-panel` and a shared `worktree`. The [RC.1 upgrade guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.5/docs/upgrade-guide/v0.2.2-rc.1/archive-worktrees/guide.md)
+documents the removal of the isolated `forge-worktree` row. Use the official
+bundle's declared loader entry IDs and live module states, not editable patch
+IDs or a caller-scoped service proxy. Test the checked-out upstream patch as
+well as the old isolated layout. Keep the rc.2 dependency floor and the
+existing Forge request/created record contract: Clutch does not claim native
+archive-cleanup ownership of an independently managed checkout.
+
+Admission reads are shared only in flight. Replacing the manager invalidates its
+outstanding results, not the per-profile first-attempt preference. Archive wins
+over new Session creation at the serialized binding boundary, without blocking
+binding repair for existing Sessions; Stop during a binding
+commit retains the native Session and any committed binding, without sending input.
+
+## Explicit Session creation after a manual disable (2026-11-19)
+
+The user approved enabling Forge without a prompt when the sidebar, Dashboard or an Agent tool explicitly creates a new Worktree Session. The Host may enable only the installed, compatible official bundle. Preserve the one-time first-load attempt and all individual component toggles. Subsequent restarts, list reads and use of existing Sessions leave a manually disabled bundle off. Opening Diff retains its own confirmation.
+
+For each creation entry point, verify that a disabled bundle can be enabled and that the panel and Worktree service must both be live before a native Session is created. A missing or incompatible bundle, an individually disabled component, activation failure or a required restart must leave no new Session. Worktree must never download Forge.

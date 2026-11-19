@@ -427,8 +427,8 @@ export class WorktreeManagerImpl implements WorktreeManagerService {
     readonly workspaceId: WorkspaceId;
     readonly worktreeId: string;
     readonly sessionId: string;
-  }): Promise<SessionBinding> {
-    return this.afterRecovery(() => bindSession(this.context, input));
+  }, purpose?: 'new-session'): Promise<SessionBinding> {
+    return this.afterRecovery(() => bindSession(this.context, input, purpose));
   }
 
   resolveRuntimeCwd(input: { readonly workspaceId: WorkspaceId; readonly sessionId: string }): Promise<string> {

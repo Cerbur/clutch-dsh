@@ -103,8 +103,10 @@ Refresh to see later edits; the Dashboard is read-only.
 The Session header's **Worktree panel** keeps a compact change summary beside the conversation.
 Use its refresh button or open the full Dashboard for more detail.
 
-**Open native local changes** opens DSH's Diff sidebar for a matching Session. If Forge is off,
-DSH asks before enabling it for the current profile. This also enables Forge's native Worktree
+**Open native local changes** checks for a Session in the target directory first. If only another
+Session matches, the Dashboard switches to it; click again once it loads. If none matches,
+the Forge setting is left alone. If the current Session matches and Forge is off, DSH asks
+before enabling it for the current profile. This also enables Forge's native Worktree
 and GitHub integration; the setting remains enabled after this plugin is removed. You can turn
 it off in **Plugins → Experimental plugins → Change requests & worktrees**.
 
@@ -176,7 +178,9 @@ Sessions and does not claim cleanup succeeded. Error history clears on page refr
 
 DSH may return a Session to the project before Forge offers recovery. You can continue the conversation there.
 
-Worktree enables the installed Forge plugin once per profile. If you disable Forge later, re-enable it in Plugins before creating a Worktree Session.
+When Worktree first loads in a profile, it makes one attempt to enable the installed, compatible official Forge bundle. If you later turn Forge off, restarting DSH, browsing lists, and opening an existing Session leave it off. Creating a new Worktree Session from the sidebar, Dashboard, or an Agent tool turns Forge back on for that profile without asking. Opening **Diff** still asks before enabling Forge.
+
+Session creation waits for the Forge panel and Worktree service to be running. If you disabled either component individually, re-enable it in **Plugins**. Worktree does not download Forge. If activation fails or requires a restart, no Session is created. Resolve the issue or restart DSH, then retry.
 
 With official Forge enabled, new Sessions keep native Worktree records after removal from management or uninstall. Forge can restore missing checkouts inside its configured pool or let you **Continue in Project**. Restoration cannot recover uncommitted files.
 

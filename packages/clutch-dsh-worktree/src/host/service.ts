@@ -150,7 +150,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
-      const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx, forge.assertReady);
+      const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx, forge);
       const creation = createWorktreeSessionCreation({ manager, sessions,
         changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
       this.sessionCreation = creation;
@@ -163,7 +163,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.inject(
       ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
       (toolCtx) => {
-        const sessions = createWorktreeToolSessionPort(toolCtx, forge.assertReady);
+        const sessions = createWorktreeToolSessionPort(toolCtx, forge);
         const sync = createBaselineSync({ manager, sessions,
           changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
         this.baselineSync = sync;

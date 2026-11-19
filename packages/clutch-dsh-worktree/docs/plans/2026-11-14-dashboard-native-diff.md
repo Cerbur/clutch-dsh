@@ -329,3 +329,12 @@ Forge registration replacement and old publisher/cleanup isolation, and both nav
 and optional bridge fallback. Each review ran the four related test files: 51 passed.
 The full suite passed 1,563 tests with no failures or skips; workspace/patch validation,
 lint, typecheck, build, README parity and diff whitespace checks passed.
+
+### Directory preflight before profile changes (2026-11-19)
+
+Opening Diff retains its own activation prompt even though explicit new Worktree Session creation can enable Forge without one.
+Host directory verification precedes the activation prompt. A switch to a retained
+Session never enables Forge on the same click. After activation, revalidate only the
+original authorized Session before opening; a failed preflight, timeout, or retired
+target cannot authorize a profile change. Surface notices must preserve each native
+Diff result's localized recovery instructions instead of retrying a Workspace refresh.

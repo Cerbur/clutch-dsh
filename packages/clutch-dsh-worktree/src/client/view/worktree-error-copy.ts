@@ -73,6 +73,7 @@ function gitErrorCopy(error: WorktreeViewError): WorktreeLocaleKey {
 }
 
 export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTranslate): string {
+  if (error.messageKey !== undefined) return t(error.messageKey);
   if (error.code === 'WORKTREE_FORGE_UNAVAILABLE') {
     if (error.details?.reason === 'starting') return t('error.forgeStarting');
     if (error.details?.reason === 'restart-required') return t('error.forgeRestartRequired');

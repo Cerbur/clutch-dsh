@@ -29,7 +29,7 @@ const RECORD = 'plugin:client-ui-forge/worktree';
 /** New Sessions only. Native records survive this producer; existing Sessions are never migrated. */
 export async function initializeForgeSession(
   ctx: Context, agent: ForgeAgent, record: WorktreeRecord, signal: AbortSignal,
-  bind: () => Promise<void>,
+  bind: (control: AbortSignal) => Promise<void>,
 ): Promise<void> {
   // Resolve the host runtime without merging its Cordis SessionStore into the
   // browser's Context in this package's shared compilation.
@@ -89,6 +89,9 @@ export async function initializeForgeSession(
       await sessions.flush(agent.session);
       throw error;
     }
-    await bind();
+    await bind(control);
+    // Stop can arrive while the Sidecar commit owns its lock. Keep any
+    // committed binding, but do not admit the queued first task afterwards.
+    if (control.aborted) throw new Error('Worktree Session initialization was cancelled before task dispatch', { cause: control.reason });
   });
 }

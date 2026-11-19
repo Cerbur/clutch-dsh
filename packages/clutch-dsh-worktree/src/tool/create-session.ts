@@ -13,12 +13,14 @@ export async function createBoundWorktreeSession(input: {
   check();
   const { sessionId } = await sessions.create(sessions.enterWorkingDirectory
     ? { cwd: record.absolutePath, workspaceId: record.workspaceId }
-    : { cwd: record.absolutePath });
+    : { cwd: record.absolutePath }, signal);
+  let bound = false;
   try {
     check();
     const bind = async () => {
       check();
-      await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId });
+      await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId }, 'new-session');
+      bound = true;
     };
     if (sessions.initializeWorktreeSession) await sessions.initializeWorktreeSession(sessionId, record, signal, bind);
     else {
@@ -27,6 +29,6 @@ export async function createBoundWorktreeSession(input: {
     }
     return { sessionId, bound: true };
   } catch (error) {
-    return { sessionId, bound: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 700) };
+    return { sessionId, bound, error: (error instanceof Error ? error.message : String(error)).slice(0, 700) };
   }
 }

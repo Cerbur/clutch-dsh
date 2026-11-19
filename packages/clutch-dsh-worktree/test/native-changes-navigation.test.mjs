@@ -216,6 +216,8 @@ test('built Client entry reads the blank binding projection and opens the regist
     (id) => switched.push(id)), 'session-switching');
   assert.deepEqual(switched, ['matching']);
   services.sidebarRightTabs.candidates = () => [{ kind: 'forge-changes', id: 'other-provider' }];
+  assert.equal(await injected.openNativeChanges(record, [], () => true), 'directory-mismatch');
+  acceptedSession = blankId; // Once authorized, an unrelated Diff provider is still unavailable.
   assert.equal(await injected.openNativeChanges(record, [], () => true), 'unavailable');
   services.sidebarRight = undefined;
   assert.equal(await injected.openNativeChanges(record, [], () => true), 'unavailable');
@@ -387,7 +389,7 @@ test('built Client entry enables Forge only after the supplied confirmation and 
     assert.equal(enabled, false);
     return true;
   }), 'opened');
-  assert.deepEqual(calls, ['pluginManager/listBundles', 'confirm', 'pluginManager/listBundles',
+  assert.deepEqual(calls, ['worktreeManager/canOpenNativeChanges', 'pluginManager/listBundles', 'confirm', 'pluginManager/listBundles',
     'pluginManager/setBundleEnabled', 'worktreeManager/canOpenNativeChanges', 'open']);
   dispose();
   assert.equal(enabled, true);
@@ -435,6 +437,6 @@ test('built Client continues through a lost enable response and delayed Session 
   assert.equal(calls.filter((call) => call === 'pluginManager/setBundleEnabled').length, 1);
   assert.equal(calls.filter((call) => call === 'open').length, 1);
   assert.equal(calls.at(-2), 'worktreeManager/canOpenNativeChanges');
-  assert.equal(calls.filter((call) => call === 'worktreeManager/canOpenNativeChanges').length, 2,
-    'directory is verified again after the native adoption error');
+  assert.equal(calls.filter((call) => call === 'worktreeManager/canOpenNativeChanges').length, 3,
+    'preflight, verification after activation, and revalidation after the native adoption error');
 });

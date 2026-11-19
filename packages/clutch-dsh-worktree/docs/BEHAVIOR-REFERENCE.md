@@ -45,7 +45,9 @@ On first load in each DSH profile, Worktree automatically enables the installed 
 
 **Known upstream limitation:** in the tested DSH build, opening a live Session can read its skill catalog and automatically fall back from a missing checkout to the project directory before Forge offers recovery. The label then disappears. This also occurs with officially created Worktrees; automatic recovery after uninstall is therefore not guaranteed. This plugin does not override that native behavior. Once DSH has returned to the project, an unavailable old binding no longer blocks conversation or supplies stale Worktree instructions. Existing Sessions are not rewritten.
 
-Automatic activation is attempted only once per profile. If you later disable Forge or its Worktree component, Worktree respects that choice across restarts and blocks new Worktree Sessions until you re-enable them in Plugins. Existing lists remain readable. A failed activation or required restart produces an actionable message before Session creation. The official bundle must already be available in DSH; Worktree does not download missing or incompatible bundles.
+The first-load attempt runs once per profile. If you later disable the bundle, ordinary restarts, list reads and use of existing Sessions leave it off. An explicit request to create a new Worktree Session from the sidebar, Dashboard or Agent tools enables the installed, compatible official bundle for the profile without a confirmation dialog. Opening **Diff** has its own confirmation.
+
+Worktree does not download Forge or override individually disabled components. Session creation waits for both the official Forge panel and its Worktree service to be live. If a component was disabled separately, re-enable it in Plugins. If activation fails or requires a restart, no Session is created. Retry after resolving the error or restarting DSH.
 
 Existing Sessions are not migrated. Old checkout paths stay in place. A new Session on an imported or older checkout can receive the label, but official disk restoration requires that checkout to be inside DSH's configured pool; otherwise use Continue in Project. Restoration does not recover uncommitted files. When several Sessions are waiting for the same missing checkout, resume each Session separately.
 
@@ -608,7 +610,10 @@ Directory verification failures, a pending Session switch, and missing native ca
 without opening another directory's Diff. This requires the native DSH right sidebar and the updated
 Worktree Host; reload the Host after rebuilding this plugin.
 
-If the official Forge bundle is off, clicking the open icon asks you to **Enable and open Diff**.
+The Host verifies the target directory before the Dashboard offers **Enable and open Diff**.
+A failed check leaves the profile alone. If only another Session matches, the first click selects
+it without enabling Forge. Click again after it loads. Diff errors give the specific next step
+in the toast and error list; refreshing Workspace data does not retry the open action.
 The confirmation explains that Forge also includes native Worktree and GitHub integration and affects
 every Session using the current profile. After confirmation, the plugin enables Forge through DSH's
 Plugin Manager, waits for the native Diff to register, verifies the target directory, and opens it
@@ -623,7 +628,7 @@ Directory verification also has a timeout, and closing the Dashboard cancels its
 An already selected bundle is not force-enabled again; check its panel toggle on the DSH Plugins page
 if Diff remains unavailable. Closing Dashboard or changing its target cancels the pending open.
 Any completed Forge enablement remains saved, including after uninstalling this plugin.
-Startup never enables Forge. To turn it off, open **Plugins → Experimental plugins** and switch off
+The Dashboard does not enable Forge in the background. The Host's separate first-load attempt is not repeated after a manual disable. To turn it off, open **Plugins → Experimental plugins** and switch off
 **Change requests & worktrees**. This disables the whole official Forge bundle for the current profile,
 including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
 

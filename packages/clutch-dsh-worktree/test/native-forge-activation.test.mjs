@@ -131,14 +131,13 @@ for (const screen of [
   { sessionId: 'other', workspaceId: 'other-ws', cwd: '/other', ready: false },
   { sessionId: 'other', workspaceId: 'ws', cwd: '/other', ready: false },
 ]) test('activation authorizes a retained candidate before waiting on an absent or unrelated current surface', async () => {
-  let registered = false;
   const selected = [];
   const navigation = createNativeChangesNavigation({
     screen: () => screen,
-    sidebar: () => ({ accepts: () => registered, open: () => assert.fail('selection must require a fresh click') }),
+    sidebar: () => ({ accepts: () => false, open: () => assert.fail('selection must require a fresh click') }),
     manager: { canOpenNativeChanges: async ({ sessionId }) => sessionId === 'saved' },
     openSession: (id) => selected.push(id),
-    ensureAvailable: async () => { registered = true; return 'ready'; },
+    ensureAvailable: async () => assert.fail('switching Sessions must not activate Forge'),
     readyTimeoutMs: 5, pollMs: 1,
   });
   assert.equal(await navigation.open({ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo' }, ['saved'], () => true), 'session-switching');
@@ -305,6 +304,56 @@ test('native adapter rejects malformed responses and propagates Gateway failures
   adapter.dispose();
 });
 
+for (const reason of ['directory-mismatch', 'verification-failed', 'verification-timeout']) {
+  test(`Forge is not offered or written when directory preflight ends in ${reason}`, async () => {
+    const f = fixture();
+    const navigation = createNativeChangesNavigation({
+      screen: () => ({ workspaceId: 'ws', sessionId: 'current', cwd: '/other', ready: true }),
+      sidebar: () => ({ accepts: () => false, open: () => assert.fail('no authorized target') }),
+      openSession: () => assert.fail('no authorized target'),
+      manager: { canOpenNativeChanges: async () => {
+        if (reason === 'verification-failed') throw new Error('Host unavailable');
+        if (reason === 'verification-timeout') return new Promise(() => {});
+        return false;
+      } }, verificationTimeoutMs: 10,
+      ensureAvailable: () => f.run(),
+    });
+    assert.equal(await navigation.open({ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/target' }, [], () => true), reason);
+    assert.deepEqual(f.calls, [], 'no management read, confirmation, or profile write');
+    navigation.dispose();
+  });
+}
+
+test('switching the current Session during confirmation does not save Forge selection', async () => {
+  const f = fixture();
+  let sessionId = 'current';
+  const navigation = createNativeChangesNavigation({
+    screen: () => ({ workspaceId: 'ws', sessionId, ready: true, cwd: '/repo' }),
+    sidebar: () => ({ accepts: () => false, open: () => assert.fail('stale open') }),
+    manager: { canOpenNativeChanges: async () => true }, openSession: () => assert.fail('stale switch'),
+    ensureAvailable: (_address, confirm, signal, isCurrent) => f.run({ confirm, signal, isCurrent }),
+  });
+  assert.equal(await navigation.open({ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo' }, [], () => true,
+    undefined, async () => { sessionId = 'other'; return true; }), 'session-switching');
+  assert.deepEqual(f.calls, ['read']);
+  navigation.dispose();
+});
+
+test('loss of directory authorization during activation does not redirect to a retained Session', async () => {
+  let registered = false;
+  const checked = [];
+  const navigation = createNativeChangesNavigation({
+    screen: () => ({ workspaceId: 'ws', sessionId: 'current', mountedSessionId: 'current', ready: true, cwd: '/repo' }),
+    sidebar: () => ({ accepts: () => registered, open: () => assert.fail('stale authorization') }),
+    manager: { canOpenNativeChanges: async ({ sessionId }) => { checked.push(sessionId); return !registered || sessionId === 'other'; } },
+    openSession: () => assert.fail('a profile confirmation must not redirect to a different Session'),
+    ensureAvailable: async () => { registered = true; return 'ready'; },
+  });
+  assert.equal(await navigation.open({ workspaceId: 'ws', worktreeId: 'wt', absolutePath: '/repo' }, ['other'], () => true), 'directory-mismatch');
+  assert.deepEqual(checked, ['current', 'current']);
+  navigation.dispose();
+});
+
 test('one open click confirms, activates, revalidates cwd and opens native Diff without a second click', async () => {
   const f = fixture();
   const calls = [];
@@ -321,7 +370,7 @@ test('one open click confirms, activates, revalidates cwd and opens native Diff 
   const result = navigation.open(record, [], () => true, undefined, async () => { calls.push('confirm'); return true; });
   assert.equal(navigation.open(record, [], () => true), result);
   assert.equal(await result, 'opened');
-  assert.deepEqual(calls, ['confirm', 'verified', 'dsh-resource://forge-changes/s/local']);
+  assert.deepEqual(calls, ['verified', 'confirm', 'verified', 'dsh-resource://forge-changes/s/local']);
   navigation.dispose();
   assert.equal(f.calls.filter((call) => call === 'enable').length, 1);
 });
@@ -330,13 +379,14 @@ test('closing or disposing during activation cancels the pending open, but keeps
   for (const dispose of [false, true]) {
     const f = fixture();
     let current = true;
+    let reads = 0;
     let entered;
     const enabling = new Promise((resolve) => { entered = resolve; });
     f.manager.enableNativeForge = async () => { f.enabled = true; entered(); return 'applied'; };
     const navigation = createNativeChangesNavigation({
       screen: () => ({ sessionId: 's', workspaceId: 'ws', cwd: '/repo', ready: true, mountedSessionId: 's' }),
       sidebar: () => ({ accepts: () => false, open: () => assert.fail('stale open') }),
-      manager: { canOpenNativeChanges: async () => assert.fail('stale validation') },
+      manager: { canOpenNativeChanges: async () => { reads++; return true; } },
       openSession: () => assert.fail('stale navigation'),
       ensureAvailable: (_address, confirm, signal) => f.run({ confirm, signal, timeoutMs: 1000 }),
     });
@@ -346,6 +396,7 @@ test('closing or disposing during activation cancels the pending open, but keeps
     if (dispose) navigation.dispose();
     else current = false;
     assert.equal(await result, 'stale');
+    assert.equal(reads, 1, 'preflight only; no validation after cancellation');
     assert.equal(f.enabled, true);
     navigation.dispose();
   }
