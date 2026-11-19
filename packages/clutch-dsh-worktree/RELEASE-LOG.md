@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.37 — 2026-11-19
+
+### 中文
+
+#### 修复
+
+- 修正工作区路径依赖的版本约束，使插件在 DSH 0.2.2-rc.2 和 rc.5 上通过市场兼容性筛选。
+
+### English
+
+#### Fixed
+
+- Correct the workspace path dependency range so the plugin passes marketplace compatibility checks on DSH 0.2.2-rc.2 and rc.5.
+
 ## 0.1.36 — 2026-11-18
 
 ### 中文

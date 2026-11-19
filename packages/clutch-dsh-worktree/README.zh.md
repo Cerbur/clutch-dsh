@@ -146,7 +146,7 @@ Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出�
 
 | 组件 | 要求 |
 | --- | --- |
-| DSH Host 与 Client | `>=0.2.2-rc.2` |
+| DSH Host、Client 与工作区路径工具包 | `>=0.2.2-rc.2` |
 | Git | `>=2.20.0`，可在 `PATH` 中使用；创建需要已有初始提交的仓库 |
 | Node.js | `>=24.9.0` |
 | 文件系统 | Windows 或 macOS 本地路径；网络或特殊文件系统可能不支持 |
