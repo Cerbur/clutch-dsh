@@ -165,7 +165,7 @@ Sessions and does not claim cleanup succeeded. Error history clears on page refr
 
 | Component | Requirement |
 | --- | --- |
-| DSH Host and Client | `>=0.2.2-rc.2` |
+| DSH Host, Client, and workspace path utility | `>=0.2.2-rc.2` |
 | Git | `>=2.20.0`, available on `PATH`; creation needs a repository with an initial commit |
 | Node.js | `>=24.9.0` |
 | Filesystem | Local Windows or macOS paths; network or special filesystems may not be supported |

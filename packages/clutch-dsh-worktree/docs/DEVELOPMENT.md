@@ -251,7 +251,7 @@ Windows drive、extended prefix 与 UNC 在浏览器路径单测中验证；这�
 多位数统计与空 Git 面板，使用隔离组件 fixture 时需与实机联调结果区分。
 
 `/cluworktree` 的可选 Host 接缝需要原生 `commands`、`tools`、`sessionController`、
-`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。包的开发依赖使用 DSH `0.2.2-rc.2`；
+`sessionQuery`、`agents`、`llm` 与 `systemPrompt` 服务。DSH 同步版本线的直接依赖统一声明 `>=0.2.2-rc.2`，本地 lockfile 解析至最低版本；
 `clutch-test-dsh-*-legacy` 别名仅为旧 registry/SDK 回归保留 `0.2.0-rc.1`，不代表支持旧宿主。
 当前 native/PTC admission 由真实源码集成测试覆盖。实现通过最小 structural Host port 调用服务，避免将
 Host SessionStore 的 Context declaration merge 引入 Client Session 类型图。
@@ -300,7 +300,7 @@ provider opt-in 隔离、其他插件不变及不确定回报的 wire 重试字�
 launcher 的 `--patch` 必须在 Web app 的 `--port` 前，且 config 覆盖需保留 dshHome。
 每次重载后使用新派发任务验证回报；旧进程的 token/目标不会恢复。
 
-Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer >=0.2.2-rc.2，开发 pin 为 0.2.2-rc.2），
+Agent 来源投递的原生数据 factory 直接依赖 `@deepseek-ai/dsh-llm`（peer 与开发依赖均为 `>=0.2.2-rc.2`），
 避免借用偶然存在的传递依赖，也不导入原生 Session/subagent 服务的 Context 类型图污染 Client。
 锁文件只在本包 importer 添加既有 llm snapshot 引用，不升级其他 graph。
 
